@@ -15513,94 +15513,6 @@ mod tests {
         )
     }
 
-    fn authoring_line_circle_contact_path(
-        session: RetainedSketchDocumentSession,
-        line_span: CurveSpan,
-        circle_span: CurveSpan,
-        parameters: &[f64],
-    ) -> FeatureAuthoringCandidate {
-        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
-        let snapshot = coordinator
-            .feature_authoring_snapshot()
-            .expect("line-circle authoring snapshot");
-        let mut authoring = FeatureAuthoringState::default();
-        let candidate = feature_candidate(authoring.activate(
-            &snapshot,
-            coordinator.session().design_document(),
-            FeatureAuthoringTool::Fillet,
-            &[
-                (SelectionItem::Curve(line_span), Some(0.4)),
-                (SelectionItem::Curve(circle_span), Some(4.0)),
-            ],
-        ));
-        coordinator
-            .prepare_feature_authoring_preview(
-                coordinator.feature_document().identity(),
-                &candidate,
-                "line-circle authoring path",
-            )
-            .expect("initial line-circle preview");
-        let owner = coordinator
-            .feature_authoring_preview()
-            .expect("held line-circle preview")
-            .corner_bindings()[0]
-            .owner;
-        let mut scene = visible_computed_scene(&coordinator);
-        let handle = scene
-            .fillet_affordances
-            .iter()
-            .find(|candidate| candidate.owner == owner)
-            .expect("line-circle affordances")
-            .contacts
-            .into_iter()
-            .find(|candidate| candidate.source.span == circle_span)
-            .expect("circular contact handle");
-        coordinator
-            .transact_feature_authoring_pointer_down(
-                &mut authoring,
-                &scene,
-                PointerInput {
-                    pointer_id: 904,
-                    position: handle.screen_position,
-                    modifiers: Modifiers::default(),
-                },
-                Some(SelectionItem::FeatureCorner(owner)),
-                PickTolerance::default(),
-                "line-circle contact press",
-            )
-            .expect("start authoring contact gesture");
-        for parameter in parameters {
-            let jet = snapshot
-                .sketch_document()
-                .evaluate_curve_jet(circle_span, *parameter)
-                .expect("contact target jet");
-            let position = scene
-                .viewport
-                .model_to_screen([jet.position.x, jet.position.y]);
-            let effects = coordinator.editor_mut().pointer_move(
-                &scene,
-                PointerInput {
-                    pointer_id: 904,
-                    position,
-                    modifiers: Modifiers::default(),
-                },
-            );
-            assert!(matches!(
-                effects.as_slice(),
-                [EditorEffect::PreviewComputedFeatureContact { .. }]
-            ));
-            coordinator
-                .apply_feature_authoring_editor_effect(&mut authoring, &effects[0])
-                .expect("accept authoring contact sample");
-            scene = visible_computed_scene(&coordinator);
-        }
-        coordinator
-            .feature_authoring_preview()
-            .expect("final authoring contact preview")
-            .candidate()
-            .clone()
-    }
-
     fn authoring_radius_path(
         session: RetainedSketchDocumentSession,
         corner: DesignPointId,
@@ -15677,73 +15589,6 @@ mod tests {
             .expect("final authoring radius preview")
             .candidate()
             .clone()
-    }
-
-    fn assert_fillet_candidates_near(
-        first: &FeatureAuthoringCandidate,
-        second: &FeatureAuthoringCandidate,
-        tolerance: f64,
-    ) {
-        assert_eq!(first.tool(), second.tool());
-        assert_eq!(first.radius().to_bits(), second.radius().to_bits());
-        assert_eq!(first.sketch_input(), second.sketch_input());
-        assert_eq!(
-            first.accepted_state_identity(),
-            second.accepted_state_identity()
-        );
-        assert_eq!(first.corners().len(), second.corners().len());
-        let near = |left: f64, right: f64| {
-            assert!(
-                (left - right).abs() <= tolerance,
-                "{left} and {right} differ beyond {tolerance}"
-            );
-        };
-        for (first, second) in first.corners().iter().zip(second.corners()) {
-            for (first_parent, second_parent) in [
-                (first.corner.first, second.corner.first),
-                (first.corner.second, second.corner.second),
-            ] {
-                assert_eq!(first_parent.source, second_parent.source);
-                near(
-                    first_parent.picked_parameter,
-                    second_parent.picked_parameter,
-                );
-                assert_eq!(first_parent.winding, second_parent.winding);
-                assert_eq!(first_parent.neighborhood, second_parent.neighborhood);
-                assert_eq!(first_parent.normal_side, second_parent.normal_side);
-                assert_eq!(
-                    first_parent.retained_endpoint,
-                    second_parent.retained_endpoint
-                );
-                match (first_parent.periodic_anchor, second_parent.periodic_anchor) {
-                    (Some(first), Some(second)) => {
-                        near(first.parameter, second.parameter);
-                        assert_eq!(first.winding, second.winding);
-                    }
-                    (None, None) => {}
-                    anchors => panic!("periodic anchors differ: {anchors:?}"),
-                }
-            }
-            assert_eq!(first.corner.endpoint_order, second.corner.endpoint_order);
-            assert_eq!(first.corner.sweep, second.corner.sweep);
-            for (left, right) in first.arc.center.into_iter().zip(second.arc.center) {
-                near(left, right);
-            }
-            near(first.arc.radius, second.arc.radius);
-            near(first.arc.start_angle, second.arc.start_angle);
-            near(first.arc.end_angle, second.arc.end_angle);
-            assert_eq!(first.arc.sweep, second.arc.sweep);
-            for (first, second) in first.arc.contacts.iter().zip(second.arc.contacts) {
-                assert_eq!(first.source, second.source);
-                near(first.parameter, second.parameter);
-                assert_eq!(first.winding, second.winding);
-                near(first.total_parameter, second.total_parameter);
-                for (left, right) in first.position.into_iter().zip(second.position) {
-                    near(left, right);
-                }
-            }
-            assert_eq!(first.options, second.options);
-        }
     }
 
     #[test]
@@ -16924,7 +16769,12 @@ mod tests {
         // restores the exact durable origin.
         let _ = fixture
             .coordinator
-            .pointer_down(&scene, pointer(801, handle.screen_position));
+            .editor_mut()
+            .pointer_down_feature_contact_handle(
+                &scene,
+                pointer(801, handle.screen_position),
+                handle,
+            );
         let preview = fixture
             .coordinator
             .editor_mut()
@@ -16994,7 +16844,12 @@ mod tests {
         // evaluation as one history entry.
         let _ = fixture
             .coordinator
-            .pointer_down(&scene, pointer(802, handle.screen_position));
+            .editor_mut()
+            .pointer_down_feature_contact_handle(
+                &scene,
+                pointer(802, handle.screen_position),
+                handle,
+            );
         let preview = fixture
             .coordinator
             .editor_mut()
@@ -17559,19 +17414,6 @@ mod tests {
             SolverConfig::default(),
         )
         .expect("accepted line-circle session");
-        let dense_authoring = authoring_line_circle_contact_path(
-            session.clone(),
-            CurveSpan::line(line),
-            CurveSpan::line(circle),
-            &[5.3, 5.5],
-        );
-        let direct_authoring = authoring_line_circle_contact_path(
-            session.clone(),
-            CurveSpan::line(line),
-            CurveSpan::line(circle),
-            &[5.5],
-        );
-        assert_fillet_candidates_near(&dense_authoring, &direct_authoring, 1.0e-9);
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         let native_points = [line_start, line_end, center];
         let native_before = native_sketch_invariants(&coordinator, &native_points);
@@ -17636,7 +17478,13 @@ mod tests {
         };
         let expected_design = coordinator.session().design_identity();
 
-        let _ = coordinator.pointer_down(&origin_scene, pointer(handle.screen_position));
+        let _ = coordinator
+            .editor_mut()
+            .pointer_down_feature_contact_handle(
+                &origin_scene,
+                pointer(handle.screen_position),
+                handle,
+            );
         let first = coordinator
             .editor_mut()
             .pointer_move(&origin_scene, pointer(target(5.3)));

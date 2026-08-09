@@ -17,7 +17,7 @@ use geosolve_sketch::{
     DesignScalarId, DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionMode,
     GeometryRole, ScalarUnit, SketchAcceptedDocumentState,
 };
-use geosolve_sketch_features::{ComputedFilletParentIndex, NativeCurveSpanSource};
+use geosolve_sketch_features::NativeCurveSpanSource;
 
 const SCREEN_SIZE: [f64; 2] = [1000.0, 700.0];
 const DEFAULT_PIXELS_PER_MODEL_UNIT: f64 = 50.0;
@@ -663,10 +663,10 @@ fn render_fillet_affordances(
         }
         let owner = affordances.owner;
         let rail = affordances.radius_rail;
-        // Branch actions paint below direct-manipulation handles. This mirrors
-        // the headless contact > radius > action/native priority in native SVG
-        // hit targeting and prevents CSS hover from advertising an occluded
-        // branch action at a crowded contact or grip.
+        // Branch actions paint below the direct radius affordance. This mirrors
+        // the headless radius > action/native priority in native SVG hit
+        // targeting and prevents CSS hover from advertising an occluded branch
+        // action at a crowded grip or generated arc.
         for action in &affordances.actions {
             let target = scene.fillet_action_target(owner, action.id);
             render_fillet_canvas_action(
@@ -704,33 +704,6 @@ fn render_fillet_affordances(
             owner.feature,
             owner.corner,
         );
-        for handle in affordances.contacts {
-            let parent = fillet_parent_key(handle.parent);
-            let label = if handle.parent == ComputedFilletParentIndex::First {
-                "Drag first-parent Fillet contact"
-            } else {
-                "Drag second-parent Fillet contact"
-            };
-            let _ = write!(
-                output,
-                concat!(
-                    "<circle class=\"wb-fillet-contact\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
-                    "role=\"img\" aria-label=\"{}\" data-fillet-contact=\"{}\" ",
-                    "data-editor-item=\"feature-corner\" data-feature-id=\"{}\" ",
-                    "data-feature-corner-id=\"{}\" data-source-curve=\"{}\" ",
-                    "data-source-segment=\"{}\" data-contact-parameter=\"{}\"/>"
-                ),
-                handle.screen_position.x,
-                handle.screen_position.y,
-                label,
-                parent,
-                owner.feature,
-                owner.corner,
-                handle.source.span.curve,
-                handle.source.span.segment,
-                handle.parameter,
-            );
-        }
     }
     output.push_str("</g>");
 }
@@ -819,13 +792,6 @@ fn fillet_owner_is_visible(
 ) -> bool {
     selection.contains(&SelectionItem::FeatureCorner(owner))
         || selection.contains(&SelectionItem::Feature(owner.feature))
-}
-
-fn fillet_parent_key(parent: ComputedFilletParentIndex) -> &'static str {
-    match parent {
-        ComputedFilletParentIndex::First => "first",
-        ComputedFilletParentIndex::Second => "second",
-    }
 }
 
 fn fillet_action_anchor(

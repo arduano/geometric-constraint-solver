@@ -554,13 +554,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke-width: 2;
   cursor: ew-resize;
 }
-.wb-fillet-contact {
-  fill: #152124;
-  stroke: #68d8e8;
-  stroke-width: 2;
-  cursor: grab;
-}
-.wb-fillet-contact[data-fillet-contact="second"] { stroke: #cf9bea; }
 .wb-fillet-action { cursor: pointer; }
 .wb-fillet-action.disabled {
   opacity: 0.35;

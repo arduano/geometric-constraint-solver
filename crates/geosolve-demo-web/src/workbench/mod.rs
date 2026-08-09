@@ -5086,6 +5086,15 @@ mod tests {
             1
         );
         assert_eq!(markup.matches("shared-radius-affected").count(), 2);
+        assert_eq!(
+            markup.matches("class=\"wb-fillet-radius-grip\"").count(),
+            1,
+            "the selected Fillet corner exposes one central radius handle"
+        );
+        assert!(
+            !markup.contains("wb-fillet-contact"),
+            "Fillet endpoint contact metadata must not render redundant canvas handles"
+        );
         assert!(
             !markup.contains("wb-fillet-alternative-ghost"),
             "unpreviewed alternatives must not be painted as CSS-owned ghosts"

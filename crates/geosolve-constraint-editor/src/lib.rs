@@ -529,14 +529,10 @@ pub struct SceneFilletCornerAffordances {
 
 /// One deterministic Fillet-aware hit.
 ///
-/// The variant order is semantic priority: contact handles win over the
-/// radius grip/spoke/rail/arc, which wins over native accepted geometry.
+/// The visible radius grip/spoke/rail/arc wins over native accepted geometry.
+/// Endpoint contact metadata is not part of the canvas hit surface.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SceneFilletHit {
-    Contact {
-        handle: SceneFilletContactHandle,
-        distance_pixels: f64,
-    },
     Radius {
         owner: geosolve_sketch_features::ComputedCornerRef,
         distance_pixels: f64,
@@ -549,7 +545,6 @@ impl SceneFilletHit {
     #[must_use]
     pub const fn item(self) -> SelectionItem {
         match self {
-            Self::Contact { handle, .. } => SelectionItem::FeatureCorner(handle.owner),
             Self::Radius { owner, .. } => SelectionItem::FeatureCorner(owner),
             Self::Native(hit) => hit.item,
         }
@@ -1123,8 +1118,8 @@ impl EditorScene {
 
     /// Resolves canvas and accessible Fillet actions through one exact validator.
     ///
-    /// Canvas painted identity is a non-authoritative hint. Contact and radius
-    /// affordances keep their higher hit priority, then branch controls are
+    /// Canvas painted identity is a non-authoritative hint. Radius affordances
+    /// keep their higher hit priority, then branch controls are
     /// independently tested against their paired model-space geometry. An
     /// accessible target skips pointer proximity but retains identical scene,
     /// owner, action and applicability checks.
@@ -1145,7 +1140,7 @@ impl EditorScene {
                 if !position.is_finite()
                     || matches!(
                         self.resolve_fillet_hit(position, tolerance),
-                        Some(SceneFilletHit::Contact { .. } | SceneFilletHit::Radius { .. })
+                        Some(SceneFilletHit::Radius { .. })
                     )
                 {
                     return None;
@@ -1216,9 +1211,10 @@ impl EditorScene {
 
     /// Resolves one Fillet-aware hit through the shared headless priority.
     ///
-    /// Contact handles win over radius grip/spoke/rail/arc hits. Those explicit
-    /// Fillet affordances win over native accepted points and curves. Constraint
-    /// and dimension annotations remain a separate presentation layer.
+    /// The visible radius grip/spoke/rail/arc wins over native accepted points
+    /// and curves. Endpoint contact metadata is deliberately not a canvas hit
+    /// target. Constraint and dimension annotations remain a separate
+    /// presentation layer.
     #[must_use]
     pub fn resolve_fillet_hit(
         &self,
@@ -1227,30 +1223,6 @@ impl EditorScene {
     ) -> Option<SceneFilletHit> {
         if !position.is_finite() || !tolerance.is_valid() {
             return None;
-        }
-        if let Some((handle, distance_pixels)) = self
-            .fillet_affordances
-            .iter()
-            .flat_map(|affordances| affordances.contacts)
-            .filter_map(|handle| {
-                let distance = position.distance(handle.screen_position);
-                (distance <= tolerance.point_pixels).then_some((handle, distance))
-            })
-            .min_by(|first, second| {
-                first
-                    .1
-                    .total_cmp(&second.1)
-                    .then_with(|| first.0.owner.cmp(&second.0.owner))
-                    .then_with(|| {
-                        fillet_parent_order(first.0.parent)
-                            .cmp(&fillet_parent_order(second.0.parent))
-                    })
-            })
-        {
-            return Some(SceneFilletHit::Contact {
-                handle,
-                distance_pixels,
-            });
         }
         if let Some((owner, distance_pixels)) = self
             .fillet_affordances
@@ -3014,10 +2986,6 @@ impl ConstraintEditor {
             return effects;
         }
         let fillet_hit = scene.resolve_fillet_hit(input.position, self.pick_tolerance);
-        if let Some(SceneFilletHit::Contact { handle, .. }) = fillet_hit {
-            effects.extend(self.pointer_down_feature_contact_handle(scene, input, handle));
-            return effects;
-        }
         if let Some(SceneFilletHit::Radius {
             owner,
             distance_pixels,
@@ -3039,7 +3007,7 @@ impl ConstraintEditor {
         }
         let geometry_hit = match fillet_hit {
             Some(SceneFilletHit::Native(hit)) => Some(hit),
-            Some(SceneFilletHit::Contact { .. } | SceneFilletHit::Radius { .. }) => unreachable!(),
+            Some(SceneFilletHit::Radius { .. }) => unreachable!(),
             None => scene.hit_test(input.position, self.pick_tolerance),
         };
         let annotation_hit = scene.annotation_hit_test(
@@ -3067,10 +3035,9 @@ impl ConstraintEditor {
     ///
     /// The coordinator validates current preview ownership and scene provenance
     /// before calling this path. This final editor-side check still requires the
-    /// pointer to hit that exact owner's contact/radius affordance or, for an
-    /// older scene without affordances, its computed curve. Contact wins over
-    /// radius. A presentation target is an intent hint rather than a geometry
-    /// oracle.
+    /// pointer to hit that exact owner's radius affordance or, for an older
+    /// scene without affordances, its computed curve. A presentation target is
+    /// an intent hint rather than a geometry oracle.
     pub(crate) fn pointer_down_feature_radius(
         &mut self,
         scene: &EditorScene,
@@ -3091,9 +3058,6 @@ impl ConstraintEditor {
             ..input
         };
         let mut effects = match scene.resolve_fillet_hit(input.position, tolerance) {
-            Some(SceneFilletHit::Contact { handle, .. }) if handle.owner == owner => {
-                self.pointer_down_feature_contact_handle(scene, direct_input, handle)
-            }
             Some(SceneFilletHit::Radius {
                 owner: resolved,
                 distance_pixels,
@@ -3106,7 +3070,7 @@ impl ConstraintEditor {
                     curve_parameter: None,
                 }),
             ),
-            Some(SceneFilletHit::Contact { .. } | SceneFilletHit::Radius { .. }) => return None,
+            Some(SceneFilletHit::Radius { .. }) => return None,
             Some(SceneFilletHit::Native(_)) | None => {
                 let hit = scene
                     .computed_curves
@@ -3123,6 +3087,7 @@ impl ConstraintEditor {
         Some(combined)
     }
 
+    #[cfg(test)]
     fn pointer_down_feature_contact_handle(
         &mut self,
         scene: &EditorScene,
@@ -3418,7 +3383,7 @@ impl ConstraintEditor {
         if !input.position.is_finite() {
             return Vec::new();
         }
-        if let Some(hit @ (SceneFilletHit::Contact { .. } | SceneFilletHit::Radius { .. })) =
+        if let Some(hit @ SceneFilletHit::Radius { .. }) =
             scene.resolve_fillet_hit(input.position, self.pick_tolerance)
         {
             let item = hit.item();
@@ -4503,13 +4468,6 @@ fn compare_hits(first: &Hit, second: &Hit) -> Ordering {
         .distance_pixels
         .total_cmp(&second.distance_pixels)
         .then_with(|| first.item.cmp(&second.item))
-}
-
-const fn fillet_parent_order(parent: ComputedFilletParentIndex) -> u8 {
-    match parent {
-        ComputedFilletParentIndex::First => 0,
-        ComputedFilletParentIndex::Second => 1,
-    }
 }
 
 const fn native_hit_priority(item: SelectionItem) -> u8 {
@@ -5981,7 +5939,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::too_many_lines)]
-    fn fillet_affordances_validate_actions_and_share_contact_radius_native_priority() {
+    fn fillet_affordances_validate_actions_and_expose_only_radius_canvas_handles() {
         let mut fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
         let affordances = fixture
             .scene
@@ -5998,9 +5956,7 @@ mod tests {
                 affordances.contacts[0].screen_position,
                 PickTolerance::default()
             ),
-            Some(SceneFilletHit::Contact { handle, .. })
-                if handle.parent == ComputedFilletParentIndex::First
-                    && handle.owner == fixture.owner
+            Some(SceneFilletHit::Radius { owner, .. }) if owner == fixture.owner
         ));
         assert!(matches!(
             fixture.scene.resolve_fillet_hit(
@@ -6261,7 +6217,7 @@ mod tests {
     }
 
     #[test]
-    fn fillet_hover_and_pointer_down_resolve_the_same_contact_and_radius_owner() {
+    fn fillet_endpoint_hover_and_pointer_down_use_the_visible_radius_surface() {
         let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
         let affordances = &fixture.scene.fillet_affordances[0];
         let mut editor = ConstraintEditor::default();
@@ -6286,7 +6242,7 @@ mod tests {
             editor.active_pointer_gesture(),
             Some(ActivePointerGesture {
                 pointer_id: 61,
-                kind: ActivePointerGestureKind::FilletContact,
+                kind: ActivePointerGestureKind::FilletRadius,
             })
         );
         editor.cancel();
@@ -6639,7 +6595,7 @@ mod tests {
         let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
         let handle = fixture.scene.fillet_affordances[0].contacts[0];
         let mut editor = ConstraintEditor::default();
-        editor.pointer_down(
+        editor.pointer_down_feature_contact_handle(
             &fixture.scene,
             pointer(
                 72,
@@ -6647,6 +6603,7 @@ mod tests {
                 handle.screen_position.y,
                 Modifiers::default(),
             ),
+            handle,
         );
         let first_target = fixture.scene.viewport.model_to_screen([2.0, 1.0]);
         let first = pointer(72, first_target.x, first_target.y, Modifiers::default());
@@ -6691,14 +6648,15 @@ mod tests {
         let mut editor = ConstraintEditor::default();
         assert!(matches!(
             editor
-                .pointer_down(
+                .pointer_down_feature_contact_handle(
                     &fixture.scene,
                     pointer(
                         41,
                         handle.screen_position.x,
                         handle.screen_position.y,
                         Modifiers::default(),
-                    )
+                    ),
+                    handle,
                 )
                 .as_slice(),
             [EditorEffect::SelectionChanged(selection)]
@@ -6753,7 +6711,7 @@ mod tests {
         let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
         let handle = fixture.scene.fillet_affordances[0].contacts[0];
         let mut editor = ConstraintEditor::default();
-        editor.pointer_down(
+        editor.pointer_down_feature_contact_handle(
             &fixture.scene,
             pointer(
                 82,
@@ -6761,6 +6719,7 @@ mod tests {
                 handle.screen_position.y,
                 Modifiers::default(),
             ),
+            handle,
         );
         let target = fixture.scene.viewport.model_to_screen([2.0, 2.0]);
         let moved = pointer(82, target.x, target.y, Modifiers::default());
@@ -6833,7 +6792,7 @@ mod tests {
             Modifiers::default(),
         );
         let mut editor = ConstraintEditor::default();
-        editor.pointer_down(&fixture.scene, down);
+        editor.pointer_down_feature_contact_handle(&fixture.scene, down, handle);
         assert!(
             editor
                 .pointer_down(
@@ -6865,7 +6824,7 @@ mod tests {
             vec![EditorEffect::ClearComputedFeatureContactPreview]
         );
 
-        editor.pointer_down(&fixture.scene, down);
+        editor.pointer_down_feature_contact_handle(&fixture.scene, down, handle);
         let parameter = preview_contact_parameter(&editor.pointer_move(&fixture.scene, moved));
         assert!(editor.accept_computed_feature_contact_preview(
             &fixture.input,
@@ -6885,7 +6844,7 @@ mod tests {
             "release must match the exact acknowledged contact sample"
         );
 
-        editor.pointer_down(&fixture.scene, down);
+        editor.pointer_down_feature_contact_handle(&fixture.scene, down, handle);
         assert_eq!(
             editor.cancel(),
             vec![EditorEffect::RestoreComputedFeatureContact {
