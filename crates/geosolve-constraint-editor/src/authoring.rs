@@ -9,8 +9,11 @@ use geosolve_sketch::{
 
 use crate::coordinator::{resolve_constraint, selection_exists, validate_dimension_selection};
 use crate::{
-    ConstraintIntent, DimensionKind, DisabledReason, ResolvedConstraintKind, SelectionItem,
+    ConstraintIntent, DimensionKind, DisabledReason, EditorScene, GeometryInteractionPolicy,
+    PickTolerance, ResolvedConstraintKind, ScreenPoint, SelectionItem,
 };
+
+const MAX_CONSTRAINT_AUTHORING_HIT_CANDIDATES: usize = 64;
 
 /// One palette tool owned by the reusable authoring state machine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -264,6 +267,85 @@ impl AuthoringState {
             }
             Err(warning) => AuthoringOutcome::Warning(warning),
         }
+    }
+
+    /// Resolves one screen click through bounded compatibility-aware native
+    /// candidates. An incompatible point or nearer support cannot mask a valid
+    /// operand underneath the same click.
+    #[must_use]
+    pub fn pick_at(
+        &mut self,
+        document: &SketchDocument,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+    ) -> AuthoringOutcome {
+        self.pick_at_with_policy(
+            document,
+            scene,
+            position,
+            tolerance,
+            GeometryInteractionPolicy::default(),
+        )
+    }
+
+    /// Policy-aware counterpart of [`Self::pick_at`].
+    #[must_use]
+    pub fn pick_at_with_policy(
+        &mut self,
+        document: &SketchDocument,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> AuthoringOutcome {
+        let Some(tool) = self.active else {
+            return AuthoringOutcome::Inactive;
+        };
+        let hits = match scene.native_authoring_hit_candidates_with_policy(
+            position,
+            tolerance,
+            MAX_CONSTRAINT_AUTHORING_HIT_CANDIDATES,
+            policy,
+        ) {
+            Ok(hits) => hits,
+            Err(crate::NativeAuthoringHitError::CandidateLimitExceeded { .. }) => {
+                return AuthoringOutcome::Warning(AuthoringWarning {
+                    reason: DisabledReason::WrongOperandKind,
+                    expected: expected_operands(document, tool, &self.pending),
+                    message: "too many overlapping authoring candidates under this click".into(),
+                });
+            }
+        };
+        let mut first_warning = None;
+        for hit in hits {
+            let mut trial = self.clone();
+            let outcome = trial.pick(
+                document,
+                AuthoringOperand::picked(hit.item, hit.curve_parameter),
+            );
+            match outcome {
+                AuthoringOutcome::Collecting { .. } | AuthoringOutcome::Apply(_) => {
+                    *self = trial;
+                    return outcome;
+                }
+                AuthoringOutcome::Warning(value) => {
+                    first_warning.get_or_insert(value);
+                }
+                AuthoringOutcome::ModeEntered { .. }
+                | AuthoringOutcome::PendingCleared { .. }
+                | AuthoringOutcome::ModeExited
+                | AuthoringOutcome::Inactive => {}
+            }
+        }
+        AuthoringOutcome::Warning(first_warning.unwrap_or_else(|| {
+            warning(
+                document,
+                tool,
+                &self.pending,
+                DisabledReason::WrongOperandKind,
+            )
+        }))
     }
 
     /// Clears a terminal application attempt while retaining the repeated tool.

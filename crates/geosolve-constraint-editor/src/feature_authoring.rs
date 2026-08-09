@@ -362,6 +362,28 @@ impl FeatureAuthoringState {
         position: ScreenPoint,
         tolerance: PickTolerance,
     ) -> FeatureAuthoringOutcome {
+        self.pick_at_with_policy(
+            snapshot,
+            document,
+            scene,
+            position,
+            tolerance,
+            crate::GeometryInteractionPolicy::default(),
+        )
+    }
+
+    /// Resolves one screen click using the current headless geometry filtering
+    /// policy and domain-aware fallback over every remaining native candidate.
+    #[must_use]
+    pub fn pick_at_with_policy(
+        &mut self,
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        document: &SketchDocument,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: crate::GeometryInteractionPolicy,
+    ) -> FeatureAuthoringOutcome {
         if self.active.is_none() {
             return FeatureAuthoringOutcome::Inactive;
         }
@@ -374,10 +396,11 @@ impl FeatureAuthoringState {
                 "the visible Fillet hit scene belongs to an older accepted sketch input",
             );
         }
-        let hits = match scene.native_authoring_hit_candidates(
+        let hits = match scene.native_authoring_hit_candidates_with_policy(
             position,
             tolerance,
             MAX_FEATURE_AUTHORING_HIT_CANDIDATES,
+            policy,
         ) {
             Ok(hits) => hits,
             Err(crate::NativeAuthoringHitError::CandidateLimitExceeded { .. }) => {

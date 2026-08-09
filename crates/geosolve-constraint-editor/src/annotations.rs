@@ -785,20 +785,46 @@ fn contact_operand_anchor(
 ) -> Option<(SelectionItem, ScreenPoint)> {
     let slot = document.contact(contact)?;
     let parameter = document.scalar(slot.parameter)?.value;
-    let curve = curves.iter().find(|curve| curve.span == slot.curve)?;
-    let anchor = curve
-        .screen_parameters
-        .iter()
-        .enumerate()
-        .min_by(|first, second| {
-            (first.1 - parameter)
-                .abs()
-                .total_cmp(&(second.1 - parameter).abs())
-        })
-        .and_then(|(index, _)| curve.screen_polyline.get(index))
-        .copied()
+    let anchor = curve_parameter_anchor(curves, slot.curve, parameter)
         .or_else(|| curve_anchor(curves, slot.curve))?;
     Some((SelectionItem::Curve(slot.curve), anchor))
+}
+
+fn curve_parameter_anchor(
+    curves: &[SceneCurve],
+    span: CurveSpan,
+    parameter: f64,
+) -> Option<ScreenPoint> {
+    parameter.is_finite().then_some(())?;
+    curves
+        .iter()
+        .filter(|curve| curve.span == span)
+        .flat_map(|curve| {
+            let origin = match curve.origin {
+                crate::SceneCurveOrigin::Native => None,
+                crate::SceneCurveOrigin::FilletDiscarded { fragment, .. } => Some(fragment),
+            };
+            curve
+                .screen_parameters
+                .iter()
+                .copied()
+                .zip(curve.screen_polyline.iter().copied())
+                .enumerate()
+                .filter(|(_, (sample, position))| sample.is_finite() && position.is_finite())
+                .map(move |(sample_index, (sample, position))| {
+                    ((sample - parameter).abs(), origin, sample_index, position)
+                })
+        })
+        .min_by(|first, second| {
+            first
+                .0
+                .total_cmp(&second.0)
+                .then_with(|| first.1.cmp(&second.1))
+                .then_with(|| first.2.cmp(&second.2))
+                .then_with(|| first.3.x.total_cmp(&second.3.x))
+                .then_with(|| first.3.y.total_cmp(&second.3.y))
+        })
+        .map(|(_, _, _, position)| position)
 }
 
 fn point_anchor(points: &[ScenePoint], id: geosolve_sketch::DesignPointId) -> Option<ScreenPoint> {
@@ -1088,4 +1114,116 @@ fn point_segment_distance(point: ScreenPoint, start: ScreenPoint, end: ScreenPoi
         x: delta[0].mul_add(projection, start.x),
         y: delta[1].mul_add(projection, start.y),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use geosolve_sketch::{
+        ContactNeighborhood, CurveDefinition, CurveSpan, DocumentFilletTrimEndpoint, GeometryRole,
+        SketchDocument,
+    };
+
+    use super::{SceneCurve, ScreenPoint, contact_operand_anchor, curve_parameter_anchor};
+    use crate::{
+        ComputedConstructionFragmentId, ComputedConstructionFragmentProvenance, ComputedCornerRef,
+        ComputedEvaluationRevision, ComputedFeatureCornerId, ComputedFeatureId,
+        ComputedSourceInterval, NativeCurveSpanSource, SceneCurveOrigin, SelectionItem,
+    };
+
+    fn point(x: f64) -> ScreenPoint {
+        ScreenPoint { x, y: 40.0 }
+    }
+
+    #[test]
+    fn contact_parameter_anchor_searches_retained_and_fillet_discarded_occurrences() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("point");
+        let end = document.add_point("end", [1.0, 0.0]).expect("point");
+        let curve = document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("curve");
+        let span = CurveSpan::line(curve);
+        let contact = document
+            .add_curve_contact(
+                "contact",
+                span,
+                0.75,
+                0,
+                ContactNeighborhood::Local {
+                    lower: 0.5,
+                    upper: 1.0,
+                },
+                None,
+            )
+            .expect("contact");
+        let retained = SceneCurve {
+            span,
+            role: GeometryRole::Profile,
+            source_role: GeometryRole::Profile,
+            origin: SceneCurveOrigin::Native,
+            screen_polyline: vec![point(0.0), point(25.0), point(50.0)],
+            screen_parameters: vec![0.0, 0.25, 0.5],
+            drag_handle_point: None,
+        };
+        let discarded = SceneCurve {
+            role: GeometryRole::Construction,
+            origin: SceneCurveOrigin::FilletDiscarded {
+                fragment: ComputedConstructionFragmentId {
+                    evaluation: ComputedEvaluationRevision::from_raw(1),
+                    ordinal: 0,
+                },
+                source: NativeCurveSpanSource { span },
+                interval: ComputedSourceInterval {
+                    start: 0.5,
+                    end: 1.0,
+                },
+                provenance: ComputedConstructionFragmentProvenance {
+                    owner: ComputedCornerRef {
+                        feature: ComputedFeatureId::from_raw(1),
+                        corner: ComputedFeatureCornerId::from_raw(1),
+                    },
+                    endpoint: DocumentFilletTrimEndpoint::End,
+                    base_interval: ComputedSourceInterval {
+                        start: 0.0,
+                        end: 1.0,
+                    },
+                },
+            },
+            screen_polyline: vec![point(50.0), point(75.0), point(100.0)],
+            screen_parameters: vec![0.5, 0.75, 1.0],
+            ..retained.clone()
+        };
+
+        let expected = Some((SelectionItem::Curve(span), point(75.0)));
+        assert_eq!(
+            contact_operand_anchor(&document, &[retained.clone(), discarded.clone()], contact),
+            expected,
+            "a contact on a discarded interval must not snap to the retained trim endpoint"
+        );
+        assert_eq!(
+            contact_operand_anchor(&document, &[discarded.clone(), retained.clone()], contact),
+            expected,
+            "presentation occurrence order must not change the contact annotation"
+        );
+
+        let mut displaced_discarded = discarded;
+        displaced_discarded.screen_polyline[0] = point(55.0);
+        for occurrences in [
+            vec![retained.clone(), displaced_discarded.clone()],
+            vec![displaced_discarded, retained],
+        ] {
+            assert_eq!(
+                curve_parameter_anchor(&occurrences, span, 0.5),
+                Some(point(50.0)),
+                "Native wins an exact retained/discarded boundary tie before fragment identity"
+            );
+        }
+    }
 }

@@ -28,9 +28,10 @@ pub use coordinator::{
     EditorMutation, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
     EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome,
     FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
-    FeatureAuthoringTransaction, LifecycleDto, LifecycleStatus, MeasurementPublication,
-    MutationOutcome, ProblemsDto, ProjectedDragRejectionStage, ProjectedDragWorkEvidence,
-    ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator, display_dimension_target,
+    FeatureAuthoringTransaction, GeometryRoleSelectionState, LifecycleDto, LifecycleStatus,
+    MeasurementPublication, MutationOutcome, ProblemsDto, ProjectedDragRejectionStage,
+    ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    display_dimension_target,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -40,17 +41,18 @@ pub use feature_authoring::{
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
 pub use geosolve_sketch_features::{
-    ComputedCircularArc, ComputedCornerRef, ComputedEdge, ComputedEdgeGeometry, ComputedEdgeId,
-    ComputedEdgeProvenance, ComputedEvaluationAllocator, ComputedEvaluationAllocatorHighWater,
-    ComputedEvaluationRevision, ComputedFeature, ComputedFeatureAllocatorHighWater,
-    ComputedFeatureCornerId, ComputedFeatureDefinition, ComputedFeatureDocument,
-    ComputedFeatureDocumentDigest, ComputedFeatureDocumentError, ComputedFeatureDocumentId,
-    ComputedFeatureDocumentIdentity, ComputedFeatureEvaluation, ComputedFeatureEvaluationInput,
-    ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationState, ComputedFeatureFailure,
-    ComputedFeatureId, ComputedFeatureLifecycleHighWater, ComputedFeatureRevision,
-    ComputedFeatureSnapshot, ComputedFilletContact, ComputedFilletCorner,
-    ComputedFilletParentIndex, ComputedFilletSet, ComputedSourceInterval, NativeCurveSpanSource,
-    NewComputedFilletCorner,
+    ComputedCircularArc, ComputedConstructionFragment, ComputedConstructionFragmentId,
+    ComputedConstructionFragmentProvenance, ComputedCornerRef, ComputedEdge, ComputedEdgeGeometry,
+    ComputedEdgeId, ComputedEdgeProvenance, ComputedEvaluationAllocator,
+    ComputedEvaluationAllocatorHighWater, ComputedEvaluationRevision, ComputedFeature,
+    ComputedFeatureAllocatorHighWater, ComputedFeatureCornerId, ComputedFeatureDefinition,
+    ComputedFeatureDocument, ComputedFeatureDocumentDigest, ComputedFeatureDocumentError,
+    ComputedFeatureDocumentId, ComputedFeatureDocumentIdentity, ComputedFeatureEvaluation,
+    ComputedFeatureEvaluationInput, ComputedFeatureEvaluationPolicy,
+    ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFeatureId,
+    ComputedFeatureLifecycleHighWater, ComputedFeatureRevision, ComputedFeatureSnapshot,
+    ComputedFilletContact, ComputedFilletCorner, ComputedFilletParentIndex, ComputedFilletSet,
+    ComputedSourceInterval, NativeCurveSpanSource, NewComputedFilletCorner,
 };
 use std::cmp::Ordering;
 
@@ -60,8 +62,8 @@ use geosolve_sketch::{
     DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveContinuity,
     DocumentCurveCurvatureRelation, DocumentCurveNormalSide, DocumentCurveSpanRef,
     DocumentDimensionId, DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch,
-    DocumentObjectId, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, ScalarDomain,
-    ScalarUnit, SketchDesignIdentity, SketchDocument, TangentOrientation,
+    DocumentObjectId, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput,
+    ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -177,18 +179,131 @@ impl SelectionItem {
     }
 }
 
+/// Geometry families admitted by ordinary canvas interaction.
+///
+/// This is editor session state rather than persisted sketch state. Construction
+/// geometry remains fully solver-active regardless of the selected scope.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum GeometryPickScope {
+    #[default]
+    All,
+    Profile,
+    Construction,
+}
+
+/// Independent session-local visibility for persistent guides and computed
+/// source portions discarded by Fillets.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GeometryVisibility {
+    pub explicit_construction: bool,
+    pub implicit_construction: bool,
+}
+
+impl Default for GeometryVisibility {
+    fn default() -> Self {
+        Self {
+            explicit_construction: true,
+            implicit_construction: true,
+        }
+    }
+}
+
+/// Complete headless geometry filtering policy used consistently by hover,
+/// selection, drag ownership, snapping and authoring.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct GeometryInteractionPolicy {
+    pub scope: GeometryPickScope,
+    pub visibility: GeometryVisibility,
+}
+
+/// Curve-role incidence used to filter persistent points without assigning a
+/// persistent role to the point itself.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ScenePointRoleIncidence {
+    pub profile: bool,
+    pub construction: bool,
+}
+
+impl ScenePointRoleIncidence {
+    const fn preferred_role(self, scope: GeometryPickScope) -> GeometryRole {
+        match (scope, self.profile) {
+            (GeometryPickScope::All | GeometryPickScope::Profile, true) => GeometryRole::Profile,
+            (GeometryPickScope::All | GeometryPickScope::Profile, false)
+            | (GeometryPickScope::Construction, _) => GeometryRole::Construction,
+        }
+    }
+}
+
+/// Presentation origin for one native-source curve occurrence.
+///
+/// Every occurrence still resolves to `SceneCurve::span`; an implicit Fillet
+/// fragment never becomes a new persistent selection identity.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SceneCurveOrigin {
+    Native,
+    FilletDiscarded {
+        fragment: ComputedConstructionFragmentId,
+        source: NativeCurveSpanSource,
+        interval: ComputedSourceInterval,
+        provenance: ComputedConstructionFragmentProvenance,
+    },
+}
+
+impl SceneCurveOrigin {
+    #[must_use]
+    pub const fn is_implicit_construction(self) -> bool {
+        matches!(self, Self::FilletDiscarded { .. })
+    }
+}
+
 /// One accepted point primitive for presentation and picking.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScenePoint {
     pub id: DesignPointId,
     pub model_position: [f64; 2],
     pub screen_position: ScreenPoint,
+    pub role_incidence: ScenePointRoleIncidence,
+}
+
+impl ScenePoint {
+    /// Whether this point is displayed under session-local construction
+    /// visibility. Pick scope deliberately does not hide displayed geometry.
+    #[must_use]
+    pub fn is_visible(self, policy: GeometryInteractionPolicy) -> bool {
+        self.role_incidence.profile
+            || (self.role_incidence.construction && policy.visibility.explicit_construction)
+    }
+
+    /// Whether this point may own interaction under the complete headless
+    /// geometry policy. Hosts may keep a non-interactive point painted.
+    #[must_use]
+    pub fn is_interactive(self, policy: GeometryInteractionPolicy) -> bool {
+        match policy.scope {
+            GeometryPickScope::Profile => self.role_incidence.profile,
+            GeometryPickScope::Construction => {
+                self.role_incidence.construction && policy.visibility.explicit_construction
+            }
+            GeometryPickScope::All => {
+                self.role_incidence.profile
+                    || (self.role_incidence.construction && policy.visibility.explicit_construction)
+            }
+        }
+    }
+
+    fn is_pickable(self, policy: GeometryInteractionPolicy) -> bool {
+        self.is_interactive(policy)
+    }
 }
 
 /// One accepted semantic curve span represented by a display polyline.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SceneCurve {
     pub span: CurveSpan,
+    /// Effective canvas/profile role for this visible occurrence.
+    pub role: GeometryRole,
+    /// Persistent role of the complete native source curve.
+    pub source_role: GeometryRole,
+    pub origin: SceneCurveOrigin,
     pub screen_polyline: Vec<ScreenPoint>,
     /// Curve parameters paired one-to-one with [`Self::screen_polyline`].
     pub screen_parameters: Vec<f64>,
@@ -199,11 +314,39 @@ pub struct SceneCurve {
     pub drag_handle_point: Option<DesignPointId>,
 }
 
+impl SceneCurve {
+    /// Whether this curve occurrence is displayed under session-local
+    /// construction visibility. Pick scope deliberately does not hide it.
+    #[must_use]
+    pub fn is_visible(&self, policy: GeometryInteractionPolicy) -> bool {
+        match self.role {
+            GeometryRole::Profile => true,
+            GeometryRole::Construction if self.origin.is_implicit_construction() => {
+                policy.visibility.implicit_construction
+            }
+            GeometryRole::Construction => policy.visibility.explicit_construction,
+        }
+    }
+
+    /// Whether this native occurrence may own interaction under the complete
+    /// headless geometry policy. Hosts may keep a non-interactive curve painted.
+    #[must_use]
+    pub fn is_interactive(&self, policy: GeometryInteractionPolicy) -> bool {
+        self.is_visible(policy) && role_participates(self.role, policy.scope)
+    }
+
+    fn is_pickable(&self, policy: GeometryInteractionPolicy) -> bool {
+        self.is_interactive(policy)
+    }
+}
+
 /// One evaluation-local computed curve with stable feature/corner selection.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SceneComputedCurve {
     pub edge: geosolve_sketch_features::ComputedEdgeId,
     pub owner: geosolve_sketch_features::ComputedCornerRef,
+    /// Effective role inherited from the computed feature's native sources.
+    pub role: GeometryRole,
     pub center: [f64; 2],
     pub radius: f64,
     pub start_angle: f64,
@@ -216,6 +359,35 @@ pub struct SceneComputedCurve {
     /// The rail is frozen at pointer down. Presentation code may draw it, but
     /// the editor remains the sole owner of projecting pointer motion onto it.
     pub radius_rail: Option<SceneFilletRadiusRail>,
+}
+
+impl SceneComputedCurve {
+    /// Whether this generated arc is displayed under session-local construction
+    /// visibility. Pick scope deliberately does not hide it.
+    #[must_use]
+    pub fn is_visible(&self, policy: GeometryInteractionPolicy) -> bool {
+        self.role == GeometryRole::Profile || policy.visibility.explicit_construction
+    }
+
+    /// Whether this computed result may own interaction under the complete
+    /// headless geometry policy. Hosts use this to suppress affordances while
+    /// retaining scope-independent geometry rendering.
+    #[must_use]
+    pub fn is_interactive(&self, policy: GeometryInteractionPolicy) -> bool {
+        self.is_visible(policy) && role_participates(self.role, policy.scope)
+    }
+
+    fn is_pickable(&self, policy: GeometryInteractionPolicy) -> bool {
+        self.is_interactive(policy)
+    }
+}
+
+const fn role_participates(role: GeometryRole, scope: GeometryPickScope) -> bool {
+    match scope {
+        GeometryPickScope::All => true,
+        GeometryPickScope::Profile => matches!(role, GeometryRole::Profile),
+        GeometryPickScope::Construction => matches!(role, GeometryRole::Construction),
+    }
 }
 
 /// One finite one-dimensional Fillet-radius continuation rail.
@@ -639,6 +811,7 @@ impl EditorScene {
         if !chord_tolerance_pixels.is_finite() || chord_tolerance_pixels <= 0.0 {
             return Err(EditorError::InvalidTolerance);
         }
+        let point_roles = point_role_incidence(document);
         let points: Vec<_> = document
             .points()
             .iter()
@@ -646,6 +819,12 @@ impl EditorScene {
                 id: point.id,
                 model_position: point.position,
                 screen_position: viewport.model_to_screen(point.position),
+                role_incidence: point_roles.get(&point.id).copied().unwrap_or(
+                    ScenePointRoleIncidence {
+                        profile: true,
+                        construction: false,
+                    },
+                ),
             })
             .collect();
         let construction_snap_points = points
@@ -655,6 +834,7 @@ impl EditorScene {
             .collect();
         let mut curves = Vec::new();
         for curve in document.curves() {
+            let role = document.geometry_role(curve.id).unwrap_or_default();
             for span in document.curve_spans(curve.id)? {
                 for interval in document.visible_intervals(span)? {
                     let start = document.evaluate_curve_jet(span, interval.start)?;
@@ -678,6 +858,9 @@ impl EditorScene {
                     )?;
                     curves.push(SceneCurve {
                         span,
+                        role,
+                        source_role: role,
+                        origin: SceneCurveOrigin::Native,
                         screen_polyline,
                         screen_parameters,
                         drag_handle_point: match &curve.definition {
@@ -714,7 +897,11 @@ impl EditorScene {
     /// # Errors
     ///
     /// Rejects stale/mismatched provenance or non-finite generated geometry.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "composite scene validation and native/computed publication remain one auditable boundary"
+    )]
     pub fn from_accepted_with_computed(
         accepted_revision: u64,
         design_identity: SketchDesignIdentity,
@@ -758,20 +945,28 @@ impl EditorScene {
                         interval,
                     },
                     geosolve_sketch_features::ComputedEdgeProvenance::SourceFragment { .. },
-                ) => scene.curves.push(scene_curve_for_interval(
-                    accepted_document,
-                    viewport,
-                    source.span,
-                    interval.start,
-                    interval.end,
-                    chord_tolerance_pixels,
-                )?),
+                ) => {
+                    let mut curve = scene_curve_for_interval(
+                        accepted_document,
+                        viewport,
+                        source.span,
+                        interval.start,
+                        interval.end,
+                        chord_tolerance_pixels,
+                    )?;
+                    curve.role = edge.role;
+                    curve.source_role = accepted_document
+                        .geometry_role(source.span.curve)
+                        .unwrap_or_default();
+                    scene.curves.push(curve);
+                }
                 (
                     geosolve_sketch_features::ComputedEdgeGeometry::CircularArc(arc),
                     geosolve_sketch_features::ComputedEdgeProvenance::FilletArc { owner, .. },
                 ) => scene.computed_curves.push(SceneComputedCurve {
                     edge: edge.id,
                     owner: *owner,
+                    role: edge.role,
                     center: arc.center,
                     radius: arc.radius,
                     start_angle: arc.start_angle,
@@ -787,6 +982,25 @@ impl EditorScene {
                 }),
                 _ => {}
             }
+        }
+        for fragment in computed.construction_fragments() {
+            let mut curve = scene_curve_for_interval(
+                accepted_document,
+                viewport,
+                fragment.source.span,
+                fragment.interval.start,
+                fragment.interval.end,
+                chord_tolerance_pixels,
+            )?;
+            curve.role = GeometryRole::Construction;
+            curve.source_role = fragment.source_role;
+            curve.origin = SceneCurveOrigin::FilletDiscarded {
+                fragment: fragment.id,
+                source: fragment.source,
+                interval: fragment.interval,
+                provenance: fragment.provenance,
+            };
+            scene.curves.push(curve);
         }
         scene.curves.sort_by_key(|curve| curve.span);
         scene.computed_curves.sort_by_key(|curve| curve.edge);
@@ -1130,13 +1344,32 @@ impl EditorScene {
         input: SceneFilletActionInput,
         tolerance: PickTolerance,
     ) -> Option<SceneFilletActionTarget> {
+        self.resolve_fillet_action_with_policy(
+            input,
+            tolerance,
+            GeometryInteractionPolicy::default(),
+        )
+    }
+
+    /// Policy-aware counterpart of [`Self::resolve_fillet_action`]. Both canvas
+    /// and accessible inputs require the owning computed curve to be visible
+    /// and admitted by the current pick scope.
+    #[must_use]
+    pub fn resolve_fillet_action_with_policy(
+        &self,
+        input: SceneFilletActionInput,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<SceneFilletActionTarget> {
         if !tolerance.is_valid() {
             return None;
         }
         match input {
-            SceneFilletActionInput::Accessible(target) => {
-                self.validated_fillet_action(&target).map(|_| target)
-            }
+            SceneFilletActionInput::Accessible(target) => self
+                .computed_owner_is_interactive(target.owner, policy)
+                .then(|| self.validated_fillet_action(&target))
+                .flatten()
+                .map(|_| target),
             SceneFilletActionInput::Canvas { position, painted } => {
                 if !position.is_finite() {
                     return None;
@@ -1147,6 +1380,7 @@ impl EditorScene {
                     .fillet_affordances
                     .iter()
                     .flat_map(|affordances| &affordances.actions)
+                    .filter(|action| self.computed_owner_is_interactive(action.owner, policy))
                     .filter(|action| {
                         matches!(
                             action.availability,
@@ -1178,6 +1412,17 @@ impl EditorScene {
                 self.validated_fillet_action(&resolved).map(|_| resolved)
             }
         }
+    }
+
+    fn computed_owner_is_interactive(
+        &self,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        policy: GeometryInteractionPolicy,
+    ) -> bool {
+        self.computed_curves
+            .iter()
+            .find(|curve| curve.owner == owner)
+            .is_some_and(|curve| curve.is_interactive(policy))
     }
 
     fn validated_fillet_action(
@@ -1217,12 +1462,33 @@ impl EditorScene {
         position: ScreenPoint,
         tolerance: PickTolerance,
     ) -> Option<SceneFilletHit> {
+        self.resolve_fillet_hit_with_policy(
+            position,
+            tolerance,
+            GeometryInteractionPolicy::default(),
+        )
+    }
+
+    /// Fillet-aware counterpart of [`Self::hit_test_with_policy`].
+    #[must_use]
+    pub fn resolve_fillet_hit_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<SceneFilletHit> {
         if !position.is_finite() || !tolerance.is_valid() {
             return None;
         }
         if let Some((owner, distance_pixels)) = self
             .fillet_affordances
             .iter()
+            .filter(|affordances| {
+                self.computed_curves
+                    .iter()
+                    .find(|curve| curve.owner == affordances.owner)
+                    .is_some_and(|curve| curve.is_pickable(policy))
+            })
             .filter_map(|affordances| {
                 self.fillet_radius_hit_distance(affordances, position, tolerance)
                     .map(|distance| (affordances.owner, distance))
@@ -1239,7 +1505,7 @@ impl EditorScene {
                 distance_pixels,
             });
         }
-        self.native_authoring_hit_test(position, tolerance)
+        self.native_authoring_hit_test_with_policy(position, tolerance, policy)
             .map(SceneFilletHit::Native)
     }
 
@@ -1291,36 +1557,47 @@ impl EditorScene {
     /// distance and persistent identity break ties.
     #[must_use]
     pub fn hit_test(&self, position: ScreenPoint, tolerance: PickTolerance) -> Option<Hit> {
+        self.hit_test_with_policy(position, tolerance, GeometryInteractionPolicy::default())
+    }
+
+    /// Returns the deterministic best visible hit under one complete headless
+    /// geometry policy.
+    ///
+    /// In `All`, a Profile candidate wins a cross-role near-tie of at most one
+    /// CSS pixel; cross-role candidates outside that band use distance. Within
+    /// one role, semantic point/curve kind precedes distance. Persistent
+    /// identity and picked parameter finish deterministic ties.
+    #[must_use]
+    pub fn hit_test_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<Hit> {
         if !position.is_finite() || !tolerance.is_valid() {
             return None;
         }
-        let point_hit = self
-            .points
-            .iter()
-            .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
-            .min_by(compare_hits);
-        if point_hit.is_some() {
-            return point_hit;
-        }
-        let native = self
-            .curves
-            .iter()
-            .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels))
-            .min_by(compare_hits);
-        let computed = self
-            .computed_curves
-            .iter()
-            .filter_map(|curve| computed_curve_hit(curve, position, tolerance.curve_pixels))
-            .min_by(compare_hits);
-        match (native, computed) {
-            (Some(first), Some(second)) => Some(if compare_hits(&first, &second).is_le() {
-                first
-            } else {
-                second
-            }),
-            (Some(hit), None) | (None, Some(hit)) => Some(hit),
-            (None, None) => None,
-        }
+        best_policy_hit(
+            self.points
+                .iter()
+                .filter(|point| point.is_pickable(policy))
+                .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
+                .chain(
+                    self.curves
+                        .iter()
+                        .filter(|curve| curve.is_pickable(policy))
+                        .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels)),
+                )
+                .chain(
+                    self.computed_curves
+                        .iter()
+                        .filter(|curve| curve.is_pickable(policy))
+                        .filter_map(|curve| {
+                            computed_curve_hit(curve, position, tolerance.curve_pixels)
+                        }),
+                ),
+            policy.scope,
+        )
     }
 
     /// Native-only geometry hit for constraint and computed-feature authoring.
@@ -1332,19 +1609,37 @@ impl EditorScene {
         position: ScreenPoint,
         tolerance: PickTolerance,
     ) -> Option<Hit> {
+        self.native_authoring_hit_test_with_policy(
+            position,
+            tolerance,
+            GeometryInteractionPolicy::default(),
+        )
+    }
+
+    /// Native-only authoring hit under one complete geometry policy.
+    #[must_use]
+    pub fn native_authoring_hit_test_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<Hit> {
         if !position.is_finite() || !tolerance.is_valid() {
             return None;
         }
-        self.points
-            .iter()
-            .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
-            .min_by(compare_hits)
-            .or_else(|| {
-                self.curves
-                    .iter()
-                    .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels))
-                    .min_by(compare_hits)
-            })
+        best_policy_hit(
+            self.points
+                .iter()
+                .filter(|point| point.is_pickable(policy))
+                .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
+                .chain(
+                    self.curves
+                        .iter()
+                        .filter(|curve| curve.is_pickable(policy))
+                        .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels)),
+                ),
+            policy.scope,
+        )
     }
 
     /// Returns bounded native authoring hits in deterministic interaction order.
@@ -1361,11 +1656,27 @@ impl EditorScene {
     ///
     /// Returns [`NativeAuthoringHitError::CandidateLimitExceeded`] on the first
     /// distinct in-tolerance item beyond `maximum_candidates`.
+    #[cfg(test)]
     pub(crate) fn native_authoring_hit_candidates(
         &self,
         position: ScreenPoint,
         tolerance: PickTolerance,
         maximum_candidates: usize,
+    ) -> Result<Vec<Hit>, NativeAuthoringHitError> {
+        self.native_authoring_hit_candidates_with_policy(
+            position,
+            tolerance,
+            maximum_candidates,
+            GeometryInteractionPolicy::default(),
+        )
+    }
+
+    pub(crate) fn native_authoring_hit_candidates_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        maximum_candidates: usize,
+        policy: GeometryInteractionPolicy,
     ) -> Result<Vec<Hit>, NativeAuthoringHitError> {
         if !position.is_finite() || !tolerance.is_valid() {
             return Ok(Vec::new());
@@ -1373,32 +1684,40 @@ impl EditorScene {
         let candidates = self
             .points
             .iter()
+            .filter(|point| point.is_pickable(policy))
             .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
             .chain(
                 self.curves
                     .iter()
+                    .filter(|curve| curve.is_pickable(policy))
                     .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels)),
             );
-        let mut unique = std::collections::BTreeMap::<SelectionItem, Hit>::new();
+        let mut unique = std::collections::BTreeMap::<SelectionItem, PolicyHitAccumulator>::new();
         for hit in candidates {
             if let Some(existing) = unique.get_mut(&hit.item) {
-                if compare_hits(&hit, existing).is_lt() {
-                    *existing = hit;
-                }
+                existing.consider(hit, policy.scope);
                 continue;
             }
             if unique.len() >= maximum_candidates {
                 return Err(NativeAuthoringHitError::CandidateLimitExceeded { maximum_candidates });
             }
-            unique.insert(hit.item, hit);
+            let mut accumulator = PolicyHitAccumulator::default();
+            accumulator.consider(hit, policy.scope);
+            unique.insert(hit.item, accumulator);
         }
-        let mut hits = unique.into_values().collect::<Vec<_>>();
-        hits.sort_by(|first, second| {
-            native_hit_priority(first.item)
-                .cmp(&native_hit_priority(second.item))
-                .then_with(|| compare_hits(first, second))
-        });
-        Ok(hits)
+        let mut remaining = unique
+            .into_values()
+            .filter_map(|candidate| candidate.best(policy.scope))
+            .collect::<Vec<_>>();
+        let mut ordered = Vec::with_capacity(remaining.len());
+        while let Some(best) = best_policy_hit(remaining.iter().copied(), policy.scope) {
+            let index = remaining
+                .iter()
+                .position(|candidate| *candidate == best)
+                .expect("the selected authoring hit came from the remaining set");
+            ordered.push(remaining.remove(index));
+        }
+        Ok(ordered)
     }
 
     /// Returns the ordinary best visible geometry hit only when that exact
@@ -1415,21 +1734,48 @@ impl EditorScene {
         tolerance: PickTolerance,
         source: &SketchDocument,
     ) -> Option<Hit> {
-        let hit = self.hit_test(position, tolerance)?;
+        self.hit_test_for_document_with_policy(
+            position,
+            tolerance,
+            source,
+            GeometryInteractionPolicy::default(),
+        )
+    }
+
+    /// Operation-authoring hit under one complete geometry policy.
+    #[must_use]
+    pub fn hit_test_for_document_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        source: &SketchDocument,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<Hit> {
+        let hit = self.hit_test_with_policy(position, tolerance, policy)?;
         if !document_contains_item(source, hit.item) {
             return None;
         }
         let foreground_blocks = match hit.item {
-            SelectionItem::Point(_) => self.points.iter().any(|point| {
-                !document_contains_item(source, SelectionItem::Point(point.id))
-                    && point_hit(point, position, tolerance.point_pixels)
-                        .is_some_and(|candidate| candidate.distance_pixels <= hit.distance_pixels)
-            }),
-            SelectionItem::Curve(_) => self.curves.iter().any(|curve| {
-                !document_contains_item(source, SelectionItem::Curve(curve.span))
-                    && curve_hit(curve, position, tolerance.curve_pixels)
-                        .is_some_and(|candidate| candidate.distance_pixels <= hit.distance_pixels)
-            }),
+            SelectionItem::Point(_) => self
+                .points
+                .iter()
+                .filter(|point| point.is_pickable(policy))
+                .any(|point| {
+                    !document_contains_item(source, SelectionItem::Point(point.id))
+                        && point_hit(point, position, tolerance.point_pixels).is_some_and(
+                            |candidate| candidate.distance_pixels <= hit.distance_pixels,
+                        )
+                }),
+            SelectionItem::Curve(_) => self
+                .curves
+                .iter()
+                .filter(|curve| curve.is_pickable(policy))
+                .any(|curve| {
+                    !document_contains_item(source, SelectionItem::Curve(curve.span))
+                        && curve_hit(curve, position, tolerance.curve_pixels).is_some_and(
+                            |candidate| candidate.distance_pixels <= hit.distance_pixels,
+                        )
+                }),
             SelectionItem::Constraint(_)
             | SelectionItem::Dimension(_)
             | SelectionItem::Feature(_)
@@ -1522,6 +1868,7 @@ impl EditorScene {
             item: occurrence.item,
             distance_pixels,
             curve_parameter: None,
+            geometry: None,
         })
     }
 
@@ -1626,11 +1973,43 @@ impl PickTolerance {
 
 /// Result of a deterministic scene hit test.
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SceneGeometryHit {
+    Point {
+        incidence: ScenePointRoleIncidence,
+    },
+    NativeCurve {
+        role: GeometryRole,
+        source_role: GeometryRole,
+        origin: SceneCurveOrigin,
+    },
+    ComputedFilletArc {
+        edge: ComputedEdgeId,
+        owner: ComputedCornerRef,
+        role: GeometryRole,
+    },
+}
+
+impl SceneGeometryHit {
+    fn preferred_role(self, scope: GeometryPickScope) -> GeometryRole {
+        match self {
+            Self::Point { incidence } => incidence.preferred_role(scope),
+            Self::NativeCurve { role, .. } | Self::ComputedFilletArc { role, .. } => role,
+        }
+    }
+}
+
+/// Result of a deterministic scene hit test.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hit {
     pub item: SelectionItem,
     pub distance_pixels: f64,
     /// Explicit curve feature picked by the user, when the hit is a curve.
     pub curve_parameter: Option<f64>,
+    /// Exact visible occurrence responsible for this hit.
+    ///
+    /// Discarded Fillet fragments retain their evaluation-local provenance here
+    /// while `item` remains the complete native source span.
+    pub geometry: Option<SceneGeometryHit>,
 }
 
 /// Typed bounded-work result for native authoring hit collection.
@@ -1798,11 +2177,13 @@ pub enum EditorEffect {
     CommitComputedFilletAction {
         target: SceneFilletActionTarget,
     },
-    /// A complete construction proposal. Hosts apply this atomically with
-    /// `SketchDocumentSession::transact`.
+    /// A complete typed construction commit envelope. Hosts apply `proposal`
+    /// and its draft-frozen `role` together through the retained coordinator;
+    /// detaching the geometry-only proposal would lose authoring intent.
     CommitConstruction {
         expected: SketchDesignIdentity,
         proposal: ConstructionProposal,
+        role: GeometryRole,
     },
     /// A non-authoritative staged construction preview.
     PreviewConstruction(ConstructionPreview),
@@ -2063,8 +2444,31 @@ impl ConstructionProposal {
         &self,
         document: &mut SketchDocument,
     ) -> Result<ConstructionResult, geosolve_sketch::DocumentError> {
+        self.apply_with_role(document, GeometryRole::Profile)
+    }
+
+    /// Applies this proposal atomically and assigns every created curve the
+    /// requested persistent geometry role. Standalone points remain role-neutral.
+    ///
+    /// # Errors
+    ///
+    /// Returns the public document validation/allocation error without mutation.
+    pub fn apply_with_role(
+        &self,
+        document: &mut SketchDocument,
+        role: GeometryRole,
+    ) -> Result<ConstructionResult, geosolve_sketch::DocumentError> {
         let mut candidate = document.clone();
         let result = self.apply_to(&mut candidate)?;
+        if role == GeometryRole::Construction && !result.curves.is_empty() {
+            let edits = result
+                .curves
+                .iter()
+                .copied()
+                .map(|curve| geosolve_sketch::GeometryRoleEdit::new(curve, role))
+                .collect::<Vec<_>>();
+            candidate.set_geometry_roles(&edits)?;
+        }
         *document = candidate;
         Ok(result)
     }
@@ -2454,6 +2858,71 @@ fn construction_branch_direction(
     Ok([delta[0] / norm, delta[1] / norm])
 }
 
+fn point_role_incidence(
+    document: &SketchDocument,
+) -> std::collections::BTreeMap<DesignPointId, ScenePointRoleIncidence> {
+    let mut incidence = document
+        .points()
+        .iter()
+        .map(|point| (point.id, ScenePointRoleIncidence::default()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    for curve in document.curves() {
+        let role = document.geometry_role(curve.id).unwrap_or_default();
+        for point in curve_definition_points(&curve.definition) {
+            if let Some(entry) = incidence.get_mut(&point) {
+                match role {
+                    GeometryRole::Profile => entry.profile = true,
+                    GeometryRole::Construction => entry.construction = true,
+                }
+            }
+        }
+    }
+    // A point with no curve incidence remains ordinary profile authoring state.
+    // This keeps standalone sketch points usable without inventing a persistent
+    // point role.
+    for value in incidence.values_mut() {
+        if !value.profile && !value.construction {
+            value.profile = true;
+        }
+    }
+    incidence
+}
+
+fn curve_definition_points(definition: &CurveDefinition) -> Vec<DesignPointId> {
+    match definition {
+        CurveDefinition::Line { start, end, .. }
+        | CurveDefinition::RationalQuadraticConic { start, end, .. } => vec![*start, *end],
+        CurveDefinition::Polyline { points, .. }
+        | CurveDefinition::BSpline {
+            controls: points, ..
+        }
+        | CurveDefinition::Nurbs {
+            controls: points, ..
+        } => points.clone(),
+        CurveDefinition::Circle { center, .. } | CurveDefinition::CircularArc { center, .. } => {
+            vec![*center]
+        }
+        CurveDefinition::QuadraticBezier { controls } => controls.to_vec(),
+        CurveDefinition::CubicBezier { controls } => controls.to_vec(),
+        CurveDefinition::Ellipse {
+            center,
+            major_axis_point,
+            ..
+        }
+        | CurveDefinition::EllipticalArc {
+            center,
+            major_axis_point,
+            ..
+        } => vec![*center, *major_axis_point],
+        CurveDefinition::ParabolaSegment { vertex, focus, .. } => vec![*vertex, *focus],
+        CurveDefinition::HyperbolaSegment {
+            center,
+            transverse_axis_point,
+            ..
+        } => vec![*center, *transverse_axis_point],
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct PointGesture {
     epoch: u64,
@@ -2555,6 +3024,7 @@ impl SnapTolerance {
 #[derive(Clone, Debug)]
 struct Draft {
     tool: EditorTool,
+    geometry_role: GeometryRole,
     pointer_id: u64,
     points: Vec<ConstructionPoint>,
     positions: Vec<[f64; 2]>,
@@ -2575,6 +3045,9 @@ pub struct ConstraintEditor {
     hover_target: Option<EditorHoverTarget>,
     hover_context: Option<AnnotationHoverContext>,
     curve_pick_parameters: Vec<(CurveSpan, f64)>,
+    curve_pick_origins: Vec<(CurveSpan, SceneCurveOrigin)>,
+    geometry_policy: GeometryInteractionPolicy,
+    authoring_geometry_role: GeometryRole,
     pick_tolerance: PickTolerance,
     drag_threshold_pixels: f64,
     point_gesture: Option<PointGesture>,
@@ -2600,6 +3073,9 @@ impl Default for ConstraintEditor {
             hover_target: None,
             hover_context: None,
             curve_pick_parameters: Vec::new(),
+            curve_pick_origins: Vec::new(),
+            geometry_policy: GeometryInteractionPolicy::default(),
+            authoring_geometry_role: GeometryRole::Profile,
             pick_tolerance: PickTolerance::default(),
             drag_threshold_pixels: 3.0,
             point_gesture: None,
@@ -2661,6 +3137,64 @@ impl ConstraintEditor {
     #[must_use]
     pub const fn tool(&self) -> EditorTool {
         self.tool
+    }
+
+    /// Returns the complete session-local geometry interaction policy.
+    #[must_use]
+    pub const fn geometry_interaction_policy(&self) -> GeometryInteractionPolicy {
+        self.geometry_policy
+    }
+
+    /// Replaces the ordinary canvas pick scope and cancels interaction admitted
+    /// under the previous policy. Durable selection identities remain intact.
+    pub fn set_geometry_pick_scope(&mut self, scope: GeometryPickScope) -> Vec<EditorEffect> {
+        if self.geometry_policy.scope == scope {
+            return Vec::new();
+        }
+        self.geometry_policy.scope = scope;
+        self.cancel_interaction_for_geometry_policy_change()
+    }
+
+    /// Replaces explicit/implicit construction visibility and cancels interaction
+    /// admitted under the previous policy. Existing selection identities remain
+    /// intact and recover when the geometry is shown again.
+    pub fn set_geometry_visibility(&mut self, visibility: GeometryVisibility) -> Vec<EditorEffect> {
+        if self.geometry_policy.visibility == visibility {
+            return Vec::new();
+        }
+        self.geometry_policy.visibility = visibility;
+        self.cancel_interaction_for_geometry_policy_change()
+    }
+
+    fn cancel_interaction_for_geometry_policy_change(&mut self) -> Vec<EditorEffect> {
+        let mut effects = self.cancel_draft();
+        effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_feature_radius_gesture());
+        effects.extend(self.cancel_feature_contact_gesture());
+        effects.extend(self.clear_fillet_branch_preview());
+        effects.extend(self.clear_hover_for_geometry_policy_change());
+        effects
+    }
+
+    fn clear_hover_for_geometry_policy_change(&mut self) -> Vec<EditorEffect> {
+        if self.hover_target.is_none() && self.hover_context.is_none() {
+            return Vec::new();
+        }
+        self.hover_target = None;
+        self.hover_context = None;
+        vec![EditorEffect::HoverChanged(EditorHoverState::default())]
+    }
+
+    /// Returns the role assigned atomically to curves created by the active
+    /// drawing workflow. Standalone points remain role-neutral.
+    #[must_use]
+    pub const fn authoring_geometry_role(&self) -> GeometryRole {
+        self.authoring_geometry_role
+    }
+
+    /// Chooses the role for subsequently started drawing workflows.
+    pub fn set_authoring_geometry_role(&mut self, role: GeometryRole) {
+        self.authoring_geometry_role = role;
     }
 
     /// Replaces the endpoint snap policy.
@@ -2787,7 +3321,13 @@ impl ConstraintEditor {
         input: SceneFilletActionInput,
     ) -> Vec<EditorEffect> {
         let target = (self.tool == EditorTool::Select && self.active_pointer_gesture().is_none())
-            .then(|| scene.resolve_fillet_action(input, self.pick_tolerance))
+            .then(|| {
+                scene.resolve_fillet_action_with_policy(
+                    input,
+                    self.pick_tolerance,
+                    self.geometry_policy,
+                )
+            })
             .flatten();
         self.set_fillet_branch_preview(target.as_ref())
     }
@@ -2806,7 +3346,11 @@ impl ConstraintEditor {
         if self.tool != EditorTool::Select || self.active_pointer_gesture().is_some() {
             return Vec::new();
         }
-        let Some(target) = scene.resolve_fillet_action(input, self.pick_tolerance) else {
+        let Some(target) = scene.resolve_fillet_action_with_policy(
+            input,
+            self.pick_tolerance,
+            self.geometry_policy,
+        ) else {
             return Vec::new();
         };
         if self.fillet_branch_preview != Some(target) {
@@ -2830,9 +3374,10 @@ impl ConstraintEditor {
     /// ordinary pointer/focus transitions also reconcile through their resolver.
     pub fn reconcile_fillet_branch_preview(&mut self, scene: &EditorScene) -> Vec<EditorEffect> {
         let retained = self.fillet_branch_preview.filter(|target| {
-            scene.resolve_fillet_action(
+            scene.resolve_fillet_action_with_policy(
                 SceneFilletActionInput::Accessible(*target),
                 self.pick_tolerance,
+                self.geometry_policy,
             ) == Some(*target)
         });
         self.set_fillet_branch_preview(retained.as_ref())
@@ -2879,11 +3424,21 @@ impl ConstraintEditor {
             .find_map(|(candidate, parameter)| (*candidate == span).then_some(*parameter))
     }
 
+    /// Returns the exact visible native-source occurrence responsible for one
+    /// selected curve's most recent canvas pick.
+    #[must_use]
+    pub fn curve_pick_origin(&self, span: CurveSpan) -> Option<SceneCurveOrigin> {
+        self.curve_pick_origins
+            .iter()
+            .find_map(|(candidate, origin)| (*candidate == span).then_some(*origin))
+    }
+
     /// Replaces ordered persistent selection, removing later duplicates.
     pub fn set_selection(&mut self, selection: impl IntoIterator<Item = SelectionItem>) {
         self.fillet_branch_preview = None;
         self.selection.clear();
         self.curve_pick_parameters.clear();
+        self.curve_pick_origins.clear();
         for item in selection {
             if !self.selection.contains(&item) {
                 self.selection.push(item);
@@ -2911,6 +3466,8 @@ impl ConstraintEditor {
         self.selection
             .retain(|item| !item_belongs_to_computed_feature(*item, feature));
         self.curve_pick_parameters
+            .retain(|(span, _)| self.selection.contains(&SelectionItem::Curve(*span)));
+        self.curve_pick_origins
             .retain(|(span, _)| self.selection.contains(&SelectionItem::Curve(*span)));
         if self
             .hover_target
@@ -2947,6 +3504,8 @@ impl ConstraintEditor {
                 if let SelectionItem::Curve(span) = item {
                     self.curve_pick_parameters
                         .retain(|(candidate, _)| *candidate != span);
+                    self.curve_pick_origins
+                        .retain(|(candidate, _)| *candidate != span);
                 }
             } else {
                 self.selection.push(item);
@@ -2954,6 +3513,7 @@ impl ConstraintEditor {
         } else {
             self.selection.clear();
             self.curve_pick_parameters.clear();
+            self.curve_pick_origins.clear();
             self.selection.push(item);
         }
     }
@@ -2981,7 +3541,11 @@ impl ConstraintEditor {
         if self.feature_radius_gesture.is_some() || self.feature_contact_gesture.is_some() {
             return effects;
         }
-        let fillet_hit = scene.resolve_fillet_hit(input.position, self.pick_tolerance);
+        let fillet_hit = scene.resolve_fillet_hit_with_policy(
+            input.position,
+            self.pick_tolerance,
+            self.geometry_policy,
+        );
         if let Some(SceneFilletHit::Radius {
             owner,
             distance_pixels,
@@ -2997,6 +3561,7 @@ impl ConstraintEditor {
                     item: SelectionItem::FeatureCorner(owner),
                     distance_pixels,
                     curve_parameter: None,
+                    geometry: None,
                 }),
             ));
             return effects;
@@ -3004,7 +3569,11 @@ impl ConstraintEditor {
         let geometry_hit = match fillet_hit {
             Some(SceneFilletHit::Native(hit)) => Some(hit),
             Some(SceneFilletHit::Radius { .. }) => unreachable!(),
-            None => scene.hit_test(input.position, self.pick_tolerance),
+            None => scene.hit_test_with_policy(
+                input.position,
+                self.pick_tolerance,
+                self.geometry_policy,
+            ),
         };
         let annotation_hit = scene.annotation_hit_test(
             input.position,
@@ -3053,7 +3622,11 @@ impl ConstraintEditor {
             modifiers: Modifiers::default(),
             ..input
         };
-        let mut effects = match scene.resolve_fillet_hit(input.position, tolerance) {
+        let mut effects = match scene.resolve_fillet_hit_with_policy(
+            input.position,
+            tolerance,
+            self.geometry_policy,
+        ) {
             Some(SceneFilletHit::Radius {
                 owner: resolved,
                 distance_pixels,
@@ -3064,6 +3637,7 @@ impl ConstraintEditor {
                     item: SelectionItem::FeatureCorner(owner),
                     distance_pixels,
                     curve_parameter: None,
+                    geometry: None,
                 }),
             ),
             Some(SceneFilletHit::Radius { .. }) => return None,
@@ -3071,7 +3645,7 @@ impl ConstraintEditor {
                 let hit = scene
                     .computed_curves
                     .iter()
-                    .find(|curve| curve.owner == owner)
+                    .find(|curve| curve.owner == owner && curve.is_pickable(self.geometry_policy))
                     .and_then(|curve| {
                         computed_curve_hit(curve, input.position, tolerance.curve_pixels)
                     })?;
@@ -3149,8 +3723,13 @@ impl ConstraintEditor {
             if let (SelectionItem::Curve(span), Some(parameter)) = (hit.item, hit.curve_parameter) {
                 self.curve_pick_parameters
                     .retain(|(candidate, _)| *candidate != span);
+                self.curve_pick_origins
+                    .retain(|(candidate, _)| *candidate != span);
                 if self.selection.contains(&hit.item) {
                     self.curve_pick_parameters.push((span, parameter));
+                    if let Some(SceneGeometryHit::NativeCurve { origin, .. }) = hit.geometry {
+                        self.curve_pick_origins.push((span, origin));
+                    }
                 }
             }
             if let Some((owner, radius, rail)) = scene.feature_radius_handle(hit.item)
@@ -3206,6 +3785,7 @@ impl ConstraintEditor {
         } else if !input.modifiers.extends_selection() {
             self.selection.clear();
             self.curve_pick_parameters.clear();
+            self.curve_pick_origins.clear();
         }
         effects.extend(
             (before != self.selection)
@@ -3379,9 +3959,11 @@ impl ConstraintEditor {
         if !input.position.is_finite() {
             return Vec::new();
         }
-        if let Some(hit @ SceneFilletHit::Radius { .. }) =
-            scene.resolve_fillet_hit(input.position, self.pick_tolerance)
-        {
+        if let Some(hit @ SceneFilletHit::Radius { .. }) = scene.resolve_fillet_hit_with_policy(
+            input.position,
+            self.pick_tolerance,
+            self.geometry_policy,
+        ) {
             let item = hit.item();
             return self.set_hover_state(
                 Some(EditorHoverTarget::Geometry(item)),
@@ -3398,7 +3980,8 @@ impl ConstraintEditor {
             self.visibility_context(),
             &[],
         );
-        let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
+        let geometry_hit =
+            scene.hit_test_with_policy(input.position, self.pick_tolerance, self.geometry_policy);
         let (target, context) = if let Some((occurrence, _)) = annotation_hit {
             let context = self.hover_context.filter(|context| {
                 scene.annotations.iter().any(|annotation| {
@@ -3858,7 +4441,7 @@ impl ConstraintEditor {
             _ => None,
         };
         proposal
-            .map(|proposal| commit_construction(expected, proposal))
+            .map(|proposal| commit_construction(expected, proposal, draft.geometry_role))
             .unwrap_or_default()
     }
 
@@ -3906,11 +4489,17 @@ impl ConstraintEditor {
         if !position.into_iter().all(f64::is_finite) {
             return Vec::new();
         }
-        let operand = snap_point(scene, input.position, self.snap_tolerance)
-            .unwrap_or(ConstructionPoint::New(position));
+        let operand = snap_point(
+            scene,
+            input.position,
+            self.snap_tolerance,
+            self.geometry_policy,
+        )
+        .unwrap_or(ConstructionPoint::New(position));
         let prior_draft = self.draft.take();
         let mut draft = prior_draft.clone().unwrap_or(Draft {
             tool: self.tool,
+            geometry_role: self.authoring_geometry_role,
             pointer_id: input.pointer_id,
             points: Vec::new(),
             positions: Vec::new(),
@@ -3951,7 +4540,9 @@ impl ConstraintEditor {
                 .collect::<Vec<_>>()
         } else {
             proposal
-                .map(|proposal| commit_construction(scene.design_identity, proposal))
+                .map(|proposal| {
+                    commit_construction(scene.design_identity, proposal, draft.geometry_role)
+                })
                 .unwrap_or_default()
         }
     }
@@ -3967,8 +4558,13 @@ impl ConstraintEditor {
         if !position.into_iter().all(f64::is_finite) {
             return Vec::new();
         }
-        let operand = snap_point(scene, input.position, self.snap_tolerance)
-            .unwrap_or(ConstructionPoint::New(position));
+        let operand = snap_point(
+            scene,
+            input.position,
+            self.snap_tolerance,
+            self.geometry_policy,
+        )
+        .unwrap_or(ConstructionPoint::New(position));
         let mut preview = draft.clone();
         preview.points.push(operand);
         preview.positions.push(operand_position(operand));
@@ -4042,9 +4638,14 @@ impl ConstraintEditor {
 fn commit_construction(
     expected: SketchDesignIdentity,
     proposal: ConstructionProposal,
+    role: GeometryRole,
 ) -> Vec<EditorEffect> {
     vec![
-        EditorEffect::CommitConstruction { expected, proposal },
+        EditorEffect::CommitConstruction {
+            expected,
+            proposal,
+            role,
+        },
         EditorEffect::ClearConstructionPreview,
     ]
 }
@@ -4264,6 +4865,9 @@ fn scene_curve_for_interval(
         });
     Ok(SceneCurve {
         span,
+        role: document.geometry_role(span.curve).unwrap_or_default(),
+        source_role: document.geometry_role(span.curve).unwrap_or_default(),
+        origin: SceneCurveOrigin::Native,
         screen_polyline,
         screen_parameters,
         drag_handle_point,
@@ -4406,6 +5010,9 @@ fn point_hit(point: &ScenePoint, position: ScreenPoint, tolerance_pixels: f64) -
         item: SelectionItem::Point(point.id),
         distance_pixels: distance,
         curve_parameter: None,
+        geometry: Some(SceneGeometryHit::Point {
+            incidence: point.role_incidence,
+        }),
     })
 }
 
@@ -4426,6 +5033,11 @@ fn curve_hit(curve: &SceneCurve, position: ScreenPoint, tolerance_pixels: f64) -
         item: SelectionItem::Curve(curve.span),
         distance_pixels: distance,
         curve_parameter: Some(parameter),
+        geometry: Some(SceneGeometryHit::NativeCurve {
+            role: curve.role,
+            source_role: curve.source_role,
+            origin: curve.origin,
+        }),
     })
 }
 
@@ -4443,6 +5055,11 @@ fn computed_curve_hit(
         item: SelectionItem::FeatureCorner(curve.owner),
         distance_pixels: distance,
         curve_parameter: None,
+        geometry: Some(SceneGeometryHit::ComputedFilletArc {
+            edge: curve.edge,
+            owner: curve.owner,
+            role: curve.role,
+        }),
     })
 }
 
@@ -4459,11 +5076,85 @@ fn document_contains_item(document: &SketchDocument, item: SelectionItem) -> boo
     }
 }
 
-fn compare_hits(first: &Hit, second: &Hit) -> Ordering {
-    first
-        .distance_pixels
-        .total_cmp(&second.distance_pixels)
+#[derive(Default)]
+struct PolicyHitAccumulator {
+    profile_nearest: Option<f64>,
+    profile_best: Option<Hit>,
+    construction_nearest: Option<f64>,
+    construction_best: Option<Hit>,
+}
+
+impl PolicyHitAccumulator {
+    fn consider(&mut self, hit: Hit, scope: GeometryPickScope) {
+        let role = hit.geometry.map_or(GeometryRole::Profile, |geometry| {
+            geometry.preferred_role(scope)
+        });
+        let (nearest, best) = match role {
+            GeometryRole::Profile => (&mut self.profile_nearest, &mut self.profile_best),
+            GeometryRole::Construction => {
+                (&mut self.construction_nearest, &mut self.construction_best)
+            }
+        };
+        if nearest.is_none_or(|distance| hit.distance_pixels < distance) {
+            *nearest = Some(hit.distance_pixels);
+        }
+        if best
+            .as_ref()
+            .is_none_or(|candidate| compare_same_role_hits(&hit, candidate).is_lt())
+        {
+            *best = Some(hit);
+        }
+    }
+
+    fn best(&self, scope: GeometryPickScope) -> Option<Hit> {
+        match scope {
+            GeometryPickScope::Profile => self.profile_best,
+            GeometryPickScope::Construction => self.construction_best,
+            GeometryPickScope::All => match (
+                self.profile_nearest,
+                self.profile_best,
+                self.construction_nearest,
+                self.construction_best,
+            ) {
+                (
+                    Some(profile_distance),
+                    Some(profile),
+                    Some(construction_distance),
+                    Some(construction),
+                ) => {
+                    if profile_distance <= construction_distance + 1.0 {
+                        Some(profile)
+                    } else {
+                        Some(construction)
+                    }
+                }
+                (Some(_), Some(profile), _, _) => Some(profile),
+                (_, _, Some(_), Some(construction)) => Some(construction),
+                _ => None,
+            },
+        }
+    }
+}
+
+fn best_policy_hit(hits: impl IntoIterator<Item = Hit>, scope: GeometryPickScope) -> Option<Hit> {
+    let mut candidates = PolicyHitAccumulator::default();
+    for hit in hits {
+        candidates.consider(hit, scope);
+    }
+    candidates.best(scope)
+}
+
+fn compare_same_role_hits(first: &Hit, second: &Hit) -> Ordering {
+    native_hit_priority(first.item)
+        .cmp(&native_hit_priority(second.item))
+        .then_with(|| first.distance_pixels.total_cmp(&second.distance_pixels))
         .then_with(|| first.item.cmp(&second.item))
+        .then_with(|| match (first.curve_parameter, second.curve_parameter) {
+            (Some(first), Some(second)) => first.total_cmp(&second),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        })
 }
 
 const fn native_hit_priority(item: SelectionItem) -> u8 {
@@ -4614,6 +5305,7 @@ fn snap_point(
     scene: &EditorScene,
     position: ScreenPoint,
     tolerance: SnapTolerance,
+    policy: GeometryInteractionPolicy,
 ) -> Option<ConstructionPoint> {
     if !tolerance.is_valid() {
         return None;
@@ -4621,6 +5313,7 @@ fn snap_point(
     scene
         .construction_snap_points
         .iter()
+        .filter(|point| point.is_pickable(policy))
         .filter_map(|point| {
             let distance = position.distance(point.screen_position);
             (distance <= tolerance.point_pixels).then_some((distance, *point))
@@ -5601,6 +6294,7 @@ mod tests {
                 ordinal: 0,
             },
             owner,
+            role: GeometryRole::Profile,
             center: arc.center,
             radius: arc.radius,
             start_angle: arc.start_angle,
@@ -5925,6 +6619,89 @@ mod tests {
             vec![EditorEffect::FilletBranchPreviewChanged { target: None }]
         );
         assert_eq!(editor.fillet_branch_preview(), None);
+    }
+
+    #[test]
+    fn fillet_branch_actions_and_live_radius_gesture_follow_geometry_policy() {
+        let mut fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let (retained, _) = install_test_fillet_actions(&mut fixture);
+        fixture.scene.computed_curves[0].role = GeometryRole::Construction;
+        let accessible = SceneFilletActionInput::Accessible(retained);
+        let profile_policy = GeometryInteractionPolicy {
+            scope: GeometryPickScope::Profile,
+            visibility: GeometryVisibility::default(),
+        };
+        let construction_policy = GeometryInteractionPolicy {
+            scope: GeometryPickScope::Construction,
+            visibility: GeometryVisibility::default(),
+        };
+        let curve = &fixture.scene.computed_curves[0];
+        assert!(curve.is_visible(profile_policy));
+        assert!(!curve.is_interactive(profile_policy));
+        assert!(curve.is_interactive(construction_policy));
+        assert_eq!(
+            fixture.scene.resolve_fillet_action_with_policy(
+                accessible,
+                PickTolerance::default(),
+                profile_policy,
+            ),
+            None
+        );
+        assert_eq!(
+            fixture.scene.resolve_fillet_action_with_policy(
+                accessible,
+                PickTolerance::default(),
+                construction_policy,
+            ),
+            Some(retained)
+        );
+
+        let mut editor = ConstraintEditor::default();
+        editor.set_geometry_pick_scope(GeometryPickScope::Construction);
+        assert_eq!(
+            editor.preview_fillet_action(&fixture.scene, accessible),
+            vec![EditorEffect::FilletBranchPreviewChanged {
+                target: Some(retained),
+            }]
+        );
+        assert_eq!(
+            editor.set_geometry_pick_scope(GeometryPickScope::Profile),
+            vec![EditorEffect::FilletBranchPreviewChanged { target: None }]
+        );
+        assert!(
+            editor
+                .preview_fillet_action(&fixture.scene, accessible)
+                .is_empty()
+        );
+
+        editor.set_geometry_pick_scope(GeometryPickScope::Construction);
+        let rail = fixture.scene.fillet_affordances[0].radius_rail;
+        let down = pointer(
+            92,
+            rail.screen_grip.x,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        editor.pointer_down(&fixture.scene, down);
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id: 92,
+                kind: ActivePointerGestureKind::FilletRadius,
+            })
+        );
+        assert_eq!(
+            editor.set_geometry_visibility(GeometryVisibility {
+                explicit_construction: false,
+                implicit_construction: true,
+            }),
+            vec![EditorEffect::RestoreComputedFeatureRadius {
+                expected: fixture.input,
+                feature: fixture.owner.feature,
+                radius: 2.0,
+            }]
+        );
+        assert!(editor.active_pointer_gesture().is_none());
     }
 
     #[test]
@@ -6362,6 +7139,53 @@ mod tests {
                 feature: fixture.owner.feature,
                 radius: 2.0,
             }]
+        );
+    }
+
+    #[test]
+    fn painted_radius_fallback_respects_computed_curve_pick_scope() {
+        let mut fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        fixture.scene.fillet_affordances.clear();
+        fixture.scene.computed_curves[0].role = GeometryRole::Construction;
+        let position = fixture.scene.viewport.model_to_screen([
+            2.0 * std::f64::consts::FRAC_1_SQRT_2,
+            2.0 * std::f64::consts::FRAC_1_SQRT_2,
+        ]);
+        let down = pointer(25, position.x, position.y, Modifiers::default());
+        let mut editor = ConstraintEditor::default();
+        editor.set_geometry_pick_scope(GeometryPickScope::Profile);
+
+        assert!(
+            editor
+                .pointer_down_feature_radius(
+                    &fixture.scene,
+                    down,
+                    fixture.owner,
+                    PickTolerance::default(),
+                )
+                .is_none(),
+            "a painted owner cannot bypass a scope that excludes its computed curve"
+        );
+        assert!(editor.active_pointer_gesture().is_none());
+
+        editor.set_geometry_pick_scope(GeometryPickScope::Construction);
+        assert!(
+            editor
+                .pointer_down_feature_radius(
+                    &fixture.scene,
+                    down,
+                    fixture.owner,
+                    PickTolerance::default(),
+                )
+                .is_some(),
+            "the same exact fallback remains available in Construction scope"
+        );
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id: 25,
+                kind: ActivePointerGestureKind::FilletRadius,
+            })
         );
     }
 
@@ -7561,6 +8385,12 @@ mod tests {
                 item: SelectionItem::Point(points[0]),
                 distance_pixels: 0.0,
                 curve_parameter: None,
+                geometry: Some(SceneGeometryHit::Point {
+                    incidence: ScenePointRoleIncidence {
+                        profile: true,
+                        construction: false,
+                    },
+                }),
             })
         );
         let overlap = ScreenPoint {
@@ -7573,6 +8403,12 @@ mod tests {
                 item: SelectionItem::Point(points[0]),
                 distance_pixels: 7.5,
                 curve_parameter: None,
+                geometry: Some(SceneGeometryHit::Point {
+                    incidence: ScenePointRoleIncidence {
+                        profile: true,
+                        construction: false,
+                    },
+                }),
             })
         );
         for offset in [7.999, 8.0, 8.001] {
@@ -7580,8 +8416,8 @@ mod tests {
                 scene
                     .hit_test(
                         ScreenPoint {
-                            x: endpoint.x + offset,
-                            y: endpoint.y,
+                            x: endpoint.x,
+                            y: endpoint.y + offset,
                         },
                         PickTolerance::default(),
                     )
@@ -7621,6 +8457,80 @@ mod tests {
                 .expect("invalid positions produce no candidates")
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn staged_role_and_kind_ranking_is_permutation_invariant() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let profile_start = document.add_point("ps", [-4.0, 0.0]).expect("point");
+        let profile_end = document.add_point("pe", [4.0, 0.0]).expect("point");
+        let construction_start = document.add_point("cs", [-4.0, 0.01]).expect("point");
+        let construction_end = document.add_point("ce", [4.0, 0.01]).expect("point");
+        let profile = document
+            .add_curve_with_role(
+                "profile",
+                CurveDefinition::Line {
+                    start: profile_start,
+                    end: profile_end,
+                    branch_direction: [1.0, 0.0],
+                },
+                GeometryRole::Profile,
+            )
+            .expect("curve");
+        let construction = document
+            .add_curve_with_role(
+                "construction",
+                CurveDefinition::Line {
+                    start: construction_start,
+                    end: construction_end,
+                    branch_direction: [1.0, 0.0],
+                },
+                GeometryRole::Construction,
+            )
+            .expect("curve");
+        let point = document.add_point("point", [0.0, 0.15]).expect("point");
+        let original = scene(&document);
+        let position = original.viewport.model_to_screen([0.0, 0.0]);
+        let expected = [
+            SelectionItem::Point(point),
+            SelectionItem::Curve(CurveSpan::line(profile)),
+            SelectionItem::Curve(CurveSpan::line(construction)),
+        ];
+        for (reverse_points, reverse_curves) in
+            [(false, false), (true, false), (false, true), (true, true)]
+        {
+            let mut candidate = original.clone();
+            if reverse_points {
+                candidate.points.reverse();
+            }
+            if reverse_curves {
+                candidate.curves.reverse();
+            }
+            assert_eq!(
+                candidate
+                    .hit_test_with_policy(
+                        position,
+                        PickTolerance::default(),
+                        GeometryInteractionPolicy::default(),
+                    )
+                    .map(|hit| hit.item),
+                Some(expected[0])
+            );
+            assert_eq!(
+                candidate
+                    .native_authoring_hit_candidates_with_policy(
+                        position,
+                        PickTolerance::default(),
+                        3,
+                        GeometryInteractionPolicy::default(),
+                    )
+                    .expect("bounded candidates")
+                    .into_iter()
+                    .map(|hit| hit.item)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+        }
     }
 
     #[test]
@@ -8372,6 +9282,7 @@ mod tests {
                         EditorEffect::CommitConstruction {
                             expected,
                             proposal: ConstructionProposal::Point { .. },
+                            ..
                         },
                         EditorEffect::ClearConstructionPreview
                     ] if *expected == scene.design_identity
@@ -8723,6 +9634,7 @@ mod tests {
                 EditorEffect::CommitConstruction {
                     expected,
                     proposal: ConstructionProposal::Polyline { .. },
+                    ..
                 },
                 EditorEffect::ClearConstructionPreview,
             ] if *expected == scene.design_identity

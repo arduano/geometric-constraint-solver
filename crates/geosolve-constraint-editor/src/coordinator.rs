@@ -13,7 +13,7 @@ use geosolve_sketch::{
     DocumentFilletTrimEndpoint, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
     DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap, DocumentSessionError,
     DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1,
-    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, OperationControl,
+    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, GeometryRoleEdit, OperationControl,
     OperationController, OperationLimits, OperationOutcome, OperationReport, OperationWork,
     ParameterBatch, RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
@@ -1151,6 +1151,15 @@ pub enum ComputedProfileBoundary {
     Withheld { active_features: usize },
 }
 
+/// Aggregate persistent role state for the complete native curves represented
+/// by the current span selection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GeometryRoleSelectionState {
+    Profile,
+    Construction,
+    Mixed,
+}
+
 /// Closed replay vocabulary used by deterministic generated/model qualification.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ReplayAction {
@@ -1193,6 +1202,7 @@ pub enum ReplayAction {
     Construction {
         expected: SketchDesignIdentity,
         proposal: ConstructionProposal,
+        role: GeometryRole,
     },
     ConstraintAction {
         expected: SketchDesignIdentity,
@@ -2090,7 +2100,14 @@ impl RetainedEditorCoordinator {
         let snapshot = self.feature_authoring_snapshot()?;
         let document = snapshot.sketch_document().clone();
         let mut trial = state.clone();
-        let outcome = trial.pick_at(&snapshot, &document, scene, position, tolerance);
+        let outcome = trial.pick_at_with_policy(
+            &snapshot,
+            &document,
+            scene,
+            position,
+            tolerance,
+            self.editor.geometry_interaction_policy(),
+        );
         self.finish_feature_authoring_transaction(state, trial, outcome, label.into())
     }
 
@@ -4654,6 +4671,79 @@ impl RetainedEditorCoordinator {
         self.apply_edit(expected, DocumentEdit::SetGeometryRole { curve, role })
     }
 
+    /// Returns the aggregate role of selected native curves. Repeated spans of
+    /// one polyline count once; non-curve selection items are ignored.
+    #[must_use]
+    pub fn selected_geometry_role_state(&self) -> Option<GeometryRoleSelectionState> {
+        let curves = self
+            .editor
+            .selection()
+            .iter()
+            .filter_map(|item| match item {
+                SelectionItem::Curve(span) => Some(span.curve),
+                SelectionItem::Point(_)
+                | SelectionItem::Constraint(_)
+                | SelectionItem::Dimension(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_) => None,
+            })
+            .collect::<BTreeSet<_>>();
+        let mut roles = curves
+            .into_iter()
+            .filter_map(|curve| self.session.design_document().geometry_role(curve));
+        let first = roles.next()?;
+        if roles.all(|role| role == first) {
+            Some(match first {
+                GeometryRole::Profile => GeometryRoleSelectionState::Profile,
+                GeometryRole::Construction => GeometryRoleSelectionState::Construction,
+            })
+        } else {
+            Some(GeometryRoleSelectionState::Mixed)
+        }
+    }
+
+    /// Atomically toggles every selected complete native curve. An all-
+    /// Construction selection becomes Profile; Profile or mixed selections
+    /// become Construction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an action-availability, stale-design, document-validation,
+    /// solve-setup or checkpoint error without partial role changes.
+    pub fn toggle_selected_geometry_role(
+        &mut self,
+        expected: SketchDesignIdentity,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        let target = match self.selected_geometry_role_state() {
+            Some(GeometryRoleSelectionState::Construction) => GeometryRole::Profile,
+            Some(GeometryRoleSelectionState::Profile | GeometryRoleSelectionState::Mixed) => {
+                GeometryRole::Construction
+            }
+            None => {
+                return Err(CoordinatorError::ActionUnavailable(
+                    DisabledReason::WrongOperandKind,
+                ));
+            }
+        };
+        let edits = self
+            .editor
+            .selection()
+            .iter()
+            .filter_map(|item| match item {
+                SelectionItem::Curve(span) => Some(span.curve),
+                SelectionItem::Point(_)
+                | SelectionItem::Constraint(_)
+                | SelectionItem::Dimension(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_) => None,
+            })
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .map(|curve| GeometryRoleEdit::new(curve, target))
+            .collect();
+        self.apply_edit(expected, DocumentEdit::SetGeometryRoles { edits })
+    }
+
     /// Explicitly changes one external binding's declared family/topology contract.
     ///
     /// This records one ordinary retained document transaction and never derives a
@@ -4751,14 +4841,30 @@ impl RetainedEditorCoordinator {
         expected: SketchDesignIdentity,
         proposal: &ConstructionProposal,
     ) -> Result<MutationOutcome<ConstructionResult>, CoordinatorError> {
+        self.apply_construction_with_role(expected, proposal, GeometryRole::Profile)
+    }
+
+    /// Applies one role-aware construction proposal as one retained transaction
+    /// and checkpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns stale-design, construction, solve-setup or checkpoint errors.
+    pub fn apply_construction_with_role(
+        &mut self,
+        expected: SketchDesignIdentity,
+        proposal: &ConstructionProposal,
+        role: GeometryRole,
+    ) -> Result<MutationOutcome<ConstructionResult>, CoordinatorError> {
         self.ensure_expected(expected)?;
         let replay = ReplayAction::Construction {
             expected,
             proposal: proposal.clone(),
+            role,
         };
-        let outcome = self
-            .session
-            .transact(expected, |document| proposal.apply(document))?;
+        let outcome = self.session.transact(expected, |document| {
+            proposal.apply_with_role(document, role)
+        })?;
         let result = MutationOutcome {
             value: outcome.value().clone(),
             design: outcome.design_identity(),
@@ -5990,9 +6096,13 @@ impl RetainedEditorCoordinator {
                 self.apply_computed_fillet_action(target.expected, target.owner, target.action)?;
                 Ok(None)
             }
-            EditorEffect::CommitConstruction { expected, proposal } => {
+            EditorEffect::CommitConstruction {
+                expected,
+                proposal,
+                role,
+            } => {
                 self.ensure_expected(*expected)?;
-                let outcome = self.apply_construction(*expected, proposal)?;
+                let outcome = self.apply_construction_with_role(*expected, proposal, *role)?;
                 Ok(Some(MutationOutcome {
                     value: EditorMutation::Construction(outcome.value),
                     design: outcome.design,
@@ -6091,8 +6201,12 @@ impl RetainedEditorCoordinator {
             ReplayAction::Edit { expected, edit } => {
                 self.apply_edit(*expected, edit.clone())?;
             }
-            ReplayAction::Construction { expected, proposal } => {
-                self.apply_construction(*expected, proposal)?;
+            ReplayAction::Construction {
+                expected,
+                proposal,
+                role,
+            } => {
+                self.apply_construction_with_role(*expected, proposal, *role)?;
             }
             ReplayAction::PointDistance {
                 expected,
@@ -9216,6 +9330,7 @@ mod tests {
                 proposal: ConstructionProposal::Point {
                     position: [7.0, 2.0],
                 },
+                role: GeometryRole::Profile,
             },
         ];
 
@@ -13145,10 +13260,23 @@ mod tests {
             scene
                 .curves
                 .iter()
-                .filter(|curve| curve.span == fixture.spans[1])
+                .filter(|curve| {
+                    curve.span == fixture.spans[1] && !curve.origin.is_implicit_construction()
+                })
                 .count(),
             1,
             "the shared middle span must be replaced once and trimmed at both ends"
+        );
+        assert_eq!(
+            scene
+                .curves
+                .iter()
+                .filter(|curve| {
+                    curve.span == fixture.spans[1] && curve.origin.is_implicit_construction()
+                })
+                .count(),
+            2,
+            "both discarded middle-span complements remain implicit construction"
         );
         for curve in &scene.computed_curves {
             assert_eq!(
