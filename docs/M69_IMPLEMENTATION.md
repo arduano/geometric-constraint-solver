@@ -155,8 +155,13 @@ durable state/selection/history retention, all three browser capture owners and 
 Construction and Construction-to-Profile batch toggles. The current-source editor suite passes
 174 unit tests plus all 17 M55, 14 M66 feature-authoring, 15 M66 matrix and 10 M69 integration
 tests; demo-web passes 71/71. Native and WASM warnings-denied focused Clippy, the WASM check,
-formatting and `git diff --check` pass. The clean integrated closeout-source release result is
-recorded separately after its committed gate.
+formatting and `git diff --check` pass. Committed closeout source
+`ba5d61fef9246bd1d097b1478c96d86db3693683` then passed the complete clean
+`nix-shell shell.nix --run './scripts/release-gate.sh'` sequence. That exact gate included strict
+workspace Clippy, all locked tests, WASM, warnings-denied rustdoc, bench compilation, both sketch
+performance suites, the 139.78-second 256-moving-body release test, licence/package validation and
+the release Trunk build. Only the pre-existing Cargo `license` plus `license-file` advisories were
+emitted.
 
 The integrated and final WASM owner checks passed:
 

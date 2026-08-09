@@ -3472,8 +3472,10 @@ operations, computed-feature or test-harness deletion. The editor/workbench revi
 scope and visibility into one coordinator-owned policy transition, closed pre-threshold drag-
 continuation and browser-capture teardown, removed duplicated role-toggle notice policy and
 removed one unused M69-only default-policy authoring wrapper. Direct editor/web regressions,
-focused native/WASM Clippy, the WASM check, formatting and diff checks pass. The committed clean
-closeout source receives the complete release gate before final synchronization.
+focused native/WASM Clippy, the WASM check, formatting and diff checks pass. Committed closeout
+source `ba5d61fef9246bd1d097b1478c96d86db3693683` passes the complete clean release gate, including
+the long 256-moving-body test, licence/package validation and release Trunk build, before final
+synchronization.
 
 Gate: persistent Construction remains solver-active and default-profile-ineligible; implicit
 construction is finite derived output with exact native provenance and no independent identity;
