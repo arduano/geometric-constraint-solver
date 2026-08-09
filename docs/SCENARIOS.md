@@ -2124,6 +2124,12 @@ Canvas actions and the compact accessible panel expose identical stable IDs, lab
 applicability, disabled reasons, attribution and affected corners. A shared-radius action visibly
 identifies every affected arc. Hovering a ghost alternative never commits it.
 
+An isolated corner solution is only a candidate. Replace that corner in the complete cloned
+feature document and advertise the action only if the owning feature remains `Current` after
+source composition. In the three-segment/two-Fillet specimen, reversing the retained direction
+of the shared middle segment would duplicate an endpoint claim; that control is absent rather
+than presented as an arrow that cannot commit. Valid outer-segment actions remain present.
+
 Status: mechanically implemented and directly editor/presentation-qualified; clean release
 qualification is complete and explicit human UAT remains pending.
 
@@ -2195,6 +2201,22 @@ rail-less.
 Status: mechanically implemented and directly qualified by the `M68-F001` feature/editor
 regressions on `c82d420`; clean release qualification passes and explicit human retest remains
 pending.
+
+### M68-DM8 - Closed-loop parents remain complete
+
+Author a regular line-curve Fillet against a full circle or ellipse. The periodic parent still
+owns exact contact, tangent, normal, winding, branch-neighbourhood and continuation state, and the
+generated Fillet arc remains current. It does not emit a visual replacement fragment: the closed
+native loop remains complete and has no meaningless retained-direction action.
+
+Repeat the topology check with a directed circular arc and with a periodic support carrying an
+explicitly open visible trim view. These open parents continue to emit source-fragment trim claims
+and remain eligible for valid retained-direction actions. The distinction follows visible domain
+topology, not a hard-coded circle/ellipse family list.
+
+Status: mechanically implemented and directly feature/editor-qualified by `M68-F004` on
+`a1ed6ff`; release Trunk and all seven Tailscale asset checks pass, while explicit human retest
+remains pending.
 
 ### Archived solver-owned M66 scenario record
 

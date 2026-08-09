@@ -6,12 +6,12 @@ Status: ready for supervising-human UAT. Implementation, focused direct qualific
 release qualification pass. M68 remains open until this scorecard receives
 explicit human approval.
 
-Candidate source: `f5a17b9`
+Candidate source: `a1ed6ff`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
-`0938c78fa43fed012f0a729982025d8cdc9826ff59ba197b671127b14aaf3cca`
+`e45a920c5bec48215b133d8d6b9ef26c1b4a958224c7c80cea5871b9f8166779`
 
 Delivery check: all seven served HTTP responses match the frozen local distribution by SHA-256.
 
@@ -70,6 +70,9 @@ Notes:
 2. Hover/focus a retained-direction arrow, inspect the preview and commit it.
 3. Exercise the same retained-direction and available branch actions through the compact panel.
 4. Repeat on reversed line-line and line-Bezier examples, including a tied/ambiguous choice.
+5. Put Fillets on both corners of a three-segment polyline, select the shared FilletSet and inspect
+   the middle segment's direction controls.
+6. Fillet a line against a full circle or ellipse, then compare it with a line against an arc.
 
 Expected: current source geometry stays normally selectable, and preview/commit preserve every
 branch field not explicitly changed. A tied choice reports ambiguity rather than guessing. The
@@ -77,7 +80,10 @@ canvas has no endpoint contact circles; retention actions first preview and then
 same action in the canvas and accessible panel. Each arrow is the sole symbol for that action and
 becomes visibly brighter, thicker and glowing when its headless preview is active. Direct contact
 manipulation is not part of the M68 canvas or panel surface; its typed metadata and internal
-continuation seam remain headless.
+continuation seam remain headless. A shared segment already consumed at both ends has no arrow for
+an impossible retained-direction change, while valid outer-segment controls remain available. A
+full circle or ellipse remains visually complete and exposes no meaningless trim-direction arrow;
+an arc or other open curve retains its ordinary trimming behavior.
 
 Result: Pending
 
@@ -211,7 +217,7 @@ glyph, and an active headless preview brightens and thickens the full arrow with
 The canvas-only SVG action suppresses Chrome's pointer-focus outline; accessible-panel buttons
 retain the workbench keyboard-focus ring.
 
-Mechanical regression: 169 editor unit tests, 46 editor integration tests and 68 web tests pass.
+Mechanical regression: 170 editor unit tests, 46 editor integration tests and 68 web tests pass.
 Focused cases reject stale, foreign, far and spoofed targets; admit an independently verified
 arrow over the Fillet surface; and prove an overlapping topmost corridor cannot suppress the
 headless-nearest action. A real release-browser reproduction showed a three-entry overlapping SVG
@@ -223,6 +229,33 @@ exactly one arrow highlights strongly. Click one to commit its branch action, th
 arrow and confirm it does not resize the Fillet or show a pressed outline. Confirm there is no
 separate glyph beside a retained-direction arrow and that keyboard-focused Inspector buttons keep
 their focus indication.
+
+### M68-F004 — impossible retained arrows and closed-loop trimming
+
+Observation: a straight segment already trimmed by Fillets at both ends could still display a
+retained-direction arrow even though committing it was rejected. Full circles and ellipses used by
+a Fillet were also rendered as trimmed open fragments.
+
+Root cause: local action enumeration solved the edited corner in isolation, while source-claim
+conflicts are defined only by complete feature-document composition. Separately, every Fillet
+contact emitted a visual trim claim even when its visible parent domain was one complete period.
+
+Disposition: fixed by `a1ed6ff`. The headless coordinator evaluates each exact replacement in a
+cloned complete feature document and publishes only actions whose owning feature remains
+`Current`. Full-period parents still supply contact and branch-continuation geometry but no longer
+publish source-fragment claims or retained-direction actions. Bounded/open curves and explicitly
+open views of periodic supports keep their existing trimming behavior.
+
+Mechanical regression: 37 feature tests, 170 editor unit tests, all 46 editor integration tests
+and 68 web tests pass. Focused cases cover two adjacent Fillets sharing a middle segment, a
+line-circle Fillet that retains the complete circle, full circle/ellipse topology, a directed arc
+and an explicitly open periodic view. Strict Clippy, warnings-denied WASM checking, release Trunk
+and seven-asset Tailscale byte verification pass.
+
+Retest: Pending. On a three-segment polyline with both corners Filleted, select the feature and
+confirm no middle-segment arrow is shown for a direction the solver cannot accept, while the
+outer-segment arrows still work. Fillet a line against a circle or ellipse and confirm the closed
+parent remains complete; repeat with an arc and confirm the arc remains trim-capable.
 
 ## Approval
 

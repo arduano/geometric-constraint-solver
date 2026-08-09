@@ -124,6 +124,20 @@ explicit radius grip or generated arc > native support
 Painted SVG identity remains only a hint. The coordinator must still validate exact owner,
 provenance and model-space proximity, preserving the `M66-PF004` trust boundary.
 
+A locally resolvable alternative is not sufficient authority to advertise an action. Before the
+coordinator publishes a Fillet action, it replaces that corner in a cloned complete feature
+document and requires the owning feature to evaluate `Current` under ordinary composition. An
+alternative that conflicts with another corner's endpoint claim is omitted from both canvas and
+accessible action surfaces; it is not presented as a control that can never commit.
+
+Full-period periodic parents contribute contact, tangent, normal and continuation data to the
+Fillet arc but do not contribute visual source-trim claims. Their native closed loop therefore
+remains complete, and retained-direction reversal is not advertised because it has no visible
+retention meaning. Bounded/open parents and explicitly open trim views of periodic supports retain
+the existing source-fragment composition and retained-direction behavior. This policy is based on
+visible source topology rather than curve-family names, so it applies equally to full circles,
+ellipses and future full-period supports while preserving arcs and other open curves.
+
 Where multiple transparent action corridors overlap, SVG paint order is not semantic priority.
 The adapter may collect every exact-stamped painted action under the pointer, but only the unique
 action independently selected as nearest by the headless model-space resolver may preview or

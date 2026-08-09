@@ -3212,8 +3212,8 @@ UAT approval. That approval is recorded above and M67 is closed.
 ### M68
 
 Status: active. Implementation, focused direct qualification and complete release qualification
-are complete on frozen candidate `f5a17b9`; explicit supervising-human UAT, including the
-`M68-F001` through `M68-F003` retests, remains pending.
+are complete on frozen candidate `a1ed6ff`; explicit supervising-human UAT, including the
+`M68-F001` through `M68-F004` retests, remains pending.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
 manipulation model for ordinary computed Fillets, while establishing only the shared canvas
@@ -3237,6 +3237,12 @@ explicit branch action; pointer motion and numeric editing never auto-switch roo
 - [x] Expose bounded local contact/root, retained-direction, complementary-arc and alternative
   candidates without global enumeration; tied choices reject with typed ambiguity and no
   implicit root change.
+- [x] Publish only actions that remain `Current` after replacing the corner in the complete
+  computed-feature document; omit locally solvable retained-direction arrows that conflict with
+  another Fillet's source claims.
+- [x] Keep full-period closed parents visually complete while retaining their Fillet contact and
+  continuation geometry; bounded/open curves and explicitly open periodic views remain
+  trim-capable.
 - [x] Add an atomic feature-set configuration mutation so a current radius plus any re-anchored
   absolute corner intent publishes in one revision/history step while preserving stable IDs and
   the existing workspace-v4/schema contract.
@@ -3288,8 +3294,13 @@ by the remaining licence/package and Trunk commands on the same untouched source
 Presentation-only follow-up `f5a17b9` removes the canvas SVG user-agent focus outline without
 changing headless behavior or the accessible-panel keyboard ring; formatting, 68 web tests,
 strict web Clippy, WASM checking, release Trunk and a pressed-state Chromium reproduction pass.
-The frozen `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
-`0938c78fa43fed012f0a729982025d8cdc9826ff59ba197b671127b14aaf3cca`. Only explicit human
+Follow-up `a1ed6ff` validates every advertised action through complete feature composition and
+makes source-trim participation topology-explicit: full circles/ellipses remain whole, while arcs
+and explicitly open periodic views remain trim-capable. The focused suites now pass 37 feature
+tests, 170 editor unit tests, all 46 editor integration tests and 68 web tests, plus strict Clippy,
+warnings-denied WASM checking and release Trunk. The frozen
+`crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
+`e45a920c5bec48215b133d8d6b9ef26c1b4a958224c7c80cea5871b9f8166779`. Only explicit human
 approval of the frozen Tailscale candidate remains unchecked. The static distribution is served
 at `http://100.94.63.83:8080/`; all seven HTTP responses match their local release files by
 SHA-256.
@@ -3330,6 +3341,20 @@ stale/foreign/spoofed and overlapping paint-order candidates. A release-browser 
 confirmed the correct crowded arrow previews and that dragging it changes neither radius nor arc.
 The canvas SVG action suppresses only its user-agent pointer-focus outline; accessible panel
 buttons retain normal keyboard focus indication.
+
+Human retest remains pending.
+
+Finding checkpoint `M68-F004` (2026-08-09): a retained-direction alternative was previously
+advertised whenever one corner solved in isolation, even when replacing that corner made the
+complete FilletSet fail source composition. This exposed unusable arrows on a segment already
+trimmed by Fillets at both ends. The same source-composition path also replaced full periodic
+parents with an open fragment, making a Fillet visually cut circles and ellipses. Commit `a1ed6ff`
+requires every advertised action to survive an exact cloned whole-document evaluation, omits
+uncommittable controls, and excludes full-period parents from visual trim claims while retaining
+their contact/branch state. Direct regressions cover the adjacent two-Fillet shared segment, full
+circle publication and retained-action catalog, full circle/ellipse topology, directed arcs and
+explicitly open periodic views. Focused native/WASM/release qualification passes and the
+replacement Tailscale bundle is byte-verified.
 
 Human retest remains pending.
 

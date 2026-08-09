@@ -3,8 +3,8 @@
 # M68 implementation — headless Fillet direct manipulation
 
 Status: implementation, focused direct qualification and complete release qualification are
-complete on frozen candidate `f5a17b9`. Explicit supervising-human UAT, including the `M68-F001`
-through `M68-F003` retests, remains pending; M68 is not yet accepted.
+complete on frozen candidate `a1ed6ff`. Explicit supervising-human UAT, including the `M68-F001`
+through `M68-F004` retests, remains pending; M68 is not yet accepted.
 
 ## 1. Files and APIs
 
@@ -19,8 +19,9 @@ schema:
 - `geosolve-constraint-editor` adds the `SceneFillet*` rail, contact, action, target and typed-limit
   DTOs; Fillet radius/contact gestures and branch-preview state in `ConstraintEditor`; and
   coordinator-owned affordance population, exact preview acknowledgement, numeric/gesture
-  publication and explicit action transactions. Feature-only publication continues through the
-  existing checkpoint/history owner.
+  publication and explicit action transactions. Action population now validates each exact corner
+  replacement against the complete cloned computed-feature document before exposing it.
+  Feature-only publication continues through the existing checkpoint/history owner.
 - `geosolve-demo-web` renders the returned DTOs, translates pointer/focus events through exact
   render stamps, captures/releases point/Fillet/pan pointers and exposes the same actions in a
   compact accessible panel. The canvas renders one central radius handle per selected corner and
@@ -75,9 +76,16 @@ Ordinary sketch geometry remains outside the feature edit. Every direct test mus
 sketch identity, accepted coordinates, residuals, rank and DOF. The solver success contract,
 priority semantics, residual catalog and M27/M28 advanced Fillet APIs are unchanged.
 
+Fillet contact geometry and visual source replacement are now separate decisions. A full-period
+parent supplies its exact contact/tangent/normal and persisted continuation state but creates no
+source-fragment trim claim, so full circles and ellipses remain visually complete. Bounded curves,
+arcs and explicitly open views of periodic supports continue through ordinary source-fragment
+composition. A retained-direction action is omitted when the parent is a complete closed loop or
+when the exact replacement would conflict with another corner in whole-document composition.
+
 ## 3. Commands and outcomes
 
-The implementation and its UAT repairs are split into nine reviewable source commits:
+The implementation and its UAT repairs are split into ten reviewable source commits:
 
 - `807d2f4` — feature-domain absolute continuation, analytic rail, bounded alternatives and
   atomic configuration replacement;
@@ -96,7 +104,9 @@ The implementation and its UAT repairs are split into nine reviewable source com
 - `25211e5` — SVG-stack reconciliation so overlapping painted corridors cannot suppress the
   unique headless-nearest action or fall through to a Fillet drag; and
 - `f5a17b9` — canvas-only suppression of Chrome's SVG pointer-focus outline while preserving
-  keyboard focus indication on the accessible action panel.
+  keyboard focus indication on the accessible action panel; and
+- `a1ed6ff` — whole-document applicability for advertised Fillet actions plus topology-based
+  preservation of complete periodic parents.
 
 The latest integrated focused gate passed in the project Nix shell:
 
@@ -104,11 +114,12 @@ The latest integrated focused gate passed in the project Nix shell:
 nix-shell shell.nix --run 'cargo fmt --all -- --check &&
   cargo test --locked -p geosolve-sketch-features -p geosolve-constraint-editor \
     -p geosolve-demo-web --all-features &&
-  cargo clippy --locked -p geosolve-constraint-editor -p geosolve-demo-web \
+  cargo clippy --locked -p geosolve-sketch-features -p geosolve-constraint-editor \
+    -p geosolve-demo-web \
     --all-targets --all-features -- -D warnings'
 ```
 
-Recorded direct results are 35/35 `geosolve-sketch-features` tests, 169/169 editor unit tests,
+Recorded direct results are 37/37 `geosolve-sketch-features` tests, 170/170 editor unit tests,
 17/17 M55 integration tests, 14/14 `m66_feature_authoring` tests, 15/15
 `m66_feature_authoring_matrix` tests (46/46 editor integration tests in total) and 68/68 demo-web
 tests. Formatting and strict native Clippy passed. After the final editor transition fix, the
@@ -148,13 +159,15 @@ passed.
 The presentation-only `f5a17b9` follow-up then passed formatting, all 68 demo-web tests, strict
 demo-web Clippy, warnings-denied WASM checking and release Trunk. A real Chromium pressed-state
 check reported the focused canvas action's computed `outline-style` as `none`; the selector does
-not match the accessible-panel buttons.
+not match the accessible-panel buttons. Follow-up `a1ed6ff` passed formatting, 37 feature tests,
+170 editor unit tests, all 46 editor integration tests, 68 web tests, strict feature/editor/web
+Clippy, warnings-denied WASM checking and release Trunk.
 
 The frozen release distribution is identified by:
 
 ```text
 sha256sum crates/geosolve-demo-web/dist/* | sha256sum
-0938c78fa43fed012f0a729982025d8cdc9826ff59ba197b671127b14aaf3cca  -
+e45a920c5bec48215b133d8d6b9ef26c1b4a958224c7c80cea5871b9f8166779  -
 ```
 
 The focused candidate is served from that exact distribution at
@@ -181,6 +194,10 @@ Focused direct evidence now covers:
 - independently validated arrows outranking overlapping Fillet surfaces, deterministic
   headless-nearest resolution across overlapping SVG corridors, no adjacent redundant arrow glyph
   and strong headless-authoritative hover emphasis; and
+- locally valid but composition-invalid branch controls omitted from both action surfaces, with
+  valid outer-segment actions retained for an adjacent two-Fillet set; and
+- full circles and ellipses retained as complete native parents while arcs and explicitly open
+  periodic views remain trim-capable; and
 - unchanged native sketch identity, coordinates, residuals, rank and DOF for every feature-only
   edit.
 
@@ -197,7 +214,7 @@ that approval is recorded.
 ## 5. Known limitations or next blocker
 
 The sole remaining blocker is focused human UAT of the frozen candidate, including explicit
-retest of `M68-F001` through `M68-F003`. This is a scoped active milestone, not a completion record.
+retest of `M68-F001` through `M68-F004`. This is a scoped active milestone, not a completion record.
 M68 intentionally excludes Offset/Mirror authoring,
 two-non-affine-parent Fillets, computed-on-computed chaining, Bake/Explode, profile/topology
 consumption, cross-revision topological naming, computed arcs as constraint operands, schema
