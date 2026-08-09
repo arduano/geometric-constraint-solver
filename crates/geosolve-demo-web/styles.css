@@ -574,12 +574,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   vector-effect: non-scaling-stroke;
 }
 #wb-fillet-direction-arrow path { fill: #e7ce8d; }
-.wb-fillet-action-control circle {
-  fill: #202728;
-  stroke: #d7bd7f;
-  stroke-width: 1.5;
-  vector-effect: non-scaling-stroke;
-}
 .wb-fillet-action-control path {
   fill: none;
   stroke: #f1d899;
@@ -588,7 +582,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-.wb-fillet-action.previewed .wb-fillet-action-control circle {
+.wb-fillet-action.previewed .wb-fillet-action-control path {
   stroke: #fff0bd;
   filter: drop-shadow(0 0 3px rgb(239 184 86 / 65%));
 }

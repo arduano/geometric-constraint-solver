@@ -762,7 +762,7 @@ fn render_fillet_canvas_action(
                 "<path class=\"wb-fillet-retained-direction\" marker-end=\"url(#wb-fillet-direction-arrow)\" ",
                 "d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
                 "<g class=\"wb-fillet-action-control\" transform=\"translate({:.3} {:.3})\">",
-                "<circle r=\"7\"/>{}</g></g>"
+                "{}</g></g>"
             ),
             control.screen_start.x,
             control.screen_start.y,
@@ -777,7 +777,7 @@ fn render_fillet_canvas_action(
             output,
             concat!(
                 "<g class=\"wb-fillet-action-control\" transform=\"translate({:.3} {:.3})\">",
-                "<circle r=\"8\"/>{}</g></g>"
+                "{}</g></g>"
             ),
             anchor.x,
             anchor.y,

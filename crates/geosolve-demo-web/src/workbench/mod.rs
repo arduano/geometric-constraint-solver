@@ -4322,7 +4322,7 @@ mod tests {
     #[test]
     fn canvas_fillet_action_emphasis_requires_headless_preview_routing() {
         let css = include_str!("../../styles.css");
-        assert!(css.contains(".wb-fillet-action.previewed .wb-fillet-action-control circle"));
+        assert!(css.contains(".wb-fillet-action.previewed .wb-fillet-action-control path"));
         for browser_owned_selector in [".wb-fillet-action:hover", ".wb-fillet-action:focus"] {
             assert!(
                 !css.contains(browser_owned_selector),
@@ -5094,6 +5094,10 @@ mod tests {
         assert!(
             !markup.contains("wb-fillet-contact"),
             "Fillet endpoint contact metadata must not render redundant canvas handles"
+        );
+        assert!(
+            !markup.contains("<circle r=\"7\"/>") && !markup.contains("<circle r=\"8\"/>"),
+            "Fillet branch actions must remain icons rather than handle-like circles"
         );
         assert!(
             !markup.contains("wb-fillet-alternative-ghost"),
