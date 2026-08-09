@@ -4255,6 +4255,43 @@ mod tests {
     }
 
     #[test]
+    fn solver_problem_card_is_a_non_intercepting_canvas_overlay() {
+        let html = include_str!("../../index.html");
+        let canvas = html.find("id=\"wb-canvas-panel\"").expect("canvas panel");
+        let problems = html.find("id=\"wb-problems\"").expect("problem card");
+        let inspector = html
+            .find("class=\"wb-inspector\"")
+            .expect("inspector after canvas");
+        assert!(canvas < problems && problems < inspector);
+        assert_eq!(html.matches("id=\"wb-problems\"").count(), 1);
+
+        let css = include_str!("../../styles.css");
+        let rule_start = css.find(".wb-problems {").expect("problem-card rule");
+        let rule_end = rule_start
+            + css[rule_start..]
+                .find('}')
+                .expect("problem-card rule boundary");
+        let rule = &css[rule_start..=rule_end];
+        for declaration in [
+            "position: absolute;",
+            "bottom: 0.75rem;",
+            "left: 0.75rem;",
+            "pointer-events: none;",
+        ] {
+            assert!(rule.contains(declaration), "missing `{declaration}`");
+        }
+        for flow_declaration in ["grid-column:", "grid-row:", "min-height:"] {
+            assert!(
+                !rule.contains(flow_declaration),
+                "overlay must not contribute `{flow_declaration}` to workbench layout"
+            );
+        }
+        assert!(css.contains(
+            "grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 15rem minmax(36rem, 1fr) 18rem;"
+        ));
+    }
+
+    #[test]
     #[allow(
         clippy::too_many_lines,
         reason = "one table qualifies every production capture owner against every terminal route"

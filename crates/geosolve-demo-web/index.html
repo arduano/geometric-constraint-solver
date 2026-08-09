@@ -123,6 +123,10 @@
           <button id="wb-guide-apply" type="button" data-wb-action="feature-apply" hidden>Apply</button>
           <button type="button" data-wb-action="cancel">Cancel</button>
         </div>
+        <section class="wb-problems" id="wb-problems" aria-label="Problems" aria-live="assertive" hidden>
+          <div><strong>Problems</strong><span>Current sketch &amp; computed features</span></div>
+          <p id="wb-problem-text">No current solver or computed-feature problem</p>
+        </section>
         <div class="wb-canvas-hud">
           <span>XY plane</span>
           <span id="wb-camera-scale">50.0 px / unit</span>
@@ -196,11 +200,6 @@
         </section>
         <p class="wb-inspector-note">Constraint glyphs and dimensions are persistent selectable objects. Values and equations come from the sketch domain.</p>
       </aside>
-
-      <section class="wb-problems" id="wb-problems" aria-label="Problems" aria-live="assertive" hidden>
-        <div><strong>Problems</strong><span>Current sketch &amp; computed features</span></div>
-        <p id="wb-problem-text">No current solver or computed-feature problem</p>
-      </section>
 
       <footer class="wb-status-bar">
         <button type="button" data-wb-action="problems">Problems</button>
