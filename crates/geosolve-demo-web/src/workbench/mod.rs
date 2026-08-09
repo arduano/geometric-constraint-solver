@@ -423,16 +423,18 @@ impl FilletActionRenderAuthority {
 #[cfg(any(target_arch = "wasm32", test))]
 fn resolve_canvas_fillet_action_candidates(
     scene: &geosolve_constraint_editor::EditorScene,
+    policy: geosolve_constraint_editor::GeometryInteractionPolicy,
     position: geosolve_constraint_editor::ScreenPoint,
     painted: impl IntoIterator<Item = geosolve_constraint_editor::SceneFilletActionTarget>,
 ) -> Option<geosolve_constraint_editor::SceneFilletActionTarget> {
     painted.into_iter().find(|target| {
-        scene.resolve_fillet_action(
+        scene.resolve_fillet_action_with_policy(
             geosolve_constraint_editor::SceneFilletActionInput::Canvas {
                 position,
                 painted: Some(*target),
             },
             geosolve_constraint_editor::PickTolerance::default(),
+            policy,
         ) == Some(*target)
     })
 }
@@ -467,7 +469,7 @@ fn observe_feature_authoring_preview_lifecycle(
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
-    use std::collections::VecDeque;
+    use std::collections::{BTreeSet, VecDeque};
     use std::rc::Rc;
     use std::str::FromStr as _;
 
@@ -478,17 +480,19 @@ pub(crate) mod wasm {
         EditorEffect, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringCandidate,
         FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick,
         FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage, FeatureAuthoringState,
-        FeatureAuthoringTool, FeatureAuthoringTransaction, Modifiers, NurbsConstructionOptions,
-        PickTolerance, PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator,
-        SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint, SelectionItem,
+        FeatureAuthoringTool, FeatureAuthoringTransaction, GeometryInteractionPolicy,
+        GeometryPickScope, GeometryRoleSelectionState, GeometryVisibility, Modifiers,
+        NurbsConstructionOptions, PickTolerance, PointerInput, ProvisionalInferenceCandidate,
+        RetainedEditorCoordinator, SceneCurveOrigin, SceneFilletActionInput,
+        SceneFilletActionTarget, ScreenPoint, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         ContactBranchEdit, ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
         DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentConstraintId,
         DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentDimensionId,
-        DocumentDimensionMode, DocumentHyperbolaBranch, DocumentSolveRequest, PersistentId,
-        RetainedSketchDocumentSession, SketchDocument, TangentOrientation,
+        DocumentDimensionMode, DocumentHyperbolaBranch, DocumentSolveRequest, GeometryRole,
+        PersistentId, RetainedSketchDocumentSession, SketchDocument, TangentOrientation,
     };
     use geosolve_sketch_features::{ComputedCornerRef, ComputedFeatureCornerId, ComputedFeatureId};
     use wasm_bindgen::JsCast;
@@ -607,6 +611,11 @@ pub(crate) mod wasm {
                 continue;
             };
             icon.set_inner_html(&super::icons::geometry_tool_icon_markup(tool));
+        }
+        if let Some(icon) =
+            required(document, "wb-geometry-role")?.query_selector(".wb-role-icon")?
+        {
+            icon.set_inner_html(&super::icons::construction_role_icon_markup());
         }
         for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
             install_authoring_icon(document, key, AuthoringTool::Constraint(intent))?;
@@ -776,7 +785,9 @@ pub(crate) mod wasm {
             if super::change_owns_option_control_click(
                 &origin.tag_name(),
                 origin
-                    .closest(".wb-palette-flyout, .wb-feature-options")
+                    .closest(
+                        ".wb-palette-flyout, .wb-feature-options, .wb-construction-display-popover",
+                    )
                     .is_ok_and(|surface| surface.is_some()),
                 origin
                     .closest(".wb-construction-options")
@@ -859,6 +870,7 @@ pub(crate) mod wasm {
                     let Some(painted) = resolve_canvas_fillet_action_at_point(
                         &callback_document,
                         &scene,
+                        wb.coordinator.editor().geometry_interaction_policy(),
                         &wb.fillet_action_render,
                         position,
                         mouse.client_x(),
@@ -965,6 +977,17 @@ pub(crate) mod wasm {
                     return;
                 }
                 if target
+                    .closest(".wb-construction-display")
+                    .ok()
+                    .flatten()
+                    .is_some()
+                {
+                    let mut wb = change_workbench.borrow_mut();
+                    let result = update_geometry_interaction_policy(&change_document, &mut wb);
+                    wb.notice = result
+                        .map_or_else(|error| error, |()| "Canvas geometry scope updated".into());
+                    drop(wb);
+                } else if target
                     .closest(".wb-feature-options")
                     .ok()
                     .flatten()
@@ -1354,6 +1377,7 @@ pub(crate) mod wasm {
                     let painted = resolve_canvas_fillet_action_at_point(
                         &callback_document,
                         &scene,
+                        wb.coordinator.editor().geometry_interaction_policy(),
                         &wb.fillet_action_render,
                         pointer.position,
                         event.client_x(),
@@ -1551,6 +1575,7 @@ pub(crate) mod wasm {
     fn resolve_canvas_fillet_action_at_point(
         document: &Document,
         scene: &EditorScene,
+        policy: GeometryInteractionPolicy,
         authority: &super::FilletActionRenderAuthority,
         position: ScreenPoint,
         client_x: i32,
@@ -1558,6 +1583,7 @@ pub(crate) mod wasm {
     ) -> Option<SceneFilletActionTarget> {
         super::resolve_canvas_fillet_action_candidates(
             scene,
+            policy,
             position,
             document
                 .elements_from_point(client_x as f32, client_y as f32)
@@ -1756,6 +1782,7 @@ pub(crate) mod wasm {
                 let painted = resolve_canvas_fillet_action_at_point(
                     &callback_document,
                     &scene,
+                    wb.coordinator.editor().geometry_interaction_policy(),
                     &wb.fillet_action_render,
                     input.position,
                     event.client_x(),
@@ -1802,14 +1829,15 @@ pub(crate) mod wasm {
                 return;
             }
             if wb.authoring.active_tool().is_some() {
-                if super::owns_authoring_pick(super::AuthoringItemInput::CanvasPointerDown)
-                    && let Some(hit) =
-                        scene.native_authoring_hit_test(input.position, PickTolerance::default())
-                {
+                let geometry_policy = wb.coordinator.editor().geometry_interaction_policy();
+                if super::owns_authoring_pick(super::AuthoringItemInput::CanvasPointerDown) {
                     let document = wb.coordinator.session().design_document().clone();
-                    let outcome = wb.authoring.pick(
+                    let outcome = wb.authoring.pick_at_with_policy(
                         &document,
-                        AuthoringOperand::picked(hit.item, hit.curve_parameter),
+                        &scene,
+                        input.position,
+                        PickTolerance::default(),
+                        geometry_policy,
                     );
                     handle_authoring_outcome(&mut wb, outcome);
                     save(&wb);
@@ -2300,6 +2328,7 @@ pub(crate) mod wasm {
                 Ok(())
             }
             "delete" => delete_selection(wb),
+            "geometry-role" => toggle_geometry_role(wb),
             "feature-radius" => apply_selected_feature_radius(document, wb),
             "feature-suppression" => toggle_selected_feature_suppression(wb),
             "dimension-target" => apply_dimension_target(document, wb),
@@ -2353,10 +2382,72 @@ pub(crate) mod wasm {
                 | "dimension-target"
                 | "feature-apply"
                 | "fillet-options"
-                | "fillet-options-close" => wb.notice.clone(),
+                | "fillet-options-close"
+                | "geometry-role" => wb.notice.clone(),
                 _ => "Action retained".into(),
             },
         );
+    }
+
+    fn toggle_geometry_role(wb: &mut Workbench) -> Result<(), String> {
+        if let Some(state) = wb.coordinator.selected_geometry_role_state() {
+            let target = match state {
+                GeometryRoleSelectionState::Construction => GeometryRole::Profile,
+                GeometryRoleSelectionState::Profile | GeometryRoleSelectionState::Mixed => {
+                    GeometryRole::Construction
+                }
+            };
+            let expected = wb.coordinator.session().design_identity();
+            wb.coordinator
+                .toggle_selected_geometry_role(expected)
+                .map_err(|error| error.to_string())?;
+            wb.notice = format!(
+                "Selected complete curve{} changed to {}",
+                if selected_curve_count(&wb.coordinator) == 1 {
+                    ""
+                } else {
+                    "s"
+                },
+                geometry_role_label(target),
+            );
+        } else {
+            let role = match wb.coordinator.editor().authoring_geometry_role() {
+                GeometryRole::Profile => GeometryRole::Construction,
+                GeometryRole::Construction => GeometryRole::Profile,
+            };
+            wb.coordinator
+                .editor_mut()
+                .set_authoring_geometry_role(role);
+            wb.notice = format!(
+                "New curve authoring role set to {}",
+                geometry_role_label(role)
+            );
+        }
+        Ok(())
+    }
+
+    fn selected_curve_count(coordinator: &RetainedEditorCoordinator) -> usize {
+        coordinator
+            .editor()
+            .selection()
+            .iter()
+            .filter_map(|item| match item {
+                SelectionItem::Curve(span) => Some(span.curve),
+                SelectionItem::Point(_)
+                | SelectionItem::Constraint(_)
+                | SelectionItem::Dimension(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_) => None,
+            })
+            .collect::<BTreeSet<_>>()
+            .len()
+    }
+
+    const fn geometry_role_label(role: GeometryRole) -> &'static str {
+        match role {
+            GeometryRole::Profile => "Profile",
+            GeometryRole::Construction => "Construction",
+        }
     }
 
     fn cancel_before_camera_change(document: &Document, wb: &mut Workbench) -> Result<(), String> {
@@ -3193,6 +3284,7 @@ pub(crate) mod wasm {
                 coordinator.current_problem_metadata().as_ref(),
                 active_fillet_preview.as_ref(),
                 fillet_action_stamp,
+                coordinator.editor().geometry_interaction_policy(),
                 wb.camera.viewport(),
             ),
         );
@@ -3294,16 +3386,128 @@ pub(crate) mod wasm {
                 )?;
             }
         }
+        render_geometry_controls(document, coordinator)?;
         render_action_availability(document, coordinator, &wb.authoring, &wb.feature_authoring)?;
         render_feature_options(document, &wb.feature_authoring)?;
         render_fillet_options_overlay(document, wb.feature_options_open)?;
         render_dimension_target_editor(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
         render_feature_editor(document, coordinator)?;
-        render_fillet_action_panel(document, scene.as_ref(), fillet_action_stamp)?;
+        render_fillet_action_panel(
+            document,
+            scene.as_ref(),
+            fillet_action_stamp,
+            coordinator.editor().geometry_interaction_policy(),
+        )?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
         Ok(())
+    }
+
+    fn render_geometry_controls(
+        document: &Document,
+        coordinator: &RetainedEditorCoordinator,
+    ) -> Result<(), JsValue> {
+        let policy = coordinator.editor().geometry_interaction_policy();
+        let scope_key = match policy.scope {
+            GeometryPickScope::All => "all",
+            GeometryPickScope::Profile => "profile",
+            GeometryPickScope::Construction => "construction",
+        };
+        if let Ok(select) =
+            required(document, "wb-geometry-pick-scope")?.dyn_into::<HtmlSelectElement>()
+        {
+            select.set_value(scope_key);
+        }
+        for (id, visible) in [
+            (
+                "wb-show-explicit-construction",
+                policy.visibility.explicit_construction,
+            ),
+            (
+                "wb-show-implicit-construction",
+                policy.visibility.implicit_construction,
+            ),
+        ] {
+            if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
+                input.set_checked(visible);
+            }
+        }
+
+        let selected_state = coordinator.selected_geometry_role_state();
+        let authoring_role = coordinator.editor().authoring_geometry_role();
+        let pressed = match selected_state {
+            Some(GeometryRoleSelectionState::Construction) => "true",
+            Some(GeometryRoleSelectionState::Mixed) => "mixed",
+            Some(GeometryRoleSelectionState::Profile) => "false",
+            None if authoring_role == GeometryRole::Construction => "true",
+            None => "false",
+        };
+        let button = required(document, "wb-geometry-role")?;
+        button.set_attribute("aria-pressed", pressed)?;
+        button.set_attribute(
+            "aria-label",
+            if selected_state.is_some() {
+                "Toggle selected complete curves between Profile and Construction"
+            } else {
+                "Toggle the role assigned to newly authored curves"
+            },
+        )?;
+
+        let inspector = required(document, "wb-geometry-role-editor")?;
+        if let Some(state) = selected_state {
+            inspector.remove_attribute("hidden")?;
+            let label = match state {
+                GeometryRoleSelectionState::Profile => "Profile",
+                GeometryRoleSelectionState::Construction => "Construction",
+                GeometryRoleSelectionState::Mixed => "Mixed roles",
+            };
+            required(document, "wb-geometry-role-state")?.set_text_content(Some(label));
+            let count = selected_curve_count(coordinator);
+            let detail = selected_implicit_origin_detail(coordinator).unwrap_or_else(|| {
+                format!(
+                    "{count} complete persistent curve{} selected. Every span and Fillet-hidden occurrence shares this role edit.",
+                    if count == 1 { " is" } else { "s are" },
+                )
+            });
+            required(document, "wb-geometry-role-detail")?.set_text_content(Some(&detail));
+        } else {
+            inspector.set_attribute("hidden", "")?;
+        }
+
+        let root = required(document, "workbench-root")?;
+        root.set_attribute("data-geometry-pick-scope", scope_key)?;
+        root.set_attribute(
+            "data-geometry-authoring-role",
+            match authoring_role {
+                GeometryRole::Profile => "profile",
+                GeometryRole::Construction => "construction",
+            },
+        )?;
+        Ok(())
+    }
+
+    fn selected_implicit_origin_detail(coordinator: &RetainedEditorCoordinator) -> Option<String> {
+        coordinator.editor().selection().iter().find_map(|item| {
+            let SelectionItem::Curve(span) = item else {
+                return None;
+            };
+            let SceneCurveOrigin::FilletDiscarded {
+                interval,
+                provenance,
+                ..
+            } = coordinator.editor().curve_pick_origin(*span)?
+            else {
+                return None;
+            };
+            Some(format!(
+                "Picked on Fillet-hidden Construction interval {:.4}–{:.4} from feature {} corner {}. Selection and edits target the complete native curve.",
+                interval.start,
+                interval.end,
+                provenance.owner.feature,
+                provenance.owner.corner,
+            ))
+        })
     }
 
     fn mark_geometry_hover(
@@ -3313,14 +3517,9 @@ pub(crate) mod wasm {
         let Some(selector) = item.and_then(super::geometry_hover_selector) else {
             return Ok(());
         };
-        let Some(element) = document.query_selector(&selector)? else {
-            return Ok(());
-        };
-        let mut classes = element.get_attribute("class").unwrap_or_default();
-        if !classes
-            .split_ascii_whitespace()
-            .any(|class| class == "geometry-hovered")
-        {
+        let unmarked = format!("{selector}:not(.geometry-hovered)");
+        while let Some(element) = document.query_selector(&unmarked)? {
+            let mut classes = element.get_attribute("class").unwrap_or_default();
             classes.push_str(" geometry-hovered");
             element.set_attribute("class", classes.trim())?;
         }
@@ -3567,10 +3766,15 @@ pub(crate) mod wasm {
         document: &Document,
         scene: Option<&EditorScene>,
         fillet_action_stamp: Option<u64>,
+        geometry_policy: GeometryInteractionPolicy,
     ) -> Result<(), JsValue> {
         let panel = required(document, "wb-fillet-actions-panel")?;
         let markup = scene.map_or_else(String::new, |scene| {
-            super::scene::fillet_action_panel_markup_with_stamp(scene, fillet_action_stamp)
+            super::scene::fillet_action_panel_markup_with_stamp(
+                scene,
+                fillet_action_stamp,
+                geometry_policy,
+            )
         });
         let actions = required(document, "wb-fillet-actions")?;
         let fingerprint = super::markup_fingerprint(&markup);
@@ -3985,6 +4189,33 @@ pub(crate) mod wasm {
             _ => "Click to add the next control",
         }
     }
+
+    fn update_geometry_interaction_policy(
+        document: &Document,
+        wb: &mut Workbench,
+    ) -> Result<(), String> {
+        let scope = match select_value(document, "wb-geometry-pick-scope").as_deref() {
+            Some("all") => GeometryPickScope::All,
+            Some("profile") => GeometryPickScope::Profile,
+            Some("construction") => GeometryPickScope::Construction,
+            _ => return Err("geometry pick scope is unavailable".into()),
+        };
+        let visibility = GeometryVisibility {
+            explicit_construction: checkbox_checked(document, "wb-show-explicit-construction")
+                .ok_or_else(|| "explicit Construction visibility is unavailable".to_owned())?,
+            implicit_construction: checkbox_checked(document, "wb-show-implicit-construction")
+                .ok_or_else(|| "Fillet-hidden visibility is unavailable".to_owned())?,
+        };
+        let mut effects = wb.coordinator.editor_mut().set_geometry_pick_scope(scope);
+        effects.extend(
+            wb.coordinator
+                .editor_mut()
+                .set_geometry_visibility(visibility),
+        );
+        dispatch_effects(wb, effects);
+        Ok(())
+    }
+
     fn update_construction_options(
         document: &Document,
         editor: &mut geosolve_constraint_editor::ConstraintEditor,
@@ -4118,6 +4349,16 @@ pub(crate) mod wasm {
         )
     }
 
+    fn checkbox_checked(document: &Document, id: &str) -> Option<bool> {
+        Some(
+            document
+                .get_element_by_id(id)?
+                .dyn_into::<HtmlInputElement>()
+                .ok()?
+                .checked(),
+        )
+    }
+
     fn close_sample_selector(document: &Document) {
         if let Ok(selector) = required(document, "wb-sample-selector") {
             let _ = selector.remove_attribute("open");
@@ -4149,13 +4390,14 @@ mod tests {
         AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ConstraintIntent,
         EditorHoverState, FeatureAuthoringCandidate, FeatureAuthoringOptions,
         FeatureAuthoringOutcome, FeatureAuthoringPreviewMetadata, FeatureAuthoringState,
-        FeatureAuthoringTool, Modifiers, PickTolerance, PointerInput, RetainedEditorCoordinator,
+        FeatureAuthoringTool, GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility,
+        Modifiers, PickTolerance, PointerInput, RetainedEditorCoordinator, SceneCurveOrigin,
         ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DesignPointId, DocumentCurveNormalSide, DocumentSolveRequest,
-        RetainedSketchDocumentSession, SketchDocument,
+        GeometryRole, RetainedSketchDocumentSession, SketchDocument,
     };
 
     use super::{
@@ -4216,6 +4458,52 @@ mod tests {
             assert!(guard.contains(declaration), "missing `{declaration}`");
         }
         assert!(!guard.contains("wb-feature-options"));
+    }
+
+    #[test]
+    fn construction_controls_are_compact_accessible_and_keep_implicit_geometry_derived() {
+        let html = include_str!("../../index.html");
+        for id in [
+            "wb-geometry-role",
+            "wb-construction-display",
+            "wb-geometry-pick-scope",
+            "wb-show-explicit-construction",
+            "wb-show-implicit-construction",
+            "wb-geometry-role-editor",
+            "wb-geometry-role-state",
+        ] {
+            assert_eq!(
+                html.matches(&format!("id=\"{id}\"")).count(),
+                1,
+                "#{id} must have one ordinary-workbench owner"
+            );
+        }
+        for value in ["all", "profile", "construction"] {
+            assert!(html.contains(&format!("<option value=\"{value}\"")));
+        }
+        assert_eq!(html.matches("data-wb-action=\"geometry-role\"").count(), 2);
+        assert!(!html.contains("data-editor-item=\"construction-fragment\""));
+
+        let css = include_str!("../../styles.css");
+        for selector in [
+            ".wb-curve[data-role=\"construction\"]",
+            ".wb-curve[data-construction-origin=\"implicit\"]",
+            ".wb-tree-row[data-has-implicit-construction=\"true\"]::after",
+            ".wb-computed-item:not(.interaction-disabled):hover",
+        ] {
+            assert!(css.contains(selector), "missing `{selector}` presentation");
+        }
+        let disabled_start = css
+            .find(".wb-curve[data-interactive=\"false\"]")
+            .expect("scope-excluded geometry rule");
+        let disabled_end = disabled_start
+            + css[disabled_start..]
+                .find('}')
+                .expect("scope-excluded geometry rule boundary");
+        let disabled = &css[disabled_start..=disabled_end];
+        assert!(disabled.contains(".wb-point[data-interactive=\"false\"]"));
+        assert!(disabled.contains("pointer-events: none;"));
+        assert!(disabled.contains("cursor: default;"));
     }
 
     #[test]
@@ -5052,6 +5340,14 @@ mod tests {
             &[],
             &[],
         );
+        assert!(
+            tree.contains("data-has-implicit-construction=\"true\""),
+            "the native source row should decorate available Fillet-hidden construction"
+        );
+        assert!(
+            !tree.contains("data-editor-item=\"construction-fragment\""),
+            "evaluation-local fragments must not become fake editable tree objects"
+        );
         let row = |needle: &str| {
             let position = tree.find(needle).expect("feature tree row identity");
             let start = tree[..position]
@@ -5114,6 +5410,94 @@ mod tests {
         )
         .expect("exact grouped preview scene");
         assert_eq!(scene.computed_curves.len(), 2);
+        let implicit_span = scene
+            .curves
+            .iter()
+            .find_map(|curve| {
+                matches!(curve.origin, SceneCurveOrigin::FilletDiscarded { .. })
+                    .then_some(curve.span)
+            })
+            .expect("Fillet-discarded native source occurrence");
+        let source_occurrences = scene
+            .curves
+            .iter()
+            .filter(|curve| curve.span == implicit_span)
+            .count();
+        assert!(source_occurrences >= 2);
+        let selected_source_markup =
+            super::scene::svg_markup_with_computed_context_and_action_stamp(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                &[SelectionItem::Curve(implicit_span)],
+                &[],
+                EditorHoverState::default(),
+                None,
+                None,
+                None,
+                None,
+                GeometryInteractionPolicy::default(),
+                viewport,
+            );
+        assert!(selected_source_markup.contains("data-construction-origin=\"implicit\""));
+        let source_identity = format!(
+            "data-persistent-id=\"{}\" data-editor-item=\"curve\" data-editor-segment=\"{}\"",
+            implicit_span.curve, implicit_span.segment,
+        );
+        assert_eq!(
+            selected_source_markup
+                .split("<path")
+                .filter(|path| {
+                    path.contains(&source_identity) && path.contains("class=\"wb-curve selected")
+                })
+                .count(),
+            source_occurrences,
+            "retained and discarded occurrences must share complete-source selection styling"
+        );
+        let hidden_implicit_markup =
+            super::scene::svg_markup_with_computed_context_and_action_stamp(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                &[],
+                &[],
+                EditorHoverState::default(),
+                None,
+                None,
+                None,
+                None,
+                GeometryInteractionPolicy {
+                    scope: GeometryPickScope::All,
+                    visibility: GeometryVisibility {
+                        explicit_construction: true,
+                        implicit_construction: false,
+                    },
+                },
+                viewport,
+            );
+        assert!(!hidden_implicit_markup.contains("data-construction-origin=\"implicit\""));
+        let profile_pick_scope_markup =
+            super::scene::svg_markup_with_computed_context_and_action_stamp(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                &[],
+                &[],
+                EditorHoverState::default(),
+                None,
+                None,
+                None,
+                None,
+                GeometryInteractionPolicy {
+                    scope: GeometryPickScope::Profile,
+                    ..GeometryInteractionPolicy::default()
+                },
+                viewport,
+            );
+        assert!(
+            profile_pick_scope_markup.contains("data-construction-origin=\"implicit\""),
+            "pick scope and construction visibility must remain independent"
+        );
         let selected = SelectionItem::FeatureCorner(scene.computed_curves[0].owner);
         coordinator
             .populate_computed_fillet_affordances(
@@ -5123,6 +5507,52 @@ mod tests {
             )
             .expect("grouped Fillet affordances");
         assert_eq!(scene.fillet_affordances.len(), 2);
+        let mut construction_scene = scene.clone();
+        for curve in &mut construction_scene.computed_curves {
+            curve.role = GeometryRole::Construction;
+        }
+        let profile_policy = GeometryInteractionPolicy {
+            scope: GeometryPickScope::Profile,
+            ..GeometryInteractionPolicy::default()
+        };
+        let scoped_markup = super::scene::svg_markup_with_computed_context_and_action_stamp(
+            Some(&construction_scene),
+            Some(accepted),
+            &[],
+            &[selected],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            Some(91),
+            profile_policy,
+            viewport,
+        );
+        assert!(
+            scoped_markup.contains("wb-computed-fillet construction"),
+            "pick scope must not hide a visible Construction result"
+        );
+        let scoped_computed_item = scoped_markup
+            .split("<g class=\"wb-computed-item")
+            .nth(1)
+            .and_then(|markup| markup.split("</g>").next())
+            .expect("visible scope-excluded computed item");
+        assert!(scoped_computed_item.contains("interaction-disabled"));
+        assert!(scoped_computed_item.contains("data-interactive=\"false\""));
+        assert!(!scoped_computed_item.contains("data-editor-item="));
+        assert!(!scoped_computed_item.contains("wb-computed-hit"));
+        assert!(!scoped_markup.contains("wb-fillet-radius-affordance"));
+        assert!(!scoped_markup.contains("data-fillet-action="));
+        assert!(
+            super::scene::fillet_action_panel_markup_with_stamp(
+                &construction_scene,
+                Some(91),
+                profile_policy,
+            )
+            .is_empty(),
+            "excluded Construction results must not expose accessible actions"
+        );
         let markup = super::scene::svg_markup_with_context(
             Some(&scene),
             Some(accepted),
@@ -5226,6 +5656,7 @@ mod tests {
         assert_eq!(
             resolve_canvas_fillet_action_candidates(
                 &scene,
+                GeometryInteractionPolicy::default(),
                 action_position,
                 [overlapping_paint_order_target, canvas_target],
             ),
@@ -5233,7 +5664,12 @@ mod tests {
             "an overlapping topmost corridor must not suppress the headless nearest action"
         );
         assert_eq!(
-            resolve_canvas_fillet_action_candidates(&scene, action_position, std::iter::empty(),),
+            resolve_canvas_fillet_action_candidates(
+                &scene,
+                GeometryInteractionPolicy::default(),
+                action_position,
+                std::iter::empty(),
+            ),
             None,
             "an invalid DOM stamp must not be upgraded from current geometry"
         );
@@ -5270,6 +5706,7 @@ mod tests {
             None,
             Some(&target),
             Some(action_stamp),
+            GeometryInteractionPolicy::default(),
             viewport,
         );
         assert_eq!(
@@ -5281,7 +5718,11 @@ mod tests {
         );
         assert!(preview_markup.contains("wb-fillet-action previewed"));
         assert!(preview_markup.contains(&format!("data-fillet-action-stamp=\"{action_stamp}\"")));
-        let panel = super::scene::fillet_action_panel_markup_with_stamp(&scene, Some(action_stamp));
+        let panel = super::scene::fillet_action_panel_markup_with_stamp(
+            &scene,
+            Some(action_stamp),
+            GeometryInteractionPolicy::default(),
+        );
         assert!(panel.contains("data-fillet-action-input=\"accessible\""));
         assert!(panel.contains(&format!("data-fillet-action-stamp=\"{action_stamp}\"")));
         assert!(panel.contains(&format!(
@@ -5306,7 +5747,11 @@ mod tests {
             "wb-fillet-action-reason-{}-{}-{disabled_key}",
             second_owner.feature, second_owner.corner,
         );
-        let second_panel = super::scene::fillet_action_panel_markup_with_stamp(&second_only, None);
+        let second_panel = super::scene::fillet_action_panel_markup_with_stamp(
+            &second_only,
+            None,
+            GeometryInteractionPolicy::default(),
+        );
         assert!(second_panel.contains(&format!(
             "aria-label=\"Fillet corner {} actions\"",
             second_owner.corner,
@@ -5347,7 +5792,7 @@ mod tests {
         );
         let css = include_str!("../../styles.css");
         for selector in [
-            ".wb-computed-item:hover .wb-computed-fillet",
+            ".wb-computed-item:not(.interaction-disabled):hover .wb-computed-fillet",
             ".wb-computed-item.geometry-hovered .wb-computed-fillet",
             ".wb-computed-item.selected .wb-computed-fillet",
         ] {

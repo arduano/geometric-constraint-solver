@@ -352,9 +352,35 @@ fn construction_reference_document()
     let AlphaScenarioIds::A1(ids) = fixture.ids else {
         return Err("A1 sample returned incompatible persistent roles".into());
     };
+    let shared_diagonal = fixture
+        .document
+        .add_curve(
+            "Shared-corner construction diagonal",
+            CurveDefinition::Line {
+                start: ids.rectangle.points[0],
+                end: ids.rectangle.points[2],
+                branch_direction: [0.8, 0.6],
+            },
+        )
+        .map_err(|error| error.to_string())?;
     fixture
         .document
-        .set_geometry_role(ids.rectangle.curves[2], GeometryRole::Construction)
+        .set_geometry_role(shared_diagonal, GeometryRole::Construction)
+        .map_err(|error| error.to_string())?;
+    let overlapping_guide = add_line(
+        &mut fixture.document,
+        "Construction guide overlapping the profile base",
+        ("Overlapping guide start", [0.0, 0.0]),
+        ("Overlapping guide end", [4.0, 0.0]),
+    )?;
+    fix_curve_points(
+        &mut fixture.document,
+        overlapping_guide,
+        "Overlapping construction guide",
+    )?;
+    fixture
+        .document
+        .set_geometry_role(overlapping_guide, GeometryRole::Construction)
         .map_err(|error| error.to_string())?;
     Ok((fixture.document, fixture.request))
 }
@@ -774,15 +800,16 @@ mod tests {
     use std::collections::HashSet;
 
     use geosolve_constraint_editor::{
-        ComputedFilletContinuationLimitKind, CoordinatorError, EditorScene,
+        ComputedFilletContinuationLimitKind, CoordinatorError, EditorHoverState, EditorScene,
         FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
-        FeatureAuthoringTool, FeatureAuthoringWarningKind, PickTolerance,
-        RetainedEditorCoordinator, SelectionItem, Viewport,
+        FeatureAuthoringTool, FeatureAuthoringWarningKind, GeometryInteractionPolicy,
+        GeometryPickScope, PickTolerance, RetainedEditorCoordinator, ScreenPoint, SelectionItem,
+        Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
-        RetainedSketchDocumentSession,
+        GeometryRole, RetainedSketchDocumentSession,
     };
     use geosolve_sketch_features::ComputedFeatureFailure;
 
@@ -960,6 +987,125 @@ mod tests {
         assert!(leaves.iter().all(|definition| {
             !definition.title.contains('M') || !definition.title.contains("M6")
         }));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one focused M69 sample test owns roles, overlap priority and thin rendering metadata"
+    )]
+    fn construction_reference_sample_owns_shared_incidence_and_exact_overlap_priority() {
+        let mut catalog = SampleCatalogState::default();
+        let coordinator = catalog
+            .open_key(SampleId::ConstructionReference.key())
+            .expect("Construction/reference sample");
+        let document = coordinator.session().design_document();
+        let diagonal = document
+            .curves()
+            .iter()
+            .find(|curve| curve.label == "Shared-corner construction diagonal")
+            .expect("shared diagonal");
+        let guide = document
+            .curves()
+            .iter()
+            .find(|curve| curve.label == "Construction guide overlapping the profile base")
+            .expect("overlapping guide");
+        assert_eq!(
+            document.geometry_role(diagonal.id),
+            Some(GeometryRole::Construction)
+        );
+        assert_eq!(
+            document.geometry_role(guide.id),
+            Some(GeometryRole::Construction)
+        );
+
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted sample");
+        let viewport = Viewport::new([800.0, 600.0], [2.0, 1.5], 100.0).expect("viewport");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            document,
+            viewport,
+            0.5,
+        )
+        .expect("scene");
+        let overlap = viewport.model_to_screen([2.0, 0.0]);
+        let all_hit = scene
+            .hit_test_with_policy(
+                overlap,
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            )
+            .expect("All overlap hit");
+        let SelectionItem::Curve(all_span) = all_hit.item else {
+            panic!("overlap midpoint should resolve a curve")
+        };
+        assert_eq!(
+            document.geometry_role(all_span.curve),
+            Some(GeometryRole::Profile),
+            "Profile must win the near-identical All-scope overlap"
+        );
+        let construction_hit = scene
+            .hit_test_with_policy(
+                ScreenPoint {
+                    x: overlap.x,
+                    y: overlap.y,
+                },
+                PickTolerance::default(),
+                GeometryInteractionPolicy {
+                    scope: GeometryPickScope::Construction,
+                    ..GeometryInteractionPolicy::default()
+                },
+            )
+            .expect("Construction-only overlap hit");
+        assert_eq!(
+            construction_hit.item,
+            SelectionItem::Curve(CurveSpan::line(guide.id))
+        );
+
+        let profile_policy = GeometryInteractionPolicy {
+            scope: GeometryPickScope::Profile,
+            ..GeometryInteractionPolicy::default()
+        };
+        let markup = super::super::scene::svg_markup_with_computed_context_and_action_stamp(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            profile_policy,
+            viewport,
+        );
+        let guide_path = markup
+            .split("<path")
+            .find(|fragment| {
+                fragment.contains(&format!("data-persistent-id=\"{}\"", guide.id))
+                    && fragment.contains("data-editor-segment=\"0\"")
+            })
+            .and_then(|fragment| fragment.split("/>").next())
+            .expect("visible Construction guide path");
+        assert!(guide_path.contains("data-interactive=\"false\""));
+        assert!(!guide_path.contains("data-editor-item="));
+        let guide_start = match &guide.definition {
+            CurveDefinition::Line { start, .. } => *start,
+            _ => panic!("Construction guide must remain a line"),
+        };
+        let guide_point = markup
+            .split("<circle")
+            .find(|fragment| fragment.contains(&format!("data-persistent-id=\"{guide_start}\"")))
+            .and_then(|fragment| fragment.split("/>").next())
+            .expect("visible Construction-only guide point");
+        assert!(guide_point.contains("data-interactive=\"false\""));
+        assert!(!guide_point.contains("data-editor-item="));
     }
 
     #[test]
@@ -1150,8 +1296,11 @@ mod tests {
                 .kind,
             ComputedFilletContinuationLimitKind::BranchFold,
         );
-        let status_markup =
-            super::super::scene::fillet_action_panel_markup_with_stamp(&stress_scene, None);
+        let status_markup = super::super::scene::fillet_action_panel_markup_with_stamp(
+            &stress_scene,
+            None,
+            GeometryInteractionPolicy::default(),
+        );
         assert!(status_markup.contains("data-fillet-limit=\"branch-fold\""));
         assert!(status_markup.contains("<strong>Branch fold:</strong>"));
     }

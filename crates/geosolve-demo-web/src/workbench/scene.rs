@@ -7,9 +7,10 @@ use geosolve_constraint_editor::{
     AdvancedConstructionKind, ComputedFeatureProblemMetadata, ComputedFilletContinuationLimitKind,
     ConstructionPreview, ConstructionPreviewGeometry, DimensionTargetDisplayUnit, EditorHoverState,
     EditorHoverTarget, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
-    EditorProblemTarget, EditorScene, SceneAnnotationGeometry, SceneAnnotationKind,
-    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionId, SceneFilletActionTarget,
-    SceneFilletCornerAffordances, ScreenPoint, SelectionItem, Viewport, display_dimension_target,
+    EditorProblemTarget, EditorScene, GeometryInteractionPolicy, SceneAnnotationGeometry,
+    SceneAnnotationKind, SceneCurveOrigin, SceneFilletAction, SceneFilletActionAvailability,
+    SceneFilletActionId, SceneFilletActionTarget, SceneFilletCornerAffordances, ScreenPoint,
+    SelectionItem, Viewport, display_dimension_target,
 };
 #[cfg(test)]
 use geosolve_sketch::DocumentConstraintDefinition;
@@ -211,6 +212,7 @@ pub(crate) fn svg_markup_with_computed_context(
         problem,
         active_fillet_preview,
         None,
+        GeometryInteractionPolicy::default(),
         viewport,
     )
 }
@@ -234,6 +236,7 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
     problem: Option<&EditorProblemMetadata>,
     active_fillet_preview: Option<&SceneFilletActionTarget>,
     fillet_action_stamp: Option<u64>,
+    geometry_policy: GeometryInteractionPolicy,
     viewport: Viewport,
 ) -> String {
     let mut output = String::new();
@@ -299,7 +302,11 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
         origin.y, origin.x,
     );
     if let Some(scene) = scene {
-        for curve in &scene.curves {
+        for curve in scene
+            .curves
+            .iter()
+            .filter(|curve| curve.is_visible(geometry_policy))
+        {
             if curve.screen_polyline.len() < 2 {
                 continue;
             }
@@ -308,13 +315,17 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
             let pending = pending.contains(&SelectionItem::Curve(curve.span));
             let target = EditorProblemTarget::Curve(curve.span.curve);
             let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
-            let role = accepted
-                .and_then(|state| state.document().geometry_role(curve.span.curve))
-                .unwrap_or(GeometryRole::Profile);
+            let role = curve.role;
             let item = SelectionItem::Curve(curve.span);
+            let interactive = curve.is_interactive(geometry_policy);
             let _ = write!(
                 output,
-                "<path class=\"wb-curve{}{}{}{}{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-item=\"curve\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
+                concat!(
+                    "<path class=\"wb-curve{}{}{}{}{}{}\" d=\"{}\" ",
+                    "data-persistent-id=\"{}\" {}",
+                    "data-editor-segment=\"{}\" data-role=\"{}\" data-source-role=\"{}\" ",
+                    "data-construction-origin=\"{}\" data-interactive=\"{}\"/>"
+                ),
                 if selected { " selected" } else { "" },
                 if pending { " authoring-pending" } else { "" },
                 if related.contains(&item) {
@@ -333,13 +344,18 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
                 } else {
                     ""
                 },
+                path,
                 curve.span.curve,
-                curve.span.segment,
-                if role == GeometryRole::Construction {
-                    "construction"
+                if interactive {
+                    "data-editor-item=\"curve\" "
                 } else {
-                    "profile"
+                    ""
                 },
+                curve.span.segment,
+                geometry_role_key(role),
+                geometry_role_key(curve.source_role),
+                scene_curve_origin_key(curve.origin, role),
+                interactive,
             );
             if has_problem && resolved_targets.insert(target) {
                 let anchor = curve.screen_polyline[curve.screen_polyline.len() / 2];
@@ -358,17 +374,31 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
             selection,
             active_fillet_preview,
             fillet_action_stamp,
+            geometry_policy,
         );
-        render_computed_problem_markers(&mut computed_problem_markers, scene, computed_problems);
+        render_computed_problem_markers(
+            &mut computed_problem_markers,
+            scene,
+            computed_problems,
+            geometry_policy,
+        );
         output.push_str("</g><g class=\"wb-points\">");
-        for point in &scene.points {
+        for point in scene
+            .points
+            .iter()
+            .filter(|point| point.is_visible(geometry_policy))
+        {
+            let interactive = point.is_interactive(geometry_policy);
             let selected = selection.contains(&SelectionItem::Point(point.id));
             let pending = pending.contains(&SelectionItem::Point(point.id));
             let target = EditorProblemTarget::Point(point.id);
             let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
             let _ = write!(
                 output,
-                "<circle class=\"wb-point{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" data-persistent-id=\"{}\" data-editor-item=\"point\"/>",
+                concat!(
+                    "<circle class=\"wb-point{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
+                    "data-persistent-id=\"{}\" {}data-interactive=\"{}\"/>"
+                ),
                 if selected { " selected" } else { "" },
                 if pending { " authoring-pending" } else { "" },
                 if related.contains(&SelectionItem::Point(point.id)) {
@@ -380,6 +410,12 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
                 point.screen_position.x,
                 point.screen_position.y,
                 point.id,
+                if interactive {
+                    "data-editor-item=\"point\" "
+                } else {
+                    ""
+                },
+                interactive,
             );
             if has_problem && resolved_targets.insert(target) {
                 problem_marker(
@@ -459,6 +495,7 @@ fn render_computed_problem_markers(
     output: &mut String,
     scene: &EditorScene,
     problems: &[ComputedFeatureProblemMetadata],
+    geometry_policy: GeometryInteractionPolicy,
 ) {
     for (index, problem) in problems.iter().enumerate() {
         let marker_row = u32::try_from(index).unwrap_or(u32::MAX);
@@ -468,6 +505,7 @@ fn render_computed_problem_markers(
                     scene
                         .curves
                         .iter()
+                        .filter(|curve| curve.is_visible(geometry_policy))
                         .find(|curve| curve.span == source.span)
                         .and_then(|curve| {
                             (!curve.screen_polyline.is_empty()).then(|| {
@@ -552,6 +590,7 @@ fn render_computed_geometry(
     selection: &[SelectionItem],
     active_fillet_preview: Option<&SceneFilletActionTarget>,
     fillet_action_stamp: Option<u64>,
+    geometry_policy: GeometryInteractionPolicy,
 ) {
     let evaluation = scene
         .computed_curves
@@ -567,20 +606,26 @@ fn render_computed_geometry(
         .filter(|affordances| fillet_owner_is_visible(affordances.owner, selection))
         .flat_map(|affordances| affordances.affected_owners.iter().copied())
         .collect::<BTreeSet<_>>();
-    for curve in &scene.computed_curves {
+    for curve in scene
+        .computed_curves
+        .iter()
+        .filter(|curve| curve.is_visible(geometry_policy))
+    {
         let item = SelectionItem::FeatureCorner(curve.owner);
         let selected = selection.contains(&item)
             || selection.contains(&SelectionItem::Feature(curve.owner.feature));
         let affected = affected_owners.contains(&curve.owner);
+        let interactive = curve.is_interactive(geometry_policy);
         let path = polyline_path(&curve.screen_polyline);
         let _ = write!(
             output,
             concat!(
-                "<g class=\"wb-computed-item{}{}\" data-editor-item=\"feature-corner\" ",
+                "<g class=\"wb-computed-item{}{}{}\" {}",
                 "data-feature-id=\"{}\" data-feature-corner-id=\"{}\" ",
-                "data-computed-evaluation=\"{}\" data-computed-edge=\"{}\">",
-                "<path class=\"wb-curve wb-computed-fillet\" d=\"{}\"/>",
-                "<path class=\"wb-computed-hit\" d=\"{}\"/></g>"
+                "data-computed-evaluation=\"{}\" data-computed-edge=\"{}\" data-role=\"{}\" ",
+                "data-interactive=\"{}\">",
+                "<path class=\"wb-curve wb-computed-fillet{}\" data-role=\"{}\" ",
+                "data-interactive=\"{}\" d=\"{}\"/>"
             ),
             if selected { " selected" } else { "" },
             if affected {
@@ -588,13 +633,35 @@ fn render_computed_geometry(
             } else {
                 ""
             },
+            if interactive {
+                ""
+            } else {
+                " interaction-disabled"
+            },
+            if interactive {
+                "data-editor-item=\"feature-corner\" "
+            } else {
+                ""
+            },
             curve.owner.feature,
             curve.owner.corner,
             curve.edge.evaluation.raw(),
             curve.edge.ordinal,
-            path,
+            geometry_role_key(curve.role),
+            interactive,
+            if curve.role == GeometryRole::Construction {
+                " construction"
+            } else {
+                ""
+            },
+            geometry_role_key(curve.role),
+            interactive,
             path,
         );
+        if interactive {
+            let _ = write!(output, "<path class=\"wb-computed-hit\" d=\"{path}\"/>");
+        }
+        output.push_str("</g>");
     }
     render_fillet_affordances(
         output,
@@ -602,6 +669,7 @@ fn render_computed_geometry(
         selection,
         active_fillet_preview,
         fillet_action_stamp,
+        geometry_policy,
     );
     output.push_str("</g>");
 }
@@ -656,10 +724,19 @@ fn render_fillet_affordances(
     selection: &[SelectionItem],
     active_fillet_preview: Option<&SceneFilletActionTarget>,
     fillet_action_stamp: Option<u64>,
+    geometry_policy: GeometryInteractionPolicy,
 ) {
     output.push_str("<g class=\"wb-fillet-affordances\">");
     for affordances in &scene.fillet_affordances {
         if !fillet_owner_is_visible(affordances.owner, selection) {
+            continue;
+        }
+        if !scene
+            .computed_curves
+            .iter()
+            .find(|curve| curve.owner == affordances.owner)
+            .is_some_and(|curve| curve.is_interactive(geometry_policy))
+        {
             continue;
         }
         let owner = affordances.owner;
@@ -707,6 +784,21 @@ fn render_fillet_affordances(
         );
     }
     output.push_str("</g>");
+}
+
+const fn geometry_role_key(role: GeometryRole) -> &'static str {
+    match role {
+        GeometryRole::Profile => "profile",
+        GeometryRole::Construction => "construction",
+    }
+}
+
+const fn scene_curve_origin_key(origin: SceneCurveOrigin, role: GeometryRole) -> &'static str {
+    match origin {
+        SceneCurveOrigin::FilletDiscarded { .. } => "implicit",
+        SceneCurveOrigin::Native if matches!(role, GeometryRole::Construction) => "explicit",
+        SceneCurveOrigin::Native => "profile",
+    }
 }
 
 fn render_fillet_canvas_action(
@@ -839,11 +931,19 @@ fn fillet_action_symbol(action: SceneFilletActionId) -> &'static str {
 pub(crate) fn fillet_action_panel_markup_with_stamp(
     scene: &EditorScene,
     fillet_action_stamp: Option<u64>,
+    geometry_policy: GeometryInteractionPolicy,
 ) -> String {
     let mut output = fillet_continuation_status_markup(scene);
     for affordances in scene
         .fillet_affordances
         .iter()
+        .filter(|affordances| {
+            scene
+                .computed_curves
+                .iter()
+                .find(|curve| curve.owner == affordances.owner)
+                .is_some_and(|curve| curve.is_interactive(geometry_policy))
+        })
         .filter(|affordances| !affordances.actions.is_empty())
     {
         let owner = affordances.owner;

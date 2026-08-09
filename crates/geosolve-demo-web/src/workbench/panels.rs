@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-use std::fmt::Write as _;
+use std::{collections::BTreeSet, fmt::Write as _};
 
 use geosolve_constraint_editor::{ComputedFeatureProblemMetadata, LifecycleStatus, SelectionItem};
 use geosolve_sketch::{GeometryRole, SketchDocument};
@@ -36,12 +36,29 @@ pub(crate) fn tree_markup(document: &SketchDocument, selection: &[SelectionItem]
     tree_markup_with_pending(document, selection, &[])
 }
 
+#[cfg(test)]
 pub(crate) fn tree_markup_with_pending(
     document: &SketchDocument,
     selection: &[SelectionItem],
     pending: &[SelectionItem],
 ) -> String {
+    tree_markup_with_pending_and_implicit(document, selection, pending, &BTreeSet::new())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one ordered tree pass keeps Profile/Construction grouping and persistent rows auditable"
+)]
+fn tree_markup_with_pending_and_implicit(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
+    implicit_spans: &BTreeSet<geosolve_sketch::CurveSpan>,
+) -> String {
     let mut output = String::new();
+    if !document.points().is_empty() {
+        group_label(&mut output, "Points", document.points().len());
+    }
     for point in document.points() {
         row(
             &mut output,
@@ -55,25 +72,53 @@ pub(crate) fn tree_markup_with_pending(
             "",
         );
     }
-    for curve in document.curves() {
-        if let Ok(spans) = document.curve_spans(curve.id) {
-            for span in spans {
-                row(
-                    &mut output,
-                    "curve",
-                    &span.curve.to_string(),
-                    Some(span.segment),
-                    &curve.label,
-                    TreeIconKind::Curve,
-                    selection.contains(&SelectionItem::Curve(span)),
-                    pending.contains(&SelectionItem::Curve(span)),
-                    match document.geometry_role(curve.id) {
-                        Some(GeometryRole::Construction) => " data-role=\"construction\"",
-                        _ => " data-role=\"profile\"",
-                    },
-                );
+    for role in [GeometryRole::Profile, GeometryRole::Construction] {
+        let curves = document
+            .curves()
+            .iter()
+            .filter(|curve| document.geometry_role(curve.id) == Some(role))
+            .collect::<Vec<_>>();
+        if curves.is_empty() {
+            continue;
+        }
+        group_label(
+            &mut output,
+            match role {
+                GeometryRole::Profile => "Profile geometry",
+                GeometryRole::Construction => "Construction geometry",
+            },
+            curves.len(),
+        );
+        for curve in curves {
+            if let Ok(spans) = document.curve_spans(curve.id) {
+                for span in spans {
+                    let mut role_attributes = match role {
+                        GeometryRole::Construction => " data-role=\"construction\"".to_owned(),
+                        GeometryRole::Profile => " data-role=\"profile\"".to_owned(),
+                    };
+                    if implicit_spans.contains(&span) {
+                        role_attributes.push_str(concat!(
+                            " data-has-implicit-construction=\"true\"",
+                            " title=\"Fillet-hidden construction occurrence available\"",
+                        ));
+                    }
+                    row(
+                        &mut output,
+                        "curve",
+                        &span.curve.to_string(),
+                        Some(span.segment),
+                        &curve.label,
+                        TreeIconKind::Curve,
+                        selection.contains(&SelectionItem::Curve(span)),
+                        pending.contains(&SelectionItem::Curve(span)),
+                        &role_attributes,
+                    );
+                }
             }
         }
+    }
+    if !document.constraints().is_empty() {
+        group_label(&mut output, "Constraints", document.constraints().len());
     }
     for constraint in document.constraints() {
         row(
@@ -87,6 +132,9 @@ pub(crate) fn tree_markup_with_pending(
             pending.contains(&SelectionItem::Constraint(constraint.id)),
             "",
         );
+    }
+    if !document.dimensions().is_empty() {
+        group_label(&mut output, "Dimensions", document.dimensions().len());
     }
     for dimension in document.dimensions() {
         row(
@@ -106,6 +154,13 @@ pub(crate) fn tree_markup_with_pending(
                     " data-dimension-mode=\"reference\""
                 }
             },
+        );
+    }
+    if !document.external_bindings().is_empty() {
+        group_label(
+            &mut output,
+            "External references",
+            document.external_bindings().len(),
         );
     }
     for binding in document.external_bindings() {
@@ -136,8 +191,13 @@ pub(crate) fn tree_markup_with_features(
     selection: &[SelectionItem],
     pending: &[SelectionItem],
 ) -> String {
-    let mut output = String::from("<div class=\"wb-tree-group-label\"><span>Sketch</span></div>");
-    output.push_str(&tree_markup_with_pending(document, selection, pending));
+    let implicit_spans = snapshot
+        .into_iter()
+        .flat_map(ComputedFeatureSnapshot::construction_fragments)
+        .map(|fragment| fragment.source.span)
+        .collect::<BTreeSet<_>>();
+    let mut output =
+        tree_markup_with_pending_and_implicit(document, selection, pending, &implicit_spans);
     let _ = write!(
         output,
         "<div class=\"wb-tree-group-label\"><span>Features</span><span>{}</span></div>",
@@ -215,6 +275,14 @@ pub(crate) fn tree_markup_with_features(
         }
     }
     output
+}
+
+fn group_label(output: &mut String, label: &str, count: usize) {
+    let _ = write!(
+        output,
+        "<div class=\"wb-tree-group-label\"><span>{}</span><span>{count}</span></div>",
+        escape(label),
+    );
 }
 
 #[allow(

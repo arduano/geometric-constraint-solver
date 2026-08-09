@@ -115,7 +115,7 @@ mod tests {
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, DocumentConstraintDefinition, DocumentEdit, DocumentSolveRequest,
-        RetainedSketchDocumentSession, SketchDocument,
+        GeometryRole, RetainedSketchDocumentSession, SketchDocument,
     };
 
     use super::{
@@ -206,6 +206,7 @@ mod tests {
         let commit = EditorEffect::CommitConstruction {
             expected: session.design_identity(),
             proposal,
+            role: GeometryRole::Profile,
         };
         let clear = EditorEffect::ClearConstructionPreview;
         let mut failed_commit = false;
@@ -233,6 +234,7 @@ mod tests {
             proposal: ConstructionProposal::Point {
                 position: [1.0, 0.0],
             },
+            role: GeometryRole::Profile,
         };
         let mut preview = Some(ConstructionPreview::Anchor {
             position: [1.0, 0.0],

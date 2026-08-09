@@ -345,7 +345,8 @@ mod tests {
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveSpan,
         DesignPointId, DocumentConstraintDefinition, DocumentEdit, DocumentObjectId,
-        DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument, alpha_scenario,
+        DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession, SketchDocument,
+        alpha_scenario,
     };
 
     use super::{WorkspaceSnapshot, default_evaluation_high_water};
@@ -425,6 +426,50 @@ mod tests {
         assert_eq!(
             decoded.revisions().accepted(),
             snapshot.revisions().accepted()
+        );
+    }
+
+    #[test]
+    fn workspace_v4_round_trips_persistent_construction_role_without_a_new_schema() {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("point");
+        let end = document.add_point("end", [2.0, 0.0]).expect("point");
+        let guide = document
+            .add_curve_with_role(
+                "guide",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+                GeometryRole::Construction,
+            )
+            .expect("Construction curve");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("workspace v4");
+        assert_eq!(snapshot.version, 4);
+        let decoded =
+            WorkspaceSnapshot::decode(&snapshot.encode().expect("encode")).expect("decode");
+        let restored = decoded
+            .restore_session(DocumentSolveRequest::default(), SolverConfig::default())
+            .expect("restore");
+        assert_eq!(
+            restored.design_document().geometry_role(guide),
+            Some(GeometryRole::Construction)
+        );
+        assert_eq!(
+            restored
+                .accepted_state_for_current_input()
+                .expect("accepted")
+                .document()
+                .geometry_role(guide),
+            Some(GeometryRole::Construction)
         );
     }
 

@@ -51,6 +51,10 @@ const NURBS: &str = concat!(
     "<circle cx=\"-9\" cy=\"5\" r=\"1\"/><circle cx=\"-5\" cy=\"-6\" r=\"1\"/>",
     "<circle cy=\"-2\" r=\"1\"/><circle cx=\"5\" cy=\"6\" r=\"1\"/><circle cx=\"9\" cy=\"-5\" r=\"1\"/>",
 );
+const CONSTRUCTION_ROLE: &str = concat!(
+    "<path d=\"M-8 5L8-5\" stroke-dasharray=\"3 2\"/>",
+    "<path d=\"M-7-5H7M-4-8v6M0-8v6M4-8v6\"/>",
+);
 
 const FIXED: &str = concat!(
     "<rect x=\"-5.5\" y=\"-1\" width=\"11\" height=\"8\" rx=\"1.5\"/>",
@@ -186,6 +190,12 @@ pub(crate) fn geometry_tool_icon_markup(tool: EditorTool) -> String {
     let fragment = geometry_tool_fragment(tool);
     format!(
         "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"geometry-{key}\">{fragment}</svg>"
+    )
+}
+
+pub(crate) fn construction_role_icon_markup() -> String {
+    format!(
+        "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"geometry-role-construction\">{CONSTRUCTION_ROLE}</svg>"
     )
 }
 
@@ -336,8 +346,8 @@ mod tests {
 
     use super::{
         GEOMETRY_TOOLS, TreeIconKind, authoring_icon_markup, constraint_icon_fragment,
-        constraint_icon_key, feature_icon_markup, geometry_tool_icon_markup, geometry_tool_key,
-        tree_icon_markup,
+        constraint_icon_key, construction_role_icon_markup, feature_icon_markup,
+        geometry_tool_icon_markup, geometry_tool_key, tree_icon_markup,
     };
 
     #[test]
@@ -475,6 +485,12 @@ mod tests {
         assert!(icon.contains("data-icon-key=\"feature-fillet\""));
         assert!(icon.contains("aria-hidden=\"true\""));
         assert!(!icon.contains("<text"));
+
+        let construction = construction_role_icon_markup();
+        assert!(construction.starts_with("<svg class=\"wb-palette-icon\""));
+        assert!(construction.contains("data-icon-key=\"geometry-role-construction\""));
+        assert!(construction.contains("stroke-dasharray=\"3 2\""));
+        assert!(!construction.contains("<text"));
     }
 
     #[test]

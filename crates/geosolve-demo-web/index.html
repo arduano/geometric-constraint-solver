@@ -49,6 +49,7 @@
             <button type="button" data-wb-tool="parabola" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Parabola</span></button>
             <button type="button" data-wb-tool="hyperbola" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Hyperbola</span></button>
             <button type="button" data-wb-tool="nurbs" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>NURBS</span></button>
+            <button id="wb-geometry-role" type="button" data-wb-action="geometry-role" aria-pressed="false" title="With curves selected, toggle their complete persistent curve role. Otherwise choose the role for newly drawn curves."><span class="wb-role-icon" aria-hidden="true"></span><span>Construction</span></button>
           </div>
         </section>
         <section class="wb-palette-section">
@@ -130,6 +131,15 @@
         <div class="wb-canvas-hud">
           <span>XY plane</span>
           <span id="wb-camera-scale">50.0 px / unit</span>
+          <details id="wb-construction-display" class="wb-construction-display">
+            <summary>Construction</summary>
+            <div class="wb-construction-display-popover">
+              <label>Canvas picks<select id="wb-geometry-pick-scope"><option value="all">All geometry</option><option value="profile">Profile only</option><option value="construction">Construction only</option></select></label>
+              <label class="wb-check-label"><input id="wb-show-explicit-construction" type="checkbox" checked />Explicit guides</label>
+              <label class="wb-check-label"><input id="wb-show-implicit-construction" type="checkbox" checked />Fillet-hidden portions</label>
+              <p>Profile wins near-identical overlaps. A hidden Fillet portion still selects its complete native source.</p>
+            </div>
+          </details>
           <div class="wb-camera-controls" aria-label="Canvas view controls">
             <button type="button" data-wb-action="zoom-out" aria-label="Zoom out">−</button>
             <button type="button" data-wb-action="zoom-fit">Fit</button>
@@ -145,6 +155,12 @@
           <span class="wb-field-label">Selection</span>
           <strong id="wb-selection">0 selected</strong>
           <button type="button" class="wb-danger" data-wb-action="delete">Delete selected</button>
+        </section>
+        <section id="wb-geometry-role-editor" class="wb-inspector-section wb-geometry-role-editor" hidden>
+          <span class="wb-field-label">Complete curve role</span>
+          <strong id="wb-geometry-role-state">Profile</strong>
+          <p id="wb-geometry-role-detail">Role changes target complete persistent curves, including every span and any Fillet-hidden portion.</p>
+          <button type="button" data-wb-action="geometry-role">Toggle Profile / Construction</button>
         </section>
         <section class="wb-inspector-section wb-construction-options">
           <span class="wb-field-label">Advanced curve authoring</span>

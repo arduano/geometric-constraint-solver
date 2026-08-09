@@ -235,13 +235,17 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-tool-palette kbd { color: #d6b16f; background: transparent; font: 1rem ui-monospace, monospace; }
 .wb-geometry-icon,
 .wb-authoring-icon,
-.wb-feature-icon {
+.wb-feature-icon,
+.wb-role-icon {
   display: grid;
   width: 1.35rem;
   height: 1.35rem;
   place-items: center;
   color: #d6b16f;
 }
+.wb-role-icon { color: #8fbec2; }
+#wb-geometry-role[aria-pressed="true"] .wb-role-icon,
+#wb-geometry-role[aria-pressed="mixed"] .wb-role-icon { color: #fff0bd; }
 .wb-palette-icon {
   width: 100%;
   height: 100%;
@@ -397,6 +401,15 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-tree-row.authoring-pending .wb-tree-icon { color: currentcolor; }
 .wb-empty { padding: 1rem 0.6rem; color: #707977; font-size: 0.75rem; }
 .wb-tree-row[data-role="construction"] { color: #91a6a7; font-style: italic; }
+.wb-tree-row[data-has-implicit-construction="true"]::after {
+  content: "hidden";
+  margin-left: auto;
+  color: #71898b;
+  font-size: 0.54rem;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .wb-tree-external { border-left: 2px solid #638b91 !important; color: #9cc6c9; }
 .wb-tree-feature { color: #dfc88f; }
 .wb-tree-feature[data-feature-state="failed"] { color: #f1a99b; }
@@ -509,7 +522,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke: #8ed5ca;
   stroke-width: 2.6;
 }
-.wb-computed-item:hover .wb-computed-fillet,
+.wb-computed-item:not(.interaction-disabled):hover .wb-computed-fillet,
 .wb-computed-item.geometry-hovered .wb-computed-fillet,
 .wb-computed-item.selected .wb-computed-fillet {
   stroke: #efb856;
@@ -621,8 +634,27 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-curve.authoring-pending,
 .wb-point.authoring-pending { pointer-events: none; }
-.wb-curve[data-role="construction"] { stroke: #86a0a2; stroke-dasharray: 7 5; }
+.wb-curve[data-role="construction"] { stroke: #86a0a2; stroke-dasharray: 9 3 2 3; }
+.wb-curve[data-role="construction"].selected,
+.wb-curve[data-role="construction"].geometry-hovered { stroke: #efb856; }
+.wb-curve[data-role="construction"].related,
+.wb-curve[data-role="construction"].authoring-pending { stroke: #79bfc4; }
+.wb-curve[data-construction-origin="implicit"] {
+  stroke: #70888b;
+  stroke-dasharray: 4 5;
+  opacity: 0.72;
+}
+.wb-curve[data-construction-origin="implicit"].selected,
+.wb-curve[data-construction-origin="implicit"].geometry-hovered {
+  stroke: #efb856;
+  opacity: 1;
+}
 .wb-point { fill: #131718; stroke: #8fd2ca; stroke-width: 2; cursor: grab; }
+.wb-curve[data-interactive="false"],
+.wb-point[data-interactive="false"] {
+  pointer-events: none;
+  cursor: default;
+}
 .wb-curve.has-problem,
 .wb-curve.has-problem[data-role="construction"] {
   stroke: #ff7666;
@@ -861,6 +893,37 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-problems strong { color: #ffe5e1; }
 .wb-problems span,
 .wb-problems p { margin: 0; color: #bda6a1; }
+.wb-construction-display { position: relative; }
+.wb-construction-display > summary {
+  cursor: pointer;
+  color: #9eb5b7;
+  list-style: none;
+}
+.wb-construction-display > summary::-webkit-details-marker { display: none; }
+.wb-construction-display > summary::before { content: "◇ "; color: #7ebbc1; }
+.wb-construction-display-popover {
+  position: absolute;
+  z-index: 6;
+  right: 0;
+  bottom: calc(100% + 0.55rem);
+  display: grid;
+  width: 14rem;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid #465355;
+  border-radius: 5px;
+  background: rgb(28 34 35 / 98%);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 42%);
+  color: #c3cecd;
+  font: 0.68rem system-ui, sans-serif;
+}
+.wb-construction-display-popover label { display: grid; gap: 0.25rem; }
+.wb-construction-display-popover .wb-check-label {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.wb-construction-display-popover p { margin: 0; color: #899c9d; line-height: 1.35; }
+.wb-geometry-role-editor p { margin: 0; color: #899492; font-size: 0.67rem; line-height: 1.4; }
 .wb-status-bar {
   display: flex;
   grid-column: 1 / -1;
