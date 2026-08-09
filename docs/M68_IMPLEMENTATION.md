@@ -3,8 +3,8 @@
 # M68 implementation — headless Fillet direct manipulation
 
 Status: implementation, focused direct qualification and the clean full release gate are complete
-on frozen candidate `c82d420`. Explicit supervising-human UAT, including the `M68-F001` retest,
-remains pending; M68 is not yet accepted.
+on frozen candidate `227cc9a`. Explicit supervising-human UAT, including the `M68-F001` and
+`M68-F002` retests, remains pending; M68 is not yet accepted.
 
 ## 1. Files and APIs
 
@@ -23,8 +23,10 @@ schema:
   existing checkpoint/history owner.
 - `geosolve-demo-web` renders the returned DTOs, translates pointer/focus events through exact
   render stamps, captures/releases point/Fillet/pan pointers and exposes the same actions in a
-  compact accessible panel. Its production terminal-route and pan-admission policies own only
-  browser capture bookkeeping; they do not select geometry or branches.
+  compact accessible panel. The canvas renders one central radius handle per selected corner and
+  no endpoint contact circles; typed contact/branch data remains in the headless interface, while
+  the compact panel exposes the branch actions. Its production terminal-route and pan-admission
+  policies own only browser capture bookkeeping; they do not select geometry or branches.
 
 The ordinary editable **2D Fillet playground** now contains a friendly line-circle island away
 from a fold and a separately labelled radius-`0.5` fold stress island. Both use the ordinary
@@ -75,16 +77,18 @@ priority semantics, residual catalog and M27/M28 advanced Fillet APIs are unchan
 
 ## 3. Commands and outcomes
 
-The implementation and its first UAT repair are split into four reviewable source commits:
+The implementation and its UAT repairs are split into five reviewable source commits:
 
 - `807d2f4` — feature-domain absolute continuation, analytic rail, bounded alternatives and
   atomic configuration replacement;
 - `0954e97` — workbench affordances, accessible actions, exact render stamps, friendly/fold
   specimens and point/Fillet/pan pointer capture;
 - `240a174` — coordinator/editor Current-only radius/contact transactions, exact terminal-sample
-  checks and stale/invalid/foreign-pointer hardening; and
+  checks and stale/invalid/foreign-pointer hardening;
 - `c82d420` — shared affine-source re-anchoring for evaluation and continuation plus the
-  `M68-F001` feature/editor regressions.
+  `M68-F001` feature/editor regressions; and
+- `227cc9a` — one central Fillet radius handle, no endpoint contact elements or invisible contact
+  hit zones, and focused editor/web regressions for `M68-F002`.
 
 The latest integrated focused gate passed in the project Nix shell:
 
@@ -119,7 +123,7 @@ An additional independent review of `M68-F001` found no blocker: the repair alig
 affine/affine reevaluation and continuation domains, while genuine fold conditioning and every
 non-affine seed-local guard remain unchanged.
 
-The complete clean gate then passed from source `c82d420`:
+The complete clean gate then passed from source `227cc9a`:
 
 ```text
 nix-shell shell.nix --run './scripts/release-gate.sh'
@@ -128,14 +132,14 @@ nix-shell shell.nix --run './scripts/release-gate.sh'
 The command exited successfully after formatting, warnings-denied workspace Clippy, locked
 all-feature tests, all-feature WASM, rustdoc, benchmark, licence/package, static single-workbench,
 Git-hygiene and release Trunk checks. The release-only 256-moving-body spatial sparse-crossover
-regression passed in `117.13s`. Cargo's repeated `license` plus `license-file` advisory is
+regression passed in `143.68s`. Cargo's repeated `license` plus `license-file` advisory is
 pre-existing and non-blocking; the explicit licence gate passed.
 
 The frozen release distribution is identified by:
 
 ```text
 sha256sum crates/geosolve-demo-web/dist/* | sha256sum
-def06be806f0d1d7465fb8102ed0ef5138eae1689298fe9140b5315f588d725b  -
+3644376e73790736ae2dacdb0dbd1b150d9f07ae40c0ee00f057d1f6b7b19444  -
 ```
 
 The focused candidate is served from that exact distribution at
@@ -157,6 +161,8 @@ Focused direct evidence now covers:
 - persistence, Undo/Redo/reload and the complete `M66-PF001` through `M66-PF004` regression set;
 - large native source-point edits followed by grouped-Fillet rail exposure, preview and
   publication without a false fold; and
+- exactly one visible central radius handle per selected Fillet corner, with no endpoint contact
+  element or invisible contact-hit zone; and
 - unchanged native sketch identity, coordinates, residuals, rank and DOF for every feature-only
   edit.
 
@@ -173,11 +179,11 @@ that approval is recorded.
 ## 5. Known limitations or next blocker
 
 The sole remaining blocker is focused human UAT of the frozen candidate, including explicit
-retest of `M68-F001`. This is a scoped active milestone, not a completion record. M68 intentionally
-excludes Offset/Mirror authoring,
-two-non-affine-parent
-Fillets, computed-on-computed chaining, Bake/Explode, profile/topology consumption,
-cross-revision topological naming, computed arcs as constraint operands, schema changes, global
+retest of `M68-F001` and `M68-F002`. This is a scoped active milestone, not a completion record.
+M68 intentionally excludes Offset/Mirror authoring,
+two-non-affine-parent Fillets, computed-on-computed chaining, Bake/Explode, profile/topology
+consumption, cross-revision topological naming, computed arcs as constraint operands, schema
+changes, global
 root enumeration, browser E2E, mobile and legacy UI.
 
 The interaction foundations may be reusable for later computed geometry, including variable-

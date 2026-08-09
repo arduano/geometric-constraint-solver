@@ -3212,8 +3212,8 @@ UAT approval. That approval is recorded above and M67 is closed.
 ### M68
 
 Status: active. Implementation, focused direct qualification and the clean full release gate are
-complete on frozen candidate `c82d420`; explicit supervising-human UAT, including the
-`M68-F001` retest, remains pending.
+complete on frozen candidate `227cc9a`; explicit supervising-human UAT, including the
+`M68-F001` and `M68-F002` retests, remains pending.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
 manipulation model for ordinary computed Fillets, while establishing only the shared canvas
@@ -3221,8 +3221,10 @@ foundations that interaction needs. ADR 0032 makes the headless feature/editor b
 SVG or workbench—the authority for radius rails, contacts, retained directions, local alternatives,
 preview validity and commit/rollback.
 
-M68 uses a hybrid presentation: visible on-canvas grip/rail/contact/branch affordances and a
-compact accessible panel expose the same stable headless actions. At a branch fold, continuation
+M68 uses a hybrid presentation: one central on-canvas radius grip/rail plus branch affordances and
+a compact accessible panel expose the stable headless branch actions. Typed contact metadata and
+the internal contact-continuation seam remain in the headless interface, but endpoint contact
+circles are deliberately not canvas handles. At a branch fold, continuation
 stops on the current absolute branch, retains the last exact current result and requires an
 explicit branch action; pointer motion and numeric editing never auto-switch roots.
 
@@ -3241,9 +3243,11 @@ explicit branch action; pointer motion and numeric editing never auto-switch roo
 - [x] Move authoring and published Fillet radius/contact/branch interaction into one closed
   `geosolve-constraint-editor` state machine with exact stamps, pointer ownership, frozen rail,
   last-`Current` preview evidence, cancellation and Current-only numeric/drag publication.
-- [x] Publish model-space grip/spoke/rail, contact, retained-direction and local-alternative DTOs
+- [x] Publish model-space grip/spoke/rail, contact metadata, retained-direction and
+  local-alternative DTOs
   with stable accessible action IDs, labels, applicability, disabled reasons, attribution and one
-  shared hover/click resolver. Preserve `M66-PF004` independent owner/provenance/proximity checks.
+  shared hover/click resolver. Expose one central radius handle per selected corner and no
+  endpoint contact hit zones. Preserve `M66-PF004` independent owner/provenance/proximity checks.
 - [x] Keep the workbench a thin adapter: render the returned affordances and compact action panel,
   remove raw relative branch checkboxes, highlight all shared-radius arcs and capture/release the
   initiating pointer for point, Fillet and pan gestures. A camera change cancels/restores a live
@@ -3275,12 +3279,12 @@ reference model enumerates 28 reachable states and all 240 applicable state/even
 including same-position retry and terminal-coordinate validation.
 
 Mechanical qualification record (2026-08-09): the complete clean
-`nix-shell shell.nix --run './scripts/release-gate.sh'` passes from source `c82d420`, including
+`nix-shell shell.nix --run './scripts/release-gate.sh'` passes from source `227cc9a`, including
 formatting, warnings-denied workspace Clippy, locked all-feature tests, all-feature WASM, rustdoc,
 benchmarks, licence/package checks, the static single-workbench inventory, Git hygiene and release
-Trunk. The release-only 256-moving-body spatial sparse-crossover regression passes in `117.13s`.
+Trunk. The release-only 256-moving-body spatial sparse-crossover regression passes in `143.68s`.
 The frozen `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
-`def06be806f0d1d7465fb8102ed0ef5138eae1689298fe9140b5315f588d725b`. Only explicit human
+`3644376e73790736ae2dacdb0dbd1b150d9f07ae40c0ee00f057d1f6b7b19444`. Only explicit human
 approval of the frozen Tailscale candidate remains unchecked. The static distribution is served
 at `http://100.94.63.83:8080/`; all seven HTTP responses match their local release files by
 SHA-256.
@@ -3294,6 +3298,15 @@ non-affine case retains the bounded seed-local guard. Direct feature/editor regr
 grouped Fillets remain Current and adjustable after large source-point drags, retain stable IDs,
 publish one history step and leave native sketch identity, coordinates, residuals, rank and DOF
 unchanged. Independent review found no blocker; human retest remains pending.
+
+Finding checkpoint `M68-F002` (2026-08-09): the two endpoint contact circles duplicated the
+central radius interaction visually and made selected Fillets unnecessarily busy. Commit
+`227cc9a` removes those circles, their CSS and their canvas contact-hit priority while retaining
+the typed contact/branch metadata and internal headless continuation machinery. The generated arc
+and its single central grip continue to enter the same validated radius transaction. Direct editor
+tests prove a Fillet endpoint resolves to the visible radius surface rather than an invisible
+contact target; web markup tests prove exactly one central grip for the selected corner and no
+endpoint contact elements. Human retest remains pending.
 
 Gate: radius, contact, retention and local-branch manipulation are branch-explicit, independently
 validated and transactional at the headless boundary. Only an exact last-`Current` candidate may

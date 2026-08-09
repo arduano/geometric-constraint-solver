@@ -97,9 +97,10 @@ radius are identified in the interaction DTO.
 ### Put the complete transaction in the headless coordinator
 
 `geosolve-constraint-editor` owns a closed computed-Fillet interaction state machine covering
-idle, radius drag, named-parent contact drag and branch preview. Live state records the pointer ID,
-stable feature/corner owner, complete origin configuration, exact sketch/feature/evaluation
-stamps, frozen rail, and the token and sample for the last exact `Current` preview.
+idle, radius drag, explicit named-parent contact editing and branch preview. Live state records the
+pointer ID, stable feature/corner owner, complete origin configuration, exact
+sketch/feature/evaluation stamps, frozen rail, and the token and sample for the last exact
+`Current` preview.
 
 Authoring and published-feature radius edits use the same transaction rule. A move may replace
 only provisional preview state. Pointer-up or direct numeric editing may publish only the exact
@@ -111,13 +112,13 @@ corner intent in one ordinary feature revision and one Undo step while preservin
 feature/corner IDs.
 
 The headless layer publishes model-space interaction DTOs for the radius grip, spoke and rail;
-named-parent contact handles; solid current retained-direction arrows; outlined applicable
+named-parent contact metadata; solid current retained-direction arrows; outlined applicable
 alternatives; and dashed complementary/local branch previews. Stable action IDs carry labels,
 applicability, disabled reasons, attribution and affected-corner identities. The same resolver and
 priority order serve hover and click:
 
 ```text
-contact handle > explicit radius grip or generated arc > native support
+explicit radius grip or generated arc > native support
 ```
 
 Painted SVG identity remains only a hint. The coordinator must still validate exact owner,
@@ -125,13 +126,14 @@ provenance and model-space proximity, preserving the `M66-PF004` trust boundary.
 
 ### Keep the web adapter thin
 
-The sole workbench renders the headless handles, arrows, rails and ghost alternatives and exposes
-the same stable actions in a compact accessible panel. It owns layout, focus and event
+The sole workbench renders the headless central radius handle, arrows, rail and ghost alternatives
+and exposes the same stable actions in a compact accessible panel. It owns layout, focus and event
 translation, not branch applicability, hit resolution, radius mathematics or rollback.
 
 The visible radius grip sits at the generated arc midpoint with a spoke and rail; dragging the arc
-body is a convenience entry into the same headless gesture. Contact dots move along their named
-native parent. Retained-direction arrows and ghost alternatives preview on hover/focus and commit
+body is a convenience entry into the same headless gesture. Named contact state remains available
+through the headless interface and internal continuation seam but has no endpoint circle, canvas
+hit zone or compact-panel control. Retained-direction arrows and ghost alternatives preview on hover/focus and commit
 only through their headless action ID. The old raw Flip-first, Flip-second and Alternate-arc
 checkboxes are removed from ordinary presentation.
 

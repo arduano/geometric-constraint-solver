@@ -6,12 +6,12 @@ Status: ready for supervising-human UAT. Implementation and focused direct quali
 complete, and the clean release gate passes. M68 remains open until this scorecard receives
 explicit human approval.
 
-Candidate source: `c82d420`
+Candidate source: `227cc9a`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
-`def06be806f0d1d7465fb8102ed0ef5138eae1689298fe9140b5315f588d725b`
+`3644376e73790736ae2dacdb0dbd1b150d9f07ae40c0ee00f057d1f6b7b19444`
 
 Delivery check: all seven served HTTP responses match the frozen local distribution by SHA-256.
 
@@ -64,19 +64,18 @@ Result: Pending
 
 Notes:
 
-## M68-U3 — contact and retained-direction editing
+## M68-U3 — retained-direction and branch editing
 
-1. Select a published line-circle Fillet and inspect its two named contact handles and retained-
-   direction arrows.
-2. Drag each contact along its own native parent, including near but not through a tied/ambiguous
-   choice.
-3. Hover/focus a retained-direction arrow, inspect the preview and commit it.
-4. Repeat on reversed line-line and line-Bezier examples.
+1. Select a published line-circle Fillet and inspect its retained-direction arrows.
+2. Hover/focus a retained-direction arrow, inspect the preview and commit it.
+3. Exercise the same retained-direction and available branch actions through the compact panel.
+4. Repeat on reversed line-line and line-Bezier examples, including a tied/ambiguous choice.
 
-Expected: the manipulated parent is unambiguous, current source geometry stays normally
-selectable, and preview/commit preserve every branch field not explicitly changed. A tied choice
-reports ambiguity rather than guessing. Retention actions first preview and then commit through the
-same action in the canvas and accessible panel.
+Expected: current source geometry stays normally selectable, and preview/commit preserve every
+branch field not explicitly changed. A tied choice reports ambiguity rather than guessing. The
+canvas has no endpoint contact circles; retention actions first preview and then commit through the
+same action in the canvas and accessible panel. Direct contact manipulation is not part of the M68
+canvas or panel surface; its typed metadata and internal continuation seam remain headless.
 
 Result: Pending
 
@@ -100,19 +99,19 @@ Notes:
 
 ## M68-U5 — crowded hit priority and pointer capture
 
-1. Press a contact handle where it overlaps a generated arc or native support.
-2. Press the explicit radius grip/arc where it overlaps a native support.
+1. Confirm each selected Fillet corner shows one central radius handle and no endpoint circles.
+2. Press the explicit radius grip/arc, including near an endpoint or overlapping native support.
 3. During a drag, move outside the SVG and release; repeat with pointer cancellation and a second
    pointer/button attempt.
 4. Compare hover/focus feedback with the action that clicking actually performs.
 5. Pan and wheel-zoom while only collecting or inspecting a Fillet, then begin a Fillet drag and
    attempt a camera change.
 
-Expected: contact beats radius, and explicit radius beats native support. Painted identity alone
-cannot select a stale or foreign owner. The initiating pointer remains captured until clean release
-or cancellation, no gesture is stranded, and another pointer cannot steal or publish it. Hover and
-click resolve the same action. Camera navigation remains available outside live manipulation; a
-live Fillet gesture cancels/restores before camera state changes.
+Expected: explicit radius beats native support, and an endpoint has no invisible contact-drag hit
+zone. Painted identity alone cannot select a stale or foreign owner. The initiating pointer remains
+captured until clean release or cancellation, no gesture is stranded, and another pointer cannot
+steal or publish it. Hover and click resolve the same action. Camera navigation remains available
+outside live manipulation; a live Fillet gesture cancels/restores before camera state changes.
 
 Result: Pending
 
@@ -162,6 +161,22 @@ and the replacement frozen distribution is byte-verified at the Tailscale endpoi
 
 Retest: Pending. Repeat the reproduction on the candidate and confirm both Fillets remain
 adjustable after moving the polyline points.
+
+### M68-F002 — redundant endpoint Fillet drag handles
+
+Observation: a selected Fillet displayed a central radius handle plus two contact circles at its
+ends. All three appeared to resize the Fillet, making the canvas unnecessarily busy.
+
+Disposition: fixed by `227cc9a`. The two endpoint circles and their canvas hit priority are
+removed. The visible generated arc and single central grip retain radius dragging, while typed
+contact/branch metadata and internal headless continuation support remain preserved.
+
+Mechanical regression: editor tests prove endpoint hover/press resolves to the visible radius
+surface rather than an invisible contact target. Web markup tests prove one central grip for the
+selected corner and no `wb-fillet-contact` elements. The full release gate passes on `227cc9a`.
+
+Retest: Pending. Select a Fillet and confirm it shows one central radius handle, no endpoint dots,
+and no hidden contact-drag behavior at either end.
 
 ## Approval
 

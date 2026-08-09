@@ -2093,10 +2093,11 @@ qualification is complete and explicit human UAT remains pending.
 
 ### M68-DM3 - Current-only interaction transition model
 
-Drive the closed headless Fillet interaction through idle, radius drag, contact drag on either
-parent and branch preview. Exhaust pointer down/move/up/cancel orderings, radial/tangential motion,
-coarse/fine sampling, several viewport scales, invalid-to-valid recovery, release while invalid,
-modifiers, a second pointer, stale/foreign owners, work exhaustion and camera cancellation.
+Drive the closed headless Fillet interaction through idle, radius drag, explicit named-contact
+transactions and branch preview. Exhaust pointer down/move/up/cancel orderings, radial/tangential
+motion, coarse/fine sampling, several viewport scales, invalid-to-valid recovery, release while
+invalid, modifiers, a second pointer, stale/foreign owners, work exhaustion and camera
+cancellation.
 
 The model records exact origin configuration and stamps plus only the last exact `Current` preview
 token/sample. A commit is legal iff that evidence still matches. Rejected samples may not replace
@@ -2112,10 +2113,11 @@ validation. Clean release qualification is complete and explicit human UAT remai
 
 ### M68-DM4 - Shared action resolution and crowded priority
 
-At positions where a contact handle, generated arc/grip and native support overlap, resolve both
-hover and click through the same headless action resolver. While the Fillet is selected or being
-authored, priority is named contact handle, then explicit radius grip/generated arc, then native
-support. Painted `FeatureCorner` metadata is only a hint: exact owner, accepted/computed
+At positions where a generated arc/grip and native support overlap, resolve both hover and click
+through the same headless action resolver. While the Fillet is selected or being authored,
+priority is explicit radius grip/generated arc, then native support. Named contacts remain typed
+headless metadata, not endpoint canvas handles or compact-panel controls. Painted `FeatureCorner`
+metadata is only a hint: exact owner, accepted/computed
 provenance and model-space proximity must also match, preserving `M66-PF004`.
 
 Canvas actions and the compact accessible panel expose identical stable IDs, labels,
@@ -2124,6 +2126,10 @@ identifies every affected arc. Hovering a ghost alternative never commits it.
 
 Status: mechanically implemented and directly editor/presentation-qualified; clean release
 qualification is complete and explicit human UAT remains pending.
+
+The `M68-F002` hotfix narrows the visible canvas affordance to one central radius handle per
+selected corner. Direct editor and web tests prove Fillet endpoints have neither rendered contact
+circles nor invisible contact-drag hit zones; the generated arc remains the visible radius surface.
 
 ### M68-DM5 - Atomic history, persistence and sketch invariance
 
