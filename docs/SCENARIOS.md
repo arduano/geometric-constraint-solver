@@ -2133,6 +2133,13 @@ circles nor invisible contact-drag hit zones. Branch choices retain their lightw
 arrows without circular handle-like backplates; the generated arc remains the visible radius
 surface.
 
+Painted arrow identity remains only a current-stamped hint. Where transparent action corridors
+overlap, the adapter submits every painted action under the pointer and the headless resolver
+selects the unique nearest applicable control from independently projected model-space geometry.
+A visible validated arrow outranks an overlapping Fillet radius surface, while the central radius
+grip retains priority where it visibly covers the arrow. Retained-direction arrows have no
+adjacent duplicate glyph; only the exact headless preview adds the bright, thick glowing state.
+
 ### M68-DM5 - Atomic history, persistence and sketch invariance
 
 For one- and multi-corner FilletSets, atomically publish an accepted radius plus any replacement

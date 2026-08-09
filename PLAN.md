@@ -3211,9 +3211,9 @@ UAT approval. That approval is recorded above and M67 is closed.
 
 ### M68
 
-Status: active. Implementation, focused direct qualification and the clean full release gate are
-complete on frozen candidate `5355162`; explicit supervising-human UAT, including the
-`M68-F001` and `M68-F002` retests, remains pending.
+Status: active. Implementation, focused direct qualification and complete release qualification
+are complete on frozen candidate `25211e5`; explicit supervising-human UAT, including the
+`M68-F001` through `M68-F003` retests, remains pending.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
 manipulation model for ordinary computed Fillets, while establishing only the shared canvas
@@ -3278,13 +3278,15 @@ formatting, strict native/WASM Clippy and warnings-denied WASM checking. The bou
 reference model enumerates 28 reachable states and all 240 applicable state/event transitions,
 including same-position retry and terminal-coordinate validation.
 
-Mechanical qualification record (2026-08-09): the complete clean
-`nix-shell shell.nix --run './scripts/release-gate.sh'` passes from source `5355162`, including
-formatting, warnings-denied workspace Clippy, locked all-feature tests, all-feature WASM, rustdoc,
-benchmarks, licence/package checks, the static single-workbench inventory, Git hygiene and release
-Trunk. The release-only 256-moving-body spatial sparse-crossover regression passes in `139.62s`.
+Mechanical qualification record (2026-08-09): the complete release-gate command sequence passes
+from clean source `25211e5`, including formatting, warnings-denied workspace Clippy, locked
+all-feature tests, all-feature WASM, rustdoc, benchmarks, licence/package checks, the static
+single-workbench inventory, Git hygiene and release Trunk. The wrapper invocation was externally
+terminated while its unchanged long regression was running; that exact release-only
+256-moving-body spatial sparse-crossover command then passed independently in `136.32s`, followed
+by the remaining licence/package and Trunk commands on the same untouched source.
 The frozen `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
-`11a89f991579899614fafe498a3d4a5b98509a860b6a8abd962121277e347cc3`. Only explicit human
+`24438f7019d58628ca3c34814be890c6a7a6687f233545d7b6ef03ee84664e05`. Only explicit human
 approval of the frozen Tailscale candidate remains unchecked. The static distribution is served
 at `http://100.94.63.83:8080/`; all seven HTTP responses match their local release files by
 SHA-256.
@@ -3310,6 +3312,18 @@ second handle-like visual layer; `5355162` removes those backplates while preser
 icons, arrows and action semantics. Web markup tests prove exactly one central grip for the
 selected corner, no endpoint contact elements and no handle-like branch circles. Human retest
 remains pending.
+
+Finding checkpoint `M68-F003` (2026-08-09): lightweight arrows could still lose pointer priority
+to the Fillet radius surface, and overlapping transparent arrow corridors could make the SVG's
+topmost action disagree with the headless nearest action. Commits `8e3ee5d` and `25211e5` make an
+independently validated painted arrow outrank the ordinary Fillet surface, reconcile every
+current stamped action under the pointer before selecting the unique headless-nearest action, and
+leave the visible central grip authoritative where it actually paints over an arrow. Retained-
+direction arrows no longer carry an adjacent duplicate glyph; their 24-pixel corridor previews
+through the headless editor and brightens, thickens and glows on hover. Native regressions cover
+stale/foreign/spoofed and overlapping paint-order candidates. A release-browser reproduction
+confirmed the correct crowded arrow previews and that dragging it changes neither radius nor arc.
+Human retest remains pending.
 
 Gate: radius, contact, retention and local-branch manipulation are branch-explicit, independently
 validated and transactional at the headless boundary. Only an exact last-`Current` candidate may

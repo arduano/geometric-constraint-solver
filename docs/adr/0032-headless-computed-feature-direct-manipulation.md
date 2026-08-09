@@ -2,8 +2,8 @@
 
 # ADR 0032: Headless computed-feature direct manipulation
 
-Status: accepted for M68; implementation and focused direct qualification are complete, while
-release qualification and human UAT remain pending
+Status: accepted for M68; implementation, focused direct qualification and release qualification
+are complete, while human UAT remains pending
 
 ## Context
 
@@ -123,6 +123,13 @@ explicit radius grip or generated arc > native support
 
 Painted SVG identity remains only a hint. The coordinator must still validate exact owner,
 provenance and model-space proximity, preserving the `M66-PF004` trust boundary.
+
+Where multiple transparent action corridors overlap, SVG paint order is not semantic priority.
+The adapter may collect every exact-stamped painted action under the pointer, but only the unique
+action independently selected as nearest by the headless model-space resolver may preview or
+commit. A validated visible arrow outranks an overlapping Fillet radius surface; the central
+radius grip retains priority where it visibly covers the arrow. Stale, foreign, disabled, far or
+spoofed painted targets still fall through to ordinary editor interaction.
 
 ### Keep the web adapter thin
 

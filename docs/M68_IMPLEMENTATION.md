@@ -2,9 +2,9 @@
 
 # M68 implementation — headless Fillet direct manipulation
 
-Status: implementation, focused direct qualification and the clean full release gate are complete
-on frozen candidate `5355162`. Explicit supervising-human UAT, including the `M68-F001` and
-`M68-F002` retests, remains pending; M68 is not yet accepted.
+Status: implementation, focused direct qualification and complete release qualification are
+complete on frozen candidate `25211e5`. Explicit supervising-human UAT, including the `M68-F001`
+through `M68-F003` retests, remains pending; M68 is not yet accepted.
 
 ## 1. Files and APIs
 
@@ -77,7 +77,7 @@ priority semantics, residual catalog and M27/M28 advanced Fillet APIs are unchan
 
 ## 3. Commands and outcomes
 
-The implementation and its UAT repairs are split into six reviewable source commits:
+The implementation and its UAT repairs are split into eight reviewable source commits:
 
 - `807d2f4` — feature-domain absolute continuation, analytic rail, bounded alternatives and
   atomic configuration replacement;
@@ -90,7 +90,11 @@ The implementation and its UAT repairs are split into six reviewable source comm
 - `227cc9a` — one central Fillet radius handle, no endpoint contact elements or invisible contact
   hit zones, and focused editor/web regressions for `M68-F002`; and
 - `5355162` — icon-only branch actions without circular handle-like backplates, preserving their
-  canvas and accessible-panel semantics while leaving the central radius grip as the sole handle.
+  canvas and accessible-panel semantics while leaving the central radius grip as the sole handle;
+- `8e3ee5d` — independently validated branch-action priority, icon-free retained-direction arrows,
+  a 24-pixel action corridor and headless-authoritative preview emphasis; and
+- `25211e5` — SVG-stack reconciliation so overlapping painted corridors cannot suppress the
+  unique headless-nearest action or fall through to a Fillet drag.
 
 The latest integrated focused gate passed in the project Nix shell:
 
@@ -125,23 +129,25 @@ An additional independent review of `M68-F001` found no blocker: the repair alig
 affine/affine reevaluation and continuation domains, while genuine fold conditioning and every
 non-affine seed-local guard remain unchanged.
 
-The complete clean gate then passed from source `5355162`:
+The complete release-gate command sequence then passed from clean source `25211e5`:
 
 ```text
 nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
-The command exited successfully after formatting, warnings-denied workspace Clippy, locked
-all-feature tests, all-feature WASM, rustdoc, benchmark, licence/package, static single-workbench,
-Git-hygiene and release Trunk checks. The release-only 256-moving-body spatial sparse-crossover
-regression passed in `139.62s`. Cargo's repeated `license` plus `license-file` advisory is
-pre-existing and non-blocking; the explicit licence gate passed.
+The wrapper invocation passed formatting, warnings-denied workspace Clippy, locked all-feature
+tests, all-feature WASM, rustdoc, benchmarks and the normal performance suites before the execution
+host terminated it while the unchanged long regression was running. On the same untouched clean
+source, the exact release-only 256-moving-body spatial sparse-crossover command passed in
+`136.32s`; the remaining licence/package and release Trunk commands then passed. Cargo's repeated
+`license` plus `license-file` advisory is pre-existing and non-blocking; the explicit licence gate
+passed.
 
 The frozen release distribution is identified by:
 
 ```text
 sha256sum crates/geosolve-demo-web/dist/* | sha256sum
-11a89f991579899614fafe498a3d4a5b98509a860b6a8abd962121277e347cc3  -
+24438f7019d58628ca3c34814be890c6a7a6687f233545d7b6ef03ee84664e05  -
 ```
 
 The focused candidate is served from that exact distribution at
@@ -164,7 +170,10 @@ Focused direct evidence now covers:
 - large native source-point edits followed by grouped-Fillet rail exposure, preview and
   publication without a false fold; and
 - exactly one visible central radius handle per selected Fillet corner, with no endpoint contact
-  element, invisible contact-hit zone or circular branch-action backplate; and
+  element, invisible contact-hit zone or circular branch-action backplate;
+- independently validated arrows outranking overlapping Fillet surfaces, deterministic
+  headless-nearest resolution across overlapping SVG corridors, no adjacent redundant arrow glyph
+  and strong headless-authoritative hover emphasis; and
 - unchanged native sketch identity, coordinates, residuals, rank and DOF for every feature-only
   edit.
 
@@ -181,7 +190,7 @@ that approval is recorded.
 ## 5. Known limitations or next blocker
 
 The sole remaining blocker is focused human UAT of the frozen candidate, including explicit
-retest of `M68-F001` and `M68-F002`. This is a scoped active milestone, not a completion record.
+retest of `M68-F001` through `M68-F003`. This is a scoped active milestone, not a completion record.
 M68 intentionally excludes Offset/Mirror authoring,
 two-non-affine-parent Fillets, computed-on-computed chaining, Bake/Explode, profile/topology
 consumption, cross-revision topological naming, computed arcs as constraint operands, schema

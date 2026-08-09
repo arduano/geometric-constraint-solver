@@ -2,16 +2,16 @@
 
 # M68 focused UAT — Fillet direct manipulation
 
-Status: ready for supervising-human UAT. Implementation and focused direct qualification are
-complete, and the clean release gate passes. M68 remains open until this scorecard receives
+Status: ready for supervising-human UAT. Implementation, focused direct qualification and complete
+release qualification pass. M68 remains open until this scorecard receives
 explicit human approval.
 
-Candidate source: `5355162`
+Candidate source: `25211e5`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
-`11a89f991579899614fafe498a3d4a5b98509a860b6a8abd962121277e347cc3`
+`24438f7019d58628ca3c34814be890c6a7a6687f233545d7b6ef03ee84664e05`
 
 Delivery check: all seven served HTTP responses match the frozen local distribution by SHA-256.
 
@@ -74,8 +74,10 @@ Notes:
 Expected: current source geometry stays normally selectable, and preview/commit preserve every
 branch field not explicitly changed. A tied choice reports ambiguity rather than guessing. The
 canvas has no endpoint contact circles; retention actions first preview and then commit through the
-same action in the canvas and accessible panel. Direct contact manipulation is not part of the M68
-canvas or panel surface; its typed metadata and internal continuation seam remain headless.
+same action in the canvas and accessible panel. Each arrow is the sole symbol for that action and
+becomes visibly brighter, thicker and glowing when its headless preview is active. Direct contact
+manipulation is not part of the M68 canvas or panel surface; its typed metadata and internal
+continuation seam remain headless.
 
 Result: Pending
 
@@ -107,11 +109,14 @@ Notes:
 5. Pan and wheel-zoom while only collecting or inspecting a Fillet, then begin a Fillet drag and
    attempt a camera change.
 
-Expected: explicit radius beats native support, and an endpoint has no invisible contact-drag hit
-zone. Painted identity alone cannot select a stale or foreign owner. The initiating pointer remains
-captured until clean release or cancellation, no gesture is stranded, and another pointer cannot
-steal or publish it. Hover and click resolve the same action. Camera navigation remains available
-outside live manipulation; a live Fillet gesture cancels/restores before camera state changes.
+Expected: explicit radius beats native support, while a visible branch arrow beats an overlapping
+Fillet radius surface unless the central radius grip visibly covers it; an endpoint has no
+invisible contact-drag hit zone. Overlapping arrow corridors resolve to the unique headless-nearest
+action rather than SVG paint order, and painted identity alone cannot select a stale or foreign
+owner. The initiating pointer remains captured until clean release or cancellation, no gesture is
+stranded, and another pointer cannot steal or publish it. Hover and click resolve the same action.
+Camera navigation remains available outside live manipulation; a live Fillet gesture
+cancels/restores before camera state changes.
 
 Result: Pending
 
@@ -183,6 +188,37 @@ one circle, class `wb-fillet-radius-grip`. The full release gate passes on `5355
 Retest: Pending. Select a Fillet and confirm it shows one central radius handle, no endpoint dots
 or circular branch controls, and no hidden contact-drag behavior at either end. Branch choices may
 remain visible as lightweight icons/arrows.
+
+### M68-F003 — branch arrows fell through to Fillet radius dragging
+
+Observation: hovering or dragging a visible branch control could resolve to the Fillet radius
+surface instead. Removing its circular backplate made the control look lighter, but did not fix
+the interaction mismatch. Some retained-direction arrows also still had a redundant glyph beside
+the arrow, and their hover response was not visually obvious.
+
+Root cause: the headless resolver originally gave every radius hit priority over a branch action.
+After reversing that semantic priority, overlapping 24-pixel SVG action corridors exposed a
+second adapter defect: DOM paint order could report a different stamped arrow from the uniquely
+nearest headless action, causing safe rejection and a fall-through to ordinary Fillet dragging.
+
+Disposition: fixed by `8e3ee5d` and `25211e5`. A current stamped painted action must match exact
+owner, action, accepted/computed input, applicability and model-space proximity before outranking
+the radius surface. The adapter now submits every stamped action in the SVG stack at the pointer,
+so the unique headless-nearest action wins independently of paint order. The visible central grip
+keeps priority where it actually covers an arrow. Retained-direction arrows have no adjacent
+glyph, and an active headless preview brightens and thickens the full arrow with a glow.
+
+Mechanical regression: 169 editor unit tests, 46 editor integration tests and 68 web tests pass.
+Focused cases reject stale, foreign, far and spoofed targets; admit an independently verified
+arrow over the Fillet surface; and prove an overlapping topmost corridor cannot suppress the
+headless-nearest action. A real release-browser reproduction showed a three-entry overlapping SVG
+stack resolving to `reverse-first`; the arrow became `3px` bright/glowing and a drag changed
+neither the `0.5` radius, central grip nor generated arc.
+
+Retest: Pending. Select a Fillet, hover each visible arrow—including crowded arrows—and confirm
+exactly one arrow highlights strongly. Click one to commit its branch action, then drag from an
+arrow and confirm it does not resize the Fillet. Confirm there is no separate glyph beside a
+retained-direction arrow.
 
 ## Approval
 
