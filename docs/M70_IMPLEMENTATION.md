@@ -2,16 +2,18 @@
 
 # M70 implementation — Headless auto-constraint drafting intelligence
 
-Status: implementation and focused direct qualification are complete. Integrated release
-qualification, release publication and supervising-human UAT are pending; M70 remains open.
+Status: implementation, focused direct qualification, integrated release qualification, frozen
+candidate publication and served-byte verification are complete. Supervising-human UAT is pending;
+M70 remains open.
 
 Architecture owner: ADR 0034
 
-Candidate source: **PENDING — NOT YET FROZEN**
+Candidate source: `4b16db3a885f5e28f508189b8817797375f05807` on `main`
 
-Integrated release-gate result: **PENDING — NOT YET RUN ON A CLEAN NOMINATED SOURCE**
+Integrated release-gate result: **PASS**
 
-Tailscale release distribution and byte manifest: **PENDING — NOT YET PUBLISHED**
+Tailscale release distribution and byte manifest: **PASS** at `http://100.94.63.83:8080/`;
+aggregate `e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`
 
 ## 1. Files and APIs
 
@@ -174,15 +176,36 @@ midpoint-plus-perpendicular publication, exact Redo/reload state, redundant-plan
 unchanged rejected history. Resource-boundary values remain focused native-test evidence rather
 than being overstated as golden-transcript rows.
 
-Before human UAT, one frozen source must still pass:
+The complete integrated gate ran against the clean nominated source:
 
 ```text
 nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
-Those focused counts do not nominate a release source. The integrated result, nominated source
-hash, release Trunk distribution, manifest and served-byte comparison are intentionally
-**PENDING**. No clean release-gate or deployment success is claimed by this document yet.
+The command exited 0. Formatting and diff checks, warnings-denied workspace Clippy, complete locked
+all-feature workspace tests, native/WASM transition parity, the demo-web WASM check, warnings-denied
+rustdoc, benchmark compilation, ordinary performance budgets, the 256-moving-body sparse crossover,
+licence audit, package contents and Trunk 0.21.14 release assembly all passed. The long crossover
+completed in 150.01 seconds. Cargo emitted only the longstanding non-failing `license` plus
+`license-file` manifest advisories.
+
+Release distribution SHA-256 manifest aggregate:
+`e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`.
+
+```text
+29725af79af0ecb8198fe2c4fd5bfb80b69f1e9f81ec418e7bc1f056ba2480d7  dist/API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  dist/LICENSE
+665e4df98334f5efea3efa83d18ea71198a182825c2d40f96dbf141e43a2a418  dist/THIRD_PARTY_LICENSES.md
+ff0797fa408bc3be7ad572af8541bb31ccc9767914d8c4629c77cd298925cefd  dist/geosolve-demo-web-2f7c0aa7bbcd31d0.js
+9632e099cb42a6c9e29487018260be6d8d1c2fdc948fdc82ff831556b2b8f242  dist/geosolve-demo-web-2f7c0aa7bbcd31d0_bg.wasm
+7546200a552bf530f3464cab2406b54eb1bf9d8dc423663b3662a0c632b07e03  dist/index.html
+cee6aac04d97f80072827c8b29a86f79071d01fa0cc523736c0c5f20e27b0e1b  dist/styles-aafdbbd399fb8c99.css
+```
+
+Tailscale byte verification: **PASS** at `http://100.94.63.83:8080/`. The seven manifest members
+were served from a read-only snapshot, fetched through the actual Tailscale address with proxy and
+cache bypass, and matched both their expected SHA-256 values and local bytes. `/` matched
+`index.html`, and a post-fetch aggregate check proved the frozen distribution remained unchanged.
 
 ## 4. Acceptance criteria passed and pending
 
@@ -190,14 +213,14 @@ The implementation and focused direct matrix satisfy the headless ownership, inf
 hysteresis, ranking, suppression, atomic plan, exact-input authentication, never-reuse history,
 native/WASM parity, thin-adapter and editable-sample criteria in `ACCEPTANCE.md`.
 
-The following milestone gates remain pending:
+Milestone gate state:
 
-- [ ] clean integrated `scripts/release-gate.sh` on one nominated source;
-- [ ] frozen candidate hash and release Trunk distribution;
-- [ ] Tailscale publication plus byte-for-byte manifest verification; and
+- [x] clean integrated `scripts/release-gate.sh` on one nominated source;
+- [x] frozen candidate hash and release Trunk distribution;
+- [x] Tailscale publication plus byte-for-byte manifest verification; and
 - [ ] supervising-human approval of every area in `docs/M70_UAT.md`.
 
-M70 is not complete and human UAT has not begun.
+M70 is mechanically qualified and ready for human UAT, but it is not complete.
 
 ## 5. Known limitations and next blocker
 
@@ -215,5 +238,5 @@ collision-prone digest and preserves the current ergonomic public presentation D
 the duplicate would require a broader immutable/accessor-based scene API change outside M70.
 
 `docs/M71_GOALS.md` is a temporary candidate backlog only. M71 is not active, ordered, scoped or
-authorized for implementation. The immediate blocker is the pending M70 integrated release and
-publication gate, followed by human UAT—not any M71 work.
+authorized for implementation. The only remaining M70 gate is supervising-human UAT—not any M71
+work.

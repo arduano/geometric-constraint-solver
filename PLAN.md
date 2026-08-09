@@ -43,8 +43,8 @@ outside the constraint graph; M67 completes the approved legacy-surface and froz
 M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes approved ADR 0033
 Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
 is the active ADR 0034 headless auto-constraint drafting milestone; implementation and focused
-direct qualification are complete, while integrated release qualification, publication and its
-dedicated human UAT remain pending. M66's
+direct qualification, integrated release qualification, frozen-candidate publication and served-
+byte verification are complete, while its dedicated human UAT remains pending. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3492,9 +3492,9 @@ legacy UI.
 
 ### M70
 
-Status: implementation and focused direct qualification are complete under ADR 0034. Integrated
-release qualification, release-candidate publication and supervising-human UAT are pending. M70
-remains open.
+Status: implementation, focused direct qualification, integrated release qualification, frozen-
+candidate publication and served-byte verification are complete under ADR 0034. Supervising-human
+UAT is pending; M70 remains open.
 
 Goal: add reusable CAD-like auto-constraint drafting intelligence to the headless Rust editor.
 Hover may wake semantic anchors and affine references; live construction may publish adjusted
@@ -3574,11 +3574,13 @@ M70 uses no new solver residual or persistent constraint definition.
   scope-aware reference lifecycle, suppression/ambiguity, stale/rejected/cancelled/exhausted work,
   prepared-epoch and current-host-input restoration, one-solve atomicity, one-step
   Undo/Redo/reload and byte-identical native/WASM state transitions.
-- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
+- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
   benchmarks, licence/package, release Trunk, static single-workbench and Git-hygiene gates on one
   nominated source.
-- [ ] Freeze a candidate source, pass the integrated release gate, publish it through Tailscale and
-  byte-verify the release distribution. Candidate source, endpoint and manifest: **PENDING**.
+- [x] Freeze a candidate source, pass the integrated release gate, publish it through Tailscale and
+  byte-verify the release distribution. Candidate source
+  `4b16db3a885f5e28f508189b8817797375f05807`; endpoint `http://100.94.63.83:8080/`; manifest
+  aggregate `e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`.
 - [ ] Complete `docs/M70_UAT.md` and receive explicit supervising-human approval.
 
 Gate: the placement click is the sole explicit confirmation and either publishes adjusted geometry
@@ -3594,16 +3596,20 @@ nonlinear tangent/normal, grid/axis, angle-increment and durable arbitrary point
 remain outside M70. Candidate retained primitives are recorded in `docs/M71_GOALS.md`; that
 temporary backlog does not make M71 active, ordered or authorized for implementation.
 
-Pre-UAT qualification note (2026-08-10): the focused Rust owner matrix and the shared native/WASM
-golden transition oracle are implemented and pass in the working candidate. The oracle lives at
+Pre-UAT qualification/publication note (2026-08-10): the focused Rust owner matrix and the shared
+native/WASM golden transition oracle are implemented and pass on candidate source
+`4b16db3a885f5e28f508189b8817797375f05807`. The oracle lives at
 `crates/geosolve-constraint-editor/tests/m70_transition_parity.rs` with golden bytes in
 `crates/geosolve-constraint-editor/tests/fixtures/m70_transition_parity.golden.txt`; the release
 gate now runs its WASM form explicitly. The focused inference selection passes exactly 46/46; the
 complete editor crate passes 266 unit tests plus all relevant integration suites (no aggregate
 integration-suite count is claimed), demo-web passes 82/82 tests, the sketch library passes 33/33
-unit tests and its M56 prepared-work suite passes 6/6. A nominated candidate hash,
-clean integrated release-gate result, release distribution manifest and Tailscale byte verification
-do not exist yet and remain pending. This note records no human UAT result or approval.
+unit tests and its M56 prepared-work suite passes 6/6. The complete clean integrated release gate
+passes, including the 150.01-second 256-moving-body sparse crossover and Trunk release build. The
+read-only seven-file distribution is served at `http://100.94.63.83:8080/`; every asset and `/`
+matched the local candidate bytes, with manifest aggregate
+`e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`. This note records no human
+UAT result or approval.
 
 ## Explicit non-goals
 

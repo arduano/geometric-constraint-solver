@@ -101,10 +101,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   reject transactionally, allocator-only changes invalidate prepared CAS, history restore preserves
   current host inputs, and Shift changes do not discard queued foreign-interaction movement. A private
   exact scene-semantics seal makes public mutation revoke inference-publication authority. One
-  ordinary editable auto-constraint playground supports the still-pending release gate and focused
-  human UAT. Focused inference passes 46/46, the editor passes 266 unit tests plus every relevant
+  ordinary editable auto-constraint playground supports the focused human UAT. Focused inference
+  passes 46/46, the editor passes 266 unit tests plus every relevant
   integration suite, demo-web passes 82/82, the sketch library passes 33/33 and M56 passes 6/6;
-  M70 is not yet accepted.
+  the complete release gate and byte-verified Tailscale publication pass on candidate
+  `4b16db3a885f5e28f508189b8817797375f05807`. M70 is not yet accepted pending human UAT.
 
 ### Changed
 
@@ -115,9 +116,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   removed the separately routed `/#/dev/lab` application. M68 subsequently completed the ADR 0032
   Fillet-interaction cut, and M69 subsequently completed the ADR 0033 Profile/Construction cut;
   both received explicit supervising-human approval on 2026-08-09. M70 is now scoped under ADR
-  0034 for headless auto-constraint drafting intelligence. Implementation and focused direct
-  qualification are complete; integrated release qualification, publication and human acceptance
-  remain pending.
+  0034 for headless auto-constraint drafting intelligence. Implementation, focused direct and
+  integrated release qualification, frozen-candidate publication and served-byte verification are
+  complete; human acceptance remains pending.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

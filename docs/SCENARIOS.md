@@ -1284,8 +1284,8 @@ UAT are complete. M69 reuses the ordinary Construction/reference and 2D Fillet p
 for the Profile/construction scenarios below; it adds no scenario-mode state. Its direct/release
 qualification and focused human UAT are complete. M70 is now active under ADR 0034 and adds one
 ordinary editable auto-constraint drafting playground; implementation and focused direct
-qualification are complete, while integrated release qualification, publication and human UAT
-remain pending.
+qualification, integrated release qualification, frozen-candidate publication and served-byte
+verification are complete, while human UAT remains pending.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1433,7 +1433,8 @@ Direct headless tests, not sample coordinates, own point identity reuse, all-fam
 metadata, ranking, hysteresis, suppression, resource limits and atomic commit. Human M70 UAT uses
 the leaf to assess discoverability and predictability for H/V, point reuse, PointOnCurve,
 midpoint-normal, remembered Parallel/Perpendicular, ambiguity, suppression, zoom/scope,
-Undo/Redo and reload. `docs/M70_UAT.md` records the pending scorecard.
+Undo/Redo and reload. `docs/M70_UAT.md` records the published-candidate scorecard awaiting human
+results.
 
 Application-workspace v5 round trips the field-opaque persistent-object and spline-span allocator
 high-water needed for never-reuse after Undo/divergent history and process reload. Frozen workspace

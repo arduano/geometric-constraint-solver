@@ -2,8 +2,9 @@
 
 # ADR 0034: Headless auto-constraint drafting intelligence
 
-Status: accepted for M70; implementation and focused direct qualification are complete, while
-integrated release qualification, publication and supervising-human UAT are pending
+Status: accepted for M70; implementation, focused direct qualification, integrated release
+qualification, frozen-candidate publication and served-byte verification are complete, while
+supervising-human UAT is pending
 
 ## Context
 

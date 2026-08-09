@@ -38,8 +38,8 @@ Fillet-discarded implicit construction geometry; its complete mechanical/release
 the supervising human explicitly approved it on 2026-08-09. M70 is now the active milestone under
 ADR 0034: reusable headless auto-constraint drafting intelligence, atomic
 construction-plus-inference commit and an ordinary editable UAT playground. Implementation and
-focused direct qualification are complete; integrated release qualification, publication and
-supervising-human UAT are pending.
+focused direct qualification, integrated release qualification, frozen-candidate publication and
+served-byte verification are complete; supervising-human UAT is pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -108,9 +108,10 @@ seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
 direction-at-contact domain API. M61-M69 are complete and approved. M70 implementation and focused
-direct qualification are complete under ADR 0034, but the milestone remains open for integrated
-release qualification, publication and human UAT. It uses only existing ordinary retained
-relations for persistent-point reuse, native PointOnCurve, Midpoint, line/polyline
+direct qualification, integrated release qualification, frozen-candidate publication and served-
+byte verification are complete under ADR 0034, but the milestone remains open for human UAT. It
+uses only existing ordinary retained relations for persistent-point reuse, native PointOnCurve,
+Midpoint, line/polyline
 Horizontal/Vertical and remembered affine
 Parallel/Perpendicular. Its semantic anchor/reference/candidate/commit pipeline remains headless,
 inferred placement is atomic and bare-point H/V remains honest tracking-only guidance. Persistent
@@ -129,7 +130,8 @@ current unsupported draft-v5 bytes. Shift/RAF handling preserves queued movement
 that do not own drafting suppression. The focused inference
 selection passes 46/46, the complete editor crate passes 266 unit tests plus all relevant
 integration suites, demo-web passes 82/82 tests, the sketch library passes 33/33 unit tests and M56
-passes 6/6. No candidate source is frozen yet. M64
+passes 6/6. Frozen candidate source `4b16db3a885f5e28f508189b8817797375f05807` passes the complete
+release and served-byte gates. M64
 supersedes active-scenario routing and sample-specific passive-driver metadata with one ordinary
 workspace coordinator.
 M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
@@ -261,9 +263,10 @@ computed-feature behavior and received focused supervising-human approval. M68 c
 0032 Fillet direct-manipulation cut, passed its complete release gate and received explicit
 supervising-human approval on 2026-08-09. M69 completed ADR 0033's Profile/Construction semantics,
 passed its complete release gate and received explicit supervising-human approval on 2026-08-09.
-M70 is active: implementation and focused direct qualification are complete, while integrated
-release qualification, publication and human UAT are pending. `docs/M70_IMPLEMENTATION.md` owns
-its objective ledger, `docs/M70_UAT.md` is the pending scorecard and ADR 0034 owns the architecture.
+M70 is active: implementation, focused direct qualification, integrated release qualification,
+frozen-candidate publication and served-byte verification are complete, while human UAT is
+pending. `docs/M70_IMPLEMENTATION.md` owns its objective ledger, `docs/M70_UAT.md` is the pending
+scorecard and ADR 0034 owns the architecture.
 The temporary `docs/M71_GOALS.md` backlog is not an active milestone or implementation
 authorization.
 
@@ -309,8 +312,8 @@ Durable milestone and cleanup records:
 - `docs/M69_IMPLEMENTATION.md` (completed Profile/Construction implementation ledger)
 - `docs/M69_UAT.md` (approved focused Profile/Construction scorecard)
 - `docs/adr/0033-profile-and-construction-geometry-semantics.md`
-- `docs/M70_IMPLEMENTATION.md` (implemented/directly qualified auto-constraint ledger; release
-  pending)
+- `docs/M70_IMPLEMENTATION.md` (mechanically qualified and published auto-constraint ledger; human
+  UAT pending)
 - `docs/M70_UAT.md` (draft focused auto-constraint scorecard; UAT pending)
 - `docs/adr/0034-headless-auto-constraint-drafting-intelligence.md`
 - `docs/M71_GOALS.md` (non-active follow-up primitive backlog)

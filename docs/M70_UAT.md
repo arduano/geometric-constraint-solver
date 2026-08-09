@@ -2,24 +2,40 @@
 
 # M70 focused UAT — Auto-constraint drafting
 
-Status: draft; implementation and focused direct qualification are complete. Integrated release
-qualification and publication are pending. Human UAT has not begun, and every result below remains
-Pending.
+Status: ready for focused supervising-human review. Implementation, focused direct qualification,
+the complete integrated release gate, frozen-candidate publication and served-byte verification
+pass. Human UAT results and approval remain Pending.
 
-Candidate source: **PENDING — NOT YET FROZEN**
+Candidate source: `4b16db3a885f5e28f508189b8817797375f05807` on `main`
 
-Tailscale endpoint: **PENDING — NOT YET PUBLISHED**
+Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Release distribution manifest: **PENDING — NOT YET GENERATED OR BYTE-VERIFIED**
+Release distribution manifest aggregate:
+`e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`
+
+```text
+29725af79af0ecb8198fe2c4fd5bfb80b69f1e9f81ec418e7bc1f056ba2480d7  dist/API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  dist/LICENSE
+665e4df98334f5efea3efa83d18ea71198a182825c2d40f96dbf141e43a2a418  dist/THIRD_PARTY_LICENSES.md
+ff0797fa408bc3be7ad572af8541bb31ccc9767914d8c4629c77cd298925cefd  dist/geosolve-demo-web-2f7c0aa7bbcd31d0.js
+9632e099cb42a6c9e29487018260be6d8d1c2fdc948fdc82ff831556b2b8f242  dist/geosolve-demo-web-2f7c0aa7bbcd31d0_bg.wasm
+7546200a552bf530f3464cab2406b54eb1bf9d8dc423663b3662a0c632b07e03  dist/index.html
+cee6aac04d97f80072827c8b29a86f79071d01fa0cc523736c0c5f20e27b0e1b  dist/styles-aafdbbd399fb8c99.css
+```
+
+All seven served assets and `/` were fetched through the Tailscale address with proxy/cache bypass
+and compared byte-for-byte with the read-only frozen release distribution. `/` matched
+`index.html`, and the local aggregate remained unchanged. Because the endpoint reuses port 8080
+from earlier milestones, perform one hard refresh before starting this scorecard.
 
 Use only the ordinary GeoSolve Sketch Workbench and the editable **Samples → Constraints &
 dimensions → Auto-constraint drafting playground**. Direct Rust tests are authoritative for
 candidate ranking, constraint metadata, atomicity and solver validity. This scorecard assesses
 discoverability, predictability, suppression and recovery.
 
-M70 UAT must not begin until `docs/M70_IMPLEMENTATION.md` records a passing direct matrix and clean
-release gate against one frozen source. The placement click is the explicit confirmation: there is
-no second Apply step for inferred relations.
+This frozen source has the passing direct matrix and clean release gate recorded in
+`docs/M70_IMPLEMENTATION.md`. The placement click is the explicit confirmation: there is no second
+Apply step for inferred relations.
 
 ## M70-U1 — existing points and horizontal/vertical spans
 

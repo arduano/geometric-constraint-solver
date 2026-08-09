@@ -76,9 +76,9 @@ document identity and merge the DTO through its validated API; allocator cursor 
 private. Application workspace v5 stores that value, validates its namespace and graph coverage,
 and strictly migrates v1-v4. These APIs change no frozen sketch v1-v4 bytes and do not make
 draft-v5 supported.
-M70 implementation and focused direct qualification are complete, but its integrated release gate
-and supervising-human UAT remain pending; no later M71 API is authorized by the temporary
-`docs/M71_GOALS.md` backlog.
+M70 implementation, focused direct qualification, integrated release gate and frozen-candidate
+publication are complete, but supervising-human UAT remains pending; no later M71 API is authorized
+by the temporary `docs/M71_GOALS.md` backlog.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

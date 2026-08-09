@@ -1262,8 +1262,9 @@ legacy UI.
 
 ## M70 acceptance: headless auto-constraint drafting intelligence
 
-Status: implementation and focused direct qualification are complete. Integrated release
-qualification, release publication and supervising-human UAT are pending. M70 remains open.
+Status: implementation, focused direct qualification, integrated release qualification, frozen-
+candidate publication and served-byte verification are complete. Supervising-human UAT is pending;
+M70 remains open.
 
 M70 is accepted only when all of the following are true:
 
