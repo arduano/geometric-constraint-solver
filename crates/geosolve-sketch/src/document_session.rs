@@ -21,8 +21,9 @@ use crate::document::{
     DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentMirroredBSplineInsertion,
     DocumentNurbsInsertion, DocumentObjectId, DocumentParameterId, DocumentParameterKind,
     DocumentParameterTarget, DocumentSourceId, ExternalFeatureKindV1, ExternalTopologyDigest,
-    GeometryRole, HostConfigurationActivation, LineLineFilletIds, LineLineFilletRequest,
-    MirroredCurveIds, PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
+    GeometryRole, GeometryRoleEdit, HostConfigurationActivation, LineLineFilletIds,
+    LineLineFilletRequest, MirroredCurveIds, PersistentId, RectangleIds, ScalarDomain, ScalarUnit,
+    SketchDocument,
 };
 use crate::document_lowering::{
     DocumentRuntimeMap, ResolvedDocumentParameters, ResolvedParameterBinding, RuntimeSource,
@@ -1896,6 +1897,10 @@ pub enum DocumentEdit {
         curve: CurveId,
         role: GeometryRole,
     },
+    /// Atomically changes the profile/construction roles of several curves.
+    SetGeometryRoles {
+        edits: Vec<GeometryRoleEdit>,
+    },
     /// Generalized user activation for every persistent document element.
     ///
     /// `SetSourceSuppressed` remains the source-specific compatibility command.
@@ -1976,6 +1981,7 @@ pub enum DocumentCommandEffect {
     UpdatedDimension(DocumentDimensionId),
     UpdatedSource(DocumentSourceId),
     UpdatedGeometryRole(CurveId),
+    UpdatedGeometryRoles(Vec<CurveId>),
     UpdatedElementUserSuppression(crate::DocumentElementId),
     UpdatedHostConfigurationActivation,
     Deleted(DocumentObjectId),
@@ -7587,6 +7593,11 @@ fn apply_edit(
         DocumentEdit::SetGeometryRole { curve, role } => {
             document.set_geometry_role(curve, role)?;
             DocumentCommandEffect::UpdatedGeometryRole(curve)
+        }
+        DocumentEdit::SetGeometryRoles { edits } => {
+            let curves = edits.iter().map(|edit| edit.curve).collect();
+            document.set_geometry_roles(&edits)?;
+            DocumentCommandEffect::UpdatedGeometryRoles(curves)
         }
         DocumentEdit::SetElementUserSuppressed {
             element,

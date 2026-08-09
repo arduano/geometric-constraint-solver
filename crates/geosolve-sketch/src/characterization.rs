@@ -62,6 +62,7 @@ characterized_enum!(CurrentDocumentCommandKind {
     SetOrientedAngleOrientation => "set_oriented_angle_orientation",
     SetSourceSuppressed => "set_source_suppressed",
     SetGeometryRole => "set_geometry_role",
+    SetGeometryRoles => "set_geometry_roles",
     SetElementUserSuppressed => "set_element_user_suppressed",
     SetHostConfigurationActivation => "set_host_configuration_activation",
     Delete => "delete",
@@ -97,6 +98,7 @@ characterized_enum!(CurrentDocumentEffectKind {
     UpdatedDimension => "updated_dimension",
     UpdatedSource => "updated_source",
     UpdatedGeometryRole => "updated_geometry_role",
+    UpdatedGeometryRoles => "updated_geometry_roles",
     UpdatedElementUserSuppression => "updated_element_user_suppression",
     UpdatedHostConfigurationActivation => "updated_host_configuration_activation",
     Deleted => "deleted",
@@ -186,6 +188,7 @@ impl DocumentEdit {
             }
             Self::SetSourceSuppressed { .. } => CurrentDocumentCommandKind::SetSourceSuppressed,
             Self::SetGeometryRole { .. } => CurrentDocumentCommandKind::SetGeometryRole,
+            Self::SetGeometryRoles { .. } => CurrentDocumentCommandKind::SetGeometryRoles,
             Self::SetElementUserSuppressed { .. } => {
                 CurrentDocumentCommandKind::SetElementUserSuppressed
             }
@@ -239,6 +242,7 @@ impl DocumentCommandEffect {
             Self::UpdatedDimension(_) => CurrentDocumentEffectKind::UpdatedDimension,
             Self::UpdatedSource(_) => CurrentDocumentEffectKind::UpdatedSource,
             Self::UpdatedGeometryRole(_) => CurrentDocumentEffectKind::UpdatedGeometryRole,
+            Self::UpdatedGeometryRoles(_) => CurrentDocumentEffectKind::UpdatedGeometryRoles,
             Self::UpdatedElementUserSuppression(_) => {
                 CurrentDocumentEffectKind::UpdatedElementUserSuppression
             }

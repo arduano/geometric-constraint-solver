@@ -1281,6 +1281,20 @@ pub enum GeometryRole {
     Construction,
 }
 
+/// One curve-scoped profile/construction role change in an atomic batch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GeometryRoleEdit {
+    pub curve: CurveId,
+    pub role: GeometryRole,
+}
+
+impl GeometryRoleEdit {
+    #[must_use]
+    pub const fn new(curve: CurveId, role: GeometryRole) -> Self {
+        Self { curve, role }
+    }
+}
+
 /// One explicit host-configuration activity decision.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "state", content = "element", rename_all = "snake_case")]
@@ -2388,14 +2402,42 @@ impl SketchDocument {
         curve: CurveId,
         role: GeometryRole,
     ) -> Result<(), DocumentError> {
-        if self.curve(curve).is_none() {
-            return Err(unknown("curve", curve.0));
+        self.set_geometry_roles(&[GeometryRoleEdit { curve, role }])
+    }
+
+    /// Atomically changes several curve roles without changing geometry or discrete state.
+    ///
+    /// Input order is retained by the corresponding command effect. A curve may occur only
+    /// once; duplicate entries, including entries that request conflicting roles, are rejected
+    /// before any role changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the batch is empty, a curve is unknown, a curve occurs more than
+    /// once, or the resulting document is invalid.
+    pub fn set_geometry_roles(&mut self, edits: &[GeometryRoleEdit]) -> Result<(), DocumentError> {
+        if edits.is_empty() {
+            return invalid("geometry role edits", "batch must not be empty");
+        }
+        let mut curves = BTreeSet::new();
+        for edit in edits {
+            if self.curve(edit.curve).is_none() {
+                return Err(unknown("curve", edit.curve.0));
+            }
+            if !curves.insert(edit.curve) {
+                return invalid(
+                    "geometry role edits",
+                    format!("curve {} occurs more than once", edit.curve),
+                );
+            }
         }
         let mut candidate = self.clone();
-        if role == GeometryRole::Profile {
-            candidate.geometry_roles.remove(&curve);
-        } else {
-            candidate.geometry_roles.insert(curve, role);
+        for edit in edits {
+            if edit.role == GeometryRole::Profile {
+                candidate.geometry_roles.remove(&edit.curve);
+            } else {
+                candidate.geometry_roles.insert(edit.curve, edit.role);
+            }
         }
         candidate.validate_after_mutation()?;
         *self = candidate;
@@ -4289,6 +4331,23 @@ impl SketchDocument {
         label: impl Into<String>,
         definition: CurveDefinition,
     ) -> Result<CurveId, DocumentError> {
+        self.add_curve_with_role(label, definition, GeometryRole::Profile)
+    }
+
+    /// Adds one curve with an explicit persistent profile/construction role.
+    ///
+    /// Curve creation and role assignment are one atomic document mutation. The legacy
+    /// [`Self::add_curve`] API remains equivalent to requesting [`GeometryRole::Profile`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid data or a missing semantic reference.
+    pub fn add_curve_with_role(
+        &mut self,
+        label: impl Into<String>,
+        definition: CurveDefinition,
+        role: GeometryRole,
+    ) -> Result<CurveId, DocumentError> {
         let label = label.into();
         validate_label(&label, "curve label")?;
         let id = CurveId(self.allocate_id()?);
@@ -4297,8 +4356,12 @@ impl SketchDocument {
             label,
             definition,
         });
+        if role == GeometryRole::Construction {
+            self.geometry_roles.insert(id, role);
+        }
         if let Err(error) = self.validate() {
             self.curves.pop();
+            self.geometry_roles.remove(&id);
             return Err(error);
         }
         Ok(id)
@@ -5400,12 +5463,31 @@ impl SketchDocument {
         width: f64,
         height: f64,
     ) -> Result<RectangleIds, DocumentError> {
+        self.add_rectangle_with_role(label, origin, width, height, GeometryRole::Profile)
+    }
+
+    /// Expands a rectangle whose four ordinary curves receive one explicit geometry role.
+    ///
+    /// Geometry, sources, and roles are created atomically. [`Self::add_rectangle`] remains the
+    /// compatibility spelling for a Profile rectangle.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid dimensions or any failed expanded edit.
+    pub fn add_rectangle_with_role(
+        &mut self,
+        label: &str,
+        origin: [f64; 2],
+        width: f64,
+        height: f64,
+        role: GeometryRole,
+    ) -> Result<RectangleIds, DocumentError> {
         validate_label(label, "rectangle label")?;
         finite_pair(origin, "rectangle origin")?;
         finite_positive(width, "rectangle width")?;
         finite_positive(height, "rectangle height")?;
         let before = self.clone();
-        let result = self.add_rectangle_inner(label, origin, width, height);
+        let result = self.add_rectangle_inner(label, origin, width, height, role);
         if result.is_err() {
             let next_id = self.next_id;
             *self = before;
@@ -5414,12 +5496,14 @@ impl SketchDocument {
         result
     }
 
+    #[allow(clippy::too_many_lines)]
     fn add_rectangle_inner(
         &mut self,
         label: &str,
         origin: [f64; 2],
         width: f64,
         height: f64,
+        role: GeometryRole,
     ) -> Result<RectangleIds, DocumentError> {
         let [x, y] = origin;
         let points = [
@@ -5437,13 +5521,14 @@ impl SketchDocument {
                     self.point(points[start]).expect("new point").position,
                     self.point(points[end]).expect("new point").position,
                 )?;
-                self.add_curve(
+                self.add_curve_with_role(
                     format!("{label}.edge_{}", index + 1),
                     CurveDefinition::Line {
                         start: points[start],
                         end: points[end],
                         branch_direction: direction,
                     },
+                    role,
                 )
             })
             .collect::<Result<Vec<_>, DocumentError>>()?;
@@ -5560,6 +5645,14 @@ impl SketchDocument {
         label: &str,
         request: LineLineFilletRequest,
     ) -> Result<LineLineFilletIds, DocumentError> {
+        let output_role = if [request.first.curve, request.second.curve]
+            .into_iter()
+            .any(|curve| self.geometry_role(curve) == Some(GeometryRole::Construction))
+        {
+            GeometryRole::Construction
+        } else {
+            GeometryRole::Profile
+        };
         let (first_start_id, first_end_id) = self.line_span_endpoint_ids(request.first)?;
         let (second_start_id, second_end_id) = self.line_span_endpoint_ids(request.second)?;
         let first_start = self.require_point(first_start_id)?.position;
@@ -5683,7 +5776,7 @@ impl SketchDocument {
             ScalarUnit::Angle,
             ScalarDomain::Finite,
         )?;
-        let arc = self.add_curve(
+        let arc = self.add_curve_with_role(
             format!("{label}.arc"),
             CurveDefinition::CircularArc {
                 center,
@@ -5692,6 +5785,7 @@ impl SketchDocument {
                 end_angle,
                 sweep: request.sweep,
             },
+            output_role,
         )?;
         let contact_parameters = [
             self.add_scalar(
@@ -5827,6 +5921,14 @@ impl SketchDocument {
         label: &str,
         request: CurveCurveFilletRequest,
     ) -> Result<CurveCurveFilletIds, DocumentError> {
+        let output_role = if [request.first.curve.curve, request.second.curve.curve]
+            .into_iter()
+            .any(|curve| self.geometry_role(curve) == Some(GeometryRole::Construction))
+        {
+            GeometryRole::Construction
+        } else {
+            GeometryRole::Profile
+        };
         let first_jet = self.validate_fillet_parent_request(request.first)?;
         let second_jet = self.validate_fillet_parent_request(request.second)?;
         let first_differential =
@@ -5925,7 +6027,7 @@ impl SketchDocument {
             ScalarUnit::Angle,
             ScalarDomain::Finite,
         )?;
-        let arc = self.add_curve(
+        let arc = self.add_curve_with_role(
             format!("{label}.arc"),
             CurveDefinition::CircularArc {
                 center,
@@ -5934,6 +6036,7 @@ impl SketchDocument {
                 end_angle,
                 sweep: request.sweep,
             },
+            output_role,
         )?;
         let contacts = [
             self.add_curve_contact(
@@ -6047,6 +6150,9 @@ impl SketchDocument {
             .curve(source_curve)
             .ok_or_else(|| unknown("curve", source_curve.0))?
             .clone();
+        let source_role = self
+            .geometry_role(source_curve)
+            .expect("validated source curve has a geometry role");
         let controls = point_defined_curve_controls(&source.definition).ok_or_else(|| {
             DocumentError::InvalidField {
                 field: "mirror source",
@@ -6070,7 +6176,8 @@ impl SketchDocument {
             .collect::<Vec<_>>();
         let mirrored_definition =
             mirror_curve_definition(source.definition, &mirrored_controls, axis_direction)?;
-        let mirrored_curve = self.add_curve(format!("{label}.curve"), mirrored_definition)?;
+        let mirrored_curve =
+            self.add_curve_with_role(format!("{label}.curve"), mirrored_definition, source_role)?;
         let symmetry_constraints = point_pairs
             .iter()
             .enumerate()
