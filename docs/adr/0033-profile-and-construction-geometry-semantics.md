@@ -2,8 +2,8 @@
 
 # ADR 0033: Profile and construction geometry semantics
 
-Status: accepted for implementation in M69; focused qualification and supervising-human UAT are
-pending
+Status: accepted and completed in M69; implementation, focused direct/release qualification and
+explicit supervising-human UAT approval are complete as of 2026-08-09
 
 ## Context
 
@@ -123,8 +123,9 @@ and incidence DTOs, pick-scope ordering, complete-source identity, compatible au
 interaction path. Thin workbench tests own controls, grouping, styles, accessibility and workspace
 round-trip presentation.
 
-The complete native/WASM/release gate and a fresh release Tailscale UAT must pass before M69 can
-be marked complete.
+The complete native/WASM/release gate and a fresh release Tailscale UAT passed before M69 was
+marked complete. The supervising human explicitly approved the focused scorecard and closed M69
+on 2026-08-09.
 
 ## Consequences
 

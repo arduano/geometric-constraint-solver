@@ -2,9 +2,9 @@
 
 # M69 implementation — Profile and construction geometry semantics
 
-Status: mechanically qualified and byte-verified UAT candidate, pending focused
-supervising-human approval. ADR 0033 is the accepted architecture. M69 must not be marked complete
-until `docs/M69_UAT.md` records explicit approval.
+Status: complete and explicitly approved by the supervising human on 2026-08-09. ADR 0033,
+implementation, focused direct qualification, complete release qualification, frozen candidate
+publication and focused UAT all pass.
 
 Candidate source: `567141776c78178022f6123cbb399599ba713c62` on `main`
 
@@ -136,6 +136,28 @@ All commands pass. The two package test totals remain 41/41 and 10/10 respective
 Clippy reports only Cargo's pre-existing `license` plus `license-file` manifest advisory; it emits
 no Rust warning and the explicit warnings-denied check passes.
 
+Post-UAT closeout audit (2026-08-09): independent domain review found no redundant sketch,
+operations or computed-feature implementation or test harness to remove. The focused sketch M69,
+M58 operations and computed-feature suites remained distinct and passed 3/3, 20/20 and 41/41.
+Editor/workbench review found three bounded cleanup items and corrected them without changing any
+geometry, equation, branch or persistence behavior:
+
+- geometry scope/visibility now changes through one complete coordinator-owned policy transition;
+  a pre-threshold point press releases its retained drag continuation, and the thin browser adapter
+  cancels/releases Point, Fillet or Pan capture through the same terminal routing;
+- the role-toggle notice derives the uniform post-mutation role instead of duplicating the
+  coordinator's Profile/Construction decision; and
+- the unused M69-only `AuthoringState::pick_at` default-policy wrapper is removed, while the older
+  directly exercised feature-authoring compatibility entry point remains.
+
+Direct regressions cover changed and identical policies, pre-threshold continuation teardown,
+durable state/selection/history retention, all three browser capture owners and both mixed-to-
+Construction and Construction-to-Profile batch toggles. The current-source editor suite passes
+174 unit tests plus all 17 M55, 14 M66 feature-authoring, 15 M66 matrix and 10 M69 integration
+tests; demo-web passes 71/71. Native and WASM warnings-denied focused Clippy, the WASM check,
+formatting and `git diff --check` pass. The clean integrated closeout-source release result is
+recorded separately after its committed gate.
+
 The integrated and final WASM owner checks passed:
 
 ```text
@@ -192,10 +214,10 @@ f097939267de41cbb4246c6fb40a70aa5c0a03a273dfa4db5a6a994abb0c6611  dist/index.htm
 02e29144773da283540f73aabce70f6ce483f3a8be585a4fe7ed026e39b14393  dist/styles-642247db02aebd54.css
 ```
 
-Tailscale byte verification: **PASS** at `http://100.94.63.83:8080/`. All seven manifest members
+Historical Tailscale byte verification: **PASS** at `http://100.94.63.83:8080/`. All seven manifest members
 were fetched without proxy/cache reuse, matched their expected SHA-256 values and compared
 byte-for-byte with local `dist`; `/` also matched `index.html`, and the local manifest remained
-unchanged after verification.
+unchanged after verification. The endpoint is not a continuing post-close requirement.
 
 ## 4. Acceptance criteria
 
@@ -228,13 +250,12 @@ Direct evidence covers the implementation criteria as follows:
   shared points, implicit Fillet portions, failure withholding and closed-loop preservation.
 
 Implementation, focused owner acceptance, the complete integrated release gate, release
-publication and byte verification pass. Explicit supervising-human UAT remains open and is
-intentionally not claimed here.
+publication, byte verification and explicit supervising-human UAT all pass.
 
 ## 5. Known limitations or next blocker
 
-The next blocker is procedural: obtain explicit supervising-human approval of `docs/M69_UAT.md`.
-M69 remains open until that review passes.
+No blocker remains within the explicitly approved M69 scope. M70 is intentionally unscoped and
+receives no inferred Profile/Construction follow-up work from this close decision.
 
 M69 intentionally has no persistent point role. Pick scope and visibility remain independent
 session state: changing scope does not hide painted geometry or alter history, while hiding

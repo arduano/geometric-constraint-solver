@@ -32,9 +32,10 @@ code while preserving direct domain ownership and the ordinary workbench. M68 co
 branch-preserving Fillet radius rails, typed headless contact metadata/internal continuation seam,
 explicit retention/local-alternative actions, coordinator-owned Current-only transactions and the
 pointer-capture foundation needed by those interactions. The complete mechanical/release gate
-passed and the supervising human explicitly approved M68 on 2026-08-09. M69 is now scoped and in
-progress under ADR 0033 for persistent Profile/Construction authoring, headless role-aware
-interaction and computed Fillet-discarded implicit construction geometry.
+passed and the supervising human explicitly approved M68 on 2026-08-09. M69 completed ADR 0033's
+persistent Profile/Construction authoring, headless role-aware interaction and computed
+Fillet-discarded implicit construction geometry; its complete mechanical/release gate passed and
+the supervising human explicitly approved it on 2026-08-09. M70 is an empty unscoped placeholder.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -102,7 +103,7 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M68 are complete and approved. M64 supersedes active-scenario
+direction-at-contact domain API. M61-M69 are complete and approved. M64 supersedes active-scenario
 routing and sample-specific passive-driver metadata with one ordinary workspace coordinator.
 M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
 replaces retry-based stabilization with one gesture-start accepted-nullspace locality plan,
@@ -214,7 +215,7 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The completed M54-M68 sequence covers stable diagnostics, alpha
+The completed M54-M69 sequence covers stable diagnostics, alpha
 constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
 production topology, the advanced workbench, approved advanced UAT and approved CAD-style
 authoring, approved canvas constraint visualization and interaction, editable samples and
@@ -231,8 +232,9 @@ M66 implementation or UI placeholder. M66 ended in its own scoped computed-Fille
 completed the legacy-surface and qualification-harness cleanup described in `PLAN.md`, changed no
 computed-feature behavior and received focused supervising-human approval. M68 completed the ADR
 0032 Fillet direct-manipulation cut, passed its complete release gate and received explicit
-supervising-human approval on 2026-08-09. M69 is active under ADR 0033; implementation,
-qualification and focused human UAT remain pending.
+supervising-human approval on 2026-08-09. M69 completed ADR 0033's Profile/Construction semantics,
+passed its complete release gate and received explicit supervising-human approval on 2026-08-09.
+M70 is empty and awaits scope.
 
 Durable milestone and cleanup records:
 
@@ -273,7 +275,8 @@ Durable milestone and cleanup records:
 - `docs/M68_IMPLEMENTATION.md` (completed Fillet direct-manipulation implementation ledger)
 - `docs/M68_UAT.md` (approved focused scorecard and finding ledger)
 - `docs/adr/0032-headless-computed-feature-direct-manipulation.md`
-- `docs/M69_UAT.md` (pending Profile/Construction focused scorecard)
+- `docs/M69_IMPLEMENTATION.md` (completed Profile/Construction implementation ledger)
+- `docs/M69_UAT.md` (approved focused Profile/Construction scorecard)
 - `docs/adr/0033-profile-and-construction-geometry-semantics.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

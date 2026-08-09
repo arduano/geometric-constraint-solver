@@ -270,26 +270,8 @@ impl AuthoringState {
     }
 
     /// Resolves one screen click through bounded compatibility-aware native
-    /// candidates. An incompatible point or nearer support cannot mask a valid
-    /// operand underneath the same click.
-    #[must_use]
-    pub fn pick_at(
-        &mut self,
-        document: &SketchDocument,
-        scene: &EditorScene,
-        position: ScreenPoint,
-        tolerance: PickTolerance,
-    ) -> AuthoringOutcome {
-        self.pick_at_with_policy(
-            document,
-            scene,
-            position,
-            tolerance,
-            GeometryInteractionPolicy::default(),
-        )
-    }
-
-    /// Policy-aware counterpart of [`Self::pick_at`].
+    /// candidates under the supplied geometry policy. An incompatible point or
+    /// nearer support cannot mask a valid operand underneath the same click.
     #[must_use]
     pub fn pick_at_with_policy(
         &mut self,

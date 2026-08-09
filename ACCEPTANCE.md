@@ -156,9 +156,10 @@ M8 is ready for review only when every item below is objectively present. These 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
 approved M62 authoring milestone, approved M63 canvas-constraint presentation, approved M64
-editable-sample cleanup, approved reduced-scope M65 predictable dragging and approved scoped M66
-computed-Fillet features under ADR 0031, followed by the approved M67 legacy-surface and harness
-cleanup and approved M68 headless Fillet direct manipulation under ADR 0032.
+editable-sample cleanup, approved reduced-scope M65 predictable dragging, approved scoped M66
+computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
+M68 headless Fillet direct manipulation under ADR 0032 and approved M69 Profile/Construction
+semantics under ADR 0033.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -938,14 +939,14 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M68 acceptance
+## M54-M69 acceptance
 
-M54-M68 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
+M54-M69 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
 2026-07-29, M63 and M64 received explicit supervising-human approval on 2026-07-30, and M65
 received focused supervising-human approval on 2026-08-01. M66 received explicit scoped
 supervising-human approval on 2026-08-08. M67 received explicit supervising-human approval on
-2026-08-08, and M68 received explicit supervising-human approval on 2026-08-09. No old browser E2E
-qualification may return.
+2026-08-08, while M68 and M69 received explicit supervising-human approval on 2026-08-09. No old
+browser E2E qualification may return.
 
 ## M65 acceptance: predictable bounded projected dragging
 
@@ -1220,7 +1221,12 @@ M68 is accepted only when all of the following are true:
 The 2026-08-09 close decision accepts M68-U1 through M68-U6 and resolved findings `M68-F001`
 through `M68-F005` with no new blocker recorded. It records explicit approval of frozen candidate
 `edffb8a` without inventing a separate exhaustive replay of every scripted step. M68 is closed.
+
 ## M69 acceptance: Profile and construction geometry semantics
+
+Status: complete and explicitly approved by the supervising human on 2026-08-09. ADR 0033's
+implementation, focused direct qualification, complete release qualification, frozen candidate
+publication and focused human UAT all pass.
 
 - Persistent Construction remains ordinary solver-active, constrainable curve geometry and is
   excluded only by the existing default Profile/topology scope.
@@ -1242,12 +1248,16 @@ through `M68-F005` with no new blocker recorded. It records explicit approval of
 - Focused native/WASM owners, the complete release gate and explicit supervising-human approval of
   `docs/M69_UAT.md` pass before closure.
 
-Status: implementation and qualification are pending.
+The 2026-08-09 close decision accepts M69-U1 through M69-U5 with no new finding or blocker
+recorded. It records explicit approval of frozen candidate
+`567141776c78178022f6123cbb399599ba713c62` without inventing a separate exhaustive replay of every
+scripted step. M69 is closed. M70 remains an empty unscoped placeholder without acceptance
+criteria.
 
-M68 explicitly excludes Offset/Mirror authoring, two-non-affine-parent Fillets,
-computed-on-computed chaining, Bake/Explode, profile/topology consumption, cross-revision
-topological naming, computed arcs as constraint operands, persistence/schema changes, global root
-enumeration, browser E2E, mobile and legacy UI.
+M69 explicitly excludes persistent point roles, canonical sketch v5, workspace migration,
+marquee/cycling/search additions, Offset/Mirror UI, computed-on-computed chaining, Bake/Explode,
+computed-feature production-topology consumption, new residuals, browser E2E, mobile behavior and
+legacy UI.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

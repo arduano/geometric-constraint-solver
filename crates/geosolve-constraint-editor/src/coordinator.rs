@@ -44,10 +44,10 @@ use crate::{
     ConstructionProposal, ConstructionResult, DimensionActionRequest, DimensionKind, EditorEffect,
     EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
     FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
-    PickTolerance, PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition,
-    ProvisionalInferenceCandidate, ResolvedConstraintKind, SceneFilletAction,
-    SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
-    ScreenPoint, SelectionItem,
+    GeometryInteractionPolicy, PickTolerance, PointGestureSnapshot, PointerInput,
+    ProjectedDragRequestDisposition, ProvisionalInferenceCandidate, ResolvedConstraintKind,
+    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionControlGeometry,
+    SceneFilletActionId, ScreenPoint, SelectionItem,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -1835,6 +1835,24 @@ impl RetainedEditorCoordinator {
     #[must_use]
     pub fn editor_mut(&mut self) -> &mut ConstraintEditor {
         &mut self.editor
+    }
+
+    /// Atomically replaces the editor's complete geometry interaction policy.
+    ///
+    /// A point press owns coordinator-local continuation state from pointer-down,
+    /// before the editor crosses its drag threshold or emits preview effects. If
+    /// the policy transition cancels that press, clear the matching transient
+    /// continuation here while preserving durable selection and history.
+    pub fn set_geometry_interaction_policy(
+        &mut self,
+        policy: GeometryInteractionPolicy,
+    ) -> Vec<EditorEffect> {
+        let before = self.editor.point_gesture_snapshot();
+        let effects = self.editor.set_geometry_interaction_policy(policy);
+        if before.is_some() && self.editor.point_gesture_snapshot().is_none() {
+            self.clear_transient();
+        }
+        effects
     }
 
     #[must_use]
@@ -8317,6 +8335,97 @@ mod tests {
                     .is_none()
             })
             .expect("circle sample away from its dimension annotation")
+    }
+
+    #[test]
+    fn geometry_policy_transition_clears_prethreshold_drag_continuation_only() {
+        for policy in [
+            GeometryInteractionPolicy {
+                scope: crate::GeometryPickScope::Profile,
+                ..GeometryInteractionPolicy::default()
+            },
+            GeometryInteractionPolicy {
+                visibility: crate::GeometryVisibility {
+                    explicit_construction: false,
+                    implicit_construction: true,
+                },
+                ..GeometryInteractionPolicy::default()
+            },
+        ] {
+            let (mut coordinator, scene, center, circle, _) = circle_drag_fixture();
+            let retained = retained_state_snapshot(&coordinator);
+            let history_cursor = coordinator.history_cursor();
+            let press = unannotated_circle_press(&scene, circle);
+            let effects = coordinator.pointer_down(
+                &scene,
+                PointerInput {
+                    pointer_id: 94,
+                    position: press,
+                    modifiers: crate::Modifiers::default(),
+                },
+            );
+            assert!(matches!(
+                effects.as_slice(),
+                [EditorEffect::SelectionChanged(selection)]
+                    if selection == &[SelectionItem::Curve(CurveSpan::line(circle))]
+            ));
+            assert_eq!(
+                coordinator
+                    .editor
+                    .point_gesture_snapshot()
+                    .map(|gesture| gesture.point),
+                Some(center)
+            );
+            assert!(coordinator.drag_continuation.is_some());
+            let selection = coordinator.editor.selection().to_vec();
+            let continuation = coordinator.drag_continuation.as_ref().map(|gesture| {
+                (
+                    gesture.gesture_epoch,
+                    gesture.pointer_id,
+                    gesture.point,
+                    gesture.design,
+                    gesture.accepted,
+                    gesture.last_request_id,
+                )
+            });
+            let unchanged = coordinator.editor.geometry_interaction_policy();
+            assert!(
+                coordinator
+                    .set_geometry_interaction_policy(unchanged)
+                    .is_empty()
+            );
+            assert!(coordinator.editor.point_gesture_snapshot().is_some());
+            assert_eq!(
+                coordinator.drag_continuation.as_ref().map(|gesture| {
+                    (
+                        gesture.gesture_epoch,
+                        gesture.pointer_id,
+                        gesture.point,
+                        gesture.design,
+                        gesture.accepted,
+                        gesture.last_request_id,
+                    )
+                }),
+                continuation,
+                "an identical policy must retain the exact press-time continuation"
+            );
+            assert_eq!(coordinator.editor.selection(), selection);
+
+            assert!(
+                coordinator
+                    .set_geometry_interaction_policy(policy)
+                    .is_empty(),
+                "a pre-threshold press emits no preview-clear effect"
+            );
+            assert!(coordinator.editor.point_gesture_snapshot().is_none());
+            assert!(coordinator.drag_continuation.is_none());
+            assert!(coordinator.transient.is_none());
+            assert!(coordinator.solved_preview.is_none());
+            assert!(coordinator.projected_drag_work.is_none());
+            assert_eq!(coordinator.editor.selection(), selection);
+            assert_eq!(coordinator.history_cursor(), history_cursor);
+            assert_retained_state_snapshot(&coordinator, &retained);
+        }
     }
 
     fn fixed_line_session() -> (

@@ -1281,7 +1281,8 @@ branch/contact/
 retention actions, Current-only interaction history, pointer capture and separate friendly/fold
 specimens. Their implementation, focused direct qualification, clean full release gate and human
 UAT are complete. M69 reuses the ordinary Construction/reference and 2D Fillet playground leaves
-for the Profile/construction scenarios below; it adds no scenario-mode state.
+for the Profile/construction scenarios below; it adds no scenario-mode state. Its direct/release
+qualification and focused human UAT are complete.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1290,7 +1291,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M68. Every newly scoped milestone from M69 onward ends in
+recorded at completed M40.7, M53 and M61-M69. Every newly scoped milestone from M70 onward ends in
 its own UAT after direct automated qualification.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct

@@ -995,7 +995,42 @@ fn role_aware_construction_and_selected_curve_toggle_are_atomic_and_undoable() {
             .geometry_role(second),
         Some(GeometryRole::Construction)
     );
+    assert_eq!(
+        coordinator.selected_geometry_role_state(),
+        Some(GeometryRoleSelectionState::Construction)
+    );
+    let expected = coordinator.session().design_identity();
+    coordinator
+        .toggle_selected_geometry_role(expected)
+        .expect("all-Construction selection toggles to Profile");
+    assert_eq!(
+        coordinator.session().design_document().geometry_role(first),
+        Some(GeometryRole::Profile)
+    );
+    assert_eq!(
+        coordinator
+            .session()
+            .design_document()
+            .geometry_role(second),
+        Some(GeometryRole::Profile)
+    );
+    assert_eq!(
+        coordinator.selected_geometry_role_state(),
+        Some(GeometryRoleSelectionState::Profile)
+    );
     coordinator.undo().expect("undo role batch");
+    assert_eq!(
+        coordinator.session().design_document().geometry_role(first),
+        Some(GeometryRole::Construction)
+    );
+    assert_eq!(
+        coordinator
+            .session()
+            .design_document()
+            .geometry_role(second),
+        Some(GeometryRole::Construction)
+    );
+    coordinator.undo().expect("undo mixed role batch");
     assert_eq!(
         coordinator.session().design_document().geometry_role(first),
         Some(GeometryRole::Construction)

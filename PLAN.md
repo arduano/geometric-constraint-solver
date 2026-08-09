@@ -40,8 +40,9 @@ dimension presentation. M64 completes the approved editable-sample cleanup and f
 M65 completes approved predictable, bounded projected dragging for those ordinary editable
 samples; M66 completes the approved computed-feature cut for ordinary multi-corner 2D Fillets
 outside the constraint graph; M67 completes the approved legacy-surface and frozen-harness cleanup;
-and M68 completes approved ADR 0032 Fillet direct manipulation. M69 is active under ADR 0033 for
-Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M66's
+M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes approved ADR 0033
+Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
+is an empty placeholder awaiting supervising-user scope. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -144,8 +145,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M68 are complete and approved, and
-  every newly scoped milestone from M69 onward ends in its own supervising-human UAT. Every
+- Keep human acceptance records explicit: M40.7, M53 and M61-M69 are complete and approved, and
+  every newly scoped milestone from M70 onward ends in its own supervising-human UAT. Every
   objective correctness, persistence, compatibility and presentation-adapter assertion must pass
   through direct unit or integration tests at its owning layer before a human checkpoint begins;
   old CDP E2E suites are not a qualification path.
@@ -3416,9 +3417,9 @@ root enumeration, browser E2E, mobile behavior and legacy UI.
 
 ### M69
 
-Status: mechanically qualified and byte-verified UAT candidate, pending focused
-supervising-human approval. Scope and architecture were approved by the supervising user on
-2026-08-09.
+Status: complete and explicitly approved by the supervising human on 2026-08-09. Scope,
+architecture, implementation, direct/release qualification, frozen candidate publication and
+focused UAT all pass.
 
 Goal: establish a clean CAD-facing semantic and interaction boundary between Profile geometry,
 user-authored explicit Construction geometry and evaluation-local implicit Construction geometry
@@ -3447,7 +3448,7 @@ constraint-graph object.
 - [x] Pass focused owner tests plus formatting, warnings-denied all-feature Clippy, locked
   workspace tests, WASM, rustdoc, benchmarks, licence/package, release Trunk, static-workbench and
   Git-hygiene gates on one nominated source.
-- [ ] Publish and byte-verify a release Tailscale candidate and receive explicit supervising-human
+- [x] Publish and byte-verify a release Tailscale candidate and receive explicit supervising-human
   approval of `docs/M69_UAT.md`.
 
 Implementation note (2026-08-09): ADR 0033 is implemented across the sketch document and operation
@@ -3457,10 +3458,22 @@ evaluation-local metadata and always resolve back to their complete native curve
 
 Qualification note (2026-08-09): focused owner tests, native/WASM checks, warnings-denied owner
 Clippy and the complete clean release gate pass on candidate source
-`567141776c78178022f6123cbb399599ba713c62`. Its seven-file release distribution is retained at
-`http://100.94.63.83:8080/` and was fetched and compared byte-for-byte against the frozen local
-manifest recorded in `docs/M69_IMPLEMENTATION.md` and `docs/M69_UAT.md`. M69 remains open only for
-the supervising human's focused UAT decision.
+`567141776c78178022f6123cbb399599ba713c62`. Its historical seven-file release distribution was
+served at `http://100.94.63.83:8080/` and fetched and compared byte-for-byte against the frozen
+local manifest recorded in `docs/M69_IMPLEMENTATION.md` and `docs/M69_UAT.md`.
+
+Close note (2026-08-09): the supervising human explicitly approved the focused M69 candidate and
+requested milestone closure. That decision accepts M69-U1 through M69-U5 with no new finding or
+scope blocker recorded; it does not invent an unrecorded exhaustive replay of every scripted step.
+M69 is closed.
+
+Post-UAT closeout audit (2026-08-09): independent domain review found no justified sketch,
+operations, computed-feature or test-harness deletion. The editor/workbench review consolidated
+scope and visibility into one coordinator-owned policy transition, closed pre-threshold drag-
+continuation and browser-capture teardown, removed duplicated role-toggle notice policy and
+removed one unused M69-only default-policy authoring wrapper. Direct editor/web regressions,
+focused native/WASM Clippy, the WASM check, formatting and diff checks pass. The committed clean
+closeout source receives the complete release gate before final synchronization.
 
 Gate: persistent Construction remains solver-active and default-profile-ineligible; implicit
 construction is finite derived output with exact native provenance and no independent identity;
@@ -3472,6 +3485,13 @@ M69 explicitly excludes persistent point roles, canonical sketch v5, workspace m
 marquee/cycling/search additions, Offset/Mirror UI, computed chaining, Bake/Explode,
 computed-feature production-topology consumption, new residuals, browser E2E, mobile behavior and
 legacy UI.
+
+### M70
+
+Status: empty unscoped placeholder awaiting supervising-user goals.
+
+No goal, theme, checklist, acceptance gate, scenario or implementation is assigned yet. Once
+scoped, M70 will end in its own direct qualification and supervising-human UAT.
 
 ## Explicit non-goals
 

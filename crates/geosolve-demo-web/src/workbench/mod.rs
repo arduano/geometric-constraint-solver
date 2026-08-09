@@ -68,6 +68,7 @@ enum CanvasPointerTerminal {
     LostPointerCapture { pointer_id: i32 },
     InteractionCancel,
     CameraCancel,
+    GeometryPolicyCancel,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -77,7 +78,7 @@ impl CanvasPointerTerminal {
             Self::PointerUp { pointer_id }
             | Self::PointerCancel { pointer_id }
             | Self::LostPointerCapture { pointer_id } => Some(pointer_id),
-            Self::InteractionCancel | Self::CameraCancel => None,
+            Self::InteractionCancel | Self::CameraCancel | Self::GeometryPolicyCancel => None,
         }
     }
 }
@@ -2403,17 +2404,20 @@ pub(crate) mod wasm {
     }
 
     fn toggle_geometry_role(wb: &mut Workbench) -> Result<(), String> {
-        if let Some(state) = wb.coordinator.selected_geometry_role_state() {
-            let target = match state {
-                GeometryRoleSelectionState::Construction => GeometryRole::Profile,
-                GeometryRoleSelectionState::Profile | GeometryRoleSelectionState::Mixed => {
-                    GeometryRole::Construction
-                }
-            };
+        if wb.coordinator.selected_geometry_role_state().is_some() {
             let expected = wb.coordinator.session().design_identity();
             wb.coordinator
                 .toggle_selected_geometry_role(expected)
                 .map_err(|error| error.to_string())?;
+            let target = match wb.coordinator.selected_geometry_role_state() {
+                Some(GeometryRoleSelectionState::Profile) => GeometryRole::Profile,
+                Some(GeometryRoleSelectionState::Construction) => GeometryRole::Construction,
+                Some(GeometryRoleSelectionState::Mixed) | None => {
+                    return Err(
+                        "selected geometry role toggle did not produce one uniform role".into(),
+                    );
+                }
+            };
             wb.notice = format!(
                 "Selected complete curve{} changed to {}",
                 if selected_curve_count(&wb.coordinator) == 1 {
@@ -4218,13 +4222,27 @@ pub(crate) mod wasm {
             implicit_construction: checkbox_checked(document, "wb-show-implicit-construction")
                 .ok_or_else(|| "Fillet-hidden visibility is unavailable".to_owned())?,
         };
-        let mut effects = wb.coordinator.editor_mut().set_geometry_pick_scope(scope);
-        effects.extend(
-            wb.coordinator
-                .editor_mut()
-                .set_geometry_visibility(visibility),
-        );
+        let policy = GeometryInteractionPolicy { scope, visibility };
+        let changed = wb.coordinator.editor().geometry_interaction_policy() != policy;
+        let captured_viewport = if changed && !wb.pointer_captures.is_empty() {
+            Some(
+                required(document, "wb-viewport")
+                    .map_err(|_| "canvas viewport is unavailable".to_owned())?,
+            )
+        } else {
+            None
+        };
+        let effects = wb.coordinator.set_geometry_interaction_policy(policy);
         dispatch_effects(wb, effects);
+        if let Some(viewport) = captured_viewport {
+            let canceled = cancel_captured_canvas_interactions(
+                &viewport,
+                wb,
+                super::CanvasPointerTerminal::GeometryPolicyCancel,
+                "Active canvas interaction canceled after geometry policy changed",
+            );
+            debug_assert!(canceled);
+        }
         Ok(())
     }
 
@@ -4610,6 +4628,11 @@ mod tests {
             ),
             (
                 CanvasPointerTerminal::CameraCancel,
+                CanvasPointerTerminalDisposition::Cancel,
+                true,
+            ),
+            (
+                CanvasPointerTerminal::GeometryPolicyCancel,
                 CanvasPointerTerminalDisposition::Cancel,
                 true,
             ),

@@ -44,16 +44,17 @@ and M58 Mirror companion remain available. M67 completed the approved legacy UI,
 qualification-harness and dead-code cleanup. M68 completed and received supervising-human approval
 for the ADR 0032 headless Fillet direct-manipulation cut: branch-preserving radius rails, typed
 headless contact metadata/internal continuation, explicit retention/local-alternative actions,
-Current-only coordinator transactions and pointer capture. M69 is now implementing ADR 0033's
-Profile/Construction semantics, including computed Fillet-hidden construction provenance and
-headless role-aware picking.
+Current-only coordinator transactions and pointer capture. M69 completed and received
+supervising-human approval for ADR 0033's Profile/Construction semantics, including computed
+Fillet-hidden construction provenance and headless role-aware picking. M70 is an empty unscoped
+placeholder.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed and approved through M68, with M69 in progress.
+3. `PLAN.md` — active roadmap: completed and approved through M69, with M70 awaiting scope.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -80,8 +81,8 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. Human UAT is complete at M40.7, M53 and M61-M68; every newly scoped
-milestone from M69 onward ends in its own UAT and all objective behavior is directly automated
+and application undo. Human UAT is complete at M40.7, M53 and M61-M69; every newly scoped
+milestone from M70 onward ends in its own UAT and all objective behavior is directly automated
 first. The desktop demo has no future mobile support requirement.
 
 ## Pre-1.0 API policy

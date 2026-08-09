@@ -3145,25 +3145,37 @@ impl ConstraintEditor {
         self.geometry_policy
     }
 
+    /// Atomically replaces the complete geometry interaction policy and cancels
+    /// interaction admitted under the previous policy. Durable selection
+    /// identities remain intact.
+    pub fn set_geometry_interaction_policy(
+        &mut self,
+        policy: GeometryInteractionPolicy,
+    ) -> Vec<EditorEffect> {
+        if self.geometry_policy == policy {
+            return Vec::new();
+        }
+        self.geometry_policy = policy;
+        self.cancel_interaction_for_geometry_policy_change()
+    }
+
     /// Replaces the ordinary canvas pick scope and cancels interaction admitted
     /// under the previous policy. Durable selection identities remain intact.
     pub fn set_geometry_pick_scope(&mut self, scope: GeometryPickScope) -> Vec<EditorEffect> {
-        if self.geometry_policy.scope == scope {
-            return Vec::new();
-        }
-        self.geometry_policy.scope = scope;
-        self.cancel_interaction_for_geometry_policy_change()
+        self.set_geometry_interaction_policy(GeometryInteractionPolicy {
+            scope,
+            ..self.geometry_policy
+        })
     }
 
     /// Replaces explicit/implicit construction visibility and cancels interaction
     /// admitted under the previous policy. Existing selection identities remain
     /// intact and recover when the geometry is shown again.
     pub fn set_geometry_visibility(&mut self, visibility: GeometryVisibility) -> Vec<EditorEffect> {
-        if self.geometry_policy.visibility == visibility {
-            return Vec::new();
-        }
-        self.geometry_policy.visibility = visibility;
-        self.cancel_interaction_for_geometry_policy_change()
+        self.set_geometry_interaction_policy(GeometryInteractionPolicy {
+            visibility,
+            ..self.geometry_policy
+        })
     }
 
     fn cancel_interaction_for_geometry_policy_change(&mut self) -> Vec<EditorEffect> {
@@ -6702,6 +6714,56 @@ mod tests {
             }]
         );
         assert!(editor.active_pointer_gesture().is_none());
+    }
+
+    #[test]
+    fn geometry_policy_transitions_cancel_prethreshold_point_press_and_retain_selection() {
+        let (document, _, points) = line_document();
+        let scene = scene(&document);
+        let press = scene.viewport.model_to_screen(
+            document
+                .point(points[0])
+                .expect("first line endpoint")
+                .position,
+        );
+        let input = pointer(93, press.x, press.y, Modifiers::default());
+        let mut editor = ConstraintEditor::default();
+
+        let _ = editor.pointer_down(&scene, input);
+        assert_eq!(
+            editor.point_gesture_snapshot().map(|gesture| gesture.point),
+            Some(points[0])
+        );
+        let selection = editor.selection().to_vec();
+        let unchanged = editor.geometry_interaction_policy();
+        assert!(editor.set_geometry_interaction_policy(unchanged).is_empty());
+        assert!(
+            editor.point_gesture_snapshot().is_some(),
+            "an identical complete policy must not cancel a live press"
+        );
+
+        assert!(
+            editor
+                .set_geometry_pick_scope(GeometryPickScope::Profile)
+                .is_empty(),
+            "a pre-threshold press has no preview effect to clear"
+        );
+        assert!(editor.point_gesture_snapshot().is_none());
+        assert_eq!(editor.selection(), selection);
+
+        let _ = editor.pointer_down(&scene, input);
+        assert!(editor.point_gesture_snapshot().is_some());
+        assert!(
+            editor
+                .set_geometry_visibility(GeometryVisibility {
+                    explicit_construction: false,
+                    implicit_construction: true,
+                })
+                .is_empty(),
+            "a visibility transition must still cancel before the drag threshold"
+        );
+        assert!(editor.point_gesture_snapshot().is_none());
+        assert_eq!(editor.selection(), selection);
     }
 
     #[test]

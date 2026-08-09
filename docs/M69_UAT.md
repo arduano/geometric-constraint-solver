@@ -2,11 +2,12 @@
 
 # M69 focused UAT — Profile and construction geometry
 
-Status: ready for focused supervising-human review; approval is pending.
+Status: closed with explicit supervising-human approval on 2026-08-09. Implementation, focused
+direct qualification and complete release qualification pass.
 
 Candidate source: `567141776c78178022f6123cbb399599ba713c62` on `main`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
+Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest aggregate:
 `1ffc65e4dadee3da240bad502254ea850a1cb9b11e06376572179b0ef1c75ba1`
@@ -22,8 +23,8 @@ f097939267de41cbb4246c6fb40a70aa5c0a03a273dfa4db5a6a994abb0c6611  dist/index.htm
 ```
 
 All seven served assets and `/` were fetched over the Tailscale endpoint and compared byte-for-byte
-with the frozen local release distribution. Hard-refresh once before beginning if this browser tab
-previously loaded an older candidate from the same endpoint.
+with the frozen local release distribution before handoff. The endpoint is not a continuing
+post-close requirement.
 
 Use only the ordinary GeoSolve Sketch Workbench. Direct Rust tests are the mathematical,
 persistence and interaction-policy authority; this scorecard assesses discoverability,
@@ -46,7 +47,7 @@ persistent polyline, and mixed selections deterministically become Construction.
 constraints and accepted coordinates do not move. Persistent roles survive ordinary workspace
 reload.
 
-Result: Pending.
+Result: Accepted under the explicit M69 close decision.
 
 Notes:
 
@@ -64,7 +65,7 @@ Expected: Profile predictably wins the near-identical overlap in All mode. Const
 the grouped tree provide direct access to the guide; Profile-only excludes it. Scope changes do not
 mutate document/history. Construction geometry remains solver-active and editable.
 
-Result: Pending.
+Result: Accepted under the explicit M69 close decision.
 
 Notes:
 
@@ -80,7 +81,7 @@ scopes because they are one neutral persistent point, not duplicated or assigned
 Construction-only controls follow Construction visibility/scope, while free points remain
 ordinary Profile interaction targets.
 
-Result: Pending.
+Result: Accepted under the explicit M69 close decision.
 
 Notes:
 
@@ -98,7 +99,7 @@ highlights the complete native source rather than creating a fragment row or ide
 scope ignores the discarded occurrence, Construction scope selects it, and hiding it changes only
 presentation/interaction. Both-end composition remains stable and finite.
 
-Result: Pending.
+Result: Accepted under the explicit M69 close decision.
 
 Notes:
 
@@ -114,10 +115,13 @@ construction ghost. Full-period loops remain whole; open parents expose only val
 complements. Existing Fillet interaction, pointer capture, problem overlays, constraint authoring,
 camera controls and workspace history remain usable.
 
-Result: Pending.
+Result: Accepted under the explicit M69 close decision.
 
 Notes:
 
 ## Approval
 
-Supervising-human decision: Pending.
+On 2026-08-09, the supervising human explicitly accepted the focused M69 candidate and requested
+milestone closure. M69-U1 through M69-U5 are accepted under that close decision with no new finding
+or blocker recorded. This approval does not replace the direct qualification above or invent a
+separate exhaustive replay of every scripted step.

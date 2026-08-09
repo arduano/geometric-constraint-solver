@@ -84,6 +84,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   an analytic branch-preserving radius rail, explicit contact/retention/bounded-local-alternative
   actions, Current-only coordinator transactions, pointer capture and Rust-first qualification.
   The complete release gate and focused human UAT pass on approved candidate `edffb8a`.
+- ADR 0033 and the completed, supervising-human-approved M69 Profile/Construction semantics cut:
+  atomic curve-role authoring/conversion, role-aware operation output, exact evaluation-local
+  Fillet-discarded construction provenance, shared headless pick/visibility policy and thin
+  workbench controls. The complete release gate and focused human UAT pass on approved candidate
+  `567141776c78178022f6123cbb399599ba713c62`.
 
 ### Changed
 
@@ -92,8 +97,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   developer cards while retaining Problems,
   canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
   removed the separately routed `/#/dev/lab` application. M68 subsequently completed the ADR 0032
-  Fillet-interaction cut and received explicit supervising-human approval on 2026-08-09. M69 is
-  now scoped under ADR 0033 for Profile/Construction semantics and is in progress.
+  Fillet-interaction cut, and M69 subsequently completed the ADR 0033 Profile/Construction cut;
+  both received explicit supervising-human approval on 2026-08-09. M70 is an empty unscoped
+  placeholder.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by
