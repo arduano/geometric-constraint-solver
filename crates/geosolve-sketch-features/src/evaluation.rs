@@ -1525,18 +1525,11 @@ fn evaluate_persistent_corner(
         // persisted seeds only inside a bounded neighbourhood and reject
         // multiple genuine roots; evaluation must never use a remote
         // whole-cell root as a silent repair after a source edit or import.
-        let root_parents = if affine == [true, true] {
-            // Two transverse supporting lines have exactly one offset
-            // intersection for fixed sides and radius, so there is no remote
-            // root to hop to and the complete certified cells remain valid.
-            root_parents
-        } else {
-            seed_connected_root_parents(root_parents).ok_or({
-                EvaluateFeatureError::Failure(ComputedFeatureFailure::InvalidParentState {
-                    corner: corner.id,
-                })
-            })?
-        };
+        let root_parents = current_branch_root_parents(&root_parents, affine).ok_or({
+            EvaluateFeatureError::Failure(ComputedFeatureFailure::InvalidParentState {
+                corner: corner.id,
+            })
+        })?;
         let (solutions, root_failure) =
             match local_fillet_roots(sketch, &root_parents, sides, radius, policy, controller) {
                 RootSearchResult::Completed { solutions, failure } => (solutions, failure),
@@ -2091,7 +2084,7 @@ fn resolve_seed_connected_absolute_corner(
         Err(error) => return Err(error),
     }
     let (parents, affine, root_parents) = prepare_absolute_corner(sketch, prior)?;
-    let root_parents = seed_connected_root_parents(root_parents)
+    let root_parents = current_branch_root_parents(&root_parents, affine)
         .ok_or(ComputedFeatureAuthoringError::InvalidContinuationState)?;
     let (solutions, root_failure) = match local_fillet_roots(
         sketch,
@@ -3467,6 +3460,26 @@ fn seed_connected_root_parents(mut parents: [RootParent; 2]) -> Option<[RootPare
         parent.bounds = (lower, upper);
     }
     Some(parents)
+}
+
+/// Returns the bounded search cells for the branch that is current after a
+/// native-source edit.
+///
+/// Two transverse affine supports have exactly one offset intersection for
+/// fixed normal sides and radius. Their complete certified cells are therefore
+/// branch-local even when a source edit moves the new contact far from its
+/// persisted parameter seed. A non-affine parent can have multiple roots in
+/// one certified cell, so it retains the narrow seed-connected guard against a
+/// remote root hop.
+fn current_branch_root_parents(
+    parents: &[RootParent; 2],
+    affine: [bool; 2],
+) -> Option<[RootParent; 2]> {
+    if affine == [true, true] {
+        Some(*parents)
+    } else {
+        seed_connected_root_parents(*parents)
+    }
 }
 
 fn local_fillet_roots(

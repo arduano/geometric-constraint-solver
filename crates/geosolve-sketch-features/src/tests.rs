@@ -23,6 +23,7 @@ use crate::{
 
 struct PolylineFixture {
     document: SketchDocument,
+    points: [geosolve_sketch::DesignPointId; 4],
     curve: geosolve_sketch::CurveId,
     spans: [CurveSpan; 3],
 }
@@ -59,6 +60,7 @@ fn scaled_polyline_fixture(scale: f64, document_id: u128) -> PolylineFixture {
         .unwrap();
     PolylineFixture {
         document,
+        points,
         curve,
         spans: [0, 1, 2].map(|segment| CurveSpan { curve, segment }),
     }
@@ -2164,6 +2166,96 @@ fn grouped_radius_continuation_is_ordered_bounded_and_all_or_nothing() {
             .unwrap(),
         OperationOutcome::Cancelled { .. }
     ));
+}
+
+#[test]
+fn line_line_continuation_reanchors_after_large_source_point_edits() {
+    let mut fixture = polyline_fixture();
+    let priors = [first_corner(fixture.spans), second_corner(fixture.spans)];
+    let mut features = ComputedFeatureDocument::new(fixture.document.id());
+    let feature = features
+        .create_fillet_set("edited adjacent corners", 0.5, priors.to_vec())
+        .unwrap();
+
+    // Keep both right-angle Fillets visibly regular while moving their line
+    // contacts well outside the old one-eighth parameter neighbourhoods.
+    fixture
+        .document
+        .set_point_position(fixture.points[0], [3.0, 0.0])
+        .unwrap();
+    fixture
+        .document
+        .set_point_position(fixture.points[3], [5.0, 4.0])
+        .unwrap();
+    let session = retained(fixture.document);
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let evaluated = evaluate(&session, &features, &mut allocator);
+    assert!(matches!(
+        evaluated
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == feature)
+            .unwrap()
+            .state,
+        ComputedFeatureEvaluationState::Current { .. }
+    ));
+
+    let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+    let rebased = complete(
+        authoring
+            .continue_fillet_corners(
+                &priors,
+                0.5,
+                0.5,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            )
+            .expect("current regular line-line branches must re-anchor"),
+    );
+    assert_eq!(rebased.len(), 2);
+    assert_close(rebased[0].arc.contacts[0].total_parameter, 0.5, 1.0e-10);
+    assert_close(rebased[1].arc.contacts[1].total_parameter, 0.5, 1.0e-10);
+
+    let continued = complete(
+        authoring
+            .continue_fillet_corners(
+                &priors,
+                0.5,
+                0.6,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            )
+            .expect("re-anchored regular line-line branches must remain adjustable"),
+    );
+    for (prior, value) in priors.into_iter().zip(continued) {
+        assert_eq!(value.arc.radius.to_bits(), 0.6_f64.to_bits());
+        assert_eq!(value.corner.first.source, prior.first.source);
+        assert_eq!(value.corner.second.source, prior.second.source);
+        assert_eq!(value.corner.first.neighborhood, prior.first.neighborhood);
+        assert_eq!(value.corner.second.neighborhood, prior.second.neighborhood);
+        assert_eq!(value.corner.first.winding, prior.first.winding);
+        assert_eq!(value.corner.second.winding, prior.second.winding);
+        assert_eq!(value.corner.first.normal_side, prior.first.normal_side);
+        assert_eq!(value.corner.second.normal_side, prior.second.normal_side);
+        assert_eq!(
+            value.corner.first.retained_endpoint,
+            prior.first.retained_endpoint
+        );
+        assert_eq!(
+            value.corner.second.retained_endpoint,
+            prior.second.retained_endpoint
+        );
+        assert_eq!(value.corner.endpoint_order, prior.endpoint_order);
+        assert_eq!(value.corner.sweep, prior.sweep);
+        assert!(
+            value
+                .sensitivity
+                .center_derivative
+                .into_iter()
+                .all(f64::is_finite)
+        );
+        assert!(value.sensitivity.transverse_quality > 0.9);
+    }
 }
 
 #[test]

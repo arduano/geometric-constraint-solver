@@ -14599,7 +14599,10 @@ mod tests {
     #[allow(clippy::too_many_lines)]
     fn every_source_point_drag_previews_commits_and_recovers_current_computed_output() {
         let cases = [
-            (0_usize, [12.0, -6.0]),
+            // This first move shortens the outer span enough to move the
+            // unique line-line contact outside its old one-eighth parameter
+            // neighbourhood while keeping the right-angle Fillet regular.
+            (0_usize, [100.0, 0.0]),
             (1, [-8.0, 10.0]),
             (2, [9.0, -8.0]),
             (3, [-11.0, 7.0]),
@@ -14742,6 +14745,18 @@ mod tests {
                 ),
             };
             assert!(committed_evaluation.raw() > preview_evaluation.raw());
+            fixture
+                .coordinator
+                .editor_mut()
+                .set_selection([SelectionItem::Feature(feature)]);
+            let editable_scene = current_computed_scene(&fixture.coordinator);
+            assert_eq!(editable_scene.fillet_affordances.len(), 2);
+            assert!(
+                editable_scene
+                    .computed_fillet_continuation_statuses
+                    .is_empty(),
+                "case {case} rendered Current output but withheld a regular Fillet rail"
+            );
             let committed_edges = fixture
                 .coordinator
                 .computed_snapshot()
@@ -14781,6 +14796,167 @@ mod tests {
                 persistent_corners
             );
         }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the UAT regression keeps source edits, rails, grouped publication and native-sketch invariants in one scenario"
+    )]
+    fn large_affine_source_edits_keep_grouped_fillet_affordances_adjustable() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate =
+            grouped_fillet_candidate(&fixture.coordinator, fixture.points[1..=2].iter().copied());
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        fixture
+            .coordinator
+            .set_computed_fillet_radius(
+                fixture.coordinator.feature_document().identity(),
+                feature,
+                0.5,
+            )
+            .expect("establish edited shared radius");
+
+        // Shortening both outer spans keeps the two right-angle Fillets regular,
+        // but moves their unique affine contacts well outside the old one-eighth
+        // parameter neighbourhoods retained by the feature intent.
+        for (point, position) in [
+            (fixture.points[0], [3.0, 0.0]),
+            (fixture.points[3], [5.0, 4.0]),
+        ] {
+            let moved = fixture
+                .coordinator
+                .apply_edit(
+                    fixture.coordinator.session().design_identity(),
+                    DocumentEdit::SetPointPosition { point, position },
+                )
+                .expect("accepted large affine source edit");
+            assert!(moved.published_accepted.is_some());
+            assert!(matches!(
+                computed_feature_state(
+                    fixture
+                        .coordinator
+                        .computed_snapshot()
+                        .expect("current output after source edit"),
+                    feature,
+                ),
+                ComputedFeatureEvaluationState::Current { .. }
+            ));
+        }
+
+        let design_before_radius = fixture.coordinator.session().design_identity();
+        let accepted_before_radius = fixture
+            .coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted edited sketch")
+            .identity();
+        let design_json_before_radius = fixture
+            .coordinator
+            .session()
+            .export_design_json()
+            .expect("edited design JSON");
+        let accepted_json_before_radius = fixture
+            .coordinator
+            .session()
+            .export_accepted_json()
+            .expect("edited accepted JSON");
+        let equation_invariants_before_radius =
+            accepted_sketch_equation_invariants(&fixture.coordinator);
+        let ComputedFeatureDefinition::FilletSet(set_before_radius) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("edited Fillet set")
+            .definition;
+        let corner_ids_before_radius = set_before_radius
+            .corners
+            .iter()
+            .map(|corner| corner.id)
+            .collect::<Vec<_>>();
+
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Feature(feature)]);
+        let scene = current_computed_scene(&fixture.coordinator);
+        assert_eq!(scene.fillet_affordances.len(), 2);
+        assert!(scene.computed_fillet_continuation_statuses.is_empty());
+        assert!(scene.fillet_affordances.iter().all(|affordances| {
+            let derivative = affordances.radius_rail.model_derivative;
+            derivative.into_iter().all(f64::is_finite) && derivative[0].hypot(derivative[1]) > 0.0
+        }));
+
+        let origin = scene.computed_input.expect("current edited computed input");
+        let history_before = fixture.coordinator.history_len();
+        let preview = fixture
+            .coordinator
+            .preview_computed_fillet_radius_exact(origin, feature, 0.6)
+            .expect("preview re-anchored grouped radius");
+        assert!(matches!(
+            computed_feature_state(preview, feature),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+        fixture
+            .coordinator
+            .set_computed_fillet_radius_exact(origin, feature, 0.6)
+            .expect("publish re-anchored grouped radius");
+        assert_eq!(
+            fillet_radius(&fixture.coordinator, feature).to_bits(),
+            0.6_f64.to_bits()
+        );
+        assert_eq!(fixture.coordinator.history_len(), history_before + 1);
+        assert_eq!(
+            fixture.coordinator.session().design_identity(),
+            design_before_radius
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted sketch after feature edit")
+                .identity(),
+            accepted_before_radius
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .session()
+                .export_design_json()
+                .expect("design JSON after feature edit"),
+            design_json_before_radius
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .session()
+                .export_accepted_json()
+                .expect("accepted JSON after feature edit"),
+            accepted_json_before_radius
+        );
+        assert_eq!(
+            accepted_sketch_equation_invariants(&fixture.coordinator),
+            equation_invariants_before_radius
+        );
+        let ComputedFeatureDefinition::FilletSet(set_after_radius) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("re-anchored Fillet set")
+            .definition;
+        assert_eq!(
+            set_after_radius
+                .corners
+                .iter()
+                .map(|corner| corner.id)
+                .collect::<Vec<_>>(),
+            corner_ids_before_radius
+        );
+
+        let published = current_computed_scene(&fixture.coordinator);
+        assert_eq!(published.fillet_affordances.len(), 2);
+        assert!(published.computed_fillet_continuation_statuses.is_empty());
     }
 
     #[test]
