@@ -3,7 +3,7 @@
 # M68 implementation — headless Fillet direct manipulation
 
 Status: implementation, focused direct qualification and the clean full release gate are complete
-on frozen candidate `227cc9a`. Explicit supervising-human UAT, including the `M68-F001` and
+on frozen candidate `5355162`. Explicit supervising-human UAT, including the `M68-F001` and
 `M68-F002` retests, remains pending; M68 is not yet accepted.
 
 ## 1. Files and APIs
@@ -77,7 +77,7 @@ priority semantics, residual catalog and M27/M28 advanced Fillet APIs are unchan
 
 ## 3. Commands and outcomes
 
-The implementation and its UAT repairs are split into five reviewable source commits:
+The implementation and its UAT repairs are split into six reviewable source commits:
 
 - `807d2f4` — feature-domain absolute continuation, analytic rail, bounded alternatives and
   atomic configuration replacement;
@@ -88,7 +88,9 @@ The implementation and its UAT repairs are split into five reviewable source com
 - `c82d420` — shared affine-source re-anchoring for evaluation and continuation plus the
   `M68-F001` feature/editor regressions; and
 - `227cc9a` — one central Fillet radius handle, no endpoint contact elements or invisible contact
-  hit zones, and focused editor/web regressions for `M68-F002`.
+  hit zones, and focused editor/web regressions for `M68-F002`; and
+- `5355162` — icon-only branch actions without circular handle-like backplates, preserving their
+  canvas and accessible-panel semantics while leaving the central radius grip as the sole handle.
 
 The latest integrated focused gate passed in the project Nix shell:
 
@@ -123,7 +125,7 @@ An additional independent review of `M68-F001` found no blocker: the repair alig
 affine/affine reevaluation and continuation domains, while genuine fold conditioning and every
 non-affine seed-local guard remain unchanged.
 
-The complete clean gate then passed from source `227cc9a`:
+The complete clean gate then passed from source `5355162`:
 
 ```text
 nix-shell shell.nix --run './scripts/release-gate.sh'
@@ -132,14 +134,14 @@ nix-shell shell.nix --run './scripts/release-gate.sh'
 The command exited successfully after formatting, warnings-denied workspace Clippy, locked
 all-feature tests, all-feature WASM, rustdoc, benchmark, licence/package, static single-workbench,
 Git-hygiene and release Trunk checks. The release-only 256-moving-body spatial sparse-crossover
-regression passed in `143.68s`. Cargo's repeated `license` plus `license-file` advisory is
+regression passed in `139.62s`. Cargo's repeated `license` plus `license-file` advisory is
 pre-existing and non-blocking; the explicit licence gate passed.
 
 The frozen release distribution is identified by:
 
 ```text
 sha256sum crates/geosolve-demo-web/dist/* | sha256sum
-3644376e73790736ae2dacdb0dbd1b150d9f07ae40c0ee00f057d1f6b7b19444  -
+11a89f991579899614fafe498a3d4a5b98509a860b6a8abd962121277e347cc3  -
 ```
 
 The focused candidate is served from that exact distribution at
@@ -162,7 +164,7 @@ Focused direct evidence now covers:
 - large native source-point edits followed by grouped-Fillet rail exposure, preview and
   publication without a false fold; and
 - exactly one visible central radius handle per selected Fillet corner, with no endpoint contact
-  element or invisible contact-hit zone; and
+  element, invisible contact-hit zone or circular branch-action backplate; and
 - unchanged native sketch identity, coordinates, residuals, rank and DOF for every feature-only
   edit.
 

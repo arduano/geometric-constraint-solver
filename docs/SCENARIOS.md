@@ -2129,7 +2129,9 @@ qualification is complete and explicit human UAT remains pending.
 
 The `M68-F002` hotfix narrows the visible canvas affordance to one central radius handle per
 selected corner. Direct editor and web tests prove Fillet endpoints have neither rendered contact
-circles nor invisible contact-drag hit zones; the generated arc remains the visible radius surface.
+circles nor invisible contact-drag hit zones. Branch choices retain their lightweight icons and
+arrows without circular handle-like backplates; the generated arc remains the visible radius
+surface.
 
 ### M68-DM5 - Atomic history, persistence and sketch invariance
 

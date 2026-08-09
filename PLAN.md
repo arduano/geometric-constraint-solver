@@ -3212,7 +3212,7 @@ UAT approval. That approval is recorded above and M67 is closed.
 ### M68
 
 Status: active. Implementation, focused direct qualification and the clean full release gate are
-complete on frozen candidate `227cc9a`; explicit supervising-human UAT, including the
+complete on frozen candidate `5355162`; explicit supervising-human UAT, including the
 `M68-F001` and `M68-F002` retests, remains pending.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
@@ -3279,12 +3279,12 @@ reference model enumerates 28 reachable states and all 240 applicable state/even
 including same-position retry and terminal-coordinate validation.
 
 Mechanical qualification record (2026-08-09): the complete clean
-`nix-shell shell.nix --run './scripts/release-gate.sh'` passes from source `227cc9a`, including
+`nix-shell shell.nix --run './scripts/release-gate.sh'` passes from source `5355162`, including
 formatting, warnings-denied workspace Clippy, locked all-feature tests, all-feature WASM, rustdoc,
 benchmarks, licence/package checks, the static single-workbench inventory, Git hygiene and release
-Trunk. The release-only 256-moving-body spatial sparse-crossover regression passes in `143.68s`.
+Trunk. The release-only 256-moving-body spatial sparse-crossover regression passes in `139.62s`.
 The frozen `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
-`3644376e73790736ae2dacdb0dbd1b150d9f07ae40c0ee00f057d1f6b7b19444`. Only explicit human
+`11a89f991579899614fafe498a3d4a5b98509a860b6a8abd962121277e347cc3`. Only explicit human
 approval of the frozen Tailscale candidate remains unchecked. The static distribution is served
 at `http://100.94.63.83:8080/`; all seven HTTP responses match their local release files by
 SHA-256.
@@ -3305,8 +3305,11 @@ central radius interaction visually and made selected Fillets unnecessarily busy
 the typed contact/branch metadata and internal headless continuation machinery. The generated arc
 and its single central grip continue to enter the same validated radius transaction. Direct editor
 tests prove a Fillet endpoint resolves to the visible radius surface rather than an invisible
-contact target; web markup tests prove exactly one central grip for the selected corner and no
-endpoint contact elements. Human retest remains pending.
+contact target. A live-browser sanity check then identified circular branch-action backplates as a
+second handle-like visual layer; `5355162` removes those backplates while preserving the branch
+icons, arrows and action semantics. Web markup tests prove exactly one central grip for the
+selected corner, no endpoint contact elements and no handle-like branch circles. Human retest
+remains pending.
 
 Gate: radius, contact, retention and local-branch manipulation are branch-explicit, independently
 validated and transactional at the headless boundary. Only an exact last-`Current` candidate may

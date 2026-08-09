@@ -6,12 +6,12 @@ Status: ready for supervising-human UAT. Implementation and focused direct quali
 complete, and the clean release gate passes. M68 remains open until this scorecard receives
 explicit human approval.
 
-Candidate source: `227cc9a`
+Candidate source: `5355162`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
-`3644376e73790736ae2dacdb0dbd1b150d9f07ae40c0ee00f057d1f6b7b19444`
+`11a89f991579899614fafe498a3d4a5b98509a860b6a8abd962121277e347cc3`
 
 Delivery check: all seven served HTTP responses match the frozen local distribution by SHA-256.
 
@@ -167,16 +167,22 @@ adjustable after moving the polyline points.
 Observation: a selected Fillet displayed a central radius handle plus two contact circles at its
 ends. All three appeared to resize the Fillet, making the canvas unnecessarily busy.
 
-Disposition: fixed by `227cc9a`. The two endpoint circles and their canvas hit priority are
-removed. The visible generated arc and single central grip retain radius dragging, while typed
-contact/branch metadata and internal headless continuation support remain preserved.
+Disposition: fixed by `227cc9a` and `5355162`. The first change removes the two endpoint contact
+circles and their canvas hit priority. Live-browser inspection then showed that the circular
+backplates behind retained-direction and branch icons still looked like extra handles; the second
+change removes those backplates while preserving the icon/arrow actions. The visible generated arc
+and single central grip retain radius dragging, while typed contact/branch metadata and internal
+headless continuation support remain preserved.
 
 Mechanical regression: editor tests prove endpoint hover/press resolves to the visible radius
 surface rather than an invisible contact target. Web markup tests prove one central grip for the
-selected corner and no `wb-fillet-contact` elements. The full release gate passes on `227cc9a`.
+selected corner, no `wb-fillet-contact` elements and no circular branch-action backplates. A live
+browser reproduction over the frozen Tailscale bundle confirms the selected affordance group has
+one circle, class `wb-fillet-radius-grip`. The full release gate passes on `5355162`.
 
-Retest: Pending. Select a Fillet and confirm it shows one central radius handle, no endpoint dots,
-and no hidden contact-drag behavior at either end.
+Retest: Pending. Select a Fillet and confirm it shows one central radius handle, no endpoint dots
+or circular branch controls, and no hidden contact-drag behavior at either end. Branch choices may
+remain visible as lightweight icons/arrows.
 
 ## Approval
 

@@ -133,7 +133,8 @@ translation, not branch applicability, hit resolution, radius mathematics or rol
 The visible radius grip sits at the generated arc midpoint with a spoke and rail; dragging the arc
 body is a convenience entry into the same headless gesture. Named contact state remains available
 through the headless interface and internal continuation seam but has no endpoint circle, canvas
-hit zone or compact-panel control. Retained-direction arrows and ghost alternatives preview on hover/focus and commit
+hit zone or compact-panel control. Retained-direction and branch choices use lightweight canvas
+icons and arrows without circular handle-like backplates; they preview on hover/focus and commit
 only through their headless action ID. The old raw Flip-first, Flip-second and Alternate-arc
 checkboxes are removed from ordinary presentation.
 
