@@ -2,9 +2,9 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: paused for `M70B-F002` replacement publication. `M70B-F001` retains its owning-layer
-correction and complete prior replacement evidence; the second payload finding now has direct
-headless-authoring and accepted-scene authority regressions plus a passing complete release gate.
+Status: ready for focused `M70B-F002` UAT. `M70B-F001` retains its owning-layer correction and
+complete prior replacement evidence; the second payload finding now has direct headless-authoring
+and accepted-scene authority regressions plus a fully qualified, byte-verified replacement.
 Every human result below remains pending; this scorecard records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
@@ -16,12 +16,17 @@ Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
 Prior `M70B-F001` release distribution manifest aggregate:
 `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`
 
+Current `M70B-F002` Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Current `M70B-F002` release distribution manifest aggregate:
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
+
 ## Preconditions
 
 - [x] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct `M70B-F002` qualification.
 - [x] The complete integrated release gate passes on the `M70B-F002` clean nominated source.
-- [ ] An `M70B-F002` replacement read-only release distribution is served through Tailscale.
-- [ ] Every `M70B-F002` served asset and `/` matches the frozen local bytes.
+- [x] An `M70B-F002` replacement read-only release distribution is served through Tailscale.
+- [x] Every `M70B-F002` served asset and `/` matches the frozen local bytes.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;

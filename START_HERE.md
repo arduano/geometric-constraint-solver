@@ -50,9 +50,9 @@ owning-layer correction, exact payload regression, complete release qualificatio
 Tailscale publication and served-byte verification. The second supplied payload opened
 `M70B-F002`: radial Normal had inherited finite-segment contact defaults and the web adapter erased
 historical accepted presentation beneath the rejected attempt. Headless supporting-line authoring
-and accepted-scene authority regressions plus the complete F002 replacement gate pass; publication
-and targeted human recheck remain pending. M71 is deferred behind M70B and remains an unauthorized
-candidate backlog.
+and accepted-scene authority regressions plus the complete F002 replacement gate and byte-verified
+publication pass; targeted human recheck remains pending. M71 is deferred behind M70B and remains
+an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -291,9 +291,9 @@ the original frozen publication remain historical transport evidence. `M70B-F001
 focused owning-layer correction/regression and fully qualified, byte-verified replacement.
 `M70B-F002` corrects radial Normal to retained-accepted centre-on-supporting-line semantics and
 keeps rejected-attempt presentation visible but detached; focused owner regressions and the
-complete replacement gate pass, while publication and `docs/M70B_UAT.md` targeted rechecks remain
-pending. The temporary `docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation
-authorization.
+complete replacement gate plus byte-verified publication pass, while `docs/M70B_UAT.md` targeted
+rechecks remain pending. The temporary `docs/M71_GOALS.md` backlog is deferred behind M70B and is
+not implementation authorization.
 
 Durable milestone and cleanup records:
 

@@ -3650,9 +3650,9 @@ every scripted step. M70 is closed.
 
 Status: active after `M70B-F002`. Bounded reproduction transport and restore remain qualified;
 `M70B-F001` has complete replacement evidence, while the second human payload finding now has a
-direct headless-authoring correction, accepted-scene authority matrix and complete replacement
-qualification. Publication and focused human UAT remain pending. No completion or approval is
-claimed.
+direct headless-authoring correction, accepted-scene authority matrix and fully qualified,
+byte-verified replacement publication. Focused human UAT remains pending. No completion or
+approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3691,8 +3691,9 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
 - [x] Re-pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM,
   rustdoc, benchmark/licence/package checks, release Trunk, static single-workbench and Git-hygiene
   gates on the `M70B-F002` nominated source.
-- [ ] Freeze and publish that candidate through the usual Tailscale UAT path, byte-verify its
-  distribution, complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
+- [x] Freeze and publish that candidate through the usual Tailscale UAT path and byte-verify its
+  distribution.
+- [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
 Qualification/publication note (2026-08-10): source
 `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b` passes the demo-web 94/94 library and 1/1 native
@@ -3751,8 +3752,11 @@ integrated release gate. The gate includes formatting, warnings-denied Clippy, l
 workspace tests, native/WASM M70 parity, the demo-web WASM check, warnings-denied rustdoc,
 benchmark compilation, performance budgets, package/licence checks, static single-workbench and
 Git-hygiene checks, the 147.45-second 256-moving-body sparse crossover and Trunk 0.21.14 release
-assembly. Only replacement publication, served-byte verification, focused human UAT and explicit
-approval remain pending.
+assembly. A read-only seven-file snapshot at
+`/tmp/geosolve-m70b-f002-uat.tcE3Jl` is served at `http://100.94.63.83:8080/`; every asset and `/`
+byte-matches the frozen local candidate, with manifest aggregate
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. Only focused human UAT
+and explicit approval remain pending.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The

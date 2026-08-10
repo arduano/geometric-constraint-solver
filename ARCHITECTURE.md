@@ -76,8 +76,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   accepted-geometry projection seed that never reads rejected coordinates, and keeps older
   accepted geometry renderable but detached beneath a
   rejected design without weakening current computed-scene fail-closed publication. F001
-  replacement evidence, F002 direct regressions and the F002 complete replacement gate pass;
-  publication and targeted human recheck remain pending.
+  replacement evidence, F002 direct regressions, the F002 complete replacement gate and
+  byte-verified publication pass; targeted human recheck remains pending.
   M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -1048,6 +1048,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   supporting-line incidence, seeds the affine contact at the accepted centre projection and
   separates detached accepted presentation from current fail-closed inference-publication
   authority. F001 replacement evidence, both F002 direct owner regressions and the F002 complete
-  replacement gate pass; F002 publication and dedicated human UAT remain pending.
+  replacement gate plus byte-verified publication pass; dedicated human UAT remains pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.

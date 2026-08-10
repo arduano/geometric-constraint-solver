@@ -5,8 +5,8 @@
 Status: active after `M70B-F002`. The bounded transport and restore remain qualified, and
 `M70B-F001` retains complete replacement evidence. The second human-supplied payload finding has a
 direct headless-authoring correction, accepted-scene fallback regression and complete replacement
-qualification; publication, supervising-human UAT and approval remain pending. This document
-records no human pass or milestone closure.
+qualification/publication; supervising-human UAT and approval remain pending. This document records
+no human pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
 transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
@@ -21,6 +21,12 @@ Prior `M70B-F001` replacement source: `b4ec279e221df38816b7376a6978712e21df02c2`
 `M70B-F002` replacement source: `2e0f6c348ea0d3d9ee0bc2fd556f402a29d7059b`
 
 `M70B-F002` integrated release-gate result: **PASS**
+
+`M70B-F002` Tailscale distribution: `/tmp/geosolve-m70b-f002-uat.tcE3Jl` at
+`http://100.94.63.83:8080/`
+
+`M70B-F002` release manifest aggregate:
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
 
 Prior `M70B-F001` integrated release-gate result: **PASS**
 
@@ -269,8 +275,24 @@ checks, workspace warnings-denied Clippy and locked all-feature tests, native/WA
 parity, the demo-web WASM check, warnings-denied rustdoc, benchmark compilation, performance
 budgets, package/licence checks and Trunk 0.21.14 release assembly all pass. The required
 256-moving-body sparse crossover passes in 147.45 seconds. Only the pre-existing non-failing Cargo
-`license` plus `license-file` advisories were emitted. Replacement distribution freezing,
-publication and served-byte verification remain pending.
+`license` plus `license-file` advisories were emitted.
+
+The F002 replacement release distribution contains exactly seven read-only files:
+
+```text
+af91333ed578f05ec49c76fd10c18dd0ead0f9f845b8ff45279de5a6cbc7b80e  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+a6fb10ec3fac3021c5b2c5f92e1bbbd96f2ef0920a1e10c990ab4244ce04adda  geosolve-demo-web-7be0279dd606ae0c.js
+a379c7c8307fda6715e22a3e64d786942bf4095505a3fc972c02fc38e2dbb63e  geosolve-demo-web-7be0279dd606ae0c_bg.wasm
+1ad69307a269c0e9f7431e7c0c077b39cb0a490985c15360e38992e5646200f1  index.html
+49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048  styles-36c74d05d21a90c9.css
+```
+
+All seven assets were fetched through the actual Tailscale address with proxy/cache bypass and
+compared byte-for-byte to read-only snapshot `/tmp/geosolve-m70b-f002-uat.tcE3Jl`. `/` also
+matches `index.html`; independently calculated local and served aggregates both equal the F002
+manifest above.
 
 ## 3.1 `M70B-F001` owning-layer correction
 
@@ -356,7 +378,7 @@ is never substituted.
 - [x] `M70B-F002` payload, circle/arc external-support, operand-order, historical-seed,
   invalid-request and scene-authority regressions pass with no solver or authority weakening;
 - [x] the `M70B-F002` source passes the complete integrated release gate;
-- [ ] its replacement distribution is frozen and byte-verified over Tailscale;
+- [x] its replacement distribution is frozen and byte-verified over Tailscale;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 

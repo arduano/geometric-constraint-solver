@@ -53,9 +53,9 @@ M70B is the active bounded reproduction-capsule cut. It packages freshly encoded
 application-workspace v5 bytes as strict, size-limited `GEOSOLVE_REPRO_V1` text for copy/paste
 failure handoff, then validates and reconstructs a complete coordinator before replacing live
 state. The transport and `M70B-F001` replacement are fully qualified and published. `M70B-F002`
-now has focused radial-Normal and accepted-scene authority corrections plus a passing complete
-replacement gate; publication and dedicated UAT recheck remain pending. M71 remains deferred
-behind it.
+now has focused radial-Normal and accepted-scene authority corrections plus a fully qualified,
+byte-verified replacement publication; dedicated UAT recheck and approval remain pending. M71
+remains deferred behind it.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
