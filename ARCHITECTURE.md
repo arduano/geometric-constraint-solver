@@ -1031,7 +1031,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   UAT. Implementation, focused direct qualification, integrated release qualification, frozen-
   replacement-candidate publication, served-byte verification and scoped human UAT are complete.
   Circle-authoring finding `M70-F001` is resolved.
-- M70B: active bounded reproduction-capsule implementation. It transports the authoritative
+- M70B: active bounded reproduction-capsule human-UAT candidate. It transports the authoritative
   workspace v5 envelope without copying raw browser storage, restores through the strict workspace
   decoder and a newly constructed coordinator before atomic swap, and exposes a visible
   copy/paste overlay with manual fallback. It restores no legacy lab/E2E path and serializes no

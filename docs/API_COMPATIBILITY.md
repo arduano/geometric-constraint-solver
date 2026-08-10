@@ -90,11 +90,12 @@ payload is compressed text around the existing private application-workspace v5 
 new `geosolve-sketch` persistence version, supported domain schema or accepted-state shortcut.
 The companion `geosolve-repro` stdin/stdout binary decodes transport for diagnosis only and cannot
 validate or publish a coordinator.
-Generated V1 text is canonical; a future incompatible transport must use a new header rather than
-silently reinterpret V1. The FNV-1a field detects accidental corruption only and conveys no
-authenticity. Successful transport decode still requires strict `WorkspaceSnapshot` validation and
-complete coordinator reconstruction before publication. No library crate API, frozen sketch v1-v4
-bytes or draft-v5 support status changes. Qualification and frozen publication pass on source
+V1 text is generated deterministically with canonical fields and strict unpadded base64url; a
+future incompatible transport must use a new header rather than silently reinterpret V1. The
+FNV-1a field detects accidental corruption only and conveys no authenticity. Successful transport
+decode still requires strict `WorkspaceSnapshot` validation and complete coordinator
+reconstruction before publication. No library crate API, frozen sketch v1-v4 bytes or draft-v5
+support status changes. Qualification and frozen publication pass on source
 `30d66a60e21543546274befd9791058897eb9eb5`; M70B UAT remains pending. No M71 API is authorized by
 the candidate `docs/M71_GOALS.md` backlog, which remains deferred behind M70B.
 

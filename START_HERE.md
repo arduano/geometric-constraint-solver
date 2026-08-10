@@ -40,7 +40,7 @@ headless auto-constraint drafting intelligence, atomic construction-plus-inferen
 ordinary editable UAT playground. Replacement source
 `3d157896c87eaf647abee1192c838100ce359ce9` passed direct/release qualification, publication and
 the repaired Circle-through-point UAT; the supervising human explicitly approved M70 on
-2026-08-10. M70B is the active bounded reproduction-payload implementation cut. It introduces a
+2026-08-10. M70B is the active bounded reproduction-payload human-UAT cut. It introduces a
 versioned, compressed text capsule around the authoritative application-workspace v5 snapshot so
 UAT failures can be copied into a text conversation and restored through the ordinary validated
 coordinator path. Source `30d66a60e21543546274befd9791058897eb9eb5` passes direct/release

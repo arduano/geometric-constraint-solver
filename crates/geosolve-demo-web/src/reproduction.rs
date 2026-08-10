@@ -420,6 +420,39 @@ mod tests {
         let workspace = vec![b'a'; 200];
         let valid = encode_workspace_bytes(&workspace, SMALL_LIMITS).expect("small payload");
 
+        let exact_text_limits = CodecLimits {
+            text: valid.len(),
+            ..SMALL_LIMITS
+        };
+        assert_eq!(
+            encode_workspace_bytes(&workspace, exact_text_limits)
+                .expect("encode at exact text limit"),
+            valid
+        );
+        assert_eq!(
+            decode_workspace_bytes(&valid, exact_text_limits).expect("decode at exact text limit"),
+            workspace
+        );
+
+        let compressed_len = URL_SAFE_NO_PAD
+            .decode(valid.rsplit(':').next().expect("body"))
+            .expect("compressed body")
+            .len();
+        let exact_compressed_limits = CodecLimits {
+            compressed: compressed_len,
+            ..SMALL_LIMITS
+        };
+        assert_eq!(
+            encode_workspace_bytes(&workspace, exact_compressed_limits)
+                .expect("encode at exact compressed limit"),
+            valid
+        );
+        assert_eq!(
+            decode_workspace_bytes(&valid, exact_compressed_limits)
+                .expect("decode at exact compressed limit"),
+            workspace
+        );
+
         let exact_workspace_limit = vec![b'a'; SMALL_LIMITS.workspace];
         let exact_workspace_payload =
             encode_workspace_bytes(&exact_workspace_limit, SMALL_LIMITS).expect("exact limit");
@@ -473,10 +506,6 @@ mod tests {
             }
         );
 
-        let compressed_len = URL_SAFE_NO_PAD
-            .decode(valid.rsplit(':').next().expect("body"))
-            .expect("compressed body")
-            .len();
         let compressed_limits = CodecLimits {
             compressed: compressed_len - 1,
             ..SMALL_LIMITS

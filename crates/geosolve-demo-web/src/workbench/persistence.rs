@@ -476,8 +476,9 @@ mod tests {
     };
 
     use super::{
-        WorkspaceSnapshot, coordinator_from_reproduction_payload, default_evaluation_high_water,
-        derive_sketch_identity_high_water, reproduction_payload_from_coordinator,
+        WorkspaceSnapshot, coordinator_from_reproduction_payload, coordinator_from_snapshot,
+        default_evaluation_high_water, derive_sketch_identity_high_water,
+        reproduction_payload_from_coordinator,
     };
 
     fn computed_fillet_candidate(
@@ -681,6 +682,53 @@ mod tests {
         assert_eq!(
             restored.session().persistent_identity_high_water(),
             coordinator.session().persistent_identity_high_water()
+        );
+    }
+
+    #[test]
+    fn reproduction_restore_rejects_coordinator_reconstruction_failure_atomically() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(8.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let retained = WorkspaceSnapshot::from_coordinator(&coordinator)
+            .expect("retained workspace")
+            .encode()
+            .expect("retained workspace JSON");
+        let mut reconstruction_failure: serde_json::Value =
+            serde_json::from_str(&retained).expect("workspace value");
+        reconstruction_failure["feature_lifecycle_high_water"]["revision"] =
+            serde_json::Value::from(u64::MAX);
+        let payload = crate::reproduction::encode_workspace(
+            &serde_json::to_string(&reconstruction_failure)
+                .expect("coordinator-invalid workspace JSON"),
+        )
+        .expect("transport coordinator-invalid workspace");
+        let workspace = crate::reproduction::decode_workspace(&payload)
+            .expect("decode coordinator-invalid workspace transport");
+        let snapshot = WorkspaceSnapshot::decode(&workspace)
+            .expect("workspace validation precedes coordinator reconstruction");
+        assert!(
+            coordinator_from_snapshot(&snapshot)
+                .unwrap_err()
+                .contains("exhausted"),
+            "coordinator reconstruction must reject an exhausted feature lifecycle revision"
+        );
+        assert!(
+            coordinator_from_reproduction_payload(&payload)
+                .unwrap_err()
+                .contains("exhausted"),
+            "the complete payload path must propagate coordinator reconstruction failure"
+        );
+        assert_eq!(
+            WorkspaceSnapshot::from_coordinator(&coordinator)
+                .expect("workspace after coordinator reconstruction failure")
+                .encode()
+                .expect("workspace JSON after coordinator reconstruction failure"),
+            retained
         );
     }
 

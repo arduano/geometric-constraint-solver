@@ -44,8 +44,8 @@ M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes ap
 Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
 completes the approved ADR 0034 headless auto-constraint drafting milestone, including the
 `M70-F001` Circle-through-point repair and replacement qualification/publication. M70B is the
-active bounded reproduction-capsule implementation: complete workspace v5 state can be copied as
-compressed text and restored atomically through its existing validation path. Direct/release
+active bounded reproduction-capsule human-UAT candidate: complete workspace v5 state can be copied
+as compressed text and restored atomically through its existing validation path. Direct/release
 qualification, frozen publication and served-byte verification pass; focused human UAT remains
 pending. M71 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
@@ -3695,8 +3695,9 @@ aggregate `3fa3b7486c046b6e7c83464198d52eb5878182f83a28ed234da12bd9503b1a4d`.
 Only the focused human UAT and explicit approval remain open in the combined final checkbox.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
-while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. Copy or
-paste never runs a solver equation in the browser, and M70B closes only after direct qualification
+while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The
+browser adapter duplicates or evaluates no solver equation itself; reconstruction invokes the
+ordinary Rust domain certification path before swap. M70B closes only after direct qualification
 and its own explicit human UAT. `docs/M70B_IMPLEMENTATION.md`, `docs/M70B_UAT.md` and
 `docs/SCENARIOS.md` own the detailed ledger.
 
