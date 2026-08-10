@@ -3,9 +3,9 @@
 # ADR 0034: Headless auto-constraint drafting intelligence
 
 Status: accepted for M70; implementation, focused direct qualification, integrated release
-qualification, frozen-candidate publication and served-byte verification are complete for the first
-candidate, while Circle-authoring finding `M70-F001`, replacement qualification/publication and
-supervising-human UAT are pending
+qualification, frozen replacement-candidate publication and served-byte verification are complete.
+Circle-authoring finding `M70-F001` is mechanically resolved, while its targeted M70-U1 recheck
+and supervising-human UAT are pending
 
 ## Context
 
@@ -235,8 +235,9 @@ The deterministic cross-target oracle is
 `crates/geosolve-constraint-editor/tests/fixtures/m70_transition_parity.golden.txt`. The same test
 runs natively and through `wasm-bindgen-test-runner`; the release gate invokes its WASM form
 explicitly. Its transcript covers every M70 inference family, tracking, ambiguity, suppression and
-release, stale/clear lifecycle, atomic midpoint-plus-perpendicular publication, rejection,
-Undo/Redo and reload. Focused native tests separately own exact resource-limit boundaries.
+release, stale/clear lifecycle, atomic midpoint-plus-perpendicular and Circle-through-point
+publication, rejection, Undo/Redo and reload. Focused native tests separately own exact
+resource-limit boundaries.
 
 Direct coordinator tests are authoritative for point identity reuse, all-family native
 PointOnCurve metadata, Midpoint, line/polyline Horizontal/Vertical, remembered Parallel/
@@ -248,9 +249,10 @@ cannot acquire authority, and that compatibility scenes remain renderable but no
 They also prove pre-bind semantic mutation rejection, post-bind authority revocation, the bounded
 and cancellable 32-relation commit-plan envelope, process-local prepared CAS epochs, current-input
 history restoration and bounded/validated persistent identity high-water across process reload.
-The initial candidate's focused inference selection passes 46/46, the editor crate passes 266 unit
-tests plus all relevant integration suites, demo-web passes 82/82 tests, the sketch library passes
-33/33 and M56 passes 6/6. Replacement counts covering `M70-F001` remain pending.
+Replacement source `3d157896c87eaf647abee1192c838100ce359ce9` passes the focused inference
+selection 47/47, 271/271 editor unit tests plus all relevant integration suites, demo-web 83/83, the
+sketch library 33/33 and M56 6/6. Its complete release gate, frozen publication and served-byte
+verification pass; targeted human recheck remains pending.
 ADR 0033 scope, Profile overlap, implicit-source mapping and computed-Fillet exclusion remain
 mandatory regressions.
 

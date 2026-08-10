@@ -39,8 +39,10 @@ the supervising human explicitly approved it on 2026-08-09. M70 is now the activ
 ADR 0034: reusable headless auto-constraint drafting intelligence, atomic
 construction-plus-inference commit and an ordinary editable UAT playground. Implementation and
 focused direct qualification, integrated release qualification, frozen-candidate publication and
-served-byte verification are complete for the first candidate. Circle-authoring UAT finding
-`M70-F001`, its replacement candidate and supervising-human approval are pending.
+served-byte verification are complete for replacement source
+`3d157896c87eaf647abee1192c838100ce359ce9`. The objective repair, direct regressions, release
+qualification and publication for Circle-authoring finding `M70-F001` are mechanically resolved;
+its targeted M70-U1 recheck and overall supervising-human approval remain pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -128,14 +130,14 @@ field-opaque, bounded and checkpoint-serializable; a process-local epoch invalid
 prepared work, and history restore keeps exact current host inputs. Application workspace v5 stores
 the cursor value while strictly migrating v1-v4 without changing frozen sketch v1-v4 bytes or
 current unsupported draft-v5 bytes. Shift/RAF handling preserves queued movement for interactions
-that do not own drafting suppression. The focused inference
-selection passes 46/46, the complete editor crate passes 266 unit tests plus all relevant
-integration suites, demo-web passes 82/82 tests, the sketch library passes 33/33 unit tests and M56
-passes 6/6. Frozen candidate source `4b16db3a885f5e28f508189b8817797375f05807` passes the complete
-release and served-byte gates, but human review opened `M70-F001`: a Circle circumference snap to an
-existing point or line endpoint must atomically create PointOnCurve(existing point, created circle),
-not a hidden rim point or an arbitrary line-interior contact/tangency. Replacement qualification and
-targeted human recheck remain pending. M64
+that do not own drafting suppression. On replacement source
+`3d157896c87eaf647abee1192c838100ce359ce9`, the focused inference selection passes 47/47, the
+complete editor crate passes 271/271 unit tests plus all relevant integration suites, demo-web passes
+83/83 tests, the sketch library passes 33/33 unit tests and M56 passes 6/6. The complete release
+gate and served-byte verification also pass. `M70-F001` is mechanically resolved: a Circle
+circumference snap to an existing point or line endpoint atomically creates
+PointOnCurve(existing point, created circle), not a hidden rim point or an arbitrary line-interior
+contact/tangency. Its targeted human recheck and overall M70 approval remain pending. M64
 supersedes active-scenario routing and sample-specific passive-driver metadata with one ordinary
 workspace coordinator.
 M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
@@ -268,8 +270,9 @@ computed-feature behavior and received focused supervising-human approval. M68 c
 supervising-human approval on 2026-08-09. M69 completed ADR 0033's Profile/Construction semantics,
 passed its complete release gate and received explicit supervising-human approval on 2026-08-09.
 M70 is active: implementation, focused direct qualification, integrated release qualification,
-frozen-candidate publication and served-byte verification are complete for its first candidate,
-while `M70-F001`, replacement qualification/publication and human UAT are pending.
+frozen replacement-candidate publication and served-byte verification are complete.
+`M70-F001` is mechanically resolved, while its targeted M70-U1 recheck and the remaining human UAT
+are pending.
 `docs/M70_IMPLEMENTATION.md` owns its objective ledger, `docs/M70_UAT.md` is the pending scorecard
 and ADR 0034 owns the architecture.
 The temporary `docs/M71_GOALS.md` backlog is not an active milestone or implementation
@@ -317,9 +320,9 @@ Durable milestone and cleanup records:
 - `docs/M69_IMPLEMENTATION.md` (completed Profile/Construction implementation ledger)
 - `docs/M69_UAT.md` (approved focused Profile/Construction scorecard)
 - `docs/adr/0033-profile-and-construction-geometry-semantics.md`
-- `docs/M70_IMPLEMENTATION.md` (mechanically qualified and published auto-constraint ledger; human
+- `docs/M70_IMPLEMENTATION.md` (replacement-qualified and published auto-constraint ledger; human
   UAT pending)
-- `docs/M70_UAT.md` (draft focused auto-constraint scorecard; UAT pending)
+- `docs/M70_UAT.md` (focused auto-constraint scorecard; targeted M70-U1 recheck and UAT pending)
 - `docs/adr/0034-headless-auto-constraint-drafting-intelligence.md`
 - `docs/M71_GOALS.md` (non-active follow-up primitive backlog)
 

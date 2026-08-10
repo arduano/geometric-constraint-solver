@@ -1263,9 +1263,9 @@ legacy UI.
 ## M70 acceptance: headless auto-constraint drafting intelligence
 
 Status: implementation, focused direct qualification, integrated release qualification, frozen-
-candidate publication and served-byte verification are complete for the first candidate.
-Supervising-human UAT finding `M70-F001` is open; replacement qualification/publication and human
-approval are pending, so M70 remains open.
+replacement-candidate publication and served-byte verification are complete. Supervising-human
+UAT finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and human approval
+are pending, so M70 remains open.
 
 M70 is accepted only when all of the following are true:
 
@@ -1361,11 +1361,12 @@ M70 is accepted only when all of the following are true:
   directions, reference lifecycle, bundles, ambiguity, suppression, stale/rejected/exhausted work,
   exact scene-publication authentication, atomic allocation/publication, Circle reverse-incidence
   without a hidden rim point or line-interior fallback, and deterministic Undo/Redo/reload/replay.
-  The initial candidate's focused inference selection passes exactly 46/46; the complete editor
-  crate passes 266 unit tests plus all relevant integration suites, without inventing one aggregate
-  integration-suite count; demo-web passes 82/82 tests; the sketch library passes 33/33 unit tests;
-  and its M56 prepared-work suite passes 6/6. Replacement counts covering `M70-F001` are recorded
-  before closure.
+  Replacement source `3d157896c87eaf647abee1192c838100ce359ce9` passes the focused inference
+  selection exactly 47/47 and 271/271 editor unit tests. Its named integration suites pass M55 17/17,
+  M66 feature authoring 14/14, M66 feature authoring matrix 15/15, M69 geometry semantics 10/10
+  and native M70 transition parity 1/1, without inventing one aggregate integration-suite count.
+  Demo-web passes 83/83 tests, the sketch library passes 33/33 unit tests, and its M56
+  prepared-work suite passes 6/6.
 - Native and WASM match the shared golden transition oracle in
   `crates/geosolve-constraint-editor/tests/m70_transition_parity.rs` and
   `crates/geosolve-constraint-editor/tests/fixtures/m70_transition_parity.golden.txt`. It covers
@@ -1392,8 +1393,9 @@ Its application-workspace v5 migration is limited to host-owned identity high-wa
 symmetry, concentric/quadrant, certified intersection/collinear/extension, nonlinear
 tangent/normal, grid/axis, angle increment and durable arbitrary point-pair H/V inference remain
 outside scope.
-`M70-F001` remains an open M70 UAT finding until its Circle-through-point contract has direct
-owning-layer regressions, replacement release evidence and a targeted human recheck.
+`M70-F001` has direct owning-layer regressions and replacement release/publication evidence, so
+its objective repair gates are mechanically resolved. Its targeted M70-U1 human recheck remains
+pending, and M70 remains open.
 `docs/M71_GOALS.md` is a non-active candidate backlog and confers no implementation authority.
 
 ### Superseded M66 solver-owned Fillet acceptance record

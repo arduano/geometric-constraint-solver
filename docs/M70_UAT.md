@@ -2,30 +2,30 @@
 
 # M70 focused UAT — Auto-constraint drafting
 
-Status: focused supervising-human review is paused on open finding `M70-F001`. Implementation,
-focused direct qualification, the complete integrated release gate, frozen-candidate publication
-and served-byte verification pass for the initial candidate below. A replacement candidate,
-targeted recheck, remaining human results and approval are Pending.
+Status: ready for targeted supervising-human review. Implementation, focused direct qualification,
+the complete integrated release gate, frozen replacement-candidate publication and served-byte
+verification pass. `M70-F001` is mechanically resolved; its targeted M70-U1 recheck, the remaining
+human results and overall approval are Pending.
 
-Candidate source: `4b16db3a885f5e28f508189b8817797375f05807` on `main`
+Replacement candidate source: `3d157896c87eaf647abee1192c838100ce359ce9` on `main`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest aggregate:
-`e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`
+`04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`
 
 ```text
-29725af79af0ecb8198fe2c4fd5bfb80b69f1e9f81ec418e7bc1f056ba2480d7  dist/API_COMPATIBILITY.md
+0632b2c7178a74a4f97938d2f08ed969152d41c7008f777d6b43ee4b94ab6e89  dist/API_COMPATIBILITY.md
 ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  dist/LICENSE
 665e4df98334f5efea3efa83d18ea71198a182825c2d40f96dbf141e43a2a418  dist/THIRD_PARTY_LICENSES.md
-ff0797fa408bc3be7ad572af8541bb31ccc9767914d8c4629c77cd298925cefd  dist/geosolve-demo-web-2f7c0aa7bbcd31d0.js
-9632e099cb42a6c9e29487018260be6d8d1c2fdc948fdc82ff831556b2b8f242  dist/geosolve-demo-web-2f7c0aa7bbcd31d0_bg.wasm
-7546200a552bf530f3464cab2406b54eb1bf9d8dc423663b3662a0c632b07e03  dist/index.html
+ff0797fa408bc3be7ad572af8541bb31ccc9767914d8c4629c77cd298925cefd  dist/geosolve-demo-web-881dfebee4e3e756.js
+fe8c75f390cbcc9c95777c9dc3d41ac0dc790d05bfef406a7cd5a539c8b73320  dist/geosolve-demo-web-881dfebee4e3e756_bg.wasm
+bf9e151a6d9abcfca984867615e20ec2f34e36ca9e378e49f74b429ff21a402c  dist/index.html
 cee6aac04d97f80072827c8b29a86f79071d01fa0cc523736c0c5f20e27b0e1b  dist/styles-aafdbbd399fb8c99.css
 ```
 
 All seven served assets and `/` were fetched through the Tailscale address with proxy/cache bypass
-and compared byte-for-byte with the read-only frozen release distribution. `/` matched
+and compared byte-for-byte with read-only snapshot `/tmp/geosolve-m70-uat.1NQkzV`. `/` matched
 `index.html`, and the local aggregate remained unchanged. Because the endpoint reuses port 8080
 from earlier milestones, perform one hard refresh before starting this scorecard.
 
@@ -34,7 +34,7 @@ dimensions → Auto-constraint drafting playground**. Direct Rust tests are auth
 candidate ranking, constraint metadata, atomicity and solver validity. This scorecard assesses
 discoverability, predictability, suppression and recovery.
 
-This frozen source has the passing direct matrix and clean release gate recorded in
+This frozen replacement source has the passing direct matrix and clean release gate recorded in
 `docs/M70_IMPLEMENTATION.md`. The placement click is the explicit confirmation: there is no second
 Apply step for inferred relations.
 
@@ -59,7 +59,7 @@ persistent point, including a line endpoint, by atomically committing PointOnCur
 existing point and the newly created circle. The radius click creates no hidden rim point, and an
 arbitrary line interior creates no implicit contact or tangency.
 
-Result: Finding open — `M70-F001`; M70-U1 is not approved.
+Result: Pending targeted recheck — `M70-F001` is mechanically resolved; M70-U1 is not approved.
 
 Notes:
 
@@ -141,7 +141,7 @@ Notes:
 
 ### M70-F001 — circle circumference did not express circle-through-point intent
 
-Status: **Open**.
+Status: **Mechanically resolved; targeted human recheck pending**.
 
 The supervising-human UAT of frozen candidate
 `4b16db3a885f5e28f508189b8817797375f05807` identified a missing semantic distinction at the second
@@ -152,13 +152,14 @@ PointOnCurve(existing point, created circle). It must allocate no hidden circumf
 Semantic midpoints and arbitrary line interiors are not eligible for this reverse-incidence snap,
 and the gesture must not infer line contact or tangency.
 
-Closure requires direct headless inference/commit regressions, thin presentation coverage, a fresh
-clean release candidate and publication, and a targeted supervising-human recheck of the two U1
-circle steps. Until then the prior release evidence remains historical candidate evidence only;
-M70 remains open and M71 remains inactive.
+Replacement source `3d157896c87eaf647abee1192c838100ce359ce9` now implements that contract.
+Direct headless inference/commit regressions, thin presentation coverage, the complete clean
+release gate, frozen publication and served-byte verification all pass. The prior source remains
+historical discovery evidence only. A targeted supervising-human recheck of the two U1 circle
+steps is still required; M70 remains open and M71 remains inactive.
 
 ## Approval
 
-Pending. M70 closes only after the supervising human explicitly approves M70-U1 through M70-U5,
-`M70-F001` is resolved on a freshly qualified and published candidate, and all objective findings
-have direct owning-layer regressions plus the necessary targeted recheck.
+Pending. M70 closes only after the supervising human explicitly approves M70-U1 through M70-U5
+and accepts the targeted `M70-F001` recheck. The finding's objective repair, direct-regression,
+replacement-qualification and publication requirements are already mechanically resolved.

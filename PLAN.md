@@ -43,9 +43,9 @@ outside the constraint graph; M67 completes the approved legacy-surface and froz
 M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes approved ADR 0033
 Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
 is the active ADR 0034 headless auto-constraint drafting milestone; implementation and focused
-direct qualification, integrated release qualification, frozen-candidate publication and served-
-byte verification are complete for its first candidate, while open UAT finding `M70-F001`, a
-replacement candidate and its dedicated human UAT remain pending. M66's
+direct qualification, integrated release qualification, frozen replacement-candidate publication
+and served-byte verification are complete. UAT finding `M70-F001` is mechanically resolved, while
+its targeted M70-U1 recheck and dedicated human UAT remain pending. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3494,8 +3494,8 @@ legacy UI.
 ### M70
 
 Status: implementation, focused direct qualification, integrated release qualification, frozen-
-candidate publication and served-byte verification are complete for the first ADR 0034 candidate.
-Circle-authoring finding `M70-F001` is open; its replacement qualification/publication and
+replacement-candidate publication and served-byte verification are complete under ADR 0034.
+Circle-authoring finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and
 supervising-human UAT are pending, so M70 remains open.
 
 Goal: add reusable CAD-like auto-constraint drafting intelligence to the headless Rust editor.
@@ -3517,11 +3517,12 @@ M70 uses no new solver residual or persistent constraint definition.
 - [x] Reuse an existing persistent point identity without manufacturing a redundant Coincident
   source or duplicate point. A standalone Point-tool confirmation of that same identity is a
   history-neutral no-op; reuse inside another construction is encoded in its point operand.
-- [ ] Resolve `M70-F001`: treat the Circle circumference click as a radius sample rather than an
+- [ ] Close `M70-F001`: treat the Circle circumference click as a radius sample rather than an
   authored point operand. Near an existing persistent point or line endpoint, preview and commit
   PointOnCurve(existing point, created circle) in the same atomic construction plan, with no hidden
   rim point. Do not infer contact or tangency from an arbitrary line interior; add direct headless
   inference/commit and thin presentation regressions before replacement release qualification.
+  Those objective gates now pass; keep this item open until the targeted M70-U1 human recheck.
 - [x] Create explicit native PointOnCurve contacts for line, circle/arc, Bezier, conic, B-spline
   and NURBS spans with complete span/domain/parameter/winding/neighbourhood metadata.
 - [x] Prefer semantic line/polyline Midpoint over generic PointOnCurve and support a compatible
@@ -3588,7 +3589,11 @@ M70 uses no new solver residual or persistent constraint definition.
   Tailscale and byte-verify the release distribution. Candidate source
   `4b16db3a885f5e28f508189b8817797375f05807`; endpoint `http://100.94.63.83:8080/`; manifest
   aggregate `e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`. This evidence predates
-  open finding `M70-F001`; a replacement candidate must repeat the gate before targeted UAT.
+  finding `M70-F001` and remains historical evidence only.
+- [x] Freeze replacement source `3d157896c87eaf647abee1192c838100ce359ce9`, repeat the complete
+  integrated release gate, publish its read-only seven-file distribution at
+  `http://100.94.63.83:8080/` and byte-verify it with manifest aggregate
+  `04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`.
 - [ ] Complete `docs/M70_UAT.md` and receive explicit supervising-human approval.
 
 Gate: the placement click is the sole explicit confirmation and either publishes adjusted geometry
@@ -3604,7 +3609,8 @@ nonlinear tangent/normal, grid/axis, angle-increment and durable arbitrary point
 remain outside M70. Candidate retained primitives are recorded in `docs/M71_GOALS.md`; that
 temporary backlog does not make M71 active, ordered or authorized for implementation.
 
-Pre-UAT qualification/publication note (2026-08-10): the focused Rust owner matrix and the shared
+Historical initial-candidate qualification/publication note (2026-08-10): the focused Rust owner
+matrix and the shared
 native/WASM golden transition oracle are implemented and pass on candidate source
 `4b16db3a885f5e28f508189b8817797375f05807`. The oracle lives at
 `crates/geosolve-constraint-editor/tests/m70_transition_parity.rs` with golden bytes in
@@ -3617,9 +3623,21 @@ passes, including the 150.01-second 256-moving-body sparse crossover and Trunk r
 read-only seven-file distribution is served at `http://100.94.63.83:8080/`; every asset and `/`
 matched the local candidate bytes, with manifest aggregate
 `e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`. Supervising-human review then
-opened `M70-F001` for Circle circumference-to-point semantics. The recorded candidate remains valid
-release evidence but is not a closure candidate; direct repair qualification, replacement
-publication and targeted human recheck remain pending.
+opened `M70-F001` for Circle circumference-to-point semantics. This recorded candidate remains
+valid historical release evidence but is not the current review candidate.
+
+Replacement qualification/publication note (2026-08-10): source
+`3d157896c87eaf647abee1192c838100ce359ce9` passes the focused inference selection 47/47, 271/271
+editor unit tests plus named integration suites M55 17/17, M66 feature authoring 14/14, M66 feature
+authoring matrix 15/15, M69 geometry semantics 10/10 and native M70 transition parity 1/1;
+demo-web passes 83/83, the sketch library 33/33 and M56 6/6. The complete clean integrated release
+gate passes, including the 151.53-second 256-moving-body sparse crossover and release Trunk build.
+A read-only seven-file snapshot at `/tmp/geosolve-m70-uat.1NQkzV` is served at
+`http://100.94.63.83:8080/`; every asset and `/` matched the local replacement bytes, with manifest
+aggregate `04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`.
+These results mechanically resolve the implementation, direct-regression, release and publication
+requirements of `M70-F001`; its targeted M70-U1 recheck and overall supervising-human approval
+remain pending.
 
 ## Explicit non-goals
 

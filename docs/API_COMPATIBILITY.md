@@ -76,13 +76,14 @@ document identity and merge the DTO through its validated API; allocator cursor 
 private. Application workspace v5 stores that value, validates its namespace and graph coverage,
 and strictly migrates v1-v4. These APIs change no frozen sketch v1-v4 bytes and do not make
 draft-v5 supported.
-The open `M70-F001` amendment extends that unreleased DTO surface with an explicit Circle
+The `M70-F001` amendment extends that unreleased DTO surface with an explicit Circle
 circumference subject and reverse-incidence candidate. Its durable result is the existing
 PointOnCurve relation; it adds no sketch constraint, residual or persistence variant.
 M70 implementation, focused direct qualification, integrated release gate and frozen-candidate
-publication are complete for the first candidate. Circle-authoring finding `M70-F001`, replacement
-qualification/publication and supervising-human UAT remain pending; no later M71 API is authorized
-by the temporary `docs/M71_GOALS.md` backlog.
+publication are complete on replacement source `3d157896c87eaf647abee1192c838100ce359ce9`.
+Circle-authoring finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and
+supervising-human UAT remain pending. No later M71 API is authorized by the temporary
+`docs/M71_GOALS.md` backlog.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

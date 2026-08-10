@@ -101,13 +101,16 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   reject transactionally, allocator-only changes invalidate prepared CAS, history restore preserves
   current host inputs, and Shift changes do not discard queued foreign-interaction movement. A private
   exact scene-semantics seal makes public mutation revoke inference-publication authority. One
-  ordinary editable auto-constraint playground supports the focused human UAT. Focused inference
-  passes 46/46, the editor passes 266 unit tests plus every relevant
-  integration suite, demo-web passes 82/82, the sketch library passes 33/33 and M56 passes 6/6;
-  the complete release gate and byte-verified Tailscale publication pass on candidate
-  `4b16db3a885f5e28f508189b8817797375f05807`. Human review then opened Circle-authoring finding
-  `M70-F001`; its repair, replacement qualification/publication and human recheck remain pending,
-  so M70 is not yet accepted.
+  ordinary editable auto-constraint playground supports the focused human UAT. Historical initial
+  candidate `4b16db3a885f5e28f508189b8817797375f05807` passed focused inference 46/46,
+  266 editor unit tests plus every relevant integration suite, demo-web 82/82, the sketch library
+  33/33, M56 6/6, the complete release gate and byte-verified Tailscale publication. Human review
+  then opened Circle-authoring finding `M70-F001`. Replacement source
+  `3d157896c87eaf647abee1192c838100ce359ce9` implements that Circle-through-point contract and
+  passes focused inference 47/47, 271/271 editor unit tests plus every relevant integration suite,
+  demo-web 83/83, sketch 33/33 and M56 6/6. Its complete release gate, frozen Tailscale publication
+  and served-byte verification pass. The finding is mechanically resolved, but its targeted human
+  recheck and overall M70 approval remain pending.
 
 ### Changed
 
@@ -119,9 +122,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   Fillet-interaction cut, and M69 subsequently completed the ADR 0033 Profile/Construction cut;
   both received explicit supervising-human approval on 2026-08-09. M70 is now scoped under ADR
   0034 for headless auto-constraint drafting intelligence. Implementation, focused direct and
-  integrated release qualification, frozen-candidate publication and served-byte verification are
-  complete for the first candidate; `M70-F001`, replacement qualification/publication and human
-  acceptance remain pending.
+  integrated release qualification, frozen replacement-candidate publication and served-byte
+  verification are complete. `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and
+  overall human acceptance remain pending.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

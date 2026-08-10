@@ -3,18 +3,21 @@
 # M70 implementation — Headless auto-constraint drafting intelligence
 
 Status: implementation, focused direct qualification, integrated release qualification, frozen
-candidate publication and served-byte verification are complete for the candidate below.
-Supervising-human UAT opened `M70-F001`; replacement qualification/publication and human approval
-are pending, so M70 remains open.
+replacement-candidate publication and served-byte verification are complete. `M70-F001` is
+mechanically resolved; its targeted M70-U1 recheck and overall human approval are pending, so M70
+remains open.
 
 Architecture owner: ADR 0034
 
-Candidate source: `4b16db3a885f5e28f508189b8817797375f05807` on `main`
+Replacement candidate source: `3d157896c87eaf647abee1192c838100ce359ce9` on `main`
+
+Historical initial candidate: `4b16db3a885f5e28f508189b8817797375f05807`; its release evidence
+predates the supervising-human `M70-F001` finding.
 
 Integrated release-gate result: **PASS**
 
 Tailscale release distribution and byte manifest: **PASS** at `http://100.94.63.83:8080/`;
-aggregate `e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`
+aggregate `04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`
 
 ## 1. Files and APIs
 
@@ -138,11 +141,13 @@ inferred relation atomically, while allocator high-water deliberately does not r
 
 ## 3. Commands and outcomes
 
-Focused qualification recorded for the initial candidate passed. The focused inference selection
-is exactly **46/46**. The complete editor crate run passes **266 unit tests plus all relevant
-integration suites**; no aggregate integration-suite count is inferred or claimed here. The
-complete demo-web run passes **82/82**. The sketch library passes **33/33** unit tests and its M56
-prepared-work integration suite passes **6/6**. Replacement counts after `M70-F001` remain pending.
+Focused qualification for replacement source
+`3d157896c87eaf647abee1192c838100ce359ce9` passes. The focused inference selection is exactly
+**47/47**. The complete editor crate run passes **271/271 unit tests** plus named integration
+suites M55 **17/17**, M66 feature authoring **14/14**, M66 feature authoring matrix **15/15**, M69
+geometry semantics **10/10** and native M70 transition parity **1/1**; no invented aggregate
+integration-suite count is claimed. The complete demo-web run passes **83/83**. The sketch library
+passes **33/33** unit tests and its M56 prepared-work integration suite passes **6/6**.
 
 ```text
 cargo fmt --all -- --check
@@ -164,8 +169,9 @@ git diff --check
 The direct matrix covers exact point, curve and direction hysteresis boundaries; deterministic
 ranking and ambiguity; order/zoom/uniform-coordinate-scale/translation invariance; NaN/Inf input
 and non-finite derived-output rejection; fail-fast candidate and scene caps; bounded reference
-memory with scope-aware affine eligibility; every construction stage in the initial scope and every
-native curve family;
+memory with scope-aware affine eligibility; every `ConstructionPoint` stage, the Circle
+circumference radius-sample subject with persistent-point-only reverse incidence, and every native
+curve family;
 line/polyline direction inference; suppression and lifecycle clearing; exact token/plan/input
 authentication; the 32-relation plan bound; atomic allocation/publication; redundancy,
 cancellation and per-relation work exhaustion; one-step Undo/Redo/reload/replay under current host
@@ -177,9 +183,9 @@ behind-graph and trailing-input rejection.
 
 The native/WASM golden transcript covers point identity, PointOnCurve, Midpoint, Horizontal,
 Vertical, Parallel, Perpendicular, tracking, ambiguity, suppression/release, stale/clear lifecycle,
-midpoint-plus-perpendicular publication, exact Redo/reload state, redundant-plan rejection and
-unchanged rejected history. Resource-boundary values remain focused native-test evidence rather
-than being overstated as golden-transcript rows.
+midpoint-plus-perpendicular and Circle-through-point publication, exact Redo/reload state,
+redundant-plan rejection and unchanged rejected history. Resource-boundary values remain focused
+native-test evidence rather than being overstated as golden-transcript rows.
 
 The complete integrated gate ran against the clean nominated source:
 
@@ -191,46 +197,48 @@ The command exited 0. Formatting and diff checks, warnings-denied workspace Clip
 all-feature workspace tests, native/WASM transition parity, the demo-web WASM check, warnings-denied
 rustdoc, benchmark compilation, ordinary performance budgets, the 256-moving-body sparse crossover,
 licence audit, package contents and Trunk 0.21.14 release assembly all passed. The long crossover
-completed in 150.01 seconds. Cargo emitted only the longstanding non-failing `license` plus
+completed in 151.53 seconds. Cargo emitted only the longstanding non-failing `license` plus
 `license-file` manifest advisories.
 
 Release distribution SHA-256 manifest aggregate:
-`e0cf0a44184ae1a3e5308e77adb478cb41db1fa529d42f3c8cb9969160325044`.
+`04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`.
 
 ```text
-29725af79af0ecb8198fe2c4fd5bfb80b69f1e9f81ec418e7bc1f056ba2480d7  dist/API_COMPATIBILITY.md
+0632b2c7178a74a4f97938d2f08ed969152d41c7008f777d6b43ee4b94ab6e89  dist/API_COMPATIBILITY.md
 ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  dist/LICENSE
 665e4df98334f5efea3efa83d18ea71198a182825c2d40f96dbf141e43a2a418  dist/THIRD_PARTY_LICENSES.md
-ff0797fa408bc3be7ad572af8541bb31ccc9767914d8c4629c77cd298925cefd  dist/geosolve-demo-web-2f7c0aa7bbcd31d0.js
-9632e099cb42a6c9e29487018260be6d8d1c2fdc948fdc82ff831556b2b8f242  dist/geosolve-demo-web-2f7c0aa7bbcd31d0_bg.wasm
-7546200a552bf530f3464cab2406b54eb1bf9d8dc423663b3662a0c632b07e03  dist/index.html
+ff0797fa408bc3be7ad572af8541bb31ccc9767914d8c4629c77cd298925cefd  dist/geosolve-demo-web-881dfebee4e3e756.js
+fe8c75f390cbcc9c95777c9dc3d41ac0dc790d05bfef406a7cd5a539c8b73320  dist/geosolve-demo-web-881dfebee4e3e756_bg.wasm
+bf9e151a6d9abcfca984867615e20ec2f34e36ca9e378e49f74b429ff21a402c  dist/index.html
 cee6aac04d97f80072827c8b29a86f79071d01fa0cc523736c0c5f20e27b0e1b  dist/styles-aafdbbd399fb8c99.css
 ```
 
 Tailscale byte verification: **PASS** at `http://100.94.63.83:8080/`. The seven manifest members
-were served from a read-only snapshot, fetched through the actual Tailscale address with proxy and
-cache bypass, and matched both their expected SHA-256 values and local bytes. `/` matched
-`index.html`, and a post-fetch aggregate check proved the frozen distribution remained unchanged.
+were served from read-only snapshot `/tmp/geosolve-m70-uat.1NQkzV`, fetched through the actual
+Tailscale address with proxy and cache bypass, and matched both their expected SHA-256 values and
+local bytes. `/` matched `index.html`, and a post-fetch aggregate check proved the frozen
+distribution remained unchanged.
 
 ## 4. Acceptance criteria passed and pending
 
-The initial implementation and focused direct matrix satisfy the original headless ownership,
+The replacement implementation and focused direct matrix satisfy the headless ownership,
 inference-family, hysteresis, ranking, suppression, atomic plan, exact-input authentication,
-never-reuse history, native/WASM parity, thin-adapter and editable-sample criteria in
-`ACCEPTANCE.md`. The amended Circle circumference contract added by `M70-F001` is not claimed by
-that frozen evidence.
+never-reuse history, native/WASM parity, thin-adapter, editable-sample and amended Circle
+circumference criteria in `ACCEPTANCE.md`.
 
 Milestone gate state:
 
-- [x] clean integrated `scripts/release-gate.sh` on one nominated source;
-- [x] frozen candidate hash and release Trunk distribution;
+- [x] clean integrated `scripts/release-gate.sh` on replacement source
+  `3d157896c87eaf647abee1192c838100ce359ce9`;
+- [x] frozen replacement-candidate hash and release Trunk distribution;
 - [x] Tailscale publication plus byte-for-byte manifest verification;
-- [ ] resolve `M70-F001`, repeat direct/release/publication qualification on a replacement source
-  and receive its targeted human recheck; and
-- [ ] supervising-human approval of every area in `docs/M70_UAT.md`.
+- [x] resolve the objective implementation/direct/release/publication requirements of `M70-F001`;
+  and
+- [ ] receive the targeted M70-U1 recheck and supervising-human approval of every area in
+  `docs/M70_UAT.md`.
 
-The initial candidate is mechanically qualified, but human review is paused on `M70-F001`; M70 is
-not complete.
+The replacement candidate is mechanically qualified and published. Targeted M70-U1 recheck and
+overall supervising-human UAT remain pending, so M70 is not complete.
 
 ## 5. Known limitations and next blocker
 
@@ -242,13 +250,13 @@ sketch schemas remain unchanged, while workspace v5 adds only host-owned identit
 Browser E2E, mobile behavior, global root enumeration and
 browser-owned geometric policy remain excluded.
 
-Open UAT finding `M70-F001` requires the Circle circumference stage to distinguish a radius sample
-from an authored point operand. Near an existing persistent point or line endpoint, it must preview
-**Circle through point** and atomically commit PointOnCurve(existing point, created circle), without
-allocating a hidden rim point. Semantic midpoints and arbitrary line interiors are ineligible, and
-no line-interior contact or tangency may be inferred. The published candidate above remains valid
-initial release evidence but is not a milestone-closure candidate; direct regressions, replacement
-qualification/publication and a targeted human recheck remain pending.
+`M70-F001` is mechanically resolved. The Circle circumference stage distinguishes its radius sample
+from an authored point operand: near an existing persistent point or line endpoint it previews
+**Circle through point** and atomically commits PointOnCurve(existing point, created circle),
+without allocating a hidden rim point. Semantic midpoints and arbitrary line interiors are
+ineligible, and no line-interior contact or tangency is inferred. Direct regressions, replacement
+qualification/publication and served-byte verification pass; the targeted M70-U1 human recheck
+remains pending.
 
 The exact scene seal intentionally clones inference-visible native tessellation and construction
 snap anchors, roughly doubling that bounded portion of each authoritative scene. This avoids a
@@ -256,5 +264,5 @@ collision-prone digest and preserves the current ergonomic public presentation D
 the duplicate would require a broader immutable/accessor-based scene API change outside M70.
 
 `docs/M71_GOALS.md` is a temporary candidate backlog only. M71 is not active, ordered, scoped or
-authorized for implementation. The remaining M70 work is `M70-F001` plus supervising-human UAT—not
-any M71 work.
+authorized for implementation. The remaining M70 work is the targeted `M70-F001` recheck plus
+supervising-human UAT—not any M71 work.

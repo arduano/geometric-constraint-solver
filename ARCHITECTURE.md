@@ -62,9 +62,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   atomic construction-plus-relation commit belong to `geosolve-constraint-editor`; the browser
   remains a thin renderer/event adapter. The target uses existing retained constraint primitives
   only. Implementation, focused direct qualification, integrated release qualification, frozen-
-  candidate publication and served-byte verification are complete for the first candidate.
-  Circle-authoring finding `M70-F001`, replacement qualification/publication and supervising-human
-  UAT remain pending.
+  replacement-candidate publication and served-byte verification are complete. Circle-authoring
+  finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and the remaining
+  supervising-human UAT are pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -320,8 +320,9 @@ no-op. Candidate enumeration stops at its configured bound and fails closed with
 semantic prefix. A Circle circumference click is instead a radius sample: near an existing point or
 line endpoint it creates PointOnCurve(existing point, created circle) atomically, without a hidden
 rim point or any arbitrary line-interior contact/tangency fallback. This paragraph describes
-implemented but not-yet-human-accepted M70 behavior; open finding `M70-F001` must receive replacement
-qualification/publication and targeted human recheck before the milestone can close.
+implemented but not-yet-human-accepted M70 behavior. `M70-F001` has passed direct regressions,
+replacement qualification/publication and served-byte verification, but still requires its
+targeted human recheck before the milestone can close.
 
 Publication authority is not derivable from public scene fields. Only the retained coordinator can
 authenticate an `EditorScene` against its exact current accepted document, design filter and
@@ -1002,7 +1003,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   stage-local references, ranked/hysteretic candidate bundles, semantic suppression, atomic
   construction-plus-existing-relation publication, one editable playground and a dedicated human
   UAT. Implementation, focused direct qualification, integrated release qualification, frozen-
-  candidate publication and served-byte verification are complete for the first candidate; open
-  Circle-authoring finding `M70-F001`, its replacement candidate and human UAT are pending.
+  replacement-candidate publication and served-byte verification are complete. Circle-authoring
+  finding `M70-F001` is mechanically resolved; its targeted recheck and the remaining human UAT
+  are pending.
   `docs/M71_GOALS.md` is a non-active backlog for additional retained primitives, not the next
   authorized milestone.
