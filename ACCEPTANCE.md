@@ -1401,8 +1401,8 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 
 Status: active after `M70B-F002`. The reproduction transport criteria remain qualified;
 `M70B-F001` has complete replacement evidence, and `M70B-F002` has direct headless-authoring and
-accepted-scene fallback regressions. Full replacement qualification/publication, human review and
-approval remain pending.
+accepted-scene fallback regressions plus a passing complete replacement gate. Publication, human
+review and approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted

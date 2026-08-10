@@ -2,14 +2,14 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: paused for `M70B-F002` replacement qualification/publication. `M70B-F001` retains its
-owning-layer correction and complete prior replacement evidence; the second payload finding now
-has direct headless-authoring and accepted-scene authority regressions. Every human result below
-remains pending; this scorecard records no human pass or approval.
+Status: paused for `M70B-F002` replacement publication. `M70B-F001` retains its owning-layer
+correction and complete prior replacement evidence; the second payload finding now has direct
+headless-authoring and accepted-scene authority regressions plus a passing complete release gate.
+Every human result below remains pending; this scorecard records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
-`M70B-F002` replacement candidate source: pending clean commit and complete qualification
+`M70B-F002` replacement candidate source: `2e0f6c348ea0d3d9ee0bc2fd556f402a29d7059b`
 
 Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
 
@@ -19,7 +19,7 @@ Prior `M70B-F001` release distribution manifest aggregate:
 ## Preconditions
 
 - [x] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct `M70B-F002` qualification.
-- [ ] The complete integrated release gate passes on the `M70B-F002` clean nominated source.
+- [x] The complete integrated release gate passes on the `M70B-F002` clean nominated source.
 - [ ] An `M70B-F002` replacement read-only release distribution is served through Tailscale.
 - [ ] Every `M70B-F002` served asset and `/` matches the frozen local bytes.
 - [ ] The browser has hard-refreshed that exact candidate.

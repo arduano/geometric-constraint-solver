@@ -4,8 +4,8 @@
 
 Status: active after `M70B-F002`. The bounded transport and restore remain qualified, and
 `M70B-F001` retains complete replacement evidence. The second human-supplied payload finding has a
-direct headless-authoring correction and accepted-scene fallback regression; complete replacement
-qualification/publication, supervising-human UAT and approval remain pending. This document
+direct headless-authoring correction, accepted-scene fallback regression and complete replacement
+qualification; publication, supervising-human UAT and approval remain pending. This document
 records no human pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
@@ -18,7 +18,9 @@ Prior withdrawn candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
 
 Prior `M70B-F001` replacement source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
-`M70B-F002` replacement source: pending clean commit and complete qualification
+`M70B-F002` replacement source: `2e0f6c348ea0d3d9ee0bc2fd556f402a29d7059b`
+
+`M70B-F002` integrated release-gate result: **PASS**
 
 Prior `M70B-F001` integrated release-gate result: **PASS**
 
@@ -254,8 +256,21 @@ git diff --check
 
 Focused outcomes are 4/4 radial-Normal regressions, M55 17/17 and 2/2 accepted-scene composition
 authority rows. Warnings-denied focused Clippy, explicit WASM compilation, formatting and diff
-checks pass. Complete integrated replacement qualification and publication are deliberately not
-claimed until the clean nominated commit passes the release gate.
+checks pass.
+
+Clean nominated source `2e0f6c348ea0d3d9ee0bc2fd556f402a29d7059b` then passed:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The complete integrated gate exited zero: formatting, static single-workbench and Git-hygiene
+checks, workspace warnings-denied Clippy and locked all-feature tests, native/WASM M70 transition
+parity, the demo-web WASM check, warnings-denied rustdoc, benchmark compilation, performance
+budgets, package/licence checks and Trunk 0.21.14 release assembly all pass. The required
+256-moving-body sparse crossover passes in 147.45 seconds. Only the pre-existing non-failing Cargo
+`license` plus `license-file` advisories were emitted. Replacement distribution freezing,
+publication and served-byte verification remain pending.
 
 ## 3.1 `M70B-F001` owning-layer correction
 
@@ -340,8 +355,8 @@ is never substituted.
   frozen and byte-verified over Tailscale;
 - [x] `M70B-F002` payload, circle/arc external-support, operand-order, historical-seed,
   invalid-request and scene-authority regressions pass with no solver or authority weakening;
-- [ ] the `M70B-F002` source passes the complete integrated release gate and its replacement
-  distribution is frozen and byte-verified over Tailscale;
+- [x] the `M70B-F002` source passes the complete integrated release gate;
+- [ ] its replacement distribution is frozen and byte-verified over Tailscale;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
