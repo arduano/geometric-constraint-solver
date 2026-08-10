@@ -160,8 +160,8 @@ editable-sample cleanup, approved reduced-scope M65 predictable dragging, approv
 computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
 M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
 semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
-is in active UAT repair after `M70B-F001`; its focused correction passes while replacement
-qualification/publication and human UAT remain pending. M71 remains deferred behind it.
+has a fully qualified and byte-verified replacement after `M70B-F001`; targeted human recheck and
+approval remain pending. M71 remains deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1399,10 +1399,10 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 
 ## M70B acceptance: workspace reproduction handoff
 
-Status: active UAT repair. The reproduction transport criteria remain qualified, but
-`M70B-F001` withdraws the prior candidate until its owning-layer branch-bound correction receives
-complete replacement qualification, publication and served-byte verification. Human review and
-approval remain pending.
+Status: ready for targeted supervising-human recheck. The reproduction transport criteria remain
+qualified, and `M70B-F001` now has an owning-layer branch-bound correction, complete replacement
+qualification, frozen publication and served-byte verification. Human review and approval remain
+pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted

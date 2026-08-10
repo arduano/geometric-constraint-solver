@@ -119,8 +119,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   reconstruction both succeed. A narrow native stdin decoder exposes bounded workspace JSON for
   recipient-side diagnosis without publication authority. The sole workbench presents copy/paste
   in a visible overlay with a manual-copy fallback; transient UI/camera/history/sample state and
-  legacy lab/raw-storage formats are excluded. Direct/release qualification, frozen Tailscale
-  publication and served-byte verification pass; focused human UAT remains pending.
+  legacy lab/raw-storage formats are excluded. Human payload finding `M70B-F001` corrected the
+  mismatch between semantic-open Local contact intervals and closed effective core bounds without
+  changing persisted branch metadata or strict validation. Replacement source
+  `b4ec279e221df38816b7376a6978712e21df02c2` passes direct/release qualification, frozen Tailscale
+  publication and served-byte verification; focused human UAT and the targeted recheck remain
+  pending.
 
 ### Changed
 

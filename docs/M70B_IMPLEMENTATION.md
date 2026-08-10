@@ -2,20 +2,27 @@
 
 # M70B implementation — Bounded workspace reproduction capsules
 
-Status: active UAT repair. The bounded transport and restore remain qualified, but the first
-human-supplied payload exposed `M70B-F001`. The prior candidate is withdrawn while the direct
-branch-bound correction is prepared for complete replacement qualification and publication.
+Status: ready for targeted supervising-human recheck. The bounded transport and restore remain
+qualified, and the first human-supplied payload finding `M70B-F001` now has a direct owning-layer
+correction, complete replacement qualification, frozen publication and served-byte verification.
 Supervising-human UAT and approval remain pending; this document records no human pass or
 milestone closure.
 
-Architecture owner: the existing `geosolve-demo-web` workspace-persistence boundary; M70B adds no
-solver or domain authority and requires no new ADR.
+Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
+transport, while `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected
+by `M70B-F001`. The browser gains no solver/domain authority and no new ADR is required.
 
 Prior withdrawn candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
 
-Replacement candidate source: **PENDING**
+Replacement candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
-Replacement integrated release-gate result: **PENDING**
+Replacement integrated release-gate result: **PASS**
+
+Replacement Tailscale distribution: `/tmp/geosolve-m70b-f001-uat.A2G9KJ` at
+`http://100.94.63.83:8080/`
+
+Replacement release manifest aggregate:
+`b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`
 
 Prior withdrawn Tailscale distribution: `/tmp/geosolve-m70b-uat.Oj9SZT`, manifest aggregate
 `35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`
@@ -47,6 +54,14 @@ a second scene model.
   `THIRD_PARTY_LICENSES.md`; no native library, FFI or `unsafe` exception is added.
 - `PLAN.md`, `ACCEPTANCE.md`, `ARCHITECTURE.md`, `docs/SCENARIOS.md` and
   `docs/M70B_UAT.md` own the qualified scope and pending human gate.
+- `crates/geosolve-sketch/src/compiler.rs` maps each existing semantic-open Local contact interval
+  to closed effective core bounds one representable value inward. Persistent branch metadata and
+  independent validation remain unchanged.
+- `crates/geosolve-sketch/tests/m70b_open_contact_bounds.rs` directly certifies the two effective
+  active endpoints; existing M12 and M27 bound expectations cover Bezier, tangency and Fillet
+  consumers.
+- `crates/geosolve-constraint-editor/tests/m70b_projected_drag.rs` reconstructs the exact payload
+  graph/accepted state and owns the continued projected-drag regression.
 
 The canonical single-line envelope is:
 
@@ -133,8 +148,49 @@ binary made the WASM artifact selection ambiguous. The final source explicitly s
 `geosolve_demo_web` in the Trunk link; both a focused release build and the complete replacement
 gate pass with that fix.
 
-Replacement `M70B-F001` qualification and publication evidence is pending below; the historical
-results above do not nominate the withdrawn distribution for further human UAT.
+The historical results above do not nominate the withdrawn distribution for further human UAT.
+
+Replacement source `b4ec279e221df38816b7376a6978712e21df02c2` then passed:
+
+```text
+cargo test --locked -p geosolve-sketch --test m70b_open_contact_bounds
+cargo test --locked -p geosolve-constraint-editor --test m70b_projected_drag
+cargo test --locked -p geosolve-sketch --test m12 --test m27
+cargo test --locked -p geosolve-sketch --test m22_differential_constraints \
+  --test m22_nurbs_runtime
+cargo test --locked -p geosolve-sketch --test m28
+cargo test --locked -p geosolve-sketch --test m10 --test m14
+cargo clippy --locked -p geosolve-sketch -p geosolve-constraint-editor \
+  --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
+git diff --check
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+Focused outcomes are 1/1 direct-bound, 1/1 exact-payload, M12 10/10, M27 10/10,
+M22 differential 3/3, M22 NURBS runtime 2/2, M28 18/18, M10 17/17 and M14 12/12.
+Warnings-denied focused Clippy, formatting and diff checks pass. The complete clean integrated gate
+exited zero: workspace warnings-denied Clippy and locked tests, native/WASM M70 transition parity,
+the demo-web WASM check, warnings-denied rustdoc, benchmark compilation, performance budgets,
+package/licence checks and Trunk 0.21.14 release assembly all pass. The required 256-moving-body
+sparse crossover passes in 146.60 seconds. Only the pre-existing non-failing Cargo `license` plus
+`license-file` advisories were emitted.
+
+The release distribution contains exactly seven read-only files:
+
+```text
+af91333ed578f05ec49c76fd10c18dd0ead0f9f845b8ff45279de5a6cbc7b80e  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+922e9e87046394256a701436b9991ad25cd2ef28786b69e0a70d8eaa6163993a  geosolve-demo-web-8a79f3f16d3cefbf.js
+0bb7882b6b4928fce6f6d4bc9ba55955e4f7889659e4af7270b1f67bbf6c48ef  geosolve-demo-web-8a79f3f16d3cefbf_bg.wasm
+dae08a4c361e72668e09e3687352d88fa50baf778e345cc6e54349c4fd3beae6  index.html
+49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048  styles-36c74d05d21a90c9.css
+```
+
+All seven assets were fetched through the actual Tailscale address with proxy/cache bypass and
+compared byte-for-byte to the frozen snapshot. `/` also matches `index.html`; independently
+calculated local and served aggregates both equal the replacement manifest above.
 
 The intended recipient-side diagnostic workflow is:
 
@@ -192,7 +248,7 @@ freedoms preserved.
 - [x] warnings-denied native Clippy and the explicit WASM check pass;
 - [x] the locked complete workspace/release gate passes without weakening an existing threshold;
 - [x] dependency licence inventory, package contents and release Trunk assembly pass;
-- [ ] the `M70B-F001` replacement source and read-only distribution are completely requalified,
+- [x] the `M70B-F001` replacement source and read-only distribution are completely requalified,
   frozen and byte-verified over Tailscale;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
@@ -207,5 +263,9 @@ size honestly rather than silently dropping content.
 
 The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, file picker,
 download flow, raw browser-storage handoff and browser E2E remain retired. M70B cannot close until
-the replacement candidate passes the complete gate and focused human UAT is explicitly approved.
-M71 stays deferred throughout that work.
+the focused human UAT and targeted `M70B-F001` recheck are explicitly approved. A Local interval
+whose semantic endpoint is exactly zero has no valid solution at that endpoint; exact edge pressure
+can therefore still fail closed before the one-ULP effective endpoint becomes active. Ordinary
+near-edge contacts and the supplied positive-bound payload pass, but exact bound-event application
+for extreme zero/tiny Local intervals remains a future hardening topic rather than being folded
+into this repair. M71 stays deferred throughout that work.

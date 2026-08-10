@@ -2,23 +2,24 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: replacement candidate pending. `M70B-F001` withdrew the prior candidate during human UAT;
-its owning-layer correction passes focused regression but still requires complete replacement
-qualification, publication and served-byte verification. Every human result below remains
-pending; this scorecard records no human pass or approval.
+Status: ready for targeted supervising-human recheck. `M70B-F001` withdrew the prior candidate
+during human UAT; its owning-layer correction, complete replacement qualification, frozen
+publication and served-byte verification now pass. Every human result below remains pending; this
+scorecard records no human pass or approval.
 
-Replacement candidate source: **PENDING**
+Replacement candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
-Replacement Tailscale endpoint: **PENDING**
+Replacement Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Replacement release distribution manifest aggregate: **PENDING**
+Replacement release distribution manifest aggregate:
+`b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`
 
 ## Preconditions
 
 - [x] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct qualification.
-- [ ] The complete integrated release gate passes on the replacement clean nominated source.
-- [ ] A replacement read-only release distribution is served through the usual Tailscale endpoint.
-- [ ] Every replacement served asset and `/` matches the frozen local bytes.
+- [x] The complete integrated release gate passes on the replacement clean nominated source.
+- [x] A replacement read-only release distribution is served through the usual Tailscale endpoint.
+- [x] Every replacement served asset and `/` matches the frozen local bytes.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;

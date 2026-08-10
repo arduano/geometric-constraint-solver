@@ -44,11 +44,12 @@ M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes ap
 Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
 completes the approved ADR 0034 headless auto-constraint drafting milestone, including the
 `M70-F001` Circle-through-point repair and replacement qualification/publication. M70B is the
-active bounded reproduction-capsule human-UAT repair: complete workspace v5 state can be copied as
+active bounded reproduction-capsule human-UAT candidate: complete workspace v5 state can be copied as
 compressed text and restored atomically through its existing validation path. The first supplied
 payload opened `M70B-F001`; its focused branch-bound correction and exact graph regression pass,
-while replacement release qualification/publication and focused human UAT remain pending. M71 is
-deferred behind M70B and remains an unauthorized candidate backlog. M66's
+along with replacement release qualification, frozen publication and served-byte verification;
+targeted human recheck remains pending. M71 is deferred behind M70B and remains an unauthorized
+candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3647,9 +3648,9 @@ every scripted step. M70 is closed.
 
 ### M70B
 
-Status: active UAT repair and replacement qualification. Bounded reproduction transport and
-restore remain qualified, but the first human payload exposed `M70B-F001`; the prior frozen
-candidate is withdrawn until its owning-layer correction is requalified and republished. Focused
+Status: ready for targeted supervising-human recheck. Bounded reproduction transport and restore
+remain qualified; the first human payload finding `M70B-F001` now has an owning-layer correction,
+complete replacement qualification, frozen publication and served-byte verification. Focused
 human UAT remains pending. No completion or approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
@@ -3709,8 +3710,18 @@ bounds one representable value inward while preserving the persisted interval an
 independent validation. The exact payload regression reaches six formerly failing horizontal,
 vertical, diagonal and reversal targets in one bounded attempt each, keeps all ten freedoms and
 validates residuals independently; direct sketch coverage proves both effective active endpoints
-remain strictly inside unchanged branch metadata. Replacement full qualification, publication,
-served-byte verification and the targeted human recheck remain pending.
+remain strictly inside unchanged branch metadata.
+
+`M70B-F001` replacement qualification/publication note (2026-08-10): source
+`b4ec279e221df38816b7376a6978712e21df02c2` passes the focused F001 tests, M12, M27, M22
+differential/NURBS, M28, M10 and M14 collateral, warnings-denied focused Clippy and the complete
+integrated release gate. The gate includes locked workspace tests, native/WASM M70 parity, the
+demo-web WASM check, rustdoc, benchmark compilation, performance budgets, package/licence checks,
+the 146.60-second 256-moving-body sparse crossover and Trunk release assembly. A read-only
+seven-file snapshot at `/tmp/geosolve-m70b-f001-uat.A2G9KJ` is served at
+`http://100.94.63.83:8080/`; every asset and `/` byte-matches the frozen local candidate, with
+manifest aggregate `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`.
+Only the targeted recheck, remaining focused UAT and explicit approval remain pending.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The
