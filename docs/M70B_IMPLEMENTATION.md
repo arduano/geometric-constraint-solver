@@ -2,19 +2,22 @@
 
 # M70B implementation — Bounded workspace reproduction capsules
 
-Status: active implementation. The bounded transport, restore and ordinary-workbench delivery
-scope is fixed below. Focused/direct qualification, the complete integrated release gate, frozen
-candidate publication, served-byte verification and supervising-human UAT are all pending. This
-document records no pass or approval.
+Status: active human UAT. The bounded transport, restore, ordinary-workbench delivery, focused
+qualification, complete integrated release gate, frozen-candidate publication and served-byte
+verification pass. Supervising-human UAT and approval remain pending; this document records no
+human pass or milestone closure.
 
 Architecture owner: the existing `geosolve-demo-web` workspace-persistence boundary; M70B adds no
 solver or domain authority and requires no new ADR.
 
-Candidate source: pending
+Candidate source: `30d66a60e21543546274befd9791058897eb9eb5`
 
-Integrated release-gate result: **PENDING**
+Integrated release-gate result: **PASS**
 
-Tailscale release distribution and byte manifest: **PENDING**
+Tailscale release distribution: `/tmp/geosolve-m70b-uat.V3OMjp` at
+`http://100.94.63.83:8080/`
+
+Release manifest aggregate: `3fa3b7486c046b6e7c83464198d52eb5878182f83a28ed234da12bd9503b1a4d`
 
 ## 1. Files and APIs
 
@@ -42,7 +45,7 @@ a second scene model.
   URL-safe text encoding and zlib stream handling. Their licence expressions are recorded in
   `THIRD_PARTY_LICENSES.md`; no native library, FFI or `unsafe` exception is added.
 - `PLAN.md`, `ACCEPTANCE.md`, `ARCHITECTURE.md`, `docs/SCENARIOS.md` and
-  `docs/M70B_UAT.md` own the active scope and pending gate.
+  `docs/M70B_UAT.md` own the qualified scope and pending human gate.
 
 The canonical single-line envelope is:
 
@@ -96,7 +99,7 @@ persisted workspace, not an old browser interaction.
 
 ## 3. Commands and outcomes
 
-No command below is recorded as passing yet. The nominated source must run at least:
+The exact implementation tree later committed unchanged as the nominated source passed:
 
 ```text
 cargo fmt --all -- --check
@@ -106,8 +109,27 @@ cargo check --locked -p geosolve-demo-web --all-features \
   --target wasm32-unknown-unknown
 cargo deny check licenses
 git diff --check
-nix-shell shell.nix --run './scripts/release-gate.sh'
+nix-shell shell.nix --run \
+  'env GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true ./scripts/release-gate.sh'
 ```
+
+Outcomes on 2026-08-10:
+
+- `cargo fmt --all -- --check` and `git diff --check`: pass;
+- locked all-feature `geosolve-demo-web`: 93/93 library tests plus 1/1 native decoder test pass;
+- warnings-denied demo-web Clippy and the explicit `wasm32-unknown-unknown` check: pass;
+- both native and WASM `cargo license` inventories include the recorded M70B packages and only
+  recorded GPL-compatible expressions;
+- `cargo deny check licenses`: pass;
+- the complete integrated release gate: pass, including all locked workspace tests, cross-target
+  M70 transition parity, rustdoc, benchmark compilation, package contents, performance budgets,
+  the 127.53-second 256-moving-body sparse crossover and Trunk 0.21.14 release assembly; and
+- every one of the seven frozen files and served `/` byte-matches the read-only local snapshot.
+
+An earlier development gate reached Trunk and correctly exposed that the new native diagnostic
+binary made the WASM artifact selection ambiguous. The final source explicitly selects
+`geosolve_demo_web` in the Trunk link; both a focused release build and the complete replacement
+gate pass with that fix.
 
 The intended recipient-side diagnostic workflow is:
 
@@ -118,7 +140,7 @@ cargo run --locked -p geosolve-demo-web --bin geosolve-repro < payload.txt
 That command only exposes decoded workspace JSON for inspection; it is not a qualification result
 or a coordinator-publication route.
 
-Pending direct coverage must prove:
+Direct coverage proves:
 
 - deterministic exact bytes, empty and repetitive workspace round trips and fixed checksum
   convention;
@@ -134,13 +156,13 @@ Pending direct coverage must prove:
 - native tests cover codec behavior and the same codec path compiles for
   `wasm32-unknown-unknown`.
 
-## 4. Acceptance criteria pending
+## 4. Acceptance criteria
 
-- [ ] focused codec, persistence and thin-adapter tests pass;
-- [ ] warnings-denied native Clippy and the explicit WASM check pass;
-- [ ] the locked complete workspace/release gate passes without weakening an existing threshold;
-- [ ] dependency licence inventory, package contents and release Trunk assembly pass;
-- [ ] one clean source and read-only distribution are frozen and byte-verified over Tailscale;
+- [x] focused codec, persistence and thin-adapter tests pass;
+- [x] warnings-denied native Clippy and the explicit WASM check pass;
+- [x] the locked complete workspace/release gate passes without weakening an existing threshold;
+- [x] dependency licence inventory, package contents and release Trunk assembly pass;
+- [x] one clean source and read-only distribution are frozen and byte-verified over Tailscale;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
@@ -154,5 +176,4 @@ size honestly rather than silently dropping content.
 
 The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, file picker,
 download flow, raw browser-storage handoff and browser E2E remain retired. M70B cannot close until
-the pending direct/release gate produces one candidate and the focused human UAT is explicitly
-approved. M71 stays deferred throughout that work.
+the focused human UAT is explicitly approved. M71 stays deferred throughout that work.

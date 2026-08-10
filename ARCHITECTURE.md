@@ -69,9 +69,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   workbench's authoritative v5 snapshot. `GEOSOLVE_REPRO_V1` is deterministic zlib compressed,
   strict unpadded base64url text with an FNV-1a corruption checksum; decoded bytes still pass the
   ordinary strict workspace decoder and full coordinator reconstruction before an atomic live
-  swap. A visible copy/paste overlay provides manual-copy fallback. Direct/release qualification
-  and human UAT remain pending. M71 is deferred behind M70B and remains an unauthorized candidate
-  backlog.
+  swap. A visible copy/paste overlay provides manual-copy fallback. Direct/release qualification,
+  frozen publication and served-byte verification pass; human UAT remains pending. M71 is deferred
+  behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -1035,7 +1035,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   workspace v5 envelope without copying raw browser storage, restores through the strict workspace
   decoder and a newly constructed coordinator before atomic swap, and exposes a visible
   copy/paste overlay with manual fallback. It restores no legacy lab/E2E path and serializes no
-  transient UI, camera, history or sample metadata. Direct/release qualification and dedicated
-  human UAT remain pending.
+  transient UI, camera, history or sample metadata. Direct/release qualification and frozen
+  publication pass; dedicated human UAT remains pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.

@@ -43,8 +43,9 @@ the repaired Circle-through-point UAT; the supervising human explicitly approved
 2026-08-10. M70B is the active bounded reproduction-payload implementation cut. It introduces a
 versioned, compressed text capsule around the authoritative application-workspace v5 snapshot so
 UAT failures can be copied into a text conversation and restored through the ordinary validated
-coordinator path. Direct/release qualification and the dedicated human UAT remain pending. M71 is
-deferred behind M70B and remains an unauthorized candidate backlog.
+coordinator path. Source `30d66a60e21543546274befd9791058897eb9eb5` passes direct/release
+qualification, frozen Tailscale publication and served-byte verification; the dedicated human UAT
+remains pending. M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -279,8 +280,8 @@ serialized freshly as authoritative `WorkspaceSnapshot` v5 bytes, transported as
 `GEOSOLVE_REPRO_V1` zlib/base64url text and reconstructed completely before any live-workspace
 swap. It restores no transient tool, selection, sample, camera or command-history state and does
 not revive the legacy lab, E2E stack or raw-`localStorage` exchange. Qualification and
-`docs/M70B_UAT.md` approval remain pending. The temporary `docs/M71_GOALS.md` backlog is deferred
-behind M70B and is not implementation authorization.
+frozen-candidate publication pass; `docs/M70B_UAT.md` approval remains pending. The temporary
+`docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:
 
@@ -327,7 +328,7 @@ Durable milestone and cleanup records:
 - `docs/M70_IMPLEMENTATION.md` (completed and approved auto-constraint ledger)
 - `docs/M70_UAT.md` (approved focused auto-constraint scorecard and finding ledger)
 - `docs/adr/0034-headless-auto-constraint-drafting-intelligence.md`
-- `docs/M70B_IMPLEMENTATION.md` (active reproduction-capsule ledger and pending gates)
+- `docs/M70B_IMPLEMENTATION.md` (qualified reproduction-capsule ledger and pending human gate)
 - `docs/M70B_UAT.md` (prepared reproduction handoff/restore scorecard; not yet approved)
 - `docs/M71_GOALS.md` (deferred post-M70B primitive backlog)
 

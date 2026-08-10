@@ -160,8 +160,8 @@ editable-sample cleanup, approved reduced-scope M65 predictable dragging, approv
 computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
 M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
 semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
-is the active bounded reproduction-capsule implementation awaiting direct/release qualification
-and its own human UAT; M71 remains deferred behind it.
+is the qualified, frozen reproduction-capsule candidate awaiting its own human UAT; M71 remains
+deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1399,8 +1399,8 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 
 ## M70B acceptance: workspace reproduction handoff
 
-Status: active implementation; acceptance and human UAT are pending. No item below is recorded as
-passing until one nominated candidate supplies the direct and integrated evidence.
+Status: active human UAT. Objective implementation, qualification, publication and served-byte
+criteria pass on the nominated candidate; human review and approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted

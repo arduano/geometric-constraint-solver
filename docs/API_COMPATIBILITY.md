@@ -94,8 +94,9 @@ Generated V1 text is canonical; a future incompatible transport must use a new h
 silently reinterpret V1. The FNV-1a field detects accidental corruption only and conveys no
 authenticity. Successful transport decode still requires strict `WorkspaceSnapshot` validation and
 complete coordinator reconstruction before publication. No library crate API, frozen sketch v1-v4
-bytes or draft-v5 support status changes. Qualification and M70B UAT remain pending. No M71 API is
-authorized by the candidate `docs/M71_GOALS.md` backlog, which remains deferred behind M70B.
+bytes or draft-v5 support status changes. Qualification and frozen publication pass on source
+`30d66a60e21543546274befd9791058897eb9eb5`; M70B UAT remains pending. No M71 API is authorized by
+the candidate `docs/M71_GOALS.md` backlog, which remains deferred behind M70B.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

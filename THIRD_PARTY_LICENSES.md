@@ -3,8 +3,8 @@
 GeoSolve is licensed under `GPL-3.0-or-later`; see `LICENSE`. Its pre-M70B locked native and
 WASM dependency graphs were audited on 2026-07-21 with `cargo-license` and rechecked on
 2026-07-22 with `cargo-deny`. The pure-Rust M70B additions and their compatible declared
-expressions are recorded below; a fresh two-platform inventory and `cargo-deny` result remain a
-pending M70B close gate.
+expressions are recorded below; both platform inventories and `cargo deny check licenses` were
+re-run successfully on the nominated M70B source on 2026-08-10.
 
 ## Declared dependency licences
 
@@ -44,8 +44,8 @@ The pure-Rust M70B text transport adds these locked packages and declared SPDX e
 
 They implement strict URL-safe text encoding and zlib/Adler stream handling only. They add no
 native library, FFI or `unsafe` block to GeoSolve source. Their exact checksums remain locked in
-`Cargo.lock`; M70B cannot close until both platform inventories and `cargo deny check licenses`
-pass on the nominated candidate.
+`Cargo.lock`; both platform inventories and `cargo deny check licenses` pass on the nominated
+candidate.
 
 ## `faer` bundled notices
 

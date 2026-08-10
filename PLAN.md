@@ -46,8 +46,8 @@ completes the approved ADR 0034 headless auto-constraint drafting milestone, inc
 `M70-F001` Circle-through-point repair and replacement qualification/publication. M70B is the
 active bounded reproduction-capsule implementation: complete workspace v5 state can be copied as
 compressed text and restored atomically through its existing validation path. Direct/release
-qualification and focused human UAT remain pending. M71 is deferred behind M70B and remains an
-unauthorized candidate backlog. M66's
+qualification, frozen publication and served-byte verification pass; focused human UAT remains
+pending. M71 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3646,42 +3646,53 @@ every scripted step. M70 is closed.
 
 ### M70B
 
-Status: active implementation; bounded reproduction transport and restore are scoped. Direct
-qualification, integrated release qualification, frozen-candidate publication and the focused
-human UAT are pending. No completion or approval is claimed.
+Status: active human UAT. Bounded reproduction transport and restore, direct qualification,
+integrated release qualification, frozen-candidate publication and served-byte verification pass.
+Focused human UAT remains pending. No completion or approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
 
-- [ ] Encode the current coordinator freshly through authoritative `WorkspaceSnapshot` v5 rather
+- [x] Encode the current coordinator freshly through authoritative `WorkspaceSnapshot` v5 rather
   than copying a `localStorage` value or inventing a second scene schema.
-- [ ] Transport those exact bytes as deterministic single-line `GEOSOLVE_REPRO_V1` text using one
+- [x] Transport those exact bytes as deterministic single-line `GEOSOLVE_REPRO_V1` text using one
   zlib stream, strict unpadded base64url, canonical decoded length and a 64-bit FNV-1a accidental-
   corruption checksum. The checksum is not authentication.
-- [ ] Enforce independent 16 MiB text, 12 MiB compressed-body and 64 MiB decoded-workspace limits;
+- [x] Enforce independent 16 MiB text, 12 MiB compressed-body and 64 MiB decoded-workspace limits;
   reject unsupported versions/codecs, noncanonical fields/base64, truncation, trailing compressed
   bytes, length mismatch, invalid UTF-8 and checksum mismatch with typed errors.
-- [ ] Decode into opaque workspace JSON, pass it through the ordinary strict workspace decoder,
+- [x] Decode into opaque workspace JSON, pass it through the ordinary strict workspace decoder,
   reconstruct a complete validated `RetainedEditorCoordinator`, and only then replace the live
   workbench. Every failure leaves the current coordinator and accepted scene unchanged.
-- [ ] Provide a narrow native stdin/stdout decoder so a pasted capsule can be inspected outside the
+- [x] Provide a narrow native stdin/stdout decoder so a pasted capsule can be inspected outside the
   browser; it may expose decoded workspace JSON but cannot validate or publish a coordinator.
-- [ ] Add one visible canvas-adjacent copy/paste overlay. Automatic clipboard success reports the
+- [x] Add one visible canvas-adjacent copy/paste overlay. Automatic clipboard success reports the
   copy result, while denied/unavailable clipboard access leaves the complete payload visible and
   selectable for manual copy. Load errors remain in the overlay and cause no canvas layout shift.
-- [ ] Keep the capsule intentionally limited to persisted workspace truth: no current tool,
+- [x] Keep the capsule intentionally limited to persisted workspace truth: no current tool,
   pointer/selection/hover state, camera, sample identity/guidance or native command-history cursor.
   Do not restore `/#/dev/lab`, browser E2E, file/download glue or the old
   `GEOSOLVE_SCENE_V1`/raw-storage format.
-- [ ] Directly qualify deterministic codec behavior under native tests and compile that same codec
+- [x] Directly qualify deterministic codec behavior under native tests and compile that same codec
   path for WASM; cover empty, representative, computed-Fillet and maximum-bound workspaces; strict
   malformed/corrupt/oversized input; complete v5 round-trip; and atomic retention after transport,
   workspace or coordinator failure.
-- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
+- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
   benchmark/licence/package checks, release Trunk, static single-workbench and Git-hygiene gates on
   one nominated source.
 - [ ] Freeze and publish that candidate through the usual Tailscale UAT path, byte-verify its
   distribution, complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
+
+Qualification/publication note (2026-08-10): source
+`30d66a60e21543546274befd9791058897eb9eb5` passes the demo-web 93/93 library and 1/1 native
+decoder tests, warnings-denied Clippy, the explicit WASM check, both platform licence inventories
+and the complete integrated release gate. The gate includes all locked workspace tests,
+cross-target M70 parity, rustdoc, benchmark compilation, performance budgets, package/licence
+checks, the 127.53-second 256-moving-body sparse crossover and Trunk release assembly. A read-only
+seven-file snapshot at `/tmp/geosolve-m70b-uat.V3OMjp` is served at
+`http://100.94.63.83:8080/`; every asset and `/` matched the frozen local bytes, with manifest
+aggregate `3fa3b7486c046b6e7c83464198d52eb5878182f83a28ed234da12bd9503b1a4d`.
+Only the focused human UAT and explicit approval remain open in the combined final checkbox.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. Copy or

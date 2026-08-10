@@ -1287,8 +1287,8 @@ ordinary editable auto-constraint drafting playground; implementation and focuse
 qualification, integrated release qualification, frozen replacement-candidate publication and
 served-byte verification are complete, and the scoped human UAT was approved on 2026-08-10. M70B
 is the active bounded reproduction-capsule cut. It adds a workbench-global copy/paste overlay rather
-than a protected sample fixture; its direct/release qualification and focused human UAT remain
-pending. M71 is deferred behind it.
+than a protected sample fixture; direct/release qualification and frozen publication pass, while
+focused human UAT remains pending. M71 is deferred behind it.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is

@@ -2,22 +2,23 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: prepared, not started. Implementation qualification, candidate freeze/publication,
-served-byte verification and every human result below are pending. This scorecard records no pass
-or approval.
+Status: ready for supervising-human review. Implementation qualification, candidate
+freeze/publication and served-byte verification pass. Every human result below remains pending;
+this scorecard records no human pass or approval.
 
-Candidate source: pending
+Candidate source: `30d66a60e21543546274befd9791058897eb9eb5`
 
-Tailscale endpoint: pending
+Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Release distribution manifest aggregate: pending
+Release distribution manifest aggregate:
+`3fa3b7486c046b6e7c83464198d52eb5878182f83a28ed234da12bd9503b1a4d`
 
 ## Preconditions
 
-- [ ] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct qualification.
-- [ ] The complete integrated release gate passes on one clean nominated source.
-- [ ] A read-only release distribution is served through the usual Tailscale endpoint.
-- [ ] Every served asset and `/` matches the frozen local bytes.
+- [x] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct qualification.
+- [x] The complete integrated release gate passes on one clean nominated source.
+- [x] A read-only release distribution is served through the usual Tailscale endpoint.
+- [x] Every served asset and `/` matches the frozen local bytes.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;

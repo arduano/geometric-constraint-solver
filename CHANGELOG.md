@@ -119,8 +119,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   reconstruction both succeed. A narrow native stdin decoder exposes bounded workspace JSON for
   recipient-side diagnosis without publication authority. The sole workbench presents copy/paste
   in a visible overlay with a manual-copy fallback; transient UI/camera/history/sample state and
-  legacy lab/raw-storage formats are excluded. Direct/release qualification and focused human UAT
-  are pending.
+  legacy lab/raw-storage formats are excluded. Direct/release qualification, frozen Tailscale
+  publication and served-byte verification pass; focused human UAT remains pending.
 
 ### Changed
 
@@ -134,8 +134,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   0034 headless auto-constraint drafting intelligence. Implementation, focused direct and
   integrated release qualification, frozen replacement-candidate publication and served-byte
   verification are complete. `M70-F001` is resolved and the scoped human UAT is approved. M70B is
-  now the active bounded reproduction-capsule implementation awaiting qualification and its own
-  human UAT; M71 remains deferred behind it.
+  now the qualified, frozen bounded reproduction-capsule candidate awaiting its own human UAT;
+  M71 remains deferred behind it.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

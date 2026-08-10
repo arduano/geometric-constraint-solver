@@ -52,15 +52,16 @@ the `M70-F001` Circle-through-point repair, replacement qualification/publicatio
 M70B is the active bounded reproduction-capsule cut. It packages freshly encoded authoritative
 application-workspace v5 bytes as strict, size-limited `GEOSOLVE_REPRO_V1` text for copy/paste
 failure handoff, then validates and reconstructs a complete coordinator before replacing live
-state. Qualification and its dedicated UAT are pending; M71 remains deferred behind it.
+state. Qualification and frozen publication pass; its dedicated UAT remains pending. M71 remains
+deferred behind it.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed and approved through M70, with the bounded M70B
-   reproduction-capsule cut awaiting qualification/UAT and M71 deferred behind it.
+3. `PLAN.md` — active roadmap: completed and approved through M70, with the qualified M70B
+   reproduction-capsule cut awaiting human UAT and M71 deferred behind it.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
