@@ -82,7 +82,19 @@ PointOnCurve relation; it adds no sketch constraint, residual or persistence var
 M70 implementation, focused direct qualification, integrated release gate and frozen-candidate
 publication are complete on replacement source `3d157896c87eaf647abee1192c838100ce359ce9`.
 Circle-authoring finding `M70-F001` is resolved and the supervising human approved M70 on
-2026-08-10. M70B is an empty bugfix placeholder and authorizes no API change. No M71 API is
+2026-08-10.
+
+M70B adds a small versioned codec surface to the non-published `geosolve-demo-web` diagnostic
+consumer: `GEOSOLVE_REPRO_V1`, bounded encode/decode functions and typed transport failures. Its
+payload is compressed text around the existing private application-workspace v5 encoding, not a
+new `geosolve-sketch` persistence version, supported domain schema or accepted-state shortcut.
+The companion `geosolve-repro` stdin/stdout binary decodes transport for diagnosis only and cannot
+validate or publish a coordinator.
+Generated V1 text is canonical; a future incompatible transport must use a new header rather than
+silently reinterpret V1. The FNV-1a field detects accidental corruption only and conveys no
+authenticity. Successful transport decode still requires strict `WorkspaceSnapshot` validation and
+complete coordinator reconstruction before publication. No library crate API, frozen sketch v1-v4
+bytes or draft-v5 support status changes. Qualification and M70B UAT remain pending. No M71 API is
 authorized by the candidate `docs/M71_GOALS.md` backlog, which remains deferred behind M70B.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release

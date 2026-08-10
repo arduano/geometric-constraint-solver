@@ -374,6 +374,37 @@ impl WorkspaceSnapshot {
     }
 }
 
+pub(crate) fn coordinator_from_snapshot(
+    snapshot: &WorkspaceSnapshot,
+) -> Result<RetainedEditorCoordinator, String> {
+    let session =
+        snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
+    let features = snapshot.feature_document()?;
+    RetainedEditorCoordinator::with_features_and_high_water(
+        session,
+        features,
+        snapshot.feature_lifecycle_high_water(),
+        snapshot.computed_evaluation_high_water(),
+    )
+    .map_err(|error| error.to_string())
+}
+
+pub(crate) fn reproduction_payload_from_coordinator(
+    coordinator: &RetainedEditorCoordinator,
+) -> Result<String, String> {
+    let workspace = WorkspaceSnapshot::from_coordinator(coordinator)?.encode()?;
+    crate::reproduction::encode_workspace(&workspace).map_err(|error| error.to_string())
+}
+
+pub(crate) fn coordinator_from_reproduction_payload(
+    payload: &str,
+) -> Result<RetainedEditorCoordinator, String> {
+    let workspace =
+        crate::reproduction::decode_workspace(payload).map_err(|error| error.to_string())?;
+    let snapshot = WorkspaceSnapshot::decode(&workspace)?;
+    coordinator_from_snapshot(&snapshot)
+}
+
 fn derive_sketch_identity_high_water(
     design: &WorkspaceDocumentPayload,
     accepted: Option<&WorkspaceDocumentPayload>,
@@ -445,7 +476,8 @@ mod tests {
     };
 
     use super::{
-        WorkspaceSnapshot, default_evaluation_high_water, derive_sketch_identity_high_water,
+        WorkspaceSnapshot, coordinator_from_reproduction_payload, default_evaluation_high_water,
+        derive_sketch_identity_high_water, reproduction_payload_from_coordinator,
     };
 
     fn computed_fillet_candidate(
@@ -552,6 +584,103 @@ mod tests {
         assert_eq!(
             decoded.revisions().accepted(),
             snapshot.revisions().accepted()
+        );
+    }
+
+    #[test]
+    fn reproduction_restore_is_atomic_and_keeps_workspace_validation_authoritative() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(8.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let retained = WorkspaceSnapshot::from_coordinator(&coordinator)
+            .expect("retained workspace")
+            .encode()
+            .expect("retained workspace JSON");
+        let payload = reproduction_payload_from_coordinator(&coordinator)
+            .expect("valid reproduction payload");
+        assert_eq!(
+            reproduction_payload_from_coordinator(&coordinator)
+                .expect("repeat valid reproduction payload"),
+            payload,
+            "copying an unchanged workspace must be byte-stable"
+        );
+
+        let mut corrupt_fields = payload.split(':').map(str::to_owned).collect::<Vec<_>>();
+        corrupt_fields[3] = "0000000000000000".into();
+        let corrupt = corrupt_fields.join(":");
+        assert!(
+            coordinator_from_reproduction_payload(&corrupt)
+                .unwrap_err()
+                .contains("checksum mismatch")
+        );
+        assert_eq!(
+            WorkspaceSnapshot::from_coordinator(&coordinator)
+                .expect("workspace after corrupt payload")
+                .encode()
+                .expect("workspace JSON after corrupt payload"),
+            retained
+        );
+
+        let mut invalid_workspace: serde_json::Value =
+            serde_json::from_str(&retained).expect("workspace value");
+        invalid_workspace["computed_evaluation_high_water"]["next_revision"] =
+            serde_json::Value::from(0);
+        let invalid_payload = crate::reproduction::encode_workspace(
+            &serde_json::to_string(&invalid_workspace).expect("invalid workspace JSON"),
+        )
+        .expect("transport structurally invalid workspace");
+        assert!(
+            coordinator_from_reproduction_payload(&invalid_payload)
+                .unwrap_err()
+                .contains("must be nonzero")
+        );
+        assert_eq!(
+            WorkspaceSnapshot::from_coordinator(&coordinator)
+                .expect("workspace after invalid restore")
+                .encode()
+                .expect("workspace JSON after invalid restore"),
+            retained
+        );
+
+        let restored = coordinator_from_reproduction_payload(&payload)
+            .expect("restore valid reproduction payload");
+        assert_eq!(
+            restored.session().design_document(),
+            coordinator.session().design_document()
+        );
+        assert_eq!(
+            restored
+                .session()
+                .accepted_state()
+                .map(geosolve_sketch::SketchAcceptedDocumentState::document),
+            coordinator
+                .session()
+                .accepted_state()
+                .map(geosolve_sketch::SketchAcceptedDocumentState::document)
+        );
+        assert_eq!(
+            restored.feature_document().id(),
+            coordinator.feature_document().id()
+        );
+        assert_eq!(
+            restored.feature_document().sketch_document(),
+            coordinator.feature_document().sketch_document()
+        );
+        assert_eq!(
+            restored.feature_document().features(),
+            coordinator.feature_document().features()
+        );
+        assert_eq!(
+            restored.feature_document().allocator_high_water(),
+            coordinator.feature_document().allocator_high_water()
+        );
+        assert_eq!(
+            restored.session().persistent_identity_high_water(),
+            coordinator.session().persistent_identity_high_water()
         );
     }
 
@@ -789,10 +918,10 @@ mod tests {
         coordinator.clear_feature_authoring_preview();
         let live_sketch_high_water = coordinator.session().revision_high_water();
 
-        let encoded = WorkspaceSnapshot::from_coordinator(&coordinator)
-            .expect("capture live workspace")
-            .encode()
-            .expect("encode live workspace");
+        let payload = reproduction_payload_from_coordinator(&coordinator)
+            .expect("encode live reproduction payload");
+        let encoded = crate::reproduction::decode_workspace(&payload)
+            .expect("decode exact workspace JSON from reproduction payload");
         let decoded = WorkspaceSnapshot::decode(&encoded).expect("decode live workspace");
         assert_eq!(decoded.revisions(), live_sketch_high_water);
         assert!(
@@ -808,16 +937,8 @@ mod tests {
                 > cancelled_evaluation.raw()
         );
 
-        let restored_session = decoded
-            .restore_session(DocumentSolveRequest::default(), SolverConfig::default())
-            .expect("restore sketch session");
-        let mut restored = RetainedEditorCoordinator::with_features_and_high_water(
-            restored_session,
-            decoded.feature_document().expect("restore feature sidecar"),
-            decoded.feature_lifecycle_high_water(),
-            decoded.computed_evaluation_high_water(),
-        )
-        .expect("restore composite coordinator");
+        let mut restored = coordinator_from_reproduction_payload(&payload)
+            .expect("restore complete reproduction payload");
         let regenerated = restored
             .computed_snapshot()
             .expect("regenerated computed output");

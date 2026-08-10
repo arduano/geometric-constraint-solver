@@ -22,9 +22,11 @@ rust-version = "1.89"
 authors = ["Leonid Shchurov"]
 
 [workspace.dependencies]
+base64 = { version = "0.23.1", default-features = false, features = ["alloc"] }
 nalgebra = "0.35.0"
 faer = { version = "=0.24.4", default-features = false, features = ["std", "sparse-linalg"] }
 indexmap = "2.14.0"
+miniz_oxide = { version = "0.9.1", default-features = false, features = ["with-alloc"] }
 num-dual = "0.14.1"
 petgraph = "0.8.3"
 serde = { version = "1", features = ["derive"] }

@@ -23,7 +23,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 
 .workbench button,
 .workbench input,
-.workbench select {
+.workbench select,
+.workbench textarea {
   color: inherit;
   border: 1px solid #42494a;
   border-radius: 3px;
@@ -58,6 +59,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-brand span { color: #d29a45; font-weight: 500; }
 .wb-command-group { display: flex; gap: 0.3rem; }
+.wb-reproduction-commands { padding-left: 0.3rem; border-left: 1px solid #3d4546; }
+.wb-reproduction-commands button { color: #b9d8d8; }
 .wb-sample-selector {
   position: relative;
   min-width: 0;
@@ -437,6 +440,78 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   -webkit-user-drag: none;
 }
 #wb-viewport { width: 100%; height: 100%; touch-action: none; }
+.wb-reproduction-overlay {
+  position: absolute;
+  z-index: 10;
+  top: 1rem;
+  left: 50%;
+  display: grid;
+  width: min(46rem, calc(100% - 2rem));
+  height: min(30rem, calc(100% - 2rem));
+  grid-template-rows: auto auto auto minmax(8rem, 1fr) auto;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid #637071;
+  border-radius: 6px;
+  background: rgb(24 29 29 / 98%);
+  box-shadow: 0 16px 46px rgb(0 0 0 / 58%);
+  transform: translateX(-50%);
+}
+.wb-reproduction-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  color: #e6c785;
+}
+.wb-reproduction-title div { display: grid; gap: 0.12rem; }
+.wb-reproduction-title span {
+  color: #899492;
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.wb-reproduction-title button {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  font-size: 1rem;
+}
+.wb-reproduction-overlay p {
+  margin: 0;
+  color: #a7b1af;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+.wb-reproduction-overlay .wb-reproduction-status {
+  padding: 0.38rem 0.5rem;
+  border-left: 2px solid #6aa8ad;
+  color: #c5dddd;
+  background: rgb(52 77 79 / 35%);
+}
+.wb-reproduction-overlay textarea {
+  width: 100%;
+  min-height: 0;
+  padding: 0.55rem;
+  resize: none;
+  outline-offset: 1px;
+  color: #cfdddd;
+  background: #111718;
+  font: 0.66rem/1.4 ui-monospace, "Cascadia Mono", monospace;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.wb-reproduction-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.wb-reproduction-actions span {
+  margin-left: auto;
+  color: #879492;
+  font-size: 0.62rem;
+  text-align: right;
+}
 .wb-canvas-feature-options {
   position: absolute;
   z-index: 5;

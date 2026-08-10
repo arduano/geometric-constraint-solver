@@ -40,8 +40,11 @@ headless auto-constraint drafting intelligence, atomic construction-plus-inferen
 ordinary editable UAT playground. Replacement source
 `3d157896c87eaf647abee1192c838100ce359ce9` passed direct/release qualification, publication and
 the repaired Circle-through-point UAT; the supervising human explicitly approved M70 on
-2026-08-10. M70B is the active empty placeholder for the next bounded bugfix cut. M71 is deferred
-behind M70B and remains an unauthorized candidate backlog.
+2026-08-10. M70B is the active bounded reproduction-payload implementation cut. It introduces a
+versioned, compressed text capsule around the authoritative application-workspace v5 snapshot so
+UAT failures can be copied into a text conversation and restored through the ordinary validated
+coordinator path. Direct/release qualification and the dedicated human UAT remain pending. M71 is
+deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -271,8 +274,13 @@ passed its complete release gate and received explicit supervising-human approva
 M70 is complete and approved: implementation, focused direct qualification, integrated release
 qualification, frozen replacement-candidate publication, served-byte verification and scoped human
 UAT all pass. `M70-F001` is resolved. `docs/M70_IMPLEMENTATION.md`, `docs/M70_UAT.md` and ADR 0034
-own the completed record. M70B is the active empty post-M70 bugfix placeholder. The temporary
-`docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
+own the completed record. M70B is the active reproduction-capsule cut: the current coordinator is
+serialized freshly as authoritative `WorkspaceSnapshot` v5 bytes, transported as bounded
+`GEOSOLVE_REPRO_V1` zlib/base64url text and reconstructed completely before any live-workspace
+swap. It restores no transient tool, selection, sample, camera or command-history state and does
+not revive the legacy lab, E2E stack or raw-`localStorage` exchange. Qualification and
+`docs/M70B_UAT.md` approval remain pending. The temporary `docs/M71_GOALS.md` backlog is deferred
+behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:
 
@@ -319,6 +327,8 @@ Durable milestone and cleanup records:
 - `docs/M70_IMPLEMENTATION.md` (completed and approved auto-constraint ledger)
 - `docs/M70_UAT.md` (approved focused auto-constraint scorecard and finding ledger)
 - `docs/adr/0034-headless-auto-constraint-drafting-intelligence.md`
+- `docs/M70B_IMPLEMENTATION.md` (active reproduction-capsule ledger and pending gates)
+- `docs/M70B_UAT.md` (prepared reproduction handoff/restore scorecard; not yet approved)
 - `docs/M71_GOALS.md` (deferred post-M70B primitive backlog)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

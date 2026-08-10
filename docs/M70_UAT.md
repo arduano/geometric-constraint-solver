@@ -167,4 +167,5 @@ the 2026-08-10 scoped close decision.
 The supervising human reported that the replacement looked good and explicitly requested M70
 closure on 2026-08-10. This accepts M70-U1 through M70-U5 and the targeted `M70-F001` recheck for
 the recorded scope without claiming an unrecorded exhaustive replay of every scripted step. M70 is
-closed; M70B is the next empty bugfix placeholder and M71 remains deferred behind it.
+closed; M70B is now the active bounded workspace-reproduction capsule implementation awaiting its
+own qualification/UAT, and M71 remains deferred behind it.

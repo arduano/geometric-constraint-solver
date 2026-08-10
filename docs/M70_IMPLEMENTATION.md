@@ -262,6 +262,6 @@ snap anchors, roughly doubling that bounded portion of each authoritative scene.
 collision-prone digest and preserves the current ergonomic public presentation DTO; eliminating
 the duplicate would require a broader immutable/accessor-based scene API change outside M70.
 
-M70 is closed. M70B is the active empty placeholder for the supervising user's post-M70 defect
-list. `docs/M71_GOALS.md` remains a candidate backlog deferred behind M70B; M71 is not scoped or
-authorized for implementation.
+M70 is closed. M70B is now the active bounded workspace-reproduction capsule implementation; its
+direct/release qualification and focused UAT remain pending. `docs/M71_GOALS.md` remains a
+candidate backlog deferred behind M70B; M71 is not scoped or authorized for implementation.

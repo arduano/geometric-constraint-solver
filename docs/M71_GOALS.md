@@ -2,8 +2,8 @@
 
 # M71 candidate goals — Retained primitives for richer drafting inference
 
-Status: deferred candidate backlog only. M71 is ordered after the active M70B bugfix placeholder,
-but is not scoped or authorized for implementation.
+Status: deferred candidate backlog only. M71 is ordered after the active M70B bounded
+workspace-reproduction capsule cut, but is not scoped or authorized for implementation.
 
 M70 deliberately proved auto-constraint interaction using constraint definitions already admitted
 by the ordinary retained editor workflow. This document records likely follow-up primitives and

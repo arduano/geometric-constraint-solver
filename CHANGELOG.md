@@ -111,6 +111,16 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   demo-web 83/83, sketch 33/33 and M56 6/6. Its complete release gate, frozen Tailscale publication
   and served-byte verification pass. The targeted human recheck and scoped UAT are accepted; the
   supervising human explicitly approved and closed M70 on 2026-08-10.
+- The active M70B reproduction-payload candidate: deterministic single-line
+  `GEOSOLVE_REPRO_V1` text over freshly encoded authoritative application-workspace v5 bytes, with
+  zlib compression, strict unpadded URL-safe base64, canonical byte length, FNV-1a corruption
+  detection and independent text/compressed/decoded resource limits. Decode remains
+  non-authoritative until the ordinary strict workspace decoder and complete coordinator
+  reconstruction both succeed. A narrow native stdin decoder exposes bounded workspace JSON for
+  recipient-side diagnosis without publication authority. The sole workbench presents copy/paste
+  in a visible overlay with a manual-copy fallback; transient UI/camera/history/sample state and
+  legacy lab/raw-storage formats are excluded. Direct/release qualification and focused human UAT
+  are pending.
 
 ### Changed
 
@@ -124,7 +134,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   0034 headless auto-constraint drafting intelligence. Implementation, focused direct and
   integrated release qualification, frozen replacement-candidate publication and served-byte
   verification are complete. `M70-F001` is resolved and the scoped human UAT is approved. M70B is
-  now the empty post-M70 bugfix placeholder; M71 remains deferred behind it.
+  now the active bounded reproduction-capsule implementation awaiting qualification and its own
+  human UAT; M71 remains deferred behind it.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

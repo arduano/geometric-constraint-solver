@@ -44,8 +44,10 @@ M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes ap
 Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
 completes the approved ADR 0034 headless auto-constraint drafting milestone, including the
 `M70-F001` Circle-through-point repair and replacement qualification/publication. M70B is the
-active empty placeholder for a bounded post-M70 bugfix cut; its defect list is awaiting supervising-
-user scope. M71 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
+active bounded reproduction-capsule implementation: complete workspace v5 state can be copied as
+compressed text and restored atomically through its existing validation path. Direct/release
+qualification and focused human UAT remain pending. M71 is deferred behind M70B and remains an
+unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3644,12 +3646,48 @@ every scripted step. M70 is closed.
 
 ### M70B
 
-Status: active empty placeholder. The supervising user will provide a bounded set of unrelated
-post-M70 defects before implementation begins.
+Status: active implementation; bounded reproduction transport and restore are scoped. Direct
+qualification, integrated release qualification, frozen-candidate publication and the focused
+human UAT are pending. No completion or approval is claimed.
 
-Goal: reserve one bugfix milestone before M71. Scope, direct regression ownership and the focused
-UAT scorecard will be written from the supplied reproductions; no defect, API change or broader
-cleanup is inferred by this placeholder. M70B ends in its own UAT.
+Goal: make ordinary UAT failures self-contained and practical to hand off over text without
+restoring the deleted diagnostic lab or treating browser state as solver authority.
+
+- [ ] Encode the current coordinator freshly through authoritative `WorkspaceSnapshot` v5 rather
+  than copying a `localStorage` value or inventing a second scene schema.
+- [ ] Transport those exact bytes as deterministic single-line `GEOSOLVE_REPRO_V1` text using one
+  zlib stream, strict unpadded base64url, canonical decoded length and a 64-bit FNV-1a accidental-
+  corruption checksum. The checksum is not authentication.
+- [ ] Enforce independent 16 MiB text, 12 MiB compressed-body and 64 MiB decoded-workspace limits;
+  reject unsupported versions/codecs, noncanonical fields/base64, truncation, trailing compressed
+  bytes, length mismatch, invalid UTF-8 and checksum mismatch with typed errors.
+- [ ] Decode into opaque workspace JSON, pass it through the ordinary strict workspace decoder,
+  reconstruct a complete validated `RetainedEditorCoordinator`, and only then replace the live
+  workbench. Every failure leaves the current coordinator and accepted scene unchanged.
+- [ ] Provide a narrow native stdin/stdout decoder so a pasted capsule can be inspected outside the
+  browser; it may expose decoded workspace JSON but cannot validate or publish a coordinator.
+- [ ] Add one visible canvas-adjacent copy/paste overlay. Automatic clipboard success reports the
+  copy result, while denied/unavailable clipboard access leaves the complete payload visible and
+  selectable for manual copy. Load errors remain in the overlay and cause no canvas layout shift.
+- [ ] Keep the capsule intentionally limited to persisted workspace truth: no current tool,
+  pointer/selection/hover state, camera, sample identity/guidance or native command-history cursor.
+  Do not restore `/#/dev/lab`, browser E2E, file/download glue or the old
+  `GEOSOLVE_SCENE_V1`/raw-storage format.
+- [ ] Directly qualify deterministic codec behavior under native tests and compile that same codec
+  path for WASM; cover empty, representative, computed-Fillet and maximum-bound workspaces; strict
+  malformed/corrupt/oversized input; complete v5 round-trip; and atomic retention after transport,
+  workspace or coordinator failure.
+- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
+  benchmark/licence/package checks, release Trunk, static single-workbench and Git-hygiene gates on
+  one nominated source.
+- [ ] Freeze and publish that candidate through the usual Tailscale UAT path, byte-verify its
+  distribution, complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
+
+Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
+while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. Copy or
+paste never runs a solver equation in the browser, and M70B closes only after direct qualification
+and its own explicit human UAT. `docs/M70B_IMPLEMENTATION.md`, `docs/M70B_UAT.md` and
+`docs/SCENARIOS.md` own the detailed ledger.
 
 ### M71
 

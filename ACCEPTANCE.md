@@ -160,7 +160,8 @@ editable-sample cleanup, approved reduced-scope M65 predictable dragging, approv
 computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
 M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
 semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
-is the active empty post-M70 bugfix placeholder; M71 remains deferred behind it.
+is the active bounded reproduction-capsule implementation awaiting direct/release qualification
+and its own human UAT; M71 remains deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1396,12 +1397,48 @@ outside scope.
 accepted targeted M70-U1 human recheck. The 2026-08-10 scoped close decision accepts M70-U1 through
 M70-U5 without inventing an unrecorded exhaustive replay of every scripted step. M70 is closed.
 
-## M70B acceptance: post-M70 bugfix cut
+## M70B acceptance: workspace reproduction handoff
 
-Status: active empty placeholder. Acceptance criteria will be written from the supervising user's
-bounded defect reproductions. Each accepted defect requires an owning-layer regression,
-proportionate requalification and its own focused M70B UAT. This placeholder authorizes no inferred
-fix, API change or cleanup. M71 remains deferred behind M70B.
+Status: active implementation; acceptance and human UAT are pending. No item below is recorded as
+passing until one nominated candidate supplies the direct and integrated evidence.
+
+- Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
+  coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
+  `GEOSOLVE_SCENE_V1` format or a second geometry/persistence schema.
+- The text is one canonical `GEOSOLVE_REPRO_V1` envelope containing the exact decoded byte length,
+  one zlib stream, strict unpadded URL-safe base64 and a lowercase 64-bit FNV-1a corruption
+  checksum. The checksum is described only as accidental-corruption detection, never
+  authentication or trust evidence.
+- Encoding and decoding fail closed at independent limits of 16 MiB complete text, 12 MiB
+  compressed body and 64 MiB decoded workspace. Unsupported version/codec, noncanonical decimal or
+  checksum text, padded/noncanonical base64, corrupt/truncated/trailing zlib input, length mismatch,
+  invalid UTF-8 and checksum mismatch return typed failures without unbounded inflation.
+- Capsule decoding yields only opaque workspace JSON. `WorkspaceSnapshot::decode` must then apply
+  the existing strict version/schema/migration checks, and a complete validated coordinator must be
+  reconstructed before the sole live workbench is replaced. Failure at any layer retains the exact
+  current coordinator, accepted scene and persisted workspace.
+- A native stdin/stdout decoder can expose the bounded decoded workspace JSON to a recipient for
+  diagnosis without reading browser storage or acquiring any validation/publication authority.
+- Exact successful restore includes current design and accepted document payloads, accepted-current
+  provenance, computed-feature intent, sketch/feature/evaluation allocator high-water and lifecycle
+  revisions already owned by workspace v5. It deliberately excludes transient authoring,
+  pointer/hover/selection state, camera, sample identity/guidance and native command-history cursor.
+- The ordinary workbench exposes one accessible canvas-adjacent copy/paste overlay. The full text is
+  always inspectable; automatic clipboard denial leaves it selected for manual copy. Paste errors
+  remain visible without resizing the canvas or mutating geometry.
+- Direct Rust tests own deterministic codec bytes, representative and bound-edge workspaces,
+  strict malformed/corrupt/oversized rejection, complete computed-Fillet v5 round-trip and atomic
+  retention after transport, workspace and coordinator failures. The same codec path must compile
+  for WASM. No browser E2E or legacy route returns.
+- Formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
+  benchmark/licence/package checks, release Trunk, single-workbench inventory and Git hygiene pass
+  on one nominated source. Its frozen distribution is published and byte-verified before UAT.
+- The supervising human completes and explicitly approves every area in `docs/M70B_UAT.md`.
+
+M70B adds no residual, solver state, sketch constraint, branch rule, canonical sketch schema,
+sample fixture or general file format. The payload is a versioned diagnostic interchange around
+the application workspace and cannot publish merely because its transport checksum is valid.
+M71 remains deferred behind M70B.
 
 `docs/M71_GOALS.md` is a deferred candidate backlog and confers no implementation authority.
 

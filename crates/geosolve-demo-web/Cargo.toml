@@ -14,17 +14,21 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+base64.workspace = true
 geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
 geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
+miniz_oxide.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
 wasm-bindgen = "=0.2.121"
+wasm-bindgen-futures = "=0.4.71"
 web-sys = { version = "=0.3.98", features = [
+    "Clipboard",
     "Document",
     "DomRect",
     "Element",
@@ -34,8 +38,10 @@ web-sys = { version = "=0.3.98", features = [
     "HtmlElement",
     "HtmlInputElement",
     "HtmlSelectElement",
+    "HtmlTextAreaElement",
     "KeyboardEvent",
     "MouseEvent",
+    "Navigator",
     "PointerEvent",
     "Storage",
     "WheelEvent",

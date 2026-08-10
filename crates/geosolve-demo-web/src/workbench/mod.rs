@@ -534,6 +534,86 @@ fn observe_feature_authoring_preview_lifecycle(
     }
 }
 
+/// Runs the state-changing half of a reproduction load only after the complete
+/// replacement has been decoded and independently validated.
+#[cfg(any(target_arch = "wasm32", test))]
+fn apply_validated_reproduction<State, Candidate, Error>(
+    state: &mut State,
+    validate: impl FnOnce() -> Result<Candidate, Error>,
+    commit: impl FnOnce(&mut State, Candidate) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let candidate = validate()?;
+    commit(state, candidate)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn reproduction_overlay_presentation(open: bool) -> (&'static str, bool) {
+    (if open { "true" } else { "false" }, !open)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum ReproductionFocusReturn {
+    Copy,
+    #[default]
+    Load,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl ReproductionFocusReturn {
+    const fn element_id(self) -> &'static str {
+        match self {
+            Self::Copy => "wb-reproduction-copy-trigger",
+            Self::Load => "wb-reproduction-load-trigger",
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn reproduction_focus_target_after_action(
+    action: &str,
+    overlay_open: bool,
+    return_to: ReproductionFocusReturn,
+) -> Option<&'static str> {
+    (action == "reproduction-close" || (action == "reproduction-load" && !overlay_open))
+        .then(|| return_to.element_id())
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ForegroundOverlayEscapeOwner {
+    Reproduction,
+    Samples,
+    None,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn foreground_overlay_escape_owner(
+    reproduction_open: bool,
+    samples_open: bool,
+) -> ForegroundOverlayEscapeOwner {
+    if reproduction_open {
+        ForegroundOverlayEscapeOwner::Reproduction
+    } else if samples_open {
+        ForegroundOverlayEscapeOwner::Samples
+    } else {
+        ForegroundOverlayEscapeOwner::None
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn should_route_stationary_draft_inference(
+    reproduction_open: bool,
+    ordinary_owner: bool,
+) -> bool {
+    ordinary_owner && !reproduction_open
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn reproduction_payload_size_label(bytes: usize) -> String {
+    format!("{bytes} payload bytes")
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -566,14 +646,16 @@ pub(crate) mod wasm {
     use wasm_bindgen::JsCast;
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::prelude::JsValue;
+    use wasm_bindgen_futures::{JsFuture, spawn_local};
     use web_sys::{
         Document, Element, Event, FocusEvent, HtmlElement, HtmlInputElement, HtmlSelectElement,
-        KeyboardEvent, MouseEvent, PointerEvent, WheelEvent,
+        HtmlTextAreaElement, KeyboardEvent, MouseEvent, PointerEvent, WheelEvent,
     };
 
     use super::persistence::{
         LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, OLDER_V2_STORAGE_KEY, PREVIOUS_STORAGE_KEY,
-        STORAGE_KEY, WorkspaceSnapshot,
+        STORAGE_KEY, WorkspaceSnapshot, coordinator_from_reproduction_payload,
+        coordinator_from_snapshot, reproduction_payload_from_coordinator,
     };
 
     struct Workbench {
@@ -589,6 +671,9 @@ pub(crate) mod wasm {
         pointer_moves: Rc<RefCell<super::PointerMoveQueue>>,
         fillet_action_render: super::FilletActionRenderAuthority,
         feature_options_open: bool,
+        reproduction_overlay_open: bool,
+        reproduction_focus_return: super::ReproductionFocusReturn,
+        reproduction_copy_request: u64,
         construction_preview: Option<ConstructionPreview>,
         notice: String,
         problems_open: bool,
@@ -655,6 +740,9 @@ pub(crate) mod wasm {
             pointer_moves: Rc::new(RefCell::new(super::PointerMoveQueue::default())),
             fillet_action_render: super::FilletActionRenderAuthority::default(),
             feature_options_open: false,
+            reproduction_overlay_open: false,
+            reproduction_focus_return: super::ReproductionFocusReturn::default(),
+            reproduction_copy_request: 0,
             construction_preview: None,
             notice,
             problems_open: false,
@@ -813,21 +901,6 @@ pub(crate) mod wasm {
         RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
     }
 
-    fn coordinator_from_snapshot(
-        snapshot: &WorkspaceSnapshot,
-    ) -> Result<RetainedEditorCoordinator, String> {
-        let session =
-            snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
-        let features = snapshot.feature_document()?;
-        RetainedEditorCoordinator::with_features_and_high_water(
-            session,
-            features,
-            snapshot.feature_lifecycle_high_water(),
-            snapshot.computed_evaluation_high_water(),
-        )
-        .map_err(|error| error.to_string())
-    }
-
     #[allow(
         clippy::too_many_lines,
         reason = "one delegated root listener keeps click, change and Fillet focus routing ordered"
@@ -880,6 +953,8 @@ pub(crate) mod wasm {
                 .flatten()
                 .unwrap_or(origin);
             let mut selected_sample = false;
+            let mut focus_reproduction_text = false;
+            let mut focus_reproduction_return = None;
             if target.has_attribute("data-sample-group-trigger") {
                 return;
             } else if let Some(tool) = target
@@ -1019,14 +1094,27 @@ pub(crate) mod wasm {
                 let mut wb = callback_workbench.borrow_mut();
                 selected_sample = open_sample(&callback_document, &mut wb, &key);
             } else if let Some(action) = target.get_attribute("data-wb-action") {
-                perform_action(
-                    &callback_document,
-                    &mut callback_workbench.borrow_mut(),
+                if action == "reproduction-copy" {
+                    copy_reproduction_payload(&callback_document, &callback_workbench);
+                    return;
+                }
+                let mut wb = callback_workbench.borrow_mut();
+                perform_action(&callback_document, &mut wb, &action);
+                focus_reproduction_text =
+                    matches!(action.as_str(), "reproduction-open" | "reproduction-select");
+                focus_reproduction_return = super::reproduction_focus_target_after_action(
                     &action,
+                    wb.reproduction_overlay_open,
+                    wb.reproduction_focus_return,
                 );
             }
             save(&callback_workbench.borrow());
             let _ = render(&callback_document, &callback_workbench);
+            if focus_reproduction_text {
+                let _ = focus_and_select_reproduction_payload(&callback_document);
+            } else if let Some(id) = focus_reproduction_return {
+                focus_by_id(&callback_document, id);
+            }
             if selected_sample {
                 close_sample_selector(&callback_document);
                 focus_by_id(&callback_document, "wb-sample-trigger");
@@ -2053,10 +2141,13 @@ pub(crate) mod wasm {
     }
 
     fn owns_stationary_draft_inference(wb: &Workbench) -> bool {
-        wb.pan_gesture.is_none()
-            && wb.authoring.active_tool().is_none()
-            && wb.feature_authoring.active_tool().is_none()
-            && wb.coordinator.editor().tool() != EditorTool::Select
+        super::should_route_stationary_draft_inference(
+            wb.reproduction_overlay_open,
+            wb.pan_gesture.is_none()
+                && wb.authoring.active_tool().is_none()
+                && wb.feature_authoring.active_tool().is_none()
+                && wb.coordinator.editor().tool() != EditorTool::Select,
+        )
     }
 
     fn dispatch_stationary_draft_inference(
@@ -2094,6 +2185,37 @@ pub(crate) mod wasm {
         let callback_document = document.clone();
         let callback_workbench = Rc::clone(workbench);
         let callback = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            let escape_owner = if event.key() == "Escape" {
+                super::foreground_overlay_escape_owner(
+                    callback_workbench.borrow().reproduction_overlay_open,
+                    required(&callback_document, "wb-sample-selector")
+                        .is_ok_and(|selector| selector.has_attribute("open")),
+                )
+            } else {
+                super::ForegroundOverlayEscapeOwner::None
+            };
+            if escape_owner == super::ForegroundOverlayEscapeOwner::Reproduction {
+                event.prevent_default();
+                let focus_return = {
+                    let mut wb = callback_workbench.borrow_mut();
+                    wb.reproduction_overlay_open = false;
+                    wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                    wb.reproduction_focus_return.element_id()
+                };
+                let _ = render(&callback_document, &callback_workbench);
+                focus_by_id(&callback_document, focus_return);
+                return;
+            }
+            if event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("#wb-reproduction-overlay").ok().flatten())
+                .is_some()
+            {
+                // Text editing and native button activation inside this dialog
+                // must never fall through to any sketch keyboard behavior.
+                return;
+            }
             if event.key() == "Escape" && !callback_workbench.borrow().pointer_captures.is_empty() {
                 event.prevent_default();
                 let mut wb = callback_workbench.borrow_mut();
@@ -2116,10 +2238,7 @@ pub(crate) mod wasm {
                 let _ = render(&callback_document, &callback_workbench);
                 return;
             }
-            if event.key() == "Escape"
-                && required(&callback_document, "wb-sample-selector")
-                    .is_ok_and(|selector| selector.has_attribute("open"))
-            {
+            if escape_owner == super::ForegroundOverlayEscapeOwner::Samples {
                 event.prevent_default();
                 close_sample_selector(&callback_document);
                 focus_by_id(&callback_document, "wb-sample-trigger");
@@ -2432,7 +2551,9 @@ pub(crate) mod wasm {
                         Err(error) => wb.notice = error,
                     }
                 }
-                EditorEffect::SelectionChanged(_) | EditorEffect::HoverChanged(_) => {}
+                EditorEffect::SelectionChanged(_)
+                | EditorEffect::HoverChanged(_)
+                | EditorEffect::DraftInferenceChanged(_) => {}
                 EditorEffect::CommitPointMove { .. } => {
                     match wb.coordinator.apply_editor_effect(&effect) {
                         Ok(Some(_)) => wb.notice = "Edit retained".into(),
@@ -2446,7 +2567,6 @@ pub(crate) mod wasm {
                 | EditorEffect::CommitConstructionPlan { .. } => {
                     unreachable!("construction effects were dispatched above")
                 }
-                EditorEffect::DraftInferenceChanged(_) => {}
             }
         }
     }
@@ -2491,6 +2611,8 @@ pub(crate) mod wasm {
                 clear_feature_authoring(wb);
                 wb.camera.reset();
                 wb.feature_options_open = false;
+                wb.reproduction_overlay_open = false;
+                wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
                 wb.construction_preview = None;
                 Ok(())
             }),
@@ -2541,6 +2663,30 @@ pub(crate) mod wasm {
                 wb.feature_options_open = false;
                 Ok(())
             }
+            "reproduction-open" => {
+                close_sample_selector(document);
+                wb.reproduction_overlay_open = true;
+                wb.reproduction_focus_return = super::ReproductionFocusReturn::Load;
+                wb.feature_options_open = false;
+                wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                wb.notice = "Paste a reproduction payload, then load it atomically".into();
+                Ok(())
+            }
+            "reproduction-select" => {
+                wb.reproduction_overlay_open = true;
+                wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                wb.notice = "Reproduction payload selected; press Ctrl/Cmd+C to copy".into();
+                Ok(())
+            }
+            "reproduction-close" => {
+                wb.reproduction_overlay_open = false;
+                wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                Ok(())
+            }
+            "reproduction-load" => {
+                wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+                load_reproduction_payload(document, wb)
+            }
             "problems" => {
                 wb.problems_open = !wb.problems_open;
                 Ok(())
@@ -2582,10 +2728,158 @@ pub(crate) mod wasm {
                 | "feature-apply"
                 | "fillet-options"
                 | "fillet-options-close"
-                | "geometry-role" => wb.notice.clone(),
+                | "geometry-role"
+                | "reproduction-open"
+                | "reproduction-select"
+                | "reproduction-close"
+                | "reproduction-load" => wb.notice.clone(),
                 _ => "Action retained".into(),
             },
         );
+    }
+
+    fn copy_reproduction_payload(document: &Document, workbench: &Rc<RefCell<Workbench>>) {
+        let payload = match reproduction_payload_from_coordinator(&workbench.borrow().coordinator) {
+            Ok(payload) => payload,
+            Err(error) => {
+                workbench.borrow_mut().notice =
+                    format!("Reproduction payload could not be created: {error}");
+                let _ = render(document, workbench);
+                return;
+            }
+        };
+        let payload_bytes = payload.len();
+        let payload_size = super::reproduction_payload_size_label(payload_bytes);
+        close_sample_selector(document);
+        let request = {
+            let mut wb = workbench.borrow_mut();
+            wb.reproduction_overlay_open = true;
+            wb.reproduction_focus_return = super::ReproductionFocusReturn::Copy;
+            wb.feature_options_open = false;
+            wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+            wb.notice =
+                format!("Reproduction payload ready · {payload_size}; requesting clipboard access");
+            wb.reproduction_copy_request
+        };
+        if render(document, workbench).is_err() {
+            workbench.borrow_mut().notice =
+                "Reproduction payload is ready, but its editor could not be shown".into();
+            return;
+        }
+        let Ok(textarea) = reproduction_payload_textarea(document) else {
+            workbench.borrow_mut().notice =
+                "Reproduction payload is ready, but its editor is unavailable".into();
+            let _ = render(document, workbench);
+            return;
+        };
+        textarea.set_value(&payload);
+        let _ = focus_and_select_reproduction_payload(document);
+
+        let Ok(window) = super::platform::window() else {
+            workbench.borrow_mut().notice = format!(
+                "Clipboard access is unavailable; all {payload_size} are selected for manual copy"
+            );
+            let _ = render(document, workbench);
+            return;
+        };
+        if !window.is_secure_context() {
+            workbench.borrow_mut().notice = format!(
+                "Clipboard access requires a secure page; all {payload_size} are selected for manual copy"
+            );
+            let _ = render(document, workbench);
+            return;
+        }
+        let promise = window.navigator().clipboard().write_text(&payload);
+        let completion_document = document.clone();
+        let completion_workbench = Rc::clone(workbench);
+        let copied_payload = payload;
+        spawn_local(async move {
+            let copied = JsFuture::from(promise).await.is_ok();
+            if reproduction_payload_textarea(&completion_document)
+                .is_ok_and(|textarea| textarea.value() != copied_payload)
+            {
+                return;
+            }
+            {
+                let mut wb = completion_workbench.borrow_mut();
+                if wb.reproduction_copy_request != request {
+                    return;
+                }
+                wb.notice = if copied {
+                    format!("Reproduction payload copied · {payload_size}")
+                } else {
+                    format!(
+                        "Clipboard access was blocked; all {payload_size} are selected for manual copy"
+                    )
+                };
+            }
+            let _ = render(&completion_document, &completion_workbench);
+            if !copied {
+                let _ = focus_and_select_reproduction_payload(&completion_document);
+            }
+        });
+    }
+
+    fn load_reproduction_payload(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        let payload = reproduction_payload_textarea(document)?.value();
+        if payload.trim().is_empty() {
+            return Err("paste a reproduction payload before loading".into());
+        }
+        super::apply_validated_reproduction(
+            wb,
+            || {
+                coordinator_from_reproduction_payload(&payload)
+                    .map_err(|error| format!("Reproduction payload was not loaded: {error}"))
+            },
+            |wb, coordinator| commit_reproduction_load(document, wb, coordinator),
+        )
+    }
+
+    fn commit_reproduction_load(
+        document: &Document,
+        wb: &mut Workbench,
+        coordinator: RetainedEditorCoordinator,
+    ) -> Result<(), String> {
+        cancel_before_camera_change(document, wb)?;
+        wb.coordinator = coordinator;
+        wb.authoring = AuthoringState::default();
+        wb.feature_authoring = FeatureAuthoringState::default();
+        wb.feature_candidate = None;
+        wb.feature_pending.clear();
+        wb.samples = super::samples::SampleCatalogState::default();
+        wb.camera.reset();
+        wb.pan_gesture = None;
+        wb.pointer_captures = super::CanvasPointerCaptures::default();
+        *wb.pointer_moves.borrow_mut() = super::PointerMoveQueue::default();
+        wb.fillet_action_render = super::FilletActionRenderAuthority::default();
+        wb.feature_options_open = false;
+        wb.reproduction_overlay_open = false;
+        wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
+        wb.construction_preview = None;
+        wb.problems_open = false;
+        close_sample_selector(document);
+        if let Ok(textarea) = reproduction_payload_textarea(document) {
+            textarea.set_value("");
+        }
+        fit_camera(wb);
+        wb.notice = "Reproduction payload loaded as a fresh editable workspace".into();
+        Ok(())
+    }
+
+    fn reproduction_payload_textarea(document: &Document) -> Result<HtmlTextAreaElement, String> {
+        required(document, "wb-reproduction-payload")
+            .map_err(|_| "reproduction payload editor is unavailable".to_owned())?
+            .dyn_into::<HtmlTextAreaElement>()
+            .map_err(|_| "reproduction payload editor is unavailable".to_owned())
+    }
+
+    fn focus_and_select_reproduction_payload(document: &Document) -> Result<(), String> {
+        let textarea = reproduction_payload_textarea(document)?;
+        textarea
+            .focus()
+            .map_err(|_| "reproduction payload editor could not be focused".to_owned())?;
+        textarea.select();
+        Ok(())
     }
 
     fn toggle_geometry_role(wb: &mut Workbench) -> Result<(), String> {
@@ -2775,6 +3069,8 @@ pub(crate) mod wasm {
                 wb.authoring.deactivate();
                 clear_feature_authoring(wb);
                 wb.feature_options_open = false;
+                wb.reproduction_overlay_open = false;
+                wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
                 wb.construction_preview = None;
                 fit_camera(wb);
                 wb.notice = format!(
@@ -3599,6 +3895,7 @@ pub(crate) mod wasm {
         render_geometry_controls(document, coordinator)?;
         render_action_availability(document, coordinator, &wb.authoring, &wb.feature_authoring)?;
         render_feature_options(document, &wb.feature_authoring)?;
+        render_reproduction_overlay(document, wb.reproduction_overlay_open, &wb.notice)?;
         render_fillet_options_overlay(document, wb.feature_options_open)?;
         render_dimension_target_editor(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
@@ -3746,6 +4043,22 @@ pub(crate) mod wasm {
         }
         overlay.remove_attribute("hidden")?;
         reposition_fillet_options_overlay(document)
+    }
+
+    fn render_reproduction_overlay(
+        document: &Document,
+        open: bool,
+        status: &str,
+    ) -> Result<(), JsValue> {
+        let (expanded, hidden) = super::reproduction_overlay_presentation(open);
+        for id in [
+            "wb-reproduction-copy-trigger",
+            "wb-reproduction-load-trigger",
+        ] {
+            required(document, id)?.set_attribute("aria-expanded", expanded)?;
+        }
+        required(document, "wb-reproduction-status")?.set_text_content(Some(status));
+        set_hidden(&required(document, "wb-reproduction-overlay")?, hidden)
     }
 
     fn reposition_fillet_options_overlay(document: &Document) -> Result<(), JsValue> {
@@ -4628,12 +4941,169 @@ mod tests {
         CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
         CanvasPointerCaptures, CanvasPointerOwnership, CanvasPointerTerminal,
         CanvasPointerTerminalDisposition, CapturedCanvasPointer, DraftingPointerSample,
-        FilletActionRenderAuthority, OverlayRect, PointerMoveQueue, canvas_overlay_position,
-        canvas_pointer_capture_kind, change_owns_option_control_click, geometry_hover_selector,
+        FilletActionRenderAuthority, ForegroundOverlayEscapeOwner, OverlayRect, PointerMoveQueue,
+        ReproductionFocusReturn, apply_validated_reproduction, canvas_overlay_position,
+        canvas_pointer_capture_kind, change_owns_option_control_click,
+        foreground_overlay_escape_owner, geometry_hover_selector,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
-        palette_details_overlay_reflow_listener, resolve_canvas_fillet_action_candidates,
-        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
+        palette_details_overlay_reflow_listener, reproduction_focus_target_after_action,
+        reproduction_overlay_presentation, reproduction_payload_size_label,
+        resolve_canvas_fillet_action_candidates, revoke_held_feature_authoring_preview,
+        route_canvas_pan_pointer_down, should_route_stationary_draft_inference,
     };
+
+    #[test]
+    fn reproduction_load_validates_before_any_state_commit() {
+        let mut state = String::from("retained workspace");
+        let mut commit_called = false;
+        let rejected: Result<(), &str> = apply_validated_reproduction(
+            &mut state,
+            || Err("corrupt capsule"),
+            |state, replacement: String| {
+                commit_called = true;
+                *state = replacement;
+                Ok(())
+            },
+        );
+        assert_eq!(rejected, Err("corrupt capsule"));
+        assert_eq!(state, "retained workspace");
+        assert!(
+            !commit_called,
+            "invalid input must never enter the commit half"
+        );
+
+        apply_validated_reproduction(
+            &mut state,
+            || Ok::<_, &str>(String::from("validated replacement")),
+            |state, replacement| {
+                *state = replacement;
+                Ok(())
+            },
+        )
+        .expect("validated replacement");
+        assert_eq!(state, "validated replacement");
+    }
+
+    #[test]
+    fn reproduction_dialog_owns_keyboard_focus_and_exact_size_reporting() {
+        assert!(should_route_stationary_draft_inference(false, true));
+        assert!(
+            !should_route_stationary_draft_inference(true, true),
+            "the foreground payload dialog must isolate Shift from a live draft"
+        );
+        assert!(!should_route_stationary_draft_inference(false, false));
+
+        assert_eq!(
+            foreground_overlay_escape_owner(true, true),
+            ForegroundOverlayEscapeOwner::Reproduction,
+            "the payload dialog must own Escape ahead of the background Samples menu"
+        );
+        assert_eq!(
+            foreground_overlay_escape_owner(false, true),
+            ForegroundOverlayEscapeOwner::Samples
+        );
+        assert_eq!(
+            foreground_overlay_escape_owner(false, false),
+            ForegroundOverlayEscapeOwner::None
+        );
+
+        assert_eq!(
+            reproduction_focus_target_after_action(
+                "reproduction-close",
+                false,
+                ReproductionFocusReturn::Copy,
+            ),
+            Some("wb-reproduction-copy-trigger")
+        );
+        assert_eq!(
+            reproduction_focus_target_after_action(
+                "reproduction-load",
+                false,
+                ReproductionFocusReturn::Load,
+            ),
+            Some("wb-reproduction-load-trigger"),
+            "a successful load must not leave focus inside the hidden dialog"
+        );
+        assert_eq!(
+            reproduction_focus_target_after_action(
+                "reproduction-load",
+                true,
+                ReproductionFocusReturn::Load,
+            ),
+            None,
+            "a rejected load keeps the dialog and its current focus open"
+        );
+        assert_eq!(
+            reproduction_payload_size_label(12_345),
+            "12345 payload bytes"
+        );
+    }
+
+    #[test]
+    fn reproduction_controls_use_one_non_layout_shifting_canvas_overlay() {
+        assert_eq!(reproduction_overlay_presentation(false), ("false", true));
+        assert_eq!(reproduction_overlay_presentation(true), ("true", false));
+        assert_eq!(
+            ReproductionFocusReturn::Copy.element_id(),
+            "wb-reproduction-copy-trigger"
+        );
+        assert_eq!(
+            ReproductionFocusReturn::Load.element_id(),
+            "wb-reproduction-load-trigger"
+        );
+
+        let html = include_str!("../../index.html");
+        for id in [
+            "wb-reproduction-copy-trigger",
+            "wb-reproduction-load-trigger",
+            "wb-reproduction-overlay",
+            "wb-reproduction-payload",
+            "wb-reproduction-status",
+        ] {
+            assert_eq!(
+                html.matches(&format!("id=\"{id}\"")).count(),
+                1,
+                "#{id} must have exactly one presentation owner"
+            );
+        }
+        assert!(html.contains("data-wb-action=\"reproduction-copy\""));
+        assert!(html.contains("data-wb-action=\"reproduction-load\""));
+        assert!(html.contains("data-wb-action=\"reproduction-select\""));
+        assert!(html.contains("role=\"dialog\""));
+        let canvas = html.find("id=\"wb-canvas-panel\"").expect("canvas panel");
+        let overlay = html
+            .find("id=\"wb-reproduction-overlay\"")
+            .expect("reproduction overlay");
+        let inspector = html
+            .find("class=\"wb-inspector\"")
+            .expect("inspector after canvas");
+        assert!(canvas < overlay && overlay < inspector);
+
+        let css = include_str!("../../styles.css");
+        let rule_start = css
+            .find(".wb-reproduction-overlay {")
+            .expect("reproduction overlay rule");
+        let rule_end = rule_start
+            + css[rule_start..]
+                .find('}')
+                .expect("reproduction overlay rule boundary");
+        let rule = &css[rule_start..=rule_end];
+        for declaration in [
+            "position: absolute;",
+            "z-index: 10;",
+            "transform: translateX(-50%);",
+        ] {
+            assert!(rule.contains(declaration), "missing `{declaration}`");
+        }
+        for flow_declaration in ["grid-column:", "grid-row:"] {
+            assert!(
+                !rule.contains(flow_declaration),
+                "reproduction transport must not contribute `{flow_declaration}` to layout"
+            );
+        }
+        assert!(css.contains(".wb-reproduction-overlay textarea {"));
+        assert!(css.contains("user-select: text;"));
+    }
 
     #[test]
     fn canvas_browser_defaults_are_blocked_only_inside_the_svg_surface() {

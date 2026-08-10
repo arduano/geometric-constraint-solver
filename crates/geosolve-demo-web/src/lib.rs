@@ -1,5 +1,8 @@
 //! Non-authoritative WASM sketch workbench.
 
+/// Bounded text transport for complete workbench reproduction checkpoints.
+pub mod reproduction;
+
 #[cfg(any(target_arch = "wasm32", test))]
 mod workbench;
 

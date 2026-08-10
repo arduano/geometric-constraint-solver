@@ -1286,7 +1286,9 @@ qualification and focused human UAT are complete. M70 completed ADR 0034 and add
 ordinary editable auto-constraint drafting playground; implementation and focused direct
 qualification, integrated release qualification, frozen replacement-candidate publication and
 served-byte verification are complete, and the scoped human UAT was approved on 2026-08-10. M70B
-is an empty bugfix placeholder and adds no fixture yet; M71 is deferred behind it.
+is the active bounded reproduction-capsule cut. It adds a workbench-global copy/paste overlay rather
+than a protected sample fixture; its direct/release qualification and focused human UAT remain
+pending. M71 is deferred behind it.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1449,6 +1451,32 @@ high-water needed for never-reuse after Undo/divergent history and process reloa
 v1-v4 fixtures migrate by deriving graph-visible maxima, while malformed, foreign or trailing
 cursors reject. This checkpoint metadata is distinct from inference wake/reference state, which
 remains ephemeral and is never serialized.
+
+### M70B-R1 - Complete workspace reproduction payload
+
+Create or open any ordinary editable workspace containing representative persistent sketch state,
+at least one computed Fillet, constraints/dimensions and a Construction curve. **Copy repro**
+serializes the current retained coordinator freshly through `WorkspaceSnapshot` v5 and shows one
+single-line `GEOSOLVE_REPRO_V1` value in a visible overlay. The capsule contains design
+and accepted document payloads, accepted-current provenance, feature intent, allocator high-water
+and lifecycle revisions already owned by workspace v5. It does not contain the current tool,
+selection/hover/pointer state, camera, sample identity, guide text or command-history cursor.
+
+The transport uses one deterministic zlib stream, strict unpadded base64url, exact decoded length
+and an FNV-1a accidental-corruption checksum. The complete text, compressed body and decoded
+workspace have separate 16 MiB, 12 MiB and 64 MiB limits. Loading first validates that transport,
+then the ordinary strict workspace envelope, then reconstructs a complete retained coordinator.
+Only the fully reconstructed value replaces the live workspace. Corruption, truncation, trailing
+data, oversize input, invalid workspace semantics or coordinator reconstruction failure leaves the
+current scene unchanged.
+
+Human M70B UAT assesses discoverability, copy/manual-copy fallback, text handoff, exact visible
+restore and recoverable error presentation through `docs/M70B_UAT.md`. Direct native Rust tests
+own canonical bytes, resource limits, computed-feature/high-water fidelity and atomicity, while
+the same codec path must compile for WASM. The native `geosolve-repro` stdin decoder lets a
+recipient inspect decoded workspace JSON without
+granting it publication authority. The scenario revives neither `/#/dev/lab` nor browser
+E2E/file/download/raw-`localStorage` exchange.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

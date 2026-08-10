@@ -1,20 +1,24 @@
 # Third-party licences and attribution
 
-GeoSolve is licensed under `GPL-3.0-or-later`; see `LICENSE`. Its locked native and
-WASM dependency graphs were audited on 2026-07-21 with `cargo-license` and rechecked
-on 2026-07-22 with `cargo-deny`. No declared dependency licence is incompatible with
-GPLv3.
+GeoSolve is licensed under `GPL-3.0-or-later`; see `LICENSE`. Its pre-M70B locked native and
+WASM dependency graphs were audited on 2026-07-21 with `cargo-license` and rechecked on
+2026-07-22 with `cargo-deny`. The pure-Rust M70B additions and their compatible declared
+expressions are recorded below; a fresh two-platform inventory and `cargo-deny` result remain a
+pending M70B close gate.
 
 ## Declared dependency licences
 
 The locked graphs contain packages under these SPDX expressions:
 
+- `0BSD OR MIT OR Apache-2.0`;
 - `Apache-2.0`;
 - `Apache-2.0 OR MIT`;
 - `Apache-2.0 OR MIT OR Zlib`;
 - `(Apache-2.0 OR MIT) AND Unicode-3.0`;
 - `Apache-2.0 OR BSD-2-Clause OR MIT`;
 - `MIT`;
+- `MIT OR Apache-2.0`;
+- `MIT OR Zlib OR Apache-2.0`;
 - `MIT OR Unlicense`;
 - `Zlib`.
 
@@ -29,6 +33,19 @@ cargo license --avoid-dev-deps --all-features \
   --filter-platform wasm32-unknown-unknown --tsv
 cargo deny check licenses
 ```
+
+## M70B reproduction transport dependencies
+
+The pure-Rust M70B text transport adds these locked packages and declared SPDX expressions:
+
+- `base64 0.23.1` — `MIT OR Apache-2.0`;
+- `miniz_oxide 0.9.1` — `MIT OR Zlib OR Apache-2.0`;
+- `adler2 2.0.1` — `0BSD OR MIT OR Apache-2.0`.
+
+They implement strict URL-safe text encoding and zlib/Adler stream handling only. They add no
+native library, FFI or `unsafe` block to GeoSolve source. Their exact checksums remain locked in
+`Cargo.lock`; M70B cannot close until both platform inventories and `cargo deny check licenses`
+pass on the nominated candidate.
 
 ## `faer` bundled notices
 

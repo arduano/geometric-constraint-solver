@@ -24,7 +24,7 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M69. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics. M1-M7 remain the frozen regression baseline.
+- **Baseline:** implemented and accepted behavior through M70. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting. M1-M7 remain the frozen regression baseline.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -65,16 +65,20 @@ construction/NURBS UAT and certified all-family visual profiles.
   replacement-candidate publication, served-byte verification and scoped human UAT are complete.
   Circle-authoring finding `M70-F001` is resolved; the supervising human explicitly approved M70
   on 2026-08-10.
-- **Active placeholder:** M70B reserves the bounded post-M70 bugfix cut. It carries no inferred
-  architecture, API or defect scope until the supervising user supplies reproductions. M71 is
-  deferred behind M70B and remains an unauthorized candidate backlog.
+- **Active target:** M70B adds a bounded reproduction-payload transport around the sole
+  workbench's authoritative v5 snapshot. `GEOSOLVE_REPRO_V1` is deterministic zlib compressed,
+  strict unpadded base64url text with an FNV-1a corruption checksum; decoded bytes still pass the
+  ordinary strict workspace decoder and full coordinator reconstruction before an atomic live
+  swap. A visible copy/paste overlay provides manual-copy fallback. Direct/release qualification
+  and human UAT remain pending. M71 is deferred behind M70B and remains an unauthorized candidate
+  backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M70 sequence and active M70B placeholder listed in section 15.
+current ownership is the completed M10-M70 sequence and active M70B reproduction cut listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -148,6 +152,15 @@ budgets in a checksummed compressed text envelope. Capsule import still enters o
 through the public document-session JSON solve/validation path. The envelope is a
 private disposable-browser interchange format, not a domain schema or accepted-state
 shortcut.
+
+M70B does not restore that deleted capsule or its lab. Its new `GEOSOLVE_REPRO_V1` transport wraps
+freshly encoded complete application-workspace v5 bytes, including design/accepted document
+payloads, computed-feature intent and allocator/revision high-water already owned by
+`WorkspaceSnapshot`. It adds no solver or document authority: transport decoding is followed by
+strict workspace decoding and complete coordinator reconstruction, and the live workbench changes
+only after all three steps succeed. The text, compressed stream and decoded workspace are bounded
+independently. Transient tool/selection state, camera, sample identity and command history are
+deliberately absent.
 
 M31 supersedes the line-only geometry scope of ADR 0021 under ADR 0024 while
 preserving its visual-only boundary. Family-specific linear, circular, polynomial,
@@ -433,6 +446,16 @@ primary purpose is interactive sanity checking:
 - it is desktop-only for all future work; responsive, tablet and mobile support are
   not implementation or acceptance targets;
 - it remains non-authoritative and replaceable.
+
+M70B's reproduction codec is a pure deterministic transformation over freshly encoded
+`WorkspaceSnapshot` v5 JSON. The single-line envelope is
+`GEOSOLVE_REPRO_V1:zlib-base64url:<workspace-bytes>:<fnv1a64>:<body>`. Strict unpadded base64url
+and one fully consumed zlib stream are required; 16 MiB text, 12 MiB compressed and 64 MiB decoded
+limits fail closed before publication. FNV-1a detects accidental corruption but is not an
+authentication or security primitive. The visible overlay is browser delivery only: denied
+automatic clipboard access leaves the complete text selected and available for manual copy. A
+native stdin/stdout decoder exposes bounded workspace JSON for diagnosis only and cannot construct
+or publish a coordinator.
 
 M64 removes the completed-review harness that historically served M53-M63. A crate-private sample
 catalog now owns only stable sample keys, titles, purpose grouping and public fixture selection.
@@ -1008,7 +1031,11 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   UAT. Implementation, focused direct qualification, integrated release qualification, frozen-
   replacement-candidate publication, served-byte verification and scoped human UAT are complete.
   Circle-authoring finding `M70-F001` is resolved.
-- M70B: active empty placeholder for a bounded post-M70 defect cut. No architecture or API change
-  is authorized until its reproductions and acceptance scope are recorded.
+- M70B: active bounded reproduction-capsule implementation. It transports the authoritative
+  workspace v5 envelope without copying raw browser storage, restores through the strict workspace
+  decoder and a newly constructed coordinator before atomic swap, and exposes a visible
+  copy/paste overlay with manual fallback. It restores no legacy lab/E2E path and serializes no
+  transient UI, camera, history or sample metadata. Direct/release qualification and dedicated
+  human UAT remain pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.
