@@ -2,10 +2,9 @@
 
 # M70 focused UAT — Auto-constraint drafting
 
-Status: ready for targeted supervising-human review. Implementation, focused direct qualification,
-the complete integrated release gate, frozen replacement-candidate publication and served-byte
-verification pass. `M70-F001` is mechanically resolved; its targeted M70-U1 recheck, the remaining
-human results and overall approval are Pending.
+Status: complete and explicitly approved by the supervising human on 2026-08-10. Implementation,
+focused direct qualification, the complete integrated release gate, frozen replacement-candidate
+publication, served-byte verification and the scoped human review pass. `M70-F001` is resolved.
 
 Replacement candidate source: `3d157896c87eaf647abee1192c838100ce359ce9` on `main`
 
@@ -59,7 +58,8 @@ persistent point, including a line endpoint, by atomically committing PointOnCur
 existing point and the newly created circle. The radius click creates no hidden rim point, and an
 arbitrary line interior creates no implicit contact or tangency.
 
-Result: Pending targeted recheck — `M70-F001` is mechanically resolved; M70-U1 is not approved.
+Result: Accepted under the explicit 2026-08-10 scoped close decision, including the targeted
+`M70-F001` disposition; no separate scripted replay is claimed.
 
 Notes:
 
@@ -77,7 +77,8 @@ Fillet arc becomes an inference target. The line, circle, Bezier and NURBS objec
 UI specimens; direct Rust tests, not this manual sample, own conic, arc and B-spline family
 completeness.
 
-Result: Pending.
+Result: Accepted under the explicit 2026-08-10 scoped close decision; no separate scripted replay
+is claimed.
 
 Notes:
 
@@ -94,7 +95,8 @@ accepted relation. Midpoint plus normal may commit its compatible positional/dir
 one click. Ranking remains deterministic and unrelated geometry does not steal the intended
 reference.
 
-Result: Pending.
+Result: Accepted under the explicit 2026-08-10 scoped close decision; no separate scripted replay
+is claimed.
 
 Notes:
 
@@ -112,7 +114,8 @@ Releasing it does not resurrect a stale candidate. Exact unresolved ties are vis
 do not auto-commit. Bare-point tracking is explicitly guidance-only: it creates no fixed coordinate,
 zero dimension or hidden construction geometry.
 
-Result: Pending.
+Result: Accepted under the explicit 2026-08-10 scoped close decision; no separate scripted replay
+is claimed.
 
 Notes:
 
@@ -133,7 +136,8 @@ commits geometry. The exact draft remains recoverable after rejection. Wake/refe
 at every lifecycle boundary and is not restored from workspace persistence. The valid placement is
 one atomic history step, and the rest of the workbench remains ordinary and editable.
 
-Result: Pending.
+Result: Accepted under the explicit 2026-08-10 scoped close decision; no separate scripted replay
+is claimed.
 
 Notes:
 
@@ -141,7 +145,7 @@ Notes:
 
 ### M70-F001 — circle circumference did not express circle-through-point intent
 
-Status: **Mechanically resolved; targeted human recheck pending**.
+Status: **Resolved and accepted**.
 
 The supervising-human UAT of frozen candidate
 `4b16db3a885f5e28f508189b8817797375f05807` identified a missing semantic distinction at the second
@@ -155,11 +159,12 @@ and the gesture must not infer line contact or tangency.
 Replacement source `3d157896c87eaf647abee1192c838100ce359ce9` now implements that contract.
 Direct headless inference/commit regressions, thin presentation coverage, the complete clean
 release gate, frozen publication and served-byte verification all pass. The prior source remains
-historical discovery evidence only. A targeted supervising-human recheck of the two U1 circle
-steps is still required; M70 remains open and M71 remains inactive.
+historical discovery evidence only. The supervising human accepted the targeted U1 recheck under
+the 2026-08-10 scoped close decision.
 
 ## Approval
 
-Pending. M70 closes only after the supervising human explicitly approves M70-U1 through M70-U5
-and accepts the targeted `M70-F001` recheck. The finding's objective repair, direct-regression,
-replacement-qualification and publication requirements are already mechanically resolved.
+The supervising human reported that the replacement looked good and explicitly requested M70
+closure on 2026-08-10. This accepts M70-U1 through M70-U5 and the targeted `M70-F001` recheck for
+the recorded scope without claiming an unrecorded exhaustive replay of every scripted step. M70 is
+closed; M70B is the next empty bugfix placeholder and M71 remains deferred behind it.

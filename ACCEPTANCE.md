@@ -158,9 +158,9 @@ allocations are historical; `PLAN.md` now governs completed work through the app
 approved M62 authoring milestone, approved M63 canvas-constraint presentation, approved M64
 editable-sample cleanup, approved reduced-scope M65 predictable dragging, approved scoped M66
 computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
-M68 headless Fillet direct manipulation under ADR 0032 and approved M69 Profile/Construction
-semantics under ADR 0033. M70 is the active, not-yet-accepted ADR 0034 headless auto-constraint
-drafting milestone.
+M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
+semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
+is the active empty post-M70 bugfix placeholder; M71 remains deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1252,8 +1252,8 @@ publication and focused human UAT all pass.
 The 2026-08-09 close decision accepts M69-U1 through M69-U5 with no new finding or blocker
 recorded. It records explicit approval of frozen candidate
 `567141776c78178022f6123cbb399599ba713c62` without inventing a separate exhaustive replay of every
-scripted step. M69 is closed. M70 is active under the acceptance criteria below and is not yet
-complete.
+scripted step. M69 is closed. M70 subsequently completed the acceptance criteria below and is also
+closed.
 
 M69 explicitly excludes persistent point roles, canonical sketch v5, workspace migration,
 marquee/cycling/search additions, Offset/Mirror UI, computed-on-computed chaining, Bake/Explode,
@@ -1262,10 +1262,9 @@ legacy UI.
 
 ## M70 acceptance: headless auto-constraint drafting intelligence
 
-Status: implementation, focused direct qualification, integrated release qualification, frozen-
-replacement-candidate publication and served-byte verification are complete. Supervising-human
-UAT finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and human approval
-are pending, so M70 remains open.
+Status: complete and explicitly approved by the supervising human on 2026-08-10. Implementation,
+focused direct qualification, integrated release qualification, frozen replacement-candidate
+publication, served-byte verification and scoped human UAT all pass. `M70-F001` is resolved.
 
 M70 is accepted only when all of the following are true:
 
@@ -1393,10 +1392,18 @@ Its application-workspace v5 migration is limited to host-owned identity high-wa
 symmetry, concentric/quadrant, certified intersection/collinear/extension, nonlinear
 tangent/normal, grid/axis, angle increment and durable arbitrary point-pair H/V inference remain
 outside scope.
-`M70-F001` has direct owning-layer regressions and replacement release/publication evidence, so
-its objective repair gates are mechanically resolved. Its targeted M70-U1 human recheck remains
-pending, and M70 remains open.
-`docs/M71_GOALS.md` is a non-active candidate backlog and confers no implementation authority.
+`M70-F001` has direct owning-layer regressions, replacement release/publication evidence and an
+accepted targeted M70-U1 human recheck. The 2026-08-10 scoped close decision accepts M70-U1 through
+M70-U5 without inventing an unrecorded exhaustive replay of every scripted step. M70 is closed.
+
+## M70B acceptance: post-M70 bugfix cut
+
+Status: active empty placeholder. Acceptance criteria will be written from the supervising user's
+bounded defect reproductions. Each accepted defect requires an owning-layer regression,
+proportionate requalification and its own focused M70B UAT. This placeholder authorizes no inferred
+fix, API change or cleanup. M71 remains deferred behind M70B.
+
+`docs/M71_GOALS.md` is a deferred candidate backlog and confers no implementation authority.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

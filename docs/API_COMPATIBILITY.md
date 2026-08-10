@@ -81,9 +81,9 @@ circumference subject and reverse-incidence candidate. Its durable result is the
 PointOnCurve relation; it adds no sketch constraint, residual or persistence variant.
 M70 implementation, focused direct qualification, integrated release gate and frozen-candidate
 publication are complete on replacement source `3d157896c87eaf647abee1192c838100ce359ce9`.
-Circle-authoring finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and
-supervising-human UAT remain pending. No later M71 API is authorized by the temporary
-`docs/M71_GOALS.md` backlog.
+Circle-authoring finding `M70-F001` is resolved and the supervising human approved M70 on
+2026-08-10. M70B is an empty bugfix placeholder and authorizes no API change. No M71 API is
+authorized by the candidate `docs/M71_GOALS.md` backlog, which remains deferred behind M70B.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

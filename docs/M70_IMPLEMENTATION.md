@@ -2,10 +2,9 @@
 
 # M70 implementation — Headless auto-constraint drafting intelligence
 
-Status: implementation, focused direct qualification, integrated release qualification, frozen
-replacement-candidate publication and served-byte verification are complete. `M70-F001` is
-mechanically resolved; its targeted M70-U1 recheck and overall human approval are pending, so M70
-remains open.
+Status: complete and explicitly approved by the supervising human on 2026-08-10. Implementation,
+focused direct qualification, integrated release qualification, frozen replacement-candidate
+publication, served-byte verification and scoped human UAT all pass. `M70-F001` is resolved.
 
 Architecture owner: ADR 0034
 
@@ -219,7 +218,7 @@ Tailscale address with proxy and cache bypass, and matched both their expected S
 local bytes. `/` matched `index.html`, and a post-fetch aggregate check proved the frozen
 distribution remained unchanged.
 
-## 4. Acceptance criteria passed and pending
+## 4. Acceptance criteria passed
 
 The replacement implementation and focused direct matrix satisfy the headless ownership,
 inference-family, hysteresis, ranking, suppression, atomic plan, exact-input authentication,
@@ -234,11 +233,12 @@ Milestone gate state:
 - [x] Tailscale publication plus byte-for-byte manifest verification;
 - [x] resolve the objective implementation/direct/release/publication requirements of `M70-F001`;
   and
-- [ ] receive the targeted M70-U1 recheck and supervising-human approval of every area in
+- [x] receive the targeted M70-U1 recheck and supervising-human approval of every area in
   `docs/M70_UAT.md`.
 
-The replacement candidate is mechanically qualified and published. Targeted M70-U1 recheck and
-overall supervising-human UAT remain pending, so M70 is not complete.
+The replacement candidate is mechanically qualified, published and approved. The 2026-08-10 scoped
+close decision accepts M70-U1 through M70-U5 and the targeted `M70-F001` recheck without inventing
+an unrecorded exhaustive replay of every scripted step.
 
 ## 5. Known limitations and next blocker
 
@@ -250,19 +250,18 @@ sketch schemas remain unchanged, while workspace v5 adds only host-owned identit
 Browser E2E, mobile behavior, global root enumeration and
 browser-owned geometric policy remain excluded.
 
-`M70-F001` is mechanically resolved. The Circle circumference stage distinguishes its radius sample
+`M70-F001` is resolved. The Circle circumference stage distinguishes its radius sample
 from an authored point operand: near an existing persistent point or line endpoint it previews
 **Circle through point** and atomically commits PointOnCurve(existing point, created circle),
 without allocating a hidden rim point. Semantic midpoints and arbitrary line interiors are
 ineligible, and no line-interior contact or tangency is inferred. Direct regressions, replacement
-qualification/publication and served-byte verification pass; the targeted M70-U1 human recheck
-remains pending.
+qualification/publication, served-byte verification and the targeted M70-U1 human recheck pass.
 
 The exact scene seal intentionally clones inference-visible native tessellation and construction
 snap anchors, roughly doubling that bounded portion of each authoritative scene. This avoids a
 collision-prone digest and preserves the current ergonomic public presentation DTO; eliminating
 the duplicate would require a broader immutable/accessor-based scene API change outside M70.
 
-`docs/M71_GOALS.md` is a temporary candidate backlog only. M71 is not active, ordered, scoped or
-authorized for implementation. The remaining M70 work is the targeted `M70-F001` recheck plus
-supervising-human UAT—not any M71 work.
+M70 is closed. M70B is the active empty placeholder for the supervising user's post-M70 defect
+list. `docs/M71_GOALS.md` remains a candidate backlog deferred behind M70B; M71 is not scoped or
+authorized for implementation.

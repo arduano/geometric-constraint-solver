@@ -46,19 +46,18 @@ for the ADR 0032 headless Fillet direct-manipulation cut: branch-preserving radi
 headless contact metadata/internal continuation, explicit retention/local-alternative actions,
 Current-only coordinator transactions and pointer capture. M69 completed and received
 supervising-human approval for ADR 0033's Profile/Construction semantics, including computed
-Fillet-hidden construction provenance and headless role-aware picking. M70 is the active ADR 0034
-headless auto-constraint drafting milestone; implementation, focused direct qualification, complete
-release qualification, frozen replacement-candidate publication and served-byte verification pass.
-Circle-authoring finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and the
-remaining focused human UAT are pending, so M70 remains open.
+Fillet-hidden construction provenance and headless role-aware picking. M70 completed and received
+supervising-human approval for ADR 0034's headless auto-constraint drafting milestone, including
+the `M70-F001` Circle-through-point repair, replacement qualification/publication and scoped UAT.
+M70B is the active empty placeholder for a bounded post-M70 bugfix cut. M71 is deferred behind it.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed and approved through M69, with M70 mechanically
-   replacement-qualified but open for targeted M70-U1 recheck and human UAT.
+3. `PLAN.md` — active roadmap: completed and approved through M70, with M70B awaiting its bounded
+   bugfix scope and M71 deferred behind it.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -85,7 +84,7 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. Human UAT is complete at M40.7, M53 and M61-M69; every newly scoped
+and application undo. Human UAT is complete at M40.7, M53 and M61-M70; every newly scoped
 milestone from M70 onward ends in its own UAT and all objective behavior is directly automated
 first. The desktop demo has no future mobile support requirement.
 

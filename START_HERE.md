@@ -35,14 +35,13 @@ pointer-capture foundation needed by those interactions. The complete mechanical
 passed and the supervising human explicitly approved M68 on 2026-08-09. M69 completed ADR 0033's
 persistent Profile/Construction authoring, headless role-aware interaction and computed
 Fillet-discarded implicit construction geometry; its complete mechanical/release gate passed and
-the supervising human explicitly approved it on 2026-08-09. M70 is now the active milestone under
-ADR 0034: reusable headless auto-constraint drafting intelligence, atomic
-construction-plus-inference commit and an ordinary editable UAT playground. Implementation and
-focused direct qualification, integrated release qualification, frozen-candidate publication and
-served-byte verification are complete for replacement source
-`3d157896c87eaf647abee1192c838100ce359ce9`. The objective repair, direct regressions, release
-qualification and publication for Circle-authoring finding `M70-F001` are mechanically resolved;
-its targeted M70-U1 recheck and overall supervising-human approval remain pending.
+the supervising human explicitly approved it on 2026-08-09. M70 completed ADR 0034's reusable
+headless auto-constraint drafting intelligence, atomic construction-plus-inference commit and
+ordinary editable UAT playground. Replacement source
+`3d157896c87eaf647abee1192c838100ce359ce9` passed direct/release qualification, publication and
+the repaired Circle-through-point UAT; the supervising human explicitly approved M70 on
+2026-08-10. M70B is the active empty placeholder for the next bounded bugfix cut. M71 is deferred
+behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -110,9 +109,9 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M69 are complete and approved. M70 implementation and focused
-direct qualification, integrated release qualification, frozen-candidate publication and served-
-byte verification are complete under ADR 0034, but the milestone remains open for human UAT. It
+direction-at-contact domain API. M61-M70 are complete and approved. M70 implementation and focused
+direct qualification, integrated release qualification, frozen-candidate publication, served-byte
+verification and scoped human UAT are complete under ADR 0034. It
 uses only existing ordinary retained relations for persistent-point reuse, native PointOnCurve,
 Midpoint, line/polyline
 Horizontal/Vertical and remembered affine
@@ -134,10 +133,10 @@ that do not own drafting suppression. On replacement source
 `3d157896c87eaf647abee1192c838100ce359ce9`, the focused inference selection passes 47/47, the
 complete editor crate passes 271/271 unit tests plus all relevant integration suites, demo-web passes
 83/83 tests, the sketch library passes 33/33 unit tests and M56 passes 6/6. The complete release
-gate and served-byte verification also pass. `M70-F001` is mechanically resolved: a Circle
+gate and served-byte verification also pass. `M70-F001` is resolved: a Circle
 circumference snap to an existing point or line endpoint atomically creates
 PointOnCurve(existing point, created circle), not a hidden rim point or an arbitrary line-interior
-contact/tangency. Its targeted human recheck and overall M70 approval remain pending. M64
+contact/tangency. The targeted recheck and overall M70 approval pass. M64
 supersedes active-scenario routing and sample-specific passive-driver metadata with one ordinary
 workspace coordinator.
 M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
@@ -269,14 +268,11 @@ computed-feature behavior and received focused supervising-human approval. M68 c
 0032 Fillet direct-manipulation cut, passed its complete release gate and received explicit
 supervising-human approval on 2026-08-09. M69 completed ADR 0033's Profile/Construction semantics,
 passed its complete release gate and received explicit supervising-human approval on 2026-08-09.
-M70 is active: implementation, focused direct qualification, integrated release qualification,
-frozen replacement-candidate publication and served-byte verification are complete.
-`M70-F001` is mechanically resolved, while its targeted M70-U1 recheck and the remaining human UAT
-are pending.
-`docs/M70_IMPLEMENTATION.md` owns its objective ledger, `docs/M70_UAT.md` is the pending scorecard
-and ADR 0034 owns the architecture.
-The temporary `docs/M71_GOALS.md` backlog is not an active milestone or implementation
-authorization.
+M70 is complete and approved: implementation, focused direct qualification, integrated release
+qualification, frozen replacement-candidate publication, served-byte verification and scoped human
+UAT all pass. `M70-F001` is resolved. `docs/M70_IMPLEMENTATION.md`, `docs/M70_UAT.md` and ADR 0034
+own the completed record. M70B is the active empty post-M70 bugfix placeholder. The temporary
+`docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:
 
@@ -320,11 +316,10 @@ Durable milestone and cleanup records:
 - `docs/M69_IMPLEMENTATION.md` (completed Profile/Construction implementation ledger)
 - `docs/M69_UAT.md` (approved focused Profile/Construction scorecard)
 - `docs/adr/0033-profile-and-construction-geometry-semantics.md`
-- `docs/M70_IMPLEMENTATION.md` (replacement-qualified and published auto-constraint ledger; human
-  UAT pending)
-- `docs/M70_UAT.md` (focused auto-constraint scorecard; targeted M70-U1 recheck and UAT pending)
+- `docs/M70_IMPLEMENTATION.md` (completed and approved auto-constraint ledger)
+- `docs/M70_UAT.md` (approved focused auto-constraint scorecard and finding ledger)
 - `docs/adr/0034-headless-auto-constraint-drafting-intelligence.md`
-- `docs/M71_GOALS.md` (non-active follow-up primitive backlog)
+- `docs/M71_GOALS.md` (deferred post-M70B primitive backlog)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

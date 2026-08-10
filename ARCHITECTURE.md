@@ -57,21 +57,24 @@ construction/NURBS UAT and certified all-family visual profiles.
   selection scopes and role-aware authoring own the interaction policy. Implementation, complete
   release qualification and focused human UAT are complete; the supervising human explicitly
   approved M69 on 2026-08-09.
-- **Active target:** M70 implements ADR 0034's reusable headless auto-constraint drafting
+- **Completed target:** M70 implements ADR 0034's reusable headless auto-constraint drafting
   intelligence. Semantic anchors, stage-local reference memory, ranked prospective bundles and
   atomic construction-plus-relation commit belong to `geosolve-constraint-editor`; the browser
   remains a thin renderer/event adapter. The target uses existing retained constraint primitives
   only. Implementation, focused direct qualification, integrated release qualification, frozen-
-  replacement-candidate publication and served-byte verification are complete. Circle-authoring
-  finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and the remaining
-  supervising-human UAT are pending.
+  replacement-candidate publication, served-byte verification and scoped human UAT are complete.
+  Circle-authoring finding `M70-F001` is resolved; the supervising human explicitly approved M70
+  on 2026-08-10.
+- **Active placeholder:** M70B reserves the bounded post-M70 bugfix cut. It carries no inferred
+  architecture, API or defect scope until the supervising user supplies reproductions. M71 is
+  deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M69 sequence and active M70 target listed in section 15.
+current ownership is the completed M10-M70 sequence and active M70B placeholder listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -320,9 +323,9 @@ no-op. Candidate enumeration stops at its configured bound and fails closed with
 semantic prefix. A Circle circumference click is instead a radius sample: near an existing point or
 line endpoint it creates PointOnCurve(existing point, created circle) atomically, without a hidden
 rim point or any arbitrary line-interior contact/tangency fallback. This paragraph describes
-implemented but not-yet-human-accepted M70 behavior. `M70-F001` has passed direct regressions,
-replacement qualification/publication and served-byte verification, but still requires its
-targeted human recheck before the milestone can close.
+implemented and human-accepted M70 behavior. `M70-F001` passed direct regressions, replacement
+qualification/publication, served-byte verification and its targeted human recheck before the
+milestone closed.
 
 Publication authority is not derivable from public scene fields. Only the retained coordinator can
 authenticate an `EditorScene` against its exact current accepted document, design filter and
@@ -463,7 +466,7 @@ gesture, drafting, lifecycle and history policy and made this crate a thin adapt
 `geosolve-constraint-editor`. Cleanup M46-M50 replaces direct-test ownership and removes the
 second legacy application and old browser E2E; M51 consolidates the survivor around one workspace
 snapshot and direct presentation/evidence owners. Human acceptance is recorded at completed M40.7,
-M53 and M61-M69; every newly scoped milestone from M70 onward ends in its own UAT after direct
+M53 and M61-M70; every newly scoped milestone from M70 onward ends in its own UAT after direct
 qualification.
 
 M55 makes the surviving workbench render and dispatch the complete alpha action surface returned by
@@ -999,12 +1002,13 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   role-aware operation output, explicit/implicit construction scene metadata, Fillet-discarded
   complements, shared headless pick scopes and a focused human UAT. Implementation, direct/release
   qualification and supervising-human acceptance are complete as of 2026-08-09.
-- M70: active ADR 0034 headless auto-constraint drafting cut: semantic native anchors, bounded
+- M70: completed and approved ADR 0034 headless auto-constraint drafting cut: semantic native anchors, bounded
   stage-local references, ranked/hysteretic candidate bundles, semantic suppression, atomic
   construction-plus-existing-relation publication, one editable playground and a dedicated human
   UAT. Implementation, focused direct qualification, integrated release qualification, frozen-
-  replacement-candidate publication and served-byte verification are complete. Circle-authoring
-  finding `M70-F001` is mechanically resolved; its targeted recheck and the remaining human UAT
-  are pending.
-  `docs/M71_GOALS.md` is a non-active backlog for additional retained primitives, not the next
-  authorized milestone.
+  replacement-candidate publication, served-byte verification and scoped human UAT are complete.
+  Circle-authoring finding `M70-F001` is resolved.
+- M70B: active empty placeholder for a bounded post-M70 defect cut. No architecture or API change
+  is authorized until its reproductions and acceptance scope are recorded.
+- M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
+  primitives, not an active or authorized plan.

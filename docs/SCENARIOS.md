@@ -1282,10 +1282,11 @@ retention actions, Current-only interaction history, pointer capture and separat
 specimens. Their implementation, focused direct qualification, clean full release gate and human
 UAT are complete. M69 reuses the ordinary Construction/reference and 2D Fillet playground leaves
 for the Profile/construction scenarios below; it adds no scenario-mode state. Its direct/release
-qualification and focused human UAT are complete. M70 is now active under ADR 0034 and adds one
+qualification and focused human UAT are complete. M70 completed ADR 0034 and adds one
 ordinary editable auto-constraint drafting playground; implementation and focused direct
 qualification, integrated release qualification, frozen replacement-candidate publication and
-served-byte verification are complete, while targeted M70-U1 recheck and human UAT remain pending.
+served-byte verification are complete, and the scoped human UAT was approved on 2026-08-10. M70B
+is an empty bugfix placeholder and adds no fixture yet; M71 is deferred behind it.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1294,7 +1295,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M69. Every newly scoped milestone from M70 onward ends in
+recorded at completed M40.7, M53 and M61-M70. Every newly scoped milestone from M70 onward ends in
 its own UAT after direct automated qualification.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
@@ -1396,8 +1397,8 @@ Circle authoring treats its circumference click as a radius sample rather than a
 an existing persistent point, including a line endpoint, the headless proposal is **Circle through
 point** and the atomic plan creates PointOnCurve(existing point, created circle). It creates no
 hidden rim point. A semantic midpoint or arbitrary line interior is not eligible and cannot silently
-become line contact or tangency. `M70-F001` has passed direct regressions, replacement publication
-and served-byte verification; its UAT contract remains pending targeted human recheck.
+become line contact or tangency. `M70-F001` passed direct regressions, replacement publication,
+served-byte verification and its targeted human recheck.
 
 The replay uses persistent identities and normalized 2D editor inputs and must produce identical
 transitions natively and through WASM. A browser can map Shift to semantic suppression and render
@@ -1440,8 +1441,8 @@ Direct headless tests, not sample coordinates, own point identity reuse, all-fam
 metadata, ranking, hysteresis, suppression, resource limits and atomic commit. Human M70 UAT uses
 the leaf to assess discoverability and predictability for H/V, point reuse, PointOnCurve,
 midpoint-normal, remembered Parallel/Perpendicular, ambiguity, suppression, zoom/scope,
-Undo/Redo and reload. `docs/M70_UAT.md` records the replacement-candidate scorecard awaiting human
-results and the targeted `M70-F001` Circle-authoring recheck.
+Undo/Redo and reload. `docs/M70_UAT.md` records the approved replacement-candidate scorecard and
+resolved `M70-F001` Circle-authoring recheck.
 
 Application-workspace v5 round trips the field-opaque persistent-object and spline-span allocator
 high-water needed for never-reuse after Undo/divergent history and process reload. Frozen workspace

@@ -42,10 +42,10 @@ samples; M66 completes the approved computed-feature cut for ordinary multi-corn
 outside the constraint graph; M67 completes the approved legacy-surface and frozen-harness cleanup;
 M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes approved ADR 0033
 Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
-is the active ADR 0034 headless auto-constraint drafting milestone; implementation and focused
-direct qualification, integrated release qualification, frozen replacement-candidate publication
-and served-byte verification are complete. UAT finding `M70-F001` is mechanically resolved, while
-its targeted M70-U1 recheck and dedicated human UAT remain pending. M66's
+completes the approved ADR 0034 headless auto-constraint drafting milestone, including the
+`M70-F001` Circle-through-point repair and replacement qualification/publication. M70B is the
+active empty placeholder for a bounded post-M70 bugfix cut; its defect list is awaiting supervising-
+user scope. M71 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -148,7 +148,7 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M69 are complete and approved, and
+- Keep human acceptance records explicit: M40.7, M53 and M61-M70 are complete and approved, and
   every newly scoped milestone from M70 onward ends in its own supervising-human UAT. Every
   objective correctness, persistence, compatibility and presentation-adapter assertion must pass
   through direct unit or integration tests at its owning layer before a human checkpoint begins;
@@ -3493,10 +3493,9 @@ legacy UI.
 
 ### M70
 
-Status: implementation, focused direct qualification, integrated release qualification, frozen-
-replacement-candidate publication and served-byte verification are complete under ADR 0034.
-Circle-authoring finding `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and
-supervising-human UAT are pending, so M70 remains open.
+Status: complete and explicitly approved by the supervising human on 2026-08-10. Implementation,
+focused direct qualification, integrated release qualification, frozen replacement-candidate
+publication, served-byte verification and the scoped human UAT all pass under ADR 0034.
 
 Goal: add reusable CAD-like auto-constraint drafting intelligence to the headless Rust editor.
 Hover may wake semantic anchors and affine references; live construction may publish adjusted
@@ -3517,12 +3516,12 @@ M70 uses no new solver residual or persistent constraint definition.
 - [x] Reuse an existing persistent point identity without manufacturing a redundant Coincident
   source or duplicate point. A standalone Point-tool confirmation of that same identity is a
   history-neutral no-op; reuse inside another construction is encoded in its point operand.
-- [ ] Close `M70-F001`: treat the Circle circumference click as a radius sample rather than an
+- [x] Close `M70-F001`: treat the Circle circumference click as a radius sample rather than an
   authored point operand. Near an existing persistent point or line endpoint, preview and commit
   PointOnCurve(existing point, created circle) in the same atomic construction plan, with no hidden
   rim point. Do not infer contact or tangency from an arbitrary line interior; add direct headless
   inference/commit and thin presentation regressions before replacement release qualification.
-  Those objective gates now pass; keep this item open until the targeted M70-U1 human recheck.
+  Those objective gates and the targeted M70-U1 human recheck pass.
 - [x] Create explicit native PointOnCurve contacts for line, circle/arc, Bezier, conic, B-spline
   and NURBS spans with complete span/domain/parameter/winding/neighbourhood metadata.
 - [x] Prefer semantic line/polyline Midpoint over generic PointOnCurve and support a compatible
@@ -3594,7 +3593,7 @@ M70 uses no new solver residual or persistent constraint definition.
   integrated release gate, publish its read-only seven-file distribution at
   `http://100.94.63.83:8080/` and byte-verify it with manifest aggregate
   `04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`.
-- [ ] Complete `docs/M70_UAT.md` and receive explicit supervising-human approval.
+- [x] Complete `docs/M70_UAT.md` and receive explicit supervising-human approval.
 
 Gate: the placement click is the sole explicit confirmation and either publishes adjusted geometry
 plus every displayed compatible inferred relation in one retained transaction or publishes
@@ -3607,7 +3606,7 @@ qualification and explicit supervising-human UAT approval.
 ledger. Equality, symmetry, concentric/quadrant, certified intersection/collinear/extension,
 nonlinear tangent/normal, grid/axis, angle-increment and durable arbitrary point-pair H/V inference
 remain outside M70. Candidate retained primitives are recorded in `docs/M71_GOALS.md`; that
-temporary backlog does not make M71 active, ordered or authorized for implementation.
+backlog is deferred behind M70B and does not make M71 active or authorized for implementation.
 
 Historical initial-candidate qualification/publication note (2026-08-10): the focused Rust owner
 matrix and the shared
@@ -3636,8 +3635,26 @@ A read-only seven-file snapshot at `/tmp/geosolve-m70-uat.1NQkzV` is served at
 `http://100.94.63.83:8080/`; every asset and `/` matched the local replacement bytes, with manifest
 aggregate `04dad5a8e144be9f7a947b22dabaeee7ddd61ecec177d10c67ffcef10fc44c83`.
 These results mechanically resolve the implementation, direct-regression, release and publication
-requirements of `M70-F001`; its targeted M70-U1 recheck and overall supervising-human approval
-remain pending.
+requirements of `M70-F001`.
+
+Close record (2026-08-10): the supervising human reviewed the replacement candidate, reported it
+looked good and explicitly requested M70 closure. That scoped decision accepts M70-U1 through
+M70-U5 and the targeted `M70-F001` recheck without inventing an unrecorded exhaustive replay of
+every scripted step. M70 is closed.
+
+### M70B
+
+Status: active empty placeholder. The supervising user will provide a bounded set of unrelated
+post-M70 defects before implementation begins.
+
+Goal: reserve one bugfix milestone before M71. Scope, direct regression ownership and the focused
+UAT scorecard will be written from the supplied reproductions; no defect, API change or broader
+cleanup is inferred by this placeholder. M70B ends in its own UAT.
+
+### M71
+
+Status: deferred behind M70B. `docs/M71_GOALS.md` remains a candidate backlog, not an active plan,
+scope decision or implementation authorization.
 
 ## Explicit non-goals
 

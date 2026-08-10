@@ -2,10 +2,9 @@
 
 # ADR 0034: Headless auto-constraint drafting intelligence
 
-Status: accepted for M70; implementation, focused direct qualification, integrated release
-qualification, frozen replacement-candidate publication and served-byte verification are complete.
-Circle-authoring finding `M70-F001` is mechanically resolved, while its targeted M70-U1 recheck
-and supervising-human UAT are pending
+Status: accepted and completed for M70; implementation, focused direct qualification, integrated
+release qualification, frozen replacement-candidate publication, served-byte verification and
+scoped supervising-human UAT are complete. Circle-authoring finding `M70-F001` is resolved
 
 ## Context
 
@@ -215,7 +214,7 @@ M70 adds no residual or new persistent constraint definition. Equality, symmetry
 quadrant, certified intersection/extension/collinear, nonlinear tangent/normal, arbitrary durable
 point-pair horizontal/vertical, grid/axis and angle-increment inference are deferred. The candidate
 primitive and branch-policy backlog is recorded in `docs/M71_GOALS.md`; that document does not make
-M71 active or authorize implementation.
+M71 active or authorize implementation, and the backlog is deferred behind M70B.
 
 M70 also adds no inferred-state persistence, hidden construction geometry, canonical sketch-schema
 migration, browser-owned geometric policy, browser E2E, mobile behavior, global root enumeration or
@@ -252,7 +251,7 @@ history restoration and bounded/validated persistent identity high-water across 
 Replacement source `3d157896c87eaf647abee1192c838100ce359ce9` passes the focused inference
 selection 47/47, 271/271 editor unit tests plus all relevant integration suites, demo-web 83/83, the
 sketch library 33/33 and M56 6/6. Its complete release gate, frozen publication and served-byte
-verification pass; targeted human recheck remains pending.
+verification and targeted human recheck pass.
 ADR 0033 scope, Profile overlap, implicit-source mapping and computed-Fillet exclusion remain
 mandatory regressions.
 

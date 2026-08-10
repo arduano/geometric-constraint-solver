@@ -109,8 +109,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   `3d157896c87eaf647abee1192c838100ce359ce9` implements that Circle-through-point contract and
   passes focused inference 47/47, 271/271 editor unit tests plus every relevant integration suite,
   demo-web 83/83, sketch 33/33 and M56 6/6. Its complete release gate, frozen Tailscale publication
-  and served-byte verification pass. The finding is mechanically resolved, but its targeted human
-  recheck and overall M70 approval remain pending.
+  and served-byte verification pass. The targeted human recheck and scoped UAT are accepted; the
+  supervising human explicitly approved and closed M70 on 2026-08-10.
 
 ### Changed
 
@@ -120,11 +120,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
   removed the separately routed `/#/dev/lab` application. M68 subsequently completed the ADR 0032
   Fillet-interaction cut, and M69 subsequently completed the ADR 0033 Profile/Construction cut;
-  both received explicit supervising-human approval on 2026-08-09. M70 is now scoped under ADR
-  0034 for headless auto-constraint drafting intelligence. Implementation, focused direct and
+  both received explicit supervising-human approval on 2026-08-09. M70 subsequently completed ADR
+  0034 headless auto-constraint drafting intelligence. Implementation, focused direct and
   integrated release qualification, frozen replacement-candidate publication and served-byte
-  verification are complete. `M70-F001` is mechanically resolved; its targeted M70-U1 recheck and
-  overall human acceptance remain pending.
+  verification are complete. `M70-F001` is resolved and the scoped human UAT is approved. M70B is
+  now the empty post-M70 bugfix placeholder; M71 remains deferred behind it.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by
