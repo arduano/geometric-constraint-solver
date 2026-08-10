@@ -6,12 +6,12 @@ Status: ready for supervising-human review. Implementation qualification, candid
 freeze/publication and served-byte verification pass. Every human result below remains pending;
 this scorecard records no human pass or approval.
 
-Candidate source: `30d66a60e21543546274befd9791058897eb9eb5`
+Candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest aggregate:
-`3fa3b7486c046b6e7c83464198d52eb5878182f83a28ed234da12bd9503b1a4d`
+`35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`
 
 ## Preconditions
 

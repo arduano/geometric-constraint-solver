@@ -3684,14 +3684,14 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   distribution, complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
 Qualification/publication note (2026-08-10): source
-`30d66a60e21543546274befd9791058897eb9eb5` passes the demo-web 93/93 library and 1/1 native
+`6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b` passes the demo-web 94/94 library and 1/1 native
 decoder tests, warnings-denied Clippy, the explicit WASM check, both platform licence inventories
 and the complete integrated release gate. The gate includes all locked workspace tests,
 cross-target M70 parity, rustdoc, benchmark compilation, performance budgets, package/licence
-checks, the 127.53-second 256-moving-body sparse crossover and Trunk release assembly. A read-only
-seven-file snapshot at `/tmp/geosolve-m70b-uat.V3OMjp` is served at
+checks, the required 256-moving-body sparse crossover and Trunk release assembly. A read-only
+seven-file snapshot at `/tmp/geosolve-m70b-uat.Oj9SZT` is served at
 `http://100.94.63.83:8080/`; every asset and `/` matched the frozen local bytes, with manifest
-aggregate `3fa3b7486c046b6e7c83464198d52eb5878182f83a28ed234da12bd9503b1a4d`.
+aggregate `35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`.
 Only the focused human UAT and explicit approval remain open in the combined final checkbox.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,

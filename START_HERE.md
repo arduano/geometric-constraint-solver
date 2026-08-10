@@ -43,7 +43,7 @@ the repaired Circle-through-point UAT; the supervising human explicitly approved
 2026-08-10. M70B is the active bounded reproduction-payload human-UAT cut. It introduces a
 versioned, compressed text capsule around the authoritative application-workspace v5 snapshot so
 UAT failures can be copied into a text conversation and restored through the ordinary validated
-coordinator path. Source `30d66a60e21543546274befd9791058897eb9eb5` passes direct/release
+coordinator path. Source `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b` passes direct/release
 qualification, frozen Tailscale publication and served-byte verification; the dedicated human UAT
 remains pending. M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile

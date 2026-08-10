@@ -10,14 +10,14 @@ human pass or milestone closure.
 Architecture owner: the existing `geosolve-demo-web` workspace-persistence boundary; M70B adds no
 solver or domain authority and requires no new ADR.
 
-Candidate source: `30d66a60e21543546274befd9791058897eb9eb5`
+Candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
 
 Integrated release-gate result: **PASS**
 
-Tailscale release distribution: `/tmp/geosolve-m70b-uat.V3OMjp` at
+Tailscale release distribution: `/tmp/geosolve-m70b-uat.Oj9SZT` at
 `http://100.94.63.83:8080/`
 
-Release manifest aggregate: `3fa3b7486c046b6e7c83464198d52eb5878182f83a28ed234da12bd9503b1a4d`
+Release manifest aggregate: `35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`
 
 ## 1. Files and APIs
 
@@ -109,21 +109,20 @@ cargo check --locked -p geosolve-demo-web --all-features \
   --target wasm32-unknown-unknown
 cargo deny check licenses
 git diff --check
-nix-shell shell.nix --run \
-  'env GEOSOLVE_ALLOW_DIRTY=1 NO_COLOR=true ./scripts/release-gate.sh'
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
 Outcomes on 2026-08-10:
 
 - `cargo fmt --all -- --check` and `git diff --check`: pass;
-- locked all-feature `geosolve-demo-web`: 93/93 library tests plus 1/1 native decoder test pass;
+- locked all-feature `geosolve-demo-web`: 94/94 library tests plus 1/1 native decoder test pass;
 - warnings-denied demo-web Clippy and the explicit `wasm32-unknown-unknown` check: pass;
 - both native and WASM `cargo license` inventories include the recorded M70B packages and only
   recorded GPL-compatible expressions;
 - `cargo deny check licenses`: pass;
 - the complete integrated release gate: pass, including all locked workspace tests, cross-target
   M70 transition parity, rustdoc, benchmark compilation, package contents, performance budgets,
-  the 127.53-second 256-moving-body sparse crossover and Trunk 0.21.14 release assembly; and
+  the required 256-moving-body sparse crossover and Trunk 0.21.14 release assembly; and
 - every one of the seven frozen files and served `/` byte-matches the read-only local snapshot.
 
 An earlier development gate reached Trunk and correctly exposed that the new native diagnostic
@@ -147,11 +146,13 @@ Direct coverage proves:
 - canonical five-field envelope and strict version, codec, decimal, lowercase checksum and
   unpadded-base64 rules;
 - corruption, truncation, trailing zlib bytes, declared-length mismatch, invalid UTF-8 and all
-  three resource limits;
+  three resource limits, including exact-equality acceptance at each bound;
 - transport bombs stop at the declared bounded output rather than allocating unbounded memory;
 - a representative workspace containing computed Fillets, Construction roles and allocator
   high-water restores exact v5 content;
 - transport-valid but workspace-invalid text cannot construct or publish a coordinator;
+- transport- and workspace-valid state whose retained lifecycle exhausts coordinator
+  reconstruction also rejects through the complete payload path; and
 - a corrupt or semantically invalid payload leaves the live workspace byte-identical; and
 - native tests cover codec behavior and the same codec path compiles for
   `wasm32-unknown-unknown`.
