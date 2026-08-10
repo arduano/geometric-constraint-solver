@@ -44,10 +44,11 @@ M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes ap
 Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
 completes the approved ADR 0034 headless auto-constraint drafting milestone, including the
 `M70-F001` Circle-through-point repair and replacement qualification/publication. M70B is the
-active bounded reproduction-capsule human-UAT candidate: complete workspace v5 state can be copied
-as compressed text and restored atomically through its existing validation path. Direct/release
-qualification, frozen publication and served-byte verification pass; focused human UAT remains
-pending. M71 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
+active bounded reproduction-capsule human-UAT repair: complete workspace v5 state can be copied as
+compressed text and restored atomically through its existing validation path. The first supplied
+payload opened `M70B-F001`; its focused branch-bound correction and exact graph regression pass,
+while replacement release qualification/publication and focused human UAT remain pending. M71 is
+deferred behind M70B and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3646,9 +3647,10 @@ every scripted step. M70 is closed.
 
 ### M70B
 
-Status: active human UAT. Bounded reproduction transport and restore, direct qualification,
-integrated release qualification, frozen-candidate publication and served-byte verification pass.
-Focused human UAT remains pending. No completion or approval is claimed.
+Status: active UAT repair and replacement qualification. Bounded reproduction transport and
+restore remain qualified, but the first human payload exposed `M70B-F001`; the prior frozen
+candidate is withdrawn until its owning-layer correction is requalified and republished. Focused
+human UAT remains pending. No completion or approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3692,14 +3694,31 @@ checks, the required 256-moving-body sparse crossover and Trunk release assembly
 seven-file snapshot at `/tmp/geosolve-m70b-uat.Oj9SZT` is served at
 `http://100.94.63.83:8080/`; every asset and `/` matched the frozen local bytes, with manifest
 aggregate `35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`.
-Only the focused human UAT and explicit approval remain open in the combined final checkbox.
+This is retained as historical transport evidence; `M70B-F001` withdraws it as the current UAT
+candidate.
+
+UAT finding `M70B-F001` (2026-08-10): payload identity `8446:ea81c82137d5b13c`
+contains a free line end, a second line end on a circle and an ellipse major-axis point on the
+line. The accepted state is healthy at rank four with ten equality and bidirectional bounded
+freedoms. Drag locality also remains healthy at five passive freedoms and three anchors. The
+failure occurred when secondary optimization reached a Local contact-neighbourhood edge: Local
+branch intervals are semantically open, while their core coordinate bounds had been lowered as
+closed endpoints, so independent validation rejected an otherwise converged candidate as
+`AmbiguousContactNeighborhood`. The sketch compiler now lowers only Local effective numeric
+bounds one representable value inward while preserving the persisted interval and strict
+independent validation. The exact payload regression reaches six formerly failing horizontal,
+vertical, diagonal and reversal targets in one bounded attempt each, keeps all ten freedoms and
+validates residuals independently; direct sketch coverage proves both effective active endpoints
+remain strictly inside unchanged branch metadata. Replacement full qualification, publication,
+served-byte verification and the targeted human recheck remain pending.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The
 browser adapter duplicates or evaluates no solver equation itself; reconstruction invokes the
 ordinary Rust domain certification path before swap. M70B closes only after direct qualification
-and its own explicit human UAT. `docs/M70B_IMPLEMENTATION.md`, `docs/M70B_UAT.md` and
-`docs/SCENARIOS.md` own the detailed ledger.
+and its own explicit human UAT. Objective UAT solver/domain findings require owning-layer
+regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTATION.md`,
+`docs/M70B_UAT.md` and `docs/SCENARIOS.md` own the detailed ledger.
 
 ### M71
 

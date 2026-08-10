@@ -43,9 +43,11 @@ the repaired Circle-through-point UAT; the supervising human explicitly approved
 2026-08-10. M70B is the active bounded reproduction-payload human-UAT cut. It introduces a
 versioned, compressed text capsule around the authoritative application-workspace v5 snapshot so
 UAT failures can be copied into a text conversation and restored through the ordinary validated
-coordinator path. Source `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b` passes direct/release
-qualification, frozen Tailscale publication and served-byte verification; the dedicated human UAT
-remains pending. M71 is deferred behind M70B and remains an unauthorized candidate backlog.
+coordinator path. The first supplied payload opened `M70B-F001`: an open Local contact branch had
+been lowered to closed core endpoints, so an otherwise-valid free-endpoint drag could be rejected
+at the branch edge. The owning-layer correction and exact payload regression pass; the prior
+candidate is withdrawn pending complete replacement qualification/publication and targeted human
+recheck. M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -280,7 +282,9 @@ serialized freshly as authoritative `WorkspaceSnapshot` v5 bytes, transported as
 `GEOSOLVE_REPRO_V1` zlib/base64url text and reconstructed completely before any live-workspace
 swap. It restores no transient tool, selection, sample, camera or command-history state and does
 not revive the legacy lab, E2E stack or raw-`localStorage` exchange. Qualification and
-frozen-candidate publication pass; `docs/M70B_UAT.md` approval remains pending. The temporary
+the original frozen publication remain historical transport evidence. `M70B-F001` now has a
+focused owning-layer correction and regression; replacement qualification/publication plus
+`docs/M70B_UAT.md` approval remain pending. The temporary
 `docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:

@@ -69,9 +69,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   workbench's authoritative v5 snapshot. `GEOSOLVE_REPRO_V1` is deterministic zlib compressed,
   strict unpadded base64url text with an FNV-1a corruption checksum; decoded bytes still pass the
   ordinary strict workspace decoder and full coordinator reconstruction before an atomic live
-  swap. A visible copy/paste overlay provides manual-copy fallback. Direct/release qualification,
-  frozen publication and served-byte verification pass; human UAT remains pending. M71 is deferred
-  behind M70B and remains an unauthorized candidate backlog.
+  swap. A visible copy/paste overlay provides manual-copy fallback. `M70B-F001` additionally
+  corrects existing Local open-branch lowering by placing its effective closed core endpoints one
+  representable value inside unchanged semantic metadata. The prior candidate is withdrawn while
+  that correction receives replacement release qualification/publication and targeted human
+  recheck. M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -1031,11 +1033,13 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   UAT. Implementation, focused direct qualification, integrated release qualification, frozen-
   replacement-candidate publication, served-byte verification and scoped human UAT are complete.
   Circle-authoring finding `M70-F001` is resolved.
-- M70B: active bounded reproduction-capsule human-UAT candidate. It transports the authoritative
+- M70B: active bounded reproduction-capsule human-UAT repair. It transports the authoritative
   workspace v5 envelope without copying raw browser storage, restores through the strict workspace
   decoder and a newly constructed coordinator before atomic swap, and exposes a visible
   copy/paste overlay with manual fallback. It restores no legacy lab/E2E path and serializes no
-  transient UI, camera, history or sample metadata. Direct/release qualification and frozen
-  publication pass; dedicated human UAT remains pending.
+  transient UI, camera, history or sample metadata. `M70B-F001` keeps persisted Local branch
+  intervals open while lowering effective closed core bounds one representable value inward. Its
+  exact payload regression passes; replacement full qualification/publication and dedicated human
+  UAT remain pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.

@@ -2,22 +2,23 @@
 
 # M70B implementation — Bounded workspace reproduction capsules
 
-Status: active human UAT. The bounded transport, restore, ordinary-workbench delivery, focused
-qualification, complete integrated release gate, frozen-candidate publication and served-byte
-verification pass. Supervising-human UAT and approval remain pending; this document records no
-human pass or milestone closure.
+Status: active UAT repair. The bounded transport and restore remain qualified, but the first
+human-supplied payload exposed `M70B-F001`. The prior candidate is withdrawn while the direct
+branch-bound correction is prepared for complete replacement qualification and publication.
+Supervising-human UAT and approval remain pending; this document records no human pass or
+milestone closure.
 
 Architecture owner: the existing `geosolve-demo-web` workspace-persistence boundary; M70B adds no
 solver or domain authority and requires no new ADR.
 
-Candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
+Prior withdrawn candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
 
-Integrated release-gate result: **PASS**
+Replacement candidate source: **PENDING**
 
-Tailscale release distribution: `/tmp/geosolve-m70b-uat.Oj9SZT` at
-`http://100.94.63.83:8080/`
+Replacement integrated release-gate result: **PENDING**
 
-Release manifest aggregate: `35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`
+Prior withdrawn Tailscale distribution: `/tmp/geosolve-m70b-uat.Oj9SZT`, manifest aggregate
+`35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`
 
 ## 1. Files and APIs
 
@@ -59,9 +60,11 @@ semantics require another version prefix.
 
 ## 2. Mathematical behavior
 
-M70B changes no residual, Jacobian, scaling, priority, solve status, independent validation, rank
-classification, geometry branch or sketch/feature definition. It transports persisted application
-input and accepted-state evidence only.
+The reproduction transport changes no residual, Jacobian, scaling, priority, solve status,
+independent validation, rank classification, geometry branch or sketch/feature definition. It
+transports persisted application input and accepted-state evidence only. The separately recorded
+`M70B-F001` UAT correction changes only the effective core-bound lowering of an existing Local
+contact branch; it adds no branch kind or persisted state.
 
 Copy follows one authority-preserving path:
 
@@ -99,7 +102,7 @@ persisted workspace, not an old browser interaction.
 
 ## 3. Commands and outcomes
 
-The exact implementation tree later committed unchanged as the nominated source passed:
+The original transport implementation tree, before `M70B-F001`, passed:
 
 ```text
 cargo fmt --all -- --check
@@ -112,7 +115,7 @@ git diff --check
 env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
-Outcomes on 2026-08-10:
+Historical transport-candidate outcomes on 2026-08-10:
 
 - `cargo fmt --all -- --check` and `git diff --check`: pass;
 - locked all-feature `geosolve-demo-web`: 94/94 library tests plus 1/1 native decoder test pass;
@@ -129,6 +132,9 @@ An earlier development gate reached Trunk and correctly exposed that the new nat
 binary made the WASM artifact selection ambiguous. The final source explicitly selects
 `geosolve_demo_web` in the Trunk link; both a focused release build and the complete replacement
 gate pass with that fix.
+
+Replacement `M70B-F001` qualification and publication evidence is pending below; the historical
+results above do not nominate the withdrawn distribution for further human UAT.
 
 The intended recipient-side diagnostic workflow is:
 
@@ -157,13 +163,37 @@ Direct coverage proves:
 - native tests cover codec behavior and the same codec path compiles for
   `wasm32-unknown-unknown`.
 
+## 3.1 `M70B-F001` owning-layer correction
+
+Payload identity `8446:ea81c82137d5b13c` restores a free line endpoint, the other line endpoint
+on a circle and an ellipse major-axis point on the line. The restored state is neither singular
+nor overconstrained: numerical rank is four, equality and bidirectional bounded mobility are ten,
+and the free endpoint's locality plan has five passive freedoms and three anchors.
+
+The bounded point-on-line contact persists a Local neighbourhood
+`(0.17362649353483556, 0.5736264935348356)` and an accepted parameter
+`0.5268478331756027`. Local neighbourhoods are strict/open branch state, but the compiler had
+given the closed core optimizer those same endpoints. A secondary optimum could therefore become
+active at an endpoint accepted by core and then be rejected by independent sketch validation as
+`AmbiguousContactNeighborhood`.
+
+The compiler now gives only Local contacts the effective closed interval
+`[lower.next_up(), upper.next_down()]`. Persisted branch metadata and strict independent `>`/`<`
+validation remain unchanged; bounded `Interior`, exact `Start`/`End`, tolerances, rank rules and
+drag policy are untouched. A direct sketch regression certifies both effective active endpoints,
+independent validity and unchanged branch metadata. The exact retained-editor graph reaches six
+formerly failing horizontal, vertical, diagonal and reversal targets within `1e-8`, in one bounded
+attempt each, with independently validated normalized hard residual at most `1e-9` and all ten
+freedoms preserved.
+
 ## 4. Acceptance criteria
 
 - [x] focused codec, persistence and thin-adapter tests pass;
 - [x] warnings-denied native Clippy and the explicit WASM check pass;
 - [x] the locked complete workspace/release gate passes without weakening an existing threshold;
 - [x] dependency licence inventory, package contents and release Trunk assembly pass;
-- [x] one clean source and read-only distribution are frozen and byte-verified over Tailscale;
+- [ ] the `M70B-F001` replacement source and read-only distribution are completely requalified,
+  frozen and byte-verified over Tailscale;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
@@ -177,4 +207,5 @@ size honestly rather than silently dropping content.
 
 The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, file picker,
 download flow, raw browser-storage handoff and browser E2E remain retired. M70B cannot close until
-the focused human UAT is explicitly approved. M71 stays deferred throughout that work.
+the replacement candidate passes the complete gate and focused human UAT is explicitly approved.
+M71 stays deferred throughout that work.

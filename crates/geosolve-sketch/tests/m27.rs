@@ -408,7 +408,7 @@ fn runtime_curve_fillet_uses_local_periodic_and_unbounded_bounds() {
         .unwrap();
 
     let compiled = sketch.compile(SketchSolveRequest::default()).unwrap();
-    let expected_bounds = [
+    let expected_bounds: [(LatentVariableRole, f64, f64); 2] = [
         (LatentVariableRole::FirstCurveParameter, -0.4, 0.4),
         (LatentVariableRole::SecondCurveParameter, 0.25, 0.75),
     ];
@@ -425,8 +425,8 @@ fn runtime_curve_fillet_uses_local_periodic_and_unbounded_bounds() {
             })
             .unwrap();
         let bound = compiled.problem().bound(mapping.bound_id).unwrap();
-        assert_eq!(bound.lower(), Some(expected_lower));
-        assert_eq!(bound.upper(), Some(expected_upper));
+        assert_eq!(bound.lower(), Some(expected_lower.next_up()));
+        assert_eq!(bound.upper(), Some(expected_upper.next_down()));
     }
     assert_eq!(
         compiled

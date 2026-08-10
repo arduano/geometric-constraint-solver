@@ -160,8 +160,8 @@ editable-sample cleanup, approved reduced-scope M65 predictable dragging, approv
 computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
 M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
 semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
-is the qualified, frozen reproduction-capsule candidate awaiting its own human UAT; M71 remains
-deferred behind it.
+is in active UAT repair after `M70B-F001`; its focused correction passes while replacement
+qualification/publication and human UAT remain pending. M71 remains deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1399,8 +1399,10 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 
 ## M70B acceptance: workspace reproduction handoff
 
-Status: active human UAT. Objective implementation, qualification, publication and served-byte
-criteria pass on the nominated candidate; human review and approval remain pending.
+Status: active UAT repair. The reproduction transport criteria remain qualified, but
+`M70B-F001` withdraws the prior candidate until its owning-layer branch-bound correction receives
+complete replacement qualification, publication and served-byte verification. Human review and
+approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1435,9 +1437,17 @@ criteria pass on the nominated candidate; human review and approval remain pendi
   on one nominated source. Its frozen distribution is published and byte-verified before UAT.
 - The supervising human completes and explicitly approves every area in `docs/M70B_UAT.md`.
 
-M70B adds no residual, solver state, sketch constraint, branch rule, canonical sketch schema,
-sample fixture or general file format. The payload is a versioned diagnostic interchange around
-the application workspace and cannot publish merely because its transport checksum is valid.
+M70B adds no residual, solver state, sketch constraint, branch kind, canonical sketch schema,
+sample fixture or general file format. `M70B-F001` corrects how the pre-existing open Local branch
+rule is represented by effective closed core bounds; it preserves the persisted branch interval
+and strict independent validation. The payload is a versioned diagnostic interchange around the
+application workspace and cannot publish merely because its transport checksum is valid.
+
+`M70B-F001` acceptance additionally requires the payload-derived retained-editor regression to
+reach every recorded drag target with independently valid residuals and unchanged equality
+mobility, plus direct sketch evidence that effective Local bounds are strictly inside unchanged
+semantic branch metadata. The replacement candidate must repeat the complete release/publication
+gate before targeted human recheck.
 M71 remains deferred behind M70B.
 
 `docs/M71_GOALS.md` is a deferred candidate backlog and confers no implementation authority.

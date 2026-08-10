@@ -683,8 +683,8 @@ fn explicit_local_neighborhood_retains_one_of_two_bezier_contact_roots() {
                 .find(|bound| bound.bound_id == mapping.bound_id)
         })
         .unwrap();
-    assert_eq!(bound.lower, Some(0.1));
-    assert_eq!(bound.upper, Some(0.4));
+    assert_eq!(bound.lower, Some(0.1f64.next_up()));
+    assert_eq!(bound.upper, Some(0.4f64.next_down()));
     assert!(
         sketch
             .set_contact_state(
@@ -899,8 +899,8 @@ fn perturbed_generic_line_circle_tangency_recovers_with_scale_invariant_rank_and
             .find(|bound| bound.bound_id == contact_mapping.bound_id)
             .unwrap();
         assert_eq!(contact_bound.status, geosolve_core::BoundStatus::Inactive);
-        assert_eq!(contact_bound.lower, Some(0.25));
-        assert_eq!(contact_bound.upper, Some(0.75));
+        assert_eq!(contact_bound.lower, Some(0.25f64.next_up()));
+        assert_eq!(contact_bound.upper, Some(0.75f64.next_down()));
         assert!((contact_bound.value - 0.5).abs() <= 1.0e-9);
     }
 }

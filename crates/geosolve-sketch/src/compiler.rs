@@ -7374,7 +7374,14 @@ fn add_curve_contact_latent(
 ) -> Result<VariableId, SketchError> {
     let bounded = generic_curve_is_bounded(sketch, contact.curve);
     let bounds = match contact.neighborhood {
-        CurveContactNeighborhood::Local { lower, upper } => Some((lower, upper)),
+        // A Local contact neighbourhood is semantically open: reaching either
+        // edge is branch-ambiguous and independent validation rejects it. Core
+        // variable bounds are closed, so use the nearest representable interior
+        // values. This gives a bounded secondary optimum without allowing an
+        // active bound to produce a candidate that the domain layer must reject.
+        CurveContactNeighborhood::Local { lower, upper } => {
+            Some((lower.next_up(), upper.next_down()))
+        }
         _ if bounded => Some(match contact.neighborhood {
             CurveContactNeighborhood::Start => (0.0, 0.0),
             CurveContactNeighborhood::End => (1.0, 1.0),

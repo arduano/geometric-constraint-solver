@@ -1478,6 +1478,39 @@ recipient inspect decoded workspace JSON without
 granting it publication authority. The scenario revives neither `/#/dev/lab` nor browser
 E2E/file/download/raw-`localStorage` exchange.
 
+### M70B-F001 - Open contact-neighbourhood drag boundary
+
+The first payload handed off through M70B has envelope identity
+`8446:ea81c82137d5b13c`. Its minimal public-document regression retains the exact accepted
+geometry and branch metadata while using test-local persistent IDs:
+
+- one otherwise-free line start; the line end has a periodic point-on-circle contact;
+- one ellipse whose major-axis point has a bounded point-on-line contact;
+- no fixed source, dimension, trim view or computed feature; and
+- the line contact was picked at parameter `0.37362649353483557` with explicit Local
+  neighbourhood `[0.17362649353483556, 0.5736264935348356]`. Its restored accepted parameter is
+  already `0.5268478331756027`.
+
+The accepted graph has numerical rank `4`, equality and bidirectional bounded mobility `10`, no
+near-singular warning and no initially active bound. Drag-locality planning for the free line start
+owns five passive freedoms through three deterministic point anchors. Before the correction,
+larger horizontal/vertical samples converged at one edge of the Local interval and then failed
+independent validation with `AmbiguousContactNeighborhood`; this was neither rank loss nor a
+nonlinear convergence failure.
+
+Local contact neighbourhoods are semantically open, while core coordinate bounds are closed. The
+sketch compiler therefore represents a Local interval by its nearest closed representable
+interior, `[lower.next_up(), upper.next_down()]`. Independent validation keeps the original strict
+branch test, and the persisted contact neighbourhood is neither widened nor rewritten.
+
+The headless regression moves the free line start by `+/-0.5` horizontally, `+/-0.5` vertically
+and two larger diagonal reversals in one continued gesture. Every sample uses exactly one bounded
+attempt, reaches the requested point within `1e-8`, remains independently hard-valid at normalized
+residual `<= 1e-9`, preserves all ten equality freedoms and keeps the contact parameter strictly
+inside the same persisted Local interval. A direct sketch test separately verifies that the core
+bound lies strictly inside both persisted Local edges and that accepted branch metadata is
+unchanged. No tolerance, rank rule, drag retry, payload migration or browser policy changes.
+
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 
 A closed square initially publishes one complete visual profile. Mark its curve as

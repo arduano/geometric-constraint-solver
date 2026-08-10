@@ -2,23 +2,23 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: ready for supervising-human review. Implementation qualification, candidate
-freeze/publication and served-byte verification pass. Every human result below remains pending;
-this scorecard records no human pass or approval.
+Status: replacement candidate pending. `M70B-F001` withdrew the prior candidate during human UAT;
+its owning-layer correction passes focused regression but still requires complete replacement
+qualification, publication and served-byte verification. Every human result below remains
+pending; this scorecard records no human pass or approval.
 
-Candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
+Replacement candidate source: **PENDING**
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
+Replacement Tailscale endpoint: **PENDING**
 
-Release distribution manifest aggregate:
-`35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`
+Replacement release distribution manifest aggregate: **PENDING**
 
 ## Preconditions
 
 - [x] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct qualification.
-- [x] The complete integrated release gate passes on one clean nominated source.
-- [x] A read-only release distribution is served through the usual Tailscale endpoint.
-- [x] Every served asset and `/` matches the frozen local bytes.
+- [ ] The complete integrated release gate passes on the replacement clean nominated source.
+- [ ] A replacement read-only release distribution is served through the usual Tailscale endpoint.
+- [ ] Every replacement served asset and `/` matches the frozen local bytes.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;
@@ -118,6 +118,30 @@ Result: **PENDING**
 Notes:
 
 ## Approval
+
+### Finding `M70B-F001` — Local contact branch blocks a free endpoint drag
+
+The payload with identity `8446:ea81c82137d5b13c` restored successfully but its otherwise-free
+line endpoint moved only in small increments or appeared immobile. Headless reduction found a
+healthy ten-DOF accepted graph and healthy locality plan; a Local ellipse-point-on-line parameter
+was instead settling exactly on a semantically open branch edge and failing independent
+validation. The Local-only effective-bound correction and exact payload regression are recorded
+in `docs/SCENARIOS.md` and `docs/M70B_IMPLEMENTATION.md`.
+
+Targeted recheck after the replacement candidate is published:
+
+1. Load the original supplied payload through **Load repro**.
+2. Drag the free line endpoint—the endpoint not incident to the circle—in sizeable horizontal,
+   vertical and diagonal motions, including reversing direction during one gesture.
+3. Confirm the endpoint follows the pointer normally rather than advancing only in tiny steps,
+   and that the circle/line/ellipse contacts remain valid without a global error.
+
+Expected: the requested endpoint follows each ordinary drag continuously; no
+`AmbiguousContactNeighborhood` rejection, branch flip, freeze or DOF loss is exposed.
+
+Result: **PENDING**
+
+Notes:
 
 M70B remains active until the supervising human records explicit approval here. A scoped approval
 may accept M70B-U1 through M70B-U5 after objective findings receive owning-layer regressions and a
