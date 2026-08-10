@@ -2,26 +2,30 @@
 
 # M70B implementation — Bounded workspace reproduction capsules
 
-Status: ready for targeted supervising-human recheck. The bounded transport and restore remain
-qualified, and the first human-supplied payload finding `M70B-F001` now has a direct owning-layer
-correction, complete replacement qualification, frozen publication and served-byte verification.
-Supervising-human UAT and approval remain pending; this document records no human pass or
-milestone closure.
+Status: active after `M70B-F002`. The bounded transport and restore remain qualified, and
+`M70B-F001` retains complete replacement evidence. The second human-supplied payload finding has a
+direct headless-authoring correction and accepted-scene fallback regression; complete replacement
+qualification/publication, supervising-human UAT and approval remain pending. This document
+records no human pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
-transport, while `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected
-by `M70B-F001`. The browser gains no solver/domain authority and no new ADR is required.
+transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
+`M70B-F001`, and `geosolve-constraint-editor` owns radial-Normal authoring semantics corrected by
+`M70B-F002`. The thin web scene composer may present an older accepted document beneath a rejected
+design but gains no solver, branch or inference-publication authority. No new ADR is required.
 
 Prior withdrawn candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
 
-Replacement candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
+Prior `M70B-F001` replacement source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
-Replacement integrated release-gate result: **PASS**
+`M70B-F002` replacement source: pending clean commit and complete qualification
 
-Replacement Tailscale distribution: `/tmp/geosolve-m70b-f001-uat.A2G9KJ` at
+Prior `M70B-F001` integrated release-gate result: **PASS**
+
+Prior `M70B-F001` Tailscale distribution: `/tmp/geosolve-m70b-f001-uat.A2G9KJ` at
 `http://100.94.63.83:8080/`
 
-Replacement release manifest aggregate:
+Prior `M70B-F001` release manifest aggregate:
 `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`
 
 Prior withdrawn Tailscale distribution: `/tmp/geosolve-m70b-uat.Oj9SZT`, manifest aggregate
@@ -47,8 +51,9 @@ a second scene model.
   complete replacement coordinator; it never mutates an existing coordinator in place.
 - `crates/geosolve-demo-web/src/workbench/mod.rs`, `index.html` and `styles.css` own the thin
   visible copy/paste overlay, clipboard attempt/manual-copy fallback, error presentation and final
-  all-or-nothing workbench swap. Geometry, validation and workspace interpretation remain below
-  that browser adapter.
+  all-or-nothing workbench swap. The same module composes current computed/native scenes and now
+  retains detached historical accepted presentation when current publication authority is absent.
+  Geometry, validation and workspace interpretation remain below that browser adapter.
 - `base64 0.23.1`, `miniz_oxide 0.9.1` and transitive `adler2 2.0.1` provide pure-Rust strict
   URL-safe text encoding and zlib stream handling. Their licence expressions are recorded in
   `THIRD_PARTY_LICENSES.md`; no native library, FFI or `unsafe` exception is added.
@@ -62,6 +67,18 @@ a second scene model.
   consumers.
 - `crates/geosolve-constraint-editor/tests/m70b_projected_drag.rs` reconstructs the exact payload
   graph/accepted state and owns the continued projected-drag regression.
+- `crates/geosolve-constraint-editor/src/coordinator.rs` owns the `M70B-F002` radial-Normal
+  SupportingLine/Interior contract and unique retained-accepted-geometry projection seed. It
+  rejects the former bounded or Local request before retained mutation.
+- `crates/geosolve-constraint-editor/tests/m70b_radial_normal.rs` reconstructs the supplied
+  circle/perimeter-line geometry, covers circle/arc external supports in both operand orders and
+  freezes historical-accepted seeding beneath visibly different rejected design coordinates. It
+  verifies accepted residual validation plus mutation-free rejection of invalid metadata.
+- `crates/geosolve-demo-web/src/workbench/mod.rs` directly tests both scene-composition authority
+  rows affected by F002: a rejected constraint keeps historical accepted SVG paths visible while
+  the detached scene fails retained-session authentication, and a current computed Fillet preview
+  remains exact-stamped, composite and authenticated rather than silently falling back to native
+  geometry.
 
 The canonical single-line envelope is:
 
@@ -79,7 +96,10 @@ The reproduction transport changes no residual, Jacobian, scaling, priority, sol
 independent validation, rank classification, geometry branch or sketch/feature definition. It
 transports persisted application input and accepted-state evidence only. The separately recorded
 `M70B-F001` UAT correction changes only the effective core-bound lowering of an existing Local
-contact branch; it adds no branch kind or persisted state.
+contact branch; it adds no branch kind or persisted state. `M70B-F002` changes only headless
+authoring metadata/initialization for the pre-existing radial centre-on-line relation and the thin
+choice between current-bound and detached accepted presentation. It changes no residual,
+Jacobian, solver tolerance, priority, independent validation or retained-session authority rule.
 
 Copy follows one authority-preserving path:
 
@@ -219,6 +239,24 @@ Direct coverage proves:
 - native tests cover codec behavior and the same codec path compiles for
   `wasm32-unknown-unknown`.
 
+The `M70B-F002` focused worktree passes:
+
+```text
+cargo test --locked -p geosolve-constraint-editor --test m70b_radial_normal --test m55
+cargo test --locked -p geosolve-demo-web canvas_scene
+cargo clippy --locked -p geosolve-constraint-editor -p geosolve-demo-web \
+  --all-targets --all-features -- -D warnings
+cargo check --locked -p geosolve-demo-web --all-features \
+  --target wasm32-unknown-unknown
+cargo fmt --all -- --check
+git diff --check
+```
+
+Focused outcomes are 4/4 radial-Normal regressions, M55 17/17 and 2/2 accepted-scene composition
+authority rows. Warnings-denied focused Clippy, explicit WASM compilation, formatting and diff
+checks pass. Complete integrated replacement qualification and publication are deliberately not
+claimed until the clean nominated commit passes the release gate.
+
 ## 3.1 `M70B-F001` owning-layer correction
 
 Payload identity `8446:ea81c82137d5b13c` restores a free line endpoint, the other line endpoint
@@ -242,14 +280,68 @@ formerly failing horizontal, vertical, diagonal and reversal targets within `1e-
 attempt each, with independently validated normalized hard residual at most `1e-9` and all ten
 freedoms preserved.
 
+## 3.2 `M70B-F002` owning-layer correction
+
+Payload identity `6037:eecc886c0e61208f` restores an accepted circle and line whose end point is
+already on the circumference, then retains a rejected radial Normal source. Resolution was
+correctly `RadialLine`, and its persistent definition correctly reused centre-on-line
+`PointOnCurve`, but generic authoring selected the line's first advertised contact domain:
+bounded `[0,1]`/Interior at the picked parameter `0.5237281588081177`.
+
+That metadata imposed unintended segment containment. The circle centre's unique affine
+projection is about `1.6632787580742947`, outside the segment. The nonlinear attempt therefore
+drove the positive radius toward the degenerate zero branch and stalled after 17 iterations at
+maximum normalized hard residual about `1.53e-2`; the supplied workspace correctly retained the
+prior accepted document rather than publishing that candidate.
+
+The coordinator now gives radial Normal a dedicated closed authoring contract:
+
+1. select the affine line and circle/arc centre independently of operand order;
+2. use compatible retained accepted geometry to calculate the unique finite supporting-line
+   projection, including historical accepted geometry beneath a rejected design, and fail if the
+   selected identities are absent rather than reading attempted coordinates;
+3. expose and persist only `ContactDomain::SupportingLine` with
+   `ContactNeighborhood::Interior`, winding zero and no tangent/normal-side branch; and
+4. reject a bounded or Local direct radial request before any retained design/attempt identity can
+   advance.
+
+The supplied-coordinate regression goes through `AuthoringState` and `apply_authoring`, publishes
+independently hard-valid finite geometry at normalized residual at most `1e-9`, directly rejects
+both bounded and Local restrictions without retained mutation, freezes the visibly non-collapsed
+radius and evaluates the accepted contact through its supporting-line domain. A fixed line segment
+`(2,0)->(3,0)` with circle/arc centre `(0,0)` additionally freezes parameter `-2`, both curve
+families and both operand orders. A separate rejected-move fixture puts the attempted centre at
+`(100,0)` while the retained accepted centre stays at `(0,0)`, then proves both action metadata and
+compact authoring still use accepted parameter `-2`. This remains radial centre-on-support
+incidence, not a claim that the selected circumference point is the normal contact.
+
+The visible disappearance was a separate presentation-authority error. Beneath a newer rejected
+design, `accepted_state()` intentionally remains available while
+`accepted_state_for_current_input()` and `accepted_prepared_input()` do not. The WASM adapter had
+treated that missing current authority as `scene=None`. Scene composition now attempts the
+historical native accepted document only for that detached presentation row; current computed
+output still fails closed if its provenance or affordances cannot compose, while explicit
+Withheld/Absent state keeps its existing authenticated native path. Direct demo-web regressions
+prove both affected rows: old accepted SVG paths remain without inferred-construction authority,
+and a current Fillet preview stays composite and authenticated. The rejected fixture deliberately
+puts one attempted point at `(40,40)` while its accepted coordinate stays `(0,0)`, compares the
+complete scene point/curve vectors and requires visible problem-marker markup. Attempted geometry
+is never substituted.
+
 ## 4. Acceptance criteria
 
 - [x] focused codec, persistence and thin-adapter tests pass;
 - [x] warnings-denied native Clippy and the explicit WASM check pass;
-- [x] the locked complete workspace/release gate passes without weakening an existing threshold;
-- [x] dependency licence inventory, package contents and release Trunk assembly pass;
+- [x] the prior `M70B-F001` locked complete workspace/release gate passes without weakening an
+  existing threshold;
+- [x] the prior `M70B-F001` dependency licence inventory, package contents and release Trunk
+  assembly pass;
 - [x] the `M70B-F001` replacement source and read-only distribution are completely requalified,
   frozen and byte-verified over Tailscale;
+- [x] `M70B-F002` payload, circle/arc external-support, operand-order, historical-seed,
+  invalid-request and scene-authority regressions pass with no solver or authority weakening;
+- [ ] the `M70B-F002` source passes the complete integrated release gate and its replacement
+  distribution is frozen and byte-verified over Tailscale;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
@@ -263,9 +355,12 @@ size honestly rather than silently dropping content.
 
 The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, file picker,
 download flow, raw browser-storage handoff and browser E2E remain retired. M70B cannot close until
-the focused human UAT and targeted `M70B-F001` recheck are explicitly approved. A Local interval
-whose semantic endpoint is exactly zero has no valid solution at that endpoint; exact edge pressure
-can therefore still fail closed before the one-ULP effective endpoint becomes active. Ordinary
-near-edge contacts and the supplied positive-bound payload pass, but exact bound-event application
-for extreme zero/tiny Local intervals remains a future hardening topic rather than being folded
-into this repair. M71 stays deferred throughout that work.
+the focused human UAT and targeted `M70B-F001`/`M70B-F002` rechecks are explicitly approved. A
+Local interval whose semantic endpoint is exactly zero has no valid solution at that endpoint;
+exact edge pressure can therefore still fail closed before the one-ULP effective endpoint becomes
+active. Ordinary near-edge contacts and the supplied positive-bound payload pass, but exact
+bound-event application for extreme zero/tiny Local intervals remains a future hardening topic
+rather than being folded into this repair. Radial Normal deliberately means that the circle/arc
+centre lies on the complete affine line support. True contact-bearing normal authoring at a picked
+circumference location remains a future retained-primitive/UX decision and is not smuggled into
+M70B. M71 stays deferred throughout that work.

@@ -47,8 +47,12 @@ coordinator path. The first supplied payload opened `M70B-F001`: an open Local c
 been lowered to closed core endpoints, so an otherwise-valid free-endpoint drag could be rejected
 at the branch edge. Replacement source `b4ec279e221df38816b7376a6978712e21df02c2` passes the
 owning-layer correction, exact payload regression, complete release qualification, frozen
-Tailscale publication and served-byte verification; targeted human recheck remains pending. M71 is
-deferred behind M70B and remains an unauthorized candidate backlog.
+Tailscale publication and served-byte verification. The second supplied payload opened
+`M70B-F002`: radial Normal had inherited finite-segment contact defaults and the web adapter erased
+historical accepted presentation beneath the rejected attempt. Headless supporting-line authoring
+and accepted-scene authority regressions pass; complete F002 replacement qualification,
+publication and targeted human recheck remain pending. M71 is deferred behind M70B and remains an
+unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -284,8 +288,10 @@ serialized freshly as authoritative `WorkspaceSnapshot` v5 bytes, transported as
 swap. It restores no transient tool, selection, sample, camera or command-history state and does
 not revive the legacy lab, E2E stack or raw-`localStorage` exchange. Qualification and
 the original frozen publication remain historical transport evidence. `M70B-F001` now has a
-focused owning-layer correction/regression and fully qualified, byte-verified replacement;
-`docs/M70B_UAT.md` targeted recheck and approval remain pending. The temporary
+focused owning-layer correction/regression and fully qualified, byte-verified replacement.
+`M70B-F002` corrects radial Normal to retained-accepted centre-on-supporting-line semantics and
+keeps rejected-attempt presentation visible but detached; focused owner regressions pass, while its
+complete replacement gate/publication and `docs/M70B_UAT.md` targeted rechecks remain pending. The temporary
 `docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:

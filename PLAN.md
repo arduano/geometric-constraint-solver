@@ -3648,10 +3648,11 @@ every scripted step. M70 is closed.
 
 ### M70B
 
-Status: ready for targeted supervising-human recheck. Bounded reproduction transport and restore
-remain qualified; the first human payload finding `M70B-F001` now has an owning-layer correction,
-complete replacement qualification, frozen publication and served-byte verification. Focused
-human UAT remains pending. No completion or approval is claimed.
+Status: active after `M70B-F002`. Bounded reproduction transport and restore remain qualified;
+`M70B-F001` has complete replacement evidence, while the second human payload finding now has a
+direct headless-authoring correction and accepted-scene authority matrix. Full replacement
+qualification/publication and focused human UAT remain pending. No completion or approval is
+claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3680,9 +3681,16 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   path for WASM; cover empty, representative, computed-Fillet and maximum-bound workspaces; strict
   malformed/corrupt/oversized input; complete v5 round-trip; and atomic retention after transport,
   workspace or coordinator failure.
-- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
-  benchmark/licence/package checks, release Trunk, static single-workbench and Git-hygiene gates on
-  one nominated source.
+- [x] Resolve `M70B-F002`: author circle/arc radial Normal against the complete affine supporting
+  line, seed its latent parameter from the unique compatible retained-accepted centre projection
+  without reading rejected coordinates, reject bounded/local segment-containment metadata before
+  mutation, and keep historical accepted
+  geometry visible as a detached scene beneath any rejected retained design while current
+  computed scenes remain fail-closed. Preserve all solver, independent-validation and
+  inference-publication authority contracts.
+- [ ] Re-pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM,
+  rustdoc, benchmark/licence/package checks, release Trunk, static single-workbench and Git-hygiene
+  gates on the `M70B-F002` nominated source.
 - [ ] Freeze and publish that candidate through the usual Tailscale UAT path, byte-verify its
   distribution, complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
@@ -3722,6 +3730,20 @@ seven-file snapshot at `/tmp/geosolve-m70b-f001-uat.A2G9KJ` is served at
 `http://100.94.63.83:8080/`; every asset and `/` byte-matches the frozen local candidate, with
 manifest aggregate `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`.
 Only the targeted recheck, remaining focused UAT and explicit approval remain pending.
+
+UAT finding `M70B-F002` (2026-08-10): payload identity `6037:eecc886c0e61208f` contains a circle,
+a line endpoint on its perimeter and a newly retained radial Normal. Compact authoring had reused
+generic curve-contact defaults, so the Normal contact became bounded `[0,1]` at the clicked line
+parameter `0.5237281588081177`. The intended centre-on-line relation instead needs the complete
+line support; in this specimen its unique centre projection is about `1.6632787580742947`, beyond
+the segment endpoint. The unintended containment branch drove the positive radius toward zero and
+stalled with invalid residuals. The headless coordinator now owns SupportingLine/Interior radial
+metadata and retained-accepted-geometry projection seeding, and refuses a bounded/local radial
+request before it can advance retained design state. Payload-derived, circle/arc external-segment,
+historical-seed and operand-order regressions pass with independent residual validation.
+Separately, the workbench scene composer now paints a
+historical accepted document beneath a rejected design without granting that detached scene
+inference-publication authority. Complete replacement qualification/publication is still pending.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The

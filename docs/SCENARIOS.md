@@ -1511,6 +1511,47 @@ inside the same persisted Local interval. A direct sketch test separately verifi
 bound lies strictly inside both persisted Local edges and that accepted branch metadata is
 unchanged. No tolerance, rank rule, drag retry, payload migration or browser policy changes.
 
+### M70B-F002 - Radial Normal support and rejected-scene retention
+
+The second payload handed off through M70B has envelope identity
+`6037:eecc886c0e61208f`. Its accepted parent contains one circle and one line whose end point is
+coincident with the circle perimeter. The retained rejected design adds radial Normal as a second
+point-on-curve source from the circle centre to the line:
+
+- circle centre `(0.9830076032045713, 2.569500433739858)`, radius
+  `1.7643099377746696` and periodic perimeter contact `3.7647919835238595`;
+- directed line start `(-2.2974945144665004, -0.32237077103638284)`, end
+  `(-0.4496391860811665, 1.5397855539407332)` and picked Normal parameter
+  `0.5237281588081177`; and
+- no fixed source, dimension, trim view or computed feature.
+
+Before the correction, generic contact defaults persisted the radial relation as bounded
+`[0,1]`/Interior. That silently changed “circle centre lies on the line support” into “circle
+centre lies inside the finite segment.” The unique projection of the accepted centre onto this
+line is about `1.6632787580742947`, beyond the end. Starting at the unrelated click parameter led
+secondary optimization toward the degenerate zero-radius branch; the radius reached about
+`1.39e-17`, termination stalled after 17 iterations and the maximum normalized hard residual
+remained about `1.53e-2`. This is a satisfiable underconstrained graph, not a genuine conflict.
+
+Radial Normal authoring now publishes exactly one SupportingLine/Interior contact, winding zero,
+no tangent orientation or side branch, and seeds its affine parameter from the circle/arc centre's
+unique projection in compatible retained accepted geometry. It never reads newer rejected design
+coordinates. Direct bounded/local radial requests fail before retained mutation. The
+payload-derived application accepts with independently validated normalized hard residual at most
+`1e-9`; a fixed external segment `(2,0)->(3,0)` with centre `(0,0)` verifies parameter `-2` for
+circle and arc supports in both operand orders. A rejected design with centre `(100,0)` separately
+freezes the historical accepted seed at `-2`. The relation remains radial centre-on-support
+incidence, not contact-bearing tangency/normality at the selected circumference point.
+
+The payload also freezes the presentation failure: its design revision is newer than its retained
+accepted revision. That historical accepted document remains the only authoritative visible
+geometry. The workbench composes and paints it as a detached scene while
+`accepted_state_for_current_input()` is absent; `with_retained_session` must still reject it, so
+the stale scene cannot emit inferred construction. No attempted or invalid geometry is painted,
+and no retained-session authority rule is weakened. The companion current-computed row freezes the
+opposite invariant: exact-stamped Fillet output remains composite and authenticated, and a failed
+current composition cannot silently fall back to an authoritative native scene.
+
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 
 A closed square initially publishes one complete visual profile. Mark its curve as

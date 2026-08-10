@@ -1399,10 +1399,10 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 
 ## M70B acceptance: workspace reproduction handoff
 
-Status: ready for targeted supervising-human recheck. The reproduction transport criteria remain
-qualified, and `M70B-F001` now has an owning-layer branch-bound correction, complete replacement
-qualification, frozen publication and served-byte verification. Human review and approval remain
-pending.
+Status: active after `M70B-F002`. The reproduction transport criteria remain qualified;
+`M70B-F001` has complete replacement evidence, and `M70B-F002` has direct headless-authoring and
+accepted-scene fallback regressions. Full replacement qualification/publication, human review and
+approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1432,6 +1432,17 @@ pending.
   strict malformed/corrupt/oversized rejection, complete computed-Fillet v5 round-trip and atomic
   retention after transport, workspace and coordinator failures. The same codec path must compile
   for WASM. No browser E2E or legacy route returns.
+- Circle/arc radial Normal is explicitly centre-on-complete-supporting-line incidence. Compact
+  authoring ignores the arbitrary curve-click parameter, seeds the unique affine projection from
+  compatible retained accepted geometry, persists SupportingLine/Interior metadata and rejects
+  bounded/local segment-containment metadata before retained mutation. It never seeds from newer
+  rejected design coordinates. Both operand orders, circle/arc supports and a centre outside the
+  finite segment remain independently accepted.
+- A newer rejected design never erases its historical accepted canvas. The workbench may render
+  that accepted document as a detached presentation scene, but it cannot bind the scene to current
+  `PreparedSketchInput` or use it to publish inferred construction. Current computed output still
+  fails closed rather than falling back to an authenticated native scene. Attempted/non-finite
+  geometry remains non-authoritative and unpainted.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
   benchmark/licence/package checks, release Trunk, single-workbench inventory and Git hygiene pass
   on one nominated source. Its frozen distribution is published and byte-verified before UAT.
@@ -1448,6 +1459,17 @@ reach every recorded drag target with independently valid residuals and unchange
 mobility, plus direct sketch evidence that effective Local bounds are strictly inside unchanged
 semantic branch metadata. The replacement candidate must repeat the complete release/publication
 gate before targeted human recheck.
+
+`M70B-F002` acceptance additionally requires the supplied payload geometry to author radial Normal
+through `AuthoringState -> RetainedEditorCoordinator`, publish finite independently hard-valid
+geometry at normalized residual `<= 1e-9`, retain positive-radius and explicit supporting-line
+semantics, and reject former bounded/Local requests without advancing design, attempt, accepted,
+history or transcript identity. A thin workbench matrix must retain accepted SVG paths beneath an
+unrelated rejected constraint
+while proving the detached scene cannot acquire inference-publication authority, and must preserve
+the current computed Fillet-preview path as exact-stamped composite geometry. Its replacement
+candidate must repeat the complete release/publication gate before targeted human recheck.
+
 M71 remains deferred behind M70B.
 
 `docs/M71_GOALS.md` is a deferred candidate backlog and confers no implementation authority.

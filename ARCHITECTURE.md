@@ -71,8 +71,13 @@ construction/NURBS UAT and certified all-family visual profiles.
   ordinary strict workspace decoder and full coordinator reconstruction before an atomic live
   swap. A visible copy/paste overlay provides manual-copy fallback. `M70B-F001` additionally
   corrects existing Local open-branch lowering by placing its effective closed core endpoints one
-  representable value inside unchanged semantic metadata. Replacement release qualification,
-  frozen publication and served-byte verification pass; targeted human recheck remains pending.
+  representable value inside unchanged semantic metadata. `M70B-F002` keeps radial Normal in the
+  headless coordinator as centre-on-complete-supporting-line authoring with a unique retained-
+  accepted-geometry projection seed that never reads rejected coordinates, and keeps older
+  accepted geometry renderable but detached beneath a
+  rejected design without weakening current computed-scene fail-closed publication. F001
+  replacement evidence and F002 direct regressions pass; F002 complete
+  replacement qualification/publication and targeted human recheck remain pending.
   M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -1038,8 +1043,12 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   decoder and a newly constructed coordinator before atomic swap, and exposes a visible
   copy/paste overlay with manual fallback. It restores no legacy lab/E2E path and serializes no
   transient UI, camera, history or sample metadata. `M70B-F001` keeps persisted Local branch
-  intervals open while lowering effective closed core bounds one representable value inward. Its
-  exact payload regression, replacement full qualification/publication and served-byte
-  verification pass; dedicated human UAT remains pending.
+  intervals open while lowering effective closed core bounds one representable value inward.
+  `M70B-F002` corrects radial Normal from unintended finite-segment containment to explicit
+  supporting-line incidence, seeds the affine contact at the accepted centre projection and
+  separates detached accepted presentation from current fail-closed inference-publication
+  authority. F001
+  replacement evidence and both F002 direct owner regressions pass; F002 complete replacement
+  qualification/publication and dedicated human UAT remain pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.

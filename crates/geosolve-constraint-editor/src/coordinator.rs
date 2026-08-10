@@ -4579,6 +4579,10 @@ impl RetainedEditorCoordinator {
     )]
     pub fn action_choices(&self, action: CoordinatorActionKind) -> Vec<ActionChoice> {
         let document = self.session.design_document();
+        let accepted_document = self.session.accepted_state().map_or(
+            document,
+            geosolve_sketch::SketchAcceptedDocumentState::document,
+        );
         let selection = self.editor.selection();
         match action {
             CoordinatorActionKind::Constraint(intent) => {
@@ -4587,14 +4591,13 @@ impl RetainedEditorCoordinator {
                 };
                 if resolved == ResolvedConstraintKind::RadialLine {
                     return selected_radial_line(document, selection)
-                        .and_then(|(line, _, operand)| {
-                            contact_action_choice(
+                        .and_then(|(line, center, operand)| {
+                            radial_line_contact_action_choice(
                                 document,
+                                accepted_document,
                                 operand,
                                 line,
-                                false,
-                                false,
-                                self.editor.curve_pick_parameter(line),
+                                center,
                             )
                         })
                         .into_iter()
@@ -5456,6 +5459,13 @@ impl RetainedEditorCoordinator {
             ));
         }
         let choice = *choice;
+        if choice.domain != ContactDomain::SupportingLine
+            || choice.neighborhood != ContactNeighborhood::Interior
+        {
+            return Err(CoordinatorError::InvalidActionInput(
+                "circle normal requires the complete supporting line",
+            ));
+        }
         Ok(self.session.transact(expected, move |document| {
             let line_contact = add_action_contact(document, &label, 0, choice)?;
             document.add_constraint(
@@ -5608,15 +5618,14 @@ impl RetainedEditorCoordinator {
         options: AuthoringOptions,
     ) -> Result<ConstraintActionRequest, CoordinatorError> {
         let document = self.session.design_document();
+        let accepted_document = self.session.accepted_state().map_or(
+            document,
+            geosolve_sketch::SketchAcceptedDocumentState::document,
+        );
+        if resolved == ResolvedConstraintKind::RadialLine {
+            return radial_line_authoring_request(document, accepted_document, intent, selection);
+        }
         let contact_operands = match resolved {
-            ResolvedConstraintKind::RadialLine => selected_radial_line(document, selection)
-                .and_then(|(line, _, _)| {
-                    operands
-                        .iter()
-                        .find(|operand| operand.item == SelectionItem::Curve(line))
-                        .map(|operand| vec![(line, operand.curve_parameter)])
-                })
-                .unwrap_or_default(),
             ResolvedConstraintKind::PointOnCurve
             | ResolvedConstraintKind::CurveContact
             | ResolvedConstraintKind::CurveTangency
@@ -5641,7 +5650,8 @@ impl RetainedEditorCoordinator {
             | ResolvedConstraintKind::EqualLength
             | ResolvedConstraintKind::EqualRadius
             | ResolvedConstraintKind::Midpoint
-            | ResolvedConstraintKind::SymmetricAboutLine => Vec::new(),
+            | ResolvedConstraintKind::SymmetricAboutLine
+            | ResolvedConstraintKind::RadialLine => Vec::new(),
         };
         let tangency = resolved == ResolvedConstraintKind::CurveTangency;
         let endpoint_only = resolved == ResolvedConstraintKind::EndpointContinuity;
@@ -8186,6 +8196,103 @@ fn contact_action_choice(
         },
         default_winding: 0,
     })
+}
+
+fn radial_line_contact_action_choice(
+    topology: &SketchDocument,
+    geometry: &SketchDocument,
+    operand: u8,
+    line: CurveSpan,
+    center: DesignPointId,
+) -> Option<ActionChoice> {
+    topology
+        .curve_contact_domains(line)
+        .ok()?
+        .contains(&ContactDomain::SupportingLine)
+        .then_some(())?;
+    let default_parameter = supporting_line_projection_parameter(geometry, line, center)?;
+    Some(ActionChoice::Contact {
+        operand,
+        span: line,
+        domains: vec![ContactDomain::SupportingLine],
+        default_parameter,
+        neighborhoods: vec![ContactNeighborhood::Interior],
+        tangent_orientations: Vec::new(),
+        default_winding: 0,
+    })
+}
+
+fn radial_line_authoring_request(
+    topology: &SketchDocument,
+    geometry: &SketchDocument,
+    intent: ConstraintIntent,
+    selection: &[SelectionItem],
+) -> Result<ConstraintActionRequest, CoordinatorError> {
+    let (line, center, operand) =
+        selected_radial_line(topology, selection).ok_or(CoordinatorError::InvalidActionInput(
+            "circle normal requires one line and one circle or circular arc",
+        ))?;
+    let ActionChoice::Contact {
+        domains,
+        default_parameter,
+        neighborhoods,
+        default_winding,
+        ..
+    } = radial_line_contact_action_choice(topology, geometry, operand, line, center).ok_or(
+        CoordinatorError::InvalidActionInput(
+            "circle normal has no finite supporting-line projection",
+        ),
+    )?
+    else {
+        unreachable!("radial-line choice emits contact metadata");
+    };
+    let domain = *domains.first().ok_or(CoordinatorError::InvalidActionInput(
+        "circle normal has no supporting-line domain",
+    ))?;
+    let neighborhood = *neighborhoods
+        .first()
+        .ok_or(CoordinatorError::InvalidActionInput(
+            "circle normal has no supporting-line neighborhood",
+        ))?;
+    Ok(ConstraintActionRequest {
+        intent,
+        label: ResolvedConstraintKind::RadialLine.label().to_owned(),
+        contacts: vec![crate::ContactActionChoice {
+            support: geosolve_sketch::DocumentCurveSpanRef {
+                span: line,
+                winding: default_winding,
+            },
+            domain,
+            parameter: default_parameter,
+            neighborhood,
+            tangent_orientation: None,
+        }],
+        relation: None,
+    })
+}
+
+fn supporting_line_projection_parameter(
+    document: &SketchDocument,
+    line: CurveSpan,
+    point: DesignPointId,
+) -> Option<f64> {
+    let (start, end) = line_endpoints(document, line).ok()?;
+    let start = document.point(start)?.position;
+    let end = document.point(end)?.position;
+    let point = document.point(point)?.position;
+    let direction = [end[0] - start[0], end[1] - start[1]];
+    let offset = [point[0] - start[0], point[1] - start[1]];
+    if !direction.into_iter().chain(offset).all(f64::is_finite) {
+        return None;
+    }
+    let length = direction[0].hypot(direction[1]);
+    if !length.is_finite() || length <= 0.0 {
+        return None;
+    }
+    let unit = [direction[0] / length, direction[1] / length];
+    let distance = offset[0].mul_add(unit[0], offset[1] * unit[1]);
+    let parameter = distance / length;
+    parameter.is_finite().then_some(parameter)
 }
 
 fn contact_domain_contains(domain: ContactDomain, parameter: f64) -> bool {
@@ -11870,7 +11977,12 @@ mod tests {
             );
             if resolved == ResolvedConstraintKind::RadialLine {
                 assert_eq!(request.contacts[0].support.span, first_line);
-                assert_eq!(request.contacts[0].parameter.to_bits(), 0.5_f64.to_bits());
+                assert_eq!(request.contacts[0].domain, ContactDomain::SupportingLine);
+                assert_eq!(
+                    request.contacts[0].neighborhood,
+                    ContactNeighborhood::Interior
+                );
+                assert_eq!(request.contacts[0].parameter.to_bits(), 0.0_f64.to_bits());
             }
         }
 

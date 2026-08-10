@@ -2,24 +2,26 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: ready for targeted supervising-human recheck. `M70B-F001` withdrew the prior candidate
-during human UAT; its owning-layer correction, complete replacement qualification, frozen
-publication and served-byte verification now pass. Every human result below remains pending; this
-scorecard records no human pass or approval.
+Status: paused for `M70B-F002` replacement qualification/publication. `M70B-F001` retains its
+owning-layer correction and complete prior replacement evidence; the second payload finding now
+has direct headless-authoring and accepted-scene authority regressions. Every human result below
+remains pending; this scorecard records no human pass or approval.
 
-Replacement candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
+Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
-Replacement Tailscale endpoint: `http://100.94.63.83:8080/`
+`M70B-F002` replacement candidate source: pending clean commit and complete qualification
 
-Replacement release distribution manifest aggregate:
+Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Prior `M70B-F001` release distribution manifest aggregate:
 `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`
 
 ## Preconditions
 
-- [x] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct qualification.
-- [x] The complete integrated release gate passes on the replacement clean nominated source.
-- [x] A replacement read-only release distribution is served through the usual Tailscale endpoint.
-- [x] Every replacement served asset and `/` matches the frozen local bytes.
+- [x] `docs/M70B_IMPLEMENTATION.md` records passing focused/direct `M70B-F002` qualification.
+- [ ] The complete integrated release gate passes on the `M70B-F002` clean nominated source.
+- [ ] An `M70B-F002` replacement read-only release distribution is served through Tailscale.
+- [ ] Every `M70B-F002` served asset and `/` matches the frozen local bytes.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;
@@ -139,6 +141,38 @@ Targeted recheck after the replacement candidate is published:
 
 Expected: the requested endpoint follows each ordinary drag continuously; no
 `AmbiguousContactNeighborhood` rejection, branch flip, freeze or DOF loss is exposed.
+
+Result: **PENDING**
+
+Notes:
+
+### Finding `M70B-F002` — radial Normal collapses and the accepted canvas disappears
+
+The payload with identity `6037:eecc886c0e61208f` retained a rejected radial Normal after a line
+endpoint was placed on a circle. Generic contact defaults had constrained the circle centre to the
+finite segment at the picked parameter even though radial Normal means centre-on-supporting-line.
+The resulting attempt drove radius toward zero and stalled. The workbench then confused the older
+accepted scene's intentionally missing current inference authority with missing presentation
+geometry and emitted no scene. The headless supporting-line/projection correction and detached
+accepted-scene regression are recorded in `docs/SCENARIOS.md` and
+`docs/M70B_IMPLEMENTATION.md`.
+
+Targeted recheck after the `M70B-F002` replacement candidate is published:
+
+1. In a clean workspace, draw a circle and a line with one endpoint coincident with the circle
+   perimeter, matching the original reproduction approximately.
+2. Select the line and circle in either order and apply **Perp / normal**.
+3. Confirm the relation applies in one action, the line support passes through the circle centre,
+   the radius stays visibly positive and all geometry remains on canvas.
+4. Create or retain any genuinely rejected constraint and confirm the prior accepted geometry
+   remains visible with a problem report rather than disappearing.
+5. Optionally load the original supplied post-failure payload. Confirm its historical accepted
+   circle/line remains visible; delete or repair the rejected Normal, then repeat steps 1–3.
+
+Expected: ordinary radial Normal uses the complete line support even when the centre projects
+beyond an endpoint; there is no radius collapse, stalled/global disappearance or operand-order
+difference. A rejected edit paints only historical accepted geometry and never attempted invalid
+geometry; normal inference remains unavailable until the design is repaired.
 
 Result: **PENDING**
 

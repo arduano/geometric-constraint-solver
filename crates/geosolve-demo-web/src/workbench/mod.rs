@@ -614,6 +614,75 @@ fn reproduction_payload_size_label(bytes: usize) -> String {
     format!("{bytes} payload bytes")
 }
 
+/// Composes the best honest native/computed scene for one retained coordinator.
+///
+/// A historical accepted state beneath a newer rejected design remains valid
+/// presentation geometry, but it deliberately lacks authority to publish inferred
+/// construction. Keep that scene detached instead of confusing the missing authority
+/// with missing geometry. Current computed output remains fail-closed on any provenance
+/// or affordance-composition error; only the historical presentation row is detached.
+#[cfg(any(target_arch = "wasm32", test))]
+fn compose_editor_scene(
+    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
+    viewport: geosolve_constraint_editor::Viewport,
+    chord_tolerance_pixels: f64,
+) -> Option<geosolve_constraint_editor::EditorScene> {
+    use geosolve_constraint_editor::{ComputedSceneState, EditorScene, SelectionItem};
+
+    let source = coordinator
+        .visible_preview_session()
+        .unwrap_or(coordinator.session());
+    let accepted = source.accepted_state()?;
+    let current_accepted = source.accepted_state_for_current_input().is_some();
+    let native_scene = || {
+        EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            chord_tolerance_pixels,
+        )
+        .ok()
+    };
+    if !current_accepted {
+        return native_scene();
+    }
+    let scene = match coordinator.computed_scene_state() {
+        ComputedSceneState::Current { expected, snapshot } => {
+            let accepted_input = source.accepted_prepared_input()?;
+            let mut scene = EditorScene::from_accepted_with_computed(
+                accepted.identity().revision().get(),
+                coordinator.session().design_identity(),
+                accepted.document(),
+                coordinator.session().design_document(),
+                &accepted_input,
+                expected,
+                snapshot,
+                viewport,
+                chord_tolerance_pixels,
+            )
+            .ok()?;
+            let mut action_items = coordinator.editor().selection().to_vec();
+            if let Some(preview) = coordinator.feature_authoring_preview() {
+                action_items.push(SelectionItem::Feature(preview.metadata().feature));
+                action_items.sort_unstable();
+                action_items.dedup();
+            }
+            coordinator
+                .populate_computed_fillet_affordances(
+                    &mut scene,
+                    &action_items,
+                    chord_tolerance_pixels,
+                )
+                .ok()?;
+            scene
+        }
+        ComputedSceneState::Withheld | ComputedSceneState::Absent => native_scene()?,
+    };
+    scene.with_retained_session(source).ok()
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -623,16 +692,16 @@ pub(crate) mod wasm {
 
     use geosolve_constraint_editor::{
         ActionState, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
-        AuthoringState, AuthoringTool, BranchAction, ComputedSceneState, ConicConstructionOptions,
-        ConstructionPreview, CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason,
-        DraftInferenceInput, EditorEffect, EditorHoverTarget, EditorScene, EditorTool,
-        FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-        FeatureAuthoringPick, FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage,
-        FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringTransaction,
-        GeometryInteractionPolicy, GeometryPickScope, GeometryRoleSelectionState,
-        GeometryVisibility, Modifiers, NurbsConstructionOptions, PickTolerance, PointerInput,
-        RetainedEditorCoordinator, SceneCurveOrigin, SceneFilletActionInput,
-        SceneFilletActionTarget, ScreenPoint, SelectionItem,
+        AuthoringState, AuthoringTool, BranchAction, ConicConstructionOptions, ConstructionPreview,
+        CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason, DraftInferenceInput,
+        EditorEffect, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringCandidate,
+        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick,
+        FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage, FeatureAuthoringState,
+        FeatureAuthoringTool, FeatureAuthoringTransaction, GeometryInteractionPolicy,
+        GeometryPickScope, GeometryRoleSelectionState, GeometryVisibility, Modifiers,
+        NurbsConstructionOptions, PickTolerance, PointerInput, RetainedEditorCoordinator,
+        SceneCurveOrigin, SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint,
+        SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -3660,54 +3729,11 @@ pub(crate) mod wasm {
     }
 
     fn editor_scene(wb: &Workbench) -> Option<EditorScene> {
-        let coordinator = &wb.coordinator;
-        let source = coordinator
-            .visible_preview_session()
-            .unwrap_or(coordinator.session());
-        let accepted = source.accepted_state()?;
-        let accepted_input = source.accepted_prepared_input()?;
-        match coordinator.computed_scene_state() {
-            ComputedSceneState::Current { expected, snapshot } => {
-                let mut scene = EditorScene::from_accepted_with_computed(
-                    accepted.identity().revision().get(),
-                    coordinator.session().design_identity(),
-                    accepted.document(),
-                    coordinator.session().design_document(),
-                    &accepted_input,
-                    expected,
-                    snapshot,
-                    wb.camera.viewport(),
-                    super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
-                )
-                .ok()?;
-                let mut action_items = coordinator.editor().selection().to_vec();
-                if let Some(preview) = coordinator.feature_authoring_preview() {
-                    action_items.push(SelectionItem::Feature(preview.metadata().feature));
-                    action_items.sort_unstable();
-                    action_items.dedup();
-                }
-                coordinator
-                    .populate_computed_fillet_affordances(
-                        &mut scene,
-                        &action_items,
-                        super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
-                    )
-                    .ok()?;
-                scene.with_retained_session(source).ok()
-            }
-            ComputedSceneState::Withheld | ComputedSceneState::Absent => {
-                EditorScene::from_accepted_for_design(
-                    accepted.identity().revision().get(),
-                    coordinator.session().design_identity(),
-                    accepted.document(),
-                    coordinator.session().design_document(),
-                    wb.camera.viewport(),
-                    super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
-                )
-                .and_then(|scene| scene.with_retained_session(source))
-                .ok()
-            }
-        }
+        super::compose_editor_scene(
+            &wb.coordinator,
+            wb.camera.viewport(),
+            super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+        )
     }
 
     fn fit_camera(wb: &mut Workbench) {
@@ -4932,8 +4958,9 @@ mod tests {
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DesignPointId, DocumentCurveNormalSide, DocumentSolveRequest,
-        GeometryRole, RetainedSketchDocumentSession, SketchDocument,
+        CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition,
+        DocumentCurveNormalSide, DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession,
+        SketchAcceptedStateIdentity, SketchDocument,
     };
 
     use super::{
@@ -4943,7 +4970,7 @@ mod tests {
         CanvasPointerTerminalDisposition, CapturedCanvasPointer, DraftingPointerSample,
         FilletActionRenderAuthority, ForegroundOverlayEscapeOwner, OverlayRect, PointerMoveQueue,
         ReproductionFocusReturn, apply_validated_reproduction, canvas_overlay_position,
-        canvas_pointer_capture_kind, change_owns_option_control_click,
+        canvas_pointer_capture_kind, change_owns_option_control_click, compose_editor_scene,
         foreground_overlay_escape_owner, geometry_hover_selector,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         palette_details_overlay_reflow_listener, reproduction_focus_target_after_action,
@@ -4951,6 +4978,208 @@ mod tests {
         resolve_canvas_fillet_action_candidates, revoke_held_feature_authoring_preview,
         route_canvas_pan_pointer_down, should_route_stationary_draft_inference,
     };
+
+    fn rejected_constraint_fixture() -> (
+        RetainedEditorCoordinator,
+        [CurveSpan; 2],
+        SketchAcceptedStateIdentity,
+        String,
+    ) {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let points = [
+            document.add_point("first start", [0.0, 0.0]).unwrap(),
+            document.add_point("first end", [2.0, 0.0]).unwrap(),
+            document.add_point("second start", [0.0, 2.0]).unwrap(),
+            document.add_point("second end", [2.0, 2.0]).unwrap(),
+        ];
+        let lines = [
+            CurveSpan::line(
+                document
+                    .add_curve(
+                        "first line",
+                        CurveDefinition::Line {
+                            start: points[0],
+                            end: points[1],
+                            branch_direction: [1.0, 0.0],
+                        },
+                    )
+                    .unwrap(),
+            ),
+            CurveSpan::line(
+                document
+                    .add_curve(
+                        "second line",
+                        CurveDefinition::Line {
+                            start: points[2],
+                            end: points[3],
+                            branch_direction: [1.0, 0.0],
+                        },
+                    )
+                    .unwrap(),
+            ),
+        ];
+        for point in points {
+            let target = document.point(point).expect("fixed point").position;
+            document
+                .add_constraint(
+                    format!("fix {point}"),
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .unwrap();
+        }
+        let mut session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted fixed lines");
+        let accepted_before = session.accepted_state().expect("accepted parent");
+        let accepted_identity = accepted_before.identity();
+        let accepted_json = accepted_before
+            .document()
+            .to_canonical_json()
+            .expect("accepted parent JSON");
+        let outcome = session
+            .transact(session.design_identity(), |document| {
+                document.set_point_position(points[0], [40.0, 40.0])?;
+                document.add_constraint(
+                    "conflicting attempted point",
+                    DocumentConstraintDefinition::FixedPoint {
+                        point: points[0],
+                        target: [40.0, 40.0],
+                    },
+                )
+            })
+            .expect("retained rejected constraint and coordinate edit");
+        assert!(outcome.published_accepted_identity().is_none());
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .point(points[0])
+                .is_some_and(|point| {
+                    point.position.map(f64::to_bits) == [40.0, 40.0].map(f64::to_bits)
+                })
+        );
+        (coordinator, lines, accepted_identity, accepted_json)
+    }
+
+    #[test]
+    fn rejected_constraint_keeps_a_detached_accepted_canvas_scene() {
+        let (coordinator, lines, accepted_identity, accepted_json) = rejected_constraint_fixture();
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_none()
+        );
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("historical accepted parent");
+        assert_eq!(accepted.identity(), accepted_identity);
+        assert_eq!(
+            accepted.document().to_canonical_json().unwrap(),
+            accepted_json
+        );
+        let attempted_point = match &coordinator
+            .session()
+            .design_document()
+            .curve(lines[0].curve)
+            .expect("attempted line")
+            .definition
+        {
+            CurveDefinition::Line { start, .. } => *start,
+            _ => panic!("line definition"),
+        };
+        assert_ne!(
+            coordinator
+                .session()
+                .design_document()
+                .point(attempted_point)
+                .expect("attempted point")
+                .position
+                .map(f64::to_bits),
+            accepted
+                .document()
+                .point(attempted_point)
+                .expect("accepted point")
+                .position
+                .map(f64::to_bits),
+            "the fixture must distinguish attempted from accepted geometry"
+        );
+
+        let viewport = super::scene::viewport();
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+            .expect("detached accepted presentation scene");
+        let expected = geosolve_constraint_editor::EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.25,
+        )
+        .expect("expected accepted presentation");
+        assert_eq!(scene.points, expected.points);
+        assert_eq!(scene.curves, expected.curves);
+        assert_eq!(scene.curves.len(), 2);
+        assert_eq!(scene.points.len(), 4);
+        assert!(
+            scene
+                .clone()
+                .with_retained_session(coordinator.session())
+                .is_err(),
+            "historical accepted presentation must not gain inference-publication authority"
+        );
+        let problem = coordinator
+            .current_problem_metadata()
+            .expect("visible rejected-attempt problem");
+        let markup = super::scene::svg_markup(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            None,
+            Some(&problem),
+            viewport,
+        );
+        assert!(markup.contains("data-scene-provenance=\"accepted\""));
+        assert!(markup.contains("data-problem-scope=\""));
+        assert!(markup.contains("data-problem-marker=\""));
+        assert!(markup.contains("wb-error-marker-icon"));
+        for line in lines {
+            assert!(markup.contains(&format!("data-persistent-id=\"{}\"", line.curve)));
+        }
+    }
+
+    #[test]
+    fn current_computed_fillet_canvas_scene_stays_composite_and_authorized() {
+        let (mut coordinator, _, points) = grouped_fillet_fixture();
+        let mut state = FeatureAuthoringState::default();
+        let (_, metadata) =
+            prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
+        let source = coordinator
+            .visible_preview_session()
+            .unwrap_or(coordinator.session());
+        assert!(source.accepted_state_for_current_input().is_some());
+
+        let scene = compose_editor_scene(&coordinator, super::scene::viewport(), 0.25)
+            .expect("current composite Fillet scene");
+        assert_eq!(scene.computed_input.as_ref(), Some(&metadata.input));
+        assert_eq!(scene.computed_curves.len(), 2);
+        assert_eq!(scene.fillet_affordances.len(), 2);
+        assert!(
+            scene
+                .curves
+                .iter()
+                .any(|curve| matches!(curve.origin, SceneCurveOrigin::FilletDiscarded { .. }))
+        );
+        assert!(
+            scene.with_retained_session(source).is_ok(),
+            "a current exact-stamped composite scene retains inference authority"
+        );
+    }
 
     #[test]
     fn reproduction_load_validates_before_any_state_commit() {
