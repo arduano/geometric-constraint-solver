@@ -1750,6 +1750,7 @@ const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
     match family {
         DraftInferenceFamily::PointIdentity => "point-identity",
         DraftInferenceFamily::PointOnCurve => "point-on-curve",
+        DraftInferenceFamily::PointOnCreatedCurve => "point-on-created-curve",
         DraftInferenceFamily::Midpoint => "midpoint",
         DraftInferenceFamily::Horizontal => "horizontal",
         DraftInferenceFamily::Vertical => "vertical",
@@ -1763,6 +1764,7 @@ const fn inference_family_label(family: DraftInferenceFamily) -> &'static str {
     match family {
         DraftInferenceFamily::PointIdentity => "Reuse existing point",
         DraftInferenceFamily::PointOnCurve => "Point on curve",
+        DraftInferenceFamily::PointOnCreatedCurve => "Circle through point",
         DraftInferenceFamily::Midpoint => "Midpoint",
         DraftInferenceFamily::Horizontal => "Horizontal",
         DraftInferenceFamily::Vertical => "Vertical",
@@ -1784,6 +1786,11 @@ const fn inference_relation_presentation(
         DraftInferenceRelation::PointOnCurve { .. } => (
             "point-on-curve",
             "Point on curve",
+            SceneConstraintGlyph::PointOnCurve,
+        ),
+        DraftInferenceRelation::PointOnCreatedCurve { .. } => (
+            "point-on-created-curve",
+            "Circle through point",
             SceneConstraintGlyph::PointOnCurve,
         ),
         DraftInferenceRelation::Midpoint { .. } => {
@@ -1998,10 +2005,10 @@ mod tests {
     use geosolve_constraint_editor::{
         ComputedFeatureProblemMetadata, ConstructionPreviewGeometry, DraftInferenceEngine,
         DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy, DraftInferenceResolution,
-        DraftInferenceSample, DraftReferenceAnchor, EditorHoverState, EditorHoverTarget,
-        EditorProblemScope, EditorScene, GeometryInteractionPolicy, RetainedEditorCoordinator,
-        SceneAnnotationGeometry, SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint,
-        SelectionItem, Viewport,
+        DraftInferenceSample, DraftInferenceSubject, DraftReferenceAnchor, EditorHoverState,
+        EditorHoverTarget, EditorProblemScope, EditorScene, GeometryInteractionPolicy,
+        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationOccurrence,
+        ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -2100,6 +2107,7 @@ mod tests {
             geometry_policy: GeometryInteractionPolicy::default(),
             sample: DraftInferenceSample {
                 raw_screen_position: viewport.model_to_screen(raw_model_position),
+                subject: DraftInferenceSubject::PointOperand,
                 span_start: None,
             },
             anchors,
@@ -2180,6 +2188,29 @@ mod tests {
         assert!(tracking_markup.contains("data-inference-family=\"point-tracking\""));
         assert!(tracking_markup.contains("data-inference-classification=\"tracking-only\""));
         assert!(!tracking_markup.contains("data-inference-relation="));
+    }
+
+    #[test]
+    fn circumference_inference_is_presented_as_circle_through_point() {
+        let (design, accepted_revision, viewport, [point, _]) = inference_fixture();
+        let mut frame = inference_frame(
+            design,
+            accepted_revision,
+            viewport,
+            [0.0, 0.0],
+            vec![point_anchor(point)],
+        );
+        frame.sample.subject = DraftInferenceSubject::CircleCircumference;
+        let resolved = DraftInferenceEngine::default()
+            .resolve(&frame, DraftInferenceInput::default())
+            .expect("resolved circle-through-point inference");
+
+        let markup = inference_markup(&resolved, viewport);
+        assert!(markup.contains("data-inference-status=\"resolved\""));
+        assert!(markup.contains("data-inference-family=\"point-on-created-curve\""));
+        assert!(markup.contains("data-inference-relation=\"point-on-created-curve\""));
+        assert!(markup.contains("aria-label=\"Circle through point\""));
+        assert!(!markup.contains("aria-label=\"Reuse existing point\""));
     }
 
     #[test]

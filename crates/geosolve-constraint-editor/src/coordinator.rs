@@ -9145,6 +9145,144 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the focused lifecycle regression verifies every identity created by one atomic circle/contact plan"
+    )]
+    fn created_circle_constrains_an_existing_fixed_point_in_one_undoable_publication() {
+        let (session, points, _, _) = fixed_line_session();
+        let fixed_rim_point = points[1];
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let expected = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input");
+        let initial_history = coordinator.history_len();
+        let initial_cursor = coordinator.history_cursor();
+        let initial_document = coordinator.session().design_document();
+        let initial_points = initial_document.points().len();
+        let initial_scalars = initial_document.scalars().len();
+        let initial_curves = initial_document.curves().len();
+        let initial_contacts = initial_document.contacts().len();
+        let initial_constraints = initial_document.constraints().len();
+        let initial_sources = initial_document.sources().count();
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Circle {
+                center: ConstructionPoint::New([0.25, 0.0]),
+                radius: 1.75,
+            },
+            role: GeometryRole::Profile,
+            relations: vec![crate::InferredRelation::PointOnCurve {
+                point: crate::DraftPointSlot::Existing(fixed_rim_point),
+                contact: crate::DraftContactDescriptor {
+                    span: crate::DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0,
+                    },
+                    domain: ContactDomain::Periodic {
+                        period: std::f64::consts::TAU,
+                    },
+                    parameter: 0.0,
+                    winding: 0,
+                    neighborhood: ContactNeighborhood::Interior,
+                },
+            }],
+        };
+
+        let outcome = coordinator
+            .apply_construction_plan(&expected, &plan)
+            .expect("accepted circle/contact plan");
+        assert!(outcome.published_accepted.is_some());
+        assert_eq!(coordinator.history_len(), initial_history + 1);
+        assert_eq!(coordinator.history_cursor(), initial_cursor + 1);
+        assert_eq!(outcome.value.construction.points.len(), 1);
+        assert_eq!(outcome.value.construction.scalars.len(), 1);
+        assert_eq!(outcome.value.construction.curves.len(), 1);
+        assert_eq!(outcome.value.contacts.len(), 1);
+        assert_eq!(outcome.value.constraints.len(), 1);
+
+        let center = outcome.value.construction.points[0];
+        let radius = outcome.value.construction.scalars[0];
+        let circle = outcome.value.construction.curves[0];
+        let contact = outcome.value.contacts[0].contact;
+        let constraint = outcome.value.constraints[0].constraint;
+        let source = outcome.value.constraints[0].source;
+        let committed = coordinator.session().design_document();
+        let contact_parameter = committed.contact(contact).expect("contact").parameter;
+        assert_eq!(committed.points().len(), initial_points + 1);
+        assert_eq!(committed.scalars().len(), initial_scalars + 2);
+        assert_eq!(committed.curves().len(), initial_curves + 1);
+        assert_eq!(committed.contacts().len(), initial_contacts + 1);
+        assert_eq!(committed.constraints().len(), initial_constraints + 1);
+        assert_eq!(committed.sources().count(), initial_sources + 1);
+        assert!(matches!(
+            &committed.constraint(constraint).expect("constraint").definition,
+            DocumentConstraintDefinition::PointOnCurve {
+                point,
+                contact: resolved_contact,
+            } if *point == fixed_rim_point && *resolved_contact == contact
+        ));
+        assert_eq!(
+            committed.contact(contact).expect("contact").curve,
+            CurveSpan::line(circle)
+        );
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted publication")
+            .document();
+        assert!(accepted.curve(circle).is_some());
+        assert!(accepted.contact(contact).is_some());
+        assert!(accepted.constraint(constraint).is_some());
+        let committed_payloads = retained_document_payloads(&coordinator);
+
+        coordinator.undo().expect("one-step Undo");
+        assert_eq!(coordinator.history_cursor(), initial_cursor);
+        let undone = coordinator.session().design_document();
+        assert_eq!(undone.points().len(), initial_points);
+        assert_eq!(undone.scalars().len(), initial_scalars);
+        assert_eq!(undone.curves().len(), initial_curves);
+        assert_eq!(undone.contacts().len(), initial_contacts);
+        assert_eq!(undone.constraints().len(), initial_constraints);
+        assert_eq!(undone.sources().count(), initial_sources);
+        assert!(undone.point(center).is_none());
+        assert!(undone.scalar(radius).is_none());
+        assert!(undone.scalar(contact_parameter).is_none());
+        assert!(undone.curve(circle).is_none());
+        assert!(undone.contact(contact).is_none());
+        assert!(undone.constraint(constraint).is_none());
+        assert!(undone.source(source).is_none());
+        assert_eq!(
+            undone
+                .point(fixed_rim_point)
+                .expect("retained fixed point")
+                .position
+                .map(f64::to_bits),
+            [2.0_f64.to_bits(), 0.0_f64.to_bits()]
+        );
+        let undone_accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted state after Undo")
+            .document();
+        assert!(undone_accepted.curve(circle).is_none());
+        assert!(undone_accepted.contact(contact).is_none());
+        assert!(undone_accepted.constraint(constraint).is_none());
+
+        coordinator.redo().expect("one-step Redo");
+        assert_eq!(coordinator.history_cursor(), initial_cursor + 1);
+        assert_eq!(retained_document_payloads(&coordinator), committed_payloads);
+        let redone = coordinator.session().design_document();
+        assert!(redone.point(center).is_some());
+        assert!(redone.scalar(radius).is_some());
+        assert!(redone.scalar(contact_parameter).is_some());
+        assert!(redone.curve(circle).is_some());
+        assert!(redone.contact(contact).is_some());
+        assert!(redone.constraint(constraint).is_some());
+        assert!(redone.source(source).is_some());
+    }
+
+    #[test]
     fn undo_then_divergent_inferred_construction_never_reuses_persistent_ids() {
         let (session, _, reference, _) = fixed_line_session();
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");

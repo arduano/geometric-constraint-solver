@@ -515,6 +515,83 @@ mod tests {
     }
 
     #[test]
+    fn existing_point_on_created_circle_resolves_reverse_incidence_atomically() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let point = document
+            .add_point("existing edge point", [2.0, 0.0])
+            .expect("existing point");
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Circle {
+                center: ConstructionPoint::New([0.0, 0.0]),
+                radius: 2.0,
+            },
+            role: GeometryRole::Profile,
+            relations: vec![InferredRelation::PointOnCurve {
+                point: DraftPointSlot::Existing(point),
+                contact: DraftContactDescriptor {
+                    span: DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0,
+                    },
+                    domain: ContactDomain::Periodic {
+                        period: std::f64::consts::TAU,
+                    },
+                    parameter: 0.0,
+                    winding: 0,
+                    neighborhood: ContactNeighborhood::Interior,
+                },
+            }],
+        };
+
+        let result = plan.apply(&mut document).expect("reverse-incidence commit");
+        assert_eq!(result.construction.points.len(), 1);
+        assert_eq!(result.construction.curves.len(), 1);
+        assert_eq!(result.contacts.len(), 1);
+        assert_eq!(result.constraints.len(), 1);
+        assert_eq!(result.contacts[0].relation_index, 0);
+        assert_eq!(result.constraints[0].relation_index, 0);
+
+        let circle = CurveSpan::line(result.construction.curves[0]);
+        let contact = result.contacts[0].contact;
+        let contact_state = document.contact(contact).expect("contact");
+        assert_eq!(contact_state.curve, circle);
+        assert_eq!(
+            contact_state.domain,
+            ContactDomain::Periodic {
+                period: std::f64::consts::TAU,
+            }
+        );
+        assert_eq!(contact_state.winding, 0);
+        assert_eq!(contact_state.neighborhood, ContactNeighborhood::Interior);
+        assert_eq!(
+            document
+                .scalar(contact_state.parameter)
+                .expect("contact parameter")
+                .value
+                .to_bits(),
+            0.0f64.to_bits()
+        );
+        assert_eq!(
+            document
+                .point(point)
+                .expect("existing point")
+                .position
+                .map(f64::to_bits),
+            [2.0_f64.to_bits(), 0.0_f64.to_bits()]
+        );
+        assert!(matches!(
+            &document
+                .constraint(result.constraints[0].constraint)
+                .expect("constraint")
+                .definition,
+            DocumentConstraintDefinition::PointOnCurve {
+                point: resolved_point,
+                contact: resolved_contact,
+            } if *resolved_point == point && *resolved_contact == contact
+        ));
+    }
+
+    #[test]
     fn a_late_invalid_slot_retains_the_complete_original_document() {
         let mut document = SketchDocument::new(10.0).expect("document");
         let before = document.clone();

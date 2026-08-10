@@ -1263,8 +1263,9 @@ legacy UI.
 ## M70 acceptance: headless auto-constraint drafting intelligence
 
 Status: implementation, focused direct qualification, integrated release qualification, frozen-
-candidate publication and served-byte verification are complete. Supervising-human UAT is pending;
-M70 remains open.
+candidate publication and served-byte verification are complete for the first candidate.
+Supervising-human UAT finding `M70-F001` is open; replacement qualification/publication and human
+approval are pending, so M70 remains open.
 
 M70 is accepted only when all of the following are true:
 
@@ -1293,6 +1294,11 @@ M70 is accepted only when all of the following are true:
   duplicate point nor a redundant Coincident source. Reuse inside another construction is encoded
   directly in its point operand; a standalone Point-tool confirmation of an already-existing point
   emits no construction plan and is a history-neutral no-op.
+- The Circle circumference stage is a radius sample, not a point operand. Within point tolerance of
+  an existing persistent point, including a line endpoint, it proposes **Circle through point** and
+  atomically commits PointOnCurve(existing point, created circle). It creates no hidden rim point;
+  semantic midpoints and arbitrary line interiors are ineligible, and no contact or tangency is
+  inferred from a line interior.
 - PointOnCurve supports native line, circle/arc, Bezier, conic, B-spline and NURBS families and
   carries explicit span, accepted parameter/domain, winding and contact neighbourhood metadata.
 - A semantic line/polyline midpoint ranks ahead of generic PointOnCurve and commits the existing
@@ -1353,11 +1359,13 @@ M70 is accepted only when all of the following are true:
 - Direct Rust tests cover exact hysteresis boundaries, order/zoom/scale invariance, non-finite
   rejection, resource limits, every construction stage, every native curve family, line/polyline
   directions, reference lifecycle, bundles, ambiguity, suppression, stale/rejected/exhausted work,
-  exact scene-publication authentication, atomic allocation/publication and deterministic Undo/
-  Redo/reload/replay. The focused inference selection passes exactly 46/46; the complete editor
+  exact scene-publication authentication, atomic allocation/publication, Circle reverse-incidence
+  without a hidden rim point or line-interior fallback, and deterministic Undo/Redo/reload/replay.
+  The initial candidate's focused inference selection passes exactly 46/46; the complete editor
   crate passes 266 unit tests plus all relevant integration suites, without inventing one aggregate
   integration-suite count; demo-web passes 82/82 tests; the sketch library passes 33/33 unit tests;
-  and its M56 prepared-work suite passes 6/6.
+  and its M56 prepared-work suite passes 6/6. Replacement counts covering `M70-F001` are recorded
+  before closure.
 - Native and WASM match the shared golden transition oracle in
   `crates/geosolve-constraint-editor/tests/m70_transition_parity.rs` and
   `crates/geosolve-constraint-editor/tests/fixtures/m70_transition_parity.golden.txt`. It covers
@@ -1373,7 +1381,8 @@ M70 is accepted only when all of the following are true:
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
   benchmark/licence/package checks, release Trunk, static single-workbench inventory and Git
   hygiene pass on one nominated candidate. Its release distribution is byte-verified over
-  Tailscale before human review.
+  Tailscale before human review. Any objective UAT repair repeats those gates on a replacement
+  candidate before targeted human recheck.
 - The supervising human explicitly approves every area in `docs/M70_UAT.md`; objective findings
   receive direct owning-layer regressions before any targeted recheck.
 
@@ -1383,6 +1392,8 @@ Its application-workspace v5 migration is limited to host-owned identity high-wa
 symmetry, concentric/quadrant, certified intersection/collinear/extension, nonlinear
 tangent/normal, grid/axis, angle increment and durable arbitrary point-pair H/V inference remain
 outside scope.
+`M70-F001` remains an open M70 UAT finding until its Circle-through-point contract has direct
+owning-layer regressions, replacement release evidence and a targeted human recheck.
 `docs/M71_GOALS.md` is a non-active candidate backlog and confers no implementation authority.
 
 ### Superseded M66 solver-owned Fillet acceptance record

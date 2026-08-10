@@ -2,9 +2,10 @@
 
 # M70 focused UAT — Auto-constraint drafting
 
-Status: ready for focused supervising-human review. Implementation, focused direct qualification,
-the complete integrated release gate, frozen-candidate publication and served-byte verification
-pass. Human UAT results and approval remain Pending.
+Status: focused supervising-human review is paused on open finding `M70-F001`. Implementation,
+focused direct qualification, the complete integrated release gate, frozen-candidate publication
+and served-byte verification pass for the initial candidate below. A replacement candidate,
+targeted recheck, remaining human results and approval are Pending.
 
 Candidate source: `4b16db3a885f5e28f508189b8817797375f05807` on `main`
 
@@ -37,22 +38,28 @@ This frozen source has the passing direct matrix and clean release gate recorded
 `docs/M70_IMPLEMENTATION.md`. The placement click is the explicit confirmation: there is no second
 Apply step for inferred relations.
 
-## M70-U1 — existing points and horizontal/vertical spans
+## M70-U1 — existing points, circle-through-point and horizontal/vertical spans
 
 1. Activate Point and click the centre of an existing persistent-point specimen.
 2. Draw lines whose free endpoint approaches an existing persistent endpoint from several sides.
 3. Place one line endpoint while the existing-point proposal is active, then Undo and Redo.
 4. Draw separate nearly horizontal, nearly vertical and clearly diagonal lines.
 5. Repeat for successive spans of one polyline and at several zoom levels.
+6. Draw circles whose circumference click approaches an existing standalone point and a persistent
+   line endpoint.
+7. Repeat the circumference click over an arbitrary line interior away from either endpoint.
 
 Expected: the adjusted preview, guide and glyph agree before placement. Existing-point placement
 reuses the point identity rather than leaving a coincident duplicate. Clicking that point with the
 standalone Point tool is a history-neutral no-op because there is no new durable construction.
 Reusing it as a line/polyline operand commits that complete construction in one history step. H/V
 activates and releases with stable hysteresis; clearly diagonal input remains unadjusted and
-behavior remains consistent under zoom.
+behavior remains consistent under zoom. A circle circumference may pass through an existing
+persistent point, including a line endpoint, by atomically committing PointOnCurve with that
+existing point and the newly created circle. The radius click creates no hidden rim point, and an
+arbitrary line interior creates no implicit contact or tangency.
 
-Result: Pending.
+Result: Finding open — `M70-F001`; M70-U1 is not approved.
 
 Notes:
 
@@ -130,7 +137,28 @@ Result: Pending.
 
 Notes:
 
+## Finding ledger
+
+### M70-F001 — circle circumference did not express circle-through-point intent
+
+Status: **Open**.
+
+The supervising-human UAT of frozen candidate
+`4b16db3a885f5e28f508189b8817797375f05807` identified a missing semantic distinction at the second
+Circle click. That click supplies a radius sample; it is not an ordinary authored point operand.
+When it enters the point tolerance of an existing persistent point or line endpoint, the preview
+must say **Circle through point** and confirmation must atomically create the circle plus
+PointOnCurve(existing point, created circle). It must allocate no hidden circumference point.
+Semantic midpoints and arbitrary line interiors are not eligible for this reverse-incidence snap,
+and the gesture must not infer line contact or tangency.
+
+Closure requires direct headless inference/commit regressions, thin presentation coverage, a fresh
+clean release candidate and publication, and a targeted supervising-human recheck of the two U1
+circle steps. Until then the prior release evidence remains historical candidate evidence only;
+M70 remains open and M71 remains inactive.
+
 ## Approval
 
-Pending. M70 closes only after the supervising human explicitly approves M70-U1 through M70-U5 and
-all objective findings have direct owning-layer regressions plus any necessary targeted recheck.
+Pending. M70 closes only after the supervising human explicitly approves M70-U1 through M70-U5,
+`M70-F001` is resolved on a freshly qualified and published candidate, and all objective findings
+have direct owning-layer regressions plus the necessary targeted recheck.

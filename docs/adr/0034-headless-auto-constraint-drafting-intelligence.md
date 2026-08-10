@@ -3,8 +3,9 @@
 # ADR 0034: Headless auto-constraint drafting intelligence
 
 Status: accepted for M70; implementation, focused direct qualification, integrated release
-qualification, frozen-candidate publication and served-byte verification are complete, while
-supervising-human UAT is pending
+qualification, frozen-candidate publication and served-byte verification are complete for the first
+candidate, while Circle-authoring finding `M70-F001`, replacement qualification/publication and
+supervising-human UAT are pending
 
 ## Context
 
@@ -72,6 +73,8 @@ M70 uses only constraint definitions already admitted by the ordinary retained s
 
 - reuse an existing persistent point identity instead of creating a duplicate point plus a
   redundant coincidence source;
+- at the Circle circumference stage, pass the new circle through an existing persistent point or
+  line endpoint with PointOnCurve(existing point, created circle), without allocating a rim point;
 - create explicit PointOnCurve contact state for native line, circle/arc, Bezier, conic, B-spline
   and NURBS spans;
 - prefer a line/polyline Midpoint relation over generic PointOnCurve at a semantic midpoint;
@@ -84,6 +87,13 @@ Point identity is structural intent rather than an inferred solver relation. Whe
 construction uses the point, the selected identity lowers directly to `ConstructionPoint::Existing`.
 When the standalone Point tool confirms an identity that already exists, there is no new durable
 intent: the editor emits no construction plan and creates no history checkpoint.
+
+The Circle circumference click is a distinct semantic inference subject: it samples radius and is
+not a `ConstructionPoint`. Only persistent-point anchors, including line endpoints, are eligible.
+The headless preview identifies **Circle through point**, and the atomic plan allocates the circle
+before lowering the ordinary PointOnCurve relation against that created curve. Semantic midpoints
+and arbitrary line interiors are ineligible; no hidden circumference point, generic line contact or
+line tangency may be inferred from this gesture.
 
 Every construction stage represented by `ConstructionPoint` participates in positional inference.
 Directional inference applies only when the live stage defines a genuine line or polyline span.
@@ -230,16 +240,17 @@ Undo/Redo and reload. Focused native tests separately own exact resource-limit b
 
 Direct coordinator tests are authoritative for point identity reuse, all-family native
 PointOnCurve metadata, Midpoint, line/polyline Horizontal/Vertical, remembered Parallel/
-Perpendicular, compatible two-relation bundles, one-solve atomic publication, retained rejection,
-one-step Undo/Redo and deterministic reload/replay. They also prove that only the retained
+Perpendicular, Circle-through-existing-point reverse incidence without a hidden rim point or
+line-interior fallback, compatible two-relation bundles, one-solve atomic publication, retained
+rejection, one-step Undo/Redo and deterministic reload/replay. They also prove that only the retained
 session's exact accepted input can authenticate publication, that caller-assembled/detached scenes
 cannot acquire authority, and that compatibility scenes remain renderable but non-publishing.
 They also prove pre-bind semantic mutation rejection, post-bind authority revocation, the bounded
 and cancellable 32-relation commit-plan envelope, process-local prepared CAS epochs, current-input
 history restoration and bounded/validated persistent identity high-water across process reload.
-The focused inference selection passes 46/46, the editor crate passes 266 unit tests plus all
-relevant integration suites, demo-web passes 82/82 tests, the sketch library passes 33/33 and M56
-passes 6/6.
+The initial candidate's focused inference selection passes 46/46, the editor crate passes 266 unit
+tests plus all relevant integration suites, demo-web passes 82/82 tests, the sketch library passes
+33/33 and M56 passes 6/6. Replacement counts covering `M70-F001` remain pending.
 ADR 0033 scope, Profile overlap, implicit-source mapping and computed-Fillet exclusion remain
 mandatory regressions.
 

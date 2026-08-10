@@ -7,10 +7,10 @@ use geosolve_constraint_editor::{
     DraftGuideClassification, DraftGuideGeometry, DraftInferenceCandidate,
     DraftInferenceCompleteness, DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput,
     DraftInferenceRelation, DraftInferenceResolution, DraftInferenceSample, DraftInferenceStatus,
-    DraftPointSlot, DraftReferenceAnchor, DraftReferenceOrigin, DraftSpanSlot, EditorEffect,
-    EditorMutation, EditorScene, EditorTool, GeometryInteractionPolicy, InferredRelation,
-    Modifiers, PointerInput, RetainedEditorCoordinator, ScenePointRoleIncidence, ScreenPoint,
-    Viewport,
+    DraftInferenceSubject, DraftPointSlot, DraftReferenceAnchor, DraftReferenceOrigin,
+    DraftSpanSlot, EditorEffect, EditorMutation, EditorScene, EditorTool,
+    GeometryInteractionPolicy, InferredRelation, Modifiers, PointerInput,
+    RetainedEditorCoordinator, ScenePointRoleIncidence, ScreenPoint, Viewport,
 };
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
@@ -171,11 +171,28 @@ fn inference_frame(
     span_start: Option<[f64; 2]>,
     anchors: Vec<DraftReferenceAnchor>,
 ) -> DraftInferenceFrame {
+    inference_frame_for_subject(
+        scene,
+        sample,
+        DraftInferenceSubject::PointOperand,
+        span_start,
+        anchors,
+    )
+}
+
+fn inference_frame_for_subject(
+    scene: &EditorScene,
+    sample: [f64; 2],
+    subject: DraftInferenceSubject,
+    span_start: Option<[f64; 2]>,
+    anchors: Vec<DraftReferenceAnchor>,
+) -> DraftInferenceFrame {
     DraftInferenceFrame::from_scene(
         scene,
         GeometryInteractionPolicy::default(),
         DraftInferenceSample {
             raw_screen_position: scene.viewport.model_to_screen(sample),
+            subject,
             span_start,
         },
         anchors,
@@ -234,6 +251,9 @@ fn push_relation(transcript: &mut String, relation: DraftInferenceRelation) {
         DraftInferenceRelation::PointOnCurve { contact } => {
             transcript.push_str("curve:");
             push_contact(transcript, contact);
+        }
+        DraftInferenceRelation::PointOnCreatedCurve { point } => {
+            write!(transcript, "created-curve:{point}").expect("string write");
         }
         DraftInferenceRelation::Midpoint { span } => {
             transcript.push_str("mid:");
@@ -392,6 +412,25 @@ fn inference_transition_transcript(
         DraftInferenceInput::default(),
     );
     push_resolution(&mut transcript, "identity", &identity);
+
+    let mut engine = DraftInferenceEngine::default();
+    let circle_through_point = engine
+        .resolve(
+            &inference_frame_for_subject(
+                scene,
+                [-4.0, 1.0],
+                DraftInferenceSubject::CircleCircumference,
+                None,
+                vec![point_anchor(reference_points[0], [-4.0, 1.0])],
+            ),
+            DraftInferenceInput::default(),
+        )
+        .expect("deterministic circle-through-point transition");
+    push_resolution(
+        &mut transcript,
+        "circle-through-point",
+        &circle_through_point,
+    );
 
     let mut engine = DraftInferenceEngine::default();
     let curve = resolve(

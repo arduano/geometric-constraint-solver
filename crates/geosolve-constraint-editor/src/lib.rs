@@ -5058,7 +5058,7 @@ impl ConstraintEditor {
             return Vec::new();
         }
         let Some(draft) = self.draft.as_ref() else {
-            if !construction_point_stage(self.tool, 0) {
+            if draft_inference_subject(self.tool, 0).is_none() {
                 return self.clear_draft_inference_publication();
             }
             let resolution =
@@ -5120,14 +5120,14 @@ impl ConstraintEditor {
         if !raw_position.into_iter().all(f64::is_finite) {
             return Ok(None);
         }
-        if !construction_point_stage(tool, stage_index) {
+        let Some(subject) = draft_inference_subject(tool, stage_index) else {
             return Ok(Some(ResolvedDraftStage {
                 operand: ConstructionPoint::New(raw_position),
                 position: raw_position,
                 confirmed: None,
                 resolution: None,
             }));
-        }
+        };
 
         let resolution =
             self.resolve_draft_inference(scene, pointer, input, tool, stage_index, draft)?;
@@ -5149,6 +5149,7 @@ impl ConstraintEditor {
             .find_map(|relation| match relation {
                 DraftInferenceRelation::PointIdentity { point } => Some(*point),
                 DraftInferenceRelation::PointOnCurve { .. }
+                | DraftInferenceRelation::PointOnCreatedCurve { .. }
                 | DraftInferenceRelation::Midpoint { .. }
                 | DraftInferenceRelation::Horizontal
                 | DraftInferenceRelation::Vertical
@@ -5156,7 +5157,9 @@ impl ConstraintEditor {
                 | DraftInferenceRelation::Perpendicular { .. } => None,
             });
         let position = candidate.adjusted_model_position;
-        let operand = if let Some(id) = point_identity {
+        let operand = if subject == DraftInferenceSubject::PointOperand
+            && let Some(id) = point_identity
+        {
             let accepted_position = candidate.references.iter().find_map(|reference| {
                 if let DraftReferenceAnchor::PersistentPoint {
                     point,
@@ -5200,7 +5203,10 @@ impl ConstraintEditor {
         stage_index: usize,
         draft: Option<&Draft>,
     ) -> Result<Option<DraftInferenceResolution>, DraftInferenceError> {
-        if !pointer.is_finite() || !construction_point_stage(tool, stage_index) {
+        let Some(subject) = draft_inference_subject(tool, stage_index) else {
+            return Ok(None);
+        };
+        if !pointer.is_finite() {
             return Ok(None);
         }
         let span_start = directional_span_stage(tool, stage_index)
@@ -5234,6 +5240,7 @@ impl ConstraintEditor {
             self.geometry_policy,
             DraftInferenceSample {
                 raw_screen_position: pointer,
+                subject,
                 span_start,
             },
             anchors,
@@ -5495,6 +5502,25 @@ const fn construction_point_stage(tool: EditorTool, stage_index: usize) -> bool 
     }
 }
 
+/// Classifies construction coordinates that participate in draft inference.
+///
+/// Most inferred coordinates are persistent point operands. The circle radius
+/// stage is deliberately different: its coordinate only chooses a radius, so a
+/// point anchor means that the existing point lies on the prospective circle.
+/// No rim point is allocated or silently reused.
+const fn draft_inference_subject(
+    tool: EditorTool,
+    stage_index: usize,
+) -> Option<DraftInferenceSubject> {
+    if construction_point_stage(tool, stage_index) {
+        Some(DraftInferenceSubject::PointOperand)
+    } else if matches!(tool, EditorTool::Circle) && stage_index == 1 {
+        Some(DraftInferenceSubject::CircleCircumference)
+    } else {
+        None
+    }
+}
+
 const fn directional_span_stage(tool: EditorTool, stage_index: usize) -> bool {
     matches!(tool, EditorTool::Line) && stage_index == 1
         || matches!(tool, EditorTool::Polyline) && stage_index >= 1
@@ -5506,15 +5532,16 @@ fn construction_commit_plan(
 ) -> Option<ConstructionCommitPlan> {
     let mut relations = Vec::new();
     for confirmed in &draft.confirmed_inference {
-        let point = draft_point_slot(draft, confirmed.stage_index)?;
         for relation in confirmed.relations.iter().copied() {
             match relation {
                 DraftInferenceRelation::PointIdentity { point: expected } => {
+                    let point = draft_point_slot(draft, confirmed.stage_index)?;
                     if point != DraftPointSlot::Existing(expected) {
                         return None;
                     }
                 }
                 DraftInferenceRelation::PointOnCurve { contact } => {
+                    let point = draft_point_slot(draft, confirmed.stage_index)?;
                     relations.push(InferredRelation::PointOnCurve {
                         point,
                         contact: DraftContactDescriptor {
@@ -5526,7 +5553,14 @@ fn construction_commit_plan(
                         },
                     });
                 }
+                DraftInferenceRelation::PointOnCreatedCurve { point } => {
+                    relations.push(InferredRelation::PointOnCurve {
+                        point: DraftPointSlot::Existing(point),
+                        contact: created_circle_contact(&proposal, confirmed, point)?,
+                    });
+                }
                 DraftInferenceRelation::Midpoint { span } => {
+                    let point = draft_point_slot(draft, confirmed.stage_index)?;
                     relations.push(InferredRelation::Midpoint {
                         point,
                         line: DraftSpanSlot::Existing(span),
@@ -5564,6 +5598,55 @@ fn construction_commit_plan(
     })
 }
 
+fn created_circle_contact(
+    proposal: &ConstructionProposal,
+    confirmed: &ConfirmedDraftInference,
+    point: DesignPointId,
+) -> Option<DraftContactDescriptor> {
+    let ConstructionProposal::Circle { center, radius } = proposal else {
+        return None;
+    };
+    if confirmed.stage_index != 1 {
+        return None;
+    }
+    let center = center.position();
+    let target = confirmed
+        .references
+        .iter()
+        .find_map(|reference| match reference {
+            DraftReferenceAnchor::PersistentPoint {
+                point: candidate,
+                model_position,
+                ..
+            } if *candidate == point => Some(*model_position),
+            _ => None,
+        })?;
+    let delta = [target[0] - center[0], target[1] - center[1]];
+    let target_radius = delta[0].hypot(delta[1]);
+    let parameter = delta[1].atan2(delta[0]).rem_euclid(std::f64::consts::TAU);
+    if !center.into_iter().all(f64::is_finite)
+        || !target.into_iter().all(f64::is_finite)
+        || !target_radius.is_finite()
+        || target_radius <= 0.0
+        || target_radius.to_bits() != radius.to_bits()
+        || !parameter.is_finite()
+    {
+        return None;
+    }
+    Some(DraftContactDescriptor {
+        span: DraftSpanSlot::Created {
+            curve_index: 0,
+            segment: 0,
+        },
+        domain: ContactDomain::Periodic {
+            period: std::f64::consts::TAU,
+        },
+        parameter,
+        winding: 0,
+        neighborhood: ContactNeighborhood::Interior,
+    })
+}
+
 fn confirmed_positional_references(
     confirmed: &ConfirmedDraftInference,
 ) -> Vec<DraftReferenceAnchor> {
@@ -5572,6 +5655,7 @@ fn confirmed_positional_references(
             relation,
             DraftInferenceRelation::PointIdentity { .. }
                 | DraftInferenceRelation::PointOnCurve { .. }
+                | DraftInferenceRelation::PointOnCreatedCurve { .. }
                 | DraftInferenceRelation::Midpoint { .. }
         )
     });
@@ -5584,7 +5668,8 @@ fn confirmed_positional_references(
         .copied()
         .filter(|reference| match (relation, reference) {
             (
-                DraftInferenceRelation::PointIdentity { point: expected },
+                DraftInferenceRelation::PointIdentity { point: expected }
+                | DraftInferenceRelation::PointOnCreatedCurve { point: expected },
                 DraftReferenceAnchor::PersistentPoint { point, .. },
             ) => *point == *expected,
             (
@@ -7749,6 +7834,18 @@ mod tests {
                     expected,
                     "unexpected operand ownership for {tool:?} stage {stage}"
                 );
+                let expected_subject = if expected {
+                    Some(DraftInferenceSubject::PointOperand)
+                } else if *tool == EditorTool::Circle && stage == 1 {
+                    Some(DraftInferenceSubject::CircleCircumference)
+                } else {
+                    None
+                };
+                assert_eq!(
+                    draft_inference_subject(*tool, stage),
+                    expected_subject,
+                    "unexpected inference subject for {tool:?} stage {stage}"
+                );
                 assert_eq!(
                     directional_span_stage(*tool, stage),
                     (*tool == EditorTool::Line && stage == 1)
@@ -8119,6 +8216,7 @@ mod tests {
                             )),
                         ),
                         DraftInferenceRelation::PointIdentity { .. }
+                        | DraftInferenceRelation::PointOnCreatedCurve { .. }
                         | DraftInferenceRelation::Horizontal
                         | DraftInferenceRelation::Vertical
                         | DraftInferenceRelation::Parallel { .. }
@@ -8197,6 +8295,185 @@ mod tests {
                 && (*parameter - 0.25).abs() < 1.0e-12
                 && *neighborhood == expected_neighborhood
         ));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one regression keeps adjusted preview, exact lowering, contact metadata, and allocation ownership contiguous"
+    )]
+    fn circle_circumference_snaps_through_an_existing_point_without_a_hidden_rim_point() {
+        let (document, _, points) = line_document();
+        let scene = scene(&document);
+        let center_position = [0.0, 0.0];
+        let target_position = [4.0, 1.0];
+        let expected_radius = 17.0_f64.sqrt();
+        let expected_parameter = 1.0_f64.atan2(4.0).rem_euclid(std::f64::consts::TAU);
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Circle);
+
+        let center = scene.viewport.model_to_screen(center_position);
+        editor.pointer_down(
+            &scene,
+            pointer(82, center.x, center.y, Modifiers::default()),
+        );
+        let near_target = scene.viewport.model_to_screen([4.05, 1.03]);
+        let preview = editor.pointer_move(
+            &scene,
+            pointer(82, near_target.x, near_target.y, Modifiers::default()),
+        );
+        assert!(preview.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::PreviewConstruction(ConstructionPreview::Complete {
+                proposal: ConstructionProposal::Circle { radius, .. },
+                geometry: ConstructionPreviewGeometry::Circle {
+                    center,
+                    radius: visible_radius,
+                },
+            }) if model_points_close(*center, center_position)
+                && (*radius - expected_radius).abs() < 1.0e-12
+                && (*visible_radius - expected_radius).abs() < 1.0e-12
+        )));
+        let resolution = editor
+            .draft_inference_resolution()
+            .expect("circumference inference resolution");
+        assert!(model_points_close(
+            resolution.adjusted_model_position,
+            target_position
+        ));
+        let candidate = resolved_draft_inference_candidate(resolution)
+            .expect("resolved circle-through-point candidate");
+        assert!(matches!(
+            candidate.relations.as_slice(),
+            [DraftInferenceRelation::PointOnCreatedCurve { point }] if *point == points[1]
+        ));
+
+        let effects = editor.pointer_down(
+            &scene,
+            pointer(82, near_target.x, near_target.y, Modifiers::default()),
+        );
+        let (_, plan) = construction_plan_effect(&effects);
+        assert!(matches!(
+            plan.proposal,
+            ConstructionProposal::Circle {
+                center: ConstructionPoint::New(position),
+                radius,
+            } if model_points_close(position, center_position)
+                && (radius - expected_radius).abs() < 1.0e-12
+        ));
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [InferredRelation::PointOnCurve {
+                point: DraftPointSlot::Existing(point),
+                contact: DraftContactDescriptor {
+                    span: DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0,
+                    },
+                    domain: ContactDomain::Periodic { period },
+                    parameter,
+                    winding: 0,
+                    neighborhood: ContactNeighborhood::Interior,
+                },
+            }] if *point == points[1]
+                && period.to_bits() == std::f64::consts::TAU.to_bits()
+                && (*parameter - expected_parameter).abs() < 1.0e-12
+        ));
+
+        let mut committed = document.clone();
+        let result = plan
+            .apply(&mut committed)
+            .expect("circle-through-point plan");
+        assert_eq!(
+            result.construction.points.len(),
+            1,
+            "only the center is new"
+        );
+        assert_eq!(
+            result.construction.scalars.len(),
+            1,
+            "only the radius is new"
+        );
+        assert_eq!(result.construction.curves.len(), 1);
+        assert_eq!(result.contacts.len(), 1);
+        assert_eq!(result.constraints.len(), 1);
+        let contact = committed
+            .contact(result.contacts[0].contact)
+            .expect("circle contact");
+        assert_eq!(
+            contact.curve,
+            CurveSpan::line(result.construction.curves[0])
+        );
+        assert!(matches!(
+            committed
+                .constraint(result.constraints[0].constraint)
+                .expect("point-on-circle constraint")
+                .definition,
+            DocumentConstraintDefinition::PointOnCurve { point, contact: relation_contact }
+                if point == points[1] && relation_contact == result.contacts[0].contact
+        ));
+    }
+
+    #[test]
+    fn circle_circumference_suppression_is_raw_and_zero_radius_never_publishes() {
+        let (document, _, _) = line_document();
+        let scene = scene(&document);
+        let center_position = [0.0, 0.0];
+        let raw_radius_position = [4.05, 1.03];
+        let mut suppressed = ConstraintEditor::default();
+        suppressed.activate_tool(EditorTool::Circle);
+        let center = scene.viewport.model_to_screen(center_position);
+        suppressed.pointer_down(
+            &scene,
+            pointer(83, center.x, center.y, Modifiers::default()),
+        );
+        let radius = scene.viewport.model_to_screen(raw_radius_position);
+        let effects = suppressed.pointer_down_with_draft_inference(
+            &scene,
+            pointer(83, radius.x, radius.y, Modifiers::default()),
+            DraftInferenceInput {
+                suppressed: true,
+                preferred_candidate: None,
+            },
+        );
+        assert!(effects.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::CommitConstruction {
+                proposal: ConstructionProposal::Circle { radius, .. },
+                ..
+            } if (*radius
+                - raw_radius_position[0].hypot(raw_radius_position[1]))
+                .abs()
+                < 1.0e-12
+        )));
+        assert!(
+            !effects
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+        );
+
+        let mut zero_radius = ConstraintEditor::default();
+        zero_radius.activate_tool(EditorTool::Circle);
+        let existing = scene.viewport.model_to_screen([-4.0, 1.0]);
+        zero_radius.pointer_down(
+            &scene,
+            pointer(84, existing.x, existing.y, Modifiers::default()),
+        );
+        let effects = zero_radius.pointer_down(
+            &scene,
+            pointer(84, existing.x, existing.y, Modifiers::default()),
+        );
+        assert!(!has_construction_commit(&effects));
+        assert!(zero_radius.pending_construction_commit_token().is_none());
+        assert_eq!(
+            zero_radius
+                .draft
+                .as_ref()
+                .expect("valid center stage remains active")
+                .points
+                .len(),
+            1
+        );
     }
 
     #[test]

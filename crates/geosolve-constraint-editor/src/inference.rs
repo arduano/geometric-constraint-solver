@@ -520,31 +520,62 @@ impl DraftReferenceAnchor {
         }
     }
 
-    fn family(self) -> DraftInferenceFamily {
-        match self {
-            Self::PersistentPoint { .. } => DraftInferenceFamily::PointIdentity,
-            Self::Midpoint { .. } => DraftInferenceFamily::Midpoint,
-            Self::CurvePoint { .. } | Self::AffineSupport { .. } => {
-                DraftInferenceFamily::PointOnCurve
+    fn inference_for_subject(
+        self,
+        subject: DraftInferenceSubject,
+    ) -> Option<(DraftInferenceFamily, DraftInferenceRelation)> {
+        match (subject, self) {
+            (DraftInferenceSubject::PointOperand, Self::PersistentPoint { point, .. }) => Some((
+                DraftInferenceFamily::PointIdentity,
+                DraftInferenceRelation::PointIdentity { point },
+            )),
+            (DraftInferenceSubject::PointOperand, Self::Midpoint { span, .. }) => Some((
+                DraftInferenceFamily::Midpoint,
+                DraftInferenceRelation::Midpoint { span },
+            )),
+            (
+                DraftInferenceSubject::PointOperand,
+                Self::CurvePoint { contact, .. } | Self::AffineSupport { contact, .. },
+            ) => Some((
+                DraftInferenceFamily::PointOnCurve,
+                DraftInferenceRelation::PointOnCurve { contact },
+            )),
+            (DraftInferenceSubject::CircleCircumference, Self::PersistentPoint { point, .. }) => {
+                Some((
+                    DraftInferenceFamily::PointOnCreatedCurve,
+                    DraftInferenceRelation::PointOnCreatedCurve { point },
+                ))
             }
+            (
+                DraftInferenceSubject::CircleCircumference,
+                Self::Midpoint { .. } | Self::CurvePoint { .. } | Self::AffineSupport { .. },
+            ) => None,
         }
     }
+}
 
-    fn relation(self) -> DraftInferenceRelation {
-        match self {
-            Self::PersistentPoint { point, .. } => DraftInferenceRelation::PointIdentity { point },
-            Self::Midpoint { span, .. } => DraftInferenceRelation::Midpoint { span },
-            Self::CurvePoint { contact, .. } | Self::AffineSupport { contact, .. } => {
-                DraftInferenceRelation::PointOnCurve { contact }
-            }
-        }
-    }
+/// Semantic owner of the pointer coordinate currently being inferred.
+///
+/// A point operand may reuse an existing point or receive an ordinary
+/// point-on-curve relation. A circle circumference click is not an allocated
+/// point: snapping it to a persistent point instead means that point lies on
+/// the newly created circle. Keeping these subjects distinct prevents a radius
+/// sample from masquerading as structural point identity reuse.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum DraftInferenceSubject {
+    #[default]
+    /// The coordinate becomes or structurally reuses a persistent point.
+    PointOperand,
+    /// The coordinate samples a prospective circle's radius without allocating a rim point.
+    CircleCircumference,
 }
 
 /// Normalized pointer sample for the current construction point.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DraftInferenceSample {
     pub raw_screen_position: ScreenPoint,
+    /// Semantic construction operand sampled by this pointer coordinate.
+    pub subject: DraftInferenceSubject,
     /// Start of the live line/polyline span, when direction inference is
     /// semantically applicable.  Non-span construction stages leave this `None`.
     pub span_start: Option<[f64; 2]>,
@@ -620,6 +651,7 @@ impl DraftInferenceFrame {
             prepared_input: self.prepared_input,
             viewport: self.viewport,
             geometry_policy: self.geometry_policy,
+            subject: self.sample.subject,
         }
     }
 }
@@ -641,13 +673,30 @@ impl DraftInferenceCandidateId {
 /// not a request to add a redundant Coincident constraint.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DraftInferenceRelation {
-    PointIdentity { point: DesignPointId },
-    PointOnCurve { contact: DraftCurveContact },
-    Midpoint { span: CurveSpan },
+    PointIdentity {
+        point: DesignPointId,
+    },
+    PointOnCurve {
+        contact: DraftCurveContact,
+    },
+    /// A persistent point lies on the curve allocated by this construction.
+    ///
+    /// This is the allocation-order reverse of [`Self::PointOnCurve`], not
+    /// structural point reuse and not a hidden rim point.
+    PointOnCreatedCurve {
+        point: DesignPointId,
+    },
+    Midpoint {
+        span: CurveSpan,
+    },
     Horizontal,
     Vertical,
-    Parallel { reference: CurveSpan },
-    Perpendicular { reference: CurveSpan },
+    Parallel {
+        reference: CurveSpan,
+    },
+    Perpendicular {
+        reference: CurveSpan,
+    },
 }
 
 /// Relation family exposed to policy and presentation consumers.
@@ -655,6 +704,7 @@ pub enum DraftInferenceRelation {
 pub enum DraftInferenceFamily {
     PointIdentity,
     PointOnCurve,
+    PointOnCreatedCurve,
     Midpoint,
     Horizontal,
     Vertical,
@@ -835,6 +885,7 @@ impl DraftInferenceCandidate {
                 .all(|relation| match relation {
                     DraftInferenceRelation::PointOnCurve { contact } => contact.is_valid(),
                     DraftInferenceRelation::PointIdentity { .. }
+                    | DraftInferenceRelation::PointOnCreatedCurve { .. }
                     | DraftInferenceRelation::Midpoint { .. }
                     | DraftInferenceRelation::Horizontal
                     | DraftInferenceRelation::Vertical
@@ -942,12 +993,14 @@ struct FrameStamp {
     prepared_input: Option<PreparedSketchInput>,
     viewport: Viewport,
     geometry_policy: GeometryInteractionPolicy,
+    subject: DraftInferenceSubject,
 }
 
 #[derive(Clone, Copy, Debug)]
 struct AnchorWork {
     anchor: DraftReferenceAnchor,
     key: AnchorKey,
+    family: DraftInferenceFamily,
     behavior: DraftInferenceBehavior,
     distance_pixels: f64,
 }
@@ -1150,24 +1203,28 @@ impl DraftInferenceEngine {
         let mut eligible_anchors = self.eligible_anchors(frame, raw_screen);
         deduplicate_anchor_works(&mut eligible_anchors, frame.geometry_policy.scope);
 
-        let wake_references: Vec<_> = eligible_anchors
-            .iter()
-            .filter(|work| {
-                work.anchor.is_reusable_reference()
-                    && work.distance_pixels <= self.enter_distance(work.anchor.family())
-            })
-            .copied()
-            .collect();
+        let wake_references: Vec<_> = if frame.sample.subject == DraftInferenceSubject::PointOperand
+        {
+            eligible_anchors
+                .iter()
+                .filter(|work| {
+                    work.anchor.is_reusable_reference()
+                        && work.distance_pixels <= self.enter_distance(work.family)
+                })
+                .copied()
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         let active_anchor = self.active_anchor.and_then(|active| {
             eligible_anchors.iter().copied().find(|work| {
-                work.key == active
-                    && work.distance_pixels <= self.exit_distance(work.anchor.family())
+                work.key == active && work.distance_pixels <= self.exit_distance(work.family)
             })
         });
         let higher_priority_anchor_entered = active_anchor.is_some_and(|active| {
             eligible_anchors.iter().any(|work| {
-                work.distance_pixels <= self.enter_distance(work.anchor.family())
+                work.distance_pixels <= self.enter_distance(work.family)
                     && compare_wake_reference_priority(*work, active, frame.geometry_policy.scope)
                         == Ordering::Less
             })
@@ -1178,10 +1235,12 @@ impl DraftInferenceEngine {
         } else {
             self.active_anchor = None;
             eligible_anchors
-                .retain(|work| work.distance_pixels <= self.enter_distance(work.anchor.family()));
+                .retain(|work| work.distance_pixels <= self.enter_distance(work.family));
         }
 
-        let retained_direction = self.retained_direction(frame, raw_model);
+        let retained_direction = (frame.sample.subject == DraftInferenceSubject::PointOperand)
+            .then(|| self.retained_direction(frame, raw_model))
+            .flatten();
         if retained_direction.is_none() {
             self.active_direction = None;
         }
@@ -1215,7 +1274,9 @@ impl DraftInferenceEngine {
             );
         }
 
-        standalone_guides.extend(self.point_tracking_guides(frame, raw_model));
+        if frame.sample.subject == DraftInferenceSubject::PointOperand {
+            standalone_guides.extend(self.point_tracking_guides(frame, raw_model));
+        }
         if !generation_complete {
             self.active_anchor = None;
             self.active_direction = None;
@@ -1352,15 +1413,17 @@ impl DraftInferenceEngine {
             .iter()
             .copied()
             .filter(|anchor| anchor.is_interactive(frame.geometry_policy))
-            .map(|anchor| {
-                let behavior = self.behavior(anchor.family());
+            .filter_map(|anchor| {
+                let (family, _) = anchor.inference_for_subject(frame.sample.subject)?;
+                let behavior = self.behavior(family);
                 let screen_position = frame.viewport.model_to_screen(anchor.model_position());
-                AnchorWork {
+                Some(AnchorWork {
                     anchor,
                     key: anchor.key(),
+                    family,
                     behavior,
                     distance_pixels: screen_distance(raw_screen, screen_position),
-                }
+                })
             })
             .filter(|work| {
                 work.behavior.show_guides
@@ -1473,7 +1536,11 @@ impl DraftInferenceEngine {
         if let Some(anchor) = anchor {
             references.push(anchor.anchor);
             if anchor.behavior.persist_constraint {
-                relations.push(anchor.anchor.relation());
+                let (_, relation) = anchor
+                    .anchor
+                    .inference_for_subject(frame.sample.subject)
+                    .expect("eligible anchor must retain its frame-subject relation");
+                relations.push(relation);
             }
             if anchor.behavior.show_guides {
                 guides.push(anchor_guide(None, 0, anchor));
@@ -1790,14 +1857,19 @@ impl DraftInferenceEngine {
             .iter()
             .copied()
             .filter(|anchor| anchor.is_reusable_reference())
-            .map(|anchor| AnchorWork {
-                anchor,
-                key: anchor.key(),
-                behavior: self.behavior(anchor.family()),
-                distance_pixels: screen_distance(
-                    raw_screen,
-                    viewport.model_to_screen(anchor.model_position()),
-                ),
+            .filter_map(|anchor| {
+                let (family, _) =
+                    anchor.inference_for_subject(DraftInferenceSubject::PointOperand)?;
+                Some(AnchorWork {
+                    anchor,
+                    key: anchor.key(),
+                    family,
+                    behavior: self.behavior(family),
+                    distance_pixels: screen_distance(
+                        raw_screen,
+                        viewport.model_to_screen(anchor.model_position()),
+                    ),
+                })
             })
             .chain(
                 references
@@ -1845,7 +1917,9 @@ impl DraftInferenceEngine {
     const fn behavior(&self, family: DraftInferenceFamily) -> DraftInferenceBehavior {
         match family {
             DraftInferenceFamily::PointIdentity => self.policy.point_identity,
-            DraftInferenceFamily::PointOnCurve => self.policy.point_on_curve,
+            DraftInferenceFamily::PointOnCurve | DraftInferenceFamily::PointOnCreatedCurve => {
+                self.policy.point_on_curve
+            }
             DraftInferenceFamily::Midpoint => self.policy.midpoint,
             DraftInferenceFamily::Horizontal => self.policy.horizontal,
             DraftInferenceFamily::Vertical => self.policy.vertical,
@@ -1857,9 +1931,9 @@ impl DraftInferenceEngine {
 
     fn enter_distance(&self, family: DraftInferenceFamily) -> f64 {
         match family {
-            DraftInferenceFamily::PointIdentity | DraftInferenceFamily::Midpoint => {
-                self.policy.tolerances.point_enter_pixels
-            }
+            DraftInferenceFamily::PointIdentity
+            | DraftInferenceFamily::PointOnCreatedCurve
+            | DraftInferenceFamily::Midpoint => self.policy.tolerances.point_enter_pixels,
             DraftInferenceFamily::PointOnCurve => self.policy.tolerances.curve_enter_pixels,
             DraftInferenceFamily::Horizontal
             | DraftInferenceFamily::Vertical
@@ -1871,9 +1945,9 @@ impl DraftInferenceEngine {
 
     fn exit_distance(&self, family: DraftInferenceFamily) -> f64 {
         match family {
-            DraftInferenceFamily::PointIdentity | DraftInferenceFamily::Midpoint => {
-                self.policy.tolerances.point_exit_pixels
-            }
+            DraftInferenceFamily::PointIdentity
+            | DraftInferenceFamily::PointOnCreatedCurve
+            | DraftInferenceFamily::Midpoint => self.policy.tolerances.point_exit_pixels,
             DraftInferenceFamily::PointOnCurve => self.policy.tolerances.curve_exit_pixels,
             DraftInferenceFamily::Horizontal
             | DraftInferenceFamily::Vertical
@@ -1989,7 +2063,7 @@ fn anchor_guide(
 ) -> DraftGuide {
     DraftGuide {
         id: DraftGuideId { candidate, ordinal },
-        family: work.anchor.family(),
+        family: work.family,
         classification: work.behavior.guide_classification(),
         geometry: DraftGuideGeometry::Point {
             position: work.anchor.model_position(),
@@ -2332,6 +2406,22 @@ mod tests {
         span_start: Option<[f64; 2]>,
         anchors: Vec<DraftReferenceAnchor>,
     ) -> DraftInferenceFrame {
+        frame_for_subject(
+            viewport,
+            screen,
+            DraftInferenceSubject::PointOperand,
+            span_start,
+            anchors,
+        )
+    }
+
+    fn frame_for_subject(
+        viewport: Viewport,
+        screen: ScreenPoint,
+        subject: DraftInferenceSubject,
+        span_start: Option<[f64; 2]>,
+        anchors: Vec<DraftReferenceAnchor>,
+    ) -> DraftInferenceFrame {
         DraftInferenceFrame {
             design_identity: identity(),
             accepted_revision: 1,
@@ -2340,6 +2430,7 @@ mod tests {
             geometry_policy: GeometryInteractionPolicy::default(),
             sample: DraftInferenceSample {
                 raw_screen_position: screen,
+                subject,
                 span_start,
             },
             anchors,
@@ -3638,6 +3729,69 @@ mod tests {
             [DraftInferenceRelation::PointOnCurve { contact }]
                 if contact.span == curve_span(185)
         ));
+    }
+
+    #[test]
+    fn circle_circumference_inference_resolves_only_persistent_points() {
+        let view = viewport(50.0);
+        let target = [2.0, 1.0];
+        let screen = view.model_to_screen([2.08, 1.04]);
+        let mut engine = DraftInferenceEngine::default();
+        let resolution = engine
+            .resolve(
+                &frame_for_subject(
+                    view,
+                    screen,
+                    DraftInferenceSubject::CircleCircumference,
+                    None,
+                    vec![
+                        affine_anchor(20, target, [1.0, 0.0]),
+                        midpoint_anchor(20, target, [1.0, 0.0]),
+                        point_anchor(10, target),
+                    ],
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("circle circumference inference");
+        let selected = resolved_candidate(&resolution);
+        assert_eq!(selected.adjusted_model_position, target);
+        assert_eq!(
+            selected.adjusted_screen_position,
+            view.model_to_screen(target)
+        );
+        assert_eq!(
+            selected.relations,
+            vec![DraftInferenceRelation::PointOnCreatedCurve {
+                point: point_id(10)
+            }]
+        );
+        assert!(matches!(
+            selected.references.as_slice(),
+            [DraftReferenceAnchor::PersistentPoint { point, .. }] if *point == point_id(10)
+        ));
+        assert!(selected.guides.iter().all(|guide| {
+            guide.family == DraftInferenceFamily::PointOnCreatedCurve
+                && guide.classification == DraftGuideClassification::ConstraintBacked
+        }));
+
+        let curve_only = engine
+            .resolve(
+                &frame_for_subject(
+                    view,
+                    screen,
+                    DraftInferenceSubject::CircleCircumference,
+                    None,
+                    vec![
+                        affine_anchor(20, target, [1.0, 0.0]),
+                        midpoint_anchor(20, target, [1.0, 0.0]),
+                    ],
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("curve anchors are ineligible for a circle circumference");
+        assert_eq!(curve_only.status, DraftInferenceStatus::None);
+        assert!(curve_only.candidates.is_empty());
+        assert!(curve_only.guides.is_empty());
     }
 
     #[test]

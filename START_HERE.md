@@ -39,7 +39,8 @@ the supervising human explicitly approved it on 2026-08-09. M70 is now the activ
 ADR 0034: reusable headless auto-constraint drafting intelligence, atomic
 construction-plus-inference commit and an ordinary editable UAT playground. Implementation and
 focused direct qualification, integrated release qualification, frozen-candidate publication and
-served-byte verification are complete; supervising-human UAT is pending.
+served-byte verification are complete for the first candidate. Circle-authoring UAT finding
+`M70-F001`, its replacement candidate and supervising-human approval are pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -131,7 +132,10 @@ that do not own drafting suppression. The focused inference
 selection passes 46/46, the complete editor crate passes 266 unit tests plus all relevant
 integration suites, demo-web passes 82/82 tests, the sketch library passes 33/33 unit tests and M56
 passes 6/6. Frozen candidate source `4b16db3a885f5e28f508189b8817797375f05807` passes the complete
-release and served-byte gates. M64
+release and served-byte gates, but human review opened `M70-F001`: a Circle circumference snap to an
+existing point or line endpoint must atomically create PointOnCurve(existing point, created circle),
+not a hidden rim point or an arbitrary line-interior contact/tangency. Replacement qualification and
+targeted human recheck remain pending. M64
 supersedes active-scenario routing and sample-specific passive-driver metadata with one ordinary
 workspace coordinator.
 M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
@@ -264,9 +268,10 @@ computed-feature behavior and received focused supervising-human approval. M68 c
 supervising-human approval on 2026-08-09. M69 completed ADR 0033's Profile/Construction semantics,
 passed its complete release gate and received explicit supervising-human approval on 2026-08-09.
 M70 is active: implementation, focused direct qualification, integrated release qualification,
-frozen-candidate publication and served-byte verification are complete, while human UAT is
-pending. `docs/M70_IMPLEMENTATION.md` owns its objective ledger, `docs/M70_UAT.md` is the pending
-scorecard and ADR 0034 owns the architecture.
+frozen-candidate publication and served-byte verification are complete for its first candidate,
+while `M70-F001`, replacement qualification/publication and human UAT are pending.
+`docs/M70_IMPLEMENTATION.md` owns its objective ledger, `docs/M70_UAT.md` is the pending scorecard
+and ADR 0034 owns the architecture.
 The temporary `docs/M71_GOALS.md` backlog is not an active milestone or implementation
 authorization.
 

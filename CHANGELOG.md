@@ -105,7 +105,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   passes 46/46, the editor passes 266 unit tests plus every relevant
   integration suite, demo-web passes 82/82, the sketch library passes 33/33 and M56 passes 6/6;
   the complete release gate and byte-verified Tailscale publication pass on candidate
-  `4b16db3a885f5e28f508189b8817797375f05807`. M70 is not yet accepted pending human UAT.
+  `4b16db3a885f5e28f508189b8817797375f05807`. Human review then opened Circle-authoring finding
+  `M70-F001`; its repair, replacement qualification/publication and human recheck remain pending,
+  so M70 is not yet accepted.
 
 ### Changed
 
@@ -118,7 +120,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   both received explicit supervising-human approval on 2026-08-09. M70 is now scoped under ADR
   0034 for headless auto-constraint drafting intelligence. Implementation, focused direct and
   integrated release qualification, frozen-candidate publication and served-byte verification are
-  complete; human acceptance remains pending.
+  complete for the first candidate; `M70-F001`, replacement qualification/publication and human
+  acceptance remain pending.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

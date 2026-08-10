@@ -1392,6 +1392,13 @@ therefore a history-neutral no-op. Candidate enumeration stops at the first uniq
 its configured bound insufficient; candidate or scene exhaustion returns typed incomplete
 evidence, raw coordinates and no partial semantic prefix.
 
+Circle authoring treats its circumference click as a radius sample rather than a point operand. At
+an existing persistent point, including a line endpoint, the headless proposal is **Circle through
+point** and the atomic plan creates PointOnCurve(existing point, created circle). It creates no
+hidden rim point. A semantic midpoint or arbitrary line interior is not eligible and cannot silently
+become line contact or tangency. `M70-F001` keeps this UAT contract open until direct regressions, a
+replacement published candidate and targeted human recheck pass.
+
 The replay uses persistent identities and normalized 2D editor inputs and must produce identical
 transitions natively and through WASM. A browser can map Shift to semantic suppression and render
 the returned guide; a 3D CAD host can first map its camera ray onto the active sketch plane.
@@ -1434,7 +1441,7 @@ metadata, ranking, hysteresis, suppression, resource limits and atomic commit. H
 the leaf to assess discoverability and predictability for H/V, point reuse, PointOnCurve,
 midpoint-normal, remembered Parallel/Perpendicular, ambiguity, suppression, zoom/scope,
 Undo/Redo and reload. `docs/M70_UAT.md` records the published-candidate scorecard awaiting human
-results.
+results and the open `M70-F001` Circle-authoring recheck.
 
 Application-workspace v5 round trips the field-opaque persistent-object and spline-span allocator
 high-water needed for never-reuse after Undo/divergent history and process reload. Frozen workspace
