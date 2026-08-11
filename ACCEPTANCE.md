@@ -160,9 +160,11 @@ editable-sample cleanup, approved reduced-scope M65 predictable dragging, approv
 computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
 M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
 semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
-has fully qualified and byte-verified F001/F002 replacements plus a clean 193-row test-only H1
-oracle whose complete release gate and fresh publication also pass; targeted human recheck and
-approval remain pending. M71 remains deferred behind it.
+has fully qualified and byte-verified F001/F002 replacements plus a historically clean 193-row
+test-only H1/H2 baseline whose complete release gate and fresh publication passed. H3 preserves
+those rows while adding four reviewed F003/F004 `DEFECT` rows; its `--require-clean` gate is
+deliberately red. Targeted human recheck and approval remain pending. M71 remains deferred behind
+it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1401,13 +1403,14 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 ## M70B acceptance: workspace reproduction handoff
 
 Status: active during human UAT. The reproduction transport criteria remain qualified;
-`M70B-F001` and `M70B-F002` retain complete replacement evidence. The continue-through-failure
-oracle still records 193/193 passing constraint/dimension-authoring and reachable scene-authority
-rows, but subsequent UAT opened `M70B-F003` in computed-Fillet authoring, which that matrix does
-not cover. Two supplied line-circle Fillet payloads subsequently opened `M70B-F004` in persisted
-computed-feature branch traversal, another absent matrix dimension. Both exact current failures
-are characterized at their headless owners with production code unchanged; human review and
-approval remain pending.
+`M70B-F001` and `M70B-F002` retain complete replacement evidence. The historical M70B-H1/H2
+continue-through-failure baseline records 193/193 passing constraint/dimension-authoring and
+reachable scene-authority rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring and
+`M70B-F004` in persisted computed-feature branch traversal, dimensions absent from that baseline.
+M70B-H3 preserves the original 193 rows byte-for-byte and appends four process-isolated reviewed
+`DEFECT` rows for those findings, yielding 197 total rows. Exact `--check` passes, while
+`--require-clean` intentionally fails; both failures remain characterized at their headless owners
+with production code unchanged, and human review and approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1437,7 +1440,7 @@ approval remain pending.
   strict malformed/corrupt/oversized rejection, complete computed-Fillet v5 round-trip and atomic
   retention after transport, workspace and coordinator failures. The same codec path must compile
   for WASM. No browser E2E or legacy route returns.
-- The manually administered M70B-H1 oracle exhaustively inventories all sixteen
+- The historical manually administered M70B-H1 oracle exhaustively inventories all sixteen
   `ResolvedConstraintKind` and five `DimensionKind` families. Every family has one deterministic
   case and eight fixed-seed variants that schedule span reversal, operand reversal and
   perturbed-recovery geometry while varying finite transform/contact input. Dimension variants
@@ -1449,21 +1452,28 @@ approval remain pending.
   detached historical accepted presentation beneath rejected design. It verifies visible problem
   metadata and exact authentication allow/deny behavior without manufacturing an unreachable
   `ComputedSceneState::Absent` coordinator.
-- Every authoring and scene row runs in a separately bounded process and later rows continue after
-  semantic defects, panics, timeout/hard-kill exits or harness errors. Its stable six-column TSV
-  freezes the effective scheduled input fingerprint, has the exact 193 `(case_id, family)` pairs
-  and no duplicate/unclassified row; the checked golden must match exactly and `--require-clean`
-  must fail if any row is not `PASS`. Dimension rows independently compare accepted measurements,
-  target metadata and display units across create/edit/Undo/Redo. Endpoint-continuity rows verify
-  path-oriented G2 curvature and rate-explicit Parametric-C2 derivatives, including a pre-satisfied
-  unequal-rate witness. `docs/M70B_HARDENING.md` records the seed, exact commands and readable
-  checklist. The historical H1 survey contains exactly 193 `PASS` rows; its scope does not include
-  computed-Fillet operand collection or source-edit branch traversal and therefore does not gate
-  later `M70B-F003` or `M70B-F004`.
+- Every authoring, feature and scene row runs in a separately bounded process and later rows
+  continue after semantic defects, panics, timeout/hard-kill exits or harness errors. Its stable
+  six-column TSV freezes the effective scheduled input fingerprint and rejects
+  duplicate/unclassified rows; the checked golden must match exactly and `--require-clean` must
+  fail if any row is not `PASS`.
+  Dimension rows independently compare accepted measurements, target metadata and display units
+  across create/edit/Undo/Redo. Endpoint-continuity rows verify path-oriented G2 curvature and
+  rate-explicit Parametric-C2 derivatives, including a pre-satisfied unequal-rate witness.
+  `docs/M70B_HARDENING.md` records the seed, exact commands and readable checklist. The historical
+  H1/H2 baseline contains exactly 193 `PASS` rows; its scope did not include computed-Fillet operand
+  collection or source-edit branch traversal and therefore did not gate later `M70B-F003` or
+  `M70B-F004`.
 - M70B-H2 moves those exact rows and golden bytes to milestone-neutral test/fixture/driver names,
   accepts finding IDs from later active milestones, makes the clean oracle mandatory inside the
   release gate and installs the implicitly invoked repository defect-hardening skill. The original
   H1 SHA-256 and UAT bytes remain unchanged and no compatibility alias survives.
+- M70B-H3 appends exactly four process-isolated `feature.fillet` rows: F003 Coincident-closure
+  point and curve-pair authoring plus F004 line-circle same-cell winding-zero and seam-winding-one
+  evaluation. All original 193 rows remain byte-identical. The reviewed inventory is exactly 197
+  rows: 193 `PASS` plus four `DEFECT` rows assigned to `M70B-F003`/`M70B-F004`. Passing `--check`
+  proves only that this reviewed checklist is stable; it is not release readiness. The mandatory
+  `--require-clean` release gate intentionally remains red until every row is reviewed `PASS`.
 - Circle/arc radial Normal is explicitly centre-on-complete-supporting-line incidence. Compact
   authoring ignores the arbitrary curve-click parameter, seeds the unique affine projection from
   compatible retained accepted geometry, persists SupportingLine/Interior metadata and rejects
@@ -1518,6 +1528,16 @@ publicly resolved valid roots strictly inside the same certified circle cell. It
 complete sketch/feature identity retention and deduplicate the two cases as one source-edit
 locality defect. It is not evidence of resolution: an authorized repair must later make both
 persisted evaluations Current without permitting a remote root hop or implicit branch change.
+
+M70B-H3 acceptance is test-only and requires all four Fillet rows to execute in separate bounded
+processes, retain stable case IDs/fingerprints and classify the two F003 rows plus two F004 rows as
+the already-reviewed `DEFECT` findings. The prior 193 H1/H2 rows must remain byte-for-byte
+unchanged, producing exactly 197 rows with golden SHA-256
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`. `--check` must pass to
+prove checklist stability, while `--require-clean` must intentionally fail while any reviewed
+defect remains. Therefore H3 is not a release qualification: the mandatory release gate stays red
+and M70B cannot close until authorized repairs make the focused regressions pass positively and a
+reviewed clean golden allows `--require-clean` to pass. H3 changes no production behavior.
 
 M71 remains deferred behind M70B.
 
@@ -1838,7 +1858,8 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   transform, operand-order, lifecycle or authority-state axis.
 - Golden updates are reviewed input-and-classification changes, never automatic acceptance of new
   output. `--check` freezes the recorded checklist and `--require-clean` is the release closure
-  gate.
+  gate. A passing `--check` with reviewed `DEFECT` rows proves checklist stability, not release
+  readiness; the mandatory gate remains red until `--require-clean` passes.
 - `.agents/skills/geosolve-harden-defect/` is the canonical intake, ownership, regression and
   qualification workflow for solver and headless-UX findings.
 - Differential tests compare geometric validity, rank/mobility/status and branch continuity, not identical internal coordinates or iteration counts.

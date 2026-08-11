@@ -2,9 +2,10 @@
 
 # Canonical GeoSolve defect testing
 
-Use a layered golden strategy. Keep the 193-row authoring/scene oracle as the stable broad
+Use a layered golden strategy. Keep the reviewed authoring/scene/feature oracle as the stable broad
 compatibility matrix; do not turn it into the only regression suite or a dumping ground for exact
-defects.
+defects. `docs/M70B_HARDENING.md` owns the historical and current inventory counts, dispositions
+and byte-preservation record.
 
 ## Testing layers
 

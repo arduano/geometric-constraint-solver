@@ -7,11 +7,14 @@ approved.
 `M70B-F001` and `M70B-F002` retain their owning-layer corrections and complete replacement
 evidence. M70B-H1 adds a 193/193 passing constraint/dimension-authoring and scene oracle; its
 complete release gate and fresh byte-verified Tailscale publication now pass. M70B-H2 only
-generalizes that test infrastructure and
-adds the repo-local defect workflow; its clean release qualification passes without replacing or
-altering the served H1 product candidate. F003 and F004 fall outside that matrix and now have
-focused headless current-behavior characterizations only; no fix or repair plan is authorized yet.
-This scorecard records no human pass or approval.
+generalized that test infrastructure and added the repo-local defect workflow; its clean release
+qualification passed without replacing or altering the served H1 product candidate. Test-only H3
+preserves those 193 row records and adds four isolated `feature.fillet` rows: point and curve-pair
+Coincident-closure authoring record F003, while lower same-cell and periodic-seam line-circle
+evaluation record F004. The current 197-row golden contains 193 `PASS` and four reviewed `DEFECT`;
+`--check` passes while `--require-clean` intentionally fails on exactly those four open rows. H3
+changes no production behavior or served bytes, and no fix or repair plan is authorized yet. This
+scorecard records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
@@ -20,6 +23,12 @@ Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 Current `M70B-H1` candidate source: `dd645d99e705e56c80ab2a4a136f7a4d03baafbf`
 
 Qualified `M70B-H2` test-infrastructure source: `47584bdb607c722df508eae56584726954a03205`
+
+Historical `M70B-H1/H2` golden SHA-256:
+`803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`
+
+Current `M70B-H3` golden SHA-256:
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`
 
 Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
 
@@ -33,7 +42,8 @@ Current `M70B-H1` read-only snapshot: `/tmp/geosolve-m70b-h1-uat.viSB9G`
 Current `M70B-H1` release distribution manifest aggregate:
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
 
-H1 is test-only, so its release bytes and aggregate intentionally match the prior F002 candidate.
+H1-H3 are test-only, so the served release bytes and aggregate intentionally remain the prior F002
+product bytes qualified and republished by H1.
 
 ## Preconditions
 
@@ -44,6 +54,10 @@ H1 is test-only, so its release bytes and aggregate intentionally match the prio
 - [x] M70B-H1's checked golden and clean-oracle gate pass with 193/193 classified rows.
 - [x] The clean M70B-H1 source passes the complete integrated release gate.
 - [x] A fresh M70B-H1 read-only distribution is served and byte-verified through Tailscale.
+- [x] M70B-H3's reviewed 197-row golden `--check` passes with 193 `PASS` and four expected
+  `DEFECT` rows carrying only `M70B-F003`/`M70B-F004`.
+- [ ] M70B-H3's `--require-clean` gate returns zero; it intentionally fails on exactly those four
+  rows while the findings remain open.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;
@@ -51,6 +65,25 @@ there is no scenario mode, protected fixture, alternate coordinator or restored 
 Native Rust tests remain authoritative for exact bytes, bounds, workspace/high-water fidelity and
 atomicity; the same codec path must also compile for WASM. Human review assesses discoverability,
 text handoff, visible restoration and failure recovery.
+
+## M70B-H3 — Reviewed test-only Fillet golden
+
+The current aggregate driver executes the original 193 H1/H2 rows plus four isolated
+`feature.fillet` rows:
+
+- `feature.fillet.authoring.coincident-closure.point` — `M70B-F003`;
+- `feature.fillet.authoring.coincident-closure.curve-pair` — `M70B-F003`;
+- `feature.fillet.evaluation.line-circle.same-cell-lower` — `M70B-F004`, winding zero; and
+- `feature.fillet.evaluation.line-circle.same-cell-seam` — `M70B-F004`, winding one.
+
+The checked golden SHA-256 is
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`. The reviewed check is
+green: all 197 rows match their expected bytes, with 193 `PASS` and four `DEFECT`. The clean gate is
+deliberately red: `./scripts/golden-authoring-scene-oracle.sh --require-clean` exits nonzero and
+names exactly those four rows. That red result is the expected open-defect gate, not a panic,
+timeout, harness error or production regression introduced by H3.
+
+Result: **REVIEWED CHECK PASS — CLEAN GATE BLOCKED BY EXACTLY FOUR OPEN DEFECT ROWS**
 
 ## M70B-U1 — Discover and copy a self-contained payload
 
@@ -211,10 +244,13 @@ rejection retains the prior valid two-corner preview; the two-span rejection ret
 first support and no-preview state. Neither publishes a feature.
 
 The exact current failure is encoded by
-`m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair`. The 193-row golden
-remains green because it exercises constraint/dimension authoring and precomposed scene authority,
-not computed-Fillet operand collection. This checkpoint deliberately does not implement or plan
-the production correction.
+`m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair`. The historical
+H1/H2 193-row golden remained green because it exercised constraint/dimension authoring and
+precomposed scene authority, not computed-Fillet operand collection. H3 now records both public
+routes as reviewed `DEFECT` rows:
+`feature.fillet.authoring.coincident-closure.point` and
+`feature.fillet.authoring.coincident-closure.curve-pair`. This checkpoint deliberately does not
+implement or plan the production correction.
 
 Result: **OPEN — ENCODED, NOT FIXED**
 
@@ -232,9 +268,11 @@ characterization. The valid circle contacts move about `0.459` and `0.507` radia
 seed, while persisted nonlinear evaluation searches only about `0.393` radians on either side.
 Normal sides, retained endpoints, endpoint order and sweep do not need to change; the upper root's
 normalized winding advances across the periodic parameter seam while its total parameter remains
-inside the same certified cell. The 193-row golden remains green because it contains no
-computed-Fillet source-edit/branch-traversal row; this is an explicit scope result, not evidence
-that the feature works.
+inside the same certified cell. The historical H1/H2 193-row golden remained green because it
+contained no computed-Fillet source-edit/branch-traversal row. H3 now records the missing axis as
+reviewed `DEFECT` rows `feature.fillet.evaluation.line-circle.same-cell-lower` (winding zero) and
+`feature.fillet.evaluation.line-circle.same-cell-seam` (winding one). Each independently proves the
+viable branch rather than trusting the failed evaluation status.
 
 This checkpoint deliberately does not implement or plan the production correction.
 
@@ -243,4 +281,5 @@ Result: **OPEN — ENCODED, NOT FIXED**
 M70B remains active until the supervising human records explicit approval here. A scoped approval
 may accept M70B-U1 through M70B-U5 after objective findings receive owning-layer regressions and a
 targeted recheck; it must not invent an unrecorded exhaustive replay. M71 remains deferred until
-M70B is closed.
+M70B is closed. The H3 `--require-clean` gate remains intentionally red on exactly the four reviewed
+F003/F004 rows until those findings are resolved or explicitly dispositioned.

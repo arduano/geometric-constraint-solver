@@ -1289,7 +1289,12 @@ served-byte verification are complete, and the scoped human UAT was approved on 
 is the active bounded reproduction-capsule cut. It adds a workbench-global copy/paste overlay rather
 than a protected sample fixture; F001/F002 replacement qualification/publication pass and the
 test-only H1 authoring/scene survey, complete release gate and fresh byte-verified publication are
-clean. Focused human UAT remains pending. M71 is deferred behind it.
+historically clean. H2 preserves those exact 193 passing rows under milestone-neutral names.
+Test-only H3 adds four reviewed `feature.fillet` rows without changing the original bytes: two
+F003 Coincident-closure authoring routes and two F004 same-cell line-circle evaluation branches.
+The current 197-row checklist contains 193 `PASS` plus four `DEFECT`; `--check` passes while
+`--require-clean` intentionally fails on exactly those four open rows. H3 changes no production
+behavior or release bytes. Focused human UAT remains pending. M71 is deferred behind it.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1578,11 +1583,16 @@ the current typed defect and must become a positive three-corner preview/publica
 when a production correction is authorized. No correction or repair plan belongs to this
 checkpoint.
 
-The milestone-neutral golden still passes all 193 rows. That matrix covers the complete retained
-constraint/dimension authoring inventory and four scene-authority states; its sole Fillet scene is
-precomposed and it does not exercise `FeatureAuthoringTool::Fillet`, point-to-corner incidence or
-curve-pair collection. The exact triangle therefore belongs first to this focused owner regression
-rather than being disguised as a passing broad-matrix row.
+The historical H1/H2 golden passed all 193 rows because that matrix covered the complete retained
+constraint/dimension authoring inventory and four scene-authority states, but did not execute
+`FeatureAuthoringTool::Fillet`, point-to-corner incidence or curve-pair collection. H3 now records
+the systemic gap as two isolated reviewed rows without replacing the focused owner regression:
+
+- `feature.fillet.authoring.coincident-closure.point`; and
+- `feature.fillet.authoring.coincident-closure.curve-pair`.
+
+Both rows are `DEFECT` with finding `M70B-F003`. They turn positive automatically when the public
+authoring path succeeds; no production correction is part of H3.
 
 ### M70B-F004 - Persisted line-circle Fillet misses valid same-branch roots
 
@@ -1619,11 +1629,18 @@ fingerprints, the exact persistent branch, hard-valid accepted state, viable fre
 `NoLocalRoot` failure, empty generated output and unchanged sketch/feature identities. It freezes
 current behavior only; no production correction or repair plan is authorized in this checkpoint.
 
-The milestone-neutral 193-row golden remains green. Its only computed-Fillet row presents an
-unchanged precomposed Current scene, so it exercises neither native source edits nor traversal of a
-persistent nonlinear branch cell. This case belongs first to the exact feature-owner regression;
-the missing computed-feature source-edit/branch dimension is recorded for later reviewed golden
-expansion rather than silently inserting two large payloads into the broad matrix.
+The historical H1/H2 193-row golden remained green because its only computed-Fillet row presented
+an unchanged precomposed Current scene and exercised neither native source edits nor traversal of a
+persistent nonlinear branch cell. H3 now records the systemic branch dimension as two compact,
+isolated reviewed rows while retaining the exact feature-owner regression and payload evidence:
+
+- `feature.fillet.evaluation.line-circle.same-cell-lower` freezes the lower same-cell root with
+  winding zero; and
+- `feature.fillet.evaluation.line-circle.same-cell-seam` freezes the periodic-seam root with
+  winding one.
+
+Both rows are `DEFECT` with finding `M70B-F004`. They independently validate the viable branch
+rather than treating an evaluation status as their geometric oracle. H3 adds no production repair.
 
 ### M70B-H1 - Continue-through-failure authoring and scene oracle
 
@@ -1649,13 +1666,13 @@ current computed Fillet output, current native fallback under Withheld computed 
 historical accepted presentation beneath rejected design. A fresh coordinator reports a current
 empty computed snapshot, so the oracle does not fabricate an unreachable native `Absent` row.
 
-Every authoring and scene row runs in a separate bounded process. Semantic defects, panics,
-timeout/hard-kill exits and harness errors are written to the stable six-column TSV while later
-rows continue. The driver rejects nonzero child exits even if a TSV exists, verifies the exact 193
-case/family pairs and freezes each authoring PASS row's effective scheduled-input fingerprint.
-`scripts/golden-authoring-scene-oracle.sh --check` compares all rows with
-`golden_authoring_scene_oracle.golden.tsv`; `--require-clean` additionally rejects any non-PASS
-row.
+At H1, every authoring and scene row ran in a separate bounded process. Semantic defects, panics,
+timeout/hard-kill exits and harness errors were written to the stable six-column TSV while later
+rows continued. The driver rejected nonzero child exits even if a TSV existed, verified the exact
+193 case/family pairs and froze each authoring PASS row's effective scheduled-input fingerprint.
+The H1 `--check` compared those rows with `golden_authoring_scene_oracle.golden.tsv`, while
+`--require-clean` additionally rejected any non-PASS row. H3 retains that contract over the
+expanded inventory described below.
 
 The initial 2026-08-11 survey was clean: all 193 rows passed and opened no finding at survey time.
 Later human UAT opened `M70B-F003` outside the matrix's constraint/dimension and scene-authority
@@ -1675,12 +1692,38 @@ than the sole home for defects. A reproduced finding first gets the smallest pub
 regression; the matrix expands only when it exposes a systemic family, branch, transform,
 operand-order, lifecycle or authority-state gap.
 
-The release gate invokes `scripts/golden-authoring-scene-oracle.sh --require-clean`. Its reviewed
-finding IDs may belong to the active milestone rather than M70B alone. The repository-local
+On the clean H2 source, the release gate invoked
+`scripts/golden-authoring-scene-oracle.sh --require-clean` and passed. Reviewed finding IDs may
+belong to the active milestone rather than M70B alone. The repository-local
 `.agents/skills/geosolve-harden-defect/` workflow owns intake, payload preservation, reproduction,
 layer routing, independent invariants, matrix-expansion decisions and proportional qualification.
 It excludes pure browser/CSS defects unless evidence crosses a Rust headless or scene-authority
 contract. H2 adds no residual, solver behavior, persistent schema, browser behavior or UAT scene.
+
+### M70B-H3 - Reviewed computed-Fillet golden expansion
+
+H3 adds the two systemic computed-Fillet dimensions exposed only after F003 and F004 had focused
+owner-layer characterizations. `crates/geosolve-constraint-editor/tests/golden_fillet_oracle.rs`
+drives four public-boundary cases, each in its own bounded process through the existing aggregate
+driver:
+
+- `feature.fillet.authoring.coincident-closure.point` — `M70B-F003`;
+- `feature.fillet.authoring.coincident-closure.curve-pair` — `M70B-F003`;
+- `feature.fillet.evaluation.line-circle.same-cell-lower` — `M70B-F004`, winding zero; and
+- `feature.fillet.evaluation.line-circle.same-cell-seam` — `M70B-F004`, winding one.
+
+The first pair uses the public headless feature-authoring/coordinator path. The second pair uses
+the public computed-feature evaluation boundary and independently checks finite accepted geometry,
+hard validity, source/contact incidence, radius, tangency, signed normal side, source/span
+identity, contact parameter, winding and membership in the unchanged Local cell. Public contact
+reseeding is evidence that the branch remains viable, not a substitute production path.
+
+All original H1/H2 row records remain byte-identical. The current inventory is 197 rows: 193
+`PASS` plus four reviewed `DEFECT`. The checked golden SHA-256 is
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`.
+`scripts/golden-authoring-scene-oracle.sh --check` passes; `--require-clean` intentionally fails on
+exactly the four rows above while F003 and F004 remain open. H3 changes no residual, solver,
+feature-authoring, feature-evaluation, persistent schema, browser or release behavior.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

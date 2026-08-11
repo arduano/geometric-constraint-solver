@@ -1,17 +1,26 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M70B-H1 test hardening and defect survey
+# M70B-H1–H3 test hardening and defect survey
 
 Status: the bounded H1 test-only survey, complete release qualification and byte-verified UAT
-publication remain historically clean. Subsequent human UAT opened `M70B-F003` in computed-Fillet
-authoring and `M70B-F004` in persisted computed-Fillet source-edit branch traversal, both outside
-the 193-row matrix. Their focused headless characterizations change no runtime solver, sketch,
-authoring or workbench behavior. Supervising-human M70B review and approval remain pending.
+publication remain historically clean. H2 preserved that exact 193-row corpus under
+milestone-neutral names. Subsequent human UAT opened `M70B-F003` in computed-Fillet authoring and
+`M70B-F004` in persisted computed-Fillet source-edit branch traversal, both outside the original
+matrix. H3 now adds four isolated, reviewed `feature.fillet` rows: the current 197-row checklist is
+193 `PASS` plus four `DEFECT`. Golden `--check` passes and `--require-clean` intentionally fails on
+exactly those four open rows. The focused characterizations and H3 expansion change no runtime
+solver, sketch, authoring, feature-evaluation or workbench behavior. Supervising-human M70B review
+and approval remain pending.
 
-M70B-H1 originated this matrix. M70B-H2 moves the unchanged 193-row corpus and driver to
+M70B-H1 originated this matrix. M70B-H2 moved the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
-golden bytes and SHA-256 remain unchanged. H2 clean qualification and independent skill forward
-tests pass on source `47584bdb607c722df508eae56584726954a03205`.
+golden bytes and SHA-256 remained unchanged. H2 clean qualification and independent skill forward
+tests passed on source `47584bdb607c722df508eae56584726954a03205`.
+
+M70B-H3 keeps every H1/H2 row record byte-identical and appends only the missing systemic Fillet
+axes already proven at their narrow owners. The current golden SHA-256 is
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`. This new hash records the
+four reviewed defects; it does not supersede the historical H1/H2 source or hash evidence below.
 
 ## Scope and authority
 
@@ -41,7 +50,7 @@ empty state is a current empty computed snapshot.
 
 ## Deterministic matrix
 
-The machine-readable matrix contains 193 independently classified rows:
+The historical H1/H2 machine-readable matrix contained 193 independently classified rows:
 
 - 16 `ResolvedConstraintKind` families, each with one deterministic witness and eight seeded
   variants: 144 rows;
@@ -93,14 +102,26 @@ The reachable scene rows are:
 - `scene.current-native.withheld`; and
 - `scene.rejected-historical.detached`.
 
+H3 adds exactly four process-isolated `feature.fillet` rows without changing any of those original
+records:
+
+- `feature.fillet.authoring.coincident-closure.point`;
+- `feature.fillet.authoring.coincident-closure.curve-pair`;
+- `feature.fillet.evaluation.line-circle.same-cell-lower`; and
+- `feature.fillet.evaluation.line-circle.same-cell-seam`.
+
+The active inventory is therefore 197 rows. The original 193 remain `PASS`; the two authoring rows
+are reviewed `M70B-F003` defects and the two evaluation rows are reviewed `M70B-F004` defects.
+
 ## Driver and classification contract
 
-`scripts/golden-authoring-scene-oracle.sh` runs every authoring and scene row in its own process with a
-30-second runtime limit and a five-second hard-kill grace period. Semantic failures, panics,
-timeouts (`124` or hard-kill `137`) and harness errors are rows rather than an instruction to stop;
-later rows still run. A nonzero child exit is never accepted merely because it wrote a complete
-TSV. Child output must match the requested case and family, and the final inventory must contain
-the exact 193 `(case_id, family)` pairs.
+`scripts/golden-authoring-scene-oracle.sh` runs every authoring, Fillet-feature and scene row in its
+own process with a 30-second runtime limit and a five-second hard-kill grace period. Semantic
+failures, panics, timeouts (`124` or hard-kill `137`) and harness errors are rows rather than an
+instruction to stop; later rows still run. A nonzero child exit is never accepted merely because
+it wrote a complete TSV. Child output must match the requested case and family. H1/H2 required
+their exact 193 `(case_id, family)` pairs; the H3 driver requires the exact current 197-pair
+inventory and rejects a missing, duplicate or unexpected Fillet row.
 
 The stable TSV schema is:
 
@@ -118,11 +139,13 @@ The three operator modes are:
 
 `--survey` always executes the complete matrix. `--check` requires exact agreement with
 `crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv`.
-`--require-clean` additionally fails if any recorded row is not `PASS`. Scratch output lives under
-the ignored workspace `target/` tree so a full system `/tmp` cannot turn semantic results into
-false harness failures. `GEOSOLVE_GOLDEN_ORACLE_CASE` selects exactly one row inside each child.
-Every authoring PASS fingerprint is `input-<fnv1a64>` over the effective post-scheduling variant;
-the golden therefore detects seed/scheduling drift instead of recording an uninformative `ok`.
+`--require-clean` additionally fails if any recorded row is not `PASS`; at H3 it therefore fails
+intentionally on the four reviewed findings even though `--check` succeeds. Scratch output lives
+under the ignored workspace `target/` tree so a full system `/tmp` cannot turn semantic results
+into false harness failures. `GEOSOLVE_GOLDEN_ORACLE_CASE` selects exactly one row inside each
+child. Every authoring PASS fingerprint is `input-<fnv1a64>` over the effective post-scheduling
+variant; the golden therefore detects seed/scheduling drift instead of recording an uninformative
+`ok`.
 
 If a future row fails, preserve its family, case ID, fixed seed, minimized variant fingerprint and
 exact family command. Deduplicate common root causes, assign the next active-milestone `M*-F*`
@@ -130,9 +153,9 @@ identity only after independent reproduction and add a `GEOSOLVE_REPRO_V1` paylo
 fixture can be represented as a workbench workspace.
 Do not weaken an oracle or implement a production correction during the discovery phase.
 
-## Survey result and readable defect checklist
+## Historical H1/H2 survey result and readable checklist
 
-The completed matrix still records 193/193 `PASS`, zero semantic defects, zero panics, zero
+The completed H1/H2 matrix recorded 193/193 `PASS`, zero semantic defects, zero panics, zero
 timeouts and zero harness errors within its declared scope. It opened no finding at H1 survey time.
 Later human UAT opened `M70B-F003`: the matrix has no computed-Fillet authoring rows, so its green
 result cannot detect a Coincident-closed triangle closure rejected through both point and curve-pair
@@ -185,15 +208,16 @@ cargo test --locked -p geosolve-constraint-editor \
 
 The first command passes by asserting the exact open-defect signature and transactional retention;
 it must be converted to positive success expectations during an authorized repair. The second
-remains 193/193 green and therefore demonstrates the broad matrix's computed-feature-authoring
-blind spot rather than resolution of F003.
+historically remained 193/193 green at H1/H2 and demonstrated the broad matrix's
+computed-feature-authoring blind spot rather than resolution of F003.
 
 Focused F004 evidence reconstructs payload fingerprints `4752:daa87c91c75abf9f` and
 `4750:beda1885b15e38b5` as one two-case feature-owner regression. It asserts finite independently
 hard-valid accepted sketches, exact retained branch metadata, `NoLocalRoot` with no partial output,
 explicitly re-anchored same-cell valid roots and unchanged sketch/feature identities. The unchanged
-193-row check remains green, demonstrating that the layered golden strategy routes this computed-feature
-source-edit/branch case to its narrow owner rather than pretending the broad matrix detected it.
+H1/H2 193-row check remained green, demonstrating that the layered golden strategy first routed
+this computed-feature source-edit/branch case to its narrow owner rather than pretending the broad
+matrix detected it.
 
 ```text
 cargo test --locked -p geosolve-sketch-features --lib \
@@ -202,9 +226,51 @@ cargo test --locked -p geosolve-sketch-features --lib \
 ./scripts/golden-authoring-scene-oracle.sh --check
 ```
 
+## M70B-H3 current Fillet inventory and reviewed defect checklist
+
+H3 expands the broad oracle only after the two root causes have focused owner regressions. It adds
+one compact process-isolated row for each public route/branch dimension and retains each finding's
+reviewed disposition:
+
+| Case ID | Public route or branch | Status | Finding | Failure class |
+| --- | --- | --- | --- | --- |
+| `feature.fillet.authoring.coincident-closure.point` | Point-to-corner authoring | `DEFECT` | `M70B-F003` | `fillet.authoring.topology` |
+| `feature.fillet.authoring.coincident-closure.curve-pair` | Last/first span-pair authoring | `DEFECT` | `M70B-F003` | `fillet.authoring.topology` |
+| `feature.fillet.evaluation.line-circle.same-cell-lower` | Same-cell lower root, winding 0 | `DEFECT` | `M70B-F004` | `fillet.evaluation.branch-locality` |
+| `feature.fillet.evaluation.line-circle.same-cell-seam` | Same-cell seam root, winding 1 | `DEFECT` | `M70B-F004` | `fillet.evaluation.branch-locality` |
+
+| Inventory cut | PASS | DEFECT | PANIC | TIMEOUT | HARNESS_ERROR | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Historical H1/H2 | 193 | 0 | 0 | 0 | 0 | 193 |
+| Current H3 | 193 | 4 | 0 | 0 | 0 | 197 |
+
+`crates/geosolve-constraint-editor/tests/golden_fillet_oracle.rs` owns the four current rows. The
+authoring pair calls the public headless feature-authoring and retained-coordinator transactions.
+The evaluation pair calls public computed-feature evaluation and uses public contact reseeding
+only to expose a viable root; independent checks then require finite current accepted geometry,
+hard validity, contact/source incidence, radius, tangency, signed side, native source/span
+identity, parameter/winding representation and membership in the unchanged Local cell.
+
+Current H3 evidence:
+
+```text
+cargo test --locked -p geosolve-constraint-editor \
+  --test golden_fillet_oracle golden_fillet_oracle_inventory_and_tsv_schema_are_exhaustive \
+  -- --exact
+./scripts/golden-authoring-scene-oracle.sh --check
+./scripts/golden-authoring-scene-oracle.sh --require-clean
+```
+
+The inventory preflight and `--check` pass. `--require-clean` intentionally exits nonzero and names
+exactly the four reviewed rows above; that is the current clean-gate blocker, not a harness error.
+The 197-row golden SHA-256 is
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`. H3 changes only tests,
+driver inventory, checked golden bytes and documentation; no production behavior or release byte
+changes.
+
 ## Qualification ledger
 
-Focused commands completed so far:
+Historical H1 focused commands completed:
 
 ```text
 cargo test --locked -p geosolve-constraint-editor \
@@ -222,11 +288,11 @@ cargo fmt --all -- --check
 git diff --check
 ```
 
-Observed outcomes are 1/1 inventory pass, 193/193 survey rows pass, exact golden check pass,
+Historical H1 observed outcomes were 1/1 inventory pass, 193/193 survey rows pass, exact golden check pass,
 clean-oracle gate pass, 4/4 scene rows pass, the complete editor crate pass (271 unit tests plus all
 named integration suites, including the 2/2 oracle harness), demo-web 97/97 library plus 1/1 native
 decoder pass, focused warnings-denied Clippy pass, WASM test compilation, formatting pass and diff
-check pass. The final golden SHA-256 is
+check pass. The historical H1/H2 golden SHA-256 is
 `803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`.
 
 Driver fault injection with a temporary fake Cargo executable also completed without leaving a
@@ -292,3 +358,13 @@ file retains the H1 hash listed above, and the ordered manifest aggregate remain
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. H2 therefore leaves the
 served H1 product candidate unchanged and requires no Tailscale republish. Human UAT remains
 pending.
+
+### M70B-H3 current gate state
+
+H3 changes only test infrastructure and documentation, so the H1 product distribution and release
+manifest above remain the last qualified bytes. The current 197-row `--check` passes against
+golden SHA-256 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`.
+The mandatory `--require-clean` step intentionally fails on the two F003 and two F004 rows and no
+others. A new clean release qualification or Tailscale publication is therefore neither claimed
+nor required for this test-only discovery checkpoint; the red gate remains the explicit blocker
+until the findings are resolved or otherwise dispositioned by the supervising human.

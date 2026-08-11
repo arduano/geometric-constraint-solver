@@ -48,12 +48,15 @@ active bounded reproduction-capsule human-UAT candidate: complete workspace v5 s
 compressed text and restored atomically through its existing validation path. The first supplied
 payload opened `M70B-F001`; its focused branch-bound correction and exact graph regression pass,
 and `M70B-F002` has complete radial-Normal/scene-authority replacement evidence and publication.
-The clean test-only M70B-H1 survey now freezes 193/193 authoring/scene rows, and its nominated
-source has complete release-gate and byte-verified replacement-publication evidence. M70B-H2
-completes the mandatory milestone-neutral golden gate and repository-local defect workflow on
-clean source `47584bdb607c722df508eae56584726954a03205`, with the H1 golden and release bytes unchanged.
-Targeted human recheck and approval remain pending. M71 is deferred behind M70B and remains an
-unauthorized candidate backlog. M66's
+The test-only M70B-H1 survey historically froze 193/193 clean authoring/scene rows, and its
+nominated source has complete release-gate and byte-verified replacement-publication evidence.
+M70B-H2 completed the mandatory milestone-neutral golden gate and repository-local defect workflow
+on clean source `47584bdb607c722df508eae56584726954a03205`, with the H1 golden and release bytes
+unchanged. M70B-H3 now preserves those original 193 rows byte-for-byte and appends four
+process-isolated computed-Fillet rows for open F003/F004, producing a reviewed 197-row checklist of
+193 `PASS` plus four `DEFECT`. Its exact `--check` passes while `--require-clean` intentionally
+fails, so the mandatory release gate remains red. Targeted human recheck and approval remain
+pending. M71 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3653,16 +3656,19 @@ every scripted step. M70 is closed.
 ### M70B
 
 Status: active during human UAT. Bounded reproduction transport and restore remain qualified;
-`M70B-F001` and `M70B-F002` retain complete replacement evidence. M70B-H1 still freezes a
-continue-through-failure authoring/scene oracle with 193/193 passing rows, but subsequent UAT opened
-`M70B-F003` outside that matrix: a Coincident-closed open triangle cannot author its closure Fillet
-through either the point or two-span route. The exact typed failure is encoded at the headless
-owner. Two subsequent supplied line-circle Fillet payloads deduplicate as `M70B-F004`: valid roots
-remain inside the unchanged explicit circle branch after native source edits, but persisted
-evaluation searches only a narrower seed window and returns `NoLocalRoot`. The exact two-case
-failure is encoded at the feature owner. Neither open finding includes a production correction or
-repair plan. The prior clean source and read-only distribution remain historical qualification
-evidence, not evidence that F003 or F004 is resolved. No completion or approval is claimed.
+`M70B-F001` and `M70B-F002` retain complete replacement evidence. M70B-H1/H2 historically froze a
+clean continue-through-failure authoring/scene baseline with 193/193 passing rows. Subsequent UAT
+opened `M70B-F003`: a Coincident-closed open triangle cannot author its closure Fillet through
+either the point or two-span route. The exact typed failure is encoded at the headless owner. Two
+subsequent supplied line-circle Fillet payloads deduplicate as `M70B-F004`: valid roots remain
+inside the unchanged explicit circle branch after native source edits, but persisted evaluation
+searches only a narrower seed window and returns `NoLocalRoot`. The exact two-case failure is
+encoded at the feature owner. Test-only M70B-H3 now adds those four process-isolated cases to the
+golden as reviewed F003/F004 `DEFECT` rows while preserving the original 193 `PASS` rows
+byte-for-byte. The 197-row `--check` passes, but `--require-clean` intentionally fails. Neither open
+finding includes a production correction or repair plan. The prior clean source and read-only
+distribution remain historical qualification evidence, not evidence that F003 or F004 is
+resolved. No completion or approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3732,7 +3738,24 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   valid root remains inside the same explicit circle branch cell. Keep feature/sketch intent and
   identities unchanged, deduplicate the payloads as one defect, change no production behavior and
   record that the 193-row golden has no computed-Fillet source-edit/branch-traversal dimension.
+- [x] Complete `M70B-H3` as a test-only golden expansion: append four process-isolated
+  `feature.fillet` rows for F003's Coincident-closure point and curve-pair paths plus F004's
+  line-circle same-cell winding-zero and seam winding-one paths. Preserve all original 193 rows
+  byte-for-byte; freeze exactly 197 rows as 193 `PASS` plus four reviewed `DEFECT` rows assigned to
+  `M70B-F003`/`M70B-F004`; require the exact `--check` to pass and `--require-clean` to fail until
+  those findings are repaired and reviewed as clean. Change no production behavior and do not
+  nominate this deliberately red checklist as a release candidate.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
+
+`M70B-H3` qualification note (2026-08-11): the four new Fillet cases run in independent bounded
+processes and preserve the original H1/H2 193 rows byte-for-byte. The reviewed golden contains
+exactly 197 rows: 193 `PASS`, two F003 `DEFECT` classifications for Coincident-closure point/pair
+authoring and two F004 `DEFECT` classifications for same-cell line-circle winding zero/seam winding
+one evaluation. `./scripts/golden-authoring-scene-oracle.sh --check` passes against golden SHA-256
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`;
+`./scripts/golden-authoring-scene-oracle.sh --require-clean` intentionally fails because reviewed
+defects remain. This is checklist-stability evidence only: the mandatory release gate remains red,
+M70B cannot close, and no production behavior or UAT product bytes change.
 
 `M70B-H2` qualification note (2026-08-11): clean source
 `47584bdb607c722df508eae56584726954a03205` passes the renamed 193/193 clean oracle and the complete
@@ -3834,9 +3857,11 @@ returns `WrongOperandKind`; explicitly selecting the last and first spans return
 `DuplicateSupport` with the same-curve non-adjacency message. Both failures preserve the prior
 authoring/preview state and empty feature document. The focused owner characterization
 `m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair` records the open
-defect without changing production behavior. The milestone-neutral 193-row golden remains green
-because it covers constraint/dimension authoring and scene authority, not computed-Fillet operand
-collection. No correction or repair plan is authorized in this checkpoint.
+defect without changing production behavior. At that focused checkpoint the historical
+milestone-neutral 193-row H1/H2 baseline remained green because it covered constraint/dimension
+authoring and scene authority, not computed-Fillet operand collection. H3 now records the point and
+curve-pair paths as two reviewed F003 `DEFECT` rows without altering the original 193 rows. No
+correction or repair plan is authorized in this checkpoint.
 
 UAT finding `M70B-F004` (2026-08-11), independently reproduced against source
 `b10bc6b2de478239472b08fe71727ccbb49d67ab`: payload identities
@@ -3849,16 +3874,19 @@ finds a valid root in that same cell at circle parameters `5.551739581930468` an
 `6.517367674350060`. Their displacements from the persisted `6.010678569256539` seed exceed the
 non-affine 12.5%-of-cell search window, so these are one feature-evaluation locality defect, not
 missing normal-side branches or two findings. The focused owner characterization records both
-current failures and viable branches without changing production behavior. The unchanged 193-row
-golden stays green because it has no computed-Fillet source-edit/branch-traversal row; no correction
-or repair plan is authorized in this checkpoint.
+current failures and viable branches without changing production behavior. At that focused
+checkpoint the historical 193-row H1/H2 golden stayed green because it had no computed-Fillet
+source-edit/branch-traversal row. H3 now records the winding-zero and seam-winding-one cases as two
+reviewed F004 `DEFECT` rows without altering the original 193 rows; no correction or repair plan is
+authorized in this checkpoint.
 
 `M70B-F004` test-only qualification note (2026-08-11): the exact two-row feature-owner
 characterization passes, all 42 `geosolve-sketch-features` tests pass and warnings-denied
-all-target/all-feature Clippy plus formatting pass. The milestone-neutral golden check still
-matches all 193 reviewed rows byte-for-byte. This is evidence that the layered workflow routed an
-out-of-matrix computed-feature defect to its owner; it is not a production correction, replacement
-candidate or UAT resolution.
+all-target/all-feature Clippy plus formatting pass. Before H3 expansion, the milestone-neutral
+golden check still matched all 193 historical rows byte-for-byte. H3 preserves those rows and adds
+the two reviewed F004 defect classifications to the current 197-row checklist. This is evidence
+that the layered workflow routed an out-of-matrix computed-feature defect to its owner; it is not a
+production correction, replacement candidate or UAT resolution.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The

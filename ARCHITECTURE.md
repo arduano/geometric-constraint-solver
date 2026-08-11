@@ -83,7 +83,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   complete release gate and byte-verified replacement publication are clean; targeted human
   recheck remains pending. M70B-H2 gives the unchanged matrix milestone-neutral names, makes its
   clean mode a mandatory release step and installs the repo-local layered defect workflow; it adds
-  no runtime layer.
+  no runtime layer. Test-only M70B-H3 preserves the original 193 H1/H2 rows byte-identically and
+  adds four process-isolated `feature.fillet` rows. The current 197-row checklist records 193
+  `PASS` plus four reviewed `DEFECT` rows, split evenly between `M70B-F003` and `M70B-F004`;
+  `--check` passes while `--require-clean` intentionally fails. H3 changes no production/runtime
+  behavior, runtime dependency or release byte.
   M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -485,6 +489,17 @@ now requires the clean matrix. `.agents/skills/geosolve-harden-defect/` defines 
 defect workflow: exact regressions remain with the narrowest public Rust owner, and this broad
 matrix expands only for a systemic missing dimension. This remains repository/test infrastructure,
 not another product layer.
+
+M70B-H3 adds only the systemic computed-Fillet dimensions exposed by F003 and F004. Two
+`feature.fillet` rows drive Coincident-closure point and curve-pair collection through the public
+headless feature-authoring and retained-coordinator APIs. Two more capture and execute the public
+computed-feature evaluation API for lower same-cell and periodic-seam line-circle cases, using the
+public contact-reseed path only to prove that a valid root remains in the persisted branch cell.
+The oracle independently requires current accepted sketch hard validity and finite geometry, then
+checks Fillet incidence, radius, tangency, signed normal side, native source/span identity, contact
+parameter, winding and same-cell root membership. It does not trust an evaluation status as its
+geometric oracle. The original 193 rows remain byte-identical; the four reviewed defect rows make
+the current inventory 197 without adding runtime code, product authority or release bytes.
 
 M64 removes the completed-review harness that historically served M53-M63. A crate-private sample
 catalog now owns only stable sample keys, titles, purpose grouping and public fixture selection.
@@ -1072,7 +1087,11 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   authority. F001 replacement evidence, both F002 direct owner regressions, and the F002 complete
   replacement gate plus byte-verified publication all pass. M70B-H1 freezes a clean 193-row
   test-only authoring/scene oracle; its complete release gate and fresh byte-verified publication
-  also pass.
+  also pass. M70B-H2 preserves those exact bytes under milestone-neutral infrastructure. Test-only
+  M70B-H3 retains all 193 original `PASS` rows and adds four reviewed `feature.fillet` `DEFECT`
+  rows, producing a 197-row checklist whose `--check` passes and whose `--require-clean`
+  intentionally fails until F003/F004 close. H3 changes no production/runtime behavior or release
+  bytes.
   Dedicated human UAT remains pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.

@@ -67,8 +67,13 @@ seven-file Tailscale publication is byte-verified. M70B-H2 generalizes that unch
 the milestone-neutral mandatory golden gate and repository-local defect-hardening workflow. Clean
 source `47584bdb607c722df508eae56584726954a03205` passes the complete release gate, preserves the
 exact H1 golden and release bytes, and leaves the existing H1 UAT publication in place; targeted
-human recheck remains pending. M71 is deferred behind M70B and remains an unauthorized candidate
-backlog.
+human recheck remains pending. Test-only M70B-H3 preserves the original 193 H1/H2 rows
+byte-identically and adds four isolated `feature.fillet` rows: point and curve-pair
+Coincident-closure authoring record `M70B-F003`, while lower same-cell and periodic-seam
+line-circle evaluation record `M70B-F004`. The current 197-row checklist contains 193 `PASS` and
+four reviewed `DEFECT` rows. `--check` passes those reviewed bytes; `--require-clean`
+intentionally fails while the findings remain open. H3 changes no production/runtime behavior or
+release bytes. M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -313,9 +318,13 @@ fresh byte-verified publication now pass. Later UAT finding `M70B-F003` is encod
 computed-Fillet authoring boundary. `M70B-F004` is likewise encoded at the computed-feature
 evaluation owner: two supplied line-circle payloads retain viable roots inside their explicit
 branch cells but fall outside the narrower persisted seed window. Both remain open without a
-production fix or repair plan. Targeted rechecks and explicit approval remain pending. The
-temporary `docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation
-authorization.
+production fix or repair plan. M70B-H2 preserves the original 193 rows and moves the workflow to
+milestone-neutral names. Test-only M70B-H3 then appends four process-isolated `feature.fillet`
+rows without changing those original bytes: two reviewed F003 authoring defects and two reviewed
+F004 evaluation defects. The resulting 197-row checklist is 193 `PASS` plus four `DEFECT`;
+`--check` passes and `--require-clean` intentionally fails. No H3 production/runtime or release
+byte changed. Targeted rechecks and explicit approval remain pending. The temporary
+`docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:
 

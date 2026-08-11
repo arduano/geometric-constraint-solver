@@ -9,11 +9,14 @@ passing rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring out
 two later supplied line-circle Fillet payloads opened `M70B-F004` in persistent nonlinear branch
 traversal. Both exact failures are characterized at their headless owners with no production
 correction. The H1 nominated source passes the complete release gate and its fresh read-only
-Tailscale distribution is byte-verified. M70B-H2 generalizes the unchanged matrix and installs the
+Tailscale distribution is byte-verified. M70B-H2 generalized the unchanged matrix and installed the
 repository-local defect-hardening workflow without changing release behavior. Its clean release
-qualification, skill validation and independent forward tests pass with the H1 golden and release
-bytes unchanged. Supervising-human UAT and approval remain pending. This document records no human
-pass or milestone closure.
+qualification, skill validation and independent forward tests passed with the H1 golden and release
+bytes unchanged. Test-only M70B-H3 preserves the original 193 row records and adds four isolated
+`feature.fillet` rows: two reviewed F003 authoring defects and two reviewed F004 evaluation
+defects. The current 197-row `--check` passes; `--require-clean` intentionally fails on exactly
+those four rows. H3 changes no production/runtime or release behavior. Supervising-human UAT and
+approval remain pending. This document records no human pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
 transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
@@ -54,6 +57,12 @@ Current `M70B-H1` release manifest aggregate:
 
 `M70B-H2` golden SHA-256:
 `803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`
+
+Current `M70B-H3` golden SHA-256:
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`
+
+Current `M70B-H3` golden disposition: **193 PASS + 4 reviewed DEFECT = 197**;
+`--check` **PASS**, `--require-clean` **EXPECTED FAIL** on exactly those four rows.
 
 `M70B-H2` release manifest aggregate:
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
@@ -122,6 +131,11 @@ a second scene model.
   certified circle cell. The exact test is
   `m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window`; it changes no
   feature-evaluation behavior.
+- `crates/geosolve-constraint-editor/tests/golden_fillet_oracle.rs` owns H3's four compact
+  process-isolated `feature.fillet` rows. Two exercise Coincident-closure point and curve-pair
+  collection through the public feature-authoring/coordinator boundary. Two exercise persisted
+  line-circle evaluation for a lower winding-zero root and a periodic-seam winding-one root, then
+  independently validate the viable same-cell geometry through public domain APIs.
 - `crates/geosolve-demo-web/src/workbench/mod.rs` directly tests both scene-composition authority
   rows affected by F002: a rejected constraint keeps historical accepted SVG paths visible while
   the detached scene fails retained-session authentication, and a current computed Fillet preview
@@ -139,19 +153,26 @@ a second scene model.
   current empty computed output, current computed Fillet output, Withheld/native fallback and
   rejected-design/detached-historical presentation. These are the reachable authority states; no
   runtime state is manufactured for the oracle.
-- `scripts/golden-authoring-scene-oracle.sh` isolates every authoring and scene row with a runtime/hard-kill
-  bound, continues through semantic defects, panics, timeouts and harness errors, rejects nonzero
-  exits and wrong child identities, and implements survey/check/require-clean modes over the exact
-  193-case six-column golden at
+- `scripts/golden-authoring-scene-oracle.sh` isolates every authoring, Fillet-feature and scene row
+  with a runtime/hard-kill bound, continues through semantic defects, panics, timeouts and harness
+  errors, rejects nonzero exits and wrong child identities, and implements
+  survey/check/require-clean modes. H1/H2 froze the exact 193-case inventory; H3 adds the four
+  isolated Fillet rows and requires the exact current 197-case inventory at
   `crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv`.
+- `crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv`
+  preserves all 193 historical H1/H2 row records byte-identically and adds four reviewed `DEFECT`
+  rows carrying `M70B-F003` or `M70B-F004`. Its current SHA-256 is
+  `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`.
 - `docs/M70B_HARDENING.md` owns the fixed seed, commands, complete readable checklist and honest
   scope limits. `proptest` is added only as a native dev-dependency; runtime and WASM dependency
   surfaces are unchanged.
 - `.agents/skills/geosolve-harden-defect/` owns the automatically invoked layered workflow for
   preserving a report, reproducing through public Rust boundaries, choosing the smallest test
   owner, deciding whether the broad matrix should expand and qualifying an authorized fix.
-- `scripts/release-gate.sh` now runs the milestone-neutral oracle in `--require-clean` mode after
-  the locked all-feature workspace tests.
+- `scripts/release-gate.sh` runs the milestone-neutral oracle in `--require-clean` mode after the
+  locked all-feature workspace tests. That step passed on clean H2; under H3 it intentionally
+  blocks on exactly the four reviewed open Fillet rows rather than treating known defects as a
+  clean release.
 
 The canonical single-line envelope is:
 
@@ -173,6 +194,10 @@ contact branch; it adds no branch kind or persisted state. `M70B-F002` changes o
 authoring metadata/initialization for the pre-existing radial centre-on-line relation and the thin
 choice between current-bound and detached accepted presentation. It changes no residual,
 Jacobian, solver tolerance, priority, independent validation or retained-session authority rule.
+M70B-H3 is test-only: it observes existing Fillet authoring and evaluation through public Rust
+boundaries, independently validates their accepted inputs and any viable generated geometry, and
+records reviewed dispositions. It changes no residual, Jacobian, search window, branch metadata,
+feature definition, authoring transition, evaluation status, scene authority or persisted schema.
 
 Copy follows one authority-preserving path:
 
@@ -449,12 +474,12 @@ The initial proposal included an `Absent` row, but ordinary coordinator refresh 
 a current empty computed snapshot. The final matrix therefore tests reachable state rather than
 weakening or changing runtime code to manufacture a fifth row.
 
-The integrated survey contains exactly 193 rows. All pass under the fixed seed, so the historical
-H1 readable defect checklist was empty and no payload was created at survey time. Each row runs in
-its own bounded child; authoring PASS rows freeze effective scheduled-input fingerprints and the driver
-requires the exact case/family inventory. Exact results and operator commands are frozen in
-`docs/M70B_HARDENING.md`. The complete release/publication gate now passes on the nominated H1
-source, which has replaced F002 as the current UAT candidate without changing release bytes.
+The H1 integrated survey contained exactly 193 rows. All passed under the fixed seed, so the
+historical H1 readable defect checklist was empty and no payload was created at survey time. Each
+row ran in its own bounded child; authoring PASS rows froze effective scheduled-input fingerprints
+and the driver required the exact case/family inventory. Exact historical results and operator
+commands are frozen in `docs/M70B_HARDENING.md`. The complete release/publication gate passed on
+the nominated H1 source, which replaced F002 as the UAT candidate without changing release bytes.
 
 ## 3.4 `M70B-H2` milestone-neutral golden workflow
 
@@ -463,12 +488,13 @@ environment variables and scene survey to stable milestone-neutral names, remove
 and broadens reviewed finding IDs to later active milestones. All 193 case/family pairs, the fixed
 seed, scheduled variants, input fingerprints, classifications and golden bytes remain exact.
 
-The golden remains a broad authoring/scene compatibility matrix. The checked-in
+The golden remains a broad compatibility matrix. The checked-in
 `$geosolve-harden-defect` skill requires each reproduced defect to receive the smallest public
 owning-layer regression first, and expands the matrix only for a systemic missing axis. Pure
 browser/CSS findings remain outside that workflow unless they cross a Rust adapter contract. The
-complete release gate now includes the clean matrix, while the existing H1 UAT distribution stays
-the product candidate because H2 changes no release input.
+complete release gate included and passed the clean matrix on H2, while the existing H1 UAT
+distribution stayed the product candidate because H2 changed no release input. H3's reviewed
+defect rows now make that same clean gate intentionally red, as recorded in section 3.7.
 
 The repo-local skill passes the official `quick_validate.py` check. Independent fresh-context
 forward tests route a historical solver/headless defect to the owning drag/session layer without
@@ -496,11 +522,11 @@ differ by one; closing spans two and zero therefore appear nonadjacent. The edit
 topology error to the misleading `DuplicateSupport` warning. These are authoring/topology semantic
 gaps, not invalid accepted geometry or nonlinear convergence.
 
-The existing 193-row golden remains exactly green because it does not execute computed-Fillet
-authoring. This confirms the layered workflow is doing its intended job: broad compatibility stays
-stable while an exact defect lives at its narrow public owner. It also records a missing systemic
-computed-feature-authoring axis for later review. No matrix expansion, production repair or repair
-plan is part of this checkpoint.
+The historical H1/H2 193-row golden remained exactly green because it did not execute
+computed-Fillet authoring. That first confirmed the layered workflow was doing its intended job:
+broad compatibility stayed stable while the exact defect lived at its narrow public owner. H3 now
+adds separate reviewed point and curve-pair rows for the missing systemic axis without replacing
+the focused regression. No production repair or repair plan is part of either characterization.
 
 ## 3.6 `M70B-F004` open owner characterization
 
@@ -523,10 +549,49 @@ cell. This deduplicates the payloads as one source-edit locality defect rather t
 choices.
 
 The focused feature-owner characterization freezes both current failures, viable same-branch roots,
-hard-valid accepted state and unchanged sketch/feature identities. The milestone-neutral 193-row
-golden remains green because its one precomposed Fillet scene undergoes no native source edit or
-nonlinear branch traversal. That explicit scope result validates owner routing in the layered
-workflow; no broad-row insertion, production repair or repair plan is part of this checkpoint.
+hard-valid accepted state and unchanged sketch/feature identities. The historical H1/H2 193-row
+golden remained green because its one precomposed Fillet scene underwent no native source edit or
+nonlinear branch traversal. That explicit scope result validated owner routing in the layered
+workflow. H3 now adds compact reviewed lower-cell and periodic-seam rows without embedding either
+large workspace payload or changing production behavior.
+
+## 3.7 `M70B-H3` reviewed Fillet golden expansion
+
+H3 changes tests, the aggregate driver inventory, checked golden bytes and documentation only. It
+adds `crates/geosolve-constraint-editor/tests/golden_fillet_oracle.rs` with four exhaustive case
+IDs:
+
+- `feature.fillet.authoring.coincident-closure.point` — `M70B-F003`;
+- `feature.fillet.authoring.coincident-closure.curve-pair` — `M70B-F003`;
+- `feature.fillet.evaluation.line-circle.same-cell-lower` — `M70B-F004`, winding zero; and
+- `feature.fillet.evaluation.line-circle.same-cell-seam` — `M70B-F004`, winding one.
+
+Every row runs in its own bounded child process. The authoring cases call the public headless
+feature-authoring transaction and would pass only after the closure corner produces and publishes
+one Current Fillet. The evaluation cases first call ordinary persisted feature evaluation. If it
+returns `NoLocalRoot`, public contact reseeding exposes the expected viable root, after which the
+oracle independently verifies finite accepted geometry, hard validity, native source/span
+identity, contact incidence, radius, tangency, signed normal side, parameter/winding representation
+and unchanged Local-cell membership. A solver/evaluator status alone is never the geometric oracle.
+
+The original 193 H1/H2 row records remain byte-identical. The checked file now contains 197 rows:
+193 `PASS` and four reviewed `DEFECT`, with no panic, timeout or harness error. Its SHA-256 is
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`.
+
+Current H3 commands and outcomes:
+
+```text
+cargo test --locked -p geosolve-constraint-editor \
+  --test golden_fillet_oracle golden_fillet_oracle_inventory_and_tsv_schema_are_exhaustive \
+  -- --exact
+./scripts/golden-authoring-scene-oracle.sh --check
+./scripts/golden-authoring-scene-oracle.sh --require-clean
+```
+
+The inventory preflight and `--check` pass. `--require-clean` intentionally exits nonzero on
+exactly the four reviewed rows, making F003/F004 the explicit current clean-gate blocker. No clean
+H3 release gate, replacement build or Tailscale publication is claimed because H3 changes no
+product bytes and intentionally records open defects.
 
 ## 4. Acceptance criteria
 
@@ -551,10 +616,17 @@ workflow; no broad-row insertion, production repair or repair plan is part of th
   full release gate, validates and independently forward-tests the repo-local skill, and leaves the
   existing UAT release bytes unchanged;
 - [x] open `M70B-F003` is independently reproduced and encoded at the headless owner without a
-  production change, while the unchanged 193-row golden's scope gap is explicit;
+  production change, while the historical 193-row golden's scope gap is explicit;
 - [x] open `M70B-F004` deduplicates both supplied line-circle payloads at the feature owner, proves
   viable roots inside the stored branch despite `NoLocalRoot`, preserves transaction identity and
-  changes no production behavior while the golden's source-edit/branch scope gap stays explicit;
+  changes no production behavior while the historical golden's source-edit/branch scope gap stays
+  explicit;
+- [x] M70B-H3 preserves all 193 H1/H2 row records, adds two isolated rows per open Fillet finding,
+  freezes the 197-row golden at SHA-256
+  `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec` and passes reviewed
+  `--check` without a production change;
+- [ ] the current `--require-clean` gate returns zero; it intentionally reports exactly the four
+  reviewed F003/F004 rows until those findings are resolved or explicitly dispositioned;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
@@ -567,8 +639,10 @@ payloads remain unsuitable for chat even when below the defensive limits; the UI
 size honestly rather than silently dropping content.
 
 The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, file picker,
-download flow, raw browser-storage handoff and browser E2E remain retired. The immediate blocker is
-focused human UAT and explicit approval, including targeted `M70B-F001`/`M70B-F002` rechecks. A
+download flow, raw browser-storage handoff and browser E2E remain retired. The immediate automated
+blocker is the H3 `--require-clean` gate, which intentionally reports the two F003 and two F004
+rows; focused human UAT and explicit approval, including targeted `M70B-F001`/`M70B-F002` rechecks,
+also remain pending. A
 Local interval whose semantic endpoint is exactly zero has no valid solution at that endpoint;
 exact edge pressure can therefore still fail closed before the one-ULP effective endpoint becomes
 active. Ordinary near-edge contacts and the supplied positive-bound payload pass, but exact
@@ -577,6 +651,6 @@ rather than being folded into this repair. Radial Normal deliberately means that
 centre lies on the complete affine line support. True contact-bearing normal authoring at a picked
 circumference location remains a future retained-primitive/UX decision and is not smuggled into
 M70B. `M70B-F003` remains an open Coincident-topology Fillet-authoring defect, and `M70B-F004`
-remains an open persisted line-circle branch-traversal defect. Each has only a focused
-current-behavior characterization; no correction is claimed. M71 stays deferred throughout that
-work.
+remains an open persisted line-circle branch-traversal defect. Each has a focused owner
+characterization and two reviewed H3 golden rows, but no correction is claimed. M71 stays deferred
+throughout that work.
