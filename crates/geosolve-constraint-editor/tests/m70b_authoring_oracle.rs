@@ -533,6 +533,18 @@ fn survey_seeded(family: OracleFamily, variant_index: u32) -> SurveyRow {
             variant.displaced = variant_index & 2 != 0;
             variant.swap_operands = variant_index & 4 != 0;
             variant.option_index = u8::try_from(variant_index).expect("eight option variants");
+            if matches!(
+                family.subject,
+                FamilySubject::Constraint {
+                    kind: ResolvedConstraintKind::EndpointContinuity,
+                    ..
+                }
+            ) && variant_index == 3
+            {
+                // Retain one pre-satisfied unequal-rate Parametric-C2 witness; seed-07
+                // remains its displaced, operand-swapped recovery counterpart.
+                variant.displaced = false;
+            }
             let variant = effective_variant(family, variant, false);
             *last_variant.borrow_mut() = variant;
             match survey_one(family, variant, false) {

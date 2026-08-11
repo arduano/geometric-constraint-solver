@@ -166,8 +166,9 @@ for case_id in "${scene_cases[@]}"; do
   timeout -k 5s "${timeout_seconds}s" env \
     GEOSOLVE_M70B_ORACLE_CASE="$case_id" \
     GEOSOLVE_M70B_ORACLE_OUTPUT="$scene_output" \
-    cargo test --locked -p geosolve-demo-web m70b_scene_authority_oracle_survey \
-      -- --nocapture >"$scene_log" 2>&1
+    cargo test --locked -p geosolve-demo-web --lib \
+      workbench::tests::m70b_scene_authority_oracle_survey \
+      -- --exact --nocapture >"$scene_log" 2>&1
   scene_exit_code=$?
   set -e
   if [[ "$scene_exit_code" -eq 0 ]] && \
