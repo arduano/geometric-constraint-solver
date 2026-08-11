@@ -55,10 +55,15 @@ on clean source `47584bdb607c722df508eae56584726954a03205`, with the H1 golden a
 unchanged. Test-only M70B-H3 historically preserved those original 193 rows byte-for-byte and
 appended four process-isolated computed-Fillet `DEFECT` rows for F003/F004; its exact `--check`
 passed while `--require-clean` intentionally failed. Authorized production repairs now make those
-same stable rows pass, yielding a reviewed 197/197-`PASS` fixture. Exact golden, workspace, Clippy,
-formatting and relevant WASM qualification pass. Clean repair source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes the complete release gate, and its frozen
-seven-file Tailscale publication is byte-verified. Targeted human recheck and approval remain
+same stable rows pass. `M70B-F005` additionally repairs persistent line-circle movement from exact
+payload `4228:0823d31f269300af` across a stale conservative certificate edge by requiring an
+overlapping fresh certificate chain to one unique transverse same-branch root. Its exact
+payload-derived owner regression and systemic row extend the reviewed fixture to 198/198 `PASS`.
+Focused owner/golden and aggregate golden qualification, formatting, warnings-denied all-workspace
+Clippy, locked all-feature workspace tests and the relevant WASM check pass. Prior F003/F004 source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete
+release gate and its frozen seven-file Tailscale publication is byte-verified. Complete F005
+clean release qualification, fresh publication, targeted movement recheck and approval remain
 pending. M71
 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
@@ -3675,13 +3680,19 @@ same-polyline pair eligibility and retained-endpoint hints; suppressed constrain
 proximity do not join points. F004 now lets persisted Circle/CircularArc-plus-affine Fillets search
 their complete certified explicit tangent-orientation cell, while generic nonlinear evaluation and
 radius continuation retain their narrow fold/locality guards. The same four golden cases preserve
-their exact input fingerprints and now yield `PASS`, making the current fixture 197/197 `PASS` with
-SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
-Focused F003/F004 owner qualification, exact golden check/clean modes, formatting, warnings-denied
-workspace Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean repair
-source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate, and its frozen
-seven-file distribution is published and byte-verified through Tailscale. Targeted human recheck
-and approval remain pending; M70B is not complete.
+their exact input fingerprints and now yield `PASS`. F005 treats the persisted Local interval as a
+branch witness rather than an immutable movement bound: a `NoLocalRoot`-only circular/affine
+fallback must prove stored-to-fresh-seed-to-fresh-candidate certificate overlap and a unique
+transverse root, without changing feature metadata or crossing a true orientation barrier. The
+current fixture is 198/198 `PASS` with SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
+Focused F003-F005 owner and golden tests, the 45-test feature suite, nine-test retained movement
+suite, aggregate golden survey/check/clean modes, formatting, warnings-denied all-workspace Clippy,
+locked all-feature workspace tests and the relevant WASM check pass. Prior F003/F004 source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate and its frozen
+seven-file distribution is published and byte-verified through Tailscale. Complete F005 clean
+release qualification, a fresh immutable distribution, targeted movement recheck and approval
+remain pending; M70B is not complete.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3771,13 +3782,35 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
 - [x] Review the four stable H3 rows from `DEFECT` to `PASS` without changing their input
   fingerprints: curve-pair `input-d04adbf29c08b9bd`, point `input-4ba571059db7afff`, same-cell
   lower `input-f9920c3cf170130d` and same-cell seam `input-2da21ef04cfb4246`. Preserve the original
-  193 row records byte-for-byte and record the current 197/197-`PASS` fixture SHA-256 as
+  193 row records byte-for-byte and record the F003/F004 repair checkpoint's 197/197-`PASS` fixture
+  SHA-256 as
   `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
 - [x] Re-pass formatting, warnings-denied workspace Clippy, locked all-feature workspace tests,
   the exact golden `--check` and `--require-clean`, and the relevant WASM build after the F003/F004
   repairs.
-- [x] Pass the complete clean replacement-candidate release gate and publish/byte-verify its frozen
-  UAT distribution.
+- [x] Resolve `M70B-F005` from payload `4228:0823d31f269300af`: preserve the exact rank-zero,
+  seven-DOF accepted sketch and persistent Fillet state; on circular-plus-affine persisted
+  `NoLocalRoot`, search only the retained support and publish only one transverse root whose fresh
+  seed/candidate certificates overlap the durable stored witness. Preserve true tangent barriers,
+  folds, singular offsets, ambiguity, full-circle non-trimming and read-only evaluation.
+- [x] Make F005 continuous through ordinary point dragging without turning branch metadata into a
+  hidden motion bound: authenticate sibling previews from the preceding accepted preview, refresh
+  contact/winding/periodic/certificate state after each accepted source movement, and persist only
+  that exact re-anchor atomically with the native edit. Require every previously Current computed
+  feature to remain Current before a projected scene advances; at a genuine finite-parent/fold or
+  bounded-work limit, retain the last complete native-plus-Fillet scene, expose targeted limit
+  metadata when attribution is defensible, recover in reverse, and commit only the last valid
+  sample. Preserve unrelated pre-existing Failed sets and the native-only preview fallback.
+- [x] Append the systemic
+  `feature.fillet.evaluation.line-circle.source-rotation.retained-start` row at fingerprint
+  `input-04658a77db2dc779`, preserve all prior 197 rows byte-for-byte and record the 198/198-`PASS`
+  fixture SHA-256 as `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
+- [x] Pass formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests,
+  the relevant WASM check and aggregate golden survey/check/clean modes for the F005 worktree.
+- [x] Pass the complete clean F003/F004 replacement-candidate release gate and publish/byte-verify
+  its frozen UAT distribution.
+- [ ] Pass the complete clean F005 replacement gate and publish/byte-verify a fresh immutable UAT
+  distribution before asking for the targeted movement recheck.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
 Historical `M70B-H3` test-only qualification note (2026-08-11): the four new Fillet cases ran in
@@ -3811,12 +3844,51 @@ normal sides, retention, endpoint order, sweep, cell and winding. The focused
 all 42 tests under `cargo test --locked -p geosolve-sketch-features --all-features` pass. The four
 golden rows retain input fingerprints
 `input-d04adbf29c08b9bd`, `input-4ba571059db7afff`, `input-f9920c3cf170130d` and
-`input-2da21ef04cfb4246` while transitioning `DEFECT` to `PASS`; the reviewed 197/197-`PASS`
-fixture has SHA-256
+`input-2da21ef04cfb4246` while transitioning `DEFECT` to `PASS`; that reviewed F003/F004 repair
+checkpoint is 197/197 `PASS` and has SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Both aggregate golden modes,
 formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
 relevant WASM build pass. This was the pre-nomination repair checkpoint; the replacement
 qualification below supersedes only its release/publication state.
+
+`M70B-F005` repair note (2026-08-11): payload `4228:0823d31f269300af` restores a finite,
+independently hard-valid rank-zero sketch with seven DOF and one radius-1 Circle/line Fillet. After
+the affine source rotated, the intended circle contact moved to total parameter
+`7.909322804062922`, only `0.051999730670326` above the stored Local upper certificate
+`7.857323073392596`. The root is transverse (`|cross| ~= 0.527757`) and fresh certificates around
+the persisted seed and candidate overlap; the alternative root lies across the real
+tangent-orientation barrier. The old evaluator intersected its search and publication bounds with
+the stale numeric edge and returned `NoLocalRoot`.
+
+Persisted evaluation now keeps its ordinary fast path and adds a fallback only for
+Circle/CircularArc-plus-affine `NoLocalRoot`. It searches one retained support, filters candidates
+through a fresh stored-to-seed-to-candidate overlap proof, rejects zero/multiple material roots,
+and repeats that proof before publication. It does not mutate feature JSON, widen generic
+nonlinear evaluation, alter radius continuation or turn folds/singularities into success. Focused
+test `m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell` preserves the exact
+sketch/feature bytes, rank/DOF, metadata, independent arc invariants, opposite-root negative
+control, full-circle non-trimming and read-only state. The golden adds only
+`feature.fillet.evaluation.line-circle.source-rotation.retained-start` at
+`input-04658a77db2dc779`; all prior 197 rows remain byte-identical and the resulting 198/198-`PASS`
+fixture has SHA-256 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
+
+F005 movement follow-up (2026-08-12): the static payload root was only the first half of the
+defect. Treating its Local certificate as immutable still made a persistent Fillet fragile while
+its native line moved. Current feature evaluation now emits authenticated continuation metadata;
+accepted source steps refresh the same corner's contact parameters, winding, periodic anchor,
+Local certificate and transverse orientation without changing its side, retained endpoint, order,
+sweep or radius. Projected sibling previews are tied to the exact preceding accepted preview, and
+the durable re-anchor is cold-revalidated and recorded only beside the exact native edit that
+derived it. That cold pass uses no continuation hint and must reproduce exact generated geometry,
+contact/provenance metadata, discarded construction fragments and feature dispositions. Exact
+replay rejects transitions transplanted to another edit or durable host input; Undo/Redo and cold
+reload reproduce the same branch; unrelated Failed sets retain their intent and disposition.
+Point-drag publication is also atomic across native and computed geometry: mouse-up stages the
+session, sidecar, allocator, checkpoint, history and transcript before publication, while a sample
+that loses any previously Current set is withheld, leaves the last complete scene and release
+position intact, publishes a local feature/corner/source limit cue where possible, and may recover
+on the next valid sample. Direct document edits remain allowed to intentionally produce a visible
+Failed computed feature, and non-Edit actions do not persist unrecorded contact refreshes.
 
 `M70B-F003/F004` replacement qualification/publication note (2026-08-11): clean nominated source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes

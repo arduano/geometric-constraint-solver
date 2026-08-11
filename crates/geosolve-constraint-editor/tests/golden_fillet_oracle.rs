@@ -2,7 +2,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(
     clippy::too_many_lines,
-    reason = "the four reviewed Fillet permutations remain one process-isolated golden family"
+    reason = "the five reviewed Fillet permutations remain one process-isolated golden family"
 )]
 
 use std::collections::BTreeSet;
@@ -23,21 +23,42 @@ use geosolve_sketch::{
     ScalarUnit, SketchDocument, SketchHardValidity, SolverConfig,
 };
 use geosolve_sketch_features::{
-    ComputedEdgeGeometry, ComputedEvaluationAllocator, ComputedFeatureAuthoringSnapshot,
-    ComputedFeatureDocument, ComputedFeatureDocumentId, ComputedFeatureEvaluationPolicy,
-    ComputedFeatureEvaluationSnapshot, ComputedFeatureEvaluationState, ComputedFeatureFailure,
-    ComputedFilletContactReseedRequest, ComputedFilletParent, ComputedFilletParentIndex,
-    NativeCurveSpanSource, NewComputedFilletCorner,
+    ComputedCornerRef, ComputedEdgeGeometry, ComputedEvaluationAllocator,
+    ComputedFeatureAuthoringSnapshot, ComputedFeatureDefinition, ComputedFeatureDocument,
+    ComputedFeatureDocumentId, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
+    ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFilletContactReseedRequest,
+    ComputedFilletParent, ComputedFilletParentIndex, NativeCurveSpanSource,
+    NewComputedFilletCorner,
 };
 
 const FAMILY: &str = "feature.fillet";
 const TSV_HEADER: &str = "case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint";
-const CASE_IDS: [&str; 4] = [
+const CASE_IDS: [&str; 5] = [
     "feature.fillet.authoring.coincident-closure.curve-pair",
     "feature.fillet.authoring.coincident-closure.point",
     "feature.fillet.evaluation.line-circle.same-cell-lower",
     "feature.fillet.evaluation.line-circle.same-cell-seam",
+    "feature.fillet.evaluation.line-circle.source-rotation.retained-start",
 ];
+
+const SOURCE_ROTATION_SKETCH_JSON: &str = concat!(
+    r#"{"version":4,"id":"7653a0003fed873aee16ee394279fe5e","next_id":"7653a0003fed873aee16ee394279fe65","model_scale":10.0,"points":["#,
+    r#"{"id":"7653a0003fed873aee16ee394279fe5f","label":"draft point","position":[0.16002449354493023,1.9065418176251467]},"#,
+    r#"{"id":"7653a0003fed873aee16ee394279fe62","label":"draft point","position":[-2.6404041434913528,2.0437056692350866]},"#,
+    r#"{"id":"7653a0003fed873aee16ee394279fe63","label":"draft point","position":[1.371638516099403,4.855564627238864]}],"#,
+    r#""scalars":[{"id":"7653a0003fed873aee16ee394279fe60","label":"radius","value":2.201783656372145,"unit":"length","domain":{"kind":"positive"}}],"#,
+    r#""curves":[{"id":"7653a0003fed873aee16ee394279fe61","label":"circle","definition":{"kind":"circle","center":"7653a0003fed873aee16ee394279fe5f","radius":"7653a0003fed873aee16ee394279fe60"}},"#,
+    r#"{"id":"7653a0003fed873aee16ee394279fe64","label":"line","definition":{"kind":"line","start":"7653a0003fed873aee16ee394279fe62","end":"7653a0003fed873aee16ee394279fe63","branch_direction":[0.9748804436785523,0.22272880490208083]}}],"#,
+    r#""contacts":[],"trim_views":[],"constraints":[],"dimensions":[],"source_order":[]}"#,
+);
+
+const SOURCE_ROTATION_FEATURE_JSON: &str = concat!(
+    r#"{"version":1,"document_id":"1136cf735081f15888738f4d370b9b2d","sketch_document":"7653a0003fed873aee16ee394279fe5e","revision":7,"next_feature_id":"0000000000000002","next_corner_id":"0000000000000002","features":["#,
+    r#"{"id":"0000000000000001","label":"Fillet 1","suppressed":false,"definition":{"kind":"fillet_set","radius":1.0,"corners":["#,
+    r#"{"id":"0000000000000001","first":{"source":{"span":{"curve":"7653a0003fed873aee16ee394279fe61","segment":0}},"picked_parameter":0.01630131737160223,"winding":1,"neighborhood":{"local":{"lower":4.959571177211237,"upper":7.857323073392596}},"normal_side":"right","retained_endpoint":"end","periodic_anchor":{"parameter":3.1578939709613953,"winding":0}},"#,
+    r#""second":{"source":{"span":{"curve":"7653a0003fed873aee16ee394279fe64","segment":0}},"picked_parameter":0.6995120213306758,"winding":0,"neighborhood":"interior","normal_side":"left","retained_endpoint":"start","periodic_anchor":null},"#,
+    r#""endpoint_order":"first_then_second","sweep":"counter_clockwise"}]}}],"digest":"df8408ece03aa63593d91056ed1d09592f4f1f2654cb2616f205be04cb217081"}"#,
+);
 
 #[derive(Clone, Debug)]
 struct SemanticDefect {
@@ -113,7 +134,7 @@ impl SurveyRow {
 
 #[test]
 fn golden_fillet_oracle_inventory_and_tsv_schema_are_exhaustive() {
-    assert_eq!(CASE_IDS.len(), 4);
+    assert_eq!(CASE_IDS.len(), 5);
     assert_eq!(TSV_HEADER.split('\t').count(), 6);
     assert_eq!(
         CASE_IDS.into_iter().collect::<BTreeSet<_>>().len(),
@@ -164,6 +185,9 @@ fn observe(case_id: &str) -> Observation {
         }
         "feature.fillet.evaluation.line-circle.same-cell-seam" => {
             observe_line_circle(LineCircleRow::SEAM)
+        }
+        "feature.fillet.evaluation.line-circle.source-rotation.retained-start" => {
+            observe_source_rotation()
         }
         _ => unreachable!("inventory checked the selected case"),
     }
@@ -640,6 +664,412 @@ fn observe_line_circle(row: LineCircleRow) -> Observation {
         input_fingerprint: fixture.input_fingerprint,
         outcome: Err(failure),
     }
+}
+
+fn observe_source_rotation() -> Observation {
+    let document = SketchDocument::from_json(SOURCE_ROTATION_SKETCH_JSON)
+        .expect("source-rotation accepted sketch JSON");
+    assert_eq!(
+        document.to_canonical_json().expect("canonical sketch JSON"),
+        SOURCE_ROTATION_SKETCH_JSON,
+        "source-rotation sketch fixture must remain canonical"
+    );
+    let session = retained(document);
+    assert_current_accepted(&session);
+    let accepted = session
+        .accepted_state_for_current_input()
+        .expect("source-rotation accepted state");
+    let diagnostics = accepted.diagnostics();
+    let rank = diagnostics.rank.expect("source-rotation rank diagnostics");
+    let mobility = diagnostics
+        .mobility
+        .expect("source-rotation mobility diagnostics");
+    assert_eq!(rank.numerical_rank, Some(0));
+    assert_eq!(mobility.equality_degrees_of_freedom, Some(7));
+    assert_eq!(mobility.bidirectional_bounded_degrees_of_freedom, Some(7));
+
+    let features = ComputedFeatureDocument::from_json(SOURCE_ROTATION_FEATURE_JSON)
+        .expect("source-rotation feature JSON");
+    assert_eq!(
+        features.to_json().expect("canonical feature JSON"),
+        SOURCE_ROTATION_FEATURE_JSON,
+        "source-rotation feature fixture must retain its exact digest and revision"
+    );
+    assert_eq!(features.sketch_document(), accepted.document().id());
+    assert_eq!(features.features().len(), 1);
+    let feature = &features.features()[0];
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    assert_eq!(fillet.corners.len(), 1);
+    let persisted_corner = fillet.corners[0].without_id();
+    let corner = fillet.corners[0].id;
+    let feature = feature.id;
+
+    let input_fingerprint =
+        input_fingerprint(&[SOURCE_ROTATION_SKETCH_JSON, SOURCE_ROTATION_FEATURE_JSON]);
+    assert_eq!(input_fingerprint, "input-04658a77db2dc779");
+
+    let design_json = session
+        .design_document()
+        .to_canonical_json()
+        .expect("source-rotation retained design JSON");
+    let accepted_identity = accepted.identity();
+    let accepted_json = accepted
+        .document()
+        .to_canonical_json()
+        .expect("source-rotation accepted JSON");
+    let prepared_input = session.prepared_input();
+    let feature_identity = features.identity();
+    let feature_json = features.to_json().expect("source-rotation feature JSON");
+
+    let snapshot = evaluate(&session, &features);
+    let outcome = validate_source_rotation_snapshot(
+        accepted.document(),
+        &snapshot,
+        feature,
+        corner,
+        persisted_corner,
+    );
+
+    let accepted_after = session
+        .accepted_state_for_current_input()
+        .expect("evaluation must retain source-rotation accepted state");
+    assert_eq!(
+        session
+            .design_document()
+            .to_canonical_json()
+            .expect("retained design JSON after evaluation"),
+        design_json
+    );
+    assert_eq!(accepted_after.identity(), accepted_identity);
+    assert_eq!(
+        accepted_after
+            .document()
+            .to_canonical_json()
+            .expect("accepted JSON after evaluation"),
+        accepted_json
+    );
+    assert_eq!(session.prepared_input(), prepared_input);
+    assert_eq!(features.identity(), feature_identity);
+    assert_eq!(
+        features.to_json().expect("feature JSON after evaluation"),
+        feature_json
+    );
+
+    Observation {
+        input_fingerprint,
+        outcome,
+    }
+}
+
+fn validate_source_rotation_snapshot(
+    document: &SketchDocument,
+    snapshot: &geosolve_sketch_features::ComputedFeatureSnapshot,
+    feature: geosolve_sketch_features::ComputedFeatureId,
+    corner: geosolve_sketch_features::ComputedFeatureCornerId,
+    persisted: NewComputedFilletCorner,
+) -> OracleResult {
+    let evaluation = snapshot
+        .feature_evaluations()
+        .iter()
+        .find(|evaluation| evaluation.feature == feature)
+        .expect("source-rotation feature evaluation");
+    let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
+        let message = match &evaluation.state {
+            ComputedFeatureEvaluationState::Failed {
+                failure: ComputedFeatureFailure::NoLocalRoot { .. },
+            } => concat!(
+                "source rotation left a regular intended line-circle root just beyond the stale ",
+                "persisted Local-cell edge, but evaluation returned NoLocalRoot"
+            )
+            .to_owned(),
+            other => format!("source-rotation Fillet evaluation was not Current: {other:?}"),
+        };
+        return Err(defect("fillet.evaluation.certificate-transport", message));
+    };
+    if corner_edges.len() != 1 || corner_edges[0].0 != corner {
+        return Err(defect(
+            "fillet.evaluation.publication",
+            "source-rotation Fillet did not publish exactly its one persistent corner",
+        ));
+    }
+    if snapshot
+        .edges()
+        .iter()
+        .filter(|edge| matches!(edge.geometry, ComputedEdgeGeometry::CircularArc(_)))
+        .count()
+        != 1
+    {
+        return Err(defect(
+            "fillet.evaluation.publication",
+            "source-rotation Fillet did not publish exactly one circular arc",
+        ));
+    }
+    let edge = snapshot
+        .fillet_arc_edge(ComputedCornerRef { feature, corner })
+        .ok_or_else(|| {
+            defect(
+                "fillet.evaluation.publication",
+                "source-rotation Current state had no arc for its stable corner owner",
+            )
+        })?;
+    if edge.id != corner_edges[0].1 {
+        return Err(defect(
+            "fillet.evaluation.publication",
+            "source-rotation corner publication referenced a different generated edge",
+        ));
+    }
+    let ComputedEdgeGeometry::CircularArc(arc) = &edge.geometry else {
+        return Err(defect(
+            "fillet.evaluation.publication",
+            "source-rotation corner edge was not a circular arc",
+        ));
+    };
+    validate_source_rotation_arc(document, persisted, arc)
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the source-rotation row independently validates branch transport and published geometry"
+)]
+fn validate_source_rotation_arc(
+    document: &SketchDocument,
+    persisted: NewComputedFilletCorner,
+    arc: &geosolve_sketch_features::ComputedCircularArc,
+) -> OracleResult {
+    const CIRCLE_TOTAL: f64 = 7.909_322_804_062_922;
+    const CIRCLE_PRINCIPAL: f64 = 1.626_137_496_883_336;
+    const LINE_PARAMETER: f64 = 0.796_915_905_159_832;
+    const EXPECTED_CENTER: [f64; 2] = [-0.017_075_528_971_715, 5.103_423_761_681_947];
+    const EXPECTED_TRANSVERSALITY: f64 = -0.527_757_423_204_954_1;
+
+    let ContactNeighborhood::Local {
+        lower: stored_lower,
+        upper: stored_upper,
+    } = persisted.first.neighborhood
+    else {
+        return Err(defect(
+            "fillet.evaluation.branch-state",
+            "source-rotation circle parent lost its persisted Local witness",
+        ));
+    };
+    let Some(anchor) = persisted.first.periodic_anchor else {
+        return Err(defect(
+            "fillet.evaluation.branch-state",
+            "source-rotation circle parent lost its periodic anchor",
+        ));
+    };
+    if persisted.first.normal_side != DocumentCurveNormalSide::Right
+        || persisted.first.retained_endpoint != DocumentFilletTrimEndpoint::End
+        || persisted.first.winding != 1
+        || persisted.second.normal_side != DocumentCurveNormalSide::Left
+        || persisted.second.retained_endpoint != DocumentFilletTrimEndpoint::Start
+        || persisted.second.winding != 0
+        || persisted.second.neighborhood != ContactNeighborhood::Interior
+        || persisted.second.periodic_anchor.is_some()
+        || persisted.endpoint_order != DocumentFilletEndpointOrder::FirstThenSecond
+        || persisted.sweep != DocumentArcSweep::CounterClockwise
+    {
+        return Err(defect(
+            "fillet.evaluation.branch-state",
+            "source-rotation persisted side, retention, winding, neighborhood, order or sweep changed",
+        ));
+    }
+    let persisted_seed = persisted.first.picked_parameter
+        + f64::from(persisted.first.winding) * std::f64::consts::TAU;
+    if !(stored_lower < persisted_seed
+        && persisted_seed < stored_upper
+        && CIRCLE_TOTAL > stored_upper)
+    {
+        return Err(defect(
+            "fillet.evaluation.certificate-transport",
+            "source-rotation fixture no longer crosses only the stale persisted cell edge",
+        ));
+    }
+
+    let support_lower = anchor.parameter + f64::from(anchor.winding) * std::f64::consts::TAU;
+    let support_upper = support_lower + std::f64::consts::TAU;
+    let seed_cell = document
+        .certify_line_curve_fillet_branch_cell(
+            persisted.second.source.span,
+            persisted.first.source.span,
+            persisted_seed,
+            support_lower,
+            support_upper,
+        )
+        .map_err(|error| {
+            defect(
+                "fillet.evaluation.certificate-transport",
+                format!("current source geometry could not certify its seed cell: {error}"),
+            )
+        })?;
+    let candidate_cell = document
+        .certify_line_curve_fillet_branch_cell(
+            persisted.second.source.span,
+            persisted.first.source.span,
+            CIRCLE_TOTAL,
+            support_lower,
+            support_upper,
+        )
+        .map_err(|error| {
+            defect(
+                "fillet.evaluation.certificate-transport",
+                format!(
+                    "current source geometry could not certify its regular branch cell: {error}"
+                ),
+            )
+        })?;
+    let ContactNeighborhood::Local {
+        lower: seed_lower,
+        upper: seed_upper,
+    } = seed_cell
+    else {
+        return Err(defect(
+            "fillet.evaluation.certificate-transport",
+            "current source geometry returned no Local seed certificate",
+        ));
+    };
+    let ContactNeighborhood::Local {
+        lower: candidate_lower,
+        upper: candidate_upper,
+    } = candidate_cell
+    else {
+        return Err(defect(
+            "fillet.evaluation.certificate-transport",
+            "current source geometry returned no Local candidate certificate",
+        ));
+    };
+    if !(seed_lower < persisted_seed
+        && persisted_seed < seed_upper
+        && candidate_lower < CIRCLE_TOTAL
+        && CIRCLE_TOTAL < candidate_upper
+        && stored_lower.max(seed_lower) < stored_upper.min(seed_upper)
+        && seed_lower.max(candidate_lower) < seed_upper.min(candidate_upper))
+    {
+        return Err(defect(
+            "fillet.evaluation.certificate-transport",
+            format!(
+                "persisted seed {persisted_seed:.15} and intended root {CIRCLE_TOTAL:.15} are not connected by stored [{stored_lower:.15}, {stored_upper:.15}], seed [{seed_lower:.15}, {seed_upper:.15}] and candidate [{candidate_lower:.15}, {candidate_upper:.15}] regular cells"
+            ),
+        ));
+    }
+
+    if !arc.center.into_iter().all(f64::is_finite)
+        || !arc.radius.is_finite()
+        || !arc.start_angle.is_finite()
+        || !arc.end_angle.is_finite()
+        || arc.contacts.iter().any(|contact| {
+            !contact.parameter.is_finite()
+                || !contact.total_parameter.is_finite()
+                || !contact.position.into_iter().all(f64::is_finite)
+        })
+    {
+        return Err(defect(
+            "fillet.evaluation.invalid-geometry",
+            "source-rotation Fillet published non-finite geometry",
+        ));
+    }
+    if (arc.radius - 1.0).abs() > 1.0e-12
+        || arc.sweep != DocumentArcSweep::CounterClockwise
+        || (arc.center[0] - EXPECTED_CENTER[0]).abs() > 2.0e-9
+        || (arc.center[1] - EXPECTED_CENTER[1]).abs() > 2.0e-9
+    {
+        return Err(defect(
+            "fillet.evaluation.branch-state",
+            "source-rotation Fillet changed radius, sweep or intended local root center",
+        ));
+    }
+    if arc.contacts[0].source != persisted.first.source
+        || arc.contacts[1].source != persisted.second.source
+        || (arc.contacts[0].total_parameter - CIRCLE_TOTAL).abs() > 2.0e-9
+        || (arc.contacts[0].parameter - CIRCLE_PRINCIPAL).abs() > 2.0e-9
+        || arc.contacts[0].winding != 1
+        || (arc.contacts[1].total_parameter - LINE_PARAMETER).abs() > 2.0e-9
+        || (arc.contacts[1].parameter - LINE_PARAMETER).abs() > 2.0e-9
+        || arc.contacts[1].winding != 0
+    {
+        return Err(defect(
+            "fillet.evaluation.branch-state",
+            "source-rotation Fillet selected a different source, contact root or winding",
+        ));
+    }
+
+    let mut unit_tangents = [[0.0; 2]; 2];
+    for (index, (parent, contact)) in [persisted.first, persisted.second]
+        .into_iter()
+        .zip(arc.contacts)
+        .enumerate()
+    {
+        let jet = document
+            .evaluate_curve_jet(parent.source.span, contact.total_parameter)
+            .map_err(|error| {
+                defect(
+                    "fillet.evaluation.invalid-geometry",
+                    format!("source-rotation contact jet failed: {error}"),
+                )
+            })?;
+        let tangent_length = jet.first_derivative.x.hypot(jet.first_derivative.y);
+        if !tangent_length.is_finite() || tangent_length <= 0.0 {
+            return Err(defect(
+                "fillet.evaluation.invalid-geometry",
+                "source-rotation contact has no finite regular tangent",
+            ));
+        }
+        unit_tangents[index] = [
+            jet.first_derivative.x / tangent_length,
+            jet.first_derivative.y / tangent_length,
+        ];
+        let position_error =
+            (jet.position.x - contact.position[0]).hypot(jet.position.y - contact.position[1]);
+        let radial = [
+            arc.center[0] - contact.position[0],
+            arc.center[1] - contact.position[1],
+        ];
+        let radial_length = radial[0].hypot(radial[1]);
+        let normalized_tangency =
+            (unit_tangents[index][0] * radial[0] + unit_tangents[index][1] * radial[1]).abs()
+                / radial_length;
+        let signed_offset =
+            radial[0] * -unit_tangents[index][1] + radial[1] * unit_tangents[index][0];
+        let expected_offset = match parent.normal_side {
+            DocumentCurveNormalSide::Left => arc.radius,
+            DocumentCurveNormalSide::Right => -arc.radius,
+        };
+        if position_error > 1.0e-9
+            || (radial_length - arc.radius).abs() > 1.0e-9
+            || normalized_tangency > 1.0e-9
+            || (signed_offset - expected_offset).abs() > 1.0e-9
+        {
+            return Err(defect(
+                "fillet.evaluation.invalid-geometry",
+                "source-rotation Fillet failed incidence, radius, tangency or signed-side validation",
+            ));
+        }
+    }
+    let transversality =
+        unit_tangents[0][0] * unit_tangents[1][1] - unit_tangents[0][1] * unit_tangents[1][0];
+    if transversality >= -0.5 || (transversality - EXPECTED_TRANSVERSALITY).abs() > 2.0e-9 {
+        return Err(defect(
+            "fillet.evaluation.certificate-transport",
+            "source-rotation intended root is no longer regular on its retained orientation branch",
+        ));
+    }
+
+    let (start, end) = match persisted.endpoint_order {
+        DocumentFilletEndpointOrder::FirstThenSecond => (arc.contacts[0], arc.contacts[1]),
+        DocumentFilletEndpointOrder::SecondThenFirst => (arc.contacts[1], arc.contacts[0]),
+    };
+    for (angle, contact) in [(arc.start_angle, start), (arc.end_angle, end)] {
+        let expected =
+            (contact.position[1] - arc.center[1]).atan2(contact.position[0] - arc.center[0]);
+        let delta = angle - expected;
+        if delta.sin().atan2(delta.cos()).abs() > 1.0e-9 {
+            return Err(defect(
+                "fillet.evaluation.branch-state",
+                "source-rotation Fillet endpoint angles changed explicit endpoint order",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_reseeded_branch(

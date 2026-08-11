@@ -37,8 +37,8 @@ pub use coordinator::{
     FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
     FeatureAuthoringTransaction, GeometryRoleSelectionState, LifecycleDto, LifecycleStatus,
     MeasurementPublication, MutationOutcome, ProblemsDto, ProjectedDragRejectionStage,
-    ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
-    display_dimension_target,
+    ProjectedDragWorkEvidence, RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint,
+    RetainedEditorCoordinator, display_dimension_target,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -2407,6 +2407,11 @@ pub enum EditorEffect {
         point: DesignPointId,
         model_position: [f64; 2],
     },
+    /// Commits the retained projected point preview as one transaction. The
+    /// retained coordinator clears transient point state only after this
+    /// effect succeeds; on failure it keeps the last complete preview so the
+    /// host can report the limit or retry without dispatching a separate
+    /// [`Self::ClearPointPreview`].
     CommitPointMove {
         expected: SketchDesignIdentity,
         point: DesignPointId,
@@ -4718,14 +4723,11 @@ impl ConstraintEditor {
             preview.map_or_else(
                 || vec![EditorEffect::ClearPointPreview],
                 |(_, _, _, _, position)| {
-                    vec![
-                        EditorEffect::CommitPointMove {
-                            expected,
-                            point: gesture.point,
-                            model_position: position,
-                        },
-                        EditorEffect::ClearPointPreview,
-                    ]
+                    vec![EditorEffect::CommitPointMove {
+                        expected,
+                        point: gesture.point,
+                        model_position: position,
+                    }]
                 },
             )
         } else {
@@ -13724,7 +13726,7 @@ mod tests {
         );
         assert!(
             matches!(editor.pointer_up(&scene, scene.design_identity, pointer(8, endpoint.x + 4.0, endpoint.y, Modifiers::default())).as_slice(),
-            [EditorEffect::CommitPointMove { expected, point, model_position }, EditorEffect::ClearPointPreview] if *expected == scene.design_identity && *point == points[0] && (model_position[0] - 2.0).abs() < 1.0e-12 && (model_position[1] - 3.0).abs() < 1.0e-12)
+            [EditorEffect::CommitPointMove { expected, point, model_position }] if *expected == scene.design_identity && *point == points[0] && (model_position[0] - 2.0).abs() < 1.0e-12 && (model_position[1] - 3.0).abs() < 1.0e-12)
         );
 
         editor.pointer_down(
@@ -13784,7 +13786,7 @@ mod tests {
         );
         assert!(
             matches!(editor.pointer_up(&scene, scene.design_identity, pointer(8, endpoint.x + 5.0, endpoint.y, Modifiers::default())).as_slice(),
-            [EditorEffect::CommitPointMove { model_position, .. }, EditorEffect::ClearPointPreview] if (model_position[0] - 7.0).abs() < 1.0e-12 && (model_position[1] - 8.0).abs() < 1.0e-12)
+            [EditorEffect::CommitPointMove { model_position, .. }] if (model_position[0] - 7.0).abs() < 1.0e-12 && (model_position[1] - 8.0).abs() < 1.0e-12)
         );
     }
 

@@ -7,13 +7,15 @@ publication remain historically clean. H2 preserved that exact 193-row corpus un
 milestone-neutral names. Subsequent human UAT opened `M70B-F003` in computed-Fillet authoring and
 `M70B-F004` in persisted computed-Fillet source-edit branch traversal, both outside the original
 matrix. H3 added four isolated, reviewed `feature.fillet` rows and recorded the exact discovery
-state as 193 `PASS` plus four `DEFECT`. The now-authorized repairs resolve both findings at their
-headless owners, and the current 197-row golden fixture records 197 `PASS` with the four input
-fingerprints unchanged. Both focused repair suites, both aggregate golden modes, formatting,
-warnings-denied workspace Clippy, locked all-feature workspace tests and the relevant WASM build
-pass. Clean source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate,
-and its immutable seven-file replacement is byte-verified and served through Tailscale.
-Supervising-human M70B review and approval remain pending.
+state as 193 `PASS` plus four `DEFECT`. The authorized F003/F004 repairs resolve both findings at
+their headless owners and produced a fully qualified 197/197-`PASS` replacement with the four input
+fingerprints unchanged. F005 then adds one source-rotation row for payload
+`4228:0823d31f269300af`; the current 198-row golden records 198 `PASS` at SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Its 45-test feature-owner
+suite, nine-test retained movement suite, focused golden tests, all aggregate golden modes,
+formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
+relevant WASM check pass. Complete F005 clean release qualification, a fresh immutable publication,
+supervising-human recheck and M70B approval remain pending.
 
 M70B-H1 originated this matrix. M70B-H2 moved the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
@@ -24,8 +26,10 @@ M70B-H3 kept every H1/H2 row record byte-identical and appended only the missing
 axes already proven at their narrow owners. Its discovery fixture SHA-256 was
 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`; that historical hash records
 the four reviewed defects and does not supersede the historical H1/H2 source or hash evidence
-below. The repaired fixture changes only those four dispositions to `PASS` and has current
+below. The F003/F004 repair checkpoint changed only those four dispositions to `PASS` and had
 SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
+F005 preserves those 197 records byte-for-byte, appends one passing source-rotation row and yields
+the current SHA-256 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
 
 ## Scope and authority
 
@@ -115,9 +119,16 @@ records:
 - `feature.fillet.evaluation.line-circle.same-cell-lower`; and
 - `feature.fillet.evaluation.line-circle.same-cell-seam`.
 
-The active inventory is therefore 197 rows. The original 193 remain `PASS`; the two authoring rows
+That historical H3 inventory is 197 rows. The original 193 remain `PASS`; the two authoring rows
 now pass after the `M70B-F003` repair and the two evaluation rows now pass after the `M70B-F004`
 repair. Their case IDs and input fingerprints remain stable across discovery and repair.
+
+F005 appends one systemic persisted-evaluation movement dimension without changing any prior row:
+
+- `feature.fillet.evaluation.line-circle.source-rotation.retained-start`.
+
+The active inventory is therefore 198 rows, all `PASS`. Its input fingerprint is
+`input-04658a77db2dc779` and its payload identity is `4228:0823d31f269300af`.
 
 ## Driver and classification contract
 
@@ -126,8 +137,8 @@ own process with a 30-second runtime limit and a five-second hard-kill grace per
 failures, panics, timeouts (`124` or hard-kill `137`) and harness errors are rows rather than an
 instruction to stop; later rows still run. A nonzero child exit is never accepted merely because
 it wrote a complete TSV. Child output must match the requested case and family. H1/H2 required
-their exact 193 `(case_id, family)` pairs; the H3 driver requires the exact current 197-pair
-inventory and rejects a missing, duplicate or unexpected Fillet row.
+their exact 193 `(case_id, family)` pairs; H3 required 197 pairs and the current driver requires
+the exact 198-pair inventory, rejecting a missing, duplicate or unexpected Fillet row.
 
 The stable TSV schema is:
 
@@ -248,8 +259,9 @@ cargo test --locked -p geosolve-sketch-features --lib \
 ```
 
 The current positive regression is
-`m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_cell`; the complete
-locked all-feature owner suite passes 42/42:
+`m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_cell`; at the F004
+repair checkpoint the complete locked all-feature owner suite passed 42/42. F005 extends the
+current suite to 45/45:
 
 ```text
 cargo test --locked -p geosolve-sketch-features --all-features
@@ -274,20 +286,24 @@ positive behavior:
 | `feature.fillet.authoring.coincident-closure.curve-pair` | Last/first span-pair authoring | `PASS` | `M70B-F003` | `input-d04adbf29c08b9bd` |
 | `feature.fillet.evaluation.line-circle.same-cell-lower` | Same-cell lower root, winding 0 | `PASS` | `M70B-F004` | `input-f9920c3cf170130d` |
 | `feature.fillet.evaluation.line-circle.same-cell-seam` | Same-cell seam root, winding 1 | `PASS` | `M70B-F004` | `input-2da21ef04cfb4246` |
+| `feature.fillet.evaluation.line-circle.source-rotation.retained-start` | Moved affine source, overlapping transported cells, retained Start | `PASS` | `M70B-F005` | `input-04658a77db2dc779` |
 
 | Inventory cut | PASS | DEFECT | PANIC | TIMEOUT | HARNESS_ERROR | Total |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Historical H1/H2 | 193 | 0 | 0 | 0 | 0 | 193 |
 | Historical H3 discovery | 193 | 4 | 0 | 0 | 0 | 197 |
-| Current repaired fixture | 197 | 0 | 0 | 0 | 0 | 197 |
+| Post-F003/F004 repaired fixture | 197 | 0 | 0 | 0 | 0 | 197 |
+| Current F005 fixture | 198 | 0 | 0 | 0 | 0 | 198 |
 
-`crates/geosolve-constraint-editor/tests/golden_fillet_oracle.rs` owns the four current rows. The
+`crates/geosolve-constraint-editor/tests/golden_fillet_oracle.rs` owns the five current rows. The
 authoring pair calls the public headless feature-authoring and retained-coordinator transactions.
-The evaluation pair calls public persisted computed-feature evaluation directly. Only a
-`NoLocalRoot` diagnostic path uses public contact reseeding to prove that a viable same-cell root
-was withheld; a current `PASS` independently requires finite accepted geometry, hard validity,
-contact/source incidence, radius, tangency, signed side, native source/span identity,
-parameter/winding representation and membership in the unchanged Local cell.
+The three evaluation rows call public persisted computed-feature evaluation directly. Only a
+`NoLocalRoot` diagnostic path uses public contact reseeding to prove that a viable root was
+withheld. Every current `PASS` independently requires finite accepted geometry, hard validity,
+contact/source incidence, radius, tangency, signed side, native source/span identity and explicit
+parameter/winding representation. F004 additionally requires membership in the unchanged Local
+cell; F005 requires a fresh stored-to-seed-to-candidate certificate-overlap chain and rejection of
+the alternate root across the real orientation barrier.
 
 Current focused repair evidence:
 
@@ -295,14 +311,56 @@ Current focused repair evidence:
 cargo test --locked -p geosolve-constraint-editor \
   --test m70b_closed_triangle_fillet
 cargo test --locked -p geosolve-sketch-features --all-features
+cargo test --locked -p geosolve-constraint-editor \
+  --test m70b_f005_retained_movement
 ```
 
-Both focused suites pass. The repaired 197-row fixture records 197 `PASS`, zero defects, panics,
-timeouts or harness errors, and has SHA-256
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Aggregate oracle
-`--check`/`--require-clean`, full workspace tests, warnings-denied Clippy, formatting and the
-relevant WASM check pass. The complete clean repair release and replacement publication are
-recorded below.
+All three focused suites pass, including F005's exact payload-derived feature-owner regression
+`m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell`. The current 198-row
+fixture records 198 `PASS`, zero defects, panics, timeouts or harness errors, and has SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Aggregate oracle
+`--survey`/`--check`/`--require-clean`, formatting, warnings-denied all-workspace Clippy, locked
+all-feature workspace tests and the relevant WASM build pass. The clean release gate and
+replacement publication remain the F005 nomination work below.
+
+### M70B-F005 movement-certificate checklist
+
+The exact loadable capsule is preserved at
+`crates/geosolve-demo-web/tests/fixtures/m70b_f005_repro.txt`; its identity is
+`4228:0823d31f269300af`, and an ordinary-decoder/web-workspace regression restores it before
+checking the Current computed scene. The accepted sketch is finite, hard-valid at normalized
+residual `0`, rank zero and seven DOF. Before repair, public computed-feature evaluation
+returned `Failed(NoLocalRoot)` and withheld the Fillet. The valid circle contact
+`7.909322804062922` is only `0.051999730670326` beyond the stored upper certificate, is transverse
+at about `0.527757`, and has a root-centred current certificate overlapping the fresh certificate
+at the persisted seed. The alternate root at about `9.021239181530` is across the real orientation
+barrier.
+
+The owner regression freezes exact accepted/feature JSON, IDs/revisions/digest, rank/DOF, persistent
+normal sides, retention, winding, anchor, endpoint order and sweep; independently checks source
+incidence, radius, tangency, signed offsets and transversality; requires full-circle non-trimming;
+and proves evaluation leaves accepted input and feature bytes unchanged. The broad row adds the
+missing systemic dimension—affine-source rotation moving a root beyond a stale certificate—and
+uses the same independent invariants. Existing same-cell, exact-fold, offset-singularity,
+high-curvature remote-root and radius-continuation tests remain the negative/collateral controls.
+
+The separate retained movement suite contains nine exact tests rather than duplicating a static
+payload row nine times in the golden. It covers a true pointer gesture across both the stale
+certificate edge and the real cardinal point, stepwise full-period winding, durable re-anchoring,
+mixed Current/Failed state, exact replay/edit binding, stale scene authority, a genuine finite-
+parent barrier, reverse recovery, terminal-invalid release, and first-sample rejection. Its
+independent invariants require paired accepted/native and computed input identity, unchanged
+branch semantics, finite incidence/radius/tangency, no root hop, last-complete-scene retention,
+targeted limit attribution, no history on an entirely invalid gesture, and exact Undo/Redo/replay/
+reload recovery. Coordinator unit regressions additionally force allocator exhaustion between
+continued evaluation and cold durability publication, reject replay after a host parameter-input
+change, prove a non-Edit constraint action cannot persist an unrecorded feature revision, and
+require a direct edit that newly fails one Fillet while re-anchoring another to replay the exact
+recorded dispositions. The
+cold feature regression compares exact generated geometry/provenance, contact metadata, discarded
+construction fragments and dispositions while ignoring only evaluation-local IDs. The existing web
+scene test proves targeted computed-feature metadata highlights
+only the named sources and renders a local icon; no browser-side branch inference is added.
 
 ## Qualification ledger
 
@@ -395,18 +453,22 @@ file retains the H1 hash listed above, and the ordered manifest aggregate remain
 served H1 product candidate unchanged and requires no Tailscale republish. Human UAT remains
 pending.
 
-### M70B-H3 discovery and current repair gate state
+### M70B-H3 discovery, F003/F004 gate and F005 current state
 
 H3 changed only test infrastructure and documentation, so the H1 product distribution and release
 manifest above remained the last qualified bytes. Its historical 197-row `--check` passed against
 golden SHA-256 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`, while
 `--require-clean` intentionally failed on the two F003 and two F004 rows and no others.
 
-The authorized repair now changes production behavior at the headless authoring and computed
-feature-evaluation owners. The current fixture is 197/197 `PASS` at SHA-256
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`; both focused owner suites,
-both aggregate golden checks, formatting, warnings-denied workspace Clippy, locked all-feature
-workspace tests and the relevant WASM build pass.
+The authorized F003/F004 repair changed production behavior at the headless authoring and computed
+feature-evaluation owners and passed the complete qualification recorded below. F005 subsequently
+adds one source-rotation certificate-transport row without altering those 197 records. The current
+fixture is 198/198 `PASS` at SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`; its exact owner regression,
+45-test owner suite, nine-test retained movement suite, focused golden tests, all aggregate golden
+modes, formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
+relevant WASM check pass. F005's clean release qualification and replacement publication remain
+pending.
 
 ### M70B-F003/F004 replacement qualification and publication
 
@@ -440,3 +502,10 @@ snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale addre
 cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
 immutable local counterpart. The F003/F004 targeted human rechecks and supervising-human approval
 remain pending.
+
+### M70B-F005 replacement qualification and publication
+
+The F005 implementation and current 198-row golden have focused mechanical evidence, but no clean
+replacement commit, complete release-gate result or fresh immutable distribution is recorded yet.
+The already served F003/F004 snapshot predates F005 and must not be used for the F005 movement-
+continuity recheck in `docs/M70B_UAT.md`.

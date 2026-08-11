@@ -15,11 +15,11 @@ use crate::{
     ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFeatureDocumentError,
     ComputedFeatureDocumentId, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
     ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFeatureLifecycleHighWater,
-    ComputedFeatureRevision, ComputedFeatureSnapshotError, ComputedFilletAuthoringOptions,
-    ComputedFilletContactReseedRequest, ComputedFilletCornerAlternativeKind,
-    ComputedFilletCornerAuthoringRequest, ComputedFilletCurvePick, ComputedFilletParent,
-    ComputedFilletParentIndex, ContinuedComputedFilletCorner, NativeCurveSpanSource,
-    NewComputedFilletCorner,
+    ComputedFeatureReanchorError, ComputedFeatureRevision, ComputedFeatureSnapshotError,
+    ComputedFilletAuthoringOptions, ComputedFilletContactReseedRequest,
+    ComputedFilletCornerAlternativeKind, ComputedFilletCornerAuthoringRequest,
+    ComputedFilletCurvePick, ComputedFilletParent, ComputedFilletParentIndex,
+    ContinuedComputedFilletCorner, NativeCurveSpanSource, NewComputedFilletCorner,
 };
 
 struct PolylineFixture {
@@ -298,6 +298,12 @@ const M70B_F004_ROWS: [M70bF004Row; 2] = [
         viable_circle_winding: 1,
     },
 ];
+
+const M70B_F005_PAYLOAD_FINGERPRINT: &str = "4228:0823d31f269300af";
+
+const M70B_F005_ACCEPTED_JSON: &str = r#"{"version":4,"id":"7653a0003fed873aee16ee394279fe5e","next_id":"7653a0003fed873aee16ee394279fe65","model_scale":10.0,"points":[{"id":"7653a0003fed873aee16ee394279fe5f","label":"draft point","position":[0.16002449354493023,1.9065418176251467]},{"id":"7653a0003fed873aee16ee394279fe62","label":"draft point","position":[-2.6404041434913528,2.0437056692350866]},{"id":"7653a0003fed873aee16ee394279fe63","label":"draft point","position":[1.371638516099403,4.855564627238864]}],"scalars":[{"id":"7653a0003fed873aee16ee394279fe60","label":"radius","value":2.201783656372145,"unit":"length","domain":{"kind":"positive"}}],"curves":[{"id":"7653a0003fed873aee16ee394279fe61","label":"circle","definition":{"kind":"circle","center":"7653a0003fed873aee16ee394279fe5f","radius":"7653a0003fed873aee16ee394279fe60"}},{"id":"7653a0003fed873aee16ee394279fe64","label":"line","definition":{"kind":"line","start":"7653a0003fed873aee16ee394279fe62","end":"7653a0003fed873aee16ee394279fe63","branch_direction":[0.9748804436785523,0.22272880490208083]}}],"contacts":[],"trim_views":[],"constraints":[],"dimensions":[],"source_order":[]}"#;
+
+const M70B_F005_FEATURE_JSON: &str = r#"{"version":1,"document_id":"1136cf735081f15888738f4d370b9b2d","sketch_document":"7653a0003fed873aee16ee394279fe5e","revision":7,"next_feature_id":"0000000000000002","next_corner_id":"0000000000000002","features":[{"id":"0000000000000001","label":"Fillet 1","suppressed":false,"definition":{"kind":"fillet_set","radius":1.0,"corners":[{"id":"0000000000000001","first":{"source":{"span":{"curve":"7653a0003fed873aee16ee394279fe61","segment":0}},"picked_parameter":0.01630131737160223,"winding":1,"neighborhood":{"local":{"lower":4.959571177211237,"upper":7.857323073392596}},"normal_side":"right","retained_endpoint":"end","periodic_anchor":{"parameter":3.1578939709613953,"winding":0}},"second":{"source":{"span":{"curve":"7653a0003fed873aee16ee394279fe64","segment":0}},"picked_parameter":0.6995120213306758,"winding":0,"neighborhood":"interior","normal_side":"left","retained_endpoint":"start","periodic_anchor":null},"endpoint_order":"first_then_second","sweep":"counter_clockwise"}]}}],"digest":"df8408ece03aa63593d91056ed1d09592f4f1f2654cb2616f205be04cb217081"}"#;
 
 #[allow(
     clippy::too_many_lines,
@@ -858,6 +864,19 @@ fn assert_close(actual: f64, expected: f64, tolerance: f64) {
         (actual - expected).abs() <= tolerance,
         "expected {expected:.12e}, got {actual:.12e}, tolerance {tolerance:.3e}"
     );
+}
+
+fn normalized_cross(first: [f64; 2], second: [f64; 2]) -> f64 {
+    let denominator = first[0].hypot(first[1]) * second[0].hypot(second[1]);
+    (first[0].mul_add(second[1], -first[1] * second[0])) / denominator
+}
+
+fn tangent_orientation_cell(direction: [f64; 2], parameter: f64) -> (f64, f64) {
+    let first_barrier = direction[1].atan2(direction[0]) - std::f64::consts::FRAC_PI_2;
+    let lower = ((parameter - first_barrier) / std::f64::consts::PI)
+        .floor()
+        .mul_add(std::f64::consts::PI, first_barrier);
+    (lower, lower + std::f64::consts::PI)
 }
 
 fn assert_m70b_f004_branch_state(
@@ -3225,6 +3244,627 @@ fn m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_c
             row.payload_fingerprint
         );
     }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the payload-derived regression keeps accepted-state, persistent branch, independent geometry, barrier and read-only evidence together"
+)]
+fn m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell() {
+    let document = SketchDocument::from_json(M70B_F005_ACCEPTED_JSON)
+        .expect("payload-derived accepted sketch must decode");
+    assert_eq!(
+        document.to_canonical_json().unwrap(),
+        M70B_F005_ACCEPTED_JSON,
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: accepted sketch transcription drifted"
+    );
+    let session = retained(document);
+    let accepted = session
+        .accepted_state_for_current_input()
+        .expect("payload-derived sketch must be current and accepted");
+    assert_eq!(
+        accepted.document().to_canonical_json().unwrap(),
+        M70B_F005_ACCEPTED_JSON,
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: retained accepted sketch drifted"
+    );
+    assert!(
+        accepted
+            .document()
+            .points()
+            .iter()
+            .all(|point| point.position.into_iter().all(f64::is_finite)),
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: accepted point geometry is non-finite"
+    );
+    assert!(
+        accepted
+            .document()
+            .scalars()
+            .iter()
+            .all(|scalar| scalar.value.is_finite()),
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: accepted scalar geometry is non-finite"
+    );
+    let diagnostics = accepted.diagnostics();
+    let solve = diagnostics.solve.expect("accepted solve diagnostics");
+    assert_eq!(solve.hard_validity, SketchHardValidity::Valid);
+    assert!(solve.hard_residuals_validated);
+    assert!(
+        solve
+            .maximum_normalized_hard_residual
+            .is_some_and(|residual| residual <= 1.0e-9),
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: accepted hard residual is not independently valid: {solve:?}"
+    );
+    assert_eq!(
+        diagnostics.rank.expect("rank diagnostics").numerical_rank,
+        Some(0)
+    );
+    let mobility = diagnostics.mobility.expect("mobility diagnostics");
+    assert_eq!(mobility.equality_degrees_of_freedom, Some(7));
+    assert_eq!(mobility.bidirectional_bounded_degrees_of_freedom, Some(7));
+
+    let features = ComputedFeatureDocument::from_json(M70B_F005_FEATURE_JSON)
+        .expect("payload-derived feature intent must decode");
+    assert_eq!(
+        features.to_json().unwrap(),
+        M70B_F005_FEATURE_JSON,
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: persisted feature bytes drifted"
+    );
+    assert_eq!(features.sketch_document(), accepted.document().id());
+    assert_eq!(features.revision().raw(), 7);
+    assert_eq!(
+        features.digest().to_string(),
+        "df8408ece03aa63593d91056ed1d09592f4f1f2654cb2616f205be04cb217081"
+    );
+    let high_water = features.allocator_high_water();
+    assert_eq!(high_water.next_feature_id.raw(), 2);
+    assert_eq!(high_water.next_corner_id.raw(), 2);
+    assert_eq!(features.features().len(), 1);
+    let feature = &features.features()[0];
+    assert_eq!(feature.id.raw(), 1);
+    assert_eq!(feature.label, "Fillet 1");
+    assert!(!feature.suppressed);
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    assert_eq!(fillet.radius.to_bits(), 1.0_f64.to_bits());
+    assert_eq!(fillet.corners.len(), 1);
+    let persisted = fillet.corners[0];
+    assert_eq!(persisted.id.raw(), 1);
+    let corner = persisted.without_id();
+    assert_eq!(
+        corner.first.picked_parameter.to_bits(),
+        0.016_301_317_371_602_23_f64.to_bits()
+    );
+    assert_eq!(corner.first.winding, 1);
+    assert_eq!(
+        corner.first.neighborhood,
+        geosolve_sketch::ContactNeighborhood::Local {
+            lower: 4.959_571_177_211_237,
+            upper: 7.857_323_073_392_596,
+        }
+    );
+    assert_eq!(corner.first.normal_side, DocumentCurveNormalSide::Right);
+    assert_eq!(
+        corner.first.retained_endpoint,
+        DocumentFilletTrimEndpoint::End
+    );
+    assert_eq!(
+        corner.first.periodic_anchor,
+        Some(DocumentTrimParameter {
+            parameter: 3.157_893_970_961_395_3,
+            winding: 0,
+        })
+    );
+    assert_eq!(
+        corner.second.picked_parameter.to_bits(),
+        0.699_512_021_330_675_8_f64.to_bits()
+    );
+    assert_eq!(corner.second.winding, 0);
+    assert_eq!(
+        corner.second.neighborhood,
+        geosolve_sketch::ContactNeighborhood::Interior
+    );
+    assert_eq!(corner.second.normal_side, DocumentCurveNormalSide::Left);
+    assert_eq!(
+        corner.second.retained_endpoint,
+        DocumentFilletTrimEndpoint::Start
+    );
+    assert_eq!(corner.second.periodic_anchor, None);
+    assert_eq!(
+        corner.endpoint_order,
+        DocumentFilletEndpointOrder::FirstThenSecond
+    );
+    assert_eq!(corner.sweep, DocumentArcSweep::CounterClockwise);
+    let persisted_circle_total =
+        corner.first.picked_parameter + f64::from(corner.first.winding) * std::f64::consts::TAU;
+    assert_close(persisted_circle_total, 6.299_486_624_551_188, 2.0e-15);
+
+    assert!(matches!(
+        accepted
+            .document()
+            .curve(corner.first.source.span.curve)
+            .expect("circle source")
+            .definition,
+        CurveDefinition::Circle { .. }
+    ));
+    let CurveDefinition::Line {
+        branch_direction, ..
+    } = &accepted
+        .document()
+        .curve(corner.second.source.span.curve)
+        .expect("line source")
+        .definition
+    else {
+        panic!("{M70B_F005_PAYLOAD_FINGERPRINT}: second source is not a line");
+    };
+    let persistent_line_direction = *branch_direction;
+    assert_close(
+        persistent_line_direction[0],
+        0.974_880_443_678_552_3,
+        2.0e-15,
+    );
+    assert_close(
+        persistent_line_direction[1],
+        0.222_728_804_902_080_83,
+        2.0e-15,
+    );
+
+    let accepted_identity = accepted.identity();
+    let accepted_json = accepted.document().to_canonical_json().unwrap();
+    let feature_identity = features.identity();
+    let feature_json = features.to_json().unwrap();
+    let prepared_input = session.prepared_input();
+    let evaluation_snapshot = ComputedFeatureEvaluationSnapshot::capture(
+        &session,
+        &features,
+        ComputedFeatureEvaluationPolicy::default(),
+    )
+    .expect("current accepted payload input must capture");
+    assert_eq!(
+        evaluation_snapshot
+            .sketch_document()
+            .to_canonical_json()
+            .unwrap(),
+        accepted_json
+    );
+    let evaluation_input = evaluation_snapshot.input();
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let evaluated = complete(
+        evaluation_snapshot
+            .prepare(&mut allocator)
+            .unwrap()
+            .execute(OperationControl::unlimited())
+            .unwrap(),
+    );
+    assert_eq!(evaluated.input(), evaluation_input);
+    let evaluation = evaluated
+        .feature_evaluations()
+        .iter()
+        .find(|evaluation| evaluation.feature == feature.id)
+        .expect("payload feature evaluation");
+    let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
+        panic!(
+            "{M70B_F005_PAYLOAD_FINGERPRINT}: persisted same-branch Fillet did not remain Current: {:?}",
+            evaluation.state
+        );
+    };
+    assert_eq!(corner_edges.len(), 1);
+    assert_eq!(corner_edges[0].0, persisted.id);
+    let edge = evaluated
+        .edge(corner_edges[0].1)
+        .expect("current corner edge must resolve");
+    let ComputedEdgeGeometry::CircularArc(arc) = &edge.geometry else {
+        panic!("{M70B_F005_PAYLOAD_FINGERPRINT}: current corner edge is not a Fillet arc");
+    };
+    assert_eq!(
+        evaluated
+            .edges()
+            .iter()
+            .filter(|edge| matches!(edge.geometry, ComputedEdgeGeometry::CircularArc(_)))
+            .count(),
+        1
+    );
+    assert_eq!(arc.radius.to_bits(), 1.0_f64.to_bits());
+    assert_eq!(arc.sweep, DocumentArcSweep::CounterClockwise);
+    assert_close(arc.center[0], -0.017_075_528_971_715_492, 2.0e-9);
+    assert_close(arc.center[1], 5.103_423_761_681_947, 2.0e-9);
+
+    let circle_contact = arc.contacts[0];
+    let line_contact = arc.contacts[1];
+    assert_eq!(circle_contact.source, corner.first.source);
+    assert_eq!(line_contact.source, corner.second.source);
+    assert_eq!(circle_contact.winding, 1);
+    assert_eq!(line_contact.winding, 0);
+    assert_close(circle_contact.parameter, 1.626_137_496_883_336_2, 2.0e-9);
+    assert_close(
+        circle_contact.total_parameter,
+        7.909_322_804_062_922,
+        2.0e-9,
+    );
+    assert_close(
+        circle_contact.total_parameter,
+        circle_contact.parameter + f64::from(circle_contact.winding) * std::f64::consts::TAU,
+        2.0e-12,
+    );
+    assert_close(line_contact.parameter, 0.796_915_905_159_832_2, 2.0e-9);
+    assert_close(
+        line_contact.total_parameter,
+        line_contact.parameter,
+        2.0e-12,
+    );
+    assert!(0.0 < line_contact.parameter && line_contact.parameter < 1.0);
+
+    for (parent, contact) in [corner.first, corner.second].into_iter().zip(arc.contacts) {
+        let jet = accepted
+            .document()
+            .evaluate_curve_jet(parent.source.span, contact.total_parameter)
+            .expect("accepted source contact must evaluate");
+        let incidence =
+            (jet.position.x - contact.position[0]).hypot(jet.position.y - contact.position[1]);
+        assert!(
+            incidence <= 1.0e-9,
+            "{M70B_F005_PAYLOAD_FINGERPRINT}: source incidence residual {incidence:.12e}"
+        );
+        let radial = [
+            arc.center[0] - contact.position[0],
+            arc.center[1] - contact.position[1],
+        ];
+        let radial_length = radial[0].hypot(radial[1]);
+        assert_close(radial_length, arc.radius, 1.0e-9);
+        let tangent = [jet.first_derivative.x, jet.first_derivative.y];
+        let tangent_length = tangent[0].hypot(tangent[1]);
+        let left_normal = [-tangent[1] / tangent_length, tangent[0] / tangent_length];
+        let signed_offset = radial[0].mul_add(left_normal[0], radial[1] * left_normal[1]);
+        let expected_offset = match parent.normal_side {
+            DocumentCurveNormalSide::Left => arc.radius,
+            DocumentCurveNormalSide::Right => -arc.radius,
+        };
+        assert_close(signed_offset, expected_offset, 1.0e-9);
+        let normalized_tangency = tangent[0].mul_add(radial[0], tangent[1] * radial[1]).abs()
+            / (tangent_length * radial_length);
+        assert!(
+            normalized_tangency <= 1.0e-9,
+            "{M70B_F005_PAYLOAD_FINGERPRINT}: normalized tangency residual {normalized_tangency:.12e}"
+        );
+    }
+    for (angle, contact) in [
+        (arc.start_angle, circle_contact),
+        (arc.end_angle, line_contact),
+    ] {
+        let expected =
+            (contact.position[1] - arc.center[1]).atan2(contact.position[0] - arc.center[0]);
+        let delta = angle - expected;
+        assert!(
+            delta.sin().atan2(delta.cos()).abs() <= 1.0e-9,
+            "{M70B_F005_PAYLOAD_FINGERPRINT}: generated arc endpoint is not incident"
+        );
+    }
+    assert_close(
+        (arc.end_angle - arc.start_angle).rem_euclid(std::f64::consts::TAU),
+        0.555_958_188_733_340,
+        2.0e-9,
+    );
+
+    let circle_jet = accepted
+        .document()
+        .evaluate_curve_jet(corner.first.source.span, circle_contact.total_parameter)
+        .unwrap();
+    let line_jet = accepted
+        .document()
+        .evaluate_curve_jet(corner.second.source.span, line_contact.total_parameter)
+        .unwrap();
+    let circle_tangent = [circle_jet.first_derivative.x, circle_jet.first_derivative.y];
+    let current_line_direction = [line_jet.first_derivative.x, line_jet.first_derivative.y];
+    let persistent_orientation = normalized_cross(persistent_line_direction, circle_tangent);
+    let current_orientation = normalized_cross(current_line_direction, circle_tangent);
+    assert!(persistent_orientation > 0.0);
+    assert_close(current_orientation, 0.527_757_423_204_954, 2.0e-10);
+
+    let (persistent_lower, persistent_upper) =
+        tangent_orientation_cell(persistent_line_direction, circle_contact.total_parameter);
+    let (current_lower, current_upper) =
+        tangent_orientation_cell(current_line_direction, circle_contact.total_parameter);
+    assert_close(persistent_lower, 4.937_001_677_565_56, 2.0e-12);
+    assert_close(persistent_upper, 8.078_594_331_155_353, 2.0e-12);
+    assert_close(current_lower, 5.323_688_339_206_471, 2.0e-12);
+    assert_close(current_upper, 8.465_280_992_796_263, 2.0e-12);
+    let geosolve_sketch::ContactNeighborhood::Local {
+        lower: stored_lower,
+        upper: stored_upper,
+    } = corner.first.neighborhood
+    else {
+        unreachable!("exact persisted branch was asserted Local above")
+    };
+    assert!(stored_upper < circle_contact.total_parameter);
+    assert_close(
+        circle_contact.total_parameter - stored_upper,
+        0.051_999_730_670_326,
+        2.0e-9,
+    );
+    assert!(
+        persistent_lower < stored_lower
+            && stored_lower < persistent_upper
+            && persistent_lower < stored_upper
+            && stored_upper < persistent_upper
+    );
+    assert!(
+        persistent_lower < circle_contact.total_parameter
+            && circle_contact.total_parameter < persistent_upper
+            && current_lower < circle_contact.total_parameter
+            && circle_contact.total_parameter < current_upper
+    );
+    assert!(
+        persistent_lower < persisted_circle_total
+            && persisted_circle_total < persistent_upper
+            && current_lower < persisted_circle_total
+            && persisted_circle_total < current_upper
+    );
+
+    // This second mathematical root lies beyond both real tangent barriers and
+    // has the opposite orientation sign. It is a negative control against
+    // widening the search into an implicit branch switch.
+    let alternate_parameter = 9.021_239_181_529_605;
+    let alternate_jet = accepted
+        .document()
+        .evaluate_curve_jet(corner.first.source.span, alternate_parameter)
+        .unwrap();
+    let alternate_tangent = [
+        alternate_jet.first_derivative.x,
+        alternate_jet.first_derivative.y,
+    ];
+    let alternate_persistent_orientation =
+        normalized_cross(persistent_line_direction, alternate_tangent);
+    let alternate_current_orientation = normalized_cross(current_line_direction, alternate_tangent);
+    assert!(alternate_parameter > persistent_upper && alternate_parameter > current_upper);
+    assert!(alternate_persistent_orientation < 0.0);
+    assert!(alternate_current_orientation < 0.0);
+    assert!(persistent_orientation * alternate_persistent_orientation < 0.0);
+    assert!(current_orientation * alternate_current_orientation < 0.0);
+    assert!(
+        (circle_contact.total_parameter - alternate_parameter).abs() > 1.0,
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: evaluation selected the opposite-branch root"
+    );
+
+    assert_eq!(
+        evaluated.source_fragment_edges(corner.first.source).count(),
+        0,
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: full circle was incorrectly trimmed"
+    );
+    assert_eq!(
+        evaluated
+            .source_construction_fragments(corner.first.source)
+            .count(),
+        0,
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: full circle gained a discarded complement"
+    );
+    assert_eq!(
+        evaluated
+            .source_fragment_edges(corner.second.source)
+            .count(),
+        1,
+        "{M70B_F005_PAYLOAD_FINGERPRINT}: retained line side was not published"
+    );
+    assert_eq!(evaluated.replaced_sources(), &[corner.second.source]);
+
+    let accepted_after = session
+        .accepted_state_for_current_input()
+        .expect("feature evaluation must retain the accepted sketch");
+    assert_eq!(accepted_after.identity(), accepted_identity);
+    assert_eq!(
+        accepted_after.document().to_canonical_json().unwrap(),
+        accepted_json
+    );
+    assert_eq!(session.prepared_input(), prepared_input);
+    assert_eq!(features.identity(), feature_identity);
+    assert_eq!(features.to_json().unwrap(), feature_json);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the full-winding regression keeps every accepted continuation sample and branch invariant in one auditable sequence"
+)]
+fn m70b_f005_line_circle_source_rotation_crosses_stale_seed_barrier_and_returns() {
+    let base = SketchDocument::from_json(M70B_F005_ACCEPTED_JSON)
+        .expect("payload-derived accepted sketch must decode");
+    let features = ComputedFeatureDocument::from_json(M70B_F005_FEATURE_JSON)
+        .expect("payload-derived feature intent must decode");
+    let ComputedFeatureDefinition::FilletSet(fillet) = &features.features()[0].definition;
+    let persisted = fillet.corners[0];
+    let circle = persisted.first.source.span;
+    let line = persisted.second.source.span;
+    let CurveDefinition::Line { start, end, .. } =
+        base.curve(line.curve).expect("line source").definition
+    else {
+        panic!("payload-derived affine parent is not a line");
+    };
+    let CurveDefinition::Circle { center, .. } =
+        base.curve(circle.curve).expect("circle source").definition
+    else {
+        panic!("payload-derived curved parent is not a circle");
+    };
+    let center = base.point(center).expect("circle center").position;
+    let seed_total = persisted.first.picked_parameter
+        + f64::from(persisted.first.winding) * std::f64::consts::TAU;
+    let seed_tangent = base
+        .evaluate_curve_jet(circle, seed_total)
+        .expect("circle seed tangent")
+        .first_derivative;
+    let stale_seed_barrier_angle = seed_tangent.y.atan2(seed_tangent.x);
+    let cardinal_crossing = [
+        35.0_f64.to_radians(),
+        70.0_f64.to_radians(),
+        stale_seed_barrier_angle - 1.0e-6,
+        stale_seed_barrier_angle,
+        stale_seed_barrier_angle + 1.0e-6,
+        100.0_f64.to_radians(),
+        115.0_f64.to_radians(),
+        123.0_f64.to_radians(),
+    ];
+    let mut forward = cardinal_crossing.to_vec();
+    forward.extend((0..=17).map(|step| (140.0 + 15.0 * f64::from(step)).to_radians()));
+    let mut angles = forward.clone();
+    angles.extend(forward.iter().rev().skip(1).copied());
+    let mut previous_circle_parameter: Option<f64> = None;
+    let mut previous_evaluation = None;
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let mut session = retained(base.clone());
+    let mut observed_parameters = Vec::with_capacity(angles.len());
+    for (step, angle) in angles.into_iter().enumerate() {
+        let direction = [angle.cos(), angle.sin()];
+        let expected = session.design_identity();
+        let transaction = session
+            .transact(expected, |document| {
+                document.set_point_position(
+                    start,
+                    [
+                        center[0] - 5.0 * direction[0],
+                        center[1] - 5.0 * direction[1],
+                    ],
+                )?;
+                document.set_point_position(
+                    end,
+                    [
+                        center[0] + 5.0 * direction[0],
+                        center[1] + 5.0 * direction[1],
+                    ],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        assert!(
+            transaction.published_accepted_identity().is_some(),
+            "step {step} did not publish accepted source geometry"
+        );
+        let captured = if let Some(previous) = previous_evaluation.as_ref() {
+            ComputedFeatureEvaluationSnapshot::capture_continuing_from(
+                &session,
+                &features,
+                ComputedFeatureEvaluationPolicy::default(),
+                previous,
+            )
+            .unwrap()
+        } else {
+            ComputedFeatureEvaluationSnapshot::capture(
+                &session,
+                &features,
+                ComputedFeatureEvaluationPolicy::default(),
+            )
+            .unwrap()
+        };
+        let evaluated = complete(
+            captured
+                .prepare(&mut allocator)
+                .unwrap()
+                .execute(OperationControl::unlimited())
+                .unwrap(),
+        );
+        let evaluation = &evaluated.feature_evaluations()[0];
+        let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
+            panic!(
+                "{M70B_F005_PAYLOAD_FINGERPRINT}: step {step} at {angle:.16} radians lost the regular persisted branch: {:?}",
+                evaluation.state
+            );
+        };
+        let edge = evaluated.edge(corner_edges[0].1).expect("current arc edge");
+        let ComputedEdgeGeometry::CircularArc(arc) = &edge.geometry else {
+            panic!("step {step} did not publish a Fillet arc");
+        };
+        let parameter = arc.contacts[0].total_parameter;
+        if let Some(previous) = previous_circle_parameter {
+            assert!(
+                (parameter - previous).abs() < 0.75,
+                "step {step} jumped from circle parameter {previous:.16} to {parameter:.16}"
+            );
+        }
+        previous_circle_parameter = Some(parameter);
+        observed_parameters.push(parameter);
+        previous_evaluation = Some(evaluated);
+    }
+    let range = observed_parameters.iter().copied().fold(
+        (f64::INFINITY, f64::NEG_INFINITY),
+        |(lower, upper), value| (lower.min(value), upper.max(value)),
+    );
+    assert!(
+        range.1 - range.0 > 0.9 * std::f64::consts::TAU,
+        "the accepted continuation never crossed a complete periodic winding"
+    );
+    assert_close(
+        observed_parameters[0],
+        *observed_parameters.last().unwrap(),
+        1.0e-8,
+    );
+}
+
+#[test]
+fn reanchored_feature_state_is_cold_reproducible_and_rejects_unrelated_input() {
+    let document = SketchDocument::from_json(M70B_F005_ACCEPTED_JSON)
+        .expect("payload-derived accepted sketch must decode");
+    let session = retained(document);
+    let features = ComputedFeatureDocument::from_json(M70B_F005_FEATURE_JSON)
+        .expect("payload-derived feature intent must decode");
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let previous = complete(
+        ComputedFeatureEvaluationSnapshot::capture(
+            &session,
+            &features,
+            ComputedFeatureEvaluationPolicy::default(),
+        )
+        .unwrap()
+        .prepare(&mut allocator)
+        .unwrap()
+        .execute(OperationControl::unlimited())
+        .unwrap(),
+    );
+    let reanchored = previous
+        .reanchored_feature_document(&features)
+        .expect("current payload feature can derive one exact re-anchor");
+    let cold = complete(
+        ComputedFeatureEvaluationSnapshot::capture(
+            &session,
+            &reanchored,
+            ComputedFeatureEvaluationPolicy::default(),
+        )
+        .expect("ordinary capture accepts the derived persistent state")
+        .prepare(&mut allocator)
+        .unwrap()
+        .execute(OperationControl::unlimited())
+        .unwrap(),
+    );
+    let cold_reanchored = cold
+        .reanchored_feature_document(&reanchored)
+        .expect("ordinary cold evaluation independently reproduces the re-anchor");
+    assert_eq!(cold_reanchored.features(), reanchored.features());
+    assert_eq!(previous.edges().len(), cold.edges().len());
+    for (continued, reproduced) in previous.edges().iter().zip(cold.edges()) {
+        assert_eq!(continued.id.ordinal, reproduced.id.ordinal);
+        assert_eq!(continued.role, reproduced.role);
+        assert_eq!(continued.geometry, reproduced.geometry);
+        assert_eq!(continued.provenance, reproduced.provenance);
+    }
+    assert_eq!(
+        previous.construction_fragments().len(),
+        cold.construction_fragments().len()
+    );
+    for (continued, reproduced) in previous
+        .construction_fragments()
+        .iter()
+        .zip(cold.construction_fragments())
+    {
+        assert_eq!(continued.id.ordinal, reproduced.id.ordinal);
+        assert_eq!(continued.source, reproduced.source);
+        assert_eq!(continued.interval, reproduced.interval);
+        assert_eq!(continued.source_role, reproduced.source_role);
+        assert_eq!(continued.provenance, reproduced.provenance);
+    }
+    assert_eq!(previous.replaced_sources(), cold.replaced_sources());
+
+    let mut unrelated = reanchored.clone();
+    unrelated
+        .set_fillet_radius(features.features()[0].id, 1.25)
+        .expect("structurally valid but unrelated feature edit");
+    assert!(matches!(
+        previous.reanchored_feature_document(&unrelated),
+        Err(ComputedFeatureReanchorError::SnapshotInputMismatch)
+    ));
 }
 
 #[test]

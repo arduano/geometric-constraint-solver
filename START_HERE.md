@@ -76,16 +76,36 @@ constraints, never coordinate proximity, and uses them for corner incidence, sam
 eligibility and retained-endpoint hints. F004 now searches the complete certified explicit
 tangent-orientation cell for persisted Circle/CircularArc-plus-affine Fillets; generic nonlinear
 parents and radius continuation retain their narrower fold/locality guards. The same four rows
-retain their exact input fingerprints and now make the current golden 197/197 `PASS`, SHA-256
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused F003 and F004
-regressions, both exact golden modes, formatting, warnings-denied workspace Clippy, locked
-all-feature workspace tests and the relevant WASM build pass. Clean source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes
+retain their exact input fingerprints. A later movement payload opened `M70B-F005`: rotating an
+affine parent moved the valid circle contact only `0.052` beyond a stale conservative certificate
+edge, despite overlapping fresh seed/root certificates and transverse same-branch geometry.
+Persisted Circle/CircularArc-plus-affine evaluation now has a `NoLocalRoot`-only transport fallback
+that searches one retained support and accepts exactly one root only when fresh certified cells
+prove connected nonzero orientation; real tangent barriers, folds, offset singularities and
+ambiguity remain fail-closed. Owner regression
+`m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell` and golden row
+`feature.fillet.evaluation.line-circle.source-rotation.retained-start` retain exact payload
+`4228:0823d31f269300af` and input fingerprint `input-04658a77db2dc779`. The current golden is
+198/198 `PASS`, SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Focused F003-F005
+regressions, focused golden tests, aggregate survey/check/clean modes, formatting and focused
+warnings-denied Clippy pass. F005 now also owns accepted-step movement continuity: exact sibling
+preview provenance carries the same branch across stale certificate/cardinal seams, accepted edits
+durably refresh contact/winding/periodic/certificate state only after exact no-hint cold validation,
+and replay binds that refresh to the native edit and durable host inputs. Projected mouse-up stages
+session, sidecar, allocator, checkpoint, history and transcript before one publication. A sample
+that genuinely loses a previously Current Fillet cannot publish a line-only half-scene; the last
+complete preview and release point remain visible with a local limit cue and recover in reverse.
+Forced durability-failure, non-Edit refresh and host-input replay regressions cover the transaction
+seams. The 45-test feature suite and nine-test retained-movement suite pass locally. The prior clean F003/F004 source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
 snapshot at `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Only targeted human
-recheck and explicit M70B approval remain pending.
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. F005 formatting,
+warnings-denied all-workspace Clippy, locked all-feature workspace tests, the relevant WASM check
+and aggregate golden modes pass. Complete F005 clean release qualification and a fresh immutable
+publication must precede the targeted movement recheck; explicit M70B approval remains pending.
 M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
@@ -333,17 +353,19 @@ owners. Test-only M70B-H3 then appended four process-isolated `feature.fillet` r
 changing the original 193 bytes. Its historical 193-`PASS`/four-`DEFECT` classification and
 SHA-256 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec` remain the pre-repair
 checkpoint. Authorized production repairs now resolve Coincident-equivalent closed-polyline
-incidence and complete certified circular-plus-affine persisted branch traversal. The four stable
-rows retain their exact input fingerprints and have transitioned `DEFECT` to `PASS`; the current
-197/197-`PASS` golden has SHA-256
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused owner tests, both
-exact golden modes, formatting, warnings-denied workspace Clippy, locked all-feature workspace
-tests and the relevant WASM build pass. Clean source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate. Its immutable
+incidence and complete certified circular-plus-affine persisted branch traversal. F005 then makes
+that branch certificate transport with the moved affine source instead of treating a stale
+numeric cell edge as a geometric barrier. The original four stable rows remain unchanged and the
+new source-rotation row passes at fingerprint `input-04658a77db2dc779`; the current 198/198-`PASS`
+golden has SHA-256 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
+Focused owner and golden tests, all aggregate golden modes, formatting and focused warnings-denied
+Clippy pass. Prior F003/F004 source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete
+release gate. Its immutable
 seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match the snapshot, whose ordered-manifest
-aggregate is `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted rechecks and
-explicit approval remain pending. The temporary
+aggregate is `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. F005's complete
+qualification and fresh publication must precede its targeted movement recheck; explicit approval
+remains pending. The temporary
 `docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:

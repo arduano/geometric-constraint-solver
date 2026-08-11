@@ -40,6 +40,10 @@ const CONTINUATION_MAX_PARAMETER_FRACTION: f64 = 0.125;
 const CONTINUATION_MIN_BRACKET_FRACTION: f64 = 1.0e-6;
 const CONTINUATION_MAX_CORRECTION_FRACTION: f64 = 0.25;
 const TANGENCY_TOLERANCE: f64 = 2.0e-7;
+// An accepted continuation step may turn either regular offset tangent by less
+// than one quarter turn. Larger source jumps are rejected so two unseen folds
+// cannot masquerade as same-sign branch continuity in one pointer sample.
+const CONTINUATION_MIN_TANGENT_DIRECTION_DOT: f64 = 0.0;
 
 /// Bounded deterministic computed-feature evaluation policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -124,6 +128,7 @@ pub struct ComputedFeatureEvaluationSnapshot {
     input: ComputedFeatureEvaluationInput,
     sketch: SketchDocument,
     features: ComputedFeatureDocument,
+    continuation_hints: Vec<ComputedFilletContinuation>,
 }
 
 #[allow(
@@ -164,7 +169,49 @@ impl ComputedFeatureEvaluationSnapshot {
             },
             sketch: accepted.document().clone(),
             features: features.clone(),
+            continuation_hints: Vec::new(),
         })
+    }
+
+    /// Captures current accepted geometry while carrying forward only
+    /// authenticated, presentation-independent Fillet branch continuity from
+    /// one previous computed snapshot of the same feature document namespace.
+    ///
+    /// The prior snapshot contributes no geometry authority: current source
+    /// geometry is captured from `session`, and every hint is matched again to
+    /// the current persistent corner before it can participate in root
+    /// selection.
+    pub fn capture_continuing_from(
+        session: &RetainedSketchDocumentSession,
+        features: &ComputedFeatureDocument,
+        policy: ComputedFeatureEvaluationPolicy,
+        previous: &ComputedFeatureSnapshot,
+    ) -> Result<Self, ComputedFeatureSnapshotError> {
+        let mut captured = Self::capture(session, features, policy)?;
+        if previous.input.features.document != captured.input.features.document
+            || previous.input.accepted.document() != captured.input.accepted.document()
+        {
+            return Err(ComputedFeatureSnapshotError::ContinuationForDifferentWorkspace);
+        }
+        if previous.input.features != captured.input.features {
+            return Err(ComputedFeatureSnapshotError::ContinuationForDifferentFeatureState);
+        }
+        let same_exact_accepted_input = previous.input.accepted == captured.input.accepted
+            && previous.input.sketch == captured.input.sketch;
+        let direct_accepted_successor = previous.input.accepted != captured.input.accepted
+            && session.last_attempt().parent_accepted_identity() == Some(previous.input.accepted);
+        let exact_preview_continuation =
+            session.last_attempt().continuation_parent_input() == Some(previous.input.sketch);
+        if !same_exact_accepted_input && !direct_accepted_successor && !exact_preview_continuation {
+            return Err(ComputedFeatureSnapshotError::ContinuationForUnrelatedAcceptedState);
+        }
+        captured.continuation_hints = previous
+            .fillet_continuations
+            .iter()
+            .chain(&previous.retained_fillet_continuations)
+            .copied()
+            .collect();
+        Ok(captured)
     }
 
     #[must_use]
@@ -738,6 +785,25 @@ pub enum ComputedFeatureSnapshotError {
     AcceptedInputMismatch,
     #[error("computed-feature sidecar is structurally invalid: {0}")]
     InvalidFeatureDocument(#[source] ComputedFeatureDocumentError),
+    #[error("computed-feature continuation belongs to a different workspace namespace")]
+    ContinuationForDifferentWorkspace,
+    #[error("computed-feature continuation does not match the current persistent feature state")]
+    ContinuationForDifferentFeatureState,
+    #[error("computed-feature continuation is not the same accepted input or its direct successor")]
+    ContinuationForUnrelatedAcceptedState,
+}
+
+/// Failure to turn one coherent completed evaluation into refreshed persistent
+/// contact seeds and Local certificates after a native-source edit.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ComputedFeatureReanchorError {
+    #[error("computed-feature snapshot does not match the supplied feature document")]
+    SnapshotInputMismatch,
+    #[error("computed-feature snapshot is incomplete or inconsistent with feature state")]
+    IncompleteEvaluation,
+    #[error(transparent)]
+    Document(#[from] ComputedFeatureDocumentError),
 }
 
 /// Evaluation setup failure. Individual feature geometry failures are result data.
@@ -1024,6 +1090,26 @@ pub struct ComputedCornerRef {
     pub corner: ComputedFeatureCornerId,
 }
 
+/// Explicit orientation of the two regular offset tangents at one Fillet root.
+/// The sign can change only at a genuine transverse branch fold.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ComputedFilletTransverseOrientation {
+    Negative,
+    Positive,
+}
+
+/// Authenticated current branch metadata emitted by feature evaluation for a
+/// later accepted native-source edit. `corner` is re-anchored to the published
+/// contacts and carries refreshed explicit Local/winding/periodic state.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ComputedFilletContinuation {
+    owner: ComputedCornerRef,
+    radius: f64,
+    corner: NewComputedFilletCorner,
+    transverse_orientation: ComputedFilletTransverseOrientation,
+    offset_tangent_directions: [[f64; 2]; 2],
+}
+
 /// One independently validated Fillet contact.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ComputedFilletContact {
@@ -1191,6 +1277,8 @@ pub struct ComputedFeatureSnapshot {
     construction_fragments: Vec<ComputedConstructionFragment>,
     features: Vec<ComputedFeatureEvaluation>,
     replaced_sources: Vec<NativeCurveSpanSource>,
+    fillet_continuations: Vec<ComputedFilletContinuation>,
+    retained_fillet_continuations: Vec<ComputedFilletContinuation>,
 }
 
 impl ComputedFeatureSnapshot {
@@ -1225,6 +1313,67 @@ impl ComputedFeatureSnapshot {
     #[must_use]
     pub fn replaced_sources(&self) -> &[NativeCurveSpanSource] {
         &self.replaced_sources
+    }
+
+    /// Produces a feature document whose explicit Fillet contact parameters,
+    /// windings, periodic anchors and Local certificates match every Current
+    /// set in this evaluation. Failed sets retain their prior persistent intent,
+    /// and retained-last-valid hints are never promoted. The input document is
+    /// never mutated on failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a mismatched input snapshot, an incomplete or
+    /// inconsistent feature evaluation, or an invalid atomic replacement.
+    pub fn reanchored_feature_document(
+        &self,
+        features: &ComputedFeatureDocument,
+    ) -> Result<ComputedFeatureDocument, ComputedFeatureReanchorError> {
+        if self.input.features != features.identity() {
+            return Err(ComputedFeatureReanchorError::SnapshotInputMismatch);
+        }
+        let mut reanchored = features.clone();
+        for feature in features.features() {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+            let evaluation = self
+                .features
+                .iter()
+                .find(|evaluation| evaluation.feature == feature.id)
+                .ok_or(ComputedFeatureReanchorError::IncompleteEvaluation)?;
+            match (&evaluation.state, feature.suppressed) {
+                (ComputedFeatureEvaluationState::Suppressed, true)
+                | (ComputedFeatureEvaluationState::Failed { .. }, false) => {}
+                (ComputedFeatureEvaluationState::Current { .. }, false) => {
+                    let corners = fillet
+                        .corners
+                        .iter()
+                        .map(|corner| {
+                            self.fillet_continuations
+                                .iter()
+                                .find(|continuation| {
+                                    continuation.owner
+                                        == (ComputedCornerRef {
+                                            feature: feature.id,
+                                            corner: corner.id,
+                                        })
+                                })
+                                .map(|continuation| (corner.id, continuation.corner))
+                        })
+                        .collect::<Option<Vec<_>>>()
+                        .ok_or(ComputedFeatureReanchorError::IncompleteEvaluation)?;
+                    reanchored.replace_fillet_set(feature.id, fillet.radius, corners)?;
+                }
+                (
+                    ComputedFeatureEvaluationState::Current { .. }
+                    | ComputedFeatureEvaluationState::Failed { .. },
+                    true,
+                )
+                | (ComputedFeatureEvaluationState::Suppressed, false) => {
+                    return Err(ComputedFeatureReanchorError::IncompleteEvaluation);
+                }
+            }
+        }
+        Ok(reanchored)
     }
 
     #[must_use]
@@ -1398,6 +1547,7 @@ struct EvaluatedCorner {
     role: GeometryRole,
     arc: ComputedCircularArc,
     claims: [EndpointClaim; 2],
+    continuation: ComputedFilletContinuation,
 }
 
 #[derive(Clone, Debug)]
@@ -1456,7 +1606,13 @@ fn evaluate_snapshot(
             });
             continue;
         }
-        match evaluate_feature(&snapshot.sketch, feature, snapshot.input.policy, controller) {
+        match evaluate_feature(
+            &snapshot.sketch,
+            feature,
+            &snapshot.continuation_hints,
+            snapshot.input.policy,
+            controller,
+        ) {
             Ok(candidate) => candidates.push(candidate),
             Err(EvaluateFeatureError::Stopped) => {
                 return Ok(empty_interrupted_snapshot(&snapshot.input, evaluation));
@@ -1484,6 +1640,7 @@ fn evaluate_snapshot(
     let mut edges = Vec::new();
     let mut construction_fragments = Vec::new();
     let mut replaced_sources = Vec::new();
+    let mut fillet_continuations = Vec::new();
     for composition in compositions.values() {
         let output = compose_source_output(composition)?;
         let source_role = snapshot
@@ -1589,6 +1746,7 @@ fn evaluate_snapshot(
                 },
             });
             corner_edges.push((corner.owner.corner, id));
+            fillet_continuations.push(corner.continuation);
         }
         evaluations.push(ComputedFeatureEvaluation {
             feature: candidate.feature,
@@ -1598,6 +1756,19 @@ fn evaluate_snapshot(
     evaluations.sort_by_key(|evaluation| evaluation.feature);
     replaced_sources.sort();
     replaced_sources.dedup();
+    let mut owners = fillet_continuations
+        .iter()
+        .map(|continuation| continuation.owner)
+        .collect::<BTreeSet<_>>();
+    let retained_fillet_continuations = snapshot
+        .continuation_hints
+        .iter()
+        .filter(|continuation| {
+            continuation_matches_feature_document(continuation, &snapshot.features)
+                && owners.insert(continuation.owner)
+        })
+        .copied()
+        .collect();
     Ok(ComputedFeatureSnapshot {
         input: snapshot.input,
         evaluation,
@@ -1605,6 +1776,8 @@ fn evaluate_snapshot(
         construction_fragments,
         features: evaluations,
         replaced_sources,
+        fillet_continuations,
+        retained_fillet_continuations,
     })
 }
 
@@ -1619,6 +1792,8 @@ fn empty_interrupted_snapshot(
         construction_fragments: Vec::new(),
         features: Vec::new(),
         replaced_sources: Vec::new(),
+        fillet_continuations: Vec::new(),
+        retained_fillet_continuations: Vec::new(),
     }
 }
 
@@ -1630,6 +1805,7 @@ enum EvaluateFeatureError {
 fn evaluate_feature(
     sketch: &SketchDocument,
     feature: &ComputedFeature,
+    continuation_hints: &[ComputedFilletContinuation],
     policy: ComputedFeatureEvaluationPolicy,
     controller: &mut OperationController,
 ) -> Result<EvaluatedFeatureCandidate, EvaluateFeatureError> {
@@ -1646,8 +1822,18 @@ fn evaluate_feature(
             feature: feature.id,
             corner: corner.id,
         };
-        let evaluated =
-            evaluate_persistent_corner(sketch, owner, *corner, fillet.radius, policy, controller)?;
+        let continuation = continuation_hints
+            .iter()
+            .find(|continuation| continuation.owner == owner);
+        let evaluated = evaluate_persistent_corner(
+            sketch,
+            owner,
+            *corner,
+            fillet.radius,
+            continuation,
+            policy,
+            controller,
+        )?;
         corners.push(evaluated);
     }
     Ok(EvaluatedFeatureCandidate {
@@ -1661,11 +1847,12 @@ fn evaluate_persistent_corner(
     owner: ComputedCornerRef,
     corner: ComputedFilletCorner,
     radius: f64,
+    continuation: Option<&ComputedFilletContinuation>,
     policy: ComputedFeatureEvaluationPolicy,
     controller: &mut OperationController,
 ) -> Result<EvaluatedCorner, EvaluateFeatureError> {
     let parents = [corner.first, corner.second];
-    let root_parents = prepare_root_parents(sketch, parents, Some(corner.id))
+    let prepared_root_parents = prepare_root_parents(sketch, parents, Some(corner.id))
         .map_err(EvaluateFeatureError::Failure)?;
     let affine = parents.map(|parent| is_affine_line_span(sketch, parent.source.span));
     if affine == [false, false] {
@@ -1673,68 +1860,28 @@ fn evaluate_persistent_corner(
             ComputedFeatureFailure::UnsupportedCurvedPair { corner: corner.id },
         ));
     }
-    let root_parents = certify_persistent_branch(sketch, root_parents, affine, corner.id)
-        .map_err(EvaluateFeatureError::Failure)?;
+    let certified = certify_persistent_branch(sketch, prepared_root_parents, affine, corner.id);
     let sides = [corner.first.normal_side, corner.second.normal_side];
-    let exact = exact_seed_solution(sketch, &root_parents, sides, radius).map_err(|failure| {
-        EvaluateFeatureError::Failure(match failure {
-            OffsetGeometryFailure::OffsetSingularity => {
-                ComputedFeatureFailure::OffsetSingularity { corner: corner.id }
-            }
-            OffsetGeometryFailure::Invalid => {
-                ComputedFeatureFailure::InvalidParentState { corner: corner.id }
-            }
-        })
-    })?;
-    let (root_parents, solution) = if let Some(solution) = exact {
-        (root_parents, solution)
-    } else {
-        // A persisted circular parent has constant offset regularity, so its
-        // complete certified tangent-orientation cell contains at most one
-        // transverse line-offset root. Its picked parameter is therefore only
-        // a search seed after a source edit, not another hidden branch bound.
-        // General curved parents retain the tighter seed-connected guard
-        // because an offset cusp can introduce a disconnected remote root
-        // inside one tangent-orientation cell.
-        let root_parents = persistent_evaluation_root_parents(sketch, &root_parents, affine)
-            .ok_or({
-                EvaluateFeatureError::Failure(ComputedFeatureFailure::InvalidParentState {
-                    corner: corner.id,
-                })
-            })?;
-        let (solutions, root_failure) =
-            match local_fillet_roots(sketch, &root_parents, sides, radius, policy, controller) {
-                RootSearchResult::Completed { solutions, failure } => (solutions, failure),
-                RootSearchResult::Stopped => return Err(EvaluateFeatureError::Stopped),
-            };
-        let solution =
-            select_seed_connected_solution(sketch, &root_parents, &solutions).map_err(|kind| {
-                EvaluateFeatureError::Failure(match kind {
-                    RootSelectionFailure::None => match root_failure {
-                        RootSearchFailure::NoLocalRoot => {
-                            ComputedFeatureFailure::NoLocalRoot { corner: corner.id }
-                        }
-                        RootSearchFailure::SingularParents => {
-                            ComputedFeatureFailure::SingularParents { corner: corner.id }
-                        }
-                        RootSearchFailure::OffsetSingularity => {
-                            ComputedFeatureFailure::OffsetSingularity { corner: corner.id }
-                        }
-                    },
-                    RootSelectionFailure::Ambiguous => {
-                        ComputedFeatureFailure::AmbiguousLocalRoot { corner: corner.id }
-                    }
-                })
-            })?;
-        (root_parents, solution)
+    let root_input = PersistentCornerRootInput {
+        corner: corner.id,
+        persistent: corner.without_id(),
+        prepared: prepared_root_parents,
+        certified,
+        affine,
+        sides,
+        radius,
+        policy,
+        continuation,
     };
+    let resolved = resolve_persistent_corner_root(sketch, &root_input, controller)?;
     let arc = build_and_validate_arc(
         sketch,
         parents,
-        solution,
+        resolved.solution,
         radius,
         corner.endpoint_order,
         corner.sweep,
+        resolved.branch_validation,
     )
     .map_err(|failure| {
         EvaluateFeatureError::Failure(match failure {
@@ -1753,21 +1900,365 @@ fn evaluate_persistent_corner(
         endpoint_claim(
             owner,
             corner.first,
-            solution.parameters[0],
-            root_parents[0].topology,
+            resolved.solution.parameters[0],
+            resolved.root_parents[0].topology,
         ),
         endpoint_claim(
             owner,
             corner.second,
-            solution.parameters[1],
-            root_parents[1].topology,
+            resolved.solution.parameters[1],
+            resolved.root_parents[1].topology,
         ),
     ];
+    let continuation =
+        build_source_fillet_continuation(sketch, owner, corner, radius, affine, resolved.solution)?;
     Ok(EvaluatedCorner {
         owner,
         role: combined_source_role(sketch, parents),
         arc,
         claims,
+        continuation,
+    })
+}
+
+fn build_source_fillet_continuation(
+    sketch: &SketchDocument,
+    owner: ComputedCornerRef,
+    corner: ComputedFilletCorner,
+    radius: f64,
+    affine: [bool; 2],
+    solution: LocalFilletSolution,
+) -> Result<ComputedFilletContinuation, EvaluateFeatureError> {
+    let continued_parents =
+        build_source_continued_parents(sketch, [corner.first, corner.second], affine, solution)
+            .map_err(|_| {
+                EvaluateFeatureError::Failure(ComputedFeatureFailure::UncertifiedBranch {
+                    corner: corner.id,
+                })
+            })?;
+    let continued_corner = NewComputedFilletCorner {
+        first: continued_parents[0],
+        second: continued_parents[1],
+        endpoint_order: corner.endpoint_order,
+        sweep: corner.sweep,
+    }
+    .canonicalized();
+    let offset_tangent_directions = fillet_offset_tangent_directions(
+        sketch,
+        [continued_corner.first, continued_corner.second],
+        solution,
+        radius,
+    )
+    .ok_or(EvaluateFeatureError::Failure(
+        ComputedFeatureFailure::SingularParents { corner: corner.id },
+    ))?;
+    let transverse_orientation = fillet_transverse_orientation_for_derivatives(
+        offset_tangent_directions[0],
+        offset_tangent_directions[1],
+    )
+    .ok_or(EvaluateFeatureError::Failure(
+        ComputedFeatureFailure::SingularParents { corner: corner.id },
+    ))?;
+    Ok(ComputedFilletContinuation {
+        owner,
+        radius,
+        corner: continued_corner,
+        transverse_orientation,
+        offset_tangent_directions,
+    })
+}
+
+#[derive(Clone)]
+struct PersistentCornerRootInput<'a> {
+    corner: ComputedFeatureCornerId,
+    persistent: NewComputedFilletCorner,
+    prepared: [RootParent; 2],
+    certified: Result<[RootParent; 2], ComputedFeatureFailure>,
+    affine: [bool; 2],
+    sides: [DocumentCurveNormalSide; 2],
+    radius: f64,
+    policy: ComputedFeatureEvaluationPolicy,
+    continuation: Option<&'a ComputedFilletContinuation>,
+}
+
+struct PersistentCornerRootResolution<'a> {
+    root_parents: [RootParent; 2],
+    solution: LocalFilletSolution,
+    branch_validation: ArcBranchValidation<'a>,
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the persisted fast path, typed failure routing and narrowly gated transport fallback remain one auditable branch-selection transaction"
+)]
+fn resolve_persistent_corner_root<'a>(
+    sketch: &SketchDocument,
+    input: &'a PersistentCornerRootInput<'a>,
+    controller: &mut OperationController,
+) -> Result<PersistentCornerRootResolution<'a>, EvaluateFeatureError> {
+    let matching_continuation = input
+        .continuation
+        .filter(|continuation| continuation_matches_persistent_corner(continuation, input));
+    let matches_continuation = |solution: LocalFilletSolution| {
+        matching_continuation.is_none_or(|continuation| {
+            continuation_accepts_solution(sketch, input, continuation, solution)
+        })
+    };
+    let mut ordinary_failure = None;
+    if let Ok(certified) = &input.certified {
+        let exact = exact_seed_solution(sketch, certified, input.sides, input.radius).map_err(
+            |failure| {
+                EvaluateFeatureError::Failure(match failure {
+                    OffsetGeometryFailure::OffsetSingularity => {
+                        ComputedFeatureFailure::OffsetSingularity {
+                            corner: input.corner,
+                        }
+                    }
+                    OffsetGeometryFailure::Invalid => ComputedFeatureFailure::InvalidParentState {
+                        corner: input.corner,
+                    },
+                })
+            },
+        )?;
+        if let Some(solution) = exact.filter(|solution| matches_continuation(*solution)) {
+            return Ok(PersistentCornerRootResolution {
+                root_parents: *certified,
+                solution,
+                branch_validation: ArcBranchValidation::PersistedCell,
+            });
+        }
+        // A persisted circular parent has constant offset regularity, so its
+        // complete certified tangent-orientation cell contains at most one
+        // transverse line-offset root. Its picked parameter is therefore only
+        // a search seed after a source edit, not another hidden branch bound.
+        // General curved parents retain the tighter seed-connected guard
+        // because an offset cusp can introduce a disconnected remote root
+        // inside one tangent-orientation cell.
+        let root_parents = persistent_evaluation_root_parents(sketch, certified, input.affine)
+            .ok_or({
+                EvaluateFeatureError::Failure(ComputedFeatureFailure::InvalidParentState {
+                    corner: input.corner,
+                })
+            })?;
+        let (solutions, root_failure) = match local_fillet_roots(
+            sketch,
+            &root_parents,
+            input.sides,
+            input.radius,
+            input.policy,
+            controller,
+        ) {
+            RootSearchResult::Completed { solutions, failure } => (solutions, failure),
+            RootSearchResult::Stopped => return Err(EvaluateFeatureError::Stopped),
+        };
+        let solutions = solutions
+            .into_iter()
+            .filter(|solution| matches_continuation(*solution))
+            .collect::<Vec<_>>();
+        match select_seed_connected_solution(sketch, &root_parents, &solutions) {
+            Ok(solution) => {
+                return Ok(PersistentCornerRootResolution {
+                    root_parents,
+                    solution,
+                    branch_validation: ArcBranchValidation::PersistedCell,
+                });
+            }
+            Err(RootSelectionFailure::None)
+                if matching_continuation.is_some()
+                    || root_failure == RootSearchFailure::NoLocalRoot =>
+            {
+                ordinary_failure = Some(ComputedFeatureFailure::NoLocalRoot {
+                    corner: input.corner,
+                });
+            }
+            Err(kind) => {
+                return Err(EvaluateFeatureError::Failure(map_persistent_root_failure(
+                    input.corner,
+                    kind,
+                    root_failure,
+                )));
+            }
+        }
+    } else if let Err(failure) = &input.certified {
+        if !matches!(failure, ComputedFeatureFailure::UncertifiedBranch { .. }) {
+            return Err(EvaluateFeatureError::Failure(failure.clone()));
+        }
+        ordinary_failure = Some(failure.clone());
+    }
+
+    let proof = matching_continuation
+        .map(CircularAffineBranchProof::AcceptedContinuation)
+        .or_else(|| {
+            matches!(
+                ordinary_failure,
+                Some(ComputedFeatureFailure::NoLocalRoot { .. })
+            )
+            .then_some(CircularAffineBranchProof::PersistedCellOverlap)
+        })
+        .ok_or_else(|| {
+            EvaluateFeatureError::Failure(ordinary_failure.unwrap_or(
+                ComputedFeatureFailure::NoLocalRoot {
+                    corner: input.corner,
+                },
+            ))
+        })?;
+    resolve_transported_circular_affine_root(sketch, input, proof, controller)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum CircularAffineBranchProof<'a> {
+    PersistedCellOverlap,
+    AcceptedContinuation(&'a ComputedFilletContinuation),
+}
+
+fn continuation_matches_persistent_corner(
+    continuation: &ComputedFilletContinuation,
+    input: &PersistentCornerRootInput<'_>,
+) -> bool {
+    let current = input.persistent;
+    let previous = continuation.corner;
+    continuation.radius.to_bits() == input.radius.to_bits()
+        && previous.first.source == current.first.source
+        && previous.second.source == current.second.source
+        && previous.first.normal_side == current.first.normal_side
+        && previous.second.normal_side == current.second.normal_side
+        && previous.first.retained_endpoint == current.first.retained_endpoint
+        && previous.second.retained_endpoint == current.second.retained_endpoint
+        && previous.endpoint_order == current.endpoint_order
+        && previous.sweep == current.sweep
+}
+
+fn continuation_matches_feature_document(
+    continuation: &ComputedFilletContinuation,
+    features: &ComputedFeatureDocument,
+) -> bool {
+    let Some(feature) = features.feature(continuation.owner.feature) else {
+        return false;
+    };
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    let Some(corner) = fillet
+        .corners
+        .iter()
+        .find(|corner| corner.id == continuation.owner.corner)
+    else {
+        return false;
+    };
+    let current = corner.without_id();
+    let previous = continuation.corner;
+    !feature.suppressed
+        && continuation.radius.to_bits() == fillet.radius.to_bits()
+        && previous.first.source == current.first.source
+        && previous.second.source == current.second.source
+        && previous.first.normal_side == current.first.normal_side
+        && previous.second.normal_side == current.second.normal_side
+        && previous.first.retained_endpoint == current.first.retained_endpoint
+        && previous.second.retained_endpoint == current.second.retained_endpoint
+        && previous.endpoint_order == current.endpoint_order
+        && previous.sweep == current.sweep
+}
+
+fn continuation_accepts_solution(
+    sketch: &SketchDocument,
+    input: &PersistentCornerRootInput<'_>,
+    continuation: &ComputedFilletContinuation,
+    solution: LocalFilletSolution,
+) -> bool {
+    if !continuation_cell_contains_solution(continuation, input.affine, solution) {
+        return false;
+    }
+    let Some(directions) = fillet_offset_tangent_directions(
+        sketch,
+        input.prepared.map(|parent| parent.parent),
+        solution,
+        input.radius,
+    ) else {
+        return false;
+    };
+    fillet_transverse_orientation_for_derivatives(directions[0], directions[1])
+        == Some(continuation.transverse_orientation)
+        && directions
+            .into_iter()
+            .zip(continuation.offset_tangent_directions)
+            .all(|(current, previous)| {
+                current[0].mul_add(previous[0], current[1] * previous[1])
+                    > CONTINUATION_MIN_TANGENT_DIRECTION_DOT
+            })
+}
+
+fn continuation_cell_contains_solution(
+    continuation: &ComputedFilletContinuation,
+    affine: [bool; 2],
+    solution: LocalFilletSolution,
+) -> bool {
+    let parents = [continuation.corner.first, continuation.corner.second];
+    (0..2).all(|index| {
+        if affine[index] {
+            parents[index].neighborhood == ContactNeighborhood::Interior
+        } else {
+            matches!(
+                parents[index].neighborhood,
+                ContactNeighborhood::Local { lower, upper }
+                    if lower < solution.parameters[index] && solution.parameters[index] < upper
+            )
+        }
+    })
+}
+
+fn resolve_transported_circular_affine_root<'a>(
+    sketch: &SketchDocument,
+    input: &'a PersistentCornerRootInput<'a>,
+    proof: CircularAffineBranchProof<'a>,
+    controller: &mut OperationController,
+) -> Result<PersistentCornerRootResolution<'a>, EvaluateFeatureError> {
+    let proof_parents = circular_affine_branch_proof_parents(sketch, &input.prepared, proof)
+        .ok_or({
+            EvaluateFeatureError::Failure(ComputedFeatureFailure::NoLocalRoot {
+                corner: input.corner,
+            })
+        })?;
+    let transported_parents =
+        circular_affine_transport_search_parents(sketch, &proof_parents, input.affine).ok_or({
+            EvaluateFeatureError::Failure(ComputedFeatureFailure::NoLocalRoot {
+                corner: input.corner,
+            })
+        })?;
+    let (transported_solutions, transported_failure) = match local_fillet_roots(
+        sketch,
+        &transported_parents,
+        input.sides,
+        input.radius,
+        input.policy,
+        controller,
+    ) {
+        RootSearchResult::Completed { solutions, failure } => (solutions, failure),
+        RootSearchResult::Stopped => return Err(EvaluateFeatureError::Stopped),
+    };
+    let transported_solutions = transported_solutions
+        .into_iter()
+        .filter(|solution| {
+            transported_circular_affine_solution_is_certified(
+                sketch,
+                &proof_parents,
+                input.affine,
+                input.radius,
+                *solution,
+                proof,
+            )
+        })
+        .collect::<Vec<_>>();
+    let solution =
+        select_seed_connected_solution(sketch, &transported_parents, &transported_solutions)
+            .map_err(|kind| {
+                EvaluateFeatureError::Failure(map_persistent_root_failure(
+                    input.corner,
+                    kind,
+                    transported_failure,
+                ))
+            })?;
+    Ok(PersistentCornerRootResolution {
+        root_parents: transported_parents,
+        solution,
+        branch_validation: ArcBranchValidation::TransportedCircularAffine(proof),
     })
 }
 
@@ -2304,6 +2795,7 @@ fn resolve_authoring_corner(
         radius,
         endpoint_order,
         DocumentArcSweep::CounterClockwise,
+        ArcBranchValidation::PersistedCell,
     )
     .map_err(map_arc_authoring_failure)?;
     Ok(AuthoringCornerResolution::Completed(Box::new(
@@ -2751,6 +3243,7 @@ fn complete_absolute_corner_geometry(
         radius,
         corner.endpoint_order,
         corner.sweep,
+        ArcBranchValidation::PersistedCell,
     )
     .map_err(map_arc_continuation_failure)?;
     Ok((corner, arc))
@@ -2897,6 +3390,59 @@ fn build_continued_parents(
         if affine[index] != matches!(neighborhood, ContactNeighborhood::Interior) {
             return Err(ComputedFeatureAuthoringError::InvalidContinuationState);
         }
+        let periodic_anchor =
+            periodic_anchor_for(topology.domain, total, prior[index].retained_endpoint)?;
+        continued.push(ComputedFilletParent {
+            source: prior[index].source,
+            picked_parameter: parameter,
+            winding,
+            neighborhood,
+            normal_side: solution.sides[index],
+            retained_endpoint: prior[index].retained_endpoint,
+            periodic_anchor,
+        });
+    }
+    continued
+        .try_into()
+        .map_err(|_| ComputedFeatureAuthoringError::InvalidResolvedGeometry)
+}
+
+/// Re-anchors one independently validated source-edit result to its current
+/// contacts. Unlike radius-only continuation, native-source movement refreshes
+/// the curved Local certificate so the next accepted edit never depends on a
+/// stale numeric cell edge.
+fn build_source_continued_parents(
+    sketch: &SketchDocument,
+    prior: [ComputedFilletParent; 2],
+    affine: [bool; 2],
+    solution: LocalFilletSolution,
+) -> Result<[ComputedFilletParent; 2], ComputedFeatureAuthoringError> {
+    let mut continued = Vec::with_capacity(2);
+    for index in 0..2 {
+        let topology = source_topology_for_authoring(sketch, prior[index].source)?;
+        let total = solution.parameters[index];
+        let (parameter, winding) = normalize_parameter(topology.domain, total)
+            .ok_or(ComputedFeatureAuthoringError::InvalidResolvedGeometry)?;
+        let neighborhood = if affine[index] {
+            if prior[index].neighborhood != ContactNeighborhood::Interior {
+                return Err(ComputedFeatureAuthoringError::InvalidContinuationState);
+            }
+            ContactNeighborhood::Interior
+        } else {
+            let (support_lower, support_upper) = match topology.domain {
+                SourceDomain::Bounded { lower, upper } => (lower, upper),
+                SourceDomain::Periodic { period } => (total - 0.5 * period, total + 0.5 * period),
+            };
+            sketch
+                .certify_line_curve_fillet_branch_cell(
+                    prior[1 - index].source.span,
+                    prior[index].source.span,
+                    total,
+                    support_lower,
+                    support_upper,
+                )
+                .map_err(|_| ComputedFeatureAuthoringError::UncertifiedCurvedBranch)?
+        };
         let periodic_anchor =
             periodic_anchor_for(topology.domain, total, prior[index].retained_endpoint)?;
         continued.push(ComputedFilletParent {
@@ -3199,6 +3745,52 @@ fn raw_signed_radius_transverse_quality(
         return Err(ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity);
     }
     Ok(quality)
+}
+
+fn fillet_offset_tangent_directions(
+    sketch: &SketchDocument,
+    parents: [ComputedFilletParent; 2],
+    solution: LocalFilletSolution,
+    radius: f64,
+) -> Option<[[f64; 2]; 2]> {
+    let mut directions = [[0.0; 2]; 2];
+    for index in 0..2 {
+        let derivative = offset_geometry(
+            sketch,
+            parents[index].source.span,
+            solution.parameters[index],
+            parents[index].normal_side,
+            radius,
+        )
+        .ok()?
+        .derivative;
+        let norm = derivative[0].hypot(derivative[1]);
+        if !norm.is_finite() || norm <= 0.0 {
+            return None;
+        }
+        directions[index] = [derivative[0] / norm, derivative[1] / norm];
+    }
+    Some(directions)
+}
+
+fn fillet_transverse_orientation_for_derivatives(
+    first: [f64; 2],
+    second: [f64; 2],
+) -> Option<ComputedFilletTransverseOrientation> {
+    let determinant = first[1].mul_add(second[0], -(first[0] * second[1]));
+    let scale = first[0].hypot(first[1]) * second[0].hypot(second[1]);
+    if !determinant.is_finite()
+        || !scale.is_finite()
+        || scale <= 0.0
+        || determinant.abs() <= PARENT_SINGULARITY_TOLERANCE * scale
+    {
+        return None;
+    }
+    Some(if determinant < 0.0 {
+        ComputedFilletTransverseOrientation::Negative
+    } else {
+        ComputedFilletTransverseOrientation::Positive
+    })
 }
 
 const fn flip_trim_endpoint(endpoint: DocumentFilletTrimEndpoint) -> DocumentFilletTrimEndpoint {
@@ -3891,6 +4483,251 @@ fn persistent_evaluation_root_parents(
     }
 }
 
+/// Broadens one persisted circular/affine Fillet only to the visible retained
+/// circular support. Candidate roots still have to prove that their freshly
+/// certified tangent-orientation cell overlaps the cell at the persisted seed;
+/// these bounds are therefore a search envelope, not permission to cross a
+/// branch barrier.
+fn circular_affine_transport_search_parents(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    affine: [bool; 2],
+) -> Option<[RootParent; 2]> {
+    let (curved_index, affine_index) = circular_affine_parent_indices(sketch, parents, affine)?;
+    if parents[affine_index].parent.neighborhood != ContactNeighborhood::Interior {
+        return None;
+    }
+    let mut transported = *parents;
+    transported[curved_index].bounds =
+        interior_bounds(parents[curved_index].topology.base_interval)?;
+    Some(transported)
+}
+
+/// Selects the exact periodic/contact frame that owns a circular/affine
+/// transport proof. A persisted-cell proof uses durable intent directly. An
+/// accepted continuation uses its freshly re-anchored contact frame so a
+/// continuous drag may cross the old periodic-anchor seam without widening
+/// past the previous accepted branch cell.
+fn circular_affine_branch_proof_parents(
+    sketch: &SketchDocument,
+    persisted: &[RootParent; 2],
+    proof: CircularAffineBranchProof<'_>,
+) -> Option<[RootParent; 2]> {
+    match proof {
+        CircularAffineBranchProof::PersistedCellOverlap => Some(*persisted),
+        CircularAffineBranchProof::AcceptedContinuation(continuation) => prepare_root_parents(
+            sketch,
+            [continuation.corner.first, continuation.corner.second],
+            Some(continuation.owner.corner),
+        )
+        .ok(),
+    }
+}
+
+fn circular_affine_parent_indices(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    affine: [bool; 2],
+) -> Option<(usize, usize)> {
+    let (curved_index, affine_index) = match affine {
+        [false, true] => (0, 1),
+        [true, false] => (1, 0),
+        _ => return None,
+    };
+    is_constant_curvature_circular_span(sketch, parents[curved_index].parent.source.span)
+        .then_some((curved_index, affine_index))
+}
+
+/// Proves that a root displaced by a native-source edit remains in the same
+/// current tangent-orientation branch as the persisted contact seed.
+///
+/// The stored Local interval is a durable branch witness, but its numeric edge
+/// is only a conservative certificate from the geometry that existed when the
+/// Fillet was authored. Fresh cells around the old seed and proposed root may
+/// overlap beyond that stale edge. Their overlap is a proof of connected,
+/// nonzero tangent orientation; opposite sides of a real parallel-tangent
+/// barrier cannot both certify the same open parameter interval.
+fn transported_circular_affine_solution_is_certified(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    affine: [bool; 2],
+    radius: f64,
+    solution: LocalFilletSolution,
+    proof: CircularAffineBranchProof<'_>,
+) -> bool {
+    let Some((curved_index, affine_index)) =
+        circular_affine_parent_indices(sketch, parents, affine)
+    else {
+        return false;
+    };
+    let Some(search_parents) = circular_affine_transport_search_parents(sketch, parents, affine)
+    else {
+        return false;
+    };
+    if solution.sides != parents.map(|parent| parent.parent.normal_side)
+        || solution
+            .parameters
+            .iter()
+            .enumerate()
+            .any(|(index, parameter)| {
+                !parameter.is_finite()
+                    || *parameter < search_parents[index].bounds.0
+                    || *parameter > search_parents[index].bounds.1
+                    || !parameter_strictly_inside(
+                        *parameter,
+                        search_parents[index].topology.base_interval,
+                    )
+            })
+    {
+        return false;
+    }
+    let Some(candidate_directions) = fillet_offset_tangent_directions(
+        sketch,
+        parents.map(|parent| parent.parent),
+        solution,
+        radius,
+    ) else {
+        return false;
+    };
+    let Some(candidate_orientation) = fillet_transverse_orientation_for_derivatives(
+        candidate_directions[0],
+        candidate_directions[1],
+    ) else {
+        return false;
+    };
+    if let CircularAffineBranchProof::AcceptedContinuation(continuation) = proof {
+        return continuation_cell_contains_solution(continuation, affine, solution)
+            && candidate_orientation == continuation.transverse_orientation
+            && candidate_directions
+                .into_iter()
+                .zip(continuation.offset_tangent_directions)
+                .all(|(current, previous)| {
+                    current[0].mul_add(previous[0], current[1] * previous[1])
+                        > CONTINUATION_MIN_TANGENT_DIRECTION_DOT
+                });
+    }
+    let ContactNeighborhood::Local {
+        lower: stored_lower,
+        upper: stored_upper,
+    } = parents[curved_index].parent.neighborhood
+    else {
+        return false;
+    };
+    let stored_cell = ComputedSourceInterval {
+        start: stored_lower,
+        end: stored_upper,
+    };
+    let Some(seed_cell) = certify_current_circular_affine_cell(
+        sketch,
+        parents,
+        curved_index,
+        affine_index,
+        parents[curved_index].seed_total,
+    ) else {
+        return false;
+    };
+    let Some(candidate_cell) = certify_current_circular_affine_cell(
+        sketch,
+        parents,
+        curved_index,
+        affine_index,
+        solution.parameters[curved_index],
+    ) else {
+        return false;
+    };
+    certified_cells_overlap(stored_cell, seed_cell)
+        && certified_cells_overlap(seed_cell, candidate_cell)
+        && persisted_current_and_candidate_orientations_agree(
+            sketch,
+            parents,
+            curved_index,
+            affine_index,
+            radius,
+            solution,
+            candidate_orientation,
+        )
+}
+
+fn persisted_current_and_candidate_orientations_agree(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    curved_index: usize,
+    affine_index: usize,
+    radius: f64,
+    solution: LocalFilletSolution,
+    candidate_orientation: ComputedFilletTransverseOrientation,
+) -> bool {
+    let Some(branch_direction) =
+        sketch.curve_branch_direction(parents[affine_index].parent.source.span)
+    else {
+        return false;
+    };
+    let Ok(curved_seed) = offset_geometry(
+        sketch,
+        parents[curved_index].parent.source.span,
+        parents[curved_index].seed_total,
+        parents[curved_index].parent.normal_side,
+        radius,
+    ) else {
+        return false;
+    };
+    let Ok(current_affine) = offset_geometry(
+        sketch,
+        parents[affine_index].parent.source.span,
+        solution.parameters[affine_index],
+        parents[affine_index].parent.normal_side,
+        radius,
+    ) else {
+        return false;
+    };
+    let ordered = |affine_derivative| {
+        if curved_index == 0 {
+            fillet_transverse_orientation_for_derivatives(curved_seed.derivative, affine_derivative)
+        } else {
+            fillet_transverse_orientation_for_derivatives(affine_derivative, curved_seed.derivative)
+        }
+    };
+    ordered(branch_direction) == Some(candidate_orientation)
+        && ordered(current_affine.derivative) == Some(candidate_orientation)
+}
+
+fn certify_current_circular_affine_cell(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    curved_index: usize,
+    affine_index: usize,
+    parameter: f64,
+) -> Option<ComputedSourceInterval> {
+    let support = parents[curved_index].topology.base_interval;
+    if !parameter_strictly_inside(parameter, support) {
+        return None;
+    }
+    let ContactNeighborhood::Local { lower, upper } = sketch
+        .certify_line_curve_fillet_branch_cell(
+            parents[affine_index].parent.source.span,
+            parents[curved_index].parent.source.span,
+            parameter,
+            support.start,
+            support.end,
+        )
+        .ok()?
+    else {
+        return None;
+    };
+    Some(ComputedSourceInterval {
+        start: lower,
+        end: upper,
+    })
+}
+
+fn certified_cells_overlap(first: ComputedSourceInterval, second: ComputedSourceInterval) -> bool {
+    interior_bounds(ComputedSourceInterval {
+        start: first.start.max(second.start),
+        end: first.end.min(second.end),
+    })
+    .is_some()
+}
+
 fn local_fillet_roots(
     sketch: &SketchDocument,
     parents: &[RootParent; 2],
@@ -4200,6 +5037,25 @@ enum RootSelectionFailure {
     Ambiguous,
 }
 
+const fn map_persistent_root_failure(
+    corner: ComputedFeatureCornerId,
+    selection: RootSelectionFailure,
+    search: RootSearchFailure,
+) -> ComputedFeatureFailure {
+    match selection {
+        RootSelectionFailure::None => match search {
+            RootSearchFailure::NoLocalRoot => ComputedFeatureFailure::NoLocalRoot { corner },
+            RootSearchFailure::SingularParents => {
+                ComputedFeatureFailure::SingularParents { corner }
+            }
+            RootSearchFailure::OffsetSingularity => {
+                ComputedFeatureFailure::OffsetSingularity { corner }
+            }
+        },
+        RootSelectionFailure::Ambiguous => ComputedFeatureFailure::AmbiguousLocalRoot { corner },
+    }
+}
+
 fn select_solution(
     sketch: &SketchDocument,
     source_spans: [CurveSpan; 2],
@@ -4262,6 +5118,12 @@ enum ArcValidationFailure {
     Invalid,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ArcBranchValidation<'a> {
+    PersistedCell,
+    TransportedCircularAffine(CircularAffineBranchProof<'a>),
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "independent parent, contact, tangency and arc publication checks remain one fail-closed audit path"
@@ -4273,6 +5135,7 @@ fn build_and_validate_arc(
     radius: f64,
     endpoint_order: DocumentFilletEndpointOrder,
     sweep: DocumentArcSweep,
+    branch_validation: ArcBranchValidation<'_>,
 ) -> Result<ComputedCircularArc, ArcValidationFailure> {
     if !radius.is_finite() || radius <= 0.0 || !solution.center.into_iter().all(f64::is_finite) {
         return Err(ArcValidationFailure::Invalid);
@@ -4284,16 +5147,33 @@ fn build_and_validate_arc(
     if affine == [false, false] {
         return Err(ArcValidationFailure::Invalid);
     }
-    let publication_parents = prepare_root_parents(sketch, parents, None)
-        .and_then(|prepared| {
-            certify_persistent_branch(
+    let prepared =
+        prepare_root_parents(sketch, parents, None).map_err(|_| ArcValidationFailure::Invalid)?;
+    let publication_parents = match branch_validation {
+        ArcBranchValidation::PersistedCell => certify_persistent_branch(
+            sketch,
+            prepared,
+            affine,
+            ComputedFeatureCornerId::from_raw(0),
+        )
+        .map_err(|_| ArcValidationFailure::Invalid)?,
+        ArcBranchValidation::TransportedCircularAffine(proof) => {
+            let proof_parents = circular_affine_branch_proof_parents(sketch, &prepared, proof)
+                .ok_or(ArcValidationFailure::Invalid)?;
+            if !transported_circular_affine_solution_is_certified(
                 sketch,
-                prepared,
+                &proof_parents,
                 affine,
-                ComputedFeatureCornerId::from_raw(0),
-            )
-        })
-        .map_err(|_| ArcValidationFailure::Invalid)?;
+                radius,
+                solution,
+                proof,
+            ) {
+                return Err(ArcValidationFailure::Invalid);
+            }
+            circular_affine_transport_search_parents(sketch, &proof_parents, affine)
+                .ok_or(ArcValidationFailure::Invalid)?
+        }
+    };
     if solution
         .parameters
         .iter()
@@ -4414,6 +5294,7 @@ fn contact_angles(
         radius,
         DocumentFilletEndpointOrder::FirstThenSecond,
         DocumentArcSweep::CounterClockwise,
+        ArcBranchValidation::PersistedCell,
     )?;
     Ok([
         (arc.contacts[0].position[1] - arc.center[1])
@@ -4819,6 +5700,7 @@ mod publication_tests {
                 0.5,
                 DocumentFilletEndpointOrder::FirstThenSecond,
                 DocumentArcSweep::CounterClockwise,
+                ArcBranchValidation::PersistedCell,
             ),
             Err(ArcValidationFailure::SingularParents)
         ));

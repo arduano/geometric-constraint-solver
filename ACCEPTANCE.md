@@ -164,13 +164,18 @@ has fully qualified and byte-verified F001/F002 replacements plus a historically
 test-only H1/H2 baseline whose complete release gate and fresh publication passed. H3 historically
 preserved those rows while adding four reviewed F003/F004 `DEFECT` rows; its test-only
 `--require-clean` gate was deliberately red. Authorized production repairs now make the same four
-stable cases `PASS`, so the current reviewed fixture is 197/197 `PASS`. Exact golden, workspace,
-Clippy, formatting and relevant WASM qualification pass. Clean source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes the complete release gate, and its
+stable cases `PASS`. F005 adds one exact source-rotation Fillet row and accepts movement beyond a
+stale certificate edge only through overlapping fresh same-branch certificates. The current
+reviewed fixture is 198/198 `PASS`. Focused F005 owner/golden, the 45-test feature suite, nine-test
+retained movement suite and aggregate golden qualification, formatting, warnings-denied all-
+workspace Clippy, locked all-feature workspace tests and the relevant WASM check pass. Prior
+F003/F004 source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate, and its
 immutable seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served and byte-verified
 at `http://100.94.63.83:8080/` with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted human recheck and
-approval remain pending. M71 remains deferred behind it.
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Complete F005 clean release
+qualification and fresh publication must precede the targeted movement recheck; approval remains
+pending. M71 remains deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1419,16 +1424,19 @@ passed while `--require-clean` intentionally failed at the test-only checkpoint.
 was subsequently authorized: active explicit Coincident equivalence now owns closure-Fillet
 topology, and persisted circular-plus-affine Fillets may search their complete certified explicit
 tangent-orientation cell without weakening generic nonlinear or radius-continuation guards. The
-same four rows retain their input fingerprints and now make the reviewed fixture 197/197 `PASS`,
-SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
-Focused owner qualification, both exact golden modes, formatting, warnings-denied workspace
-Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean source
+same four rows retain their input fingerprints and made the F003/F004 repair checkpoint 197/197
+`PASS`, while F005 adds source-rotation fingerprint `input-04658a77db2dc779`. The reviewed fixture is now
+198/198 `PASS`, SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
+Focused owner/golden tests, the 45-test feature suite, nine-test retained movement suite, aggregate
+golden survey/check/clean modes, formatting, warnings-denied all-workspace Clippy, locked all-
+feature workspace tests and the relevant WASM check pass. Prior F003/F004 source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
 snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Human recheck and approval
-remain pending.
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Complete F005 clean release
+qualification, fresh publication, human recheck and approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1555,6 +1563,58 @@ CircularArc plus affine support, whose fixed-radius offset cannot fold within th
 tangent-orientation cell. General nonlinear curves retain the narrow seed-connected guard and
 radius continuation retains its fold/remote-root guard.
 
+`M70B-F005` acceptance preserves the complete loadable payload at
+`crates/geosolve-demo-web/tests/fixtures/m70b_f005_repro.txt`, identity
+`4228:0823d31f269300af`, plus its exact accepted sketch and feature JSON, rank zero, seven
+equality/bidirectional DOF and the original circle Right/End plus line Left/Start metadata. The
+ordinary decoder/workspace/coordinator path must restore one authoritative Current Fillet scene.
+The intended contact at total parameter `7.909322804062922` lies outside
+the stale stored upper certificate but must publish Current only after fresh seed and candidate
+cells prove a connected nonzero tangent-orientation branch. Search must remain bounded to one
+retained Circle/CircularArc support and one affine Interior parent, run only after ordinary
+persisted evaluation reports `NoLocalRoot`, accept exactly one materially distinct transverse
+root, and repeat branch validation before publication. A real tangent barrier, fold, offset
+singularity, ambiguity, invalid geometry or unsupported nonlinear pair remains fail-closed.
+Evaluation must not rewrite feature state or accepted input, and a full circle remains untrimmed.
+Exact owner regression `m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell`
+and the process-isolated
+`feature.fillet.evaluation.line-circle.source-rotation.retained-start` row at
+`input-04658a77db2dc779` are mandatory.
+
+Persistent movement acceptance additionally requires a sequence contract, not just the static
+payload result. Each accepted source step must carry authenticated same-corner continuation from
+the exact prior accepted preview, preserve source/radius/side/retention/order/sweep and transverse
+orientation, and refresh the contact parameter, winding, periodic anchor and Local certificate.
+The refreshed feature state may become durable only as an atomic derivative of that exact native
+edit. A no-hint cold re-evaluation must reproduce exact generated geometry, contacts, construction
+fragments and Current/Failed/Suppressed state. Replay must bind the edit and drag target plus the
+durable solver, activation, parameter and external-input stamps; the process-local prepared epoch
+and candidate previous-state preference are deliberately rebound. Undo/Redo, transcript replay
+and checkpoint reload must reproduce the same branch, and a recorded re-anchor cannot be
+transplanted onto another edit or host input. A deliberate direct edit may newly fail one feature
+while re-anchoring another, but replay must reproduce those exact recorded dispositions; the
+stricter Current-only rule belongs to projected dragging. Multiple small steps may traverse a complete
+periodic winding, while an unseen quarter-turn, opposite root, actual fold, singularity or
+ambiguity still rejects.
+
+Projected point-drag publication is complete-scene atomic: every feature Current in the last valid
+preview must remain Current before the native source preview advances. Pre-existing unrelated
+Failed sets do not block, and Failed-to-Current recovery is permitted. A rejected or work-exhausted
+sample retains the paired last-valid native and computed scene, preserves the last valid release
+coordinate, exposes feature/corner/both-parent problem metadata when attribution is defensible,
+and clears that cue on reverse recovery or cancellation. Releasing after a rejected terminal
+sample commits only the last complete preview; a first-sample rejection creates no history. The
+general `mark_solved_preview` API retains its established native-only/Withheld fallback, and a
+deliberate direct document edit may still publish an attributed Failed feature rather than being
+silently clamped.
+
+Mouse-up must stage native geometry, durable feature intent, evaluation allocator, computed
+snapshot, checkpoint, history and transcript before one infallible publication. Any native-release,
+continuation, cold-reproduction, identity-exhaustion or checkpoint failure leaves all live and
+transient authority unchanged so the held last-valid preview remains retryable. Ordinary
+non-`Edit` replay actions cold-evaluate without silently persisting contact-frame changes, and
+ordinary checkpoint failure restores its pre-mutation retained session and computed state.
+
 Historical M70B-H3 acceptance was test-only: all four Fillet rows executed in separate bounded
 processes, retained stable case IDs/fingerprints and classified the two F003 plus two F004 rows as
 reviewed `DEFECT`. The prior 193 H1/H2 rows remained byte-for-byte unchanged, producing exactly
@@ -1566,16 +1626,20 @@ itself changed no production behavior.
 Repair acceptance requires those same four rows to transition `DEFECT` to `PASS` without changing
 their input fingerprints: curve-pair `input-d04adbf29c08b9bd`, point
 `input-4ba571059db7afff`, lower same-cell `input-f9920c3cf170130d` and seam same-cell
-`input-2da21ef04cfb4246`. The reviewed current fixture is exactly 197/197 `PASS`, SHA-256
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused F003 and F004 owner
-qualification, exact golden `--check`/`--require-clean`, formatting, warnings-denied workspace
-Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean repaired source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes
+`input-2da21ef04cfb4246`. The reviewed F003/F004 repair checkpoint was exactly 197/197 `PASS`, SHA-256
+`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. F005 appends only its
+source-rotation row, preserves all prior records byte-for-byte and yields exactly 198/198 `PASS` at
+SHA-256 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Focused F003-F005 owner
+and golden tests, aggregate golden `--survey`/`--check`/`--require-clean`, formatting,
+warnings-denied all-workspace Clippy, locked all-feature workspace tests and the relevant WASM
+check pass. Prior F003/F004 source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. The immutable seven-file
 snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Only targeted human recheck
-and explicit approval remain.
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Complete F005 clean release
+qualification and fresh publication must precede its targeted movement recheck; explicit approval
+remains pending.
 
 M71 remains deferred behind M70B.
 

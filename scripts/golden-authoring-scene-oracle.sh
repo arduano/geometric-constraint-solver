@@ -77,6 +77,7 @@ fillet_cases=(
   feature.fillet.authoring.coincident-closure.point
   feature.fillet.evaluation.line-circle.same-cell-lower
   feature.fillet.evaluation.line-circle.same-cell-seam
+  feature.fillet.evaluation.line-circle.source-rotation.retained-start
 )
 
 scene_cases=(

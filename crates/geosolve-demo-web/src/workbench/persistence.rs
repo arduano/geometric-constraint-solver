@@ -464,8 +464,9 @@ fn decode_document(payload: &WorkspaceDocumentPayload) -> Result<SketchDocument,
 mod tests {
     use geosolve_constraint_editor::{
         AuthoringMutation, AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool,
-        ConstraintIntent, FeatureAuthoringCandidate, FeatureAuthoringOutcome,
-        FeatureAuthoringState, FeatureAuthoringTool, RetainedEditorCoordinator, SelectionItem,
+        ComputedEdgeGeometry, ComputedFeatureEvaluationState, ComputedSceneState, ConstraintIntent,
+        FeatureAuthoringCandidate, FeatureAuthoringOutcome, FeatureAuthoringState,
+        FeatureAuthoringTool, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -682,6 +683,46 @@ mod tests {
         assert_eq!(
             restored.session().persistent_identity_high_water(),
             coordinator.session().persistent_identity_high_water()
+        );
+    }
+
+    #[test]
+    fn m70b_f005_supplied_payload_restores_exact_current_fillet_through_ordinary_decoder() {
+        const PAYLOAD: &str = include_str!("../../tests/fixtures/m70b_f005_repro.txt");
+        let payload = PAYLOAD.trim_end();
+        let workspace = crate::reproduction::decode_workspace(payload)
+            .expect("exact F005 reproduction transport");
+        assert_eq!(workspace.len(), 4_228);
+        let snapshot =
+            WorkspaceSnapshot::decode(&workspace).expect("exact F005 application workspace");
+        assert!(snapshot.accepted_belongs_to_current_design);
+
+        let coordinator = coordinator_from_reproduction_payload(payload)
+            .expect("ordinary F005 coordinator restoration");
+        assert_eq!(coordinator.session().design_document().points().len(), 3);
+        assert_eq!(coordinator.session().design_document().curves().len(), 2);
+        assert_eq!(coordinator.feature_document().features().len(), 1);
+        let ComputedSceneState::Current { snapshot, .. } = coordinator.computed_scene_state()
+        else {
+            panic!("F005 payload must restore one authoritative current computed scene");
+        };
+        assert!(matches!(
+            snapshot.feature_evaluations(),
+            [evaluation]
+                if matches!(evaluation.state, ComputedFeatureEvaluationState::Current { .. })
+        ));
+        assert_eq!(
+            snapshot
+                .edges()
+                .iter()
+                .filter(|edge| matches!(edge.geometry, ComputedEdgeGeometry::CircularArc(_)))
+                .count(),
+            1
+        );
+        assert_eq!(
+            payload.split(':').nth(3),
+            Some("0823d31f269300af"),
+            "the checked-in fixture must retain the supplied checksum identity"
         );
     }
 

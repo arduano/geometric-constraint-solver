@@ -1373,6 +1373,7 @@ pub struct SketchDocumentAttempt {
     identity: SketchAttemptIdentity,
     input: SketchAttemptInput,
     parent_accepted: Option<SketchAcceptedStateIdentity>,
+    continuation_parent_input: Option<PreparedSketchInput>,
     accepted_state: Option<SketchAcceptedStateIdentity>,
     solve: Option<SketchSolveResult>,
     attempted_geometry: Option<crate::SketchGeometry>,
@@ -1400,6 +1401,14 @@ impl SketchDocumentAttempt {
     #[must_use]
     pub const fn parent_accepted_identity(&self) -> Option<SketchAcceptedStateIdentity> {
         self.parent_accepted
+    }
+
+    /// Exact accepted preview input used only as the numerical continuation
+    /// seed for this attempt. Ordinary authoritative attempts return `None`.
+    /// This is runtime provenance, not geometry authority or persisted intent.
+    #[must_use]
+    pub const fn continuation_parent_input(&self) -> Option<PreparedSketchInput> {
+        self.continuation_parent_input
     }
 
     /// Returns the state published by this attempt, never an older retained state.
@@ -4431,7 +4440,7 @@ impl RetainedSketchDocumentSession {
         let mut candidate = self.design.clone();
         candidate.set_point_position(point, position)?;
         candidate.validate()?;
-        self.retain_candidate_with_seed(
+        let outcome = self.retain_candidate_with_seed(
             candidate,
             DocumentCommandEffect::UpdatedPoint(point),
             Some(DocumentDragTarget {
@@ -4439,7 +4448,9 @@ impl RetainedSketchDocumentSession {
                 target: position,
             }),
             &preview_accepted.document,
-        )
+        )?;
+        self.last_attempt.continuation_parent_input = Some(preview.prepared_input());
+        Ok(outcome)
     }
 
     /// Publishes one accepted projected drag without moving it through another solve.
@@ -4674,6 +4685,8 @@ impl RetainedSketchDocumentSession {
         self.design = candidate;
         self.design_identity = design_identity;
         self.request = publication_request;
+        let mut attempt = attempt;
+        attempt.continuation_parent_input = Some(preview.prepared_input());
         self.last_attempt = attempt;
         self.accepted_revision_high_water = Some(published_accepted.revision);
         self.accepted = Some(accepted);
@@ -5059,6 +5072,8 @@ impl RetainedSketchDocumentSession {
             return Ok(controller.outcome_unchecked());
         }
         self.request = request;
+        let mut attempt = attempt;
+        attempt.continuation_parent_input = Some(preview.prepared_input());
         self.last_attempt = attempt.clone();
         if let Some(accepted) = accepted {
             self.accepted_revision_high_water = Some(accepted.identity.revision);
@@ -7173,6 +7188,7 @@ fn publish_retained_attempt(
         identity: attempt_identity,
         input,
         parent_accepted,
+        continuation_parent_input: None,
         accepted_state,
         solve: execution.solve,
         attempted_geometry: execution.attempted_geometry,

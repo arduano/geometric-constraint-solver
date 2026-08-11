@@ -3,7 +3,8 @@
 # M70B focused UAT — Workspace reproduction handoff
 
 Status: human UAT opened `M70B-F003` and `M70B-F004`; both findings now have authorized,
-locally implemented owner repairs, while the prior clean `M70B-H1` candidate remains unapproved.
+locally implemented owner repairs, and later movement finding `M70B-F005` has an implemented
+certificate-transport repair, while the milestone remains unapproved.
 `M70B-F001` and `M70B-F002` retain their owning-layer corrections and complete replacement
 evidence. M70B-H1 adds a 193/193 passing constraint/dimension-authoring and scene oracle; its
 complete release gate and fresh byte-verified Tailscale publication now pass. M70B-H2 only
@@ -12,14 +13,17 @@ qualification passed without replacing or altering the served H1 product candida
 preserves those 193 row records and adds four isolated `feature.fillet` rows: point and curve-pair
 Coincident-closure authoring record F003, while lower same-cell and periodic-seam line-circle
 evaluation record F004. H3 historically recorded 193 `PASS` and four reviewed `DEFECT`. The
-repaired fixture retains the same 197 cases and exact four input fingerprints but now contains
-197 `PASS` at SHA-256
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused F003 and F004 owner
-suites, both aggregate golden modes, formatting, warnings-denied workspace Clippy, locked
-all-feature workspace tests and the relevant WASM build pass. Clean source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate, and its immutable
-seven-file replacement is byte-verified and served through Tailscale. Targeted human rechecks and
-approval remain pending. This scorecard records no human pass or approval.
+repaired fixture retains the same 197 cases and exact four input fingerprints. F005 appends one
+source-rotation row at `input-04658a77db2dc779`, preserving all earlier records; the current
+fixture contains 198 `PASS` at SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. F005's exact owner
+regression, 45-test feature suite, nine-test retained movement suite, focused golden tests, all
+aggregate golden modes, formatting, warnings-denied all-workspace Clippy, locked all-feature
+workspace tests and the relevant WASM check pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` and its immutable served snapshot remain the qualified
+F003/F004 candidate; they predate F005. Complete F005 clean release qualification, a fresh
+byte-verified publication, targeted human rechecks and approval remain pending. This scorecard
+records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
@@ -36,20 +40,22 @@ Historical `M70B-H3` discovery golden SHA-256:
 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`
 
 Current repaired golden SHA-256:
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`
 
-Current `M70B-F003/F004` replacement source:
+Published `M70B-F003/F004` replacement source:
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf`
 
-Current `M70B-F003/F004` integrated release-gate result: **PASS**
+Published `M70B-F003/F004` integrated release-gate result: **PASS**
 
-Current `M70B-F003/F004` Tailscale endpoint: `http://100.94.63.83:8080/`
+Published `M70B-F003/F004` Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Current `M70B-F003/F004` read-only snapshot:
+Published `M70B-F003/F004` read-only snapshot:
 `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY`
 
-Current `M70B-F003/F004` release distribution manifest aggregate:
+Published `M70B-F003/F004` release distribution manifest aggregate:
 `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`
+
+`M70B-F005` replacement source, release-gate result and Tailscale snapshot: **PENDING**
 
 The snapshot directory is mode `0555`, every file is mode `0444`, and PID `524440` is bound only
 to the Tailscale address. Every served asset and `/` byte-matches the immutable snapshot.
@@ -59,7 +65,7 @@ Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
 Prior `M70B-F001` release distribution manifest aggregate:
 `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`
 
-Current `M70B-H1` Tailscale endpoint: `http://100.94.63.83:8080/`
+Historical `M70B-H1` Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Current `M70B-H1` read-only snapshot: `/tmp/geosolve-m70b-h1-uat.viSB9G`
 
@@ -83,16 +89,23 @@ served UAT candidate.
 - [x] Historical M70B-H3 preserved all 193 H1/H2 rows and reviewed exactly four `DEFECT` rows
   carrying only `M70B-F003`/`M70B-F004` at SHA-256
   `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`.
-- [x] The repaired fixture retains all 197 case IDs and exact input fingerprints, records 197
-  `PASS` and has SHA-256
+- [x] The F003/F004 repair checkpoint retained all 197 case IDs and exact input fingerprints,
+  recorded 197 `PASS` and had SHA-256
   `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
-- [x] The focused F003 editor integration suite and 42-test all-feature F004 owner suite pass.
+- [x] F005 exact payload `4228:0823d31f269300af` appends only source-rotation fingerprint
+  `input-04658a77db2dc779`; the current fixture records 198 `PASS` at SHA-256
+  `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
+- [x] The focused F003 editor integration suite, 45-test all-feature F004/F005 owner suite and
+  nine-test retained F005 movement suite pass.
 - [x] Current aggregate golden `--check` and `--require-clean` runs pass.
-- [x] Full workspace, Clippy, formatting and WASM repair qualification pass.
+- [x] Formatting and focused warnings-denied Clippy pass for F005.
+- [x] Full workspace Clippy/tests and the relevant WASM build pass for the F005 replacement.
 - [x] Clean `main` source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete
-  integrated release gate.
-- [x] Its immutable seven-file replacement distribution is served only through Tailscale and every
-  asset plus `/` byte-matches the frozen snapshot.
+  integrated F003/F004 release gate.
+- [x] Its immutable F003/F004 seven-file replacement distribution is served only through Tailscale
+  and every asset plus `/` byte-matches the frozen snapshot.
+- [ ] A clean F005 replacement passes the complete release gate and a fresh immutable distribution
+  is served and byte-verified through Tailscale.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;
@@ -101,15 +114,17 @@ Native Rust tests remain authoritative for exact bytes, bounds, workspace/high-w
 atomicity; the same codec path must also compile for WASM. Human review assesses discoverability,
 text handoff, visible restoration and failure recovery.
 
-## M70B-H3 — Reviewed discovery golden and current repaired fixture
+## M70B-H3/F005 — Reviewed discovery golden and current repaired fixture
 
-The current aggregate driver executes the original 193 H1/H2 rows plus four isolated
+The current aggregate driver executes the original 193 H1/H2 rows plus five isolated
 `feature.fillet` rows:
 
 - `feature.fillet.authoring.coincident-closure.point` — `M70B-F003`;
 - `feature.fillet.authoring.coincident-closure.curve-pair` — `M70B-F003`;
 - `feature.fillet.evaluation.line-circle.same-cell-lower` — `M70B-F004`, winding zero; and
-- `feature.fillet.evaluation.line-circle.same-cell-seam` — `M70B-F004`, winding one.
+- `feature.fillet.evaluation.line-circle.same-cell-seam` — `M70B-F004`, winding one; and
+- `feature.fillet.evaluation.line-circle.source-rotation.retained-start` — `M70B-F005`, moved
+  affine source with overlapping fresh certificates.
 
 At the H3 discovery checkpoint, the checked golden SHA-256 was
 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`: all 197 rows matched their
@@ -124,13 +139,45 @@ The current repaired fixture keeps the same four case IDs and input fingerprints
 - `input-f9920c3cf170130d` for lower same-cell evaluation; and
 - `input-2da21ef04cfb4246` for periodic-seam same-cell evaluation.
 
-It now records 197 `PASS`, zero defects, panics, timeouts or harness errors at SHA-256
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. The focused owner suites,
-aggregate `--check`/`--require-clean`, formatting, warnings-denied workspace Clippy, locked
-all-feature workspace tests and the relevant WASM build pass. The complete clean release gate and
-byte-verified Tailscale publication also pass. Human UAT remains pending.
+F005 preserves those records and appends
+`feature.fillet.evaluation.line-circle.source-rotation.retained-start` at
+`input-04658a77db2dc779`. The current fixture records 198 `PASS`, zero defects, panics, timeouts or
+harness errors at SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Exact F005 owner regression
+`m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell`, the 45-test owner suite,
+nine-test retained movement suite, focused golden tests, aggregate
+`--survey`/`--check`/`--require-clean`, formatting, warnings-denied all-workspace Clippy, locked
+all-feature workspace tests and the relevant WASM check pass. The clean F005 release qualification
+and fresh byte-verified Tailscale publication remain pending, followed by human UAT.
 
-Result: **REPLACEMENT QUALIFIED AND PUBLISHED — HUMAN UAT PENDING**
+Result: **F003/F004 REPLACEMENT PUBLISHED; F005 REPLACEMENT QUALIFICATION PENDING**
+
+## M70B-F005 — Persistent Fillet movement continuity
+
+1. Copy the complete checked-in
+   [`m70b_f005_repro.txt`](../crates/geosolve-demo-web/tests/fixtures/m70b_f005_repro.txt) capsule
+   (identity `4228:0823d31f269300af`) and load it through **Load repro**.
+2. Confirm the radius-1 Fillet between the circle and line is visible immediately.
+3. Drag either line endpoint so the Fillet contact moves through the circle's nearby 90-degree/
+   cardinal mark and back again.
+4. Repeat with several small movements on both sides of that mark.
+5. Move far enough that the chosen contact genuinely leaves the finite line segment, or toward an
+   actual tangent/fold limit. Confirm motion pauses at the last complete valid line-plus-Fillet
+   scene with a local warning rather than deleting the Fillet or jumping to the opposite contact.
+6. Without releasing, move back into valid geometry and confirm the warning clears and the same
+   Fillet branch resumes. Repeat once by releasing while still beyond the limit; confirm only the
+   last valid preview is committed.
+
+Expected: ordinary transverse movement stays continuous when a valid root crosses an old cached
+certificate edge. The Fillet retains its circle side, line side, retained endpoints and sweep;
+the full circle remains visible. There is no disappearance at a cardinal mark and no opposite-root
+jump. A genuine parent/fold/barrier limit holds the last complete scene and release point, exposes
+an attributed cue when possible, and recovers when dragged back. It never paints a moved line with
+its persistent Fillet missing.
+
+Result: **PENDING**
+
+Notes:
 
 ## M70B-U1 — Discover and copy a self-contained payload
 
@@ -345,8 +392,10 @@ The positive regression
 `m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_cell` requires both
 exact payload-derived cases to publish independently valid Current Fillets at the expected root
 and winding inside the unchanged Local cell, beyond the former seed window, without changing
-retained sketch/feature identity. The locked all-feature owner suite passes 42/42. Both F004 golden
-rows keep their exact inputs and now record `PASS`.
+retained sketch/feature identity. The locked all-feature owner suite passed 42/42 at the F004 repair
+checkpoint and now passes 45/45 with F005 appended. The retained movement suite separately passes
+9/9. Both F004 golden rows keep their exact inputs
+and record `PASS`.
 
 Targeted repair recheck on the published replacement candidate:
 
@@ -366,6 +415,8 @@ Result: **RESOLVED HEADLESS — EXACT-PAYLOAD HUMAN RECHECK PENDING**
 M70B remains active until the supervising human records explicit approval here. A scoped approval
 may accept M70B-U1 through M70B-U5 after objective findings receive owning-layer regressions and a
 targeted recheck; it must not invent an unrecorded exhaustive replay. M71 remains deferred until
-M70B is closed. F003/F004 are resolved at their headless owners and the current fixture records all
-197 rows as `PASS`; the complete release qualification and immutable Tailscale publication pass.
-Only the prepared human UAT, targeted rechecks above and explicit approval remain before closure.
+M70B is closed. F003/F004 are resolved at their headless owners and their complete release
+qualification and immutable Tailscale publication pass. F005 is resolved at its feature owner and
+the current fixture records all 198 rows as `PASS`, but its complete qualification and fresh
+publication remain pending. After those gates, only the prepared human UAT, targeted rechecks above
+and explicit approval remain before closure.

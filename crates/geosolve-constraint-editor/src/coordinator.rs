@@ -29,10 +29,11 @@ use geosolve_sketch_features::{
     ComputedFeatureDocumentError, ComputedFeatureDocumentIdentity, ComputedFeatureEvaluationError,
     ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
     ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFeatureId,
-    ComputedFeatureLifecycleHighWater, ComputedFeatureSnapshot, ComputedFeatureSnapshotError,
-    ComputedFilletContactReseedRequest, ComputedFilletCornerAlternative,
-    ComputedFilletCornerAlternativeKind, ComputedFilletParentIndex, ContinuedComputedFilletCorner,
-    NativeCurveSpanSource, NewComputedFilletCorner,
+    ComputedFeatureLifecycleHighWater, ComputedFeatureReanchorError, ComputedFeatureSnapshot,
+    ComputedFeatureSnapshotError, ComputedFilletContactReseedRequest,
+    ComputedFilletCornerAlternative, ComputedFilletCornerAlternativeKind,
+    ComputedFilletParentIndex, ContinuedComputedFilletCorner, NativeCurveSpanSource,
+    NewComputedFilletCorner,
 };
 use thiserror::Error;
 
@@ -142,13 +143,399 @@ fn evaluate_computed_features(
     allocator: &mut ComputedEvaluationAllocator,
     control: OperationControl,
 ) -> Result<OperationOutcome<ComputedFeatureSnapshot>, CoordinatorError> {
-    Ok(ComputedFeatureEvaluationSnapshot::capture(
-        session,
-        features,
-        ComputedFeatureEvaluationPolicy::default(),
-    )?
-    .prepare(allocator)?
-    .execute(control)?)
+    evaluate_computed_features_continuing(session, features, allocator, control, None)
+}
+
+fn evaluate_computed_features_continuing(
+    session: &RetainedSketchDocumentSession,
+    features: &ComputedFeatureDocument,
+    allocator: &mut ComputedEvaluationAllocator,
+    control: OperationControl,
+    previous: Option<&ComputedFeatureSnapshot>,
+) -> Result<OperationOutcome<ComputedFeatureSnapshot>, CoordinatorError> {
+    let captured = if let Some(previous) = previous {
+        ComputedFeatureEvaluationSnapshot::capture_continuing_from(
+            session,
+            features,
+            ComputedFeatureEvaluationPolicy::default(),
+            previous,
+        )?
+    } else {
+        ComputedFeatureEvaluationSnapshot::capture(
+            session,
+            features,
+            ComputedFeatureEvaluationPolicy::default(),
+        )?
+    };
+    Ok(captured.prepare(allocator)?.execute(control)?)
+}
+
+fn capture_computed_features_continuing(
+    session: &RetainedSketchDocumentSession,
+    features: &ComputedFeatureDocument,
+    previous: Option<&ComputedFeatureSnapshot>,
+) -> Result<ComputedFeatureEvaluationSnapshot, CoordinatorError> {
+    Ok(if let Some(previous) = previous {
+        ComputedFeatureEvaluationSnapshot::capture_continuing_from(
+            session,
+            features,
+            ComputedFeatureEvaluationPolicy::default(),
+            previous,
+        )?
+    } else {
+        ComputedFeatureEvaluationSnapshot::capture(
+            session,
+            features,
+            ComputedFeatureEvaluationPolicy::default(),
+        )?
+    })
+}
+
+/// A recorded native edit may carry only the contact-frame refresh derived
+/// from that same edit. It must never smuggle an ordinary feature mutation
+/// (radius, suppression, ownership, topology, side, trim direction or sweep)
+/// into deterministic replay.
+fn recorded_transition_is_reanchor_only(
+    before: &ComputedFeatureDocument,
+    after: &ComputedFeatureDocument,
+) -> bool {
+    if after.validate().is_err()
+        || before.id() != after.id()
+        || before.sketch_document() != after.sketch_document()
+        || after.revision() <= before.revision()
+        || before.allocator_high_water() != after.allocator_high_water()
+        || before.features().len() != after.features().len()
+    {
+        return false;
+    }
+    before
+        .features()
+        .iter()
+        .zip(after.features())
+        .all(|(before_feature, after_feature)| {
+            if before_feature.id != after_feature.id
+                || before_feature.label != after_feature.label
+                || before_feature.suppressed != after_feature.suppressed
+            {
+                return false;
+            }
+            let (
+                geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(before_fillet),
+                geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(after_fillet),
+            ) = (&before_feature.definition, &after_feature.definition);
+            before_fillet.radius.to_bits() == after_fillet.radius.to_bits()
+                && before_fillet.corners.len() == after_fillet.corners.len()
+                && before_fillet.corners.iter().zip(&after_fillet.corners).all(
+                    |(before_corner, after_corner)| {
+                        before_corner.id == after_corner.id
+                            && before_corner.endpoint_order == after_corner.endpoint_order
+                            && before_corner.sweep == after_corner.sweep
+                            && [
+                                (before_corner.first, after_corner.first),
+                                (before_corner.second, after_corner.second),
+                            ]
+                            .into_iter()
+                            .all(|(before_parent, after_parent)| {
+                                before_parent.source == after_parent.source
+                                    && before_parent.normal_side == after_parent.normal_side
+                                    && before_parent.retained_endpoint
+                                        == after_parent.retained_endpoint
+                            })
+                    },
+                )
+        })
+}
+
+fn computed_feature_states_match_for_durable_reanchor(
+    continued: &ComputedFeatureSnapshot,
+    cold: &ComputedFeatureSnapshot,
+) -> bool {
+    continued.edges().len() == cold.edges().len()
+        && continued
+            .edges()
+            .iter()
+            .zip(cold.edges())
+            .all(|(continued, cold)| {
+                continued.id.ordinal == cold.id.ordinal
+                    && continued.role == cold.role
+                    && continued.geometry == cold.geometry
+                    && continued.provenance == cold.provenance
+            })
+        && continued.construction_fragments().len() == cold.construction_fragments().len()
+        && continued
+            .construction_fragments()
+            .iter()
+            .zip(cold.construction_fragments())
+            .all(|(continued, cold)| {
+                continued.id.ordinal == cold.id.ordinal
+                    && continued.source == cold.source
+                    && continued.interval == cold.interval
+                    && continued.source_role == cold.source_role
+                    && continued.provenance == cold.provenance
+            })
+        && continued.replaced_sources() == cold.replaced_sources()
+        && continued.feature_evaluations().len() == cold.feature_evaluations().len()
+        && continued
+            .feature_evaluations()
+            .iter()
+            .zip(cold.feature_evaluations())
+            .all(|(continued, cold)| {
+                if continued.feature != cold.feature {
+                    return false;
+                }
+                match (&continued.state, &cold.state) {
+                    (
+                        ComputedFeatureEvaluationState::Current {
+                            corner_edges: continued,
+                        },
+                        ComputedFeatureEvaluationState::Current { corner_edges: cold },
+                    ) => {
+                        continued.len() == cold.len()
+                            && continued.iter().zip(cold).all(
+                                |((continued_corner, continued_edge), (cold_corner, cold_edge))| {
+                                    continued_corner == cold_corner
+                                        && continued_edge.ordinal == cold_edge.ordinal
+                                },
+                            )
+                    }
+                    (
+                        ComputedFeatureEvaluationState::Suppressed,
+                        ComputedFeatureEvaluationState::Suppressed,
+                    ) => true,
+                    (
+                        ComputedFeatureEvaluationState::Failed { failure: continued },
+                        ComputedFeatureEvaluationState::Failed { failure: cold },
+                    ) => continued == cold,
+                    _ => false,
+                }
+            })
+}
+
+fn computed_feature_document_semantics_match(
+    expected: &ComputedFeatureDocument,
+    candidate: &ComputedFeatureDocument,
+) -> bool {
+    expected.id() == candidate.id()
+        && expected.sketch_document() == candidate.sketch_document()
+        && expected.allocator_high_water() == candidate.allocator_high_water()
+        && expected.features() == candidate.features()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum RecordedComputedFeatureDisposition {
+    Current,
+    Suppressed,
+    Failed(ComputedFeatureFailure),
+}
+
+fn recorded_computed_feature_dispositions(
+    snapshot: &ComputedFeatureSnapshot,
+) -> Vec<(ComputedFeatureId, RecordedComputedFeatureDisposition)> {
+    snapshot
+        .feature_evaluations()
+        .iter()
+        .map(|evaluation| {
+            let disposition = match &evaluation.state {
+                ComputedFeatureEvaluationState::Current { .. } => {
+                    RecordedComputedFeatureDisposition::Current
+                }
+                ComputedFeatureEvaluationState::Suppressed => {
+                    RecordedComputedFeatureDisposition::Suppressed
+                }
+                ComputedFeatureEvaluationState::Failed { failure } => {
+                    RecordedComputedFeatureDisposition::Failed(failure.clone())
+                }
+            };
+            (evaluation.feature, disposition)
+        })
+        .collect()
+}
+
+/// Transcript replay must reproduce every durable prepared-input semantic while
+/// deliberately rebinding the process-local prepared-state epoch and the
+/// candidate solver's previous-state-preference bit. The epoch authenticates
+/// off-thread work in one live coordinator, while the preference records how a
+/// projected release reached geometry that replay independently reconstructs.
+/// Neither is persisted intent. The exact drag target, retained publication
+/// request, solver policy and every activation/parameter/external stamp remain
+/// bound.
+fn prepared_sketch_inputs_match_for_replay(
+    expected: &PreparedSketchInput,
+    candidate: &PreparedSketchInput,
+) -> bool {
+    let expected_input = (*expected).attempt_input();
+    let candidate_input = (*candidate).attempt_input();
+    expected_input.design_identity() == candidate_input.design_identity()
+        && expected_input.candidate_request().drag == candidate_input.candidate_request().drag
+        && expected_input.publication_request() == candidate_input.publication_request()
+        && expected_input.solver_config() == candidate_input.solver_config()
+        && expected_input.effective_activation_revision()
+            == candidate_input.effective_activation_revision()
+        && expected_input.activation_digest() == candidate_input.activation_digest()
+        && expected_input.parameter_revision() == candidate_input.parameter_revision()
+        && expected_input.parameter_digest() == candidate_input.parameter_digest()
+        && expected_input.external_snapshot_set_revision()
+            == candidate_input.external_snapshot_set_revision()
+        && expected_input.external_snapshot_set_digest()
+            == candidate_input.external_snapshot_set_digest()
+        && (*expected).latest_attempt_identity() == (*candidate).latest_attempt_identity()
+        && (*expected).accepted_state_identity() == (*candidate).accepted_state_identity()
+        && (*expected).accepted_revision_high_water() == (*candidate).accepted_revision_high_water()
+}
+
+/// Turns one authenticated continued preview into ordinary persistent feature
+/// state and proves that an evaluation with no transient continuation hints
+/// reproduces the same feature/corner dispositions and exact contact metadata.
+fn evaluate_durable_computed_reanchor(
+    session: &RetainedSketchDocumentSession,
+    features: &ComputedFeatureDocument,
+    allocator: &mut ComputedEvaluationAllocator,
+    continued: &ComputedFeatureSnapshot,
+) -> Result<(ComputedFeatureDocument, ComputedFeatureSnapshot), CoordinatorError> {
+    if session.accepted_prepared_input() != Some(continued.input().sketch)
+        || continued.input().features != features.identity()
+    {
+        return Err(CoordinatorError::StaleComputedFeatureCandidate);
+    }
+    let reanchored = continued.reanchored_feature_document(features)?;
+    let evaluated =
+        evaluate_computed_features(session, &reanchored, allocator, bounded_geometry_control())?;
+    let OperationOutcome::Completed { value: cold, .. } = evaluated else {
+        return Err(CoordinatorError::ComputedFeatureWorkStopped);
+    };
+    if !computed_feature_states_match_for_durable_reanchor(continued, &cold) {
+        return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+    }
+    let independently_reanchored = cold.reanchored_feature_document(&reanchored)?;
+    if !computed_feature_document_semantics_match(&reanchored, &independently_reanchored) {
+        return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+    }
+    Ok((reanchored, cold))
+}
+
+fn computed_feature_preview_invalidations(
+    features: &ComputedFeatureDocument,
+    previous: &ComputedFeatureSnapshot,
+    candidate: &ComputedFeatureSnapshot,
+) -> Vec<ComputedFeatureProblemMetadata> {
+    previous
+        .feature_evaluations()
+        .iter()
+        .filter(|evaluation| {
+            matches!(
+                evaluation.state,
+                ComputedFeatureEvaluationState::Current { .. }
+            )
+        })
+        .filter_map(|previous| {
+            let candidate = candidate
+                .feature_evaluations()
+                .iter()
+                .find(|candidate| candidate.feature == previous.feature);
+            match candidate.map(|candidate| &candidate.state) {
+                Some(ComputedFeatureEvaluationState::Current { .. }) => None,
+                Some(ComputedFeatureEvaluationState::Failed { failure }) => {
+                    let mut problem =
+                        computed_feature_problem(features, previous.feature, failure);
+                    let prefix = if computed_fillet_failure_limit(failure).kind
+                        == ComputedFilletContinuationLimitKind::DomainBoundary
+                    {
+                        "Parent limit"
+                    } else {
+                        "Fillet movement limit"
+                    };
+                    problem.message = format!(
+                        "{prefix}: holding the last valid position because {failure}"
+                    );
+                    Some(problem)
+                }
+                Some(ComputedFeatureEvaluationState::Suppressed) | None => {
+                    Some(ComputedFeatureProblemMetadata {
+                        feature: Some(previous.feature),
+                        corners: Vec::new(),
+                        sources: Vec::new(),
+                        scope: EditorProblemScope::Targeted,
+                        message: "Fillet movement is held at the last valid position because complete computed output is unavailable"
+                            .into(),
+                    })
+                }
+            }
+        })
+        .collect()
+}
+
+fn computed_preview_global_limit(message: impl Into<String>) -> ComputedFeatureProblemMetadata {
+    ComputedFeatureProblemMetadata {
+        feature: None,
+        corners: Vec::new(),
+        sources: Vec::new(),
+        scope: EditorProblemScope::Global,
+        message: message.into(),
+    }
+}
+
+fn computed_preview_stopped_problems(
+    features: &ComputedFeatureDocument,
+    previous: Option<&ComputedFeatureSnapshot>,
+    message: impl Into<String>,
+) -> Vec<ComputedFeatureProblemMetadata> {
+    let message = message.into();
+    let Some(previous) = previous else {
+        return vec![computed_preview_global_limit(message)];
+    };
+    let current = previous
+        .feature_evaluations()
+        .iter()
+        .filter(|evaluation| {
+            matches!(
+                evaluation.state,
+                ComputedFeatureEvaluationState::Current { .. }
+            )
+        })
+        .map(|evaluation| evaluation.feature)
+        .collect::<Vec<_>>();
+    let [feature] = current.as_slice() else {
+        return vec![computed_preview_global_limit(message)];
+    };
+    let Some(feature_value) = features.feature(*feature) else {
+        return vec![computed_preview_global_limit(message)];
+    };
+    let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+        &feature_value.definition;
+    let mut corners = fillet
+        .corners
+        .iter()
+        .map(|corner| corner.id)
+        .collect::<Vec<_>>();
+    corners.sort_unstable();
+    corners.dedup();
+    let mut sources = fillet
+        .corners
+        .iter()
+        .flat_map(|corner| [corner.first.source, corner.second.source])
+        .collect::<Vec<_>>();
+    sources.sort_unstable();
+    sources.dedup();
+    vec![ComputedFeatureProblemMetadata {
+        feature: Some(*feature),
+        corners,
+        sources,
+        scope: EditorProblemScope::Targeted,
+        message,
+    }]
+}
+
+fn evaluate_computed_features_in_controller_continuing(
+    session: &RetainedSketchDocumentSession,
+    features: &ComputedFeatureDocument,
+    allocator: &mut ComputedEvaluationAllocator,
+    controller: &mut OperationController,
+    previous: Option<&ComputedFeatureSnapshot>,
+) -> Result<Option<ComputedFeatureSnapshot>, CoordinatorError> {
+    let value = capture_computed_features_continuing(session, features, previous)?
+        .prepare(allocator)?
+        .execute_in_controller(controller)?;
+    Ok(value)
 }
 
 fn evaluate_computed_features_in_controller(
@@ -157,13 +544,9 @@ fn evaluate_computed_features_in_controller(
     allocator: &mut ComputedEvaluationAllocator,
     controller: &mut OperationController,
 ) -> Result<Option<ComputedFeatureSnapshot>, CoordinatorError> {
-    Ok(ComputedFeatureEvaluationSnapshot::capture(
-        session,
-        features,
-        ComputedFeatureEvaluationPolicy::default(),
-    )?
-    .prepare(allocator)?
-    .execute_in_controller(controller)?)
+    evaluate_computed_features_in_controller_continuing(
+        session, features, allocator, controller, None,
+    )
 }
 
 fn require_current_feature_authoring_evaluation(
@@ -1184,6 +1567,17 @@ pub enum GeometryRoleSelectionState {
     Mixed,
 }
 
+/// Exact derived branch-state promotion paired with one recorded native edit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecordedComputedFeatureTransition {
+    edit: DocumentEdit,
+    before_sketch: PreparedSketchInput,
+    after_sketch: PreparedSketchInput,
+    before: ComputedFeatureDocumentIdentity,
+    after: ComputedFeatureDocument,
+    dispositions: Vec<(ComputedFeatureId, RecordedComputedFeatureDisposition)>,
+}
+
 /// Closed replay vocabulary used by deterministic generated/model qualification.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ReplayAction {
@@ -1222,6 +1616,7 @@ pub enum ReplayAction {
     Edit {
         expected: SketchDesignIdentity,
         edit: DocumentEdit,
+        computed_features: Option<Box<RecordedComputedFeatureTransition>>,
     },
     Construction {
         expected: SketchDesignIdentity,
@@ -1308,6 +1703,8 @@ pub enum CoordinatorError {
     ComputedFeatureSnapshot(#[from] ComputedFeatureSnapshotError),
     #[error(transparent)]
     ComputedFeatureAuthoring(#[from] ComputedFeatureAuthoringError),
+    #[error(transparent)]
+    ComputedFeatureReanchor(#[from] ComputedFeatureReanchorError),
     #[error("selected operands cannot construct the requested dimension")]
     IncompatibleDimension,
     #[error("invalid typed action input: {0}")]
@@ -1346,6 +1743,10 @@ pub enum CoordinatorError {
     StaleComputedFeatureCandidate,
     #[error("computed-feature evaluation stopped before publication")]
     ComputedFeatureWorkStopped,
+    #[error("computed-feature preview would invalidate previously Current output")]
+    ComputedFeaturePreviewInvalidated,
+    #[error("computed-feature contact re-anchor is not independently cold-reproducible")]
+    ComputedFeatureReanchorNotDurable,
     #[error("computed-feature authoring preview was rejected: {0}")]
     FeatureAuthoringPreviewRejected(ComputedFeatureFailure),
     #[error("computed-feature authoring preview is missing or does not match")]
@@ -1439,6 +1840,8 @@ struct ProjectedDragContinuation {
     planning_operation: Option<OperationReport>,
     planning_failure: Option<ProjectedDragPlanningFailure>,
     last_accepted_preview: Option<RetainedSketchDocumentSession>,
+    last_valid_computed_snapshot: Option<ComputedFeatureSnapshot>,
+    computed_problems: Vec<ComputedFeatureProblemMetadata>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1454,6 +1857,17 @@ enum TransientLifecycle {
         attempt: SketchAttemptIdentity,
         accepted: SketchAcceptedStateIdentity,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SolvedPreviewPublicationPolicy {
+    /// Publish the independently accepted native preview even when computed
+    /// output must be withheld. This preserves the general preview API's
+    /// established native-only fallback contract.
+    AllowNativeOnly,
+    /// A projected source drag advances only when native and every previously
+    /// Current computed feature form one complete scene.
+    RequireCompleteComputedScene,
 }
 
 impl RetainedEditorCoordinator {
@@ -1845,6 +2259,12 @@ impl RetainedEditorCoordinator {
         &self,
         input: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
     ) -> Option<&ComputedFeatureDocument> {
+        let ComputedSceneState::Current { expected, snapshot } = self.computed_scene_state() else {
+            return None;
+        };
+        if *expected != *input || snapshot.input() != *input {
+            return None;
+        }
         if let Some(preview) = self.feature_authoring_preview.as_ref()
             && preview.snapshot.input() == *input
             && preview.features.identity() == input.features
@@ -3684,7 +4104,8 @@ impl RetainedEditorCoordinator {
             .feature_authoring_preview
             .as_ref()
             .map_or(&self.features, |preview| &preview.features);
-        self.computed_snapshot()
+        let mut problems = self
+            .computed_snapshot()
             .into_iter()
             .flat_map(ComputedFeatureSnapshot::feature_evaluations)
             .filter_map(|evaluation| match &evaluation.state {
@@ -3694,7 +4115,11 @@ impl RetainedEditorCoordinator {
                 ComputedFeatureEvaluationState::Current { .. }
                 | ComputedFeatureEvaluationState::Suppressed => None,
             })
-            .collect()
+            .collect::<Vec<_>>();
+        if let Some(gesture) = self.drag_continuation.as_ref() {
+            problems.extend(gesture.computed_problems.iter().cloned());
+        }
+        problems
     }
 
     /// Returns the independently accepted drag preview visible to a presentation adapter.
@@ -3852,6 +4277,12 @@ impl RetainedEditorCoordinator {
             planning_operation: Some(planning_operation),
             planning_failure,
             last_accepted_preview: None,
+            last_valid_computed_snapshot: self
+                .computed_snapshot
+                .as_ref()
+                .filter(|snapshot| snapshot.input().features == self.features.identity())
+                .cloned(),
+            computed_problems: Vec::new(),
         }
     }
 
@@ -3926,6 +4357,7 @@ impl RetainedEditorCoordinator {
             return Vec::new();
         };
         gesture.last_request_id = Some(request_id);
+        gesture.computed_problems.clear();
         let planning_operation = gesture
             .planning_operation
             .take()
@@ -4056,10 +4488,22 @@ impl RetainedEditorCoordinator {
                         .filter(|position| position.iter().all(|value| value.is_finite()));
                     if accepted_position.is_none() {
                         rejection_stage = Some(ProjectedDragRejectionStage::AcceptedState);
-                    } else if self.mark_solved_preview(&candidate).is_err() {
+                    } else if self
+                        .mark_solved_preview_continuing_controlled(
+                            &candidate,
+                            bounded_geometry_control(),
+                            gesture.last_valid_computed_snapshot.as_ref(),
+                            SolvedPreviewPublicationPolicy::RequireCompleteComputedScene,
+                            &mut gesture.computed_problems,
+                        )
+                        .is_err()
+                    {
                         accepted_position = None;
                         rejection_stage = Some(ProjectedDragRejectionStage::PreviewPublication);
                     } else {
+                        if let Some(snapshot) = self.computed_preview_snapshot.as_ref() {
+                            gesture.last_valid_computed_snapshot = Some(snapshot.clone());
+                        }
                         gesture.last_accepted_preview = self.solved_preview.take();
                     }
                 }
@@ -4118,6 +4562,25 @@ impl RetainedEditorCoordinator {
         preview: &RetainedSketchDocumentSession,
         control: OperationControl,
     ) -> Result<(), CoordinatorError> {
+        let previous = self.computed_snapshot.clone();
+        let mut projected_problems = Vec::new();
+        self.mark_solved_preview_continuing_controlled(
+            preview,
+            control,
+            previous.as_ref(),
+            SolvedPreviewPublicationPolicy::AllowNativeOnly,
+            &mut projected_problems,
+        )
+    }
+
+    fn mark_solved_preview_continuing_controlled(
+        &mut self,
+        preview: &RetainedSketchDocumentSession,
+        control: OperationControl,
+        previous: Option<&ComputedFeatureSnapshot>,
+        publication: SolvedPreviewPublicationPolicy,
+        projected_problems: &mut Vec<ComputedFeatureProblemMetadata>,
+    ) -> Result<(), CoordinatorError> {
         let current_design = self.session.design_identity();
         let preview_design = preview.design_identity();
         let preview_attempt = preview.last_attempt();
@@ -4151,26 +4614,56 @@ impl RetainedEditorCoordinator {
         if preview_attempt.accepted_state_identity() != Some(preview_accepted) {
             return Err(CoordinatorError::PreviewAcceptedStateMismatch);
         }
-        match evaluate_computed_features(
+        let evaluated = evaluate_computed_features_continuing(
             preview,
             &self.features,
             &mut self.computed_evaluation_allocator,
             control,
-        ) {
+            previous.filter(|snapshot| snapshot.input().features == self.features.identity()),
+        );
+        match evaluated {
             Ok(OperationOutcome::Completed { value, .. }) => {
+                if publication == SolvedPreviewPublicationPolicy::RequireCompleteComputedScene
+                    && let Some(previous) = previous
+                {
+                    let problems =
+                        computed_feature_preview_invalidations(&self.features, previous, &value);
+                    if !problems.is_empty() {
+                        *projected_problems = problems;
+                        return Err(CoordinatorError::ComputedFeaturePreviewInvalidated);
+                    }
+                }
                 self.computed_preview_input = Some(value.input());
                 self.computed_preview_snapshot = Some(value);
                 self.computed_preview_evaluation_problem = None;
+                projected_problems.clear();
             }
             Ok(stopped) => {
-                self.computed_preview_snapshot = None;
-                self.computed_preview_input = None;
-                self.computed_preview_evaluation_problem = Some(format!(
+                let message = format!(
                     "computed-feature preview evaluation stopped: {:?}",
                     stopped.report().stopping_reason
-                ));
+                );
+                if publication == SolvedPreviewPublicationPolicy::RequireCompleteComputedScene {
+                    *projected_problems = computed_preview_stopped_problems(
+                        &self.features,
+                        previous,
+                        format!(
+                            "Fillet movement limit: holding the last valid position because {message}"
+                        ),
+                    );
+                    return Err(CoordinatorError::ComputedFeatureWorkStopped);
+                }
+                self.computed_preview_snapshot = None;
+                self.computed_preview_input = None;
+                self.computed_preview_evaluation_problem = Some(message);
             }
             Err(error) => {
+                if publication == SolvedPreviewPublicationPolicy::RequireCompleteComputedScene {
+                    *projected_problems = vec![computed_preview_global_limit(format!(
+                        "Movement is held at the last valid position because computed-feature evaluation failed: {error}"
+                    ))];
+                    return Err(error);
+                }
                 self.computed_preview_snapshot = None;
                 self.computed_preview_input = None;
                 self.computed_preview_evaluation_problem = Some(error.to_string());
@@ -4742,7 +5235,9 @@ impl RetainedEditorCoordinator {
         let replay = ReplayAction::Edit {
             expected,
             edit: edit.clone(),
+            computed_features: None,
         };
+        let previous_session = self.session.clone();
         let outcome = self.session.apply(expected, edit)?;
         let result = MutationOutcome {
             value: outcome.value().clone(),
@@ -4750,8 +5245,80 @@ impl RetainedEditorCoordinator {
             attempt: outcome.attempt_identity(),
             published_accepted: outcome.published_accepted_identity(),
         };
-        self.record_mutation(replay)?;
+        self.record_mutation(replay, previous_session)?;
         Ok(result)
+    }
+
+    fn apply_recorded_edit_with_computed_features(
+        &mut self,
+        expected: SketchDesignIdentity,
+        edit: DocumentEdit,
+        transition: &RecordedComputedFeatureTransition,
+        replay: ReplayAction,
+    ) -> Result<(), CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let before_sketch = self
+            .session
+            .accepted_prepared_input()
+            .ok_or(CoordinatorError::StaleComputedFeatureCandidate)?;
+        if transition.edit != edit
+            || !prepared_sketch_inputs_match_for_replay(&transition.before_sketch, &before_sketch)
+            || self.features.identity() != transition.before
+            || transition.after.sketch_document() != self.session.design_document().id()
+            || !recorded_transition_is_reanchor_only(&self.features, &transition.after)
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        self.computed_snapshot
+            .as_ref()
+            .filter(|snapshot| {
+                snapshot.input().sketch == before_sketch
+                    && snapshot.input().features == transition.before
+            })
+            .ok_or(CoordinatorError::StaleComputedFeatureCandidate)?;
+        let mut candidate_session = self.session.clone();
+        let retained = candidate_session.apply(expected, edit)?;
+        let after_sketch = candidate_session
+            .accepted_prepared_input()
+            .filter(|_| retained.published_accepted_identity().is_some())
+            .ok_or(CoordinatorError::StaleComputedFeatureCandidate)?;
+        if !prepared_sketch_inputs_match_for_replay(&transition.after_sketch, &after_sketch) {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let mut candidate_allocator = self.computed_evaluation_allocator.clone();
+        let evaluated = evaluate_computed_features(
+            &candidate_session,
+            &transition.after,
+            &mut candidate_allocator,
+            bounded_geometry_control(),
+        )?;
+        let OperationOutcome::Completed {
+            value: snapshot, ..
+        } = evaluated
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if recorded_computed_feature_dispositions(&snapshot) != transition.dispositions {
+            return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+        }
+        let independently_reanchored = snapshot.reanchored_feature_document(&transition.after)?;
+        if !computed_feature_document_semantics_match(&transition.after, &independently_reanchored)
+        {
+            return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+        }
+        let next = checkpoint(&candidate_session, &transition.after, &candidate_allocator)?;
+
+        self.session = candidate_session;
+        self.features = transition.after.clone();
+        self.computed_evaluation_allocator = candidate_allocator;
+        self.computed_input = Some(snapshot.input());
+        self.computed_snapshot = Some(snapshot);
+        self.computed_preview_snapshot = None;
+        self.computed_preview_input = None;
+        self.computed_fillet_preview = None;
+        self.computed_evaluation_problem = None;
+        self.record_feature_mutation(next, replay);
+        Ok(())
     }
 
     /// Revision-checks and changes one curve's profile/construction role through the
@@ -4858,16 +5425,20 @@ impl RetainedEditorCoordinator {
         expected_topology: Option<ExternalTopologyDigest>,
     ) -> Result<MutationOutcome<()>, CoordinatorError> {
         self.ensure_expected(expected)?;
+        let previous_session = self.session.clone();
         let outcome = self.session.transact(expected, |document| {
             document.rebind_external_binding(binding, expected_kind, expected_topology)
         })?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::RebindExternalBinding {
-            expected,
-            binding,
-            expected_kind,
-            expected_topology,
-        })?;
+        self.record_mutation(
+            ReplayAction::RebindExternalBinding {
+                expected,
+                binding,
+                expected_kind,
+                expected_topology,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -4962,6 +5533,7 @@ impl RetainedEditorCoordinator {
             proposal: proposal.clone(),
             role,
         };
+        let previous_session = self.session.clone();
         let outcome = self.session.transact(expected, |document| {
             proposal.apply_with_role(document, role)
         })?;
@@ -4971,7 +5543,7 @@ impl RetainedEditorCoordinator {
             attempt: outcome.attempt_identity(),
             published_accepted: outcome.published_accepted_identity(),
         };
-        self.record_mutation(replay)?;
+        self.record_mutation(replay, previous_session)?;
         Ok(result)
     }
 
@@ -5270,6 +5842,7 @@ impl RetainedEditorCoordinator {
                 .map_err(CoordinatorError::ActionUnavailable)?;
         let replay_request = request.clone();
         let selection = selection.to_vec();
+        let previous_session = self.session.clone();
         let outcome = match resolved {
             ResolvedConstraintKind::PointOnCurve => self.apply_point_curve_action(
                 expected,
@@ -5321,11 +5894,14 @@ impl RetainedEditorCoordinator {
             }
         };
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::ConstraintAction {
-            expected,
-            selection,
-            request: replay_request,
-        })?;
+        self.record_mutation(
+            ReplayAction::ConstraintAction {
+                expected,
+                selection,
+                request: replay_request,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -5533,6 +6109,7 @@ impl RetainedEditorCoordinator {
         } else {
             ScalarUnit::Length
         };
+        let previous_session = self.session.clone();
         let outcome = self.session.transact(expected, move |document| {
             let scalar = document.add_scalar(
                 format!("{label} target"),
@@ -5547,11 +6124,14 @@ impl RetainedEditorCoordinator {
             )
         })?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::DimensionAction {
-            expected,
-            selection,
-            request: replay_request,
-        })?;
+        self.record_mutation(
+            ReplayAction::DimensionAction {
+                expected,
+                selection,
+                request: replay_request,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -5828,15 +6408,19 @@ impl RetainedEditorCoordinator {
             ));
         }
         let replay_edits = edits.clone();
+        let previous_session = self.session.clone();
         let outcome = self
             .session
             .apply(expected, DocumentEdit::SetContactBranches { edits })?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::SetContactBranches {
-            expected,
-            selection,
-            edits: replay_edits,
-        })?;
+        self.record_mutation(
+            ReplayAction::SetContactBranches {
+                expected,
+                selection,
+                edits: replay_edits,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -5868,6 +6452,7 @@ impl RetainedEditorCoordinator {
             ));
         }
         let dimension = *dimension;
+        let previous_session = self.session.clone();
         let outcome = self.session.apply(
             expected,
             DocumentEdit::SetOrientedAngleOrientation {
@@ -5876,11 +6461,14 @@ impl RetainedEditorCoordinator {
             },
         )?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::SetAngleOrientation {
-            expected,
-            dimension,
-            orientation,
-        })?;
+        self.record_mutation(
+            ReplayAction::SetAngleOrientation {
+                expected,
+                dimension,
+                orientation,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -5906,6 +6494,7 @@ impl RetainedEditorCoordinator {
         let second = *second;
         let label = label.into();
         let replay_label = label.clone();
+        let previous_session = self.session.clone();
         let outcome = self.session.transact(expected, move |document| {
             let scalar = document.add_scalar(
                 format!("{label} target"),
@@ -5924,12 +6513,15 @@ impl RetainedEditorCoordinator {
             )
         })?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::PointDistance {
-            expected,
-            points: [first, second],
-            mode,
-            label: replay_label,
-        })?;
+        self.record_mutation(
+            ReplayAction::PointDistance {
+                expected,
+                points: [first, second],
+                mode,
+                label: replay_label,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -5981,6 +6573,7 @@ impl RetainedEditorCoordinator {
         let curve = *curve;
         let label = label.into();
         let replay_label = label.clone();
+        let previous_session = self.session.clone();
         let outcome = self.session.transact(expected, move |document| {
             let scalar = document.add_scalar(
                 format!("{label} target"),
@@ -5998,12 +6591,15 @@ impl RetainedEditorCoordinator {
             )
         })?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::SegmentLength {
-            expected,
-            curve,
-            mode,
-            label: replay_label,
-        })?;
+        self.record_mutation(
+            ReplayAction::SegmentLength {
+                expected,
+                curve,
+                mode,
+                label: replay_label,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -6034,15 +6630,19 @@ impl RetainedEditorCoordinator {
                 DisabledReason::AlreadyInRequestedState,
             ));
         }
+        let previous_session = self.session.clone();
         let outcome = self
             .session
             .apply(expected, DocumentEdit::SetDimensionMode { dimension, mode })?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::SetDimensionMode {
-            expected,
-            dimension,
-            mode,
-        })?;
+        self.record_mutation(
+            ReplayAction::SetDimensionMode {
+                expected,
+                dimension,
+                mode,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -6102,15 +6702,19 @@ impl RetainedEditorCoordinator {
         }
         let objects = selected_objects(self.session.design_document(), self.editor.selection())
             .map_err(|_| CoordinatorError::IncompatibleDimension)?;
+        let previous_session = self.session.clone();
         let outcome = self.session.transact(expected, move |document| {
             document.remove_many_with_dependents(&objects)?;
             Ok(objects)
         })?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::Delete {
-            expected,
-            selection,
-        })?;
+        self.record_mutation(
+            ReplayAction::Delete {
+                expected,
+                selection,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -6179,6 +6783,7 @@ impl RetainedEditorCoordinator {
         }) {
             return Err(CoordinatorError::IncompatibleDimension);
         }
+        let previous_session = self.session.clone();
         let outcome = self.session.transact(expected, move |document| {
             for source in &sources {
                 document.set_source_suppressed(*source, suppressed)?;
@@ -6186,11 +6791,14 @@ impl RetainedEditorCoordinator {
             Ok(sources)
         })?;
         let result = mutation_from(&outcome);
-        self.record_mutation(ReplayAction::SetSuppressed {
-            expected,
-            selection,
-            suppressed,
-        })?;
+        self.record_mutation(
+            ReplayAction::SetSuppressed {
+                expected,
+                selection,
+                suppressed,
+            },
+            previous_session,
+        )?;
         Ok(result)
     }
 
@@ -6226,6 +6834,10 @@ impl RetainedEditorCoordinator {
         self.apply_editor_effect_with_projected_release_control(effect, projected_drag_control())
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "exact preview authentication, native release, durable feature re-anchor and atomic publication form one transaction boundary"
+    )]
     fn commit_solved_point_move(
         &mut self,
         expected: SketchDesignIdentity,
@@ -6259,40 +6871,137 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::SolvedPreviewMismatch);
         }
-        let replay = ReplayAction::Edit {
-            expected,
-            edit: DocumentEdit::SetPointPosition {
-                point,
-                position: model_position,
-            },
+        let before_sketch = self
+            .session
+            .accepted_prepared_input()
+            .ok_or(ComputedFeatureSnapshotError::CurrentAcceptedStateRequired)?;
+        let before_features = self.features.identity();
+        let computed_continuation = self
+            .computed_preview_snapshot
+            .as_ref()
+            .filter(|snapshot| {
+                self.computed_preview_input == Some(snapshot.input())
+                    && snapshot.input().sketch == preview.prepared_input()
+                    && snapshot.input().features == before_features
+            })
+            .cloned()
+            .or_else(|| {
+                self.drag_continuation
+                    .as_ref()
+                    .and_then(|gesture| gesture.last_valid_computed_snapshot.clone())
+                    .filter(|snapshot| {
+                        snapshot.input().sketch == preview.prepared_input()
+                            && snapshot.input().features == before_features
+                    })
+            })
+            .ok_or(CoordinatorError::ComputedFeaturePreviewInvalidated)?;
+        let edit = DocumentEdit::SetPointPosition {
+            point,
+            position: model_position,
         };
+        let mut candidate_session = self.session.clone();
         let retained = if let Some(locality) = locality.as_ref() {
             complete_projected_drag_release(
-                self.session
-                    .apply_point_position_from_preview_with_drag_locality_controlled(
-                        expected,
-                        point,
-                        model_position,
-                        &preview,
-                        locality,
-                        release_control,
-                    )?,
+                candidate_session.apply_point_position_from_preview_with_drag_locality_controlled(
+                    expected,
+                    point,
+                    model_position,
+                    &preview,
+                    locality,
+                    release_control,
+                )?,
             )?
         } else {
-            self.session.apply_point_position_from_preview(
+            candidate_session.apply_point_position_from_preview(
                 expected,
                 point,
                 model_position,
                 &preview,
             )?
         };
+        let after_sketch = candidate_session
+            .accepted_prepared_input()
+            .filter(|_| retained.published_accepted_identity().is_some())
+            .ok_or(CoordinatorError::SolvedPreviewMismatch)?;
+        if candidate_session.last_attempt().continuation_parent_input()
+            != Some(computed_continuation.input().sketch)
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+
+        let mut candidate_allocator = self.computed_evaluation_allocator.clone();
+        let continued = evaluate_computed_features_continuing(
+            &candidate_session,
+            &self.features,
+            &mut candidate_allocator,
+            bounded_geometry_control(),
+            Some(&computed_continuation),
+        )?;
+        let OperationOutcome::Completed {
+            value: continued, ..
+        } = continued
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if !computed_feature_preview_invalidations(
+            &self.features,
+            &computed_continuation,
+            &continued,
+        )
+        .is_empty()
+        {
+            return Err(CoordinatorError::ComputedFeaturePreviewInvalidated);
+        }
+        let (candidate_features, cold) = evaluate_durable_computed_reanchor(
+            &candidate_session,
+            &self.features,
+            &mut candidate_allocator,
+            &continued,
+        )?;
+        if cold.input().sketch != after_sketch
+            || cold.input().features != candidate_features.identity()
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let computed_features = (candidate_features.identity() != before_features)
+            .then(|| {
+                if !recorded_transition_is_reanchor_only(&self.features, &candidate_features) {
+                    return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+                }
+                Ok(Box::new(RecordedComputedFeatureTransition {
+                    edit: edit.clone(),
+                    before_sketch,
+                    after_sketch,
+                    before: before_features,
+                    after: candidate_features.clone(),
+                    dispositions: recorded_computed_feature_dispositions(&cold),
+                }))
+            })
+            .transpose()?;
+        let replay = ReplayAction::Edit {
+            expected,
+            edit,
+            computed_features,
+        };
+        let next = checkpoint(
+            &candidate_session,
+            &candidate_features,
+            &candidate_allocator,
+        )?;
         let outcome = MutationOutcome {
             value: retained.value().clone(),
             design: retained.design_identity(),
             attempt: retained.attempt_identity(),
             published_accepted: retained.published_accepted_identity(),
         };
-        self.record_mutation(replay)?;
+
+        self.session = candidate_session;
+        self.features = candidate_features;
+        self.computed_evaluation_allocator = candidate_allocator;
+        self.computed_input = Some(cold.input());
+        self.computed_snapshot = Some(cold);
+        self.computed_evaluation_problem = None;
+        self.record_feature_mutation(next, replay);
         Ok(MutationOutcome {
             value: EditorMutation::PointMove(outcome.value),
             design: outcome.design,
@@ -6568,8 +7277,21 @@ impl RetainedEditorCoordinator {
             } => {
                 self.set_computed_feature_suppressed(*expected, *feature, *suppressed)?;
             }
-            ReplayAction::Edit { expected, edit } => {
-                self.apply_edit(*expected, edit.clone())?;
+            ReplayAction::Edit {
+                expected,
+                edit,
+                computed_features,
+            } => {
+                if let Some(computed_features) = computed_features {
+                    self.apply_recorded_edit_with_computed_features(
+                        *expected,
+                        edit.clone(),
+                        computed_features,
+                        action.clone(),
+                    )?;
+                } else {
+                    self.apply_edit(*expected, edit.clone())?;
+                }
             }
             ReplayAction::Construction {
                 expected,
@@ -6767,14 +7489,67 @@ impl RetainedEditorCoordinator {
         Ok(())
     }
 
-    fn record_mutation(&mut self, replay: ReplayAction) -> Result<(), CoordinatorError> {
+    fn record_mutation(
+        &mut self,
+        replay: ReplayAction,
+        previous_session: RetainedSketchDocumentSession,
+    ) -> Result<(), CoordinatorError> {
+        let previous = self.computed_snapshot.clone();
+        self.record_mutation_continuing(replay, previous.as_ref(), previous_session)
+    }
+
+    fn record_mutation_continuing(
+        &mut self,
+        mut replay: ReplayAction,
+        previous: Option<&ComputedFeatureSnapshot>,
+        previous_session: RetainedSketchDocumentSession,
+    ) -> Result<(), CoordinatorError> {
         let preserve_pending_plan = matches!(&replay, ReplayAction::ConstructionPlan { .. });
-        self.refresh_computed_features();
-        let next = checkpoint(
+        let recorded_edit = match &replay {
+            ReplayAction::Edit { edit, .. } => Some(edit.clone()),
+            _ => None,
+        };
+        let previous_features = self.features.clone();
+        let previous_allocator = self.computed_evaluation_allocator.clone();
+        let previous_computed_input = self.computed_input;
+        let previous_computed_snapshot = self.computed_snapshot.clone();
+        let previous_computed_preview_input = self.computed_preview_input;
+        let previous_computed_preview_snapshot = self.computed_preview_snapshot.clone();
+        let previous_computed_fillet_preview = self.computed_fillet_preview.clone();
+        let previous_computed_evaluation_problem = self.computed_evaluation_problem.clone();
+        let previous_computed_preview_evaluation_problem =
+            self.computed_preview_evaluation_problem.clone();
+        let computed_features =
+            self.refresh_computed_features_continuing(previous, true, recorded_edit.as_ref());
+        if let ReplayAction::Edit {
+            computed_features: recorded,
+            ..
+        } = &mut replay
+            && recorded.is_none()
+        {
+            *recorded = computed_features.map(Box::new);
+        }
+        let next = match checkpoint(
             &self.session,
             &self.features,
             &self.computed_evaluation_allocator,
-        )?;
+        ) {
+            Ok(next) => next,
+            Err(error) => {
+                self.session = previous_session;
+                self.features = previous_features;
+                self.computed_evaluation_allocator = previous_allocator;
+                self.computed_input = previous_computed_input;
+                self.computed_snapshot = previous_computed_snapshot;
+                self.computed_preview_input = previous_computed_preview_input;
+                self.computed_preview_snapshot = previous_computed_preview_snapshot;
+                self.computed_fillet_preview = previous_computed_fillet_preview;
+                self.computed_evaluation_problem = previous_computed_evaluation_problem;
+                self.computed_preview_evaluation_problem =
+                    previous_computed_preview_evaluation_problem;
+                return Err(error);
+            }
+        };
         self.history.truncate(self.history_cursor + 1);
         self.history.push(next);
         self.history_cursor += 1;
@@ -6856,35 +7631,117 @@ impl RetainedEditorCoordinator {
     }
 
     fn refresh_computed_features(&mut self) {
+        self.refresh_computed_features_continuing(None, false, None);
+    }
+
+    fn refresh_computed_features_continuing(
+        &mut self,
+        previous: Option<&ComputedFeatureSnapshot>,
+        promote_current_branch: bool,
+        recorded_edit: Option<&DocumentEdit>,
+    ) -> Option<RecordedComputedFeatureTransition> {
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
         self.computed_fillet_preview = None;
         self.computed_preview_evaluation_problem = None;
-        match evaluate_computed_features(
-            &self.session,
-            &self.features,
-            &mut self.computed_evaluation_allocator,
-            bounded_geometry_control(),
-        ) {
-            Ok(OperationOutcome::Completed { value, .. }) => {
-                self.computed_input = Some(value.input());
-                self.computed_snapshot = Some(value);
-                self.computed_evaluation_problem = None;
+        let before = self.features.identity();
+        let previous = previous.filter(|snapshot| snapshot.input().features == before);
+        let before_sketch = previous.map(|snapshot| snapshot.input().sketch);
+        let continued = (promote_current_branch && recorded_edit.is_some())
+            .then_some(previous)
+            .flatten()
+            .and_then(|previous| {
+                match evaluate_computed_features_continuing(
+                    &self.session,
+                    &self.features,
+                    &mut self.computed_evaluation_allocator,
+                    bounded_geometry_control(),
+                    Some(previous),
+                ) {
+                    Ok(OperationOutcome::Completed { value, .. }) => Some(value),
+                    Ok(stopped) => {
+                        self.computed_evaluation_problem = Some(format!(
+                            "computed-feature branch continuation stopped: {:?}",
+                            stopped.report().stopping_reason
+                        ));
+                        None
+                    }
+                    Err(error) => {
+                        self.computed_evaluation_problem = Some(format!(
+                            "computed-feature branch continuation failed: {error}"
+                        ));
+                        None
+                    }
+                }
+            });
+
+        let promoted = continued.and_then(|continued| {
+            match evaluate_durable_computed_reanchor(
+                &self.session,
+                &self.features,
+                &mut self.computed_evaluation_allocator,
+                &continued,
+            ) {
+                Ok((features, cold)) => Some((features, cold)),
+                Err(error) => {
+                    self.computed_evaluation_problem = Some(format!(
+                        "computed-feature branch promotion was not durable: {error}"
+                    ));
+                    None
+                }
             }
-            Ok(stopped) => {
-                self.computed_input = None;
-                self.computed_snapshot = None;
-                self.computed_evaluation_problem = Some(format!(
-                    "computed-feature evaluation stopped: {:?}",
-                    stopped.report().stopping_reason
-                ));
-            }
-            Err(error) => {
-                self.computed_input = None;
-                self.computed_snapshot = None;
-                self.computed_evaluation_problem = Some(error.to_string());
+        });
+
+        if let Some((features, snapshot)) = promoted {
+            self.features = features;
+            self.computed_input = Some(snapshot.input());
+            self.computed_snapshot = Some(snapshot);
+            self.computed_evaluation_problem = None;
+        } else {
+            let prior_problem = self.computed_evaluation_problem.take();
+            match evaluate_computed_features(
+                &self.session,
+                &self.features,
+                &mut self.computed_evaluation_allocator,
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => {
+                    self.computed_input = Some(value.input());
+                    self.computed_snapshot = Some(value);
+                    self.computed_evaluation_problem = prior_problem;
+                }
+                Ok(stopped) => {
+                    self.computed_input = None;
+                    self.computed_snapshot = None;
+                    self.computed_evaluation_problem = Some(format!(
+                        "computed-feature evaluation stopped: {:?}{}",
+                        stopped.report().stopping_reason,
+                        prior_problem
+                            .as_deref()
+                            .map_or(String::new(), |problem| format!(" after {problem}"))
+                    ));
+                }
+                Err(error) => {
+                    self.computed_input = None;
+                    self.computed_snapshot = None;
+                    self.computed_evaluation_problem = Some(match prior_problem {
+                        Some(problem) => format!("{problem}; cold evaluation failed: {error}"),
+                        None => error.to_string(),
+                    });
+                }
             }
         }
+        if self.features.identity() == before {
+            return None;
+        }
+        Some(RecordedComputedFeatureTransition {
+            edit: recorded_edit?.clone(),
+            before_sketch: before_sketch?,
+            after_sketch: self.session.accepted_prepared_input()?,
+            before,
+            after: self.features.clone(),
+            dispositions: recorded_computed_feature_dispositions(self.computed_snapshot.as_ref()?),
+        })
     }
 
     fn reconcile_selection(&mut self) {
@@ -8727,12 +9584,13 @@ mod tests {
     };
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, DocumentBSplineForm, DocumentConstraintDefinition,
-        DocumentExternalPointRef, DocumentM38DimensionDefinition, DocumentMeasurementDefinition,
-        DocumentParameterKind, DocumentPointRef, ExternalLineOrientationV1, ExternalSnapshotDigest,
-        ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotInputError,
-        ExternalSnapshotResourcesV1, ExternalSnapshotSet, OperationStopReason,
-        OperationWorkCounter, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
-        SolverConfig, alpha_scenario, cancellation_pair,
+        DocumentCurveNormalSide, DocumentExternalPointRef, DocumentM38DimensionDefinition,
+        DocumentMeasurementDefinition, DocumentParameterKind, DocumentPointRef,
+        ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
+        ExternalSnapshotFeatureV1, ExternalSnapshotInputError, ExternalSnapshotResourcesV1,
+        ExternalSnapshotSet, OperationStopReason, OperationWorkCounter, ParameterBatch,
+        ParameterBatchEntry, ParameterValue, PersistentId, SolverConfig, alpha_scenario,
+        cancellation_pair,
     };
     use geosolve_sketch_features::{
         ComputedFeatureDefinition, ComputedFilletAuthoringOptions,
@@ -12621,14 +13479,11 @@ mod tests {
                 .pointer_up(&scene, expected_design, pointer(moved_pointer));
         assert!(matches!(
             release.as_slice(),
-            [
-                EditorEffect::CommitPointMove {
-                    expected,
-                    point,
-                    model_position,
-                },
-                EditorEffect::ClearPointPreview,
-            ] if *expected == expected_design
+            [EditorEffect::CommitPointMove {
+                expected,
+                point,
+                model_position,
+            }] if *expected == expected_design
                 && *point == center
                 && (model_position[0] - preview_center[0]).abs() <= 1.0e-8
                 && (model_position[1] - preview_center[1]).abs() <= 1.0e-8
@@ -12823,14 +13678,11 @@ mod tests {
                 .pointer_up(&scene, expected, pointer(101, moved_pointer));
         assert!(matches!(
             release.as_slice(),
-            [
-                EditorEffect::CommitPointMove {
-                    expected: effect_expected,
-                    point: effect_point,
-                    ..
-                },
-                EditorEffect::ClearPointPreview,
-            ] if *effect_expected == expected && *effect_point == center
+            [EditorEffect::CommitPointMove {
+                expected: effect_expected,
+                point: effect_point,
+                ..
+            }] if *effect_expected == expected && *effect_point == center
         ));
         coordinator
             .apply_editor_effect(&release[0])
@@ -13324,10 +14176,7 @@ mod tests {
         );
         assert!(matches!(
             release.as_slice(),
-            [
-                EditorEffect::CommitPointMove { point, .. },
-                EditorEffect::ClearPointPreview,
-            ] if *point == center
+            [EditorEffect::CommitPointMove { point, .. }] if *point == center
         ));
         coordinator
             .apply_editor_effect(&release[0])
@@ -14787,6 +15636,190 @@ mod tests {
             .value
     }
 
+    #[test]
+    fn recorded_native_edit_transition_accepts_contact_refresh_but_rejects_branch_or_radius_edits()
+    {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let before = fixture.coordinator.feature_document().clone();
+        let ComputedFeatureDefinition::FilletSet(fillet) =
+            &before.feature(feature).expect("Fillet feature").definition;
+        let corner = fillet.corners[0];
+
+        let mut refreshed_corner = corner.without_id();
+        refreshed_corner.first.picked_parameter += 1.0e-4;
+        let mut contact_refresh = before.clone();
+        contact_refresh
+            .set_fillet_corner(feature, corner.id, refreshed_corner)
+            .expect("valid contact refresh");
+        assert!(recorded_transition_is_reanchor_only(
+            &before,
+            &contact_refresh
+        ));
+
+        let mut changed_branch = corner.without_id();
+        changed_branch.first.normal_side = match changed_branch.first.normal_side {
+            DocumentCurveNormalSide::Left => DocumentCurveNormalSide::Right,
+            DocumentCurveNormalSide::Right => DocumentCurveNormalSide::Left,
+        };
+        let mut branch_transition = before.clone();
+        branch_transition
+            .set_fillet_corner(feature, corner.id, changed_branch)
+            .expect("structurally valid branch mutation");
+        assert!(!recorded_transition_is_reanchor_only(
+            &before,
+            &branch_transition
+        ));
+
+        let mut radius_transition = before.clone();
+        radius_transition
+            .set_fillet_radius(feature, fillet.radius * 1.1)
+            .expect("structurally valid radius mutation");
+        assert!(!recorded_transition_is_reanchor_only(
+            &before,
+            &radius_transition
+        ));
+    }
+
+    #[test]
+    fn non_edit_replay_actions_never_persist_an_unrecorded_feature_reanchor() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let before_identity = fixture.coordinator.feature_document().identity();
+        let before_json = fixture.coordinator.feature_document().to_json().unwrap();
+
+        fixture
+            .coordinator
+            .apply_constraint_action_for(
+                fixture.coordinator.session().design_identity(),
+                &[SelectionItem::Curve(fixture.spans[0])],
+                ConstraintActionRequest {
+                    intent: ConstraintIntent::Horizontal,
+                    label: "horizontal source".into(),
+                    contacts: Vec::new(),
+                    relation: None,
+                },
+            )
+            .expect("ordinary non-Edit constraint action");
+
+        assert_eq!(
+            fixture.coordinator.feature_document().identity(),
+            before_identity,
+            "a non-Edit replay action cannot silently advance persistent feature intent"
+        );
+        assert_eq!(
+            fixture.coordinator.feature_document().to_json().unwrap(),
+            before_json
+        );
+        assert!(matches!(
+            fixture.coordinator.transcript().last(),
+            Some(ReplayAction::ConstraintAction { .. })
+        ));
+        assert!(matches!(
+            computed_feature_state(
+                fixture
+                    .coordinator
+                    .computed_snapshot()
+                    .expect("cold-evaluated feature output"),
+                feature,
+            ),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+    }
+
+    #[test]
+    fn direct_edit_replay_preserves_new_failure_beside_reanchored_current_feature() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let first_candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let first = apply_grouped_fillet(&mut fixture.coordinator, &first_candidate);
+        let second_candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[2]]);
+        let second = apply_grouped_fillet(&mut fixture.coordinator, &second_candidate);
+        let mut replayed = RetainedEditorCoordinator::with_features(
+            fixture.coordinator.session().clone(),
+            fixture.coordinator.feature_document().clone(),
+        )
+        .expect("exact pre-edit replay coordinator");
+        let before_features = fixture.coordinator.feature_document().identity();
+
+        fixture
+            .coordinator
+            .apply_edit(
+                fixture.coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: fixture.points[1],
+                    position: [0.1, 0.0],
+                },
+            )
+            .expect("direct edit may retain one failed Fillet beside one current Fillet");
+        let original_snapshot = fixture
+            .coordinator
+            .computed_snapshot()
+            .expect("mixed direct-edit computed state");
+        assert!(matches!(
+            computed_feature_state(original_snapshot, first),
+            ComputedFeatureEvaluationState::Failed { .. }
+        ));
+        assert!(matches!(
+            computed_feature_state(original_snapshot, second),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+        assert_ne!(
+            fixture.coordinator.feature_document().identity(),
+            before_features,
+            "the surviving Current feature must durably refresh its contact frame"
+        );
+        let action = fixture
+            .coordinator
+            .transcript()
+            .last()
+            .expect("direct edit replay action")
+            .clone();
+        assert!(matches!(
+            action,
+            ReplayAction::Edit {
+                computed_features: Some(_),
+                ..
+            }
+        ));
+        let expected_dispositions = recorded_computed_feature_dispositions(original_snapshot);
+        let expected_features = fixture.coordinator.feature_document().to_json().unwrap();
+        let expected_design = fixture.coordinator.session().export_design_json().unwrap();
+        let expected_accepted = fixture
+            .coordinator
+            .session()
+            .export_accepted_json()
+            .unwrap();
+
+        replayed
+            .replay(&action)
+            .expect("mixed direct edit must replay its recorded cold state");
+        let replayed_snapshot = replayed
+            .computed_snapshot()
+            .expect("replayed mixed computed state");
+        assert_eq!(
+            recorded_computed_feature_dispositions(replayed_snapshot),
+            expected_dispositions
+        );
+        assert!(computed_feature_states_match_for_durable_reanchor(
+            original_snapshot,
+            replayed_snapshot
+        ));
+        assert_eq!(
+            replayed.feature_document().to_json().unwrap(),
+            expected_features
+        );
+        assert_eq!(
+            replayed.session().export_design_json().unwrap(),
+            expected_design
+        );
+        assert_eq!(
+            replayed.session().export_accepted_json().unwrap(),
+            expected_accepted
+        );
+    }
+
     fn fillet_radius(coordinator: &RetainedEditorCoordinator, feature: ComputedFeatureId) -> f64 {
         let ComputedFeatureDefinition::FilletSet(fillet) = &coordinator
             .feature_document()
@@ -14879,8 +15912,10 @@ mod tests {
     }
 
     fn visible_computed_scene(coordinator: &RetainedEditorCoordinator) -> EditorScene {
-        let accepted = coordinator
-            .session()
+        let source = coordinator
+            .solved_preview_session()
+            .unwrap_or_else(|| coordinator.session());
+        let accepted = source
             .accepted_state()
             .expect("accepted visible computed scene");
         let (expected, snapshot) = match coordinator.computed_scene_state() {
@@ -14891,9 +15926,8 @@ mod tests {
             accepted.identity().revision().get(),
             accepted.design_identity(),
             accepted.document(),
-            coordinator.session().design_document(),
-            &coordinator
-                .session()
+            source.design_document(),
+            &source
                 .accepted_prepared_input()
                 .expect("current accepted visible input"),
             &expected,
@@ -16604,6 +17638,10 @@ mod tests {
                 x: press.x + screen_delta[0],
                 y: press.y + screen_delta[1],
             };
+            let intermediate = ScreenPoint {
+                x: press.x + 0.5 * screen_delta[0],
+                y: press.y + 0.5 * screen_delta[1],
+            };
             let pointer_id = 800 + u64::try_from(case).expect("small case index");
             let pointer = |position| PointerInput {
                 pointer_id,
@@ -16611,10 +17649,37 @@ mod tests {
                 modifiers: Modifiers::default(),
             };
             let _ = fixture.coordinator.pointer_down(&scene, pointer(press));
+            let first_requests = fixture
+                .coordinator
+                .editor_mut()
+                .pointer_move(&scene, pointer(intermediate));
+            let [
+                EditorEffect::RequestProjectedPointMove {
+                    pointer_id,
+                    request_id,
+                    point: requested,
+                    model_position,
+                },
+            ] = first_requests.as_slice()
+            else {
+                panic!("case {case} must request one intermediate projected source move")
+            };
+            assert_eq!(*requested, point);
+            let first_preview_effects = fixture.coordinator.resolve_projected_point_move(
+                *pointer_id,
+                *request_id,
+                *requested,
+                *model_position,
+            );
+            assert!(matches!(
+                first_preview_effects.as_slice(),
+                [EditorEffect::PreviewPointMove { point: previewed, .. }] if *previewed == point
+            ));
+            let intermediate_scene = visible_computed_scene(&fixture.coordinator);
             let requests = fixture
                 .coordinator
                 .editor_mut()
-                .pointer_move(&scene, pointer(moved));
+                .pointer_move(&intermediate_scene, pointer(moved));
             let [
                 EditorEffect::RequestProjectedPointMove {
                     pointer_id,
@@ -16624,7 +17689,7 @@ mod tests {
                 },
             ] = requests.as_slice()
             else {
-                panic!("case {case} must request one projected source move")
+                panic!("case {case} must request one final projected source move")
             };
             assert_eq!(*requested, point);
             let preview_effects = fixture.coordinator.resolve_projected_point_move(
@@ -16666,10 +17731,7 @@ mod tests {
             );
             assert!(matches!(
                 release.as_slice(),
-                [
-                    EditorEffect::CommitPointMove { point: committed, .. },
-                    EditorEffect::ClearPointPreview,
-                ] if *committed == point
+                [EditorEffect::CommitPointMove { point: committed, .. }] if *committed == point
             ));
             let committed_mutation = fixture
                 .coordinator
@@ -16688,10 +17750,6 @@ mod tests {
                     .is_some(),
                 "case {case} published an accepted state for stale input"
             );
-            fixture
-                .coordinator
-                .apply_editor_effect(&release[1])
-                .expect("clear source point preview");
             let committed_evaluation = match fixture.coordinator.computed_scene_state() {
                 ComputedSceneState::Current { expected, snapshot } => {
                     assert_eq!(*expected, snapshot.input());
@@ -16758,6 +17816,215 @@ mod tests {
                 persistent_corners
             );
         }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the rollback fingerprint deliberately covers every retained, computed, allocator, history and transient authority field"
+    )]
+    fn projected_release_discards_native_and_feature_state_when_durable_reanchor_fails() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let point = fixture.points[0];
+        let scene = current_computed_scene(&fixture.coordinator);
+        let press = scene
+            .points
+            .iter()
+            .find(|candidate| candidate.id == point)
+            .expect("movable source point")
+            .screen_position;
+        let moved = ScreenPoint {
+            x: press.x - 24.0,
+            y: press.y + 12.0,
+        };
+        let pointer = |position| PointerInput {
+            pointer_id: 8_901,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        let _ = fixture.coordinator.pointer_down(&scene, pointer(press));
+        let requests = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved));
+        let [
+            EditorEffect::RequestProjectedPointMove {
+                pointer_id,
+                request_id,
+                point: requested,
+                model_position,
+            },
+        ] = requests.as_slice()
+        else {
+            panic!("source drag must request one projected move")
+        };
+        let preview = fixture.coordinator.resolve_projected_point_move(
+            *pointer_id,
+            *request_id,
+            *requested,
+            *model_position,
+        );
+        assert!(matches!(
+            preview.as_slice(),
+            [EditorEffect::PreviewPointMove { point: previewed, .. }] if *previewed == point
+        ));
+        assert!(matches!(
+            computed_feature_state(
+                fixture
+                    .coordinator
+                    .computed_preview_snapshot
+                    .as_ref()
+                    .expect("complete computed preview"),
+                feature,
+            ),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+        let expected = fixture.coordinator.session().design_identity();
+        let release = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_up(&scene, expected, pointer(moved));
+        let [commit @ EditorEffect::CommitPointMove { .. }] = release.as_slice() else {
+            panic!("valid source preview must offer one exact release")
+        };
+
+        // The first staged evaluation may allocate `MAX - 1`; the cold
+        // durability proof then fails while trying to allocate `MAX`. Because
+        // all release work is staged, neither allocation can leak into live
+        // state and the held preview remains retryable.
+        let exhausted = ComputedEvaluationAllocatorHighWater {
+            next_revision: geosolve_sketch_features::ComputedEvaluationRevision::from_raw(
+                u64::MAX - 1,
+            ),
+        };
+        fixture
+            .coordinator
+            .computed_evaluation_allocator
+            .retain_high_water(exhausted);
+        let before_design = fixture.coordinator.session().design_identity();
+        let before_prepared = fixture
+            .coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input before rejected release");
+        let before_design_json = fixture.coordinator.session().export_design_json().unwrap();
+        let before_accepted_json = fixture
+            .coordinator
+            .session()
+            .export_accepted_json()
+            .unwrap();
+        let before_features = fixture.coordinator.feature_document().to_json().unwrap();
+        let before_feature_identity = fixture.coordinator.feature_document().identity();
+        let before_computed_input = fixture.coordinator.computed_input;
+        let before_computed_revision = fixture
+            .coordinator
+            .computed_snapshot
+            .as_ref()
+            .expect("retained computed snapshot")
+            .evaluation_revision();
+        let before_preview_input = fixture.coordinator.computed_preview_input;
+        let before_preview_revision = fixture
+            .coordinator
+            .computed_preview_snapshot
+            .as_ref()
+            .expect("held computed preview")
+            .evaluation_revision();
+        let before_solved_preview = fixture
+            .coordinator
+            .solved_preview_session()
+            .expect("held solved preview")
+            .prepared_input();
+        let before_history_len = fixture.coordinator.history_len();
+        let before_history_cursor = fixture.coordinator.history_cursor();
+        let before_transcript = fixture.coordinator.transcript().to_vec();
+        let before_checkpoint = fixture.coordinator.persistence_checkpoint().unwrap();
+
+        assert!(matches!(
+            fixture.coordinator.apply_editor_effect(commit),
+            Err(CoordinatorError::ComputedFeatureEvaluation(
+                ComputedFeatureEvaluationError::EvaluationIdentityExhausted
+            ))
+        ));
+        assert_eq!(
+            fixture.coordinator.session().design_identity(),
+            before_design
+        );
+        assert_eq!(
+            fixture.coordinator.session().accepted_prepared_input(),
+            Some(before_prepared)
+        );
+        assert_eq!(
+            fixture.coordinator.session().export_design_json().unwrap(),
+            before_design_json
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .session()
+                .export_accepted_json()
+                .unwrap(),
+            before_accepted_json
+        );
+        assert_eq!(
+            fixture.coordinator.feature_document().to_json().unwrap(),
+            before_features
+        );
+        assert_eq!(
+            fixture.coordinator.feature_document().identity(),
+            before_feature_identity
+        );
+        assert_eq!(fixture.coordinator.computed_input, before_computed_input);
+        assert_eq!(
+            fixture
+                .coordinator
+                .computed_snapshot
+                .as_ref()
+                .expect("same retained computed snapshot")
+                .evaluation_revision(),
+            before_computed_revision
+        );
+        assert_eq!(
+            fixture.coordinator.computed_preview_input,
+            before_preview_input
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .computed_preview_snapshot
+                .as_ref()
+                .expect("same held computed preview")
+                .evaluation_revision(),
+            before_preview_revision
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .solved_preview_session()
+                .expect("same held solved preview")
+                .prepared_input(),
+            before_solved_preview
+        );
+        assert_eq!(fixture.coordinator.history_len(), before_history_len);
+        assert_eq!(fixture.coordinator.history_cursor(), before_history_cursor);
+        assert_eq!(fixture.coordinator.transcript(), before_transcript);
+        assert_eq!(
+            fixture
+                .coordinator
+                .persistence_checkpoint()
+                .unwrap()
+                .computed_evaluation_high_water(),
+            before_checkpoint.computed_evaluation_high_water()
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .persistence_checkpoint()
+                .unwrap()
+                .feature_json(),
+            before_checkpoint.feature_json()
+        );
     }
 
     #[test]

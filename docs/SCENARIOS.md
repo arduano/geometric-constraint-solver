@@ -1296,15 +1296,20 @@ branches.
 That pre-repair 197-row checklist contained 193 `PASS` plus four `DEFECT`; `--check` passed while
 `--require-clean` intentionally failed. H3 changed no production behavior or release bytes.
 Authorized production repairs now make the same four stable rows pass without changing their input
-fingerprints. The current fixture is 197/197 `PASS`, SHA-256
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Exact golden, workspace,
-Clippy, formatting and relevant WASM qualification pass. Clean source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes
+fingerprints. The F003/F004 repair checkpoint was 197/197 `PASS`, SHA-256
+`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. F005 appends one exact
+source-rotation evaluation row at `input-04658a77db2dc779` while preserving those 197 records
+byte-for-byte; the current fixture is 198/198 `PASS`, SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Focused F005 owner/golden,
+aggregate golden, formatting and focused warnings-denied Clippy qualification pass. Prior F003/F004
+source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
 snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Focused human UAT remains
-pending. M71 is deferred behind it.
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. F005 formatting,
+warnings-denied all-workspace Clippy, locked all-feature workspace tests, the relevant WASM check
+and aggregate golden modes pass. Complete F005 clean release qualification and fresh publication
+must precede its focused movement UAT. M71 is deferred behind it.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1674,6 +1679,69 @@ the same case identities and input fingerprints while passing:
 - lower same-cell: `input-f9920c3cf170130d`; and
 - periodic seam: `input-2da21ef04cfb4246`.
 
+### M70B-F005 - Persistent line-circle Fillet source-rotation continuity (owner-resolved)
+
+The complete loadable capsule is preserved at
+`crates/geosolve-demo-web/tests/fixtures/m70b_f005_repro.txt`; its identity
+`4228:0823d31f269300af` restores through the ordinary decoder/workspace/coordinator path to an
+unconstrained, finite, independently hard-valid accepted sketch at rank zero and seven DOF. It
+contains a circle at
+`(0.16002449354493023, 1.9065418176251467)` with radius `2.201783656372145`, an affine line from
+`(-2.6404041434913528, 2.0437056692350866)` to
+`(1.371638516099403, 4.855564627238864)`, and one persistent radius-1 Fillet. The circle parent is
+Right/End with total seed `6.299486624551188`, Local witness
+`[4.959571177211237, 7.857323073392596]`, winding one and an explicit periodic anchor; the line is
+Left/Start/Interior. Endpoint order is FirstThenSecond and sweep is counter-clockwise.
+
+After the line rotated, persisted evaluation reported `NoLocalRoot`. The intended contact is total
+circle parameter `7.909322804062922` (principal `1.626137496883336`, winding one), line parameter
+`0.796915905159832`, with centre `(-0.017075528971715, 5.103423761681947)`. Independent incidence,
+radius, tangency and signed-side residuals are approximately machine precision and normalized
+transversality is about `0.527757`. The contact lies only `0.051999730670326` above the stale stored
+upper certificate. Fresh interval certificates around the stored seed and intended root overlap,
+so the apparent cardinal/90-degree break is not a geometric fold. The alternative contact at
+about `9.021239181530` lies across the real tangent-orientation barrier and remains rejected.
+
+The repair keeps ordinary persisted evaluation as the fast path. Only a circular-plus-affine
+`NoLocalRoot` may search the complete retained circular support. Each candidate must have a fresh
+cell connected through strict stored-to-seed and seed-to-candidate certificate overlap; zero or
+multiple material roots, a fold, offset singularity, invalid geometry or true barrier fail closed.
+The same proof is reconstructed before publication. Standalone evaluation remains read-only;
+after an accepted native edit, the retained coordinator may atomically promote only the exact
+contact-frame refresh derived from that evaluation. It refreshes contact parameters, winding,
+periodic anchor and Local certificate while preserving radius, sources, sides, retained endpoints,
+endpoint order and sweep. Generic nonlinear parents and radius continuation are unchanged.
+
+The movement regression drives the actual headless point gesture through the stale `90.19°`
+certificate edge and the true `90°` cardinal point while the finite line contact remains interior.
+It then covers a genuine out-of-segment sample. Harmless crossings publish continuously and may
+accumulate a full periodic winding; a genuine limit retains the last complete native-plus-Fillet
+preview and its release coordinate, exposes a targeted corner/two-parent cue, and recovers on a
+valid reverse sample without changing roots. A first-sample limit commits nothing; a terminal
+invalid sample commits only the previous valid preview. Mixed Current plus unrelated Failed sets,
+exact-edit replay binding, Undo/Redo, cold restore and stale/detached scene authority are also
+frozen. Direct document edits remain free to leave a computed feature visibly Failed.
+
+Mouse-up is staged rather than repaired after publication: the candidate native session, exact
+contact-frame-only sidecar, cold no-hint computed output, allocator, checkpoint, history and replay
+transition must all succeed before live authority changes. A forced allocator exhaustion between
+continued evaluation and the cold durability proof leaves design/accepted JSON, feature JSON,
+computed snapshots, allocator high-water, history, transcript and the held solved/computed preview
+unchanged. Replay rejects the authentic transition after a parameter-input revision changes even
+though design and edit identities still match. A separate ordinary constraint-action regression
+proves non-`Edit` actions cold-evaluate without persisting an unrecorded feature revision.
+
+Owner regression
+`m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell` freezes the exact sketch
+and feature JSON, rank/DOF, metadata, intended and alternate roots, full-circle non-trimming and
+read-only state. The systemic golden row is
+`feature.fillet.evaluation.line-circle.source-rotation.retained-start` at fingerprint
+`input-04658a77db2dc779`.
+
+The sequence-level owner suite is
+`crates/geosolve-constraint-editor/tests/m70b_f005_retained_movement.rs`; it is deliberately
+focused rather than appended as nine near-duplicate static golden rows.
+
 ### M70B-H1 - Continue-through-failure authoring and scene oracle
 
 This test-only survey turns the complete UI-exposed authoring family inventory into a repeatable
@@ -1736,19 +1804,23 @@ contract. H2 adds no residual, solver behavior, persistent schema, browser behav
 
 H3 adds the two systemic computed-Fillet dimensions exposed only after F003 and F004 had focused
 owner-layer characterizations. `crates/geosolve-constraint-editor/tests/golden_fillet_oracle.rs`
-drives four public-boundary cases, each in its own bounded process through the existing aggregate
+drives five public-boundary cases, each in its own bounded process through the existing aggregate
 driver:
 
 - `feature.fillet.authoring.coincident-closure.point` — `M70B-F003`;
 - `feature.fillet.authoring.coincident-closure.curve-pair` — `M70B-F003`;
 - `feature.fillet.evaluation.line-circle.same-cell-lower` — `M70B-F004`, winding zero; and
-- `feature.fillet.evaluation.line-circle.same-cell-seam` — `M70B-F004`, winding one.
+- `feature.fillet.evaluation.line-circle.same-cell-seam` — `M70B-F004`, winding one; and
+- `feature.fillet.evaluation.line-circle.source-rotation.retained-start` — `M70B-F005`, moved
+  affine source with overlapping fresh certificates.
 
-The first pair uses the public headless feature-authoring/coordinator path. The second pair uses
+The first pair uses the public headless feature-authoring/coordinator path. The next pair uses
 the public computed-feature evaluation boundary and independently checks finite accepted geometry,
 hard validity, source/contact incidence, radius, tangency, signed normal side, source/span
 identity, contact parameter, winding and membership in the unchanged Local cell. Public contact
-reseeding is evidence that the branch remains viable, not a substitute production path.
+reseeding is evidence that the branch remains viable, not a substitute production path. The F005
+row uses that same public evaluation boundary while varying the affine source and requiring fresh
+certificate overlap rather than membership inside a stale numeric interval.
 
 At the historical test-only H3 checkpoint, all original H1/H2 row records remained byte-identical
 and the inventory was 197 rows: 193 `PASS` plus four reviewed `DEFECT`. That checked golden
@@ -1760,15 +1832,20 @@ evaluation, persistent schema, browser or release behavior.
 
 After authorized F003/F004 production repairs, the same four case IDs retain the exact input
 fingerprints listed above and transition `DEFECT` to `PASS`. The original 193 row records remain
-byte-identical, so the current reviewed inventory is 197/197 `PASS`. Its SHA-256 is
-`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused owner tests pass;
-the complete workspace, exact golden `--check`/`--require-clean`, warnings-denied Clippy,
-formatting and relevant WASM qualification also pass. Clean source
+byte-identical, so the F003/F004 repair checkpoint was 197/197 `PASS` at SHA-256
+`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Its focused and complete
+workspace qualification passed. Clean source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate. Its immutable
 seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match the snapshot, whose ordered-manifest
-aggregate is `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted human
-rechecks and explicit M70B approval remain pending.
+aggregate is `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`.
+
+F005 preserves all 197 records and appends the source-rotation row at fingerprint
+`input-04658a77db2dc779`. The current fixture is 198/198 `PASS` at SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`; its focused owner/golden,
+aggregate golden, formatting, warnings-denied all-workspace Clippy, locked all-feature workspace
+tests and the relevant WASM check pass. Complete F005 clean release qualification, fresh
+publication, targeted human rechecks and explicit M70B approval remain pending.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 
