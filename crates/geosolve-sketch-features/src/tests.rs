@@ -273,23 +273,29 @@ struct LineCircleFixture {
 #[derive(Clone, Copy)]
 struct M70bF004Row {
     payload_fingerprint: &'static str,
+    accepted_canonical_json: &'static str,
     line_start: [f64; 2],
     line_end: [f64; 2],
     viable_circle_parameter: f64,
+    viable_circle_winding: i32,
 }
 
 const M70B_F004_ROWS: [M70bF004Row; 2] = [
     M70bF004Row {
         payload_fingerprint: "4752:daa87c91c75abf9f",
+        accepted_canonical_json: r#"{"version":4,"id":"945530003fee983a59bf60604279fed7","next_id":"945530003fee983a59bf60604279fee0","model_scale":10.0,"points":[{"id":"945530003fee983a59bf60604279fed8","label":"draft point","position":[-0.9640476565370273,2.537115794695225]},{"id":"945530003fee983a59bf60604279fedb","label":"draft point","position":[-5.0201018212354995,0.07996993839962943]},{"id":"945530003fee983a59bf60604279fedc","label":"draft point","position":[4.23240434577232,0.07996993839962896]}],"scalars":[{"id":"945530003fee983a59bf60604279fed9","label":"radius","value":1.1815315903695374,"unit":"length","domain":{"kind":"positive"}}],"curves":[{"id":"945530003fee983a59bf60604279feda","label":"circle","definition":{"kind":"circle","center":"945530003fee983a59bf60604279fed8","radius":"945530003fee983a59bf60604279fed9"}},{"id":"945530003fee983a59bf60604279fedd","label":"line","definition":{"kind":"line","start":"945530003fee983a59bf60604279fedb","end":"945530003fee983a59bf60604279fedc","branch_direction":[1.0,0.0]}}],"contacts":[],"trim_views":[],"constraints":[{"id":"945530003fee983a59bf60604279fede","source_id":"945530003fee983a59bf60604279fedf","label":"auto horizontal","suppressed":false,"definition":{"kind":"horizontal","line":{"curve":"945530003fee983a59bf60604279fedd","segment":0}}}],"dimensions":[],"source_order":["945530003fee983a59bf60604279fedf"]}"#,
         line_start: [-5.020_101_821_235_499_5, 0.079_969_938_399_629_43],
         line_end: [4.232_404_345_772_32, 0.079_969_938_399_628_96],
         viable_circle_parameter: 5.551_739_581_930_468,
+        viable_circle_winding: 0,
     },
     M70bF004Row {
         payload_fingerprint: "4750:beda1885b15e38b5",
+        accepted_canonical_json: r#"{"version":4,"id":"945530003fee983a59bf60604279fed7","next_id":"945530003fee983a59bf60604279fee0","model_scale":10.0,"points":[{"id":"945530003fee983a59bf60604279fed8","label":"draft point","position":[-0.9640476565370273,2.537115794695225]},{"id":"945530003fee983a59bf60604279fedb","label":"draft point","position":[-5.0201018212354995,2.043335287688456]},{"id":"945530003fee983a59bf60604279fedc","label":"draft point","position":[4.5968613866582695,2.043335287688455]}],"scalars":[{"id":"945530003fee983a59bf60604279fed9","label":"radius","value":1.1815315903695374,"unit":"length","domain":{"kind":"positive"}}],"curves":[{"id":"945530003fee983a59bf60604279feda","label":"circle","definition":{"kind":"circle","center":"945530003fee983a59bf60604279fed8","radius":"945530003fee983a59bf60604279fed9"}},{"id":"945530003fee983a59bf60604279fedd","label":"line","definition":{"kind":"line","start":"945530003fee983a59bf60604279fedb","end":"945530003fee983a59bf60604279fedc","branch_direction":[1.0,0.0]}}],"contacts":[],"trim_views":[],"constraints":[{"id":"945530003fee983a59bf60604279fede","source_id":"945530003fee983a59bf60604279fedf","label":"auto horizontal","suppressed":false,"definition":{"kind":"horizontal","line":{"curve":"945530003fee983a59bf60604279fedd","segment":0}}}],"dimensions":[],"source_order":["945530003fee983a59bf60604279fedf"]}"#,
         line_start: [-5.020_101_821_235_499_5, 2.043_335_287_688_456],
         line_end: [4.596_861_386_658_269_5, 2.043_335_287_688_455],
         viable_circle_parameter: 6.517_367_674_350_06,
+        viable_circle_winding: 1,
     },
 ];
 
@@ -353,7 +359,12 @@ fn m70b_f004_fixture(
         )
         .unwrap();
 
-    let reconstructed_json = document.to_canonical_json().unwrap();
+    assert_eq!(
+        document.to_canonical_json().unwrap(),
+        row.accepted_canonical_json,
+        "{}: payload-derived sketch transcription drifted",
+        row.payload_fingerprint
+    );
     let session = retained(document);
     assert_eq!(
         session
@@ -362,7 +373,7 @@ fn m70b_f004_fixture(
             .document()
             .to_canonical_json()
             .unwrap(),
-        reconstructed_json,
+        row.accepted_canonical_json,
         "{} did not reconstruct the exact accepted sketch",
         row.payload_fingerprint
     );
@@ -962,7 +973,7 @@ fn assert_m70b_f004_arc_is_independently_valid(
     assert_eq!(arc.sweep, corner.sweep, "{payload_fingerprint}");
 
     let parents = [corner.first, corner.second];
-    for (parent, contact) in parents.into_iter().zip(arc.contacts) {
+    for (index, (parent, contact)) in parents.into_iter().zip(arc.contacts).enumerate() {
         assert_eq!(contact.source, parent.source, "{payload_fingerprint}");
         assert!(
             contact.parameter.is_finite()
@@ -970,6 +981,18 @@ fn assert_m70b_f004_arc_is_independently_valid(
                 && contact.position.into_iter().all(f64::is_finite),
             "{payload_fingerprint}: non-finite generated contact"
         );
+        assert_close(contact.parameter, parent.picked_parameter, 2.0e-12);
+        assert_eq!(contact.winding, parent.winding, "{payload_fingerprint}");
+        let expected_total_parameter = if index == 0 {
+            parent.picked_parameter + f64::from(parent.winding) * std::f64::consts::TAU
+        } else {
+            assert_eq!(
+                parent.winding, 0,
+                "{payload_fingerprint}: bounded line contact acquired a winding"
+            );
+            parent.picked_parameter
+        };
+        assert_close(contact.total_parameter, expected_total_parameter, 2.0e-12);
         let jet = document
             .evaluate_curve_jet(parent.source.span, contact.total_parameter)
             .unwrap();
@@ -986,6 +1009,16 @@ fn assert_m70b_f004_arc_is_independently_valid(
         let radial_length = radial[0].hypot(radial[1]);
         assert_close(radial_length, arc.radius, 1.0e-9);
         let tangent_length = jet.first_derivative.x.hypot(jet.first_derivative.y);
+        let left_normal = [
+            -jet.first_derivative.y / tangent_length,
+            jet.first_derivative.x / tangent_length,
+        ];
+        let expected_signed_offset = match parent.normal_side {
+            DocumentCurveNormalSide::Left => arc.radius,
+            DocumentCurveNormalSide::Right => -arc.radius,
+        };
+        let signed_offset = radial[0] * left_normal[0] + radial[1] * left_normal[1];
+        assert_close(signed_offset, expected_signed_offset, 1.0e-9);
         let normalized_tangency =
             (jet.first_derivative.x * radial[0] + jet.first_derivative.y * radial[1]).abs()
                 / (tangent_length * radial_length);
@@ -1002,7 +1035,8 @@ fn assert_m70b_f004_arc_is_independently_valid(
     for (angle, contact) in [(arc.start_angle, start), (arc.end_angle, end)] {
         let expected =
             (contact.position[1] - arc.center[1]).atan2(contact.position[0] - arc.center[0]);
-        let angle_error = (angle - expected).sin().abs();
+        let delta = angle - expected;
+        let angle_error = delta.sin().atan2(delta.cos()).abs();
         assert!(
             angle_error <= 1.0e-9,
             "{payload_fingerprint}: arc endpoint angle mismatch {angle_error:.12e}"
@@ -3051,6 +3085,22 @@ fn m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window() {
             row.payload_fingerprint
         );
         assert_m70b_f004_branch_state(reanchored.corner, persisted_corner, row.payload_fingerprint);
+        assert_eq!(
+            reanchored.corner.first.winding, row.viable_circle_winding,
+            "{}: re-anchored circle parent has the wrong seam winding",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            reanchored.arc.contacts[0].winding, row.viable_circle_winding,
+            "{}: published circle contact has the wrong seam winding",
+            row.payload_fingerprint
+        );
+        assert_close(
+            reanchored.corner.first.picked_parameter,
+            row.viable_circle_parameter
+                .rem_euclid(std::f64::consts::TAU),
+            2.0e-10,
+        );
         let circle_parameter = reanchored.arc.contacts[0].total_parameter;
         assert_close(circle_parameter, row.viable_circle_parameter, 2.0e-10);
         assert!(

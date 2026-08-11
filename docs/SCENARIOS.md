@@ -1594,8 +1594,8 @@ Both application-workspace v5 payloads restore through the ordinary bounded deco
 coordinator. Their accepted sketches are finite, independently hard-valid at normalized residual
 below `1e-9`, rank one and six-DOF. They share the same circle centre
 `(-0.9640476565370273, 2.537115794695225)`, circle radius `1.1815315903695374` and persistent
-radius-1 Fillet. Only the accepted horizontal line height differs: `0.079969938399629` in the first
-case and `2.043335287688455` in the second.
+radius-1 Fillet. The accepted horizontal line height is `0.079969938399629` in the first case and
+`2.043335287688455` in the second; the right endpoint and resulting line extent also differ.
 
 The persistent branch is identical in both cases: circle Right/End with picked parameter
 `6.010678569256539`, Local cell `[4.712388980384694, 7.853981633974479]` and periodic anchor
