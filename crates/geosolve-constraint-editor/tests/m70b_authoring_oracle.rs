@@ -14,8 +14,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use geosolve_constraint_editor::{
     AuthoringApplication, AuthoringMutation, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
-    AuthoringState, AuthoringTool, ConstraintIntent, DimensionKind, ResolvedConstraintKind,
-    RetainedEditorCoordinator, SelectionItem,
+    AuthoringState, AuthoringTool, ConstraintIntent, DimensionKind, DimensionTargetDisplayUnit,
+    DimensionTargetMetadata, ResolvedConstraintKind, RetainedEditorCoordinator, SelectionItem,
 };
 use geosolve_sketch::{
     ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveSpan, DesignPointId,
@@ -242,8 +242,8 @@ fn continuity_option(variant: Variant) -> DocumentCurveContinuity {
         1 => DocumentCurveContinuity::G0,
         2 => DocumentCurveContinuity::G2,
         3 => DocumentCurveContinuity::ParametricC2 {
-            first_rate: 1.0,
-            second_rate: 1.0,
+            first_rate: if variant.swap_operands { 2.0 } else { 1.0 },
+            second_rate: if variant.swap_operands { 1.0 } else { 2.0 },
         },
         _ => unreachable!("modulo four"),
     }
@@ -303,14 +303,14 @@ struct SurveyRow {
 }
 
 impl SurveyRow {
-    fn pass(case_id: String, family: &'static str) -> Self {
+    fn pass(case_id: String, family: &'static str, variant: Variant) -> Self {
         Self {
             case_id,
             family,
             status: "PASS",
             finding_id: "-",
             failure_class: "-".into(),
-            fingerprint: "ok".into(),
+            fingerprint: input_fingerprint(family, variant),
         }
     }
 
@@ -359,6 +359,28 @@ impl SurveyRow {
     }
 }
 
+fn input_fingerprint(family: &str, variant: Variant) -> String {
+    let mut bytes = Vec::with_capacity(family.len() + 8 * 6 + 4);
+    bytes.extend_from_slice(family.as_bytes());
+    bytes.push(0);
+    for value in [
+        variant.translation[0],
+        variant.translation[1],
+        variant.scale,
+        variant.rotation,
+        variant.contact_parameter,
+    ] {
+        bytes.extend_from_slice(&value.to_bits().to_le_bytes());
+    }
+    bytes.extend_from_slice(&[
+        u8::from(variant.reverse_spans),
+        u8::from(variant.swap_operands),
+        u8::from(variant.displaced),
+        variant.option_index,
+    ]);
+    format!("input-{:016x}", fnv1a64(&bytes))
+}
+
 fn sanitize_tsv(value: &str) -> String {
     value
         .chars()
@@ -392,6 +414,11 @@ fn oracle_inventory_and_tsv_schema_are_exhaustive() {
     assert_eq!(SEEDED_VARIANTS, 8);
     assert_eq!(MAX_SHRINK_ITERS, 512);
     assert_eq!(BASE_SEED_HEX.len(), 64);
+    let decoded_seed = std::array::from_fn(|index| {
+        let bytes = BASE_SEED_HEX.as_bytes();
+        (hex_nibble(bytes[index * 2]) << 4) | hex_nibble(bytes[index * 2 + 1])
+    });
+    assert_eq!(BASE_SEED, decoded_seed);
 
     let ids = FAMILIES
         .iter()
@@ -421,6 +448,7 @@ fn oracle_inventory_and_tsv_schema_are_exhaustive() {
     SurveyRow::pass(
         "constraint.fixed-point.deterministic".into(),
         FAMILIES[0].id,
+        Variant::DETERMINISTIC,
     )
     .write_to(&mut bytes)
     .expect("in-memory TSV row");
@@ -428,20 +456,30 @@ fn oracle_inventory_and_tsv_schema_are_exhaustive() {
     assert_eq!(row.trim_end().split('\t').count(), 6);
 }
 
+const fn hex_nibble(value: u8) -> u8 {
+    match value {
+        b'0'..=b'9' => value - b'0',
+        b'a'..=b'f' => value - b'a' + 10,
+        _ => panic!("BASE_SEED_HEX must use lowercase hexadecimal"),
+    }
+}
+
 #[test]
 fn oracle_family_survey() {
     let selected = env::var("GEOSOLVE_M70B_ORACLE_FAMILY");
     let output = env::var("GEOSOLVE_M70B_ORACLE_OUTPUT");
-    if selected.is_err() && output.is_err() {
+    let selected_case = env::var("GEOSOLVE_M70B_ORACLE_CASE");
+    if selected.is_err() && output.is_err() && selected_case.is_err() {
         return;
     }
     let selected = selected.expect("GEOSOLVE_M70B_ORACLE_FAMILY must accompany oracle output");
     let output = output.expect("GEOSOLVE_M70B_ORACLE_OUTPUT must accompany oracle family");
-    let (family_index, family) = FAMILIES
+    let selected_case =
+        selected_case.expect("GEOSOLVE_M70B_ORACLE_CASE must accompany oracle family");
+    let family = FAMILIES
         .iter()
         .copied()
-        .enumerate()
-        .find(|(_, family)| family.id == selected)
+        .find(|family| family.id == selected)
         .unwrap_or_else(|| panic!("unknown M70B oracle family: {selected}"));
 
     let file = File::create(&output)
@@ -449,41 +487,36 @@ fn oracle_family_survey() {
     let mut output = BufWriter::new(file);
     writeln!(output, "{TSV_HEADER}").expect("write oracle TSV header");
 
-    let deterministic_id = format!("{}.deterministic", family.id);
-    match catch_unwind(AssertUnwindSafe(|| {
-        survey_one(family, Variant::DETERMINISTIC, true)
-    })) {
-        Ok(Ok(())) => SurveyRow::pass(deterministic_id, family.id),
-        Ok(Err(failure)) => SurveyRow::failed(
-            deterministic_id,
-            family.id,
-            Variant::DETERMINISTIC,
-            &failure,
-        ),
-        Err(payload) => SurveyRow::panicked(
-            deterministic_id,
-            family.id,
-            Variant::DETERMINISTIC,
-            &panic_payload(&payload),
-        ),
-    }
-    .write_to(&mut output)
-    .expect("write deterministic oracle row");
-
-    for variant_index in 0..SEEDED_VARIANTS {
-        survey_seeded(family_index, family, variant_index)
-            .write_to(&mut output)
-            .expect("write seeded oracle row");
-    }
+    let row = if selected_case == "deterministic" {
+        survey_deterministic(family)
+    } else if let Some(index) = selected_case.strip_prefix("seed-") {
+        let variant_index = index
+            .parse::<u32>()
+            .unwrap_or_else(|error| panic!("invalid M70B oracle case {selected_case}: {error}"));
+        assert!(
+            variant_index < SEEDED_VARIANTS,
+            "M70B oracle case index is outside 0..{SEEDED_VARIANTS}: {selected_case}"
+        );
+        survey_seeded(family, variant_index)
+    } else {
+        panic!("unknown M70B oracle case: {selected_case}");
+    };
+    row.write_to(&mut output).expect("write oracle row");
     output.flush().expect("flush complete oracle TSV");
 }
 
-fn survey_seeded(family_index: usize, family: OracleFamily, variant_index: u32) -> SurveyRow {
-    let mut seed = BASE_SEED;
-    seed[0] ^= u8::try_from(family_index).expect("21 families fit in u8");
-    seed[1] ^= u8::try_from(variant_index).expect("eight variants fit in u8");
-    seed[30] = seed[30].wrapping_add(u8::try_from(family_index).expect("family index"));
-    seed[31] = seed[31].wrapping_add(u8::try_from(variant_index).expect("variant index"));
+fn survey_deterministic(family: OracleFamily) -> SurveyRow {
+    let case_id = format!("{}.deterministic", family.id);
+    let variant = effective_variant(family, Variant::DETERMINISTIC, true);
+    match catch_unwind(AssertUnwindSafe(|| survey_one(family, variant, true))) {
+        Ok(Ok(())) => SurveyRow::pass(case_id, family.id, variant),
+        Ok(Err(failure)) => SurveyRow::failed(case_id, family.id, variant, &failure),
+        Err(payload) => SurveyRow::panicked(case_id, family.id, variant, &panic_payload(&payload)),
+    }
+}
+
+fn survey_seeded(family: OracleFamily, variant_index: u32) -> SurveyRow {
+    let seed = oracle_seed(family.id, variant_index);
     let config = Config {
         cases: 1,
         max_shrink_iters: MAX_SHRINK_ITERS,
@@ -500,6 +533,7 @@ fn survey_seeded(family_index: usize, family: OracleFamily, variant_index: u32) 
             variant.displaced = variant_index & 2 != 0;
             variant.swap_operands = variant_index & 4 != 0;
             variant.option_index = u8::try_from(variant_index).expect("eight option variants");
+            let variant = effective_variant(family, variant, false);
             *last_variant.borrow_mut() = variant;
             match survey_one(family, variant, false) {
                 Ok(()) => Ok(()),
@@ -515,7 +549,7 @@ fn survey_seeded(family_index: usize, family: OracleFamily, variant_index: u32) 
     }));
     let case_id = format!("{}.seed-{variant_index:02}", family.id);
     match result {
-        Ok(Ok(())) => SurveyRow::pass(case_id, family.id),
+        Ok(Ok(())) => SurveyRow::pass(case_id, family.id, last_variant.into_inner()),
         Ok(Err(_)) => {
             let (variant, failure) = last_failure
                 .into_inner()
@@ -531,6 +565,25 @@ fn survey_seeded(family_index: usize, family: OracleFamily, variant_index: u32) 
     }
 }
 
+fn oracle_seed(family: &str, variant_index: u32) -> [u8; 32] {
+    let mut seed = BASE_SEED;
+    let mut state =
+        fnv1a64(family.as_bytes()) ^ u64::from(variant_index).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    for chunk in seed.chunks_exact_mut(8) {
+        state = splitmix64(state);
+        let original = u64::from_le_bytes(chunk.try_into().expect("eight-byte seed chunk"));
+        chunk.copy_from_slice(&(original ^ state).to_le_bytes());
+    }
+    seed
+}
+
+const fn splitmix64(mut state: u64) -> u64 {
+    state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    state = (state ^ (state >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    state = (state ^ (state >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    state ^ (state >> 31)
+}
+
 fn panic_payload(payload: &Box<dyn std::any::Any + Send>) -> String {
     if let Some(message) = payload.downcast_ref::<&str>() {
         (*message).to_owned()
@@ -541,11 +594,24 @@ fn panic_payload(payload: &Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
-fn survey_one(
+fn survey_one(family: OracleFamily, variant: Variant, compare_preselection: bool) -> OracleResult {
+    let variant = effective_variant(family, variant, compare_preselection);
+    let fixture = MatrixFixture::new(family.subject, variant);
+    match family.subject {
+        FamilySubject::Constraint { kind, intent } => {
+            survey_constraint(kind, intent, &fixture, variant, compare_preselection)
+        }
+        FamilySubject::Dimension(kind) => {
+            survey_dimension(kind, &fixture, variant, compare_preselection)
+        }
+    }
+}
+
+fn effective_variant(
     family: OracleFamily,
     mut variant: Variant,
     compare_preselection: bool,
-) -> OracleResult {
+) -> Variant {
     if matches!(
         family.subject,
         FamilySubject::Constraint {
@@ -565,20 +631,24 @@ fn survey_one(
         )
     {
         variant.contact_parameter = match variant.option_index {
-            0 => 0.0,
-            1 => 1.0,
+            0 => {
+                if variant.reverse_spans {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            1 => {
+                if variant.reverse_spans {
+                    0.0
+                } else {
+                    1.0
+                }
+            }
             _ => variant.contact_parameter,
         };
     }
-    let fixture = MatrixFixture::new(family.subject, variant);
-    match family.subject {
-        FamilySubject::Constraint { kind, intent } => {
-            survey_constraint(kind, intent, &fixture, variant, compare_preselection)
-        }
-        FamilySubject::Dimension(kind) => {
-            survey_dimension(kind, &fixture, variant, compare_preselection)
-        }
-    }
+    variant
 }
 
 #[derive(Clone, Copy)]
@@ -805,35 +875,40 @@ impl MatrixFixture {
         } else {
             first_bezier_controls[2]
         };
-        let second_end = if matches!(
+        let endpoint_continuity = matches!(
             subject,
             FamilySubject::Constraint {
                 kind: ResolvedConstraintKind::EndpointContinuity,
                 ..
             }
-        ) && matches!(
-            continuity_option(variant),
-            DocumentCurveContinuity::G2 | DocumentCurveContinuity::ParametricC2 { .. }
-        ) {
+        );
+        let parametric_c2 = endpoint_continuity
+            && matches!(
+                continuity_option(variant),
+                DocumentCurveContinuity::ParametricC2 { .. }
+            );
+        let second_end = if parametric_c2 {
+            [2.0, -7.0]
+        } else if endpoint_continuity && continuity_option(variant) == DocumentCurveContinuity::G2 {
             [4.0, -12.0]
         } else {
             [4.0, -4.0]
         };
+        let second_middle = if parametric_c2 {
+            [1.0, -5.0]
+        } else {
+            [
+                2.0,
+                if displaced(ResolvedConstraintKind::EqualCurvature) {
+                    -6.4
+                } else {
+                    -6.0
+                },
+            ]
+        };
         let mut second_bezier_controls = [
             second_bezier_start,
-            add_point(
-                &mut document,
-                transform,
-                "bezier 2 middle",
-                [
-                    2.0,
-                    if displaced(ResolvedConstraintKind::EqualCurvature) {
-                        -6.4
-                    } else {
-                        -6.0
-                    },
-                ],
-            ),
+            add_point(&mut document, transform, "bezier 2 middle", second_middle),
             add_point(&mut document, transform, "bezier 2 end", second_end),
         ];
         if matches!(
@@ -844,6 +919,9 @@ impl MatrixFixture {
             }
         ) && curvature_option(variant) != DocumentCurveCurvatureRelation::MagnitudeOppositeSign
         {
+            second_bezier_controls.reverse();
+        }
+        if endpoint_continuity && variant.option_index >= 4 {
             second_bezier_controls.reverse();
         }
         let beziers = [first_bezier_controls, second_bezier_controls].map(|controls| {
@@ -1100,7 +1178,10 @@ fn constraint_operands(
         ],
         ResolvedConstraintKind::EndpointContinuity => vec![
             picked(SelectionItem::Curve(fixture.beziers[0]), 1.0),
-            picked(SelectionItem::Curve(fixture.beziers[1]), 0.0),
+            picked(
+                SelectionItem::Curve(fixture.beziers[1]),
+                if variant.option_index >= 4 { 1.0 } else { 0.0 },
+            ),
         ],
     };
     if variant.swap_operands {
@@ -1329,6 +1410,18 @@ fn survey_dimension(
         ..AuthoringOptions::default()
     };
     let mut coordinator = coordinator(fixture.document.clone());
+    let precreate_document = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .ok_or_else(|| defect("lifecycle.authority", "pre-create geometry is not current"))?
+        .document();
+    let initial_measurement = measure_dimension_operands(
+        kind,
+        &operands,
+        precreate_document,
+        options.angle_orientation,
+    )?;
+    let initial_tolerance = dimension_tolerance(kind, precreate_document);
     let application = authoring_application(
         coordinator.session().design_document(),
         AuthoringTool::Dimension(kind),
@@ -1374,26 +1467,18 @@ fn survey_dimension(
                 "created dimension has no target metadata",
             )
         })?;
-    if original_metadata.mode != DocumentDimensionMode::Driving
-        || !original_metadata.value.is_finite()
-        || original_metadata.value <= 0.0
-    {
+    validate_dimension_metadata(
+        kind,
+        dimension,
+        coordinator.session().design_document(),
+        original_metadata,
+    )?;
+    if (original_metadata.value - initial_measurement).abs() > initial_tolerance {
         return Err(defect(
-            "dimension.metadata",
-            format!("invalid initial target metadata {original_metadata:?}"),
-        ));
-    }
-    let expected_unit = if kind == DimensionKind::OrientedAngle {
-        ScalarUnit::Angle
-    } else {
-        ScalarUnit::Length
-    };
-    if original_metadata.unit != expected_unit {
-        return Err(defect(
-            "dimension.metadata",
+            "dimension.initial-target",
             format!(
-                "expected {expected_unit:?}, got {:?}",
-                original_metadata.unit
+                "authored target {} differs from pre-create accepted measurement {initial_measurement}",
+                original_metadata.value
             ),
         ));
     }
@@ -1402,6 +1487,8 @@ fn survey_dimension(
         .accepted_state_for_current_input()
         .ok_or_else(|| defect("lifecycle.authority", "created dimension is not current"))?
         .document();
+    validate_finite_geometry(accepted_created)?;
+    validate_dimension_geometry(kind, dimension, accepted_created, original_metadata.value)?;
     validate_no_move_witness(fixture, accepted_created)?;
 
     let edited_display = if kind == DimensionKind::OrientedAngle {
@@ -1426,6 +1513,12 @@ fn survey_dimension(
     let edited_metadata = coordinator
         .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
         .ok_or_else(|| defect("dimension.metadata", "edited dimension disappeared"))?;
+    validate_dimension_metadata(
+        kind,
+        dimension,
+        coordinator.session().design_document(),
+        edited_metadata,
+    )?;
     if (edited_metadata.display_value - edited_display).abs() > 1.0e-9 {
         return Err(defect(
             "dimension.edit",
@@ -1436,6 +1529,19 @@ fn survey_dimension(
         ));
     }
     let edited_bits = edited_metadata.value.to_bits();
+    validate_dimension_definition(
+        kind,
+        &operands,
+        dimension,
+        coordinator.session().design_document(),
+    )?;
+    let accepted_edited = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .ok_or_else(|| defect("lifecycle.authority", "edited dimension is not current"))?
+        .document();
+    validate_finite_geometry(accepted_edited)?;
+    validate_dimension_geometry(kind, dimension, accepted_edited, edited_metadata.value)?;
     coordinator
         .undo()
         .map_err(|error| defect("dimension.undo", error.to_string()))?;
@@ -1443,12 +1549,31 @@ fn survey_dimension(
     let undo_metadata = coordinator
         .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
         .ok_or_else(|| defect("dimension.undo", "undo did not retain created dimension ID"))?;
+    validate_dimension_metadata(
+        kind,
+        dimension,
+        coordinator.session().design_document(),
+        undo_metadata,
+    )?;
     if undo_metadata.value.to_bits() != original_metadata.value.to_bits() {
         return Err(defect(
             "dimension.undo",
             "undo did not restore the exact original target",
         ));
     }
+    validate_dimension_definition(
+        kind,
+        &operands,
+        dimension,
+        coordinator.session().design_document(),
+    )?;
+    let accepted_undo = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .ok_or_else(|| defect("lifecycle.authority", "undone dimension is not current"))?
+        .document();
+    validate_finite_geometry(accepted_undo)?;
+    validate_dimension_geometry(kind, dimension, accepted_undo, undo_metadata.value)?;
     coordinator
         .redo()
         .map_err(|error| defect("dimension.redo", error.to_string()))?;
@@ -1456,12 +1581,24 @@ fn survey_dimension(
     let redo_metadata = coordinator
         .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
         .ok_or_else(|| defect("dimension.redo", "redo did not retain dimension ID"))?;
+    validate_dimension_metadata(
+        kind,
+        dimension,
+        coordinator.session().design_document(),
+        redo_metadata,
+    )?;
     if redo_metadata.value.to_bits() != edited_bits {
         return Err(defect(
             "dimension.redo",
             "redo did not restore the exact edited target",
         ));
     }
+    validate_dimension_definition(
+        kind,
+        &operands,
+        dimension,
+        coordinator.session().design_document(),
+    )?;
     if (coordinator.history_len(), coordinator.history_cursor())
         != (history_before.0 + 2, history_before.1 + 2)
     {
@@ -1476,7 +1613,108 @@ fn survey_dimension(
         .ok_or_else(|| defect("lifecycle.authority", "redone dimension is not current"))?
         .document();
     validate_finite_geometry(accepted)?;
+    validate_dimension_geometry(kind, dimension, accepted, redo_metadata.value)?;
     validate_protected_geometry(fixture, accepted, variant.scale)
+}
+
+fn validate_dimension_metadata(
+    kind: DimensionKind,
+    dimension: geosolve_sketch::DocumentDimensionId,
+    document: &SketchDocument,
+    metadata: DimensionTargetMetadata,
+) -> OracleResult {
+    let stored = document
+        .dimension(dimension)
+        .ok_or_else(|| defect("dimension.metadata", "selected dimension disappeared"))?;
+    let expected_scalar = dimension_target_scalar(&stored.definition);
+    let (expected_unit, expected_display_unit) = if kind == DimensionKind::OrientedAngle {
+        (ScalarUnit::Angle, DimensionTargetDisplayUnit::AcuteDegrees)
+    } else {
+        (ScalarUnit::Length, DimensionTargetDisplayUnit::ModelUnits)
+    };
+    let expected_display_value = if kind == DimensionKind::OrientedAngle {
+        let line_angle = metadata.value.rem_euclid(std::f64::consts::PI);
+        line_angle
+            .min(std::f64::consts::PI - line_angle)
+            .to_degrees()
+    } else {
+        metadata.value
+    };
+    let display_matches = if kind == DimensionKind::OrientedAngle {
+        (metadata.display_value - expected_display_value).abs()
+            <= 1.0e-10 * expected_display_value.abs().max(1.0)
+    } else {
+        metadata.display_value.to_bits() == expected_display_value.to_bits()
+    };
+    let display_domain_valid = if kind == DimensionKind::OrientedAngle {
+        metadata.display_value >= 0.0
+    } else {
+        metadata.display_value > 0.0
+    };
+    if metadata.dimension != dimension
+        || metadata.scalar != expected_scalar
+        || metadata.mode != DocumentDimensionMode::Driving
+        || metadata.unit != expected_unit
+        || metadata.display_unit != expected_display_unit
+        || !metadata.value.is_finite()
+        || metadata.value <= 0.0
+        || !metadata.display_value.is_finite()
+        || !display_domain_valid
+        || !display_matches
+    {
+        return Err(defect(
+            "dimension.metadata",
+            format!(
+                "expected active {expected_unit:?}/{expected_display_unit:?} target metadata, got {metadata:?}"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn measure_dimension_operands(
+    kind: DimensionKind,
+    operands: &[AuthoringOperand],
+    document: &SketchDocument,
+    orientation: DocumentAngleOrientation,
+) -> OracleResult<f64> {
+    let items = operands
+        .iter()
+        .map(|operand| operand.item)
+        .collect::<Vec<_>>();
+    match (kind, items.as_slice()) {
+        (
+            DimensionKind::PointDistance,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) => Ok(distance(
+            document
+                .point(*first)
+                .ok_or_else(|| defect("geometry.missing", "distance first point disappeared"))?
+                .position,
+            document
+                .point(*second)
+                .ok_or_else(|| defect("geometry.missing", "distance second point disappeared"))?
+                .position,
+        )),
+        (DimensionKind::SegmentLength, [SelectionItem::Curve(curve)]) => {
+            line_length(document, *curve)
+        }
+        (DimensionKind::Radius, [SelectionItem::Curve(curve)]) => {
+            circle_radius(document, curve.curve)
+        }
+        (DimensionKind::Diameter, [SelectionItem::Curve(curve)]) => {
+            Ok(2.0 * circle_radius(document, curve.curve)?)
+        }
+        (
+            DimensionKind::OrientedAngle,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => Ok(oriented_line_angle(document, *first, *second, orientation)?
+            .rem_euclid(std::f64::consts::TAU)),
+        _ => Err(defect(
+            "geometry.oracle",
+            format!("unexpected operands for {kind:?}: {items:?}"),
+        )),
+    }
 }
 
 fn validate_current_acceptance(coordinator: &RetainedEditorCoordinator) -> OracleResult {
@@ -1830,15 +2068,7 @@ fn validate_dimension_definition(
             ),
         ));
     }
-    let target = match &stored.definition {
-        DocumentDimensionDefinition::PointDistance { target, .. }
-        | DocumentDimensionDefinition::CurveLength { target, .. }
-        | DocumentDimensionDefinition::Radius { target, .. }
-        | DocumentDimensionDefinition::Diameter { target, .. }
-        | DocumentDimensionDefinition::OrientedAngle { target, .. }
-        | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
-        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
-    };
+    let target = dimension_target_scalar(&stored.definition);
     let target = document
         .scalar(target)
         .ok_or_else(|| defect("persistence.dimension", "target scalar is absent"))?;
@@ -1894,6 +2124,115 @@ fn validate_dimension_definition(
         ));
     }
     Ok(())
+}
+
+const fn dimension_target_scalar(definition: &DocumentDimensionDefinition) -> DesignScalarId {
+    match definition {
+        DocumentDimensionDefinition::PointDistance { target, .. }
+        | DocumentDimensionDefinition::CurveLength { target, .. }
+        | DocumentDimensionDefinition::Radius { target, .. }
+        | DocumentDimensionDefinition::Diameter { target, .. }
+        | DocumentDimensionDefinition::OrientedAngle { target, .. }
+        | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
+    }
+}
+
+fn validate_dimension_geometry(
+    kind: DimensionKind,
+    dimension: geosolve_sketch::DocumentDimensionId,
+    document: &SketchDocument,
+    expected_target: f64,
+) -> OracleResult {
+    let stored = document
+        .dimension(dimension)
+        .ok_or_else(|| defect("geometry.missing", "accepted dimension disappeared"))?;
+    let persisted_target = document
+        .scalar(dimension_target_scalar(&stored.definition))
+        .ok_or_else(|| defect("geometry.missing", "accepted dimension target disappeared"))?
+        .value;
+    if persisted_target.to_bits() != expected_target.to_bits() {
+        return Err(defect(
+            "geometry.target-authority",
+            format!(
+                "accepted target {persisted_target} differs from persisted editor target {expected_target}"
+            ),
+        ));
+    }
+    let measurement = match &stored.definition {
+        DocumentDimensionDefinition::PointDistance { first, second, .. } => distance(
+            document
+                .point(*first)
+                .ok_or_else(|| defect("geometry.missing", "distance first point disappeared"))?
+                .position,
+            document
+                .point(*second)
+                .ok_or_else(|| defect("geometry.missing", "distance second point disappeared"))?
+                .position,
+        ),
+        DocumentDimensionDefinition::CurveLength { curve, .. } => line_length(document, *curve)?,
+        DocumentDimensionDefinition::Radius { curve, .. } => circle_radius(document, *curve)?,
+        DocumentDimensionDefinition::Diameter { curve, .. } => {
+            2.0 * circle_radius(document, *curve)?
+        }
+        DocumentDimensionDefinition::OrientedAngle {
+            first,
+            second,
+            orientation,
+            ..
+        } => {
+            let signed = oriented_line_angle(document, *first, *second, *orientation)?;
+            signed
+                + ((expected_target - signed) / std::f64::consts::TAU).round()
+                    * std::f64::consts::TAU
+        }
+        DocumentDimensionDefinition::SupportingLineOffset { .. }
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. } => {
+            return Err(defect(
+                "geometry.oracle",
+                format!("unexpected non-authoring dimension definition for {kind:?}"),
+            ));
+        }
+    };
+    let tolerance = dimension_tolerance(kind, document);
+    if !measurement.is_finite() || (measurement - expected_target).abs() > tolerance {
+        return Err(defect(
+            "geometry.dimension-postcondition",
+            format!(
+                "{kind:?} accepted measurement {measurement} for target {expected_target} (tolerance {tolerance})"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn dimension_tolerance(kind: DimensionKind, document: &SketchDocument) -> f64 {
+    if kind == DimensionKind::OrientedAngle {
+        2.0e-8
+    } else {
+        2.0e-8 * document.model_scale()
+    }
+}
+
+fn oriented_line_angle(
+    document: &SketchDocument,
+    first: CurveSpan,
+    second: CurveSpan,
+    orientation: DocumentAngleOrientation,
+) -> OracleResult<f64> {
+    let [first_start, first_end] = line_points(document, first)?;
+    let [second_start, second_end] = line_points(document, second)?;
+    let first = [first_end[0] - first_start[0], first_end[1] - first_start[1]];
+    let second = [
+        second_end[0] - second_start[0],
+        second_end[1] - second_start[1],
+    ];
+    Ok(match orientation {
+        DocumentAngleOrientation::CounterClockwise => {
+            cross(first, second).atan2(dot(first, second))
+        }
+        DocumentAngleOrientation::Clockwise => (-cross(first, second)).atan2(dot(first, second)),
+    })
 }
 
 fn validate_finite_geometry(document: &SketchDocument) -> OracleResult {
@@ -2151,17 +2490,80 @@ fn validate_constraint_geometry(
             second_contact,
             continuity,
         } => {
-            let position_valid =
-                contact_distance(document, *first_contact, *second_contact)? <= tolerance;
+            let first = document
+                .evaluate_contact_jet(*first_contact)
+                .map_err(|error| defect("geometry.evaluation", error.to_string()))?;
+            let second = document
+                .evaluate_contact_jet(*second_contact)
+                .map_err(|error| defect("geometry.evaluation", error.to_string()))?;
+            let first_sign = endpoint_path_sign(document, *first_contact, true)?;
+            let second_sign = endpoint_path_sign(document, *second_contact, false)?;
+            let position_delta = first.position - second.position;
+            let position_valid = position_delta[0].abs().max(position_delta[1].abs())
+                / document.model_scale()
+                <= 2.0e-8;
             match continuity {
-                DocumentCurveContinuity::G0 | DocumentCurveContinuity::ParametricC2 { .. } => {
-                    position_valid
-                }
+                DocumentCurveContinuity::G0 => position_valid,
                 DocumentCurveContinuity::G1 | DocumentCurveContinuity::G2 => {
-                    position_valid
-                        && contact_tangent_cross(document, *first_contact, *second_contact)?.abs()
+                    let first_unit = first
+                        .differential()
+                        .map_err(|error| defect("geometry.measurement", error.to_string()))?
+                        .unit_tangent
+                        * first_sign;
+                    let second_unit = second
+                        .differential()
+                        .map_err(|error| defect("geometry.measurement", error.to_string()))?
+                        .unit_tangent
+                        * second_sign;
+                    let tangent_valid =
+                        (first_unit[0] * second_unit[1] - first_unit[1] * second_unit[0]).abs()
                             <= 2.0e-8
-                        && contact_tangent_dot(document, *first_contact, *second_contact)? > 0.0
+                            && first_unit.dot(&second_unit) > 0.0;
+                    let curvature_valid = if *continuity == DocumentCurveContinuity::G2 {
+                        let first_curvature = document
+                            .measure_curve_contact(
+                                *first_contact,
+                                geosolve_sketch::DocumentCurveMeasurementKind::SignedCurvature,
+                            )
+                            .map_err(|error| defect("geometry.measurement", error.to_string()))?;
+                        let second_curvature = document
+                            .measure_curve_contact(
+                                *second_contact,
+                                geosolve_sketch::DocumentCurveMeasurementKind::SignedCurvature,
+                            )
+                            .map_err(|error| defect("geometry.measurement", error.to_string()))?;
+                        ((first_curvature * first_sign - second_curvature * second_sign)
+                            * document.model_scale())
+                        .abs()
+                            <= 2.0e-8
+                    } else {
+                        true
+                    };
+                    position_valid && tangent_valid && curvature_valid
+                }
+                DocumentCurveContinuity::ParametricC2 {
+                    first_rate,
+                    second_rate,
+                } => {
+                    let first_path = first.first_derivative * first_sign;
+                    let second_path = second.first_derivative * second_sign;
+                    let first_velocity = first_path * *first_rate;
+                    let second_velocity = second_path * *second_rate;
+                    let first_acceleration = first.second_derivative * first_rate.powi(2);
+                    let second_acceleration = second.second_derivative * second_rate.powi(2);
+                    let velocity_delta = first_velocity - second_velocity;
+                    let acceleration_delta = first_acceleration - second_acceleration;
+                    position_valid
+                        && first_rate.is_finite()
+                        && *first_rate > 0.0
+                        && second_rate.is_finite()
+                        && *second_rate > 0.0
+                        && velocity_delta[0].abs().max(velocity_delta[1].abs())
+                            / document.model_scale()
+                            <= 2.0e-8
+                        && acceleration_delta[0].abs().max(acceleration_delta[1].abs())
+                            / document.model_scale()
+                            <= 2.0e-8
                 }
             }
         }
@@ -2179,6 +2581,25 @@ fn validate_constraint_geometry(
         ));
     }
     Ok(())
+}
+
+fn endpoint_path_sign(
+    document: &SketchDocument,
+    contact: ContactId,
+    incoming: bool,
+) -> OracleResult<f64> {
+    let neighborhood = document
+        .contact(contact)
+        .ok_or_else(|| defect("geometry.missing", "continuity contact disappeared"))?
+        .neighborhood;
+    match (incoming, neighborhood) {
+        (true, ContactNeighborhood::Start) | (false, ContactNeighborhood::End) => Ok(-1.0),
+        (true, ContactNeighborhood::End) | (false, ContactNeighborhood::Start) => Ok(1.0),
+        (_, ContactNeighborhood::Interior | ContactNeighborhood::Local { .. }) => Err(defect(
+            "persistence.contact",
+            "endpoint continuity persisted an interior neighborhood",
+        )),
+    }
 }
 
 fn line_points(document: &SketchDocument, span: CurveSpan) -> OracleResult<[[f64; 2]; 2]> {

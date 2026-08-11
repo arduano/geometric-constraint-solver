@@ -5183,6 +5183,7 @@ mod tests {
     }
 
     type SceneOracleCheck = Result<(), &'static str>;
+    type SceneOracleCase = (&'static str, fn() -> SceneOracleCheck);
 
     #[derive(Clone, Copy)]
     struct SceneOracleResult {
@@ -5610,24 +5611,35 @@ mod tests {
 
     #[test]
     fn m70b_scene_authority_oracle_survey() {
-        let rows = [
-            run_scene_oracle_row(
+        let cases: [SceneOracleCase; 4] = [
+            (
                 "scene.current-computed.empty",
                 scene_oracle_current_computed_empty,
             ),
-            run_scene_oracle_row(
+            (
                 "scene.current-native.withheld",
                 scene_oracle_current_native_withheld,
             ),
-            run_scene_oracle_row(
+            (
                 "scene.current-computed.fillet",
                 scene_oracle_current_computed_fillet,
             ),
-            run_scene_oracle_row(
+            (
                 "scene.rejected-historical.detached",
                 scene_oracle_rejected_historical_detached,
             ),
         ];
+        let selected = std::env::var("GEOSOLVE_M70B_ORACLE_CASE").ok();
+        let rows = cases
+            .into_iter()
+            .filter(|(case_id, _)| selected.as_deref().is_none_or(|value| value == *case_id))
+            .map(|(case_id, check)| run_scene_oracle_row(case_id, check))
+            .collect::<Vec<_>>();
+        assert!(
+            selected.is_none() || rows.len() == 1,
+            "unknown M70B scene-authority oracle case: {}",
+            selected.as_deref().unwrap_or_default()
+        );
         let output = render_scene_oracle_results(&rows);
         if let Some(path) = std::env::var_os("GEOSOLVE_M70B_ORACLE_OUTPUT") {
             std::fs::write(&path, output.as_bytes()).unwrap_or_else(|error| {
@@ -5638,11 +5650,11 @@ mod tests {
             });
         } else {
             println!("{output}");
+            assert!(
+                rows.iter().all(|row| row.status == "PASS"),
+                "scene-authority oracle recorded one or more defects:\n{output}"
+            );
         }
-        assert!(
-            rows.iter().all(|row| row.status == "PASS"),
-            "scene-authority oracle recorded one or more defects:\n{output}"
-        );
     }
 
     #[test]
