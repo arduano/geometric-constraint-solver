@@ -2,25 +2,31 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: paused for fresh publication after the clean test-only `M70B-H1` survey. `M70B-F001` and
+Status: ready for focused human review on the clean test-only `M70B-H1` candidate. `M70B-F001` and
 `M70B-F002` retain their owning-layer corrections and complete replacement evidence. M70B-H1 adds
-a 193/193 passing authoring/scene oracle with no new finding, but its source must pass the complete
-release gate and receive a fresh byte-verified publication before human review resumes. Every human
-result below remains pending; this scorecard records no human pass or approval.
+a 193/193 passing authoring/scene oracle with no new finding; its complete release gate and fresh
+byte-verified Tailscale publication now pass. Every human result below remains pending; this
+scorecard records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
 `M70B-F002` replacement candidate source: `2e0f6c348ea0d3d9ee0bc2fd556f402a29d7059b`
+
+Current `M70B-H1` candidate source: `dd645d99e705e56c80ab2a4a136f7a4d03baafbf`
 
 Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Prior `M70B-F001` release distribution manifest aggregate:
 `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`
 
-Current `M70B-F002` Tailscale endpoint: `http://100.94.63.83:8080/`
+Current `M70B-H1` Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Current `M70B-F002` release distribution manifest aggregate:
+Current `M70B-H1` read-only snapshot: `/tmp/geosolve-m70b-h1-uat.viSB9G`
+
+Current `M70B-H1` release distribution manifest aggregate:
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
+
+H1 is test-only, so its release bytes and aggregate intentionally match the prior F002 candidate.
 
 ## Preconditions
 
@@ -29,8 +35,8 @@ Current `M70B-F002` release distribution manifest aggregate:
 - [x] An `M70B-F002` replacement read-only release distribution is served through Tailscale.
 - [x] Every `M70B-F002` served asset and `/` matches the frozen local bytes.
 - [x] M70B-H1's checked golden and clean-oracle gate pass with 193/193 classified rows.
-- [ ] The clean M70B-H1 source passes the complete integrated release gate.
-- [ ] A fresh M70B-H1 read-only distribution is served and byte-verified through Tailscale.
+- [x] The clean M70B-H1 source passes the complete integrated release gate.
+- [x] A fresh M70B-H1 read-only distribution is served and byte-verified through Tailscale.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;

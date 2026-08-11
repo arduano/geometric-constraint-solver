@@ -161,8 +161,8 @@ computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness
 M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
 semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
 has fully qualified and byte-verified F001/F002 replacements plus a clean 193-row test-only H1
-oracle; fresh release publication, targeted human recheck and approval remain pending. M71 remains
-deferred behind it.
+oracle whose complete release gate and fresh publication also pass; targeted human recheck and
+approval remain pending. M71 remains deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1403,8 +1403,8 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 Status: active after the clean `M70B-H1` test-hardening survey. The reproduction transport criteria
 remain qualified; `M70B-F001` and `M70B-F002` retain complete replacement evidence. The new
 continue-through-failure oracle records 193/193 passing authoring and reachable scene-authority
-rows with no new finding. Fresh qualification/publication, human review and approval remain
-pending.
+rows with no new finding. Its nominated source has complete release-gate and byte-verified
+publication evidence; human review and approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1446,11 +1446,15 @@ pending.
   detached historical accepted presentation beneath rejected design. It verifies visible problem
   metadata and exact authentication allow/deny behavior without manufacturing an unreachable
   `ComputedSceneState::Absent` coordinator.
-- The oracle runs each family with bounded isolation and continues after semantic defects, panics,
-  timeouts or harness errors. Its stable six-column TSV has no duplicate/unclassified row; the
-  checked golden must match exactly and `--require-clean` must fail if any row is not `PASS`.
-  `docs/M70B_HARDENING.md` records the fixed seed, exact commands and readable checklist. The clean
-  initial survey contains exactly 193 `PASS` rows and opens no `M70B-F003` finding.
+- Every authoring and scene row runs in a separately bounded process and later rows continue after
+  semantic defects, panics, timeout/hard-kill exits or harness errors. Its stable six-column TSV
+  freezes the effective scheduled input fingerprint, has the exact 193 `(case_id, family)` pairs
+  and no duplicate/unclassified row; the checked golden must match exactly and `--require-clean`
+  must fail if any row is not `PASS`. Dimension rows independently compare accepted measurements,
+  target metadata and display units across create/edit/Undo/Redo. Endpoint-continuity rows verify
+  path-oriented G2 curvature and rate-explicit Parametric-C2 derivatives, including a pre-satisfied
+  unequal-rate witness. `docs/M70B_HARDENING.md` records the seed, exact commands and readable
+  checklist. The clean survey contains exactly 193 `PASS` rows and opens no `M70B-F003` finding.
 - Circle/arc radial Normal is explicitly centre-on-complete-supporting-line incidence. Compact
   authoring ignores the arbitrary curve-click parameter, seeds the unique affine projection from
   compatible retained accepted geometry, persists SupportingLine/Interior metadata and rejects

@@ -48,9 +48,10 @@ active bounded reproduction-capsule human-UAT candidate: complete workspace v5 s
 compressed text and restored atomically through its existing validation path. The first supplied
 payload opened `M70B-F001`; its focused branch-bound correction and exact graph regression pass,
 and `M70B-F002` has complete radial-Normal/scene-authority replacement evidence and publication.
-The clean test-only M70B-H1 survey now freezes 193/193 authoring/scene rows; fresh release
-publication and targeted human recheck remain pending. M71 is deferred behind M70B and remains an
-unauthorized candidate backlog. M66's
+The clean test-only M70B-H1 survey now freezes 193/193 authoring/scene rows, and its nominated
+source has complete release-gate and byte-verified replacement-publication evidence. Targeted
+human recheck and approval remain pending. M71 is deferred behind M70B and remains an unauthorized
+candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3652,8 +3653,9 @@ every scripted step. M70 is closed.
 Status: active after the clean `M70B-H1` test-hardening survey. Bounded reproduction transport and
 restore remain qualified; `M70B-F001` and `M70B-F002` retain complete replacement evidence.
 M70B-H1 now freezes a continue-through-failure authoring/scene oracle with 193/193 passing rows and
-no new finding. Fresh release qualification/publication and focused human UAT remain pending. No
-completion or approval is claimed.
+no new finding. Its clean source has passed the complete release gate and its fresh read-only
+distribution is byte-verified over Tailscale. Focused human UAT remains pending. No completion or
+approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3702,10 +3704,23 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   defects, panics or timeouts. Freeze all 193 classifications in one machine-readable golden and a
   readable checklist without changing production code. `--check` and `--require-clean` pass with
   193/193 rows clean; no `M70B-F003` finding is opened.
-- [ ] Re-pass the complete release gate on the clean M70B-H1 source, freeze a fresh seven-file UAT
+- [x] Re-pass the complete release gate on the clean M70B-H1 source, freeze a fresh seven-file UAT
   snapshot, publish it through Tailscale and byte-verify the served distribution before resuming
   human review.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
+
+`M70B-H1` qualification/publication note (2026-08-11): nominated source
+`dd645d99e705e56c80ab2a4a136f7a4d03baafbf` passes the exact 193-row clean oracle and the complete
+integrated release gate. The gate includes formatting, warnings-denied Clippy, locked all-feature
+workspace tests, native/WASM M70 parity, the demo-web WASM check, warnings-denied rustdoc,
+benchmark compilation, performance budgets, package/licence checks, static single-workbench and
+Git-hygiene checks, the 123.32-second 256-moving-body sparse crossover and Trunk 0.21.14 release
+assembly. A fresh read-only seven-file snapshot at `/tmp/geosolve-m70b-h1-uat.viSB9G` is served at
+`http://100.94.63.83:8080/`; proxy-bypassed requests for every asset and `/` byte-match the frozen
+snapshot, with manifest aggregate
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. Because H1 changes only
+test infrastructure, the release bytes intentionally match the prior F002 candidate. Focused human
+UAT and explicit approval remain pending.
 
 Qualification/publication note (2026-08-10): source
 `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b` passes the demo-web 94/94 library and 1/1 native

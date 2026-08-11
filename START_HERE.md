@@ -53,9 +53,10 @@ historical accepted presentation beneath the rejected attempt. Headless supporti
 and accepted-scene authority regressions plus the complete F002 replacement gate and byte-verified
 publication pass. Test-only M70B-H1 now freezes all sixteen resolved constraint families, all five
 create/edit/Undo/Redo dimension families and four reachable scene-authority states in one
-continue-through-failure fixed-seed oracle. All 193 rows pass and no new finding is open; fresh
-release publication and targeted human recheck remain pending. M71 is deferred behind M70B and
-remains an unauthorized candidate backlog.
+continue-through-failure fixed-seed oracle. All 193 rows pass and no new finding is open. Source
+`dd645d99e705e56c80ab2a4a136f7a4d03baafbf` has passed the complete release gate and its fresh
+seven-file Tailscale publication is byte-verified; targeted human recheck remains pending. M71 is
+deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -295,9 +296,10 @@ focused owning-layer correction/regression and fully qualified, byte-verified re
 `M70B-F002` corrects radial Normal to retained-accepted centre-on-supporting-line semantics and
 keeps rejected-attempt presentation visible but detached; focused owner regressions and the
 complete replacement gate plus byte-verified publication pass. `M70B-H1` adds a clean 193-row
-test-only authoring/scene golden and readable defect checklist. Fresh release publication and
-`docs/M70B_UAT.md` targeted rechecks remain pending. The temporary `docs/M71_GOALS.md` backlog is
-deferred behind M70B and is not implementation authorization.
+test-only authoring/scene golden and readable defect checklist; its own complete release gate and
+fresh byte-verified publication now pass. Only `docs/M70B_UAT.md` targeted rechecks and explicit
+approval remain pending. The temporary `docs/M71_GOALS.md` backlog is deferred behind M70B and is
+not implementation authorization.
 
 Durable milestone and cleanup records:
 

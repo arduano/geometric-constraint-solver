@@ -77,10 +77,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   accepted geometry renderable but detached beneath a
   rejected design without weakening current computed-scene fail-closed publication. F001
   replacement evidence, F002 direct regressions, the F002 complete replacement gate and
-  byte-verified publication pass. Test-only M70B-H1 adds no runtime behavior: it drives every
+  byte-verified publication all pass. Test-only M70B-H1 adds no runtime behavior: it drives every
   resolved constraint/dimension family through the existing headless/retained boundaries and
-  directly inventories the four reachable scene-authority states. Its 193-row fixed-seed golden is
-  clean; fresh release publication and targeted human recheck remain pending.
+  directly inventories the four reachable scene-authority states. Its 193-row fixed-seed golden,
+  complete release gate and byte-verified replacement publication are clean; targeted human
+  recheck remains pending.
   M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -470,10 +471,11 @@ or publish a coordinator.
 M70B-H1 is qualification infrastructure rather than another interaction layer. Native integration
 tests call `AuthoringState` and `RetainedEditorCoordinator`, then independently inspect current
 accepted domain state through public sketch APIs. Workbench unit tests call the private thin scene
-composer only because scene composition is presentation-owned. The shell driver isolates families,
-records semantic failures, panics and timeouts without stopping later rows and compares the result
-with a checked six-column golden. It adds no runtime dependency, equation, inference policy,
-persistence field, scene state or browser harness.
+composer only because scene composition is presentation-owned. The shell driver isolates every
+authoring and scene row in its own bounded process, records semantic failures, panics, hard-kill
+timeouts and harness errors without stopping later rows, verifies the exact case/family inventory
+and compares stable effective-input fingerprints with a checked six-column golden. It adds no
+runtime dependency, equation, inference policy, persistence field, scene state or browser harness.
 
 M64 removes the completed-review harness that historically served M53-M63. A crate-private sample
 catalog now owns only stable sample keys, titles, purpose grouping and public fixture selection.
@@ -1058,9 +1060,10 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `M70B-F002` corrects radial Normal from unintended finite-segment containment to explicit
   supporting-line incidence, seeds the affine contact at the accepted centre projection and
   separates detached accepted presentation from current fail-closed inference-publication
-  authority. F001 replacement evidence, both F002 direct owner regressions and the F002 complete
-  replacement gate plus byte-verified publication pass. M70B-H1 freezes a clean 193-row
-  test-only authoring/scene oracle; fresh release publication and dedicated human UAT remain
-  pending.
+  authority. F001 replacement evidence, both F002 direct owner regressions, and the F002 complete
+  replacement gate plus byte-verified publication all pass. M70B-H1 freezes a clean 193-row
+  test-only authoring/scene oracle; its complete release gate and fresh byte-verified publication
+  also pass.
+  Dedicated human UAT remains pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.

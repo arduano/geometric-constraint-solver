@@ -2,9 +2,9 @@
 
 # M70B-H1 test hardening and defect survey
 
-Status: the bounded test-only survey is implemented and currently clean. It changes no runtime
-solver, sketch, authoring or workbench behavior. Release qualification and a fresh UAT publication
-remain separate gates before the supervising-human M70B review resumes.
+Status: the bounded test-only survey, complete release qualification and fresh byte-verified UAT
+publication are clean. It changes no runtime solver, sketch, authoring or workbench behavior.
+Supervising-human M70B review and approval remain pending.
 
 ## Scope and authority
 
@@ -48,9 +48,12 @@ The fixed 256-bit base seed is:
 aa6ab88cc8aa4878c51d78db3d1b993355406fce8c6c42353a850c05696c2edd
 ```
 
-Each family/variant derives a separate ChaCha test seed from that value. The eight indices also
-schedule every combination of reversed span direction, perturbed-recovery geometry and operand
-order reversal rather than leaving those booleans to chance. Seeded geometry varies finite
+Each family/variant derives a separate ChaCha test seed from that value and the stable family ID,
+so inventory reordering cannot silently change a witness. The eight indices also schedule every
+combination of reversed span direction, perturbed-recovery geometry and operand order reversal
+rather than leaving those booleans to chance. Endpoint-continuity seed 03 deliberately retains a
+pre-satisfied unequal-rate Parametric-C2 witness while seed 07 remains its displaced,
+operand-swapped recovery counterpart. Seeded geometry varies finite
 translation, scale (`0.25`, `1`, `4`), rotation and contact parameter. Horizontal and Vertical
 retain world-axis rotation by definition. Tangency covers aligned and opposed orientation;
 Equal-curvature cycles signed, same-sign magnitude and opposite-sign magnitude; endpoint
@@ -63,14 +66,18 @@ Every constraint row verifies:
   deterministic witness;
 - the exact resolved constraint family and typed stored definition;
 - contact domain, parameter, neighbourhood, winding and orientation where applicable;
+- path-oriented endpoint tangency, signed G2 curvature and rate-explicit first/second Parametric-C2
+  derivatives where applicable;
 - one accepted history checkpoint and exact-current accepted authority;
 - independent hard validation plus a public geometric postcondition;
 - no movement for a pre-satisfied witness; and
 - no collapse of protected lines or positive-radius circles during recovery.
 
-Every dimension row verifies creation, Driving mode, typed unit and target metadata, one finite
-display-target edit, exact target restoration through Undo and Redo, history shape, finite
-accepted geometry and independent hard validation after every accepted transition.
+Every dimension row independently measures accepted point distance, segment length, radius,
+diameter or directed/unwrapped angle. It verifies creation, Driving mode, dimension/scalar identity,
+typed target and ModelUnits/AcuteDegrees display metadata, one finite display-target edit, exact
+target restoration through Undo and Redo, history shape, finite accepted geometry and independent
+hard validation after every accepted transition.
 
 The reachable scene rows are:
 
@@ -81,11 +88,12 @@ The reachable scene rows are:
 
 ## Driver and classification contract
 
-`scripts/m70b-hardening-oracle.sh` runs every authoring family in its own process with a 30-second
-runtime limit, then runs the scene matrix. Semantic failures, panics, timeouts and harness errors
-are rows rather than an instruction to stop; later families still run. Per-case Rust panic
-isolation preserves the other eight variants in that family whenever the test process remains
-healthy.
+`scripts/m70b-hardening-oracle.sh` runs every authoring and scene row in its own process with a
+30-second runtime limit and a five-second hard-kill grace period. Semantic failures, panics,
+timeouts (`124` or hard-kill `137`) and harness errors are rows rather than an instruction to stop;
+later rows still run. A nonzero child exit is never accepted merely because it wrote a complete
+TSV. Child output must match the requested case and family, and the final inventory must contain
+the exact 193 `(case_id, family)` pairs.
 
 The stable TSV schema is:
 
@@ -105,7 +113,9 @@ The three operator modes are:
 `crates/geosolve-constraint-editor/tests/fixtures/m70b_hardening_oracle.golden.tsv`.
 `--require-clean` additionally fails if any recorded row is not `PASS`. Scratch output lives under
 the ignored workspace `target/` tree so a full system `/tmp` cannot turn semantic results into
-false harness failures.
+false harness failures. `GEOSOLVE_M70B_ORACLE_CASE` selects exactly one row inside each child.
+Every authoring PASS fingerprint is `input-<fnv1a64>` over the effective post-scheduling variant;
+the golden therefore detects seed/scheduling drift instead of recording an uninformative `ok`.
 
 If a future row fails, preserve its family, case ID, fixed seed, minimized variant fingerprint and
 exact family command. Deduplicate common root causes, assign the next `M70B-F003+` identity and add
@@ -146,8 +156,7 @@ was required.
 This clean result is evidence for the bounded representative matrix, not a claim that human UAT
 or every family-by-primitive Cartesian product is complete. Existing M55/M62 regressions retain
 their broader applicability and curve-family ownership; M70B-F001 and M70B-F002 retain their exact
-payload-derived regressions. M70B remains active until fresh release qualification/publication and
-explicit supervising-human approval.
+payload-derived regressions. M70B remains active until explicit supervising-human UAT approval.
 
 ## Qualification ledger
 
@@ -159,7 +168,8 @@ cargo test --locked -p geosolve-constraint-editor \
 ./scripts/m70b-hardening-oracle.sh --survey
 ./scripts/m70b-hardening-oracle.sh --check
 ./scripts/m70b-hardening-oracle.sh --require-clean
-cargo test --locked -p geosolve-demo-web m70b_scene_authority_oracle_survey -- --nocapture
+cargo test --locked -p geosolve-demo-web --lib \
+  workbench::tests::m70b_scene_authority_oracle_survey -- --exact
 cargo test --locked -p geosolve-constraint-editor --all-features
 cargo test --locked -p geosolve-demo-web --all-features
 cargo clippy --locked -p geosolve-constraint-editor -p geosolve-demo-web \
@@ -170,6 +180,47 @@ git diff --check
 
 Observed outcomes are 1/1 inventory pass, 193/193 survey rows pass, exact golden check pass,
 clean-oracle gate pass, 4/4 scene rows pass, the complete editor crate pass (271 unit tests plus all
-named integration suites, including the new 2/2 oracle harness), demo-web 97/97 library plus 1/1
-native decoder pass, focused warnings-denied Clippy pass, formatting pass and diff check pass. The
-complete workspace/release gate and fresh UAT publication are recorded here after they run.
+named integration suites, including the 2/2 oracle harness), demo-web 97/97 library plus 1/1 native
+decoder pass, focused warnings-denied Clippy pass, WASM test compilation, formatting pass and diff
+check pass. The final golden SHA-256 is
+`803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`.
+
+Driver fault injection with a temporary fake Cargo executable also completed without leaving a
+repository file: ordinary nonzero exit, timeout `124`, hard-kill `137` and wrong-family output were
+classified independently while the remaining rows continued and the exact inventory remained
+present.
+
+## Release qualification and publication
+
+Nominated source `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` passed:
+
+```text
+env NO_COLOR=true \
+  TMPDIR=/home/arduano/programming/geometric-constraint-solver/target \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The complete gate passed formatting, warnings-denied Clippy, locked all-feature workspace tests,
+native/WASM M70 transition parity, the demo-web WASM check, warnings-denied rustdoc, benchmark
+compilation, M14/M32 performance budgets, package/licence and single-workbench/Git-hygiene checks,
+the 256-moving-body sparse crossover in `123.32s`, and Trunk 0.21.14 release assembly. Only the
+pre-existing non-failing Cargo `license` plus `license-file` notices appeared.
+
+The fresh read-only seven-file snapshot is `/tmp/geosolve-m70b-h1-uat.viSB9G`, served at
+`http://100.94.63.83:8080/`. Its exact file hashes are:
+
+| File | SHA-256 |
+| --- | --- |
+| `API_COMPATIBILITY.md` | `af91333ed578f05ec49c76fd10c18dd0ead0f9f845b8ff45279de5a6cbc7b80e` |
+| `LICENSE` | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-7be0279dd606ae0c.js` | `a6fb10ec3fac3021c5b2c5f92e1bbbd96f2ef0920a1e10c990ab4244ce04adda` |
+| `geosolve-demo-web-7be0279dd606ae0c_bg.wasm` | `a379c7c8307fda6715e22a3e64d786942bf4095505a3fc972c02fc38e2dbb63e` |
+| `index.html` | `1ad69307a269c0e9f7431e7c0c077b39cb0a490985c15360e38992e5646200f1` |
+| `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+The ordered manifest aggregate is
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`.
+Because H1 changes test infrastructure only, these release bytes intentionally match the F002
+candidate. Proxy- and cache-bypassed requests through the actual Tailscale address byte-compared
+`/` and every asset with the frozen snapshot. Human UAT remains pending.
