@@ -49,11 +49,11 @@ compressed text and restored atomically through its existing validation path. Th
 payload opened `M70B-F001`; its focused branch-bound correction and exact graph regression pass,
 and `M70B-F002` has complete radial-Normal/scene-authority replacement evidence and publication.
 The clean test-only M70B-H1 survey now freezes 193/193 authoring/scene rows, and its nominated
-source has complete release-gate and byte-verified replacement-publication evidence. M70B-H2 is
-generalizing that unchanged matrix into the mandatory milestone-neutral golden gate and
-repository-local defect workflow. Targeted human recheck and approval remain pending. M71 is
-deferred behind M70B and remains an unauthorized
-candidate backlog. M66's
+source has complete release-gate and byte-verified replacement-publication evidence. M70B-H2
+completes the mandatory milestone-neutral golden gate and repository-local defect workflow on
+clean source `47584bdb607c722df508eae56584726954a03205`, with the H1 golden and release bytes unchanged.
+Targeted human recheck and approval remain pending. M71 is deferred behind M70B and remains an
+unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3709,13 +3709,27 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
 - [x] Re-pass the complete release gate on the clean M70B-H1 source, freeze a fresh seven-file UAT
   snapshot, publish it through Tailscale and byte-verify the served distribution before resuming
   human review.
-- [ ] Complete `M70B-H2` as a test-infrastructure-only generalization: move the unchanged 193-row
+- [x] Complete `M70B-H2` as a test-infrastructure-only generalization: move the unchanged 193-row
   matrix, golden and isolated driver to milestone-neutral names; accept future active-milestone
   finding IDs; make `--require-clean` mandatory in the complete release gate; and install the
   automatically invoked repository-local `$geosolve-harden-defect` workflow. Preserve the exact
   H1 seed, rows, fingerprints, golden SHA-256 and current UAT bytes, with no legacy aliases or
   production behavior change.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
+
+`M70B-H2` qualification note (2026-08-11): clean source
+`47584bdb607c722df508eae56584726954a03205` passes the renamed 193/193 clean oracle and the complete
+integrated release gate. The gate includes formatting, warnings-denied Clippy, locked all-feature
+workspace tests, the mandatory milestone-neutral oracle, native/WASM M70 parity, the demo-web WASM
+check, warnings-denied rustdoc, benchmark compilation, performance budgets, package/licence and
+single-workbench/Git-hygiene checks, the 142.95-second 256-moving-body sparse crossover and Trunk
+0.21.14 release assembly. Skill validation and independent forward tests pass: a raw historical
+solver/headless report routes to its smallest owner without inventing a finding or broad-matrix
+row, while a CSS-only report stays outside the workflow. The golden SHA-256 remains
+`803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`; all seven generated release
+files retain the H1 hashes and ordered manifest aggregate
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. No product-byte change or
+Tailscale republish is required; the H1 UAT candidate remains current.
 
 `M70B-H1` qualification/publication note (2026-08-11): nominated source
 `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` passes the exact 193-row clean oracle and the complete

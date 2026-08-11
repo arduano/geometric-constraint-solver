@@ -6,15 +6,17 @@ Status: ready for focused human review on the clean test-only `M70B-H1` candidat
 `M70B-F002` retain their owning-layer corrections and complete replacement evidence. M70B-H1 adds
 a 193/193 passing authoring/scene oracle with no new finding; its complete release gate and fresh
 byte-verified Tailscale publication now pass. M70B-H2 only generalizes that test infrastructure and
-adds the repo-local defect workflow; it does not replace or alter the served H1 product candidate.
-Every human result below remains pending; this
-scorecard records no human pass or approval.
+adds the repo-local defect workflow; its clean release qualification passes without replacing or
+altering the served H1 product candidate. Every human result below remains pending; this scorecard
+records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
 `M70B-F002` replacement candidate source: `2e0f6c348ea0d3d9ee0bc2fd556f402a29d7059b`
 
 Current `M70B-H1` candidate source: `dd645d99e705e56c80ab2a4a136f7a4d03baafbf`
+
+Qualified `M70B-H2` test-infrastructure source: `47584bdb607c722df508eae56584726954a03205`
 
 Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
 

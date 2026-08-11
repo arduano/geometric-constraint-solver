@@ -7,9 +7,10 @@ remain qualified, and `M70B-F001`/`M70B-F002` retain complete replacement eviden
 test-only continue-through-failure authoring/scene oracle with 193/193 passing rows and no new
 finding. Its nominated source passes the complete release gate and its fresh read-only Tailscale
 distribution is byte-verified. M70B-H2 generalizes the unchanged matrix and installs the
-repository-local defect-hardening workflow without changing release behavior; its clean
-qualification is pending. Supervising-human UAT and approval remain pending. This document
-records no human pass or milestone closure.
+repository-local defect-hardening workflow without changing release behavior. Its clean release
+qualification, skill validation and independent forward tests pass with the H1 golden and release
+bytes unchanged. Supervising-human UAT and approval remain pending. This document records no human
+pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
 transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
@@ -39,6 +40,16 @@ Current `M70B-H1` Tailscale distribution: `/tmp/geosolve-m70b-h1-uat.viSB9G` at
 `http://100.94.63.83:8080/`
 
 Current `M70B-H1` release manifest aggregate:
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
+
+`M70B-H2` qualified source: `47584bdb607c722df508eae56584726954a03205`
+
+`M70B-H2` integrated release-gate result: **PASS** (256-moving-body sparse crossover: `142.95s`)
+
+`M70B-H2` golden SHA-256:
+`803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`
+
+`M70B-H2` release manifest aggregate:
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
 
 Prior `M70B-F001` integrated release-gate result: **PASS**
@@ -443,6 +454,12 @@ browser/CSS findings remain outside that workflow unless they cross a Rust adapt
 complete release gate now includes the clean matrix, while the existing H1 UAT distribution stays
 the product candidate because H2 changes no release input.
 
+The repo-local skill passes the official `quick_validate.py` check. Independent fresh-context
+forward tests route a historical solver/headless defect to the owning drag/session layer without
+assigning an unconfirmed finding, applying a fix or expanding the broad matrix, and exclude a
+pure CSS-only report. Fault-injected driver evidence also continues through the complete inventory
+while independently classifying `PANIC`, `TIMEOUT` and `HARNESS_ERROR` rows.
+
 ## 4. Acceptance criteria
 
 - [x] focused codec, persistence and thin-adapter tests pass;
@@ -462,7 +479,7 @@ the product candidate because H2 changes no release input.
   production fix;
 - [x] the M70B-H1 source passes the complete integrated release gate and its fresh seven-file
   distribution is frozen and byte-verified over Tailscale;
-- [ ] M70B-H2 preserves the exact H1 golden SHA-256, passes the neutral focused/clean oracle and
+- [x] M70B-H2 preserves the exact H1 golden SHA-256, passes the neutral focused/clean oracle and
   full release gate, validates and independently forward-tests the repo-local skill, and leaves the
   existing UAT release bytes unchanged;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and

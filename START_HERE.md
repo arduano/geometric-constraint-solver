@@ -56,9 +56,11 @@ create/edit/Undo/Redo dimension families and four reachable scene-authority stat
 continue-through-failure fixed-seed oracle. All 193 rows pass and no new finding is open. Source
 `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` has passed the complete release gate and its fresh
 seven-file Tailscale publication is byte-verified. M70B-H2 generalizes that unchanged corpus into
-the milestone-neutral mandatory golden gate and repository-local defect-hardening workflow;
-targeted human recheck remains pending. M71 is
-deferred behind M70B and remains an unauthorized candidate backlog.
+the milestone-neutral mandatory golden gate and repository-local defect-hardening workflow. Clean
+source `47584bdb607c722df508eae56584726954a03205` passes the complete release gate, preserves the
+exact H1 golden and release bytes, and leaves the existing H1 UAT publication in place; targeted
+human recheck remains pending. M71 is deferred behind M70B and remains an unauthorized candidate
+backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 

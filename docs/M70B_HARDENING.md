@@ -8,7 +8,8 @@ Supervising-human M70B review and approval remain pending.
 
 M70B-H1 originated this matrix. M70B-H2 moves the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
-golden bytes and SHA-256 remain unchanged.
+golden bytes and SHA-256 remain unchanged. H2 clean qualification and independent skill forward
+tests pass on source `47584bdb607c722df508eae56584726954a03205`.
 
 ## Scope and authority
 
@@ -229,3 +230,27 @@ The ordered manifest aggregate is
 Because H1 changes test infrastructure only, these release bytes intentionally match the F002
 candidate. Proxy- and cache-bypassed requests through the actual Tailscale address byte-compared
 `/` and every asset with the frozen snapshot. Human UAT remains pending.
+
+### M70B-H2 canonical workflow qualification
+
+Clean source `47584bdb607c722df508eae56584726954a03205` passed the same complete command after the generic
+oracle became a mandatory release-gate step. The gate passed formatting, warnings-denied Clippy,
+locked all-feature workspace tests, 193/193 isolated golden rows, native/WASM M70 transition
+parity, the demo-web WASM check, warnings-denied rustdoc, benchmark compilation, M14/M32
+performance budgets, package/licence and single-workbench/Git-hygiene checks, the 256-moving-body
+sparse crossover in `142.95s`, and Trunk 0.21.14 release assembly. Only the pre-existing
+non-failing Cargo `license` plus `license-file` notices appeared.
+
+The official skill validator passed. Fresh-context forward tests demonstrated that an incomplete
+historical solver/headless report remains diagnosis-only, routes to the narrow drag/session owner,
+does not assign a finding or expand the broad matrix without a payload body, and makes no
+production fix; a pure CSS-only report does not invoke the workflow. Fault injection continued
+through all 193 rows and classified 188 ordinary passes, one panic, two timeout/hard-kill rows and
+two harness errors independently.
+
+The golden SHA-256 remains
+`803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`. Every generated release
+file retains the H1 hash listed above, and the ordered manifest aggregate remains
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. H2 therefore leaves the
+served H1 product candidate unchanged and requires no Tailscale republish. Human UAT remains
+pending.
