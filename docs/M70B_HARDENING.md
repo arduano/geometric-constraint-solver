@@ -14,8 +14,9 @@ fingerprints unchanged. F005 then adds one source-rotation row for payload
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Its 45-test feature-owner
 suite, nine-test retained movement suite, focused golden tests, all aggregate golden modes,
 formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
-relevant WASM check pass. Complete F005 clean release qualification, a fresh immutable publication,
-supervising-human recheck and M70B approval remain pending.
+relevant WASM check pass. Clean source `d400c4a8201f6afc531f5b504424d6430dbf3937`
+passes the complete release gate, and its fresh immutable seven-file publication is byte-verified
+through Tailscale. The supervising-human recheck and M70B approval remain pending.
 
 M70B-H1 originated this matrix. M70B-H2 moved the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
@@ -321,7 +322,7 @@ fixture records 198 `PASS`, zero defects, panics, timeouts or harness errors, an
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Aggregate oracle
 `--survey`/`--check`/`--require-clean`, formatting, warnings-denied all-workspace Clippy, locked
 all-feature workspace tests and the relevant WASM build pass. The clean release gate and
-replacement publication remain the F005 nomination work below.
+replacement publication evidence is recorded below.
 
 ### M70B-F005 movement-certificate checklist
 
@@ -453,7 +454,7 @@ file retains the H1 hash listed above, and the ordered manifest aggregate remain
 served H1 product candidate unchanged and requires no Tailscale republish. Human UAT remains
 pending.
 
-### M70B-H3 discovery, F003/F004 gate and F005 current state
+### M70B-H3 discovery, F003/F004 gate and F005 qualified state
 
 H3 changed only test infrastructure and documentation, so the H1 product distribution and release
 manifest above remained the last qualified bytes. Its historical 197-row `--check` passed against
@@ -467,8 +468,8 @@ fixture is 198/198 `PASS` at SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`; its exact owner regression,
 45-test owner suite, nine-test retained movement suite, focused golden tests, all aggregate golden
 modes, formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
-relevant WASM check pass. F005's clean release qualification and replacement publication remain
-pending.
+relevant WASM check pass. F005's clean release qualification and replacement publication pass as
+recorded below.
 
 ### M70B-F003/F004 replacement qualification and publication
 
@@ -505,7 +506,35 @@ remain pending.
 
 ### M70B-F005 replacement qualification and publication
 
-The F005 implementation and current 198-row golden have focused mechanical evidence, but no clean
-replacement commit, complete release-gate result or fresh immutable distribution is recorded yet.
-The already served F003/F004 snapshot predates F005 and must not be used for the F005 movement-
-continuity recheck in `docs/M70B_UAT.md`.
+Clean `main` source `d400c4a8201f6afc531f5b504424d6430dbf3937` passed:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The complete gate exited zero, including formatting, warnings-denied workspace Clippy, locked
+all-feature workspace tests, the 198/198 clean golden oracle, native/WASM transition parity, the
+demo-web WASM check, warnings-denied rustdoc, benchmark compilation, M14/M32 performance budgets,
+package/licence and Git-hygiene checks, the 256-moving-body sparse crossover in `152.49s`, and
+Trunk 0.21.14 release assembly. Only the pre-existing non-failing Cargo `license` plus
+`license-file` notices appeared.
+
+The immutable replacement snapshot is `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`; the directory is mode
+`0555` and each of its exactly seven files is mode `0444`:
+
+| File | SHA-256 |
+| --- | --- |
+| `API_COMPATIBILITY.md` | `af91333ed578f05ec49c76fd10c18dd0ead0f9f845b8ff45279de5a6cbc7b80e` |
+| `LICENSE` | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-b2164249dc1c486.js` | `d018c92ee6f2d437244a28200c026e462da4585a9f808eabeea0b1208c26768f` |
+| `geosolve-demo-web-b2164249dc1c486_bg.wasm` | `622a2f77e63574b624aecb94919994464f58671115cdbd4802283ada80c20907` |
+| `index.html` | `5088006b11625fab097b3a38c6abad8d7cf0d3c3d91875b3fcf17626dbe34c1d` |
+| `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+The ordered manifest aggregate is
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` serves that
+snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
+cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
+immutable local counterpart. This candidate supersedes the F003/F004 snapshot for the F005
+movement-continuity recheck in `docs/M70B_UAT.md`; human UAT and explicit approval remain pending.

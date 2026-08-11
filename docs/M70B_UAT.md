@@ -19,17 +19,16 @@ fixture contains 198 `PASS` at SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. F005's exact owner
 regression, 45-test feature suite, nine-test retained movement suite, focused golden tests, all
 aggregate golden modes, formatting, warnings-denied all-workspace Clippy, locked all-feature
-workspace tests and the relevant WASM check pass. Clean source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` and its immutable served snapshot remain the qualified
-F003/F004 candidate; they predate F005. Complete F005 clean release qualification, a fresh
-byte-verified publication, targeted human rechecks and approval remain pending. This scorecard
-records no human pass or approval.
+workspace tests and the relevant WASM check pass. Clean F005 source
+`d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate, and its fresh
+immutable seven-file Tailscale publication is byte-verified. Targeted human rechecks and approval
+remain pending. This scorecard records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
 `M70B-F002` replacement candidate source: `2e0f6c348ea0d3d9ee0bc2fd556f402a29d7059b`
 
-Current `M70B-H1` candidate source: `dd645d99e705e56c80ab2a4a136f7a4d03baafbf`
+Historical `M70B-H1` candidate source: `dd645d99e705e56c80ab2a4a136f7a4d03baafbf`
 
 Qualified `M70B-H2` test-infrastructure source: `47584bdb607c722df508eae56584726954a03205`
 
@@ -55,9 +54,18 @@ Published `M70B-F003/F004` read-only snapshot:
 Published `M70B-F003/F004` release distribution manifest aggregate:
 `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`
 
-`M70B-F005` replacement source, release-gate result and Tailscale snapshot: **PENDING**
+Published `M70B-F005` replacement source: `d400c4a8201f6afc531f5b504424d6430dbf3937`
 
-The snapshot directory is mode `0555`, every file is mode `0444`, and PID `524440` is bound only
+Published `M70B-F005` integrated release-gate result: **PASS**
+
+Published `M70B-F005` Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Published `M70B-F005` read-only snapshot: `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`
+
+Published `M70B-F005` release distribution manifest aggregate:
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`
+
+The snapshot directory is mode `0555`, every file is mode `0444`, and PID `1841268` is bound only
 to the Tailscale address. Every served asset and `/` byte-matches the immutable snapshot.
 
 Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
@@ -67,15 +75,16 @@ Prior `M70B-F001` release distribution manifest aggregate:
 
 Historical `M70B-H1` Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Current `M70B-H1` read-only snapshot: `/tmp/geosolve-m70b-h1-uat.viSB9G`
+Historical `M70B-H1` read-only snapshot: `/tmp/geosolve-m70b-h1-uat.viSB9G`
 
-Current `M70B-H1` release distribution manifest aggregate:
+Historical `M70B-H1` release distribution manifest aggregate:
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
 
 H1-H3 were test-only, so their served release bytes and aggregate intentionally remained the prior
 F002 product bytes qualified and republished by H1. The F003/F004 repairs change headless
 production behavior; their clean qualified and byte-verified replacement now supersedes H1 as the
-served UAT candidate.
+historical product candidate. F005's clean qualified and byte-verified replacement now supersedes
+F003/F004 as the served UAT candidate.
 
 ## Preconditions
 
@@ -104,7 +113,7 @@ served UAT candidate.
   integrated F003/F004 release gate.
 - [x] Its immutable F003/F004 seven-file replacement distribution is served only through Tailscale
   and every asset plus `/` byte-matches the frozen snapshot.
-- [ ] A clean F005 replacement passes the complete release gate and a fresh immutable distribution
+- [x] A clean F005 replacement passes the complete release gate and a fresh immutable distribution
   is served and byte-verified through Tailscale.
 - [ ] The browser has hard-refreshed that exact candidate.
 
@@ -148,9 +157,9 @@ harness errors at SHA-256
 nine-test retained movement suite, focused golden tests, aggregate
 `--survey`/`--check`/`--require-clean`, formatting, warnings-denied all-workspace Clippy, locked
 all-feature workspace tests and the relevant WASM check pass. The clean F005 release qualification
-and fresh byte-verified Tailscale publication remain pending, followed by human UAT.
+and fresh byte-verified Tailscale publication also pass; human UAT remains.
 
-Result: **F003/F004 REPLACEMENT PUBLISHED; F005 REPLACEMENT QUALIFICATION PENDING**
+Result: **F005 REPLACEMENT PUBLISHED; HUMAN UAT PENDING**
 
 ## M70B-F005 — Persistent Fillet movement continuity
 
@@ -416,7 +425,7 @@ M70B remains active until the supervising human records explicit approval here. 
 may accept M70B-U1 through M70B-U5 after objective findings receive owning-layer regressions and a
 targeted recheck; it must not invent an unrecorded exhaustive replay. M71 remains deferred until
 M70B is closed. F003/F004 are resolved at their headless owners and their complete release
-qualification and immutable Tailscale publication pass. F005 is resolved at its feature owner and
-the current fixture records all 198 rows as `PASS`, but its complete qualification and fresh
-publication remain pending. After those gates, only the prepared human UAT, targeted rechecks above
-and explicit approval remain before closure.
+qualification and immutable Tailscale publication pass. F005 is resolved across its feature,
+sketch and retained-editor owners; its current fixture records all 198 rows as `PASS`, and its
+complete qualification and fresh immutable Tailscale publication pass. Only the prepared human
+UAT, targeted rechecks above and explicit approval remain before closure.

@@ -1303,13 +1303,13 @@ byte-for-byte; the current fixture is 198/198 `PASS`, SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Focused F005 owner/golden,
 aggregate golden, formatting and focused warnings-denied Clippy qualification pass. Prior F003/F004
 source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
-`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
-snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
-`http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. F005 formatting,
-warnings-denied all-workspace Clippy, locked all-feature workspace tests, the relevant WASM check
-and aggregate golden modes pass. Complete F005 clean release qualification and fresh publication
-must precede its focused movement UAT. M71 is deferred behind it.
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` and is retained as
+historical release evidence. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937`
+passes that complete gate, including its 198-row clean oracle and 152.49-second 256-moving-body
+sparse crossover. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is
+served at `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest
+aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The focused F005
+movement UAT and explicit approval remain pending. M71 is deferred behind them.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1679,7 +1679,7 @@ the same case identities and input fingerprints while passing:
 - lower same-cell: `input-f9920c3cf170130d`; and
 - periodic seam: `input-2da21ef04cfb4246`.
 
-### M70B-F005 - Persistent line-circle Fillet source-rotation continuity (owner-resolved)
+### M70B-F005 - Persistent line-circle Fillet source-rotation continuity (qualified/published)
 
 The complete loadable capsule is preserved at
 `crates/geosolve-demo-web/tests/fixtures/m70b_f005_repro.txt`; its identity
@@ -1844,8 +1844,12 @@ F005 preserves all 197 records and appends the source-rotation row at fingerprin
 `input-04658a77db2dc779`. The current fixture is 198/198 `PASS` at SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`; its focused owner/golden,
 aggregate golden, formatting, warnings-denied all-workspace Clippy, locked all-feature workspace
-tests and the relevant WASM check pass. Complete F005 clean release qualification, fresh
-publication, targeted human rechecks and explicit M70B approval remain pending.
+tests and the relevant WASM check pass. Clean source
+`d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate. Its immutable
+seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
+`http://100.94.63.83:8080/`, with ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. Targeted human rechecks and
+explicit M70B approval remain pending.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

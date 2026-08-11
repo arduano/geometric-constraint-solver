@@ -97,15 +97,14 @@ session, sidecar, allocator, checkpoint, history and transcript before one publi
 that genuinely loses a previously Current Fillet cannot publish a line-only half-scene; the last
 complete preview and release point remain visible with a local limit cue and recover in reverse.
 Forced durability-failure, non-Edit refresh and host-input replay regressions cover the transaction
-seams. The 45-test feature suite and nine-test retained-movement suite pass locally. The prior clean F003/F004 source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
-`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
-snapshot at `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
-`http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. F005 formatting,
-warnings-denied all-workspace Clippy, locked all-feature workspace tests, the relevant WASM check
-and aggregate golden modes pass. Complete F005 clean release qualification and a fresh immutable
-publication must precede the targeted movement recheck; explicit M70B approval remains pending.
+seams. The 45-test feature suite and nine-test retained-movement suite pass. Clean F005 source
+`d400c4a8201f6afc531f5b504424d6430dbf3937` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the 198-row
+clean oracle and 152.49-second 256-moving-body sparse crossover. Its immutable seven-file snapshot
+at `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at `http://100.94.63.83:8080/`; every file and
+`/` byte-match, with ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
+recheck and explicit M70B approval remain pending.
 M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
@@ -359,13 +358,11 @@ numeric cell edge as a geometric barrier. The original four stable rows remain u
 new source-rotation row passes at fingerprint `input-04658a77db2dc779`; the current 198/198-`PASS`
 golden has SHA-256 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
 Focused owner and golden tests, all aggregate golden modes, formatting and focused warnings-denied
-Clippy pass. Prior F003/F004 source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete
-release gate. Its immutable
-seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+Clippy pass. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
+release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match the snapshot, whose ordered-manifest
-aggregate is `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. F005's complete
-qualification and fresh publication must precede its targeted movement recheck; explicit approval
-remains pending. The temporary
+aggregate is `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
+recheck and explicit approval remain pending. The temporary
 `docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:

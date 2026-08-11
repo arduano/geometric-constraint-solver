@@ -168,14 +168,12 @@ stable cases `PASS`. F005 adds one exact source-rotation Fillet row and accepts 
 stale certificate edge only through overlapping fresh same-branch certificates. The current
 reviewed fixture is 198/198 `PASS`. Focused F005 owner/golden, the 45-test feature suite, nine-test
 retained movement suite and aggregate golden qualification, formatting, warnings-denied all-
-workspace Clippy, locked all-feature workspace tests and the relevant WASM check pass. Prior
-F003/F004 source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate, and its
-immutable seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served and byte-verified
-at `http://100.94.63.83:8080/` with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Complete F005 clean release
-qualification and fresh publication must precede the targeted movement recheck; approval remains
-pending. M71 remains deferred behind it.
+workspace Clippy, locked all-feature workspace tests and the relevant WASM check pass. Clean F005
+source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate, and its immutable
+seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
+`http://100.94.63.83:8080/` with ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
+recheck and approval remain pending. M71 remains deferred behind them.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1430,13 +1428,13 @@ same four rows retain their input fingerprints and made the F003/F004 repair che
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
 Focused owner/golden tests, the 45-test feature suite, nine-test retained movement suite, aggregate
 golden survey/check/clean modes, formatting, warnings-denied all-workspace Clippy, locked all-
-feature workspace tests and the relevant WASM check pass. Prior F003/F004 source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
+feature workspace tests and the relevant WASM check pass. Clean F005 source
+`d400c4a8201f6afc531f5b504424d6430dbf3937` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
-snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Complete F005 clean release
-qualification, fresh publication, human recheck and approval remain pending.
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted human recheck
+and approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1632,14 +1630,12 @@ source-rotation row, preserves all prior records byte-for-byte and yields exactl
 SHA-256 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Focused F003-F005 owner
 and golden tests, aggregate golden `--survey`/`--check`/`--require-clean`, formatting,
 warnings-denied all-workspace Clippy, locked all-feature workspace tests and the relevant WASM
-check pass. Prior F003/F004 source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
+check pass. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. The immutable seven-file
-snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Complete F005 clean release
-qualification and fresh publication must precede its targeted movement recheck; explicit approval
-remains pending.
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
+recheck and explicit approval remain pending.
 
 M71 remains deferred behind M70B.
 

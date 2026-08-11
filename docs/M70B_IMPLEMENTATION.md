@@ -23,9 +23,10 @@ one passing source-rotation row for exact payload `4228:0823d31f269300af`. The c
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`; the 45-test feature-owner
 suite and nine-test retained movement suite pass, as do focused golden tests and aggregate
 survey/check/clean modes, formatting, warnings-denied all-workspace Clippy, locked all-feature
-workspace tests and the relevant WASM check pass. Complete F005 clean release qualification and
-fresh publication, then supervising-human UAT and approval, remain pending. This document records no human pass or
-milestone closure.
+workspace tests and the relevant WASM check. Clean F005 source
+`d400c4a8201f6afc531f5b504424d6430dbf3937` also passes the complete release gate, and its fresh
+immutable seven-file Tailscale publication is byte-verified. Supervising-human UAT and approval
+remain pending. This document records no human pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
 transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
@@ -59,10 +60,10 @@ Prior `M70B-F001` replacement source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
 `M70B-H1` integrated release-gate result: **PASS** (256-moving-body sparse crossover: `123.32s`)
 
-Current `M70B-H1` Tailscale distribution: `/tmp/geosolve-m70b-h1-uat.viSB9G` at
+Historical `M70B-H1` Tailscale distribution: `/tmp/geosolve-m70b-h1-uat.viSB9G` at
 `http://100.94.63.83:8080/`
 
-Current `M70B-H1` release manifest aggregate:
+Historical `M70B-H1` release manifest aggregate:
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
 
 `M70B-H2` qualified source: `47584bdb607c722df508eae56584726954a03205`
@@ -85,12 +86,20 @@ aggregate `--check` and `--require-clean` reruns pass.
 
 `M70B-F003/F004` integrated release-gate result: **PASS**
 
-`M70B-F005` replacement source and integrated release-gate result: **PENDING CLEAN NOMINATION**
+`M70B-F005` replacement source: `d400c4a8201f6afc531f5b504424d6430dbf3937`
 
-Current `M70B-F003/F004` Tailscale distribution:
+`M70B-F005` integrated release-gate result: **PASS** (256-moving-body sparse crossover: `152.49s`)
+
+Current `M70B-F005` Tailscale distribution:
+`/tmp/geosolve-m70b-f005-uat.Q5c9Wi` at `http://100.94.63.83:8080/`
+
+Current `M70B-F005` release manifest aggregate:
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`
+
+Historical `M70B-F003/F004` Tailscale distribution:
 `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` at `http://100.94.63.83:8080/`
 
-Current `M70B-F003/F004` release manifest aggregate:
+Historical `M70B-F003/F004` release manifest aggregate:
 `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`
 
 `M70B-H2` release manifest aggregate:
@@ -781,8 +790,43 @@ independently. The golden adds the process-isolated systemic row
 197 records byte-for-byte. The current 198/198-`PASS` fixture has SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`; focused feature tests pass
 45/45, retained movement tests pass 9/9, and all aggregate golden modes return zero. Clean
-replacement qualification/publication is
-recorded separately after nomination, before the targeted movement-continuity recheck.
+replacement qualification/publication is recorded below before the targeted movement-continuity
+recheck.
+
+## 3.10 `M70B-F005` replacement release and publication
+
+Clean `main` source `d400c4a8201f6afc531f5b504424d6430dbf3937` passed:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The complete gate exited zero, including formatting, warnings-denied workspace Clippy, locked
+all-feature workspace tests, the 198/198 clean golden oracle, native/WASM transition parity, the
+demo-web WASM check, warnings-denied rustdoc, benchmark compilation, M14/M32 performance budgets,
+package/licence and Git-hygiene checks, the 256-moving-body sparse crossover in `152.49s`, and
+Trunk 0.21.14 release assembly. Only the pre-existing non-failing Cargo `license` plus
+`license-file` notices appeared.
+
+The immutable replacement snapshot is `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`; the directory is mode
+`0555` and each of its exactly seven files is mode `0444`:
+
+| File | SHA-256 |
+| --- | --- |
+| `API_COMPATIBILITY.md` | `af91333ed578f05ec49c76fd10c18dd0ead0f9f845b8ff45279de5a6cbc7b80e` |
+| `LICENSE` | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-b2164249dc1c486.js` | `d018c92ee6f2d437244a28200c026e462da4585a9f808eabeea0b1208c26768f` |
+| `geosolve-demo-web-b2164249dc1c486_bg.wasm` | `622a2f77e63574b624aecb94919994464f58671115cdbd4802283ada80c20907` |
+| `index.html` | `5088006b11625fab097b3a38c6abad8d7cf0d3c3d91875b3fcf17626dbe34c1d` |
+| `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+The ordered manifest aggregate is
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` serves that
+snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
+cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
+immutable local counterpart. The targeted movement recheck and supervising-human approval remain
+pending.
 
 ## 4. Acceptance criteria
 
@@ -841,7 +885,7 @@ recorded separately after nomination, before the targeted movement-continuity re
 - [x] its immutable seven-file replacement distribution is frozen and byte-verified over
   Tailscale at manifest aggregate
   `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`;
-- [ ] a clean F005 replacement source passes the complete release gate and its fresh immutable
+- [x] a clean F005 replacement source passes the complete release gate and its fresh immutable
   distribution is byte-verified over Tailscale;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
@@ -856,8 +900,8 @@ size honestly rather than silently dropping content.
 
 The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, file picker,
 download flow, raw browser-storage handoff and browser E2E remain retired. The repaired
-197-`PASS` fixture and production worktree have passed the milestone-appropriate automated
-qualification and complete clean release gate; the immutable replacement is served and
+198-`PASS` fixture and clean replacement source have passed the milestone-appropriate automated
+qualification and complete clean release gate; the immutable F005 replacement is served and
 byte-verified. Focused human UAT and explicit approval, including targeted
 `M70B-F001`/`M70B-F002` rechecks, remain pending. A
 Local interval whose semantic endpoint is exactly zero has no valid solution at that endpoint;

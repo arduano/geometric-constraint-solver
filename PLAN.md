@@ -60,12 +60,11 @@ payload `4228:0823d31f269300af` across a stale conservative certificate edge by 
 overlapping fresh certificate chain to one unique transverse same-branch root. Its exact
 payload-derived owner regression and systemic row extend the reviewed fixture to 198/198 `PASS`.
 Focused owner/golden and aggregate golden qualification, formatting, warnings-denied all-workspace
-Clippy, locked all-feature workspace tests and the relevant WASM check pass. Prior F003/F004 source
-`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete
-release gate and its frozen seven-file Tailscale publication is byte-verified. Complete F005
-clean release qualification, fresh publication, targeted movement recheck and approval remain
-pending. M71
-is deferred behind M70B and remains an unauthorized candidate backlog. M66's
+Clippy, locked all-feature workspace tests and the relevant WASM check pass. Clean F005 source
+`d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate and its fresh
+immutable seven-file Tailscale publication is byte-verified. The targeted movement recheck and
+approval remain pending. M71 is deferred behind M70B and remains an unauthorized candidate
+backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3690,9 +3689,10 @@ Focused F003-F005 owner and golden tests, the 45-test feature suite, nine-test r
 suite, aggregate golden survey/check/clean modes, formatting, warnings-denied all-workspace Clippy,
 locked all-feature workspace tests and the relevant WASM check pass. Prior F003/F004 source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate and its frozen
-seven-file distribution is published and byte-verified through Tailscale. Complete F005 clean
-release qualification, a fresh immutable distribution, targeted movement recheck and approval
-remain pending; M70B is not complete.
+seven-file distribution is retained as historical evidence. Clean F005 source
+`d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate; its fresh immutable
+seven-file distribution is published and byte-verified through Tailscale. The targeted movement
+recheck and explicit approval remain pending; M70B is not complete.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3809,7 +3809,7 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   the relevant WASM check and aggregate golden survey/check/clean modes for the F005 worktree.
 - [x] Pass the complete clean F003/F004 replacement-candidate release gate and publish/byte-verify
   its frozen UAT distribution.
-- [ ] Pass the complete clean F005 replacement gate and publish/byte-verify a fresh immutable UAT
+- [x] Pass the complete clean F005 replacement gate and publish/byte-verify a fresh immutable UAT
   distribution before asking for the targeted movement recheck.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
@@ -3889,6 +3889,19 @@ that loses any previously Current set is withheld, leaves the last complete scen
 position intact, publishes a local feature/corner/source limit cue where possible, and may recover
 on the next valid sample. Direct document edits remain allowed to intentionally produce a visible
 Failed computed feature, and non-Edit actions do not persist unrecorded contact refreshes.
+
+`M70B-F005` replacement qualification/publication note (2026-08-12): clean nominated source
+`d400c4a8201f6afc531f5b504424d6430dbf3937` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. The gate includes the
+198/198 clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
+workspace tests, native/WASM transition parity, the demo-web WASM check, warnings-denied rustdoc,
+benchmark compilation, M14/M32 performance budgets, package/licence and Git-hygiene checks, the
+152.49-second 256-moving-body sparse crossover and Trunk 0.21.14 release assembly. Exactly seven
+release files are frozen read-only under `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` and served at
+`http://100.94.63.83:8080/`. Proxy- and cache-bypassed HTTP fetches of every file and `/`
+byte-match the snapshot; the ordered manifest aggregate is
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. Only the targeted movement
+recheck, remaining focused UAT and explicit M70B approval remain pending.
 
 `M70B-F003/F004` replacement qualification/publication note (2026-08-11): clean nominated source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
