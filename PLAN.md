@@ -52,11 +52,13 @@ The test-only M70B-H1 survey historically froze 193/193 clean authoring/scene ro
 nominated source has complete release-gate and byte-verified replacement-publication evidence.
 M70B-H2 completed the mandatory milestone-neutral golden gate and repository-local defect workflow
 on clean source `47584bdb607c722df508eae56584726954a03205`, with the H1 golden and release bytes
-unchanged. M70B-H3 now preserves those original 193 rows byte-for-byte and appends four
-process-isolated computed-Fillet rows for open F003/F004, producing a reviewed 197-row checklist of
-193 `PASS` plus four `DEFECT`. Its exact `--check` passes while `--require-clean` intentionally
-fails, so the mandatory release gate remains red. Targeted human recheck and approval remain
-pending. M71 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
+unchanged. Test-only M70B-H3 historically preserved those original 193 rows byte-for-byte and
+appended four process-isolated computed-Fillet `DEFECT` rows for F003/F004; its exact `--check`
+passed while `--require-clean` intentionally failed. Authorized production repairs now make those
+same stable rows pass, yielding a reviewed 197/197-`PASS` fixture. Exact golden, workspace, Clippy,
+formatting and relevant WASM qualification pass. Clean release-candidate nomination/publication,
+targeted human recheck and approval remain pending. M71
+is deferred behind M70B and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3658,17 +3660,25 @@ every scripted step. M70 is closed.
 Status: active during human UAT. Bounded reproduction transport and restore remain qualified;
 `M70B-F001` and `M70B-F002` retain complete replacement evidence. M70B-H1/H2 historically froze a
 clean continue-through-failure authoring/scene baseline with 193/193 passing rows. Subsequent UAT
-opened `M70B-F003`: a Coincident-closed open triangle cannot author its closure Fillet through
-either the point or two-span route. The exact typed failure is encoded at the headless owner. Two
-subsequent supplied line-circle Fillet payloads deduplicate as `M70B-F004`: valid roots remain
-inside the unchanged explicit circle branch after native source edits, but persisted evaluation
-searches only a narrower seed window and returns `NoLocalRoot`. The exact two-case failure is
-encoded at the feature owner. Test-only M70B-H3 now adds those four process-isolated cases to the
-golden as reviewed F003/F004 `DEFECT` rows while preserving the original 193 `PASS` rows
-byte-for-byte. The 197-row `--check` passes, but `--require-clean` intentionally fails. Neither open
-finding includes a production correction or repair plan. The prior clean source and read-only
-distribution remain historical qualification evidence, not evidence that F003 or F004 is
-resolved. No completion or approval is claimed.
+opened `M70B-F003` for Coincident-closure Fillet topology and `M70B-F004` for persisted
+line-circle branch traversal. Their focused owner regressions first froze the failures without
+production changes, and test-only M70B-H3 appended four reviewed `DEFECT` rows while preserving
+the original 193 `PASS` rows byte-for-byte. That historical H3 `--check` passed and
+`--require-clean` intentionally failed against SHA-256
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`.
+
+Production repair was subsequently authorized and implemented. F003 now treats the transitive
+components of active explicit Coincident constraints as semantic joins for Fillet point incidence,
+same-polyline pair eligibility and retained-endpoint hints; suppressed constraints and coordinate
+proximity do not join points. F004 now lets persisted Circle/CircularArc-plus-affine Fillets search
+their complete certified explicit tangent-orientation cell, while generic nonlinear evaluation and
+radius continuation retain their narrow fold/locality guards. The same four golden cases preserve
+their exact input fingerprints and now yield `PASS`, making the current fixture 197/197 `PASS` with
+SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
+Focused F003/F004 owner qualification, exact golden check/clean modes, formatting, warnings-denied
+workspace Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean
+release-candidate nomination/publication, targeted human recheck and approval remain pending;
+M70B is not complete.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3745,17 +3755,65 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   `M70B-F003`/`M70B-F004`; require the exact `--check` to pass and `--require-clean` to fail until
   those findings are repaired and reviewed as clean. Change no production behavior and do not
   nominate this deliberately red checklist as a release candidate.
+- [x] Resolve `M70B-F003` at its owners: expose deterministic transitive representatives for active
+  explicit Coincident point components, ignore suppressed relations and coordinate proximity, and
+  use those representatives for Fillet point incidence, same-polyline pair eligibility and
+  retained-endpoint hints. Convert the owner regression to prove either closure point, both span
+  orders, one three-corner preview and publication of one Current feature with three Fillet arcs.
+- [x] Resolve `M70B-F004` without implicit branch widening: use a persisted-evaluation policy that
+  searches the complete certified explicit tangent-orientation cell only for constant-curvature
+  Circle/CircularArc plus affine support. Keep the narrow seed-connected guard for general
+  nonlinear curves and the existing fold/locality guard for radius continuation; make both exact
+  payload-derived evaluations Current without changing branch, winding or source identity.
+- [x] Review the four stable H3 rows from `DEFECT` to `PASS` without changing their input
+  fingerprints: curve-pair `input-d04adbf29c08b9bd`, point `input-4ba571059db7afff`, same-cell
+  lower `input-f9920c3cf170130d` and same-cell seam `input-2da21ef04cfb4246`. Preserve the original
+  193 row records byte-for-byte and record the current 197/197-`PASS` fixture SHA-256 as
+  `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
+- [x] Re-pass formatting, warnings-denied workspace Clippy, locked all-feature workspace tests,
+  the exact golden `--check` and `--require-clean`, and the relevant WASM build after the F003/F004
+  repairs.
+- [ ] Pass the complete clean replacement-candidate release gate and publish/byte-verify its frozen
+  UAT distribution.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
-`M70B-H3` qualification note (2026-08-11): the four new Fillet cases run in independent bounded
-processes and preserve the original H1/H2 193 rows byte-for-byte. The reviewed golden contains
-exactly 197 rows: 193 `PASS`, two F003 `DEFECT` classifications for Coincident-closure point/pair
-authoring and two F004 `DEFECT` classifications for same-cell line-circle winding zero/seam winding
-one evaluation. `./scripts/golden-authoring-scene-oracle.sh --check` passes against golden SHA-256
+Historical `M70B-H3` test-only qualification note (2026-08-11): the four new Fillet cases ran in
+independent bounded processes and preserved the original H1/H2 193 rows byte-for-byte. The reviewed
+golden contained exactly 197 rows: 193 `PASS`, two F003 `DEFECT` classifications for Coincident-
+closure point/pair authoring and two F004 `DEFECT` classifications for same-cell line-circle
+winding zero/seam winding one evaluation. `./scripts/golden-authoring-scene-oracle.sh --check`
+passed against golden SHA-256
 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`;
-`./scripts/golden-authoring-scene-oracle.sh --require-clean` intentionally fails because reviewed
-defects remain. This is checklist-stability evidence only: the mandatory release gate remains red,
-M70B cannot close, and no production behavior or UAT product bytes change.
+`./scripts/golden-authoring-scene-oracle.sh --require-clean` intentionally failed because reviewed
+defects remained. This was checklist-stability evidence only: the mandatory release gate remained
+red, M70B could not close, and no production behavior or UAT product bytes changed.
+
+`M70B-F003/F004` repair note (2026-08-11): production repair was subsequently authorized. F003's
+root cause was persistent point-ID equality being used as Fillet topology even when active explicit
+Coincident constraints formed a semantic join. `SketchDocument::point_coincidence_representatives`
+now deterministically computes transitive active-Coincident components; focused coverage includes
+transitive joins, suppressed-relation exclusion and the rule that coordinate proximity alone does
+not join points. Headless point incidence, same-polyline pair eligibility and retained-endpoint
+hints consume those representatives. The positive owner regression proves either Coincident
+closure endpoint and both span orders produce one three-corner preview and one Current FilletSet
+with three generated arcs.
+
+F004's root cause was applying the generic 12.5%-of-cell seed-connected window to persisted
+constant-curvature circular offsets after native-source edits. Persisted Circle/CircularArc plus
+affine support now searches the complete certified explicit tangent-orientation cell. General
+nonlinear curves keep the narrow seed-connected guard, and radius continuation retains its fold and
+remote-root protection. The two exact payload-derived rows become Current while preserving their
+normal sides, retention, endpoint order, sweep, cell and winding. The focused
+`cargo test --locked -p geosolve-constraint-editor --test m70b_closed_triangle_fillet` command and
+all 42 tests under `cargo test --locked -p geosolve-sketch-features --all-features` pass. The four
+golden rows retain input fingerprints
+`input-d04adbf29c08b9bd`, `input-4ba571059db7afff`, `input-f9920c3cf170130d` and
+`input-2da21ef04cfb4246` while transitioning `DEFECT` to `PASS`; the reviewed 197/197-`PASS`
+fixture has SHA-256
+`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Both aggregate golden modes,
+formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
+relevant WASM build pass. The complete clean release gate and replacement publication have not yet
+been claimed for this repair candidate.
 
 `M70B-H2` qualification note (2026-08-11): clean source
 `47584bdb607c722df508eae56584726954a03205` passes the renamed 193/193 clean oracle and the complete
@@ -3847,7 +3905,7 @@ byte-matches the frozen local candidate, with manifest aggregate
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. Only focused human UAT
 and explicit approval remain pending.
 
-UAT finding `M70B-F003` (2026-08-11), independently reproduced against source
+Historical UAT finding `M70B-F003` (2026-08-11), independently reproduced against source
 `63845836d3245eccc7ab7f820ac60ba2d562f7e1`: an open three-span triangle polyline has distinct
 first and last persistent points joined by an ordinary Coincident constraint. The accepted
 geometry is finite, the endpoints agree and normalized hard residual is at most `1e-9`. Both
@@ -3855,15 +3913,25 @@ ordinary interior corners enter one valid two-corner Fillet preview, but selecti
 coincident closure point
 returns `WrongOperandKind`; explicitly selecting the last and first spans returns
 `DuplicateSupport` with the same-curve non-adjacency message. Both failures preserve the prior
-authoring/preview state and empty feature document. The focused owner characterization
-`m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair` records the open
-defect without changing production behavior. At that focused checkpoint the historical
-milestone-neutral 193-row H1/H2 baseline remained green because it covered constraint/dimension
-authoring and scene authority, not computed-Fillet operand collection. H3 now records the point and
-curve-pair paths as two reviewed F003 `DEFECT` rows without altering the original 193 rows. No
-correction or repair plan is authorized in this checkpoint.
+authoring/preview state and empty feature document. The initial focused owner characterization
+recorded that defect without changing production behavior. At that focused checkpoint the
+historical milestone-neutral 193-row H1/H2 baseline remained green because it covered
+constraint/dimension authoring and scene authority, not computed-Fillet operand collection. H3
+recorded the point and
+curve-pair paths as two reviewed F003 `DEFECT` rows without altering the original 193 rows. That
+statement remains the historical test-only checkpoint, not current disposition.
 
-UAT finding `M70B-F004` (2026-08-11), independently reproduced against source
+Resolved disposition: persistent point-ID comparison did not recognize the semantic topology of an
+active explicit Coincident constraint. Deterministic active-Coincident representatives now feed
+point-to-corner incidence, same-polyline span-pair eligibility and retained-endpoint hints. The
+implementation handles transitive components, excludes suppressed constraints and never treats
+coordinate proximity as coincidence. The positive owner regression
+`m70b_f003_coincident_triangle_closure_is_filletable_by_point_or_curve_pair` proves selecting
+either closure endpoint or either first/last span order creates the exact three-corner preview and
+publishes one Current Fillet feature containing three arcs. Its two stable golden rows now pass
+with unchanged input fingerprints.
+
+Historical UAT finding `M70B-F004` (2026-08-11), independently reproduced against source
 `b10bc6b2de478239472b08fe71727ccbb49d67ab`: payload identities
 `4752:daa87c91c75abf9f` and `4750:beda1885b15e38b5` restore through the ordinary coordinator path
 to finite, independently hard-valid six-DOF sketches. Both preserve the same radius-1 line-circle
@@ -3874,19 +3942,30 @@ finds a valid root in that same cell at circle parameters `5.551739581930468` an
 `6.517367674350060`. Their displacements from the persisted `6.010678569256539` seed exceed the
 non-affine 12.5%-of-cell search window, so these are one feature-evaluation locality defect, not
 missing normal-side branches or two findings. The focused owner characterization records both
-current failures and viable branches without changing production behavior. At that focused
+initial failures and viable branches without changing production behavior. At that focused
 checkpoint the historical 193-row H1/H2 golden stayed green because it had no computed-Fillet
-source-edit/branch-traversal row. H3 now records the winding-zero and seam-winding-one cases as two
-reviewed F004 `DEFECT` rows without altering the original 193 rows; no correction or repair plan is
-authorized in this checkpoint.
+source-edit/branch-traversal row. H3 recorded the winding-zero and seam-winding-one cases as two
+reviewed F004 `DEFECT` rows without altering the original 193 rows. That remains the historical
+test-only checkpoint.
 
-`M70B-F004` test-only qualification note (2026-08-11): the exact two-row feature-owner
-characterization passes, all 42 `geosolve-sketch-features` tests pass and warnings-denied
-all-target/all-feature Clippy plus formatting pass. Before H3 expansion, the milestone-neutral
-golden check still matched all 193 historical rows byte-for-byte. H3 preserves those rows and adds
-the two reviewed F004 defect classifications to the current 197-row checklist. This is evidence
-that the layered workflow routed an out-of-matrix computed-feature defect to its owner; it is not a
-production correction, replacement candidate or UAT resolution.
+Resolved disposition: persisted evaluation had applied the generic 12.5%-of-cell seed window even
+to constant-curvature circular offsets. A distinct persisted-evaluation policy now searches the
+complete certified explicit tangent-orientation cell for Circle/CircularArc plus affine support,
+which recovers both payload roots without leaving or implicitly changing the named branch. Generic
+nonlinear curves retain the narrower seed-connected guard, while radius continuation still rejects
+fold and remote-root hops. The exact payload-derived owner regression now makes both evaluations
+Current with independently valid arcs and unchanged source, cell, normal-side, retention,
+endpoint-order, sweep and winding metadata. Its two stable golden rows now pass with unchanged input
+fingerprints.
+
+Historical `M70B-F004` test-only qualification note (2026-08-11): the exact two-row feature-owner
+characterization passed, all 42 `geosolve-sketch-features` tests passed and warnings-denied
+all-target/all-feature Clippy plus formatting passed. Before H3 expansion, the milestone-neutral
+golden check still matched all 193 historical rows byte-for-byte. H3 preserved those rows and added
+the two reviewed F004 defect classifications to its 197-row checklist. This is evidence
+that the layered workflow routed an out-of-matrix computed-feature defect to its owner; at that
+checkpoint it was not a production correction, replacement candidate or UAT resolution. The
+resolved disposition above supersedes only the current defect state, not this historical evidence.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The

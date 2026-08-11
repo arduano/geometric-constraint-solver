@@ -3170,6 +3170,68 @@ impl SketchDocument {
         &self.constraints
     }
 
+    /// Returns the deterministic representative of every persistent point under active,
+    /// explicit [`DocumentConstraintDefinition::Coincident`] topology.
+    ///
+    /// Coordinate equality, solver tolerance and non-coincidence equations never weld points.
+    /// Every point is present in the result and maps to the lowest persistent identity in its
+    /// transitive active Coincident component. Consumers can therefore recognize semantic joins
+    /// without rebuilding constraint-activation policy or inferring topology from solved geometry.
+    #[must_use]
+    pub fn point_coincidence_representatives(&self) -> BTreeMap<DesignPointId, DesignPointId> {
+        fn root(parents: &mut [usize], value: usize) -> usize {
+            let mut representative = value;
+            while parents[representative] != representative {
+                representative = parents[representative];
+            }
+            let mut current = value;
+            while parents[current] != current {
+                let next = parents[current];
+                parents[current] = representative;
+                current = next;
+            }
+            representative
+        }
+
+        let mut points = self.points.iter().map(|point| point.id).collect::<Vec<_>>();
+        points.sort_unstable();
+        let indices = points
+            .iter()
+            .enumerate()
+            .map(|(index, point)| (*point, index))
+            .collect::<BTreeMap<_, _>>();
+        let mut parents = (0..points.len()).collect::<Vec<_>>();
+        let activity = self.compute_effective_activity();
+        for constraint in self
+            .constraints
+            .iter()
+            .filter(|constraint| activity.is_active(constraint.id))
+        {
+            let DocumentConstraintDefinition::Coincident { first, second } = constraint.definition
+            else {
+                continue;
+            };
+            let (Some(first), Some(second)) = (indices.get(&first), indices.get(&second)) else {
+                continue;
+            };
+            let first = root(&mut parents, *first);
+            let second = root(&mut parents, *second);
+            if first != second {
+                let (representative, child) = if first < second {
+                    (first, second)
+                } else {
+                    (second, first)
+                };
+                parents[child] = representative;
+            }
+        }
+        points
+            .iter()
+            .enumerate()
+            .map(|(index, point)| (*point, points[root(&mut parents, index)]))
+            .collect()
+    }
+
     /// Returns the active association that derives one circular arc's fillet endpoints.
     #[must_use]
     pub fn line_line_fillet_for_arc(&self, arc: CurveId) -> Option<&DocumentConstraint> {

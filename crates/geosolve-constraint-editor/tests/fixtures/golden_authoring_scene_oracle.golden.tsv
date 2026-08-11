@@ -188,10 +188,10 @@ dimension.segment-length.seed-04	dimension.segment-length	PASS	-	-	input-6eacb4a
 dimension.segment-length.seed-05	dimension.segment-length	PASS	-	-	input-d4296f3ecc8c7d85
 dimension.segment-length.seed-06	dimension.segment-length	PASS	-	-	input-ed6ef2f557c9188c
 dimension.segment-length.seed-07	dimension.segment-length	PASS	-	-	input-8b422760a184f6dd
-feature.fillet.authoring.coincident-closure.curve-pair	feature.fillet	DEFECT	M70B-F003	fillet.authoring.topology	881388f2a007bf19:input=input-d04adbf29c08b9bd; Coincident-equivalent closure was not authorable: Warning(FeatureAuthoringWarning { tool: Fillet, stage: PickSecondFilletCurve, kind: DuplicateSupport, message: "same-curve Fillet parents must be adjacent spans of one open polyline" })
-feature.fillet.authoring.coincident-closure.point	feature.fillet	DEFECT	M70B-F003	fillet.authoring.topology	d88cf38bf3d90e2b:input=input-4ba571059db7afff; Coincident-equivalent closure was not authorable: Warning(FeatureAuthoringWarning { tool: Fillet, stage: PickFirstFilletCurve, kind: WrongOperandKind, message: "the selected item is not a Fillet corner operand" })
-feature.fillet.evaluation.line-circle.same-cell-lower	feature.fillet	DEFECT	M70B-F004	fillet.evaluation.branch-locality	eaf007ee6e11c236:input=input-f9920c3cf170130d; persisted evaluation returned NoLocalRoot although circle parameter 5.551739581930468 with winding 0 is valid inside the unchanged Local cell
-feature.fillet.evaluation.line-circle.same-cell-seam	feature.fillet	DEFECT	M70B-F004	fillet.evaluation.branch-locality	f1a497583cf6ab41:input=input-2da21ef04cfb4246; persisted evaluation returned NoLocalRoot although circle parameter 6.517367674350060 with winding 1 is valid inside the unchanged Local cell
+feature.fillet.authoring.coincident-closure.curve-pair	feature.fillet	PASS	-	-	input-d04adbf29c08b9bd
+feature.fillet.authoring.coincident-closure.point	feature.fillet	PASS	-	-	input-4ba571059db7afff
+feature.fillet.evaluation.line-circle.same-cell-lower	feature.fillet	PASS	-	-	input-f9920c3cf170130d
+feature.fillet.evaluation.line-circle.same-cell-seam	feature.fillet	PASS	-	-	input-2da21ef04cfb4246
 scene.current-computed.empty	scene-authority	PASS	-	-	ok
 scene.current-computed.fillet	scene-authority	PASS	-	-	ok
 scene.current-native.withheld	scene-authority	PASS	-	-	ok

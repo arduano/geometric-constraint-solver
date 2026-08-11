@@ -6,21 +6,24 @@ Status: the bounded H1 test-only survey, complete release qualification and byte
 publication remain historically clean. H2 preserved that exact 193-row corpus under
 milestone-neutral names. Subsequent human UAT opened `M70B-F003` in computed-Fillet authoring and
 `M70B-F004` in persisted computed-Fillet source-edit branch traversal, both outside the original
-matrix. H3 now adds four isolated, reviewed `feature.fillet` rows: the current 197-row checklist is
-193 `PASS` plus four `DEFECT`. Golden `--check` passes and `--require-clean` intentionally fails on
-exactly those four open rows. The focused characterizations and H3 expansion change no runtime
-solver, sketch, authoring, feature-evaluation or workbench behavior. Supervising-human M70B review
-and approval remain pending.
+matrix. H3 added four isolated, reviewed `feature.fillet` rows and recorded the exact discovery
+state as 193 `PASS` plus four `DEFECT`. The now-authorized repairs resolve both findings at their
+headless owners, and the current 197-row golden fixture records 197 `PASS` with the four input
+fingerprints unchanged. Both focused repair suites, both aggregate golden modes, formatting,
+warnings-denied workspace Clippy, locked all-feature workspace tests and the relevant WASM build
+pass. Clean release nomination and supervising-human M70B review and approval remain pending.
 
 M70B-H1 originated this matrix. M70B-H2 moved the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
 golden bytes and SHA-256 remained unchanged. H2 clean qualification and independent skill forward
 tests passed on source `47584bdb607c722df508eae56584726954a03205`.
 
-M70B-H3 keeps every H1/H2 row record byte-identical and appends only the missing systemic Fillet
-axes already proven at their narrow owners. The current golden SHA-256 is
-`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`. This new hash records the
-four reviewed defects; it does not supersede the historical H1/H2 source or hash evidence below.
+M70B-H3 kept every H1/H2 row record byte-identical and appended only the missing systemic Fillet
+axes already proven at their narrow owners. Its discovery fixture SHA-256 was
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`; that historical hash records
+the four reviewed defects and does not supersede the historical H1/H2 source or hash evidence
+below. The repaired fixture changes only those four dispositions to `PASS` and has current
+SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
 
 ## Scope and authority
 
@@ -111,7 +114,8 @@ records:
 - `feature.fillet.evaluation.line-circle.same-cell-seam`.
 
 The active inventory is therefore 197 rows. The original 193 remain `PASS`; the two authoring rows
-are reviewed `M70B-F003` defects and the two evaluation rows are reviewed `M70B-F004` defects.
+now pass after the `M70B-F003` repair and the two evaluation rows now pass after the `M70B-F004`
+repair. Their case IDs and input fingerprints remain stable across discovery and repair.
 
 ## Driver and classification contract
 
@@ -139,8 +143,10 @@ The three operator modes are:
 
 `--survey` always executes the complete matrix. `--check` requires exact agreement with
 `crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv`.
-`--require-clean` additionally fails if any recorded row is not `PASS`; at H3 it therefore fails
-intentionally on the four reviewed findings even though `--check` succeeds. Scratch output lives
+`--require-clean` additionally fails if any recorded row is not `PASS`; at the historical H3
+discovery checkpoint it therefore failed intentionally on the four reviewed findings even though
+`--check` succeeded. The current fixture contains no expected non-`PASS` row, and its aggregate
+`--check` and `--require-clean` reruns both pass. Scratch output lives
 under the ignored workspace `target/` tree so a full system `/tmp` cannot turn semantic results
 into false harness failures. `GEOSOLVE_GOLDEN_ORACLE_CASE` selects exactly one row inside each
 child. Every authoring PASS fingerprint is `input-<fnv1a64>` over the effective post-scheduling
@@ -193,10 +199,11 @@ not misreported as two defects or broad passing rows.
 This clean result is evidence for the bounded representative matrix, not a claim that human UAT
 or every family-by-primitive Cartesian product is complete. Existing M55/M62 regressions retain
 their broader applicability and curve-family ownership; M70B-F001 and M70B-F002 retain their exact
-payload-derived regressions, while open M70B-F003 and M70B-F004 retain focused headless
-characterizations. M70B remains active until explicit supervising-human UAT approval.
+payload-derived regressions, while resolved M70B-F003 and M70B-F004 retain focused positive
+headless regressions. M70B remains active until broad qualification and explicit supervising-human
+UAT approval.
 
-Focused F003 evidence:
+Historical H3 F003 discovery evidence used the negative test name below:
 
 ```text
 cargo test --locked -p geosolve-constraint-editor \
@@ -206,12 +213,25 @@ cargo test --locked -p geosolve-constraint-editor \
 ./scripts/golden-authoring-scene-oracle.sh --check
 ```
 
-The first command passes by asserting the exact open-defect signature and transactional retention;
-it must be converted to positive success expectations during an authorized repair. The second
-historically remained 193/193 green at H1/H2 and demonstrated the broad matrix's
-computed-feature-authoring blind spot rather than resolution of F003.
+That first command passed at H3 by asserting the exact defect signature and transactional
+retention. The current positive regression is
+`m70b_f003_coincident_triangle_closure_is_filletable_by_point_or_curve_pair`; the focused suite
+passes with either Coincident endpoint, the first/last spans in both orders, exact three-corner
+preview/publication and one Current feature containing three Fillet arcs:
 
-Focused F004 evidence reconstructs payload fingerprints `4752:daa87c91c75abf9f` and
+```text
+cargo test --locked -p geosolve-constraint-editor \
+  --test m70b_closed_triangle_fillet
+```
+
+The root cause was direct point-ID topology: operand incidence, same-polyline join eligibility and
+retained-endpoint hints did not recognize active transitive Coincident equivalence. The repair adds
+deterministic `SketchDocument::point_coincidence_representatives()` derived only from active,
+explicit Coincident constraints and uses those representatives in all three topology decisions.
+Coordinate proximity never welds points.
+
+Historical H3 F004 discovery evidence reconstructed payload fingerprints
+`4752:daa87c91c75abf9f` and
 `4750:beda1885b15e38b5` as one two-case feature-owner regression. It asserts finite independently
 hard-valid accepted sketches, exact retained branch metadata, `NoLocalRoot` with no partial output,
 explicitly re-anchored same-cell valid roots and unchanged sketch/feature identities. The unchanged
@@ -226,47 +246,61 @@ cargo test --locked -p geosolve-sketch-features --lib \
 ./scripts/golden-authoring-scene-oracle.sh --check
 ```
 
-## M70B-H3 current Fillet inventory and reviewed defect checklist
+The current positive regression is
+`m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_cell`; the complete
+locked all-feature owner suite passes 42/42:
 
-H3 expands the broad oracle only after the two root causes have focused owner regressions. It adds
-one compact process-isolated row for each public route/branch dimension and retains each finding's
-reviewed disposition:
+```text
+cargo test --locked -p geosolve-sketch-features --all-features
+```
 
-| Case ID | Public route or branch | Status | Finding | Failure class |
+The root cause was persisted evaluation narrowing every non-affine parent to 12.5% of its explicit
+cell around the stored seed. A line paired with a Circle or CircularArc now searches the complete
+certified tangent-orientation cell: constant circular curvature makes that traversal branch-local.
+Generic nonlinear parents and direct-manipulation continuation retain the narrower seed-connected
+guard, and radius continuation is unchanged.
+
+## M70B-H3 Fillet inventory and current repaired checklist
+
+H3 expanded the broad oracle only after the two root causes had focused owner characterizations.
+It added one compact process-isolated row for each public route/branch dimension. The authorized
+repairs retain the exact case and input identities while changing the current dispositions to
+positive behavior:
+
+| Case ID | Public route or branch | Current status | Resolved finding | Input fingerprint |
 | --- | --- | --- | --- | --- |
-| `feature.fillet.authoring.coincident-closure.point` | Point-to-corner authoring | `DEFECT` | `M70B-F003` | `fillet.authoring.topology` |
-| `feature.fillet.authoring.coincident-closure.curve-pair` | Last/first span-pair authoring | `DEFECT` | `M70B-F003` | `fillet.authoring.topology` |
-| `feature.fillet.evaluation.line-circle.same-cell-lower` | Same-cell lower root, winding 0 | `DEFECT` | `M70B-F004` | `fillet.evaluation.branch-locality` |
-| `feature.fillet.evaluation.line-circle.same-cell-seam` | Same-cell seam root, winding 1 | `DEFECT` | `M70B-F004` | `fillet.evaluation.branch-locality` |
+| `feature.fillet.authoring.coincident-closure.point` | Point-to-corner authoring | `PASS` | `M70B-F003` | `input-4ba571059db7afff` |
+| `feature.fillet.authoring.coincident-closure.curve-pair` | Last/first span-pair authoring | `PASS` | `M70B-F003` | `input-d04adbf29c08b9bd` |
+| `feature.fillet.evaluation.line-circle.same-cell-lower` | Same-cell lower root, winding 0 | `PASS` | `M70B-F004` | `input-f9920c3cf170130d` |
+| `feature.fillet.evaluation.line-circle.same-cell-seam` | Same-cell seam root, winding 1 | `PASS` | `M70B-F004` | `input-2da21ef04cfb4246` |
 
 | Inventory cut | PASS | DEFECT | PANIC | TIMEOUT | HARNESS_ERROR | Total |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Historical H1/H2 | 193 | 0 | 0 | 0 | 0 | 193 |
-| Current H3 | 193 | 4 | 0 | 0 | 0 | 197 |
+| Historical H3 discovery | 193 | 4 | 0 | 0 | 0 | 197 |
+| Current repaired fixture | 197 | 0 | 0 | 0 | 0 | 197 |
 
 `crates/geosolve-constraint-editor/tests/golden_fillet_oracle.rs` owns the four current rows. The
 authoring pair calls the public headless feature-authoring and retained-coordinator transactions.
-The evaluation pair calls public computed-feature evaluation and uses public contact reseeding
-only to expose a viable root; independent checks then require finite current accepted geometry,
-hard validity, contact/source incidence, radius, tangency, signed side, native source/span
-identity, parameter/winding representation and membership in the unchanged Local cell.
+The evaluation pair calls public persisted computed-feature evaluation directly. Only a
+`NoLocalRoot` diagnostic path uses public contact reseeding to prove that a viable same-cell root
+was withheld; a current `PASS` independently requires finite accepted geometry, hard validity,
+contact/source incidence, radius, tangency, signed side, native source/span identity,
+parameter/winding representation and membership in the unchanged Local cell.
 
-Current H3 evidence:
+Current focused repair evidence:
 
 ```text
 cargo test --locked -p geosolve-constraint-editor \
-  --test golden_fillet_oracle golden_fillet_oracle_inventory_and_tsv_schema_are_exhaustive \
-  -- --exact
-./scripts/golden-authoring-scene-oracle.sh --check
-./scripts/golden-authoring-scene-oracle.sh --require-clean
+  --test m70b_closed_triangle_fillet
+cargo test --locked -p geosolve-sketch-features --all-features
 ```
 
-The inventory preflight and `--check` pass. `--require-clean` intentionally exits nonzero and names
-exactly the four reviewed rows above; that is the current clean-gate blocker, not a harness error.
-The 197-row golden SHA-256 is
-`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`. H3 changes only tests,
-driver inventory, checked golden bytes and documentation; no production behavior or release byte
-changes.
+Both focused suites pass. The repaired 197-row fixture records 197 `PASS`, zero defects, panics,
+timeouts or harness errors, and has SHA-256
+`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Aggregate oracle
+`--check`/`--require-clean`, full workspace tests, warnings-denied Clippy, formatting and the
+relevant WASM check pass; no clean repair release or replacement publication is claimed.
 
 ## Qualification ledger
 
@@ -359,12 +393,17 @@ file retains the H1 hash listed above, and the ordered manifest aggregate remain
 served H1 product candidate unchanged and requires no Tailscale republish. Human UAT remains
 pending.
 
-### M70B-H3 current gate state
+### M70B-H3 discovery and current repair gate state
 
-H3 changes only test infrastructure and documentation, so the H1 product distribution and release
-manifest above remain the last qualified bytes. The current 197-row `--check` passes against
-golden SHA-256 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`.
-The mandatory `--require-clean` step intentionally fails on the two F003 and two F004 rows and no
-others. A new clean release qualification or Tailscale publication is therefore neither claimed
-nor required for this test-only discovery checkpoint; the red gate remains the explicit blocker
-until the findings are resolved or otherwise dispositioned by the supervising human.
+H3 changed only test infrastructure and documentation, so the H1 product distribution and release
+manifest above remained the last qualified bytes. Its historical 197-row `--check` passed against
+golden SHA-256 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`, while
+`--require-clean` intentionally failed on the two F003 and two F004 rows and no others.
+
+The authorized repair now changes production behavior at the headless authoring and computed
+feature-evaluation owners. The current fixture is 197/197 `PASS` at SHA-256
+`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`; both focused owner suites,
+both aggregate golden checks, formatting, warnings-denied workspace Clippy, locked all-feature
+workspace tests and the relevant WASM build pass. The complete clean release gate and replacement
+publication remain pending, so the H1 distribution is still the last qualified and served product
+rather than a repair candidate.

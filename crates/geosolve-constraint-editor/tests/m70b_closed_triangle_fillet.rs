@@ -2,12 +2,15 @@
 
 use geosolve_constraint_editor::{
     FeatureAuthoringCandidate, FeatureAuthoringOutcome, FeatureAuthoringStage,
-    FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
+    FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringTransaction,
     RetainedEditorCoordinator, SelectionItem,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition, DocumentSolveRequest,
     RetainedSketchDocumentSession, SketchDocument, SketchHardValidity, SolverConfig,
+};
+use geosolve_sketch_features::{
+    ComputedEdgeGeometry, ComputedFeatureDefinition, ComputedFeatureEvaluationState,
 };
 
 struct ClosedTriangleFixture {
@@ -133,8 +136,66 @@ fn candidate(outcome: &FeatureAuthoringOutcome) -> &FeatureAuthoringCandidate {
     }
 }
 
-fn characterize_point_path(mut fixture: ClosedTriangleFixture) {
-    let feature_identity = fixture.coordinator.feature_document().identity();
+fn publish_three_corner_feature(
+    fixture: &mut ClosedTriangleFixture,
+    transaction: FeatureAuthoringTransaction,
+) {
+    let candidate = candidate(&transaction.outcome).clone();
+    assert_eq!(candidate.corners().len(), 3);
+    let actual_pairs = candidate
+        .corners()
+        .iter()
+        .map(|corner| {
+            std::collections::BTreeSet::from([
+                corner.corner.first.source.span,
+                corner.corner.second.source.span,
+            ])
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    let expected_pairs = std::collections::BTreeSet::from([
+        std::collections::BTreeSet::from([fixture.spans[0], fixture.spans[1]]),
+        std::collections::BTreeSet::from([fixture.spans[1], fixture.spans[2]]),
+        std::collections::BTreeSet::from([fixture.spans[2], fixture.spans[0]]),
+    ]);
+    assert_eq!(actual_pairs, expected_pairs);
+    let preview = transaction
+        .preview
+        .expect("complete three-corner preview metadata");
+    let mutation = fixture
+        .coordinator
+        .apply_feature_authoring_preview(preview.token, &candidate)
+        .expect("three-corner closure publication");
+    let feature = fixture
+        .coordinator
+        .feature_document()
+        .feature(mutation.value)
+        .expect("published closure feature");
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    assert_eq!(fillet.corners.len(), 3);
+    let current = fixture
+        .coordinator
+        .computed_snapshot()
+        .expect("current closure snapshot");
+    assert!(matches!(
+        current
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == feature.id)
+            .expect("closure feature evaluation")
+            .state,
+        ComputedFeatureEvaluationState::Current { .. }
+    ));
+    assert_eq!(
+        current
+            .edges()
+            .iter()
+            .filter(|edge| matches!(edge.geometry, ComputedEdgeGeometry::CircularArc(_)))
+            .count(),
+        3
+    );
+}
+
+fn verify_point_path(mut fixture: ClosedTriangleFixture, closure_point: DesignPointId) {
     let mut point_state = activate(&fixture);
 
     for (expected_corners, point) in [(1, fixture.points[1]), (2, fixture.points[2])] {
@@ -152,47 +213,18 @@ fn characterize_point_path(mut fixture: ClosedTriangleFixture) {
         );
         assert!(transaction.preview.is_some());
     }
-    let before_closure = point_state.clone();
-    let held_preview = fixture
+    let closure = fixture
         .coordinator
-        .feature_authoring_preview()
-        .expect("two valid corners remain previewed")
-        .metadata()
-        .clone();
-    for closure_point in [fixture.points[0], fixture.points[3]] {
-        let closure = fixture
-            .coordinator
-            .transact_feature_authoring_pick_items(
-                &mut point_state,
-                &[(SelectionItem::Point(closure_point), None)],
-                "coincident closure point Fillet",
-            )
-            .expect("closure-point warning is a typed transaction outcome");
-        assert!(matches!(
-            closure.outcome,
-            FeatureAuthoringOutcome::Warning(ref warning)
-                if warning.kind == FeatureAuthoringWarningKind::WrongOperandKind
-        ));
-        assert!(closure.preview.is_none());
-        assert_eq!(point_state, before_closure);
-        assert_eq!(
-            fixture
-                .coordinator
-                .feature_authoring_preview()
-                .expect("last valid two-corner preview retained")
-                .metadata(),
-            &held_preview
-        );
-    }
-    assert_eq!(
-        fixture.coordinator.feature_document().identity(),
-        feature_identity
-    );
-    assert!(fixture.coordinator.feature_document().features().is_empty());
+        .transact_feature_authoring_pick_items(
+            &mut point_state,
+            &[(SelectionItem::Point(closure_point), None)],
+            "coincident closure point Fillet",
+        )
+        .expect("closure point transaction");
+    publish_three_corner_feature(&mut fixture, closure);
 }
 
-fn characterize_curve_pair_path(mut fixture: ClosedTriangleFixture) {
-    let feature_identity = fixture.coordinator.feature_document().identity();
+fn verify_curve_pair_path(mut fixture: ClosedTriangleFixture, order: [usize; 2]) {
     let mut curve_state = activate(&fixture);
 
     for (expected_corners, point) in [(1, fixture.points[1]), (2, fixture.points[2])] {
@@ -214,7 +246,10 @@ fn characterize_curve_pair_path(mut fixture: ClosedTriangleFixture) {
         .coordinator
         .transact_feature_authoring_pick_items(
             &mut curve_state,
-            &[(SelectionItem::Curve(fixture.spans[2]), Some(0.75))],
+            &[(
+                (SelectionItem::Curve(fixture.spans[order[0]])),
+                Some(if order[0] == 2 { 0.75 } else { 0.25 }),
+            )],
             "closing triangle last span",
         )
         .expect("first closing-span pick");
@@ -228,38 +263,27 @@ fn characterize_curve_pair_path(mut fixture: ClosedTriangleFixture) {
             && guidance.stage == FeatureAuthoringStage::PickSecondFilletCurve
     ));
     assert!(fixture.coordinator.feature_authoring_preview().is_none());
-    let before_second = curve_state.clone();
     let second = fixture
         .coordinator
         .transact_feature_authoring_pick_items(
             &mut curve_state,
-            &[(SelectionItem::Curve(fixture.spans[0]), Some(0.25))],
+            &[(
+                (SelectionItem::Curve(fixture.spans[order[1]])),
+                Some(if order[1] == 2 { 0.75 } else { 0.25 }),
+            )],
             "closing triangle first span",
         )
-        .expect("second closing-span warning is a typed transaction outcome");
-    assert!(matches!(
-        second.outcome,
-        FeatureAuthoringOutcome::Warning(ref warning)
-            if warning.kind == FeatureAuthoringWarningKind::DuplicateSupport
-                && warning.message
-                    == "same-curve Fillet parents must be adjacent spans of one open polyline"
-    ));
-    assert!(second.preview.is_none());
-    assert_eq!(curve_state, before_second);
-    assert!(fixture.coordinator.feature_authoring_preview().is_none());
-    assert_eq!(
-        fixture.coordinator.feature_document().identity(),
-        feature_identity
-    );
-    assert!(fixture.coordinator.feature_document().features().is_empty());
+        .expect("second closing-span transaction");
+    publish_three_corner_feature(&mut fixture, second);
 }
 
 #[test]
-fn m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair() {
-    // Open-finding characterization: when repair is authorized, convert this test to require one
-    // three-corner preview/publication through both authoring paths. Until then it freezes the
-    // exact typed rejection and transactional-retention signature without weakening the clean
-    // workspace test gate.
-    characterize_point_path(fixture());
-    characterize_curve_pair_path(fixture());
+fn m70b_f003_coincident_triangle_closure_is_filletable_by_point_or_curve_pair() {
+    for closure_point in [0, 3] {
+        let fixture = fixture();
+        let point = fixture.points[closure_point];
+        verify_point_path(fixture, point);
+    }
+    verify_curve_pair_path(fixture(), [2, 0]);
+    verify_curve_pair_path(fixture(), [0, 2]);
 }

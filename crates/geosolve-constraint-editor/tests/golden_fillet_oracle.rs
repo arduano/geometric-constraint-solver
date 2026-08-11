@@ -738,6 +738,31 @@ fn validate_same_branch_arc(
     arc: &geosolve_sketch_features::ComputedCircularArc,
     row: LineCircleRow,
 ) -> OracleResult {
+    let ContactNeighborhood::Local { lower, upper } = corner.first.neighborhood else {
+        return Err(defect(
+            "fillet.evaluation.branch-state",
+            "persisted circle parent lost its explicit Local cell",
+        ));
+    };
+    if corner.first.normal_side != DocumentCurveNormalSide::Right
+        || corner.second.normal_side != DocumentCurveNormalSide::Left
+        || corner.first.retained_endpoint != DocumentFilletTrimEndpoint::End
+        || corner.second.retained_endpoint != DocumentFilletTrimEndpoint::End
+        || corner.second.neighborhood != ContactNeighborhood::Interior
+        || corner.first.periodic_anchor
+            != Some(DocumentTrimParameter {
+                parameter: 2.869_085_915_666_746,
+                winding: 0,
+            })
+        || corner.second.periodic_anchor.is_some()
+        || corner.endpoint_order != DocumentFilletEndpointOrder::FirstThenSecond
+        || corner.sweep != DocumentArcSweep::CounterClockwise
+    {
+        return Err(defect(
+            "fillet.evaluation.branch-state",
+            "persisted line-circle source, side, retention, neighborhood, anchor, order or sweep changed",
+        ));
+    }
     if !arc.center.into_iter().all(f64::is_finite)
         || !arc.radius.is_finite()
         || arc.contacts.iter().any(|contact| {
@@ -759,10 +784,11 @@ fn validate_same_branch_arc(
     }
     if (arc.contacts[0].total_parameter - row.viable_circle_parameter).abs() > 2.0e-9
         || arc.contacts[0].winding != row.viable_circle_winding
+        || !(lower < arc.contacts[0].total_parameter && arc.contacts[0].total_parameter < upper)
     {
         return Err(defect(
             "fillet.evaluation.branch-state",
-            "line-circle Fillet selected a different circle root or winding",
+            "line-circle Fillet selected a different circle root, winding or Local cell",
         ));
     }
     for (index, (parent, contact)) in [corner.first, corner.second]
@@ -774,14 +800,6 @@ fn validate_same_branch_arc(
             return Err(defect(
                 "fillet.evaluation.branch-state",
                 "published contact changed its native source",
-            ));
-        }
-        if (contact.parameter - parent.picked_parameter).abs() > 2.0e-12
-            || contact.winding != parent.winding
-        {
-            return Err(defect(
-                "fillet.evaluation.branch-state",
-                "published contact is incoherent with its persisted parent parameter or winding",
             ));
         }
         let represented_total = if index == 0 {
@@ -834,6 +852,21 @@ fn validate_same_branch_arc(
             return Err(defect(
                 "fillet.evaluation.invalid-geometry",
                 "line-circle Fillet failed incidence, radius, tangency or signed-side validation",
+            ));
+        }
+    }
+    let (start, end) = match corner.endpoint_order {
+        DocumentFilletEndpointOrder::FirstThenSecond => (arc.contacts[0], arc.contacts[1]),
+        DocumentFilletEndpointOrder::SecondThenFirst => (arc.contacts[1], arc.contacts[0]),
+    };
+    for (angle, contact) in [(arc.start_angle, start), (arc.end_angle, end)] {
+        let expected =
+            (contact.position[1] - arc.center[1]).atan2(contact.position[0] - arc.center[0]);
+        let delta = angle - expected;
+        if delta.sin().atan2(delta.cos()).abs() > 1.0e-9 {
+            return Err(defect(
+                "fillet.evaluation.branch-state",
+                "line-circle Fillet endpoint angles changed the explicit endpoint order",
             ));
         }
     }

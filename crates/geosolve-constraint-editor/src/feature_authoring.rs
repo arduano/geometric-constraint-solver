@@ -1098,11 +1098,22 @@ fn feature_corner_incidence_index(
     selected_points: &std::collections::BTreeSet<DesignPointId>,
 ) -> Result<FeatureCornerIncidenceIndex, FeatureAuthoringWarningKind> {
     let mut incidences = FeatureCornerIncidenceIndex::new();
+    let representatives = document.point_coincidence_representatives();
+    let mut selected_by_representative =
+        std::collections::BTreeMap::<DesignPointId, Vec<DesignPointId>>::new();
     for point in selected_points {
         if document.point(*point).is_none() {
             return Err(FeatureAuthoringWarningKind::MissingObject);
         }
         incidences.insert(*point, Vec::new());
+        let representative = representatives
+            .get(point)
+            .copied()
+            .ok_or(FeatureAuthoringWarningKind::MissingObject)?;
+        selected_by_representative
+            .entry(representative)
+            .or_default()
+            .push(*point);
     }
     if selected_points.is_empty() {
         return Ok(incidences);
@@ -1114,18 +1125,20 @@ fn feature_corner_incidence_index(
                     curve: curve.id,
                     segment: 0,
                 };
-                if let Some(occurrences) = incidences.get_mut(start) {
-                    retain_feature_corner_occurrence(
-                        occurrences,
-                        (span, 0.25, DocumentFilletTrimEndpoint::Start),
-                    );
-                }
-                if let Some(occurrences) = incidences.get_mut(end) {
-                    retain_feature_corner_occurrence(
-                        occurrences,
-                        (span, 0.75, DocumentFilletTrimEndpoint::End),
-                    );
-                }
+                retain_equivalent_feature_corner_occurrence(
+                    &mut incidences,
+                    &selected_by_representative,
+                    &representatives,
+                    *start,
+                    (span, 0.25, DocumentFilletTrimEndpoint::Start),
+                );
+                retain_equivalent_feature_corner_occurrence(
+                    &mut incidences,
+                    &selected_by_representative,
+                    &representatives,
+                    *end,
+                    (span, 0.75, DocumentFilletTrimEndpoint::End),
+                );
             }
             CurveDefinition::Polyline { points, closed, .. } => {
                 let span_count = if *closed {
@@ -1139,26 +1152,46 @@ fn feature_corner_incidence_index(
                         segment: u32::try_from(index)
                             .map_err(|_| FeatureAuthoringWarningKind::MissingObject)?,
                     };
-                    if let Some(occurrences) = incidences.get_mut(&points[index]) {
-                        retain_feature_corner_occurrence(
-                            occurrences,
-                            (span, 0.25, DocumentFilletTrimEndpoint::Start),
-                        );
-                    }
-                    if let Some(occurrences) =
-                        incidences.get_mut(&points[(index + 1) % points.len()])
-                    {
-                        retain_feature_corner_occurrence(
-                            occurrences,
-                            (span, 0.75, DocumentFilletTrimEndpoint::End),
-                        );
-                    }
+                    retain_equivalent_feature_corner_occurrence(
+                        &mut incidences,
+                        &selected_by_representative,
+                        &representatives,
+                        points[index],
+                        (span, 0.25, DocumentFilletTrimEndpoint::Start),
+                    );
+                    retain_equivalent_feature_corner_occurrence(
+                        &mut incidences,
+                        &selected_by_representative,
+                        &representatives,
+                        points[(index + 1) % points.len()],
+                        (span, 0.75, DocumentFilletTrimEndpoint::End),
+                    );
                 }
             }
             _ => {}
         }
     }
     Ok(incidences)
+}
+
+fn retain_equivalent_feature_corner_occurrence(
+    incidences: &mut FeatureCornerIncidenceIndex,
+    selected_by_representative: &std::collections::BTreeMap<DesignPointId, Vec<DesignPointId>>,
+    representatives: &std::collections::BTreeMap<DesignPointId, DesignPointId>,
+    endpoint: DesignPointId,
+    occurrence: FeatureCornerOccurrence,
+) {
+    let Some(representative) = representatives.get(&endpoint) else {
+        return;
+    };
+    let Some(selected) = selected_by_representative.get(representative) else {
+        return;
+    };
+    for point in selected {
+        if let Some(occurrences) = incidences.get_mut(point) {
+            retain_feature_corner_occurrence(occurrences, occurrence);
+        }
+    }
 }
 
 fn feature_hit_incidence_index(
@@ -1241,6 +1274,9 @@ fn resolve_corners(
     })?;
     let mut prepared = Vec::with_capacity(requests.len());
     let mut core_requests = Vec::with_capacity(requests.len());
+    let coincidence_representatives = snapshot
+        .sketch_document()
+        .point_coincidence_representatives();
     for (mut picks, options) in requests {
         if options.fillet_radius != Some(radius) {
             return Err((
@@ -1254,7 +1290,9 @@ fn resolve_corners(
                 "Fillet parents must be distinct native spans".into(),
             ));
         }
-        if let Some((first, second)) = shared_endpoint_hints(&picks[0], &picks[1]) {
+        if let Some((first, second)) =
+            shared_endpoint_hints(&picks[0], &picks[1], &coincidence_representatives)
+        {
             picks[0].curve.retained_endpoint_hint.get_or_insert(first);
             picks[1].curve.retained_endpoint_hint.get_or_insert(second);
         }
@@ -1323,29 +1361,33 @@ fn resolve_corners(
 fn shared_endpoint_hints(
     first: &FeatureAuthoringPick,
     second: &FeatureAuthoringPick,
+    coincidence_representatives: &std::collections::BTreeMap<DesignPointId, DesignPointId>,
 ) -> Option<(DocumentFilletTrimEndpoint, DocumentFilletTrimEndpoint)> {
     let (first_start, first_end) = first.span_endpoints?;
     let (second_start, second_end) = second.span_endpoints?;
     let mut matches = Vec::new();
-    if first_start == second_start {
+    let equivalent = |left: DesignPointId, right: DesignPointId| {
+        coincidence_representatives.get(&left) == coincidence_representatives.get(&right)
+    };
+    if equivalent(first_start, second_start) {
         matches.push((
             DocumentFilletTrimEndpoint::Start,
             DocumentFilletTrimEndpoint::Start,
         ));
     }
-    if first_start == second_end {
+    if equivalent(first_start, second_end) {
         matches.push((
             DocumentFilletTrimEndpoint::Start,
             DocumentFilletTrimEndpoint::End,
         ));
     }
-    if first_end == second_start {
+    if equivalent(first_end, second_start) {
         matches.push((
             DocumentFilletTrimEndpoint::End,
             DocumentFilletTrimEndpoint::Start,
         ));
     }
-    if first_end == second_end {
+    if equivalent(first_end, second_end) {
         matches.push((
             DocumentFilletTrimEndpoint::End,
             DocumentFilletTrimEndpoint::End,

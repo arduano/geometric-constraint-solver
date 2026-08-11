@@ -981,16 +981,27 @@ fn assert_m70b_f004_arc_is_independently_valid(
                 && contact.position.into_iter().all(f64::is_finite),
             "{payload_fingerprint}: non-finite generated contact"
         );
-        assert_close(contact.parameter, parent.picked_parameter, 2.0e-12);
-        assert_eq!(contact.winding, parent.winding, "{payload_fingerprint}");
         let expected_total_parameter = if index == 0 {
-            parent.picked_parameter + f64::from(parent.winding) * std::f64::consts::TAU
+            let geosolve_sketch::ContactNeighborhood::Local { lower, upper } = parent.neighborhood
+            else {
+                panic!("{payload_fingerprint}: circle branch is not Local");
+            };
+            assert!(
+                lower < contact.total_parameter && contact.total_parameter < upper,
+                "{payload_fingerprint}: evaluated circle root escaped the persisted Local cell"
+            );
+            contact.parameter + f64::from(contact.winding) * std::f64::consts::TAU
         } else {
             assert_eq!(
-                parent.winding, 0,
+                contact.winding, 0,
                 "{payload_fingerprint}: bounded line contact acquired a winding"
             );
-            parent.picked_parameter
+            assert_eq!(
+                parent.neighborhood,
+                geosolve_sketch::ContactNeighborhood::Interior,
+                "{payload_fingerprint}: line branch is not Interior"
+            );
+            contact.parameter
         };
         assert_close(contact.total_parameter, expected_total_parameter, 2.0e-12);
         let jet = document
@@ -2848,9 +2859,9 @@ fn line_line_continuation_reanchors_after_large_source_point_edits() {
 #[test]
 #[allow(
     clippy::too_many_lines,
-    reason = "the two-row defect characterization preserves payload, accepted-state, branch, failure and viable-root evidence together"
+    reason = "the two-row regression preserves payload, accepted-state, explicit branch and independently validated viable-root evidence together"
 )]
-fn m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window() {
+fn m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_cell() {
     for row in M70B_F004_ROWS {
         let (session, features, feature, corner_id, persisted_corner) = m70b_f004_fixture(row);
         let accepted = session
@@ -2995,33 +3006,59 @@ fn m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window() {
         );
         let prepared_input = session.prepared_input();
         let mut allocator = ComputedEvaluationAllocator::default();
-        let failed = evaluate(&session, &features, &mut allocator);
-        let evaluation = failed
+        let current = evaluate(&session, &features, &mut allocator);
+        let evaluation = current
             .feature_evaluations()
             .iter()
             .find(|evaluation| evaluation.feature == feature)
             .expect("payload feature evaluation");
+        let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
+            panic!(
+                "{}: unexpected persisted evaluation: {:?}",
+                row.payload_fingerprint, evaluation.state
+            );
+        };
+        assert_eq!(corner_edges.len(), 1, "{}", row.payload_fingerprint);
+        assert_eq!(corner_edges[0].0, corner_id, "{}", row.payload_fingerprint);
+        let arcs = current
+            .edges()
+            .iter()
+            .filter_map(|edge| match &edge.geometry {
+                ComputedEdgeGeometry::CircularArc(arc) => Some(arc),
+                ComputedEdgeGeometry::NativeSourceFragment { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(arcs.len(), 1, "{}", row.payload_fingerprint);
+        let persisted_arc = arcs[0];
+        assert_close(
+            persisted_arc.contacts[0].total_parameter,
+            row.viable_circle_parameter,
+            2.0e-10,
+        );
+        assert_eq!(
+            persisted_arc.contacts[0].winding, row.viable_circle_winding,
+            "{}: persisted evaluation used the wrong seam winding",
+            row.payload_fingerprint
+        );
         assert!(
-            matches!(
-                evaluation.state,
-                ComputedFeatureEvaluationState::Failed {
-                    failure: ComputedFeatureFailure::NoLocalRoot { corner }
-                } if corner == corner_id
-            ),
-            "{}: unexpected persisted evaluation: {:?}",
+            lower < persisted_arc.contacts[0].total_parameter
+                && persisted_arc.contacts[0].total_parameter < upper,
+            "{}: persisted evaluation escaped the explicit Local cell",
+            row.payload_fingerprint
+        );
+        let legacy_seed_window = 0.125 * (upper - lower);
+        assert!(
+            (persisted_arc.contacts[0].total_parameter - persisted_corner.first.picked_parameter)
+                .abs()
+                > legacy_seed_window,
+            "{}: regression root did not traverse beyond the former seed window",
+            row.payload_fingerprint
+        );
+        assert_m70b_f004_arc_is_independently_valid(
+            accepted.document(),
+            persisted_corner,
+            persisted_arc,
             row.payload_fingerprint,
-            evaluation.state
-        );
-        assert!(failed.edges().is_empty(), "{}", row.payload_fingerprint);
-        assert!(
-            failed.construction_fragments().is_empty(),
-            "{}",
-            row.payload_fingerprint
-        );
-        assert!(
-            failed.replaced_sources().is_empty(),
-            "{}: failed evaluation partially replaced a source",
-            row.payload_fingerprint
         );
         let accepted_after = session
             .accepted_state_for_current_input()
@@ -3053,7 +3090,7 @@ fn m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window() {
         assert_eq!(
             session.prepared_input(),
             prepared_input,
-            "{}: failed feature evaluation mutated the retained sketch input",
+            "{}: feature evaluation mutated the retained sketch input",
             row.payload_fingerprint
         );
 
@@ -3121,6 +3158,16 @@ fn m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window() {
             &reanchored.arc,
             row.payload_fingerprint,
         );
+        for (persisted, reanchored) in persisted_arc.contacts.iter().zip(reanchored.arc.contacts) {
+            assert_close(
+                persisted.total_parameter,
+                reanchored.total_parameter,
+                2.0e-10,
+            );
+            for axis in 0..2 {
+                assert_close(persisted.position[axis], reanchored.position[axis], 1.0e-9);
+            }
+        }
 
         let mut reanchored_features = features.clone();
         reanchored_features

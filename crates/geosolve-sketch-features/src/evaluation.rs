@@ -890,7 +890,9 @@ pub enum ComputedFeatureAuthoringError {
     StalePick,
     #[error("a Fillet corner requires two distinct native spans")]
     DuplicateSource,
-    #[error("same-curve Fillet parents must be adjacent spans of one open polyline")]
+    #[error(
+        "same-curve Fillet parents must be adjacent or explicitly Coincident-joined spans of one open polyline"
+    )]
     UnsupportedSameCurvePair,
     #[error("two non-affine Fillet parents require pairwise continuation")]
     UnsupportedCurvedPair,
@@ -1687,16 +1689,19 @@ fn evaluate_persistent_corner(
     let (root_parents, solution) = if let Some(solution) = exact {
         (root_parents, solution)
     } else {
-        // A source-tangent branch cell can still contain an offset cusp where
-        // `1 - side * radius * curvature` changes sign. Correct non-affine
-        // persisted seeds only inside a bounded neighbourhood and reject
-        // multiple genuine roots; evaluation must never use a remote
-        // whole-cell root as a silent repair after a source edit or import.
-        let root_parents = current_branch_root_parents(&root_parents, affine).ok_or({
-            EvaluateFeatureError::Failure(ComputedFeatureFailure::InvalidParentState {
-                corner: corner.id,
-            })
-        })?;
+        // A persisted circular parent has constant offset regularity, so its
+        // complete certified tangent-orientation cell contains at most one
+        // transverse line-offset root. Its picked parameter is therefore only
+        // a search seed after a source edit, not another hidden branch bound.
+        // General curved parents retain the tighter seed-connected guard
+        // because an offset cusp can introduce a disconnected remote root
+        // inside one tangent-orientation cell.
+        let root_parents = persistent_evaluation_root_parents(sketch, &root_parents, affine)
+            .ok_or({
+                EvaluateFeatureError::Failure(ComputedFeatureFailure::InvalidParentState {
+                    corner: corner.id,
+                })
+            })?;
         let (solutions, root_failure) =
             match local_fillet_roots(sketch, &root_parents, sides, radius, policy, controller) {
                 RootSearchResult::Completed { solutions, failure } => (solutions, failure),
@@ -2174,7 +2179,7 @@ fn resolve_authoring_corner(
         return Err(ComputedFeatureAuthoringError::DuplicateSource);
     }
     if request.first.source.span.curve == request.second.source.span.curve
-        && !same_open_polyline_adjacent_spans(
+        && !same_open_polyline_joined_spans(
             sketch,
             request.first.source.span,
             request.second.source.span,
@@ -3861,6 +3866,31 @@ fn current_branch_root_parents(
     }
 }
 
+/// Returns the bounded search cells used to re-evaluate persisted intent after
+/// native source geometry changes.
+///
+/// Circular parents have constant signed curvature, so a nonsingular fixed
+/// radius offset cannot fold inside one tangent-orientation cell. Searching
+/// that complete explicit cell remains branch-local. Other non-affine parents
+/// retain the narrower seed-connected cell because their offset regularity can
+/// change without crossing a tangent-parallel barrier.
+fn persistent_evaluation_root_parents(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    affine: [bool; 2],
+) -> Option<[RootParent; 2]> {
+    if affine == [true, true]
+        || (0..2).any(|index| {
+            !affine[index]
+                && is_constant_curvature_circular_span(sketch, parents[index].parent.source.span)
+        })
+    {
+        Some(*parents)
+    } else {
+        seed_connected_root_parents(*parents)
+    }
+}
+
 fn local_fillet_roots(
     sketch: &SketchDocument,
     parents: &[RootParent; 2],
@@ -4473,19 +4503,66 @@ fn is_affine_line_span(sketch: &SketchDocument, span: CurveSpan) -> bool {
         })
 }
 
-fn same_open_polyline_adjacent_spans(
+fn is_constant_curvature_circular_span(sketch: &SketchDocument, span: CurveSpan) -> bool {
+    span.segment == 0
+        && sketch.curve(span.curve).is_some_and(|curve| {
+            matches!(
+                curve.definition,
+                CurveDefinition::Circle { .. } | CurveDefinition::CircularArc { .. }
+            )
+        })
+}
+
+fn same_open_polyline_joined_spans(
     sketch: &SketchDocument,
     first: CurveSpan,
     second: CurveSpan,
 ) -> bool {
-    first.curve == second.curve
-        && first.segment.abs_diff(second.segment) == 1
-        && sketch.curve(first.curve).is_some_and(|curve| {
-            matches!(
-                curve.definition,
-                CurveDefinition::Polyline { closed: false, .. }
-            )
+    if first.curve != second.curve || first == second {
+        return false;
+    }
+    let Some(curve) = sketch.curve(first.curve) else {
+        return false;
+    };
+    let CurveDefinition::Polyline {
+        points,
+        closed: false,
+        ..
+    } = &curve.definition
+    else {
+        return false;
+    };
+    let (Ok(first_index), Ok(second_index)) = (
+        usize::try_from(first.segment),
+        usize::try_from(second.segment),
+    ) else {
+        return false;
+    };
+    let Some(first_end) = first_index.checked_add(1) else {
+        return false;
+    };
+    let Some(second_end) = second_index.checked_add(1) else {
+        return false;
+    };
+    if first_end >= points.len() || second_end >= points.len() {
+        return false;
+    }
+    if first.segment.abs_diff(second.segment) == 1 {
+        return true;
+    }
+    let representatives = sketch.point_coincidence_representatives();
+    let first_endpoints = [points[first_index], points[first_end]];
+    let second_endpoints = [points[second_index], points[second_end]];
+    first_endpoints
+        .into_iter()
+        .flat_map(|first| {
+            second_endpoints
+                .into_iter()
+                .map(move |second| (first, second))
         })
+        .filter(|(first, second)| representatives.get(first) == representatives.get(second))
+        .count()
+        == 1
 }
 
 #[cfg(test)]

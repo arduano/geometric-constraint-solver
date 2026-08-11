@@ -161,10 +161,12 @@ computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness
 M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
 semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
 has fully qualified and byte-verified F001/F002 replacements plus a historically clean 193-row
-test-only H1/H2 baseline whose complete release gate and fresh publication passed. H3 preserves
-those rows while adding four reviewed F003/F004 `DEFECT` rows; its `--require-clean` gate is
-deliberately red. Targeted human recheck and approval remain pending. M71 remains deferred behind
-it.
+test-only H1/H2 baseline whose complete release gate and fresh publication passed. H3 historically
+preserved those rows while adding four reviewed F003/F004 `DEFECT` rows; its test-only
+`--require-clean` gate was deliberately red. Authorized production repairs now make the same four
+stable cases `PASS`, so the current reviewed fixture is 197/197 `PASS`. Exact golden, workspace,
+Clippy, formatting and relevant WASM qualification pass; clean release-candidate nomination and
+publication, targeted human recheck and approval remain pending. M71 remains deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1407,10 +1409,17 @@ Status: active during human UAT. The reproduction transport criteria remain qual
 continue-through-failure baseline records 193/193 passing constraint/dimension-authoring and
 reachable scene-authority rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring and
 `M70B-F004` in persisted computed-feature branch traversal, dimensions absent from that baseline.
-M70B-H3 preserves the original 193 rows byte-for-byte and appends four process-isolated reviewed
-`DEFECT` rows for those findings, yielding 197 total rows. Exact `--check` passes, while
-`--require-clean` intentionally fails; both failures remain characterized at their headless owners
-with production code unchanged, and human review and approval remain pending.
+M70B-H3 historically preserved the original 193 rows byte-for-byte and appended four process-
+isolated reviewed `DEFECT` rows for those findings, yielding 197 total rows. Its exact `--check`
+passed while `--require-clean` intentionally failed at the test-only checkpoint. Production repair
+was subsequently authorized: active explicit Coincident equivalence now owns closure-Fillet
+topology, and persisted circular-plus-affine Fillets may search their complete certified explicit
+tangent-orientation cell without weakening generic nonlinear or radius-continuation guards. The
+same four rows retain their input fingerprints and now make the reviewed fixture 197/197 `PASS`,
+SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
+Focused owner qualification, both exact golden modes, formatting, warnings-denied workspace
+Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean release-
+candidate nomination/publication, human review and approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1468,12 +1477,14 @@ with production code unchanged, and human review and approval remain pending.
   accepts finding IDs from later active milestones, makes the clean oracle mandatory inside the
   release gate and installs the implicitly invoked repository defect-hardening skill. The original
   H1 SHA-256 and UAT bytes remain unchanged and no compatibility alias survives.
-- M70B-H3 appends exactly four process-isolated `feature.fillet` rows: F003 Coincident-closure
+- M70B-H3 appended exactly four process-isolated `feature.fillet` rows: F003 Coincident-closure
   point and curve-pair authoring plus F004 line-circle same-cell winding-zero and seam-winding-one
-  evaluation. All original 193 rows remain byte-identical. The reviewed inventory is exactly 197
-  rows: 193 `PASS` plus four `DEFECT` rows assigned to `M70B-F003`/`M70B-F004`. Passing `--check`
-  proves only that this reviewed checklist is stable; it is not release readiness. The mandatory
-  `--require-clean` release gate intentionally remains red until every row is reviewed `PASS`.
+  evaluation. All original 193 rows remain byte-identical. The historical test-only inventory was
+  exactly 193 `PASS` plus four `DEFECT`; its passing `--check` proved checklist stability rather
+  than release readiness, and `--require-clean` deliberately remained red. The repaired inventory
+  keeps the same 197 case IDs and exact input fingerprints while all rows are reviewed `PASS`.
+  Both exact golden modes now pass. Current fixture bytes alone do not satisfy final milestone
+  acceptance: the complete clean replacement-candidate gate must also pass on the repaired source.
 - Circle/arc radial Normal is explicitly centre-on-complete-supporting-line incidence. Compact
   authoring ignores the arbitrary curve-click parameter, seeds the unique affine projection from
   compatible retained accepted geometry, persists SupportingLine/Interior metadata and rejects
@@ -1513,31 +1524,42 @@ while proving the detached scene cannot acquire inference-publication authority,
 the current computed Fillet-preview path as exact-stamped composite geometry. Its replacement
 candidate must repeat the complete release/publication gate before targeted human recheck.
 
-Open `M70B-F003` is test-only at this checkpoint. Its focused headless characterization must
-preserve the Coincident-closed open-triangle topology, independently valid accepted geometry,
-both point and explicit two-span rejection signatures, and transactional retention of the point
-path's valid preview, the curve path's pending/no-preview state and the empty feature document. It
-is not evidence of resolution: an authorized repair
-must later convert that characterization into a positive three-corner Fillet regression before
-M70B can be approved.
+The historical test-only `M70B-F003` characterization preserved the Coincident-closed open-
+triangle topology, independently valid accepted geometry, both point and explicit two-span
+rejection signatures, and transactional state retention. Its authorized repair is accepted at the
+owning boundaries only when `SketchDocument` computes deterministic transitive representatives
+from active explicit Coincident constraints, ignores suppressed relations and coordinate
+proximity, and the Fillet collector uses those representatives for point incidence, same-polyline
+pair eligibility and retained-endpoint hints. The positive regression must prove either coincident
+closure point and both first/last-span operand orders produce one three-corner preview and publish
+one Current FilletSet containing three arcs.
 
-Open `M70B-F004` is likewise test-only. Its focused feature-owner characterization must preserve
-both supplied payload fingerprints, finite independently hard-valid accepted sketches, exact
-unchanged persistent Fillet branch metadata, the two `NoLocalRoot`/no-output states and fresh
-publicly resolved valid roots strictly inside the same certified circle cell. It must prove
-complete sketch/feature identity retention and deduplicate the two cases as one source-edit
-locality defect. It is not evidence of resolution: an authorized repair must later make both
-persisted evaluations Current without permitting a remote root hop or implicit branch change.
+The historical test-only `M70B-F004` characterization preserves both supplied payload
+fingerprints, finite independently hard-valid accepted sketches, exact persistent Fillet branch
+metadata, the former `NoLocalRoot` states and independently viable roots strictly inside the same
+certified circle cell. Its authorized repair is accepted only when both persisted evaluations are
+Current without changing source, normal side, retained endpoint, endpoint order, sweep, cell or
+winding. Searching a full persisted cell is permitted only for constant-curvature Circle/
+CircularArc plus affine support, whose fixed-radius offset cannot fold within the certified
+tangent-orientation cell. General nonlinear curves retain the narrow seed-connected guard and
+radius continuation retains its fold/remote-root guard.
 
-M70B-H3 acceptance is test-only and requires all four Fillet rows to execute in separate bounded
-processes, retain stable case IDs/fingerprints and classify the two F003 rows plus two F004 rows as
-the already-reviewed `DEFECT` findings. The prior 193 H1/H2 rows must remain byte-for-byte
-unchanged, producing exactly 197 rows with golden SHA-256
-`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`. `--check` must pass to
-prove checklist stability, while `--require-clean` must intentionally fail while any reviewed
-defect remains. Therefore H3 is not a release qualification: the mandatory release gate stays red
-and M70B cannot close until authorized repairs make the focused regressions pass positively and a
-reviewed clean golden allows `--require-clean` to pass. H3 changes no production behavior.
+Historical M70B-H3 acceptance was test-only: all four Fillet rows executed in separate bounded
+processes, retained stable case IDs/fingerprints and classified the two F003 plus two F004 rows as
+reviewed `DEFECT`. The prior 193 H1/H2 rows remained byte-for-byte unchanged, producing exactly
+197 rows with golden SHA-256
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`; `--check` passed and
+`--require-clean` intentionally failed. That remains the preserved pre-repair evidence and H3
+itself changed no production behavior.
+
+Repair acceptance requires those same four rows to transition `DEFECT` to `PASS` without changing
+their input fingerprints: curve-pair `input-d04adbf29c08b9bd`, point
+`input-4ba571059db7afff`, lower same-cell `input-f9920c3cf170130d` and seam same-cell
+`input-2da21ef04cfb4246`. The reviewed current fixture is exactly 197/197 `PASS`, SHA-256
+`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused F003 and F004 owner
+qualification, exact golden `--check`/`--require-clean`, formatting, warnings-denied workspace
+Clippy, locked all-feature workspace tests and the relevant WASM build pass. No full repaired-
+candidate qualification is claimed until the clean release and publication gates also pass.
 
 M71 remains deferred behind M70B.
 

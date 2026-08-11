@@ -83,11 +83,18 @@ construction/NURBS UAT and certified all-family visual profiles.
   complete release gate and byte-verified replacement publication are clean; targeted human
   recheck remains pending. M70B-H2 gives the unchanged matrix milestone-neutral names, makes its
   clean mode a mandatory release step and installs the repo-local layered defect workflow; it adds
-  no runtime layer. Test-only M70B-H3 preserves the original 193 H1/H2 rows byte-identically and
-  adds four process-isolated `feature.fillet` rows. The current 197-row checklist records 193
-  `PASS` plus four reviewed `DEFECT` rows, split evenly between `M70B-F003` and `M70B-F004`;
-  `--check` passes while `--require-clean` intentionally fails. H3 changes no production/runtime
-  behavior, runtime dependency or release byte.
+  no runtime layer. Test-only M70B-H3 preserved the original 193 H1/H2 rows byte-identically and
+  added four process-isolated `feature.fillet` rows. Its historical 197-row checkpoint recorded
+  193 `PASS` plus four reviewed `DEFECT` rows, split evenly between `M70B-F003` and `M70B-F004`;
+  `--check` passed while `--require-clean` intentionally failed, with no production/runtime or
+  release-byte change. Authorized production repairs now make all four stable rows `PASS` without
+  changing their input fingerprints. F003 uses active explicit Coincident equivalence for Fillet
+  topology; F004 lets persisted circular-plus-affine Fillets traverse their complete certified
+  explicit tangent-orientation cell while retaining generic nonlinear and radius-continuation
+  locality guards. The current 197/197-`PASS` golden has SHA-256
+  `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Both exact golden modes,
+  formatting, warnings-denied workspace Clippy, locked all-feature workspace tests and the
+  relevant WASM build pass; clean release nomination and publication remain pending.
   M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -179,6 +186,12 @@ only after all three steps succeed. The text, compressed stream and decoded work
 independently. Transient tool/selection state, camera, sample identity and command history are
 deliberately absent.
 
+For M70B-F003, `SketchDocument::point_coincidence_representatives` exposes one deterministic
+representative per persistent point from the transitive components of active explicit Coincident
+constraints. Suppressed constraints do not join components, and equal or nearby coordinates never
+imply topology. This is semantic topology metadata for consumers such as computed-feature
+authoring; it adds no residual, persistence field or coordinate-based branch inference.
+
 M31 supersedes the line-only geometry scope of ADR 0021 under ADR 0024 while
 preserving its visual-only boundary. Family-specific linear, circular, polynomial,
 analytic-conic and rational/spline pieces provide bounded intersection and integral
@@ -248,6 +261,13 @@ one batch. The editor owns finite picks, explicit per-corner branch choices, rem
 radius, preview progression, warnings and Apply/Enter/Escape semantics. Numeric input or a preview
 arc/radius grip edits the shared radius, and Apply creates one persistent FilletSet without a
 final radius-confirmation click.
+
+M70B-F003 makes that existing Fillet collector consume the sketch-owned active-Coincident
+representatives. Point-to-corner incidence, same-polyline span-pair eligibility and retained-
+endpoint hints therefore recognize an explicitly Coincident first/last polyline join while still
+keeping the distinct persistent point identities. Either coincident endpoint and either span order
+resolve the same closure corner; no coordinate tolerance manufactures a join, and suppression
+removes it from this topology.
 
 The retained coordinator combines one sketch session, feature document and current computed
 snapshot. It publishes only when complete sketch input/accepted identity, feature revision/digest
@@ -498,8 +518,21 @@ public contact-reseed path only to prove that a valid root remains in the persis
 The oracle independently requires current accepted sketch hard validity and finite geometry, then
 checks Fillet incidence, radius, tangency, signed normal side, native source/span identity, contact
 parameter, winding and same-cell root membership. It does not trust an evaluation status as its
-geometric oracle. The original 193 rows remain byte-identical; the four reviewed defect rows make
-the current inventory 197 without adding runtime code, product authority or release bytes.
+geometric oracle. At the historical test-only checkpoint, the original 193 rows remained byte-
+identical and four reviewed defect rows made the inventory 197 without adding runtime code,
+product authority or release bytes; that fixture had SHA-256
+`a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`.
+
+The authorized F004 repair separates persisted-evaluation search policy from radius continuation.
+For a Circle or CircularArc parent paired with affine support, constant curvature means a fixed-
+radius offset cannot fold inside one certified tangent-orientation cell, so persisted evaluation
+may search that complete explicit cell without changing branch. Generic nonlinear curves keep the
+narrow seed-connected guard, and radius continuation still stops at folds rather than selecting a
+remote root. Together with F003, this changes the four stable H3 rows from `DEFECT` to `PASS` while
+retaining their exact input fingerprints. The current 197-row fixture is all `PASS`, SHA-256
+`035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Both exact golden modes and
+the milestone-appropriate native/WASM qualification pass; clean release nomination remains a
+separate gate rather than an inferred consequence of the reviewed bytes.
 
 M64 removes the completed-review harness that historically served M53-M63. A crate-private sample
 catalog now owns only stable sample keys, titles, purpose grouping and public fixture selection.
@@ -1088,10 +1121,13 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   replacement gate plus byte-verified publication all pass. M70B-H1 freezes a clean 193-row
   test-only authoring/scene oracle; its complete release gate and fresh byte-verified publication
   also pass. M70B-H2 preserves those exact bytes under milestone-neutral infrastructure. Test-only
-  M70B-H3 retains all 193 original `PASS` rows and adds four reviewed `feature.fillet` `DEFECT`
-  rows, producing a 197-row checklist whose `--check` passes and whose `--require-clean`
-  intentionally fails until F003/F004 close. H3 changes no production/runtime behavior or release
-  bytes.
+  M70B-H3 historically retained all 193 original `PASS` rows and added four reviewed
+  `feature.fillet` `DEFECT` rows without changing production/runtime behavior or release bytes.
+  Authorized F003/F004 repairs now make those same four cases pass: active explicit Coincident
+  equivalence owns closure topology, and persisted circular-plus-affine evaluation may traverse its
+  complete certified explicit branch cell. The current reviewed fixture is 197/197 `PASS`, and its
+  exact golden, workspace, Clippy, formatting and relevant WASM qualification pass. Clean release-
+  candidate nomination and publication remain pending.
   Dedicated human UAT remains pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.
