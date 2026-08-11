@@ -165,8 +165,12 @@ test-only H1/H2 baseline whose complete release gate and fresh publication passe
 preserved those rows while adding four reviewed F003/F004 `DEFECT` rows; its test-only
 `--require-clean` gate was deliberately red. Authorized production repairs now make the same four
 stable cases `PASS`, so the current reviewed fixture is 197/197 `PASS`. Exact golden, workspace,
-Clippy, formatting and relevant WASM qualification pass; clean release-candidate nomination and
-publication, targeted human recheck and approval remain pending. M71 remains deferred behind it.
+Clippy, formatting and relevant WASM qualification pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes the complete release gate, and its
+immutable seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served and byte-verified
+at `http://100.94.63.83:8080/` with ordered-manifest aggregate
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted human recheck and
+approval remain pending. M71 remains deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1418,8 +1422,13 @@ tangent-orientation cell without weakening generic nonlinear or radius-continuat
 same four rows retain their input fingerprints and now make the reviewed fixture 197/197 `PASS`,
 SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
 Focused owner qualification, both exact golden modes, formatting, warnings-denied workspace
-Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean release-
-candidate nomination/publication, human review and approval remain pending.
+Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
+snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+`http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Human recheck and approval
+remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1483,8 +1492,10 @@ candidate nomination/publication, human review and approval remain pending.
   exactly 193 `PASS` plus four `DEFECT`; its passing `--check` proved checklist stability rather
   than release readiness, and `--require-clean` deliberately remained red. The repaired inventory
   keeps the same 197 case IDs and exact input fingerprints while all rows are reviewed `PASS`.
-  Both exact golden modes now pass. Current fixture bytes alone do not satisfy final milestone
-  acceptance: the complete clean replacement-candidate gate must also pass on the repaired source.
+  Both exact golden modes now pass. Clean repaired source
+  `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete replacement-candidate gate, and
+  its immutable seven-file distribution is byte-verified over Tailscale at ordered-manifest
+  aggregate `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`.
 - Circle/arc radial Normal is explicitly centre-on-complete-supporting-line incidence. Compact
   authoring ignores the arbitrary curve-click parameter, seeds the unique affine projection from
   compatible retained accepted geometry, persists SupportingLine/Interior metadata and rejects
@@ -1558,8 +1569,13 @@ their input fingerprints: curve-pair `input-d04adbf29c08b9bd`, point
 `input-2da21ef04cfb4246`. The reviewed current fixture is exactly 197/197 `PASS`, SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused F003 and F004 owner
 qualification, exact golden `--check`/`--require-clean`, formatting, warnings-denied workspace
-Clippy, locked all-feature workspace tests and the relevant WASM build pass. No full repaired-
-candidate qualification is claimed until the clean release and publication gates also pass.
+Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean repaired source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. The immutable seven-file
+snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+`http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Only targeted human recheck
+and explicit approval remain.
 
 M71 remains deferred behind M70B.
 

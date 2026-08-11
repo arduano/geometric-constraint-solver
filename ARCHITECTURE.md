@@ -94,7 +94,12 @@ construction/NURBS UAT and certified all-family visual profiles.
   locality guards. The current 197/197-`PASS` golden has SHA-256
   `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Both exact golden modes,
   formatting, warnings-denied workspace Clippy, locked all-feature workspace tests and the
-  relevant WASM build pass; clean release nomination and publication remain pending.
+  relevant WASM build pass. Clean source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes
+  `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`; its immutable seven-
+  file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is byte-verified and served at
+  `http://100.94.63.83:8080/`, with ordered-manifest aggregate
+  `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted human recheck and
+  explicit approval remain pending.
   M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -531,8 +536,11 @@ narrow seed-connected guard, and radius continuation still stops at folds rather
 remote root. Together with F003, this changes the four stable H3 rows from `DEFECT` to `PASS` while
 retaining their exact input fingerprints. The current 197-row fixture is all `PASS`, SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Both exact golden modes and
-the milestone-appropriate native/WASM qualification pass; clean release nomination remains a
-separate gate rather than an inferred consequence of the reviewed bytes.
+the milestone-appropriate native/WASM qualification pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate, and its immutable
+seven-file snapshot at `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served and byte-verified at
+`http://100.94.63.83:8080/` with ordered-manifest aggregate
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`.
 
 M64 removes the completed-review harness that historically served M53-M63. A crate-private sample
 catalog now owns only stable sample keys, titles, purpose grouping and public fixture selection.
@@ -1126,8 +1134,11 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   Authorized F003/F004 repairs now make those same four cases pass: active explicit Coincident
   equivalence owns closure topology, and persisted circular-plus-affine evaluation may traverse its
   complete certified explicit branch cell. The current reviewed fixture is 197/197 `PASS`, and its
-  exact golden, workspace, Clippy, formatting and relevant WASM qualification pass. Clean release-
-  candidate nomination and publication remain pending.
+  exact golden, workspace, Clippy, formatting and relevant WASM qualification pass. Clean source
+  `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes the complete release gate. Its immutable
+  seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+  `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
+  `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`.
   Dedicated human UAT remains pending.
 - M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
   primitives, not an active or authorized plan.

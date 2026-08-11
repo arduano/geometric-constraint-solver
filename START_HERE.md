@@ -79,8 +79,13 @@ parents and radius continuation retain their narrower fold/locality guards. The 
 retain their exact input fingerprints and now make the current golden 197/197 `PASS`, SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused F003 and F004
 regressions, both exact golden modes, formatting, warnings-denied workspace Clippy, locked
-all-feature workspace tests and the relevant WASM build pass. Clean release-candidate nomination,
-publication and targeted human recheck remain pending.
+all-feature workspace tests and the relevant WASM build pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
+snapshot at `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+`http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Only targeted human
+recheck and explicit M70B approval remain pending.
 M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
@@ -333,8 +338,12 @@ rows retain their exact input fingerprints and have transitioned `DEFECT` to `PA
 197/197-`PASS` golden has SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused owner tests, both
 exact golden modes, formatting, warnings-denied workspace Clippy, locked all-feature workspace
-tests and the relevant WASM build pass. Clean release-candidate nomination and publication,
-targeted rechecks and explicit approval remain pending. The temporary
+tests and the relevant WASM build pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate. Its immutable
+seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+`http://100.94.63.83:8080/`; every file and `/` byte-match the snapshot, whose ordered-manifest
+aggregate is `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted rechecks and
+explicit approval remain pending. The temporary
 `docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
 
 Durable milestone and cleanup records:

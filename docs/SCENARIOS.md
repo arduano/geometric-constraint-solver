@@ -1298,8 +1298,13 @@ That pre-repair 197-row checklist contained 193 `PASS` plus four `DEFECT`; `--ch
 Authorized production repairs now make the same four stable rows pass without changing their input
 fingerprints. The current fixture is 197/197 `PASS`, SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Exact golden, workspace,
-Clippy, formatting and relevant WASM qualification pass; clean release-candidate nomination and
-publication and focused human UAT remain pending. M71 is deferred behind it.
+Clippy, formatting and relevant WASM qualification pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
+snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+`http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Focused human UAT remains
+pending. M71 is deferred behind it.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1758,8 +1763,12 @@ fingerprints listed above and transition `DEFECT` to `PASS`. The original 193 ro
 byte-identical, so the current reviewed inventory is 197/197 `PASS`. Its SHA-256 is
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Focused owner tests pass;
 the complete workspace, exact golden `--check`/`--require-clean`, warnings-denied Clippy,
-formatting and relevant WASM qualification also pass. Clean release nomination and publication
-remain pending and are not implied by the reviewed fixture bytes.
+formatting and relevant WASM qualification also pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate. Its immutable
+seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
+`http://100.94.63.83:8080/`; every file and `/` byte-match the snapshot, whose ordered-manifest
+aggregate is `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted human
+rechecks and explicit M70B approval remain pending.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

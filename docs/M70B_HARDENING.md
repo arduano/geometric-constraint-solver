@@ -11,7 +11,9 @@ state as 193 `PASS` plus four `DEFECT`. The now-authorized repairs resolve both 
 headless owners, and the current 197-row golden fixture records 197 `PASS` with the four input
 fingerprints unchanged. Both focused repair suites, both aggregate golden modes, formatting,
 warnings-denied workspace Clippy, locked all-feature workspace tests and the relevant WASM build
-pass. Clean release nomination and supervising-human M70B review and approval remain pending.
+pass. Clean source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate,
+and its immutable seven-file replacement is byte-verified and served through Tailscale.
+Supervising-human M70B review and approval remain pending.
 
 M70B-H1 originated this matrix. M70B-H2 moved the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
@@ -200,8 +202,7 @@ This clean result is evidence for the bounded representative matrix, not a claim
 or every family-by-primitive Cartesian product is complete. Existing M55/M62 regressions retain
 their broader applicability and curve-family ownership; M70B-F001 and M70B-F002 retain their exact
 payload-derived regressions, while resolved M70B-F003 and M70B-F004 retain focused positive
-headless regressions. M70B remains active until broad qualification and explicit supervising-human
-UAT approval.
+headless regressions. M70B remains active until explicit supervising-human UAT approval.
 
 Historical H3 F003 discovery evidence used the negative test name below:
 
@@ -300,7 +301,8 @@ Both focused suites pass. The repaired 197-row fixture records 197 `PASS`, zero 
 timeouts or harness errors, and has SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Aggregate oracle
 `--check`/`--require-clean`, full workspace tests, warnings-denied Clippy, formatting and the
-relevant WASM check pass; no clean repair release or replacement publication is claimed.
+relevant WASM check pass. The complete clean repair release and replacement publication are
+recorded below.
 
 ## Qualification ledger
 
@@ -404,6 +406,37 @@ The authorized repair now changes production behavior at the headless authoring 
 feature-evaluation owners. The current fixture is 197/197 `PASS` at SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`; both focused owner suites,
 both aggregate golden checks, formatting, warnings-denied workspace Clippy, locked all-feature
-workspace tests and the relevant WASM build pass. The complete clean release gate and replacement
-publication remain pending, so the H1 distribution is still the last qualified and served product
-rather than a repair candidate.
+workspace tests and the relevant WASM build pass.
+
+### M70B-F003/F004 replacement qualification and publication
+
+Clean `main` source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passed:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The complete gate exited zero, including formatting, warnings-denied workspace Clippy, locked
+all-feature workspace tests, the 197/197 clean golden oracle, native/WASM transition parity, the
+demo-web WASM check, warnings-denied rustdoc, benchmark compilation, performance budgets,
+package/licence and Git-hygiene checks, and release Trunk assembly.
+
+The immutable replacement snapshot is `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY`; the directory is
+mode `0555` and each of its exactly seven files is mode `0444`:
+
+| File | SHA-256 |
+| --- | --- |
+| `API_COMPATIBILITY.md` | `af91333ed578f05ec49c76fd10c18dd0ead0f9f845b8ff45279de5a6cbc7b80e` |
+| `LICENSE` | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-f582f5825ff9a317.js` | `8fd77fcef71dacc2a9b2e6e38748827cb0cb73d771d4b0b1378e96e603cdac47` |
+| `geosolve-demo-web-f582f5825ff9a317_bg.wasm` | `48a0382678ccffee08c15621e9d5c34708d4d9aedfbdad1fa519806974c75836` |
+| `index.html` | `fb7ea6cddc7603a876ad90d6537d42434b82565a8245606217af593598f1ab79` |
+| `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+The ordered manifest aggregate is
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. PID `524440` serves that
+snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
+cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
+immutable local counterpart. The F003/F004 targeted human rechecks and supervising-human approval
+remain pending.

@@ -18,9 +18,10 @@ bytes unchanged. Test-only M70B-H3 preserved the original 193 row records and ad
 fingerprints but now records 197/197 `PASS` at SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. The F003 focused editor
 suite, 42-test F004 owner suite, both aggregate golden modes, formatting, warnings-denied workspace
-Clippy, locked all-feature workspace tests and the relevant WASM build pass. Supervising-human UAT,
-clean release nomination and approval remain pending. This document records no human pass or
-milestone closure.
+Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes the complete release gate, and its
+immutable seven-file replacement is byte-verified and served through Tailscale. Supervising-human
+UAT and approval remain pending. This document records no human pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
 transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
@@ -70,6 +71,16 @@ Current repaired golden SHA-256:
 
 Current repaired golden disposition: **197 PASS + 0 DEFECT = 197**. Focused owner suites and both
 aggregate `--check` and `--require-clean` reruns pass.
+
+`M70B-F003/F004` replacement source: `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf`
+
+`M70B-F003/F004` integrated release-gate result: **PASS**
+
+Current `M70B-F003/F004` Tailscale distribution:
+`/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` at `http://100.94.63.83:8080/`
+
+Current `M70B-F003/F004` release manifest aggregate:
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`
 
 `M70B-H2` release manifest aggregate:
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`
@@ -189,8 +200,8 @@ a second scene model.
 - `scripts/release-gate.sh` runs the milestone-neutral oracle in `--require-clean` mode after the
   locked all-feature workspace tests. That step passed on clean H2 and intentionally blocked on
   the four reviewed rows at the historical H3 discovery checkpoint. The current repaired fixture
-  expects a clean 197-row result, but the aggregate and complete release gates have not yet been
-  rerun.
+  passes all 197 rows, and the complete gate passes on clean replacement source
+  `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf`.
 
 The canonical single-line envelope is:
 
@@ -625,8 +636,40 @@ fixture records 197 `PASS`, zero defects, panics, timeouts or harness errors, wi
 fingerprints `input-d04adbf29c08b9bd`, `input-4ba571059db7afff`,
 `input-f9920c3cf170130d` and `input-2da21ef04cfb4246`. Aggregate golden `--check` and
 `--require-clean`, formatting, warnings-denied all-workspace Clippy, locked all-feature workspace
-tests and the relevant WASM check pass. No clean repair release, replacement build or Tailscale
-publication is claimed.
+tests and the relevant WASM check pass.
+
+## 3.8 `M70B-F003/F004` replacement release and publication
+
+Clean `main` source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passed the exact complete gate:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The command exited zero after formatting, warnings-denied workspace Clippy, locked all-feature
+workspace tests, the 197/197 clean golden oracle, native/WASM transition parity, the demo-web WASM
+check, warnings-denied rustdoc, benchmark compilation, performance budgets, package/licence and
+Git-hygiene checks, and release Trunk assembly.
+
+The replacement distribution contains exactly seven read-only files:
+
+```text
+af91333ed578f05ec49c76fd10c18dd0ead0f9f845b8ff45279de5a6cbc7b80e  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+8fd77fcef71dacc2a9b2e6e38748827cb0cb73d771d4b0b1378e96e603cdac47  geosolve-demo-web-f582f5825ff9a317.js
+48a0382678ccffee08c15621e9d5c34708d4d9aedfbdad1fa519806974c75836  geosolve-demo-web-f582f5825ff9a317_bg.wasm
+fb7ea6cddc7603a876ad90d6537d42434b82565a8245606217af593598f1ab79  index.html
+49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048  styles-36c74d05d21a90c9.css
+```
+
+Snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is immutable at directory mode `0555` and file
+mode `0444`. Its ordered manifest aggregate is
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. PID `524440` serves the
+snapshot at `http://100.94.63.83:8080/`, bound only to the Tailscale address. Proxy- and
+cache-bypassed fetches proved every served asset byte-identical to its local snapshot counterpart;
+served `/` also matches `index.html`. The distribution is ready for the still-pending targeted
+F003/F004 human rechecks and broader M70B approval.
 
 ## 4. Acceptance criteria
 
@@ -662,6 +705,11 @@ publication is claimed.
 - [x] the current aggregate golden `--check` and `--require-clean` commands return zero;
 - [x] formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
   relevant WASM build pass for the repair worktree;
+- [x] clean `main` source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete
+  integrated release gate;
+- [x] its immutable seven-file replacement distribution is frozen and byte-verified over
+  Tailscale at manifest aggregate
+  `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
@@ -676,8 +724,9 @@ size honestly rather than silently dropping content.
 The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, file picker,
 download flow, raw browser-storage handoff and browser E2E remain retired. The repaired
 197-`PASS` fixture and production worktree have passed the milestone-appropriate automated
-qualification. Clean release nomination and focused human UAT and explicit approval, including
-targeted `M70B-F001`/`M70B-F002` rechecks, remain pending. A
+qualification and complete clean release gate; the immutable replacement is served and
+byte-verified. Focused human UAT and explicit approval, including targeted
+`M70B-F001`/`M70B-F002` rechecks, remain pending. A
 Local interval whose semantic endpoint is exactly zero has no valid solution at that endpoint;
 exact edge pressure can therefore still fail closed before the one-ULP effective endpoint becomes
 active. Ordinary near-edge contacts and the supplied positive-bound payload pass, but exact

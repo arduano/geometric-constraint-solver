@@ -56,8 +56,10 @@ unchanged. Test-only M70B-H3 historically preserved those original 193 rows byte
 appended four process-isolated computed-Fillet `DEFECT` rows for F003/F004; its exact `--check`
 passed while `--require-clean` intentionally failed. Authorized production repairs now make those
 same stable rows pass, yielding a reviewed 197/197-`PASS` fixture. Exact golden, workspace, Clippy,
-formatting and relevant WASM qualification pass. Clean release-candidate nomination/publication,
-targeted human recheck and approval remain pending. M71
+formatting and relevant WASM qualification pass. Clean repair source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` also passes the complete release gate, and its frozen
+seven-file Tailscale publication is byte-verified. Targeted human recheck and approval remain
+pending. M71
 is deferred behind M70B and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
@@ -3676,9 +3678,10 @@ radius continuation retain their narrow fold/locality guards. The same four gold
 their exact input fingerprints and now yield `PASS`, making the current fixture 197/197 `PASS` with
 SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
 Focused F003/F004 owner qualification, exact golden check/clean modes, formatting, warnings-denied
-workspace Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean
-release-candidate nomination/publication, targeted human recheck and approval remain pending;
-M70B is not complete.
+workspace Clippy, locked all-feature workspace tests and the relevant WASM build pass. Clean repair
+source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate, and its frozen
+seven-file distribution is published and byte-verified through Tailscale. Targeted human recheck
+and approval remain pending; M70B is not complete.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3773,7 +3776,7 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
 - [x] Re-pass formatting, warnings-denied workspace Clippy, locked all-feature workspace tests,
   the exact golden `--check` and `--require-clean`, and the relevant WASM build after the F003/F004
   repairs.
-- [ ] Pass the complete clean replacement-candidate release gate and publish/byte-verify its frozen
+- [x] Pass the complete clean replacement-candidate release gate and publish/byte-verify its frozen
   UAT distribution.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
@@ -3812,8 +3815,21 @@ golden rows retain input fingerprints
 fixture has SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Both aggregate golden modes,
 formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
-relevant WASM build pass. The complete clean release gate and replacement publication have not yet
-been claimed for this repair candidate.
+relevant WASM build pass. This was the pre-nomination repair checkpoint; the replacement
+qualification below supersedes only its release/publication state.
+
+`M70B-F003/F004` replacement qualification/publication note (2026-08-11): clean nominated source
+`0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. The gate includes the
+197/197 clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
+workspace tests, native/WASM transition parity, the demo-web WASM check, warnings-denied rustdoc,
+benchmark compilation, performance budgets including the 146.13-second 256-moving-body sparse
+crossover, package/licence checks and the Trunk 0.21.14 release build. Exactly seven release files
+are frozen read-only under `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` and served at
+`http://100.94.63.83:8080/`. Proxy-bypassed HTTP fetches of every file and `/` byte-match the
+snapshot; the ordered manifest aggregate is
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted supervising-human
+recheck and explicit M70B approval remain pending.
 
 `M70B-H2` qualification note (2026-08-11): clean source
 `47584bdb607c722df508eae56584726954a03205` passes the renamed 193/193 clean oracle and the complete
