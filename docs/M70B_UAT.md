@@ -2,13 +2,15 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: ready for focused human review on the clean test-only `M70B-H1` candidate. `M70B-F001` and
-`M70B-F002` retain their owning-layer corrections and complete replacement evidence. M70B-H1 adds
-a 193/193 passing authoring/scene oracle with no new finding; its complete release gate and fresh
-byte-verified Tailscale publication now pass. M70B-H2 only generalizes that test infrastructure and
+Status: human UAT has opened `M70B-F003`; the prior clean `M70B-H1` candidate is not approved.
+`M70B-F001` and `M70B-F002` retain their owning-layer corrections and complete replacement
+evidence. M70B-H1 adds a 193/193 passing constraint/dimension-authoring and scene oracle; its
+complete release gate and fresh byte-verified Tailscale publication now pass. M70B-H2 only
+generalizes that test infrastructure and
 adds the repo-local defect workflow; its clean release qualification passes without replacing or
-altering the served H1 product candidate. Every human result below remains pending; this scorecard
-records no human pass or approval.
+altering the served H1 product candidate. F003 falls outside that matrix and now has a focused
+headless current-behavior characterization only; no fix or repair plan is authorized yet. This
+scorecard records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
@@ -196,6 +198,24 @@ geometry; normal inference remains unavailable until the design is repaired.
 Result: **PENDING**
 
 Notes:
+
+### Finding `M70B-F003` — Coincident closure corner cannot be Filleted
+
+An open three-segment triangle polyline was closed by making its distinct first and last points
+Coincident. Both ordinary corners entered the Fillet preview, but the closure corner failed whether
+selected as a point or as its two incident spans. Independent headless reproduction confirms the accepted
+triangle remains finite and hard-valid: the point path returns `WrongOperandKind`, and the explicit
+last/first-span path returns `DuplicateSupport` with a same-curve adjacency message. The point
+rejection retains the prior valid two-corner preview; the two-span rejection retains its pending
+first support and no-preview state. Neither publishes a feature.
+
+The exact current failure is encoded by
+`m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair`. The 193-row golden
+remains green because it exercises constraint/dimension authoring and precomposed scene authority,
+not computed-Fillet operand collection. This checkpoint deliberately does not implement or plan
+the production correction.
+
+Result: **OPEN — ENCODED, NOT FIXED**
 
 M70B remains active until the supervising human records explicit approval here. A scoped approval
 may accept M70B-U1 through M70B-U5 after objective findings receive owning-layer regressions and a

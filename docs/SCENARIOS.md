@@ -1553,6 +1553,37 @@ and no retained-session authority rule is weakened. The companion current-comput
 opposite invariant: exact-stamped Fillet output remains composite and authenticated, and a failed
 current composition cannot silently fall back to an authoritative native scene.
 
+### M70B-F003 - Coincident-closed triangle Fillet authoring
+
+Finding class: `DEFECT`, independently reproduced against source
+`63845836d3245eccc7ab7f820ac60ba2d562f7e1`.
+
+Draw one open three-span triangle polyline with four persistent points, then add an ordinary
+Coincident constraint between its distinct first and last points. The first and last points begin
+at different finite coordinates. Their accepted coordinates agree, all four accepted points remain
+finite and independent hard validation reports normalized residual at most `1e-9`. The two ordinary
+interior corners form a valid two-corner computed-Fillet preview.
+
+The closure corner is not authorable in the current implementation. Selecting either coincident
+endpoint as a point returns `WrongOperandKind`. Selecting the last and first spans explicitly
+collects the first support, then returns `DuplicateSupport` with the message that same-curve
+Fillet parents must be adjacent spans of one open polyline. Both paths retain the exact prior
+authoring/preview state and publish no computed feature, so this is a headless topology/authoring
+defect rather than a solver-convergence or browser-layout failure.
+
+The focused public-boundary characterization is
+`m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair` in
+`crates/geosolve-constraint-editor/tests/m70b_closed_triangle_fillet.rs`. It intentionally freezes
+the current typed defect and must become a positive three-corner preview/publication regression
+when a production correction is authorized. No correction or repair plan belongs to this
+checkpoint.
+
+The milestone-neutral golden still passes all 193 rows. That matrix covers the complete retained
+constraint/dimension authoring inventory and four scene-authority states; its sole Fillet scene is
+precomposed and it does not exercise `FeatureAuthoringTool::Fillet`, point-to-corner incidence or
+curve-pair collection. The exact triangle therefore belongs first to this focused owner regression
+rather than being disguised as a passing broad-matrix row.
+
 ### M70B-H1 - Continue-through-failure authoring and scene oracle
 
 This test-only survey turns the complete UI-exposed authoring family inventory into a repeatable
@@ -1585,8 +1616,10 @@ case/family pairs and freezes each authoring PASS row's effective scheduled-inpu
 `golden_authoring_scene_oracle.golden.tsv`; `--require-clean` additionally rejects any non-PASS
 row.
 
-The initial 2026-08-11 survey is clean: all 193 rows pass, so no `M70B-F003` finding or additional
-reproduction payload is recorded. `docs/M70B_HARDENING.md` owns the full readable checklist,
+The initial 2026-08-11 survey was clean: all 193 rows passed and opened no finding at survey time.
+Later human UAT opened `M70B-F003` outside the matrix's constraint/dimension and scene-authority
+scope; no reproduction payload was needed because the exact topology is compactly constructed
+through public Rust APIs. `docs/M70B_HARDENING.md` owns the full readable checklist,
 commands, seed and limitations. This does not replace the exact M70B-F001/F002 payload regressions,
 the broader M55/M62 family-by-primitive coverage or the pending supervising-human M70B UAT. Clean
 source `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` also passes the complete release gate and its fresh

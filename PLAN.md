@@ -3652,12 +3652,14 @@ every scripted step. M70 is closed.
 
 ### M70B
 
-Status: active after the clean `M70B-H1` test-hardening survey. Bounded reproduction transport and
-restore remain qualified; `M70B-F001` and `M70B-F002` retain complete replacement evidence.
-M70B-H1 now freezes a continue-through-failure authoring/scene oracle with 193/193 passing rows and
-no new finding. Its clean source has passed the complete release gate and its fresh read-only
-distribution is byte-verified over Tailscale. Focused human UAT remains pending. No completion or
-approval is claimed.
+Status: active during human UAT. Bounded reproduction transport and restore remain qualified;
+`M70B-F001` and `M70B-F002` retain complete replacement evidence. M70B-H1 still freezes a
+continue-through-failure authoring/scene oracle with 193/193 passing rows, but subsequent UAT opened
+`M70B-F003` outside that matrix: a Coincident-closed open triangle cannot author its closure Fillet
+through either the point or two-span route. The exact typed failure is encoded at the headless
+owner without a production correction or repair plan. The prior clean source and read-only
+distribution remain historical qualification evidence, not evidence that F003 is resolved. No
+completion or approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3705,7 +3707,7 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   perturbed-recovery variants per authoring family; isolate rows and continue after semantic
   defects, panics or timeouts. Freeze all 193 classifications in one machine-readable golden and a
   readable checklist without changing production code. `--check` and `--require-clean` pass with
-  193/193 rows clean; no `M70B-F003` finding is opened.
+  193/193 rows clean; no finding was opened by that historical H1 survey.
 - [x] Re-pass the complete release gate on the clean M70B-H1 source, freeze a fresh seven-file UAT
   snapshot, publish it through Tailscale and byte-verify the served distribution before resuming
   human review.
@@ -3715,6 +3717,12 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   automatically invoked repository-local `$geosolve-harden-defect` workflow. Preserve the exact
   H1 seed, rows, fingerprints, golden SHA-256 and current UAT bytes, with no legacy aliases or
   production behavior change.
+- [x] Encode open UAT finding `M70B-F003` at the headless computed-Fillet authoring boundary:
+  preserve an open three-span triangle whose distinct first/last points are Coincident, prove the
+  accepted sketch is finite and independently hard-valid, reproduce both the point-selection
+  `WrongOperandKind` and two-span `DuplicateSupport` signatures, and prove each rejection retains
+  the previous preview and feature document transactionally. Keep production code unchanged and
+  record that the 193-row golden does not exercise computed-Fillet authoring.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
 `M70B-H2` qualification note (2026-08-11): clean source
@@ -3806,6 +3814,20 @@ assembly. A read-only seven-file snapshot at
 byte-matches the frozen local candidate, with manifest aggregate
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. Only focused human UAT
 and explicit approval remain pending.
+
+UAT finding `M70B-F003` (2026-08-11), independently reproduced against source
+`63845836d3245eccc7ab7f820ac60ba2d562f7e1`: an open three-span triangle polyline has distinct
+first and last persistent points joined by an ordinary Coincident constraint. The accepted
+geometry is finite, the endpoints agree and normalized hard residual is at most `1e-9`. Both
+ordinary interior corners enter one valid two-corner Fillet preview, but selecting either
+coincident closure point
+returns `WrongOperandKind`; explicitly selecting the last and first spans returns
+`DuplicateSupport` with the same-curve non-adjacency message. Both failures preserve the prior
+authoring/preview state and empty feature document. The focused owner characterization
+`m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair` records the open
+defect without changing production behavior. The milestone-neutral 193-row golden remains green
+because it covers constraint/dimension authoring and scene authority, not computed-Fillet operand
+collection. No correction or repair plan is authorized in this checkpoint.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The

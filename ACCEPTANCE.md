@@ -1400,11 +1400,12 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 
 ## M70B acceptance: workspace reproduction handoff
 
-Status: active after the clean `M70B-H1` test-hardening survey. The reproduction transport criteria
-remain qualified; `M70B-F001` and `M70B-F002` retain complete replacement evidence. The new
-continue-through-failure oracle records 193/193 passing authoring and reachable scene-authority
-rows with no new finding. Its nominated source has complete release-gate and byte-verified
-publication evidence; human review and approval remain pending.
+Status: active during human UAT. The reproduction transport criteria remain qualified;
+`M70B-F001` and `M70B-F002` retain complete replacement evidence. The continue-through-failure
+oracle still records 193/193 passing constraint/dimension-authoring and reachable scene-authority
+rows, but subsequent UAT opened `M70B-F003` in computed-Fillet authoring, which that matrix does
+not cover. Its exact current failure is characterized at the headless owner with production code
+unchanged; human review and approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1454,7 +1455,8 @@ publication evidence; human review and approval remain pending.
   target metadata and display units across create/edit/Undo/Redo. Endpoint-continuity rows verify
   path-oriented G2 curvature and rate-explicit Parametric-C2 derivatives, including a pre-satisfied
   unequal-rate witness. `docs/M70B_HARDENING.md` records the seed, exact commands and readable
-  checklist. The clean survey contains exactly 193 `PASS` rows and opens no `M70B-F003` finding.
+  checklist. The historical H1 survey contains exactly 193 `PASS` rows; its scope does not include
+  computed-Fillet operand collection and therefore does not gate later `M70B-F003`.
 - M70B-H2 moves those exact rows and golden bytes to milestone-neutral test/fixture/driver names,
   accepts finding IDs from later active milestones, makes the clean oracle mandatory inside the
   release gate and installs the implicitly invoked repository defect-hardening skill. The original
@@ -1497,6 +1499,14 @@ unrelated rejected constraint
 while proving the detached scene cannot acquire inference-publication authority, and must preserve
 the current computed Fillet-preview path as exact-stamped composite geometry. Its replacement
 candidate must repeat the complete release/publication gate before targeted human recheck.
+
+Open `M70B-F003` is test-only at this checkpoint. Its focused headless characterization must
+preserve the Coincident-closed open-triangle topology, independently valid accepted geometry,
+both point and explicit two-span rejection signatures, and transactional retention of the point
+path's valid preview, the curve path's pending/no-preview state and the empty feature document. It
+is not evidence of resolution: an authorized repair
+must later convert that characterization into a positive three-corner Fillet regression before
+M70B can be approved.
 
 M71 remains deferred behind M70B.
 

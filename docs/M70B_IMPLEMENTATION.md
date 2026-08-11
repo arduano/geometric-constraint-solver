@@ -2,10 +2,12 @@
 
 # M70B implementation — Bounded workspace reproduction capsules
 
-Status: active after the clean `M70B-H1` test-hardening survey. The bounded transport and restore
+Status: active during human UAT. The bounded transport and restore
 remain qualified, and `M70B-F001`/`M70B-F002` retain complete replacement evidence. M70B-H1 adds a
-test-only continue-through-failure authoring/scene oracle with 193/193 passing rows and no new
-finding. Its nominated source passes the complete release gate and its fresh read-only Tailscale
+test-only continue-through-failure constraint/dimension-authoring and scene oracle with 193/193
+passing rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring outside that matrix;
+its exact failure is characterized at the headless owner with no production correction. The H1
+nominated source passes the complete release gate and its fresh read-only Tailscale
 distribution is byte-verified. M70B-H2 generalizes the unchanged matrix and installs the
 repository-local defect-hardening workflow without changing release behavior. Its clean release
 qualification, skill validation and independent forward tests pass with the H1 golden and release
@@ -17,6 +19,7 @@ transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering
 `M70B-F001`, and `geosolve-constraint-editor` owns radial-Normal authoring semantics corrected by
 `M70B-F002`. The thin web scene composer may present an older accepted document beneath a rejected
 design but gains no solver, branch or inference-publication authority. No new ADR is required.
+`geosolve-constraint-editor` also owns the open `M70B-F003` Fillet operand/topology finding.
 
 Prior withdrawn candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
 
@@ -106,6 +109,10 @@ a second scene model.
   circle/perimeter-line geometry, covers circle/arc external supports in both operand orders and
   freezes historical-accepted seeding beneath visibly different rejected design coordinates. It
   verifies accepted residual validation plus mutation-free rejection of invalid metadata.
+- `crates/geosolve-constraint-editor/tests/m70b_closed_triangle_fillet.rs` constructs the compact
+  `M70B-F003` topology through public APIs and freezes both current rejection paths plus
+  transactional preview/feature retention. It is a current-behavior characterization, not a
+  production correction or resolution claim.
 - `crates/geosolve-demo-web/src/workbench/mod.rs` directly tests both scene-composition authority
   rows affected by F002: a rejected constraint keeps historical accepted SVG paths visible while
   the detached scene fails retained-session authentication, and a current computed Fillet preview
@@ -433,9 +440,9 @@ The initial proposal included an `Absent` row, but ordinary coordinator refresh 
 a current empty computed snapshot. The final matrix therefore tests reachable state rather than
 weakening or changing runtime code to manufacture a fifth row.
 
-The integrated survey contains exactly 193 rows. All pass under the fixed seed, so the readable
-defect checklist is empty and no `M70B-F003` or payload was created. Each row runs in its own
-bounded child; authoring PASS rows freeze effective scheduled-input fingerprints and the driver
+The integrated survey contains exactly 193 rows. All pass under the fixed seed, so the historical
+H1 readable defect checklist was empty and no payload was created at survey time. Each row runs in
+its own bounded child; authoring PASS rows freeze effective scheduled-input fingerprints and the driver
 requires the exact case/family inventory. Exact results and operator commands are frozen in
 `docs/M70B_HARDENING.md`. The complete release/publication gate now passes on the nominated H1
 source, which has replaced F002 as the current UAT candidate without changing release bytes.
@@ -460,6 +467,32 @@ assigning an unconfirmed finding, applying a fix or expanding the broad matrix, 
 pure CSS-only report. Fault-injected driver evidence also continues through the complete inventory
 while independently classifying `PANIC`, `TIMEOUT` and `HARNESS_ERROR` rows.
 
+## 3.5 `M70B-F003` open owner characterization
+
+F003 is classified `DEFECT` and was independently reproduced against source
+`63845836d3245eccc7ab7f820ac60ba2d562f7e1`. It changes no production code. Its focused editor
+integration test constructs an open three-span triangle whose distinct first and last design
+points are Coincident, verifies finite accepted
+coordinates and independently validated normalized hard residual at most `1e-9`, and first proves
+that both ordinary interior corners compose one valid two-corner preview. It then freezes the two
+current closure failures: either coincident endpoint produces `WrongOperandKind`, while selecting
+the last and first spans produces `DuplicateSupport` with the underlying same-curve adjacency
+message. The point rejection retains its last valid two-corner preview; the curve-pair rejection
+retains its one pending support and no-preview state. Both retain the empty feature document.
+
+The point resolver builds incidence from exact `DesignPointId` endpoint identity, so the two
+Coincident-equivalent closure IDs each appear one-valent. The explicit curve-pair route reaches the
+feature evaluator, which permits same-open-polyline parents only when their raw segment indices
+differ by one; closing spans two and zero therefore appear nonadjacent. The editor maps that latter
+topology error to the misleading `DuplicateSupport` warning. These are authoring/topology semantic
+gaps, not invalid accepted geometry or nonlinear convergence.
+
+The existing 193-row golden remains exactly green because it does not execute computed-Fillet
+authoring. This confirms the layered workflow is doing its intended job: broad compatibility stays
+stable while an exact defect lives at its narrow public owner. It also records a missing systemic
+computed-feature-authoring axis for later review. No matrix expansion, production repair or repair
+plan is part of this checkpoint.
+
 ## 4. Acceptance criteria
 
 - [x] focused codec, persistence and thin-adapter tests pass;
@@ -482,6 +515,8 @@ while independently classifying `PANIC`, `TIMEOUT` and `HARNESS_ERROR` rows.
 - [x] M70B-H2 preserves the exact H1 golden SHA-256, passes the neutral focused/clean oracle and
   full release gate, validates and independently forward-tests the repo-local skill, and leaves the
   existing UAT release bytes unchanged;
+- [x] open `M70B-F003` is independently reproduced and encoded at the headless owner without a
+  production change, while the unchanged 193-row golden's scope gap is explicit;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
@@ -503,4 +538,6 @@ bound-event application for extreme zero/tiny Local intervals remains a future h
 rather than being folded into this repair. Radial Normal deliberately means that the circle/arc
 centre lies on the complete affine line support. True contact-bearing normal authoring at a picked
 circumference location remains a future retained-primitive/UX decision and is not smuggled into
-M70B. M71 stays deferred throughout that work.
+M70B. `M70B-F003` remains an open Coincident-topology Fillet-authoring defect with only a focused
+current-behavior characterization; no correction is claimed. M71 stays deferred throughout that
+work.

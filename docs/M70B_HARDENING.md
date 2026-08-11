@@ -2,9 +2,11 @@
 
 # M70B-H1 test hardening and defect survey
 
-Status: the bounded test-only survey, complete release qualification and fresh byte-verified UAT
-publication are clean. It changes no runtime solver, sketch, authoring or workbench behavior.
-Supervising-human M70B review and approval remain pending.
+Status: the bounded H1 test-only survey, complete release qualification and byte-verified UAT
+publication remain historically clean. Subsequent human UAT opened `M70B-F003` in computed-Fillet
+authoring outside the 193-row matrix. Its focused headless characterization changes no runtime
+solver, sketch, authoring or workbench behavior. Supervising-human M70B review and approval remain
+pending.
 
 M70B-H1 originated this matrix. M70B-H2 moves the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
@@ -130,9 +132,12 @@ Do not weaken an oracle or implement a production correction during the discover
 
 ## Survey result and readable defect checklist
 
-The completed survey currently records 193/193 `PASS`, zero semantic defects, zero panics, zero
-timeouts and zero harness errors. No `M70B-F003` finding was opened and no new reproduction payload
-was required.
+The completed matrix still records 193/193 `PASS`, zero semantic defects, zero panics, zero
+timeouts and zero harness errors within its declared scope. It opened no finding at H1 survey time.
+Later human UAT opened `M70B-F003`: the matrix has no computed-Fillet authoring rows, so its green
+result cannot detect a Coincident-closed triangle closure rejected through both point and curve-pair
+collection. The compact public-Rust fixture needs no reproduction payload and is retained in the
+focused owner regression instead.
 
 | Family | Rows | Result |
 | --- | ---: | --- |
@@ -162,7 +167,23 @@ was required.
 This clean result is evidence for the bounded representative matrix, not a claim that human UAT
 or every family-by-primitive Cartesian product is complete. Existing M55/M62 regressions retain
 their broader applicability and curve-family ownership; M70B-F001 and M70B-F002 retain their exact
-payload-derived regressions. M70B remains active until explicit supervising-human UAT approval.
+payload-derived regressions, and open M70B-F003 retains its focused headless characterization.
+M70B remains active until explicit supervising-human UAT approval.
+
+Focused F003 evidence:
+
+```text
+cargo test --locked -p geosolve-constraint-editor \
+  --test m70b_closed_triangle_fillet \
+  m70b_f003_coincident_triangle_closure_is_not_filletable_by_point_or_curve_pair \
+  -- --exact --nocapture
+./scripts/golden-authoring-scene-oracle.sh --check
+```
+
+The first command passes by asserting the exact open-defect signature and transactional retention;
+it must be converted to positive success expectations during an authorized repair. The second
+remains 193/193 green and therefore demonstrates the broad matrix's computed-feature-authoring
+blind spot rather than resolution of F003.
 
 ## Qualification ledger
 
