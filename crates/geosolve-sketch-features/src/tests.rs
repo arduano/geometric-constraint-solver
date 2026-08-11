@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_sketch::{
-    CancellationToken, CurveDefinition, CurveSpan, DocumentArcSweep, DocumentCurveNormalSide,
-    DocumentCurveTrimView, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
-    DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter,
-    GeometryRole, OperationControl, OperationLimits, OperationOutcome,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
-    cancellation_pair,
+    CancellationToken, CurveDefinition, CurveSpan, DocumentArcSweep, DocumentConstraintDefinition,
+    DocumentCurveNormalSide, DocumentCurveTrimView, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary,
+    DocumentTrimParameter, GeometryRole, OperationControl, OperationLimits, OperationOutcome,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SketchHardValidity,
+    SolverConfig, cancellation_pair,
 };
 
 use crate::{
@@ -268,6 +268,155 @@ struct LineCircleFixture {
     line: CurveSpan,
     circle: CurveSpan,
     request: ComputedFilletCornerAuthoringRequest,
+}
+
+#[derive(Clone, Copy)]
+struct M70bF004Row {
+    payload_fingerprint: &'static str,
+    line_start: [f64; 2],
+    line_end: [f64; 2],
+    viable_circle_parameter: f64,
+}
+
+const M70B_F004_ROWS: [M70bF004Row; 2] = [
+    M70bF004Row {
+        payload_fingerprint: "4752:daa87c91c75abf9f",
+        line_start: [-5.020_101_821_235_499_5, 0.079_969_938_399_629_43],
+        line_end: [4.232_404_345_772_32, 0.079_969_938_399_628_96],
+        viable_circle_parameter: 5.551_739_581_930_468,
+    },
+    M70bF004Row {
+        payload_fingerprint: "4750:beda1885b15e38b5",
+        line_start: [-5.020_101_821_235_499_5, 2.043_335_287_688_456],
+        line_end: [4.596_861_386_658_269_5, 2.043_335_287_688_455],
+        viable_circle_parameter: 6.517_367_674_350_06,
+    },
+];
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the exact payload-derived sketch and persistent Fillet intent remain one auditable fixture"
+)]
+fn m70b_f004_fixture(
+    row: M70bF004Row,
+) -> (
+    RetainedSketchDocumentSession,
+    ComputedFeatureDocument,
+    crate::ComputedFeatureId,
+    crate::ComputedFeatureCornerId,
+    NewComputedFilletCorner,
+) {
+    let mut document = SketchDocument::with_id(
+        10.0,
+        geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(
+            0x9455_3000_3fee_983a_59bf_6060_4279_fed7,
+        )),
+    )
+    .unwrap();
+    let center = document
+        .add_point(
+            "draft point",
+            [-0.964_047_656_537_027_3, 2.537_115_794_695_225],
+        )
+        .unwrap();
+    let radius = document
+        .add_scalar(
+            "radius",
+            1.181_531_590_369_537_4,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let circle = CurveSpan::line(
+        document
+            .add_curve("circle", CurveDefinition::Circle { center, radius })
+            .unwrap(),
+    );
+    let line_start = document.add_point("draft point", row.line_start).unwrap();
+    let line_end = document.add_point("draft point", row.line_end).unwrap();
+    let line = CurveSpan::line(
+        document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start: line_start,
+                    end: line_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap(),
+    );
+    document
+        .add_constraint(
+            "auto horizontal",
+            DocumentConstraintDefinition::Horizontal { line },
+        )
+        .unwrap();
+
+    let reconstructed_json = document.to_canonical_json().unwrap();
+    let session = retained(document);
+    assert_eq!(
+        session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document()
+            .to_canonical_json()
+            .unwrap(),
+        reconstructed_json,
+        "{} did not reconstruct the exact accepted sketch",
+        row.payload_fingerprint
+    );
+    let corner = NewComputedFilletCorner {
+        first: ComputedFilletParent {
+            source: source(circle),
+            picked_parameter: 6.010_678_569_256_539,
+            winding: 0,
+            neighborhood: geosolve_sketch::ContactNeighborhood::Local {
+                lower: 4.712_388_980_384_694,
+                upper: 7.853_981_633_974_479,
+            },
+            normal_side: DocumentCurveNormalSide::Right,
+            retained_endpoint: DocumentFilletTrimEndpoint::End,
+            periodic_anchor: Some(DocumentTrimParameter {
+                parameter: 2.869_085_915_666_746,
+                winding: 0,
+            }),
+        },
+        second: ComputedFilletParent {
+            source: source(line),
+            picked_parameter: 0.634_799_522_276_009_7,
+            winding: 0,
+            neighborhood: geosolve_sketch::ContactNeighborhood::Interior,
+            normal_side: DocumentCurveNormalSide::Left,
+            retained_endpoint: DocumentFilletTrimEndpoint::End,
+            periodic_anchor: None,
+        },
+        endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+        sweep: DocumentArcSweep::CounterClockwise,
+    };
+    let mut features = ComputedFeatureDocument::with_id(
+        session.design_document().id(),
+        ComputedFeatureDocumentId::from_raw(0xf330_5f73_5082_ee5a_3fda_0114_370b_9ba4),
+    );
+    let feature = features
+        .create_fillet_set("Fillet 1", 1.0, vec![corner])
+        .unwrap();
+    let persisted_corner = match &features.feature(feature).unwrap().definition {
+        ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0],
+    };
+    assert_eq!(
+        features.digest().to_string(),
+        "ddeb29c71705b33e28987876be77574c3491d8afd2559569d648fbed27c6d8e8",
+        "{} did not reconstruct the exact persisted feature intent",
+        row.payload_fingerprint
+    );
+    (
+        session,
+        features,
+        feature,
+        persisted_corner.id,
+        persisted_corner.without_id(),
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -698,6 +847,167 @@ fn assert_close(actual: f64, expected: f64, tolerance: f64) {
         (actual - expected).abs() <= tolerance,
         "expected {expected:.12e}, got {actual:.12e}, tolerance {tolerance:.3e}"
     );
+}
+
+fn assert_m70b_f004_branch_state(
+    actual: NewComputedFilletCorner,
+    persisted: NewComputedFilletCorner,
+    payload_fingerprint: &str,
+) {
+    assert_eq!(
+        actual.first.source, persisted.first.source,
+        "{payload_fingerprint}"
+    );
+    assert_eq!(
+        actual.second.source, persisted.second.source,
+        "{payload_fingerprint}"
+    );
+    assert_eq!(
+        actual.second.winding, persisted.second.winding,
+        "{payload_fingerprint}"
+    );
+    let geosolve_sketch::ContactNeighborhood::Local {
+        lower: actual_lower,
+        upper: actual_upper,
+    } = actual.first.neighborhood
+    else {
+        panic!("{payload_fingerprint}: circle branch is not Local");
+    };
+    let geosolve_sketch::ContactNeighborhood::Local {
+        lower: persisted_lower,
+        upper: persisted_upper,
+    } = persisted.first.neighborhood
+    else {
+        panic!("{payload_fingerprint}: persisted circle branch is not Local");
+    };
+    assert_close(actual_lower, persisted_lower, 2.0e-15);
+    assert_close(actual_upper, persisted_upper, 2.0e-15);
+    assert_eq!(
+        actual.second.neighborhood,
+        geosolve_sketch::ContactNeighborhood::Interior,
+        "{payload_fingerprint}"
+    );
+    assert_eq!(
+        actual.first.normal_side,
+        DocumentCurveNormalSide::Right,
+        "{payload_fingerprint}"
+    );
+    assert_eq!(
+        actual.second.normal_side,
+        DocumentCurveNormalSide::Left,
+        "{payload_fingerprint}"
+    );
+    assert_eq!(
+        actual.first.retained_endpoint,
+        DocumentFilletTrimEndpoint::End,
+        "{payload_fingerprint}"
+    );
+    assert_eq!(
+        actual.second.retained_endpoint,
+        DocumentFilletTrimEndpoint::End,
+        "{payload_fingerprint}"
+    );
+    let actual_anchor = actual
+        .first
+        .periodic_anchor
+        .unwrap_or_else(|| panic!("{payload_fingerprint}: circle branch lost its anchor"));
+    let persisted_anchor = persisted
+        .first
+        .periodic_anchor
+        .unwrap_or_else(|| panic!("{payload_fingerprint}: persisted circle branch has no anchor"));
+    let actual_total_parameter =
+        actual.first.picked_parameter + f64::from(actual.first.winding) * std::f64::consts::TAU;
+    let persisted_total_parameter = persisted.first.picked_parameter
+        + f64::from(persisted.first.winding) * std::f64::consts::TAU;
+    let actual_anchor_total =
+        actual_anchor.parameter + f64::from(actual_anchor.winding) * std::f64::consts::TAU;
+    let persisted_anchor_total =
+        persisted_anchor.parameter + f64::from(persisted_anchor.winding) * std::f64::consts::TAU;
+    assert_close(
+        actual_anchor_total - persisted_anchor_total,
+        actual_total_parameter - persisted_total_parameter,
+        2.0e-12,
+    );
+    assert_eq!(actual.second.periodic_anchor, None, "{payload_fingerprint}");
+    assert_eq!(
+        actual.endpoint_order,
+        DocumentFilletEndpointOrder::FirstThenSecond,
+        "{payload_fingerprint}"
+    );
+    assert_eq!(
+        actual.sweep,
+        DocumentArcSweep::CounterClockwise,
+        "{payload_fingerprint}"
+    );
+}
+
+fn assert_m70b_f004_arc_is_independently_valid(
+    document: &SketchDocument,
+    corner: NewComputedFilletCorner,
+    arc: &crate::ComputedCircularArc,
+    payload_fingerprint: &str,
+) {
+    assert!(
+        arc.center.into_iter().all(f64::is_finite)
+            && arc.radius.is_finite()
+            && arc.start_angle.is_finite()
+            && arc.end_angle.is_finite(),
+        "{payload_fingerprint}: non-finite generated arc"
+    );
+    assert_eq!(
+        arc.radius.to_bits(),
+        1.0_f64.to_bits(),
+        "{payload_fingerprint}"
+    );
+    assert_eq!(arc.sweep, corner.sweep, "{payload_fingerprint}");
+
+    let parents = [corner.first, corner.second];
+    for (parent, contact) in parents.into_iter().zip(arc.contacts) {
+        assert_eq!(contact.source, parent.source, "{payload_fingerprint}");
+        assert!(
+            contact.parameter.is_finite()
+                && contact.total_parameter.is_finite()
+                && contact.position.into_iter().all(f64::is_finite),
+            "{payload_fingerprint}: non-finite generated contact"
+        );
+        let jet = document
+            .evaluate_curve_jet(parent.source.span, contact.total_parameter)
+            .unwrap();
+        let position_error =
+            (jet.position.x - contact.position[0]).hypot(jet.position.y - contact.position[1]);
+        assert!(
+            position_error <= 1.0e-9,
+            "{payload_fingerprint}: source/contact mismatch {position_error:.12e}"
+        );
+        let radial = [
+            arc.center[0] - contact.position[0],
+            arc.center[1] - contact.position[1],
+        ];
+        let radial_length = radial[0].hypot(radial[1]);
+        assert_close(radial_length, arc.radius, 1.0e-9);
+        let tangent_length = jet.first_derivative.x.hypot(jet.first_derivative.y);
+        let normalized_tangency =
+            (jet.first_derivative.x * radial[0] + jet.first_derivative.y * radial[1]).abs()
+                / (tangent_length * radial_length);
+        assert!(
+            normalized_tangency <= 1.0e-9,
+            "{payload_fingerprint}: normalized tangency residual {normalized_tangency:.12e}"
+        );
+    }
+
+    let (start, end) = match corner.endpoint_order {
+        DocumentFilletEndpointOrder::FirstThenSecond => (arc.contacts[0], arc.contacts[1]),
+        DocumentFilletEndpointOrder::SecondThenFirst => (arc.contacts[1], arc.contacts[0]),
+    };
+    for (angle, contact) in [(arc.start_angle, start), (arc.end_angle, end)] {
+        let expected =
+            (contact.position[1] - arc.center[1]).atan2(contact.position[0] - arc.center[0]);
+        let angle_error = (angle - expected).sin().abs();
+        assert!(
+            angle_error <= 1.0e-9,
+            "{payload_fingerprint}: arc endpoint angle mismatch {angle_error:.12e}"
+        );
+    }
 }
 
 fn assert_radius_sensitivity_matches_finite_difference(
@@ -2498,6 +2808,325 @@ fn line_line_continuation_reanchors_after_large_source_point_edits() {
                 .all(f64::is_finite)
         );
         assert!(value.sensitivity.transverse_quality > 0.9);
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the two-row defect characterization preserves payload, accepted-state, branch, failure and viable-root evidence together"
+)]
+fn m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window() {
+    for row in M70B_F004_ROWS {
+        let (session, features, feature, corner_id, persisted_corner) = m70b_f004_fixture(row);
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("payload-derived sketch must be current and accepted");
+        assert!(
+            accepted
+                .document()
+                .points()
+                .iter()
+                .all(|point| { point.position.into_iter().all(f64::is_finite) }),
+            "{}: accepted point geometry is non-finite",
+            row.payload_fingerprint
+        );
+        assert!(
+            accepted
+                .document()
+                .scalars()
+                .iter()
+                .all(|scalar| scalar.value.is_finite()),
+            "{}: accepted scalar geometry is non-finite",
+            row.payload_fingerprint
+        );
+        let diagnostics = accepted.diagnostics();
+        let solve = diagnostics.solve.expect("accepted solve diagnostics");
+        assert_eq!(
+            solve.hard_validity,
+            SketchHardValidity::Valid,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert!(
+            solve.hard_residuals_validated,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert!(
+            solve
+                .maximum_normalized_hard_residual
+                .is_some_and(|residual| residual <= 1.0e-9),
+            "{}: accepted hard residual is not independently valid: {solve:?}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            diagnostics.rank.expect("rank diagnostics").numerical_rank,
+            Some(1),
+            "{}",
+            row.payload_fingerprint
+        );
+        let mobility = diagnostics.mobility.expect("mobility diagnostics");
+        assert_eq!(
+            mobility.equality_degrees_of_freedom,
+            Some(6),
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            mobility.bidirectional_bounded_degrees_of_freedom,
+            Some(6),
+            "{}",
+            row.payload_fingerprint
+        );
+
+        assert_eq!(feature.raw(), 1, "{}", row.payload_fingerprint);
+        assert_eq!(corner_id.raw(), 1, "{}", row.payload_fingerprint);
+        let ComputedFeatureDefinition::FilletSet(persisted_fillet) =
+            &features.feature(feature).unwrap().definition;
+        assert_eq!(
+            persisted_fillet.radius.to_bits(),
+            1.0_f64.to_bits(),
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            persisted_corner.first.picked_parameter.to_bits(),
+            6.010_678_569_256_539_f64.to_bits(),
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            persisted_corner.second.picked_parameter.to_bits(),
+            0.634_799_522_276_009_7_f64.to_bits(),
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            persisted_corner.first.winding, 0,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            persisted_corner.second.winding, 0,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            persisted_corner.first.periodic_anchor,
+            Some(DocumentTrimParameter {
+                parameter: 2.869_085_915_666_746,
+                winding: 0,
+            }),
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_m70b_f004_branch_state(persisted_corner, persisted_corner, row.payload_fingerprint);
+        let geosolve_sketch::ContactNeighborhood::Local { lower, upper } =
+            persisted_corner.first.neighborhood
+        else {
+            panic!("{}: circle branch is not Local", row.payload_fingerprint);
+        };
+        assert_eq!(
+            lower.to_bits(),
+            4.712_388_980_384_694_f64.to_bits(),
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            upper.to_bits(),
+            7.853_981_633_974_479_f64.to_bits(),
+            "{}",
+            row.payload_fingerprint
+        );
+
+        let accepted_identity = accepted.identity();
+        let accepted_json = accepted.document().to_canonical_json().unwrap();
+        let feature_identity = features.identity();
+        let feature_json = features.to_json().unwrap();
+        assert_eq!(
+            SketchDocument::from_json(&accepted_json)
+                .unwrap()
+                .to_canonical_json()
+                .unwrap(),
+            accepted_json,
+            "{}: accepted sketch did not survive canonical restoration",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            ComputedFeatureDocument::from_json(&feature_json).unwrap(),
+            features,
+            "{}: persisted Fillet intent did not survive restoration",
+            row.payload_fingerprint
+        );
+        let prepared_input = session.prepared_input();
+        let mut allocator = ComputedEvaluationAllocator::default();
+        let failed = evaluate(&session, &features, &mut allocator);
+        let evaluation = failed
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == feature)
+            .expect("payload feature evaluation");
+        assert!(
+            matches!(
+                evaluation.state,
+                ComputedFeatureEvaluationState::Failed {
+                    failure: ComputedFeatureFailure::NoLocalRoot { corner }
+                } if corner == corner_id
+            ),
+            "{}: unexpected persisted evaluation: {:?}",
+            row.payload_fingerprint,
+            evaluation.state
+        );
+        assert!(failed.edges().is_empty(), "{}", row.payload_fingerprint);
+        assert!(
+            failed.construction_fragments().is_empty(),
+            "{}",
+            row.payload_fingerprint
+        );
+        assert!(
+            failed.replaced_sources().is_empty(),
+            "{}: failed evaluation partially replaced a source",
+            row.payload_fingerprint
+        );
+        let accepted_after = session
+            .accepted_state_for_current_input()
+            .expect("evaluation must retain accepted sketch");
+        assert_eq!(
+            accepted_after.identity(),
+            accepted_identity,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            accepted_after.document().to_canonical_json().unwrap(),
+            accepted_json,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            features.identity(),
+            feature_identity,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            features.to_json().unwrap(),
+            feature_json,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            session.prepared_input(),
+            prepared_input,
+            "{}: failed feature evaluation mutated the retained sketch input",
+            row.payload_fingerprint
+        );
+
+        let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+        let reanchored = complete(
+            authoring
+                .reseed_fillet_contact(
+                    ComputedFilletContactReseedRequest {
+                        prior: persisted_corner,
+                        parent: ComputedFilletParentIndex::First,
+                        parameter: row
+                            .viable_circle_parameter
+                            .rem_euclid(std::f64::consts::TAU),
+                    },
+                    1.0,
+                    ComputedFeatureEvaluationPolicy::default(),
+                    OperationControl::unlimited(),
+                )
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "{}: viable same-cell contact did not reseed: {error:?}",
+                        row.payload_fingerprint
+                    )
+                }),
+        );
+        assert_eq!(
+            reanchored.accepted, accepted_identity,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_m70b_f004_branch_state(reanchored.corner, persisted_corner, row.payload_fingerprint);
+        let circle_parameter = reanchored.arc.contacts[0].total_parameter;
+        assert_close(circle_parameter, row.viable_circle_parameter, 2.0e-10);
+        assert!(
+            circle_parameter > lower && circle_parameter < upper,
+            "{}: viable root escaped the unchanged branch cell",
+            row.payload_fingerprint
+        );
+        let current_seed_window = 0.125 * (upper - lower);
+        assert!(
+            (circle_parameter - persisted_corner.first.picked_parameter).abs()
+                > current_seed_window,
+            "{}: viable root did not exercise the current seed-window exclusion",
+            row.payload_fingerprint
+        );
+        assert_m70b_f004_arc_is_independently_valid(
+            accepted.document(),
+            reanchored.corner,
+            &reanchored.arc,
+            row.payload_fingerprint,
+        );
+
+        let mut reanchored_features = features.clone();
+        reanchored_features
+            .set_fillet_corner(feature, corner_id, reanchored.corner)
+            .unwrap();
+        assert_eq!(
+            reanchored_features.feature(feature).unwrap().id,
+            feature,
+            "{}",
+            row.payload_fingerprint
+        );
+        assert_eq!(
+            reanchored_features.corner(feature, corner_id).unwrap().id,
+            corner_id,
+            "{}",
+            row.payload_fingerprint
+        );
+        let current = evaluate(
+            &session,
+            &reanchored_features,
+            &mut ComputedEvaluationAllocator::default(),
+        );
+        assert!(
+            matches!(
+                current
+                    .feature_evaluations()
+                    .iter()
+                    .find(|evaluation| evaluation.feature == feature)
+                    .unwrap()
+                    .state,
+                ComputedFeatureEvaluationState::Current { .. }
+            ),
+            "{}: re-anchored same-branch feature did not evaluate Current",
+            row.payload_fingerprint
+        );
+        let arcs = current
+            .edges()
+            .iter()
+            .filter_map(|edge| match &edge.geometry {
+                ComputedEdgeGeometry::CircularArc(arc) => Some(arc),
+                ComputedEdgeGeometry::NativeSourceFragment { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(arcs.len(), 1, "{}", row.payload_fingerprint);
+        assert_m70b_f004_arc_is_independently_valid(
+            accepted.document(),
+            reanchored.corner,
+            arcs[0],
+            row.payload_fingerprint,
+        );
+        assert_eq!(
+            session.prepared_input(),
+            prepared_input,
+            "{}: viable-root characterization mutated the retained sketch input",
+            row.payload_fingerprint
+        );
     }
 }
 

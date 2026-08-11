@@ -1584,6 +1584,47 @@ precomposed and it does not exercise `FeatureAuthoringTool::Fillet`, point-to-co
 curve-pair collection. The exact triangle therefore belongs first to this focused owner regression
 rather than being disguised as a passing broad-matrix row.
 
+### M70B-F004 - Persisted line-circle Fillet misses valid same-branch roots
+
+Finding class: `DEFECT`, independently reproduced against source
+`b10bc6b2de478239472b08fe71727ccbb49d67ab` from payload identities
+`4752:daa87c91c75abf9f` and `4750:beda1885b15e38b5`.
+
+Both application-workspace v5 payloads restore through the ordinary bounded decoder and retained
+coordinator. Their accepted sketches are finite, independently hard-valid at normalized residual
+below `1e-9`, rank one and six-DOF. They share the same circle centre
+`(-0.9640476565370273, 2.537115794695225)`, circle radius `1.1815315903695374` and persistent
+radius-1 Fillet. Only the accepted horizontal line height differs: `0.079969938399629` in the first
+case and `2.043335287688455` in the second.
+
+The persistent branch is identical in both cases: circle Right/End with picked parameter
+`6.010678569256539`, Local cell `[4.712388980384694, 7.853981633974479]` and periodic anchor
+`2.869085915666746`; line Left/End/Interior; FirstThenSecond endpoint order; and counter-clockwise
+sweep. Current evaluation nevertheless returns `ComputedFeatureFailure::NoLocalRoot` and publishes
+no generated arc or partial source fragments.
+
+Public contact reseeding through the computed-feature authoring snapshot finds finite,
+independently validated roots on that same explicit branch. Their circle contacts are
+`5.551739581930468` and
+`6.517367674350060`, both strictly inside the stored Local cell, with unchanged normal sides,
+retained endpoints, endpoint order and sweep. The latter crosses the periodic parameter seam and
+is represented with winding one without leaving the total-parameter cell. Their displacement from
+the stored seed is respectively about `0.458939` and `0.506689`. Persisted non-affine evaluation
+narrows the certified cell to 12.5% of its width around the old seed—about `0.392699` here—so both
+viable roots are excluded and misclassified as absent. These payloads therefore expose one
+source-edit locality defect, not two findings or missing normal-side branches.
+
+The focused owner characterization lives in `geosolve-sketch-features`. It preserves both payload
+fingerprints, the exact persistent branch, hard-valid accepted state, viable fresh roots,
+`NoLocalRoot` failure, empty generated output and unchanged sketch/feature identities. It freezes
+current behavior only; no production correction or repair plan is authorized in this checkpoint.
+
+The milestone-neutral 193-row golden remains green. Its only computed-Fillet row presents an
+unchanged precomposed Current scene, so it exercises neither native source edits nor traversal of a
+persistent nonlinear branch cell. This case belongs first to the exact feature-owner regression;
+the missing computed-feature source-edit/branch dimension is recorded for later reviewed golden
+expansion rather than silently inserting two large payloads into the broad matrix.
+
 ### M70B-H1 - Continue-through-failure authoring and scene oracle
 
 This test-only survey turns the complete UI-exposed authoring family inventory into a repeatable

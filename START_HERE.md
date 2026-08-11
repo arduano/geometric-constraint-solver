@@ -56,7 +56,12 @@ create/edit/Undo/Redo dimension families and four reachable scene-authority stat
 continue-through-failure fixed-seed oracle. All 193 rows pass. Subsequent human UAT opened
 `M70B-F003`: an open triangle polyline closed by a Coincident relation cannot author its closure
 Fillet through either the point or two-span path. A focused headless characterization freezes the
-typed transactional failure; no production correction or repair plan is authorized yet. Source
+typed transactional failure. Two later supplied line-circle Fillet payloads deduplicate as
+`M70B-F004`: after a valid native source edit, their unchanged explicit circle branch still
+contains a valid Fillet root, but persisted evaluation reports `NoLocalRoot` and withholds all
+generated output. A focused feature-owner characterization preserves both payload fingerprints,
+the viable same-branch roots and the transactional failure. Neither open finding authorizes a
+production correction or repair plan. The prior H1 source
 `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` has passed the complete release gate and its fresh
 seven-file Tailscale publication is byte-verified. M70B-H2 generalizes that unchanged corpus into
 the milestone-neutral mandatory golden gate and repository-local defect-hardening workflow. Clean
@@ -305,9 +310,12 @@ keeps rejected-attempt presentation visible but detached; focused owner regressi
 complete replacement gate plus byte-verified publication pass. `M70B-H1` adds a clean 193-row
 test-only authoring/scene golden and readable defect checklist; its own complete release gate and
 fresh byte-verified publication now pass. Later UAT finding `M70B-F003` is encoded at the headless
-computed-Fillet authoring boundary and remains open without a production fix. Targeted rechecks
-and explicit approval remain pending. The temporary `docs/M71_GOALS.md` backlog is deferred behind
-M70B and is not implementation authorization.
+computed-Fillet authoring boundary. `M70B-F004` is likewise encoded at the computed-feature
+evaluation owner: two supplied line-circle payloads retain viable roots inside their explicit
+branch cells but fall outside the narrower persisted seed window. Both remain open without a
+production fix or repair plan. Targeted rechecks and explicit approval remain pending. The
+temporary `docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation
+authorization.
 
 Durable milestone and cleanup records:
 

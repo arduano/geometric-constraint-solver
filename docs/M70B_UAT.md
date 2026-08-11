@@ -2,15 +2,16 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: human UAT has opened `M70B-F003`; the prior clean `M70B-H1` candidate is not approved.
+Status: human UAT has opened `M70B-F003` and `M70B-F004`; the prior clean `M70B-H1` candidate is not
+approved.
 `M70B-F001` and `M70B-F002` retain their owning-layer corrections and complete replacement
 evidence. M70B-H1 adds a 193/193 passing constraint/dimension-authoring and scene oracle; its
 complete release gate and fresh byte-verified Tailscale publication now pass. M70B-H2 only
 generalizes that test infrastructure and
 adds the repo-local defect workflow; its clean release qualification passes without replacing or
-altering the served H1 product candidate. F003 falls outside that matrix and now has a focused
-headless current-behavior characterization only; no fix or repair plan is authorized yet. This
-scorecard records no human pass or approval.
+altering the served H1 product candidate. F003 and F004 fall outside that matrix and now have
+focused headless current-behavior characterizations only; no fix or repair plan is authorized yet.
+This scorecard records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
@@ -214,6 +215,28 @@ The exact current failure is encoded by
 remains green because it exercises constraint/dimension authoring and precomposed scene authority,
 not computed-Fillet operand collection. This checkpoint deliberately does not implement or plan
 the production correction.
+
+Result: **OPEN — ENCODED, NOT FIXED**
+
+### Finding `M70B-F004` — valid line-circle Fillet branches are withheld after source edits
+
+The supplied payloads with identities `4752:daa87c91c75abf9f` and
+`4750:beda1885b15e38b5` both restore finite, hard-valid six-DOF sketches and the same explicit
+radius-1 line-circle Fillet branch. The accepted horizontal line lies below the circle in one case
+and crosses its upper region in the other. Both restored computed features report `NoLocalRoot`
+and render no Fillet, even though public contact reseeding independently finds a valid root strictly
+inside the unchanged certified circle branch cell.
+
+The two cases are encoded as one focused `geosolve-sketch-features` current-behavior
+characterization. The valid circle contacts move about `0.459` and `0.507` radians from the stored
+seed, while persisted nonlinear evaluation searches only about `0.393` radians on either side.
+Normal sides, retained endpoints, endpoint order and sweep do not need to change; the upper root's
+normalized winding advances across the periodic parameter seam while its total parameter remains
+inside the same certified cell. The 193-row golden remains green because it contains no
+computed-Fillet source-edit/branch-traversal row; this is an explicit scope result, not evidence
+that the feature works.
+
+This checkpoint deliberately does not implement or plan the production correction.
 
 Result: **OPEN — ENCODED, NOT FIXED**
 

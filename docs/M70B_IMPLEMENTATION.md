@@ -6,9 +6,10 @@ Status: active during human UAT. The bounded transport and restore
 remain qualified, and `M70B-F001`/`M70B-F002` retain complete replacement evidence. M70B-H1 adds a
 test-only continue-through-failure constraint/dimension-authoring and scene oracle with 193/193
 passing rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring outside that matrix;
-its exact failure is characterized at the headless owner with no production correction. The H1
-nominated source passes the complete release gate and its fresh read-only Tailscale
-distribution is byte-verified. M70B-H2 generalizes the unchanged matrix and installs the
+two later supplied line-circle Fillet payloads opened `M70B-F004` in persistent nonlinear branch
+traversal. Both exact failures are characterized at their headless owners with no production
+correction. The H1 nominated source passes the complete release gate and its fresh read-only
+Tailscale distribution is byte-verified. M70B-H2 generalizes the unchanged matrix and installs the
 repository-local defect-hardening workflow without changing release behavior. Its clean release
 qualification, skill validation and independent forward tests pass with the H1 golden and release
 bytes unchanged. Supervising-human UAT and approval remain pending. This document records no human
@@ -19,7 +20,9 @@ transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering
 `M70B-F001`, and `geosolve-constraint-editor` owns radial-Normal authoring semantics corrected by
 `M70B-F002`. The thin web scene composer may present an older accepted document beneath a rejected
 design but gains no solver, branch or inference-publication authority. No new ADR is required.
-`geosolve-constraint-editor` also owns the open `M70B-F003` Fillet operand/topology finding.
+`geosolve-constraint-editor` also owns the open `M70B-F003` Fillet operand/topology finding, while
+`geosolve-sketch-features` owns the open `M70B-F004` persisted line-circle branch-evaluation
+finding.
 
 Prior withdrawn candidate source: `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`
 
@@ -113,6 +116,12 @@ a second scene model.
   `M70B-F003` topology through public APIs and freezes both current rejection paths plus
   transactional preview/feature retention. It is a current-behavior characterization, not a
   production correction or resolution claim.
+- `crates/geosolve-sketch-features/src/tests.rs` owns the two-case `M70B-F004` characterization:
+  both payload-derived accepted source states withhold their unchanged persistent branch as
+  `NoLocalRoot`, while public contact reseeding proves independently valid roots inside the same
+  certified circle cell. The exact test is
+  `m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window`; it changes no
+  feature-evaluation behavior.
 - `crates/geosolve-demo-web/src/workbench/mod.rs` directly tests both scene-composition authority
   rows affected by F002: a rejected constraint keeps historical accepted SVG paths visible while
   the detached scene fails retained-session authentication, and a current computed Fillet preview
@@ -493,6 +502,32 @@ stable while an exact defect lives at its narrow public owner. It also records a
 computed-feature-authoring axis for later review. No matrix expansion, production repair or repair
 plan is part of this checkpoint.
 
+## 3.6 `M70B-F004` open owner characterization
+
+F004 is classified `DEFECT` and was independently reproduced against source
+`b10bc6b2de478239472b08fe71727ccbb49d67ab`. It changes no production code. The ordinary decoder
+and coordinator restore both supplied payloads—`4752:daa87c91c75abf9f` and
+`4750:beda1885b15e38b5`—with finite, independently hard-valid accepted sketches, rank one and six
+DOF. The payloads share one exact radius-1 line-circle Fillet intent and differ only in the accepted
+height/extent of the Horizontal-constrained line.
+
+Persistent evaluation certifies the unchanged circle Local cell
+`[4.712388980384694, 7.853981633974479]` but then narrows a nonlinear parent's search to 12.5% of
+that cell around the stored `6.010678569256539` seed. The valid current contacts
+`5.551739581930468` and `6.517367674350060` remain strictly inside the explicit cell yet fall beyond
+the narrower window. Both features therefore report `NoLocalRoot` and publish no partial output.
+Public contact reseeding independently finds those finite roots with the same circle Right/line
+Left normal sides, End/End retention, endpoint order and sweep. The upper root crosses the periodic
+parameter seam and is represented with winding one while remaining inside the same total-parameter
+cell. This deduplicates the payloads as one source-edit locality defect rather than missing branch
+choices.
+
+The focused feature-owner characterization freezes both current failures, viable same-branch roots,
+hard-valid accepted state and unchanged sketch/feature identities. The milestone-neutral 193-row
+golden remains green because its one precomposed Fillet scene undergoes no native source edit or
+nonlinear branch traversal. That explicit scope result validates owner routing in the layered
+workflow; no broad-row insertion, production repair or repair plan is part of this checkpoint.
+
 ## 4. Acceptance criteria
 
 - [x] focused codec, persistence and thin-adapter tests pass;
@@ -517,6 +552,9 @@ plan is part of this checkpoint.
   existing UAT release bytes unchanged;
 - [x] open `M70B-F003` is independently reproduced and encoded at the headless owner without a
   production change, while the unchanged 193-row golden's scope gap is explicit;
+- [x] open `M70B-F004` deduplicates both supplied line-circle payloads at the feature owner, proves
+  viable roots inside the stored branch despite `NoLocalRoot`, preserves transaction identity and
+  changes no production behavior while the golden's source-edit/branch scope gap stays explicit;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
@@ -538,6 +576,7 @@ bound-event application for extreme zero/tiny Local intervals remains a future h
 rather than being folded into this repair. Radial Normal deliberately means that the circle/arc
 centre lies on the complete affine line support. True contact-bearing normal authoring at a picked
 circumference location remains a future retained-primitive/UX decision and is not smuggled into
-M70B. `M70B-F003` remains an open Coincident-topology Fillet-authoring defect with only a focused
+M70B. `M70B-F003` remains an open Coincident-topology Fillet-authoring defect, and `M70B-F004`
+remains an open persisted line-circle branch-traversal defect. Each has only a focused
 current-behavior characterization; no correction is claimed. M71 stays deferred throughout that
 work.

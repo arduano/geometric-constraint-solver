@@ -3657,9 +3657,12 @@ Status: active during human UAT. Bounded reproduction transport and restore rema
 continue-through-failure authoring/scene oracle with 193/193 passing rows, but subsequent UAT opened
 `M70B-F003` outside that matrix: a Coincident-closed open triangle cannot author its closure Fillet
 through either the point or two-span route. The exact typed failure is encoded at the headless
-owner without a production correction or repair plan. The prior clean source and read-only
-distribution remain historical qualification evidence, not evidence that F003 is resolved. No
-completion or approval is claimed.
+owner. Two subsequent supplied line-circle Fillet payloads deduplicate as `M70B-F004`: valid roots
+remain inside the unchanged explicit circle branch after native source edits, but persisted
+evaluation searches only a narrower seed window and returns `NoLocalRoot`. The exact two-case
+failure is encoded at the feature owner. Neither open finding includes a production correction or
+repair plan. The prior clean source and read-only distribution remain historical qualification
+evidence, not evidence that F003 or F004 is resolved. No completion or approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3723,6 +3726,12 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   `WrongOperandKind` and two-span `DuplicateSupport` signatures, and prove each rejection retains
   the previous preview and feature document transactionally. Keep production code unchanged and
   record that the 193-row golden does not exercise computed-Fillet authoring.
+- [x] Encode open UAT finding `M70B-F004` at the computed-feature evaluation owner: preserve both
+  supplied payload fingerprints, independently validate their accepted native sketches, reproduce
+  `NoLocalRoot` with no partial output and prove through public contact reseeding that a finite
+  valid root remains inside the same explicit circle branch cell. Keep feature/sketch intent and
+  identities unchanged, deduplicate the payloads as one defect, change no production behavior and
+  record that the 193-row golden has no computed-Fillet source-edit/branch-traversal dimension.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
 `M70B-H2` qualification note (2026-08-11): clean source
@@ -3828,6 +3837,28 @@ authoring/preview state and empty feature document. The focused owner characteri
 defect without changing production behavior. The milestone-neutral 193-row golden remains green
 because it covers constraint/dimension authoring and scene authority, not computed-Fillet operand
 collection. No correction or repair plan is authorized in this checkpoint.
+
+UAT finding `M70B-F004` (2026-08-11), independently reproduced against source
+`b10bc6b2de478239472b08fe71727ccbb49d67ab`: payload identities
+`4752:daa87c91c75abf9f` and `4750:beda1885b15e38b5` restore through the ordinary coordinator path
+to finite, independently hard-valid six-DOF sketches. Both preserve the same radius-1 line-circle
+Fillet intent, including circle Right/line Left normals, End/End retention, FirstThenSecond/CCW arc
+state and circle Local cell `[4.712388980384694, 7.853981633974479]`, yet evaluate to
+`NoLocalRoot` with no generated arc. Public contact reseeding on each accepted sketch independently
+finds a valid root in that same cell at circle parameters `5.551739581930468` and
+`6.517367674350060`. Their displacements from the persisted `6.010678569256539` seed exceed the
+non-affine 12.5%-of-cell search window, so these are one feature-evaluation locality defect, not
+missing normal-side branches or two findings. The focused owner characterization records both
+current failures and viable branches without changing production behavior. The unchanged 193-row
+golden stays green because it has no computed-Fillet source-edit/branch-traversal row; no correction
+or repair plan is authorized in this checkpoint.
+
+`M70B-F004` test-only qualification note (2026-08-11): the exact two-row feature-owner
+characterization passes, all 42 `geosolve-sketch-features` tests pass and warnings-denied
+all-target/all-feature Clippy plus formatting pass. The milestone-neutral golden check still
+matches all 193 reviewed rows byte-for-byte. This is evidence that the layered workflow routed an
+out-of-matrix computed-feature defect to its owner; it is not a production correction, replacement
+candidate or UAT resolution.
 
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The

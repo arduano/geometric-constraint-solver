@@ -4,9 +4,9 @@
 
 Status: the bounded H1 test-only survey, complete release qualification and byte-verified UAT
 publication remain historically clean. Subsequent human UAT opened `M70B-F003` in computed-Fillet
-authoring outside the 193-row matrix. Its focused headless characterization changes no runtime
-solver, sketch, authoring or workbench behavior. Supervising-human M70B review and approval remain
-pending.
+authoring and `M70B-F004` in persisted computed-Fillet source-edit branch traversal, both outside
+the 193-row matrix. Their focused headless characterizations change no runtime solver, sketch,
+authoring or workbench behavior. Supervising-human M70B review and approval remain pending.
 
 M70B-H1 originated this matrix. M70B-H2 moves the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
@@ -137,7 +137,10 @@ timeouts and zero harness errors within its declared scope. It opened no finding
 Later human UAT opened `M70B-F003`: the matrix has no computed-Fillet authoring rows, so its green
 result cannot detect a Coincident-closed triangle closure rejected through both point and curve-pair
 collection. The compact public-Rust fixture needs no reproduction payload and is retained in the
-focused owner regression instead.
+focused owner regression instead. F004 then supplied two exact workspace payloads; the matrix's
+single unchanged precomposed Fillet scene cannot exercise their persistent nonlinear branch after
+a source edit. Both payloads are therefore retained as one focused feature-owner characterization,
+not misreported as two defects or broad passing rows.
 
 | Family | Rows | Result |
 | --- | ---: | --- |
@@ -167,8 +170,8 @@ focused owner regression instead.
 This clean result is evidence for the bounded representative matrix, not a claim that human UAT
 or every family-by-primitive Cartesian product is complete. Existing M55/M62 regressions retain
 their broader applicability and curve-family ownership; M70B-F001 and M70B-F002 retain their exact
-payload-derived regressions, and open M70B-F003 retains its focused headless characterization.
-M70B remains active until explicit supervising-human UAT approval.
+payload-derived regressions, while open M70B-F003 and M70B-F004 retain focused headless
+characterizations. M70B remains active until explicit supervising-human UAT approval.
 
 Focused F003 evidence:
 
@@ -184,6 +187,20 @@ The first command passes by asserting the exact open-defect signature and transa
 it must be converted to positive success expectations during an authorized repair. The second
 remains 193/193 green and therefore demonstrates the broad matrix's computed-feature-authoring
 blind spot rather than resolution of F003.
+
+Focused F004 evidence reconstructs payload fingerprints `4752:daa87c91c75abf9f` and
+`4750:beda1885b15e38b5` as one two-case feature-owner regression. It asserts finite independently
+hard-valid accepted sketches, exact retained branch metadata, `NoLocalRoot` with no partial output,
+explicitly re-anchored same-cell valid roots and unchanged sketch/feature identities. The unchanged
+193-row check remains green, demonstrating that the layered golden strategy routes this computed-feature
+source-edit/branch case to its narrow owner rather than pretending the broad matrix detected it.
+
+```text
+cargo test --locked -p geosolve-sketch-features --lib \
+  tests::m70b_f004_line_circle_same_branch_roots_are_rejected_beyond_seed_window \
+  -- --exact --nocapture
+./scripts/golden-authoring-scene-oracle.sh --check
+```
 
 ## Qualification ledger
 

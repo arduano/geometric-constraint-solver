@@ -1404,8 +1404,10 @@ Status: active during human UAT. The reproduction transport criteria remain qual
 `M70B-F001` and `M70B-F002` retain complete replacement evidence. The continue-through-failure
 oracle still records 193/193 passing constraint/dimension-authoring and reachable scene-authority
 rows, but subsequent UAT opened `M70B-F003` in computed-Fillet authoring, which that matrix does
-not cover. Its exact current failure is characterized at the headless owner with production code
-unchanged; human review and approval remain pending.
+not cover. Two supplied line-circle Fillet payloads subsequently opened `M70B-F004` in persisted
+computed-feature branch traversal, another absent matrix dimension. Both exact current failures
+are characterized at their headless owners with production code unchanged; human review and
+approval remain pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1456,7 +1458,8 @@ unchanged; human review and approval remain pending.
   path-oriented G2 curvature and rate-explicit Parametric-C2 derivatives, including a pre-satisfied
   unequal-rate witness. `docs/M70B_HARDENING.md` records the seed, exact commands and readable
   checklist. The historical H1 survey contains exactly 193 `PASS` rows; its scope does not include
-  computed-Fillet operand collection and therefore does not gate later `M70B-F003`.
+  computed-Fillet operand collection or source-edit branch traversal and therefore does not gate
+  later `M70B-F003` or `M70B-F004`.
 - M70B-H2 moves those exact rows and golden bytes to milestone-neutral test/fixture/driver names,
   accepts finding IDs from later active milestones, makes the clean oracle mandatory inside the
   release gate and installs the implicitly invoked repository defect-hardening skill. The original
@@ -1507,6 +1510,14 @@ path's valid preview, the curve path's pending/no-preview state and the empty fe
 is not evidence of resolution: an authorized repair
 must later convert that characterization into a positive three-corner Fillet regression before
 M70B can be approved.
+
+Open `M70B-F004` is likewise test-only. Its focused feature-owner characterization must preserve
+both supplied payload fingerprints, finite independently hard-valid accepted sketches, exact
+unchanged persistent Fillet branch metadata, the two `NoLocalRoot`/no-output states and fresh
+publicly resolved valid roots strictly inside the same certified circle cell. It must prove
+complete sketch/feature identity retention and deduplicate the two cases as one source-edit
+locality defect. It is not evidence of resolution: an authorized repair must later make both
+persisted evaluations Current without permitting a remote root hop or implicit branch change.
 
 M71 remains deferred behind M70B.
 
