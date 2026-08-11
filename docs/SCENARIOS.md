@@ -1581,8 +1581,9 @@ Every authoring and scene row runs in a separate bounded process. Semantic defec
 timeout/hard-kill exits and harness errors are written to the stable six-column TSV while later
 rows continue. The driver rejects nonzero child exits even if a TSV exists, verifies the exact 193
 case/family pairs and freezes each authoring PASS row's effective scheduled-input fingerprint.
-`scripts/m70b-hardening-oracle.sh --check` compares all rows with
-`m70b_hardening_oracle.golden.tsv`; `--require-clean` additionally rejects any non-PASS row.
+`scripts/golden-authoring-scene-oracle.sh --check` compares all rows with
+`golden_authoring_scene_oracle.golden.tsv`; `--require-clean` additionally rejects any non-PASS
+row.
 
 The initial 2026-08-11 survey is clean: all 193 rows pass, so no `M70B-F003` finding or additional
 reproduction payload is recorded. `docs/M70B_HARDENING.md` owns the full readable checklist,
@@ -1590,6 +1591,22 @@ commands, seed and limitations. This does not replace the exact M70B-F001/F002 p
 the broader M55/M62 family-by-primitive coverage or the pending supervising-human M70B UAT. Clean
 source `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` also passes the complete release gate and its fresh
 seven-file Tailscale snapshot is byte-verified.
+
+### M70B-H2 - Canonical golden defect workflow
+
+H2 keeps H1's exact 193-row family/scene inventory, fixed seed, input fingerprints, TSV schema and
+golden bytes while moving the test, fixture, process-isolated driver, environment variables and
+scene survey to milestone-neutral names. The golden remains the broad compatibility matrix rather
+than the sole home for defects. A reproduced finding first gets the smallest public owning-layer
+regression; the matrix expands only when it exposes a systemic family, branch, transform,
+operand-order, lifecycle or authority-state gap.
+
+The release gate invokes `scripts/golden-authoring-scene-oracle.sh --require-clean`. Its reviewed
+finding IDs may belong to the active milestone rather than M70B alone. The repository-local
+`.agents/skills/geosolve-harden-defect/` workflow owns intake, payload preservation, reproduction,
+layer routing, independent invariants, matrix-expansion decisions and proportional qualification.
+It excludes pure browser/CSS defects unless evidence crosses a Rust headless or scene-authority
+contract. H2 adds no residual, solver behavior, persistent schema, browser behavior or UAT scene.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

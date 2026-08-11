@@ -55,7 +55,9 @@ publication pass. Test-only M70B-H1 now freezes all sixteen resolved constraint 
 create/edit/Undo/Redo dimension families and four reachable scene-authority states in one
 continue-through-failure fixed-seed oracle. All 193 rows pass and no new finding is open. Source
 `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` has passed the complete release gate and its fresh
-seven-file Tailscale publication is byte-verified; targeted human recheck remains pending. M71 is
+seven-file Tailscale publication is byte-verified. M70B-H2 generalizes that unchanged corpus into
+the milestone-neutral mandatory golden gate and repository-local defect-hardening workflow;
+targeted human recheck remains pending. M71 is
 deferred behind M70B and remains an unauthorized candidate backlog.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
@@ -349,6 +351,7 @@ Durable milestone and cleanup records:
 - `docs/M70B_IMPLEMENTATION.md` (qualified reproduction-capsule ledger and pending human gate)
 - `docs/M70B_HARDENING.md` (clean test-only authoring/scene oracle and defect checklist)
 - `docs/M70B_UAT.md` (prepared reproduction handoff/restore scorecard; not yet approved)
+- `.agents/skills/geosolve-harden-defect/` (canonical solver/headless defect regression workflow)
 - `docs/M71_GOALS.md` (deferred post-M70B primitive backlog)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

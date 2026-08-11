@@ -6,6 +6,10 @@ Status: the bounded test-only survey, complete release qualification and fresh b
 publication are clean. It changes no runtime solver, sketch, authoring or workbench behavior.
 Supervising-human M70B review and approval remain pending.
 
+M70B-H1 originated this matrix. M70B-H2 moves the unchanged 193-row corpus and driver to
+milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
+golden bytes and SHA-256 remain unchanged.
+
 ## Scope and authority
 
 M70B-H1 exists to replace repeated human discovery of basic authoring-path failures with a
@@ -88,7 +92,7 @@ The reachable scene rows are:
 
 ## Driver and classification contract
 
-`scripts/m70b-hardening-oracle.sh` runs every authoring and scene row in its own process with a
+`scripts/golden-authoring-scene-oracle.sh` runs every authoring and scene row in its own process with a
 30-second runtime limit and a five-second hard-kill grace period. Semantic failures, panics,
 timeouts (`124` or hard-kill `137`) and harness errors are rows rather than an instruction to stop;
 later rows still run. A nonzero child exit is never accepted merely because it wrote a complete
@@ -104,22 +108,23 @@ case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint
 The three operator modes are:
 
 ```bash
-./scripts/m70b-hardening-oracle.sh --survey
-./scripts/m70b-hardening-oracle.sh --check
-./scripts/m70b-hardening-oracle.sh --require-clean
+./scripts/golden-authoring-scene-oracle.sh --survey
+./scripts/golden-authoring-scene-oracle.sh --check
+./scripts/golden-authoring-scene-oracle.sh --require-clean
 ```
 
 `--survey` always executes the complete matrix. `--check` requires exact agreement with
-`crates/geosolve-constraint-editor/tests/fixtures/m70b_hardening_oracle.golden.tsv`.
+`crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv`.
 `--require-clean` additionally fails if any recorded row is not `PASS`. Scratch output lives under
 the ignored workspace `target/` tree so a full system `/tmp` cannot turn semantic results into
-false harness failures. `GEOSOLVE_M70B_ORACLE_CASE` selects exactly one row inside each child.
+false harness failures. `GEOSOLVE_GOLDEN_ORACLE_CASE` selects exactly one row inside each child.
 Every authoring PASS fingerprint is `input-<fnv1a64>` over the effective post-scheduling variant;
 the golden therefore detects seed/scheduling drift instead of recording an uninformative `ok`.
 
 If a future row fails, preserve its family, case ID, fixed seed, minimized variant fingerprint and
-exact family command. Deduplicate common root causes, assign the next `M70B-F003+` identity and add
-a `GEOSOLVE_REPRO_V1` payload whenever the fixture can be represented as a workbench workspace.
+exact family command. Deduplicate common root causes, assign the next active-milestone `M*-F*`
+identity only after independent reproduction and add a `GEOSOLVE_REPRO_V1` payload whenever the
+fixture can be represented as a workbench workspace.
 Do not weaken an oracle or implement a production correction during the discovery phase.
 
 ## Survey result and readable defect checklist
@@ -164,12 +169,12 @@ Focused commands completed so far:
 
 ```text
 cargo test --locked -p geosolve-constraint-editor \
-  --test m70b_authoring_oracle oracle_inventory_and_tsv_schema_are_exhaustive -- --exact
-./scripts/m70b-hardening-oracle.sh --survey
-./scripts/m70b-hardening-oracle.sh --check
-./scripts/m70b-hardening-oracle.sh --require-clean
+  --test golden_authoring_oracle golden_oracle_inventory_and_tsv_schema_are_exhaustive -- --exact
+./scripts/golden-authoring-scene-oracle.sh --survey
+./scripts/golden-authoring-scene-oracle.sh --check
+./scripts/golden-authoring-scene-oracle.sh --require-clean
 cargo test --locked -p geosolve-demo-web --lib \
-  workbench::tests::m70b_scene_authority_oracle_survey -- --exact
+  workbench::tests::golden_scene_authority_oracle_survey -- --exact
 cargo test --locked -p geosolve-constraint-editor --all-features
 cargo test --locked -p geosolve-demo-web --all-features
 cargo clippy --locked -p geosolve-constraint-editor -p geosolve-demo-web \

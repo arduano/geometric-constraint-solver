@@ -5610,7 +5610,7 @@ mod tests {
     }
 
     #[test]
-    fn m70b_scene_authority_oracle_survey() {
+    fn golden_scene_authority_oracle_survey() {
         let cases: [SceneOracleCase; 4] = [
             (
                 "scene.current-computed.empty",
@@ -5629,7 +5629,7 @@ mod tests {
                 scene_oracle_rejected_historical_detached,
             ),
         ];
-        let selected = std::env::var("GEOSOLVE_M70B_ORACLE_CASE").ok();
+        let selected = std::env::var("GEOSOLVE_GOLDEN_ORACLE_CASE").ok();
         let rows = cases
             .into_iter()
             .filter(|(case_id, _)| selected.as_deref().is_none_or(|value| value == *case_id))
@@ -5637,14 +5637,14 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(
             selected.is_none() || rows.len() == 1,
-            "unknown M70B scene-authority oracle case: {}",
+            "unknown golden scene-authority oracle case: {}",
             selected.as_deref().unwrap_or_default()
         );
         let output = render_scene_oracle_results(&rows);
-        if let Some(path) = std::env::var_os("GEOSOLVE_M70B_ORACLE_OUTPUT") {
+        if let Some(path) = std::env::var_os("GEOSOLVE_GOLDEN_ORACLE_OUTPUT") {
             std::fs::write(&path, output.as_bytes()).unwrap_or_else(|error| {
                 panic!(
-                    "failed to write GEOSOLVE_M70B_ORACLE_OUTPUT {}: {error}",
+                    "failed to write GEOSOLVE_GOLDEN_ORACLE_OUTPUT {}: {error}",
                     std::path::Path::new(&path).display()
                 )
             });

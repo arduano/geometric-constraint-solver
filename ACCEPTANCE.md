@@ -1455,6 +1455,10 @@ publication evidence; human review and approval remain pending.
   path-oriented G2 curvature and rate-explicit Parametric-C2 derivatives, including a pre-satisfied
   unequal-rate witness. `docs/M70B_HARDENING.md` records the seed, exact commands and readable
   checklist. The clean survey contains exactly 193 `PASS` rows and opens no `M70B-F003` finding.
+- M70B-H2 moves those exact rows and golden bytes to milestone-neutral test/fixture/driver names,
+  accepts finding IDs from later active milestones, makes the clean oracle mandatory inside the
+  release gate and installs the implicitly invoked repository defect-hardening skill. The original
+  H1 SHA-256 and UAT bytes remain unchanged and no compatibility alias survives.
 - Circle/arc radial Normal is explicitly centre-on-complete-supporting-line incidence. Compact
   authoring ignores the arbitrary curve-click parameter, seeds the unique affine projection from
   compatible retained accepted geometry, persists SupportingLine/Interior metadata and rejects
@@ -1807,6 +1811,15 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 ## Regression and oracle policy
 
 - Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.
+- The milestone-neutral authoring/scene golden is the broad compatibility matrix, not the sole
+  home for reported defects. Each reproduced defect first receives the smallest public
+  owning-layer regression; the broad matrix expands only for a systemic missing family, branch,
+  transform, operand-order, lifecycle or authority-state axis.
+- Golden updates are reviewed input-and-classification changes, never automatic acceptance of new
+  output. `--check` freezes the recorded checklist and `--require-clean` is the release closure
+  gate.
+- `.agents/skills/geosolve-harden-defect/` is the canonical intake, ownership, regression and
+  qualification workflow for solver and headless-UX findings.
 - Differential tests compare geometric validity, rank/mobility/status and branch continuity, not identical internal coordinates or iteration counts.
 - SolveSpace and PlaneGCS are references/oracles, not dependencies.
 - An external convergence flag is never accepted without local independent validation.

@@ -2,7 +2,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(
     clippy::too_many_lines,
-    reason = "the exhaustive M70B family inventory is intentionally one reviewable oracle"
+    reason = "the exhaustive golden family inventory is intentionally one reviewable oracle"
 )]
 
 use std::cell::RefCell;
@@ -403,7 +403,7 @@ const fn fnv1a64(bytes: &[u8]) -> u64 {
 }
 
 #[test]
-fn oracle_inventory_and_tsv_schema_are_exhaustive() {
+fn golden_oracle_inventory_and_tsv_schema_are_exhaustive() {
     assert_eq!(CONSTRAINT_KINDS.len(), 16);
     assert_eq!(DIMENSION_KINDS.len(), 5);
     assert_eq!(
@@ -465,22 +465,22 @@ const fn hex_nibble(value: u8) -> u8 {
 }
 
 #[test]
-fn oracle_family_survey() {
-    let selected = env::var("GEOSOLVE_M70B_ORACLE_FAMILY");
-    let output = env::var("GEOSOLVE_M70B_ORACLE_OUTPUT");
-    let selected_case = env::var("GEOSOLVE_M70B_ORACLE_CASE");
+fn golden_oracle_family_survey() {
+    let selected = env::var("GEOSOLVE_GOLDEN_ORACLE_FAMILY");
+    let output = env::var("GEOSOLVE_GOLDEN_ORACLE_OUTPUT");
+    let selected_case = env::var("GEOSOLVE_GOLDEN_ORACLE_CASE");
     if selected.is_err() && output.is_err() && selected_case.is_err() {
         return;
     }
-    let selected = selected.expect("GEOSOLVE_M70B_ORACLE_FAMILY must accompany oracle output");
-    let output = output.expect("GEOSOLVE_M70B_ORACLE_OUTPUT must accompany oracle family");
+    let selected = selected.expect("GEOSOLVE_GOLDEN_ORACLE_FAMILY must accompany oracle output");
+    let output = output.expect("GEOSOLVE_GOLDEN_ORACLE_OUTPUT must accompany oracle family");
     let selected_case =
-        selected_case.expect("GEOSOLVE_M70B_ORACLE_CASE must accompany oracle family");
+        selected_case.expect("GEOSOLVE_GOLDEN_ORACLE_CASE must accompany oracle family");
     let family = FAMILIES
         .iter()
         .copied()
         .find(|family| family.id == selected)
-        .unwrap_or_else(|| panic!("unknown M70B oracle family: {selected}"));
+        .unwrap_or_else(|| panic!("unknown golden oracle family: {selected}"));
 
     let file = File::create(&output)
         .unwrap_or_else(|error| panic!("cannot create oracle TSV {output}: {error}"));
@@ -492,14 +492,14 @@ fn oracle_family_survey() {
     } else if let Some(index) = selected_case.strip_prefix("seed-") {
         let variant_index = index
             .parse::<u32>()
-            .unwrap_or_else(|error| panic!("invalid M70B oracle case {selected_case}: {error}"));
+            .unwrap_or_else(|error| panic!("invalid golden oracle case {selected_case}: {error}"));
         assert!(
             variant_index < SEEDED_VARIANTS,
-            "M70B oracle case index is outside 0..{SEEDED_VARIANTS}: {selected_case}"
+            "golden oracle case index is outside 0..{SEEDED_VARIANTS}: {selected_case}"
         );
         survey_seeded(family, variant_index)
     } else {
-        panic!("unknown M70B oracle case: {selected_case}");
+        panic!("unknown golden oracle case: {selected_case}");
     };
     row.write_to(&mut output).expect("write oracle row");
     output.flush().expect("flush complete oracle TSV");
@@ -2582,7 +2582,7 @@ fn validate_constraint_geometry(
         other => {
             return Err(defect(
                 "geometry.oracle",
-                format!("no M70B semantic oracle for {kind:?}: {other:?}"),
+                format!("no golden semantic oracle for {kind:?}: {other:?}"),
             ));
         }
     };

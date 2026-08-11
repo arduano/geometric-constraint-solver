@@ -6,7 +6,9 @@ Status: active after the clean `M70B-H1` test-hardening survey. The bounded tran
 remain qualified, and `M70B-F001`/`M70B-F002` retain complete replacement evidence. M70B-H1 adds a
 test-only continue-through-failure authoring/scene oracle with 193/193 passing rows and no new
 finding. Its nominated source passes the complete release gate and its fresh read-only Tailscale
-distribution is byte-verified. Supervising-human UAT and approval remain pending. This document
+distribution is byte-verified. M70B-H2 generalizes the unchanged matrix and installs the
+repository-local defect-hardening workflow without changing release behavior; its clean
+qualification is pending. Supervising-human UAT and approval remain pending. This document
 records no human pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
@@ -98,7 +100,7 @@ a second scene model.
   the detached scene fails retained-session authentication, and a current computed Fillet preview
   remains exact-stamped, composite and authenticated rather than silently falling back to native
   geometry.
-- `crates/geosolve-constraint-editor/tests/m70b_authoring_oracle.rs` directly surveys all sixteen
+- `crates/geosolve-constraint-editor/tests/golden_authoring_oracle.rs` directly surveys all sixteen
   resolved constraint families and all five dimension families through the ordinary
   `AuthoringState -> RetainedEditorCoordinator -> RetainedSketchDocumentSession` path. Its fixed
   seed and scheduled variants cover finite transforms, contact parameters, span/operand reversal,
@@ -110,14 +112,19 @@ a second scene model.
   current empty computed output, current computed Fillet output, Withheld/native fallback and
   rejected-design/detached-historical presentation. These are the reachable authority states; no
   runtime state is manufactured for the oracle.
-- `scripts/m70b-hardening-oracle.sh` isolates every authoring and scene row with a runtime/hard-kill
+- `scripts/golden-authoring-scene-oracle.sh` isolates every authoring and scene row with a runtime/hard-kill
   bound, continues through semantic defects, panics, timeouts and harness errors, rejects nonzero
   exits and wrong child identities, and implements survey/check/require-clean modes over the exact
   193-case six-column golden at
-  `crates/geosolve-constraint-editor/tests/fixtures/m70b_hardening_oracle.golden.tsv`.
+  `crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv`.
 - `docs/M70B_HARDENING.md` owns the fixed seed, commands, complete readable checklist and honest
   scope limits. `proptest` is added only as a native dev-dependency; runtime and WASM dependency
   surfaces are unchanged.
+- `.agents/skills/geosolve-harden-defect/` owns the automatically invoked layered workflow for
+  preserving a report, reproducing through public Rust boundaries, choosing the smallest test
+  owner, deciding whether the broad matrix should expand and qualifying an authorized fix.
+- `scripts/release-gate.sh` now runs the milestone-neutral oracle in `--require-clean` mode after
+  the locked all-feature workspace tests.
 
 The canonical single-line envelope is:
 
@@ -422,6 +429,20 @@ requires the exact case/family inventory. Exact results and operator commands ar
 `docs/M70B_HARDENING.md`. The complete release/publication gate now passes on the nominated H1
 source, which has replaced F002 as the current UAT candidate without changing release bytes.
 
+## 3.4 `M70B-H2` milestone-neutral golden workflow
+
+H2 changes no production code or golden semantics. It moves H1's test, fixture, aggregate driver,
+environment variables and scene survey to stable milestone-neutral names, removes the old aliases
+and broadens reviewed finding IDs to later active milestones. All 193 case/family pairs, the fixed
+seed, scheduled variants, input fingerprints, classifications and golden bytes remain exact.
+
+The golden remains a broad authoring/scene compatibility matrix. The checked-in
+`$geosolve-harden-defect` skill requires each reproduced defect to receive the smallest public
+owning-layer regression first, and expands the matrix only for a systemic missing axis. Pure
+browser/CSS findings remain outside that workflow unless they cross a Rust adapter contract. The
+complete release gate now includes the clean matrix, while the existing H1 UAT distribution stays
+the product candidate because H2 changes no release input.
+
 ## 4. Acceptance criteria
 
 - [x] focused codec, persistence and thin-adapter tests pass;
@@ -441,6 +462,9 @@ source, which has replaced F002 as the current UAT candidate without changing re
   production fix;
 - [x] the M70B-H1 source passes the complete integrated release gate and its fresh seven-file
   distribution is frozen and byte-verified over Tailscale;
+- [ ] M70B-H2 preserves the exact H1 golden SHA-256, passes the neutral focused/clean oracle and
+  full release gate, validates and independently forward-tests the repo-local skill, and leaves the
+  existing UAT release bytes unchanged;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 

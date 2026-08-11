@@ -17,6 +17,8 @@ Read `START_HERE.md`, `ARCHITECTURE.md`, `PLAN.md`, `ACCEPTANCE.md`, and `docs/S
 ## Work style
 
 - Implement milestones in `PLAN.md` in order.
+- Use `$geosolve-harden-defect` for every reported solver, sketch/linkage, or
+  headless-interaction defect and for any golden-oracle expansion.
 - Do not broaden the primitive/constraint set until the previous milestone's acceptance tests pass.
 - Keep public APIs small. Prefer an internal prototype over premature generic traits.
 - Every residual implementation needs a finite-difference Jacobian test and a structured human-readable audit descriptor.

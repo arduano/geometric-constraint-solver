@@ -81,7 +81,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   resolved constraint/dimension family through the existing headless/retained boundaries and
   directly inventories the four reachable scene-authority states. Its 193-row fixed-seed golden,
   complete release gate and byte-verified replacement publication are clean; targeted human
-  recheck remains pending.
+  recheck remains pending. M70B-H2 gives the unchanged matrix milestone-neutral names, makes its
+  clean mode a mandatory release step and installs the repo-local layered defect workflow; it adds
+  no runtime layer.
   M71 is deferred behind M70B and remains an unauthorized candidate backlog.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -476,6 +478,13 @@ authoring and scene row in its own bounded process, records semantic failures, p
 timeouts and harness errors without stopping later rows, verifies the exact case/family inventory
 and compares stable effective-input fingerprints with a checked six-column golden. It adds no
 runtime dependency, equation, inference policy, persistence field, scene state or browser harness.
+
+M70B-H2 leaves those semantics and golden bytes intact while giving the test, fixture, aggregate
+driver, environment variables and scene survey milestone-neutral names. The complete release gate
+now requires the clean matrix. `.agents/skills/geosolve-harden-defect/` defines the owner-first
+defect workflow: exact regressions remain with the narrowest public Rust owner, and this broad
+matrix expands only for a systemic missing dimension. This remains repository/test infrastructure,
+not another product layer.
 
 M64 removes the completed-review harness that historically served M53-M63. A crate-private sample
 catalog now owns only stable sample keys, titles, purpose grouping and public fixture selection.

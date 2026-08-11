@@ -49,8 +49,10 @@ compressed text and restored atomically through its existing validation path. Th
 payload opened `M70B-F001`; its focused branch-bound correction and exact graph regression pass,
 and `M70B-F002` has complete radial-Normal/scene-authority replacement evidence and publication.
 The clean test-only M70B-H1 survey now freezes 193/193 authoring/scene rows, and its nominated
-source has complete release-gate and byte-verified replacement-publication evidence. Targeted
-human recheck and approval remain pending. M71 is deferred behind M70B and remains an unauthorized
+source has complete release-gate and byte-verified replacement-publication evidence. M70B-H2 is
+generalizing that unchanged matrix into the mandatory milestone-neutral golden gate and
+repository-local defect workflow. Targeted human recheck and approval remain pending. M71 is
+deferred behind M70B and remains an unauthorized
 candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
@@ -3707,6 +3709,12 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
 - [x] Re-pass the complete release gate on the clean M70B-H1 source, freeze a fresh seven-file UAT
   snapshot, publish it through Tailscale and byte-verify the served distribution before resuming
   human review.
+- [ ] Complete `M70B-H2` as a test-infrastructure-only generalization: move the unchanged 193-row
+  matrix, golden and isolated driver to milestone-neutral names; accept future active-milestone
+  finding IDs; make `--require-clean` mandatory in the complete release gate; and install the
+  automatically invoked repository-local `$geosolve-harden-defect` workflow. Preserve the exact
+  H1 seed, rows, fingerprints, golden SHA-256 and current UAT bytes, with no legacy aliases or
+  production behavior change.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
 `M70B-H1` qualification/publication note (2026-08-11): nominated source

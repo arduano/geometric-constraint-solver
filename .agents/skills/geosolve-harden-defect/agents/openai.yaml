@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+interface:
+  display_name: "Harden GeoSolve Defect"
+  short_description: "Turn solver and headless UX defects into regressions"
+  default_prompt: "Use $geosolve-harden-defect to reproduce, classify, and harden this GeoSolve defect."
+
+policy:
+  allow_implicit_invocation: true

@@ -16,6 +16,7 @@ cargo fmt --all -- --check
 git diff --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-features
+./scripts/golden-authoring-scene-oracle.sh --require-clean
 env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
   cargo test --locked -p geosolve-constraint-editor --test m70_transition_parity \
   --target wasm32-unknown-unknown

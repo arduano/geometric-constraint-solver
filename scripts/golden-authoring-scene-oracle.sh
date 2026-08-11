@@ -4,13 +4,13 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-golden="$root/crates/geosolve-constraint-editor/tests/fixtures/m70b_hardening_oracle.golden.tsv"
+golden="$root/crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv"
 header=$'case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint'
 timeout_seconds=30
 
 usage() {
   printf '%s\n' \
-    'usage: scripts/m70b-hardening-oracle.sh --survey|--check|--require-clean' >&2
+    'usage: scripts/golden-authoring-scene-oracle.sh --survey|--check|--require-clean' >&2
 }
 
 if [[ $# -ne 1 ]]; then
@@ -26,7 +26,7 @@ case "$mode" in
     ;;
 esac
 
-scratch_parent="$root/target/m70b-hardening"
+scratch_parent="$root/target/golden-authoring-scene-oracle"
 mkdir -p "$scratch_parent"
 scratch="$(mktemp -d "$scratch_parent/run.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
@@ -121,7 +121,7 @@ classify_failed_process() {
 cd "$root"
 preflight_log="$scratch/preflight.log"
 if ! timeout -k 5s 300s cargo test --locked -p geosolve-constraint-editor \
-  --test m70b_authoring_oracle oracle_inventory_and_tsv_schema_are_exhaustive \
+  --test golden_authoring_oracle golden_oracle_inventory_and_tsv_schema_are_exhaustive \
   -- --exact >"$preflight_log" 2>&1; then
   printf '%s\n' 'authoring-oracle inventory/compile preflight failed' >&2
   cat "$preflight_log" >&2
@@ -142,11 +142,11 @@ for family in "${families[@]}"; do
     log="$scratch/$stem.log"
     set +e
     timeout -k 5s "${timeout_seconds}s" env \
-      GEOSOLVE_M70B_ORACLE_FAMILY="$family" \
-      GEOSOLVE_M70B_ORACLE_CASE="$oracle_case" \
-      GEOSOLVE_M70B_ORACLE_OUTPUT="$output" \
+      GEOSOLVE_GOLDEN_ORACLE_FAMILY="$family" \
+      GEOSOLVE_GOLDEN_ORACLE_CASE="$oracle_case" \
+      GEOSOLVE_GOLDEN_ORACLE_OUTPUT="$output" \
       cargo test --locked -p geosolve-constraint-editor \
-        --test m70b_authoring_oracle oracle_family_survey -- --exact --nocapture \
+        --test golden_authoring_oracle golden_oracle_family_survey -- --exact --nocapture \
         >"$log" 2>&1
     exit_code=$?
     set -e
@@ -164,10 +164,10 @@ for case_id in "${scene_cases[@]}"; do
   scene_log="$scratch/$stem.log"
   set +e
   timeout -k 5s "${timeout_seconds}s" env \
-    GEOSOLVE_M70B_ORACLE_CASE="$case_id" \
-    GEOSOLVE_M70B_ORACLE_OUTPUT="$scene_output" \
+    GEOSOLVE_GOLDEN_ORACLE_CASE="$case_id" \
+    GEOSOLVE_GOLDEN_ORACLE_OUTPUT="$scene_output" \
     cargo test --locked -p geosolve-demo-web --lib \
-      workbench::tests::m70b_scene_authority_oracle_survey \
+      workbench::tests::golden_scene_authority_oracle_survey \
       -- --exact --nocapture >"$scene_log" 2>&1
   scene_exit_code=$?
   set -e
@@ -236,7 +236,7 @@ if [[ -f "$golden" ]]; then
     require_input_fingerprint && $3 == "PASS" &&
       !(($2 == "scene-authority" && $6 == "ok") ||
         ($2 != "scene-authority" && $6 ~ /^input-[[:xdigit:]]+$/ && length($6) == 22)) { exit 1 }
-    $3 != "PASS" && ($4 !~ /^M70B-F[0-9][0-9][0-9]+$/ || $5 == "-" || $5 == "" || $6 == "" || $6 == "ok") { exit 1 }
+    $3 != "PASS" && ($4 !~ /^M[0-9][0-9]*[A-Z]*-F[0-9][0-9][0-9]+$/ || $5 == "-" || $5 == "" || $6 == "" || $6 == "ok") { exit 1 }
   ' "$golden"; then
     printf '%s\n' 'oracle golden contains an unclassified or malformed row' >&2
     exit 1
