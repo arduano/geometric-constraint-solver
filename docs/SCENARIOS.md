@@ -1287,8 +1287,9 @@ ordinary editable auto-constraint drafting playground; implementation and focuse
 qualification, integrated release qualification, frozen replacement-candidate publication and
 served-byte verification are complete, and the scoped human UAT was approved on 2026-08-10. M70B
 is the active bounded reproduction-capsule cut. It adds a workbench-global copy/paste overlay rather
-than a protected sample fixture; direct/release qualification and frozen publication pass, while
-focused human UAT remains pending. M71 is deferred behind it.
+than a protected sample fixture; F001/F002 replacement qualification/publication pass and the
+test-only H1 authoring/scene survey is clean at 193/193 rows. Fresh release publication and focused
+human UAT remain pending. M71 is deferred behind it.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1551,6 +1552,37 @@ the stale scene cannot emit inferred construction. No attempted or invalid geome
 and no retained-session authority rule is weakened. The companion current-computed row freezes the
 opposite invariant: exact-stamped Fillet output remains composite and authenticated, and a failed
 current composition cannot silently fall back to an authoritative native scene.
+
+### M70B-H1 - Continue-through-failure authoring and scene oracle
+
+This test-only survey turns the complete UI-exposed authoring family inventory into a repeatable
+defect checklist without adding a sample, browser harness or runtime behavior. Every one of the
+sixteen `ResolvedConstraintKind` families and five `DimensionKind` families has one exact
+deterministic witness plus eight variants derived from fixed base seed
+`aa6ab88cc8aa4878c51d78db3d1b993355406fce8c6c42353a850c05696c2edd`.
+
+The eight indices explicitly schedule span reversal, compatible operand-order reversal and
+perturbed recovery while seeded values vary finite translation, scale, rotation and contact
+parameter. Tangency exercises both orientations, Equal-curvature cycles every relation choice and
+endpoint continuity cycles G0/G1/G2/rate-explicit parametric C2. Dimension cases create one
+Driving dimension, edit its display target, Undo and Redo. A passing accepted row requires the
+exact resolved/stored definition and branch metadata, finite current publication, independent hard
+validation at normalized residual at most `1e-9` and a public geometric postcondition.
+
+Four additional rows cover the actual scene-authority state space: current empty computed output,
+current computed Fillet output, current native fallback under Withheld computed output and detached
+historical accepted presentation beneath rejected design. A fresh coordinator reports a current
+empty computed snapshot, so the oracle does not fabricate an unreachable native `Absent` row.
+
+Each family runs in a separate bounded process and each case catches unexpected panic. Semantic
+defects, panics, timeouts and harness errors are written to the stable six-column TSV while later
+families continue. `scripts/m70b-hardening-oracle.sh --check` compares all 193 rows with
+`m70b_hardening_oracle.golden.tsv`; `--require-clean` additionally rejects any non-PASS row.
+
+The initial 2026-08-11 survey is clean: all 193 rows pass, so no `M70B-F003` finding or additional
+reproduction payload is recorded. `docs/M70B_HARDENING.md` owns the full readable checklist,
+commands, seed and limitations. This does not replace the exact M70B-F001/F002 payload regressions,
+the broader M55/M62 family-by-primitive coverage or the pending supervising-human M70B UAT.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

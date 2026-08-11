@@ -2,11 +2,11 @@
 
 # M70B implementation — Bounded workspace reproduction capsules
 
-Status: active after `M70B-F002`. The bounded transport and restore remain qualified, and
-`M70B-F001` retains complete replacement evidence. The second human-supplied payload finding has a
-direct headless-authoring correction, accepted-scene fallback regression and complete replacement
-qualification/publication; supervising-human UAT and approval remain pending. This document records
-no human pass or milestone closure.
+Status: active after the clean `M70B-H1` test-hardening survey. The bounded transport and restore
+remain qualified, and `M70B-F001`/`M70B-F002` retain complete replacement evidence. M70B-H1 adds a
+test-only continue-through-failure authoring/scene oracle with 193/193 passing rows and no new
+finding. Fresh release qualification/publication, supervising-human UAT and approval remain
+pending. This document records no human pass or milestone closure.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
 transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
@@ -87,6 +87,23 @@ a second scene model.
   the detached scene fails retained-session authentication, and a current computed Fillet preview
   remains exact-stamped, composite and authenticated rather than silently falling back to native
   geometry.
+- `crates/geosolve-constraint-editor/tests/m70b_authoring_oracle.rs` directly surveys all sixteen
+  resolved constraint families and all five dimension families through the ordinary
+  `AuthoringState -> RetainedEditorCoordinator -> RetainedSketchDocumentSession` path. Its fixed
+  seed and scheduled variants cover finite transforms, contact parameters, span/operand reversal,
+  perturbed recovery and explicit tangency/curvature/continuity choices. Dimension rows include
+  target edit, Undo and Redo.
+- `crates/geosolve-demo-web/src/workbench/mod.rs` also owns four test-only complete-scene rows for
+  current empty computed output, current computed Fillet output, Withheld/native fallback and
+  rejected-design/detached-historical presentation. These are the reachable authority states; no
+  runtime state is manufactured for the oracle.
+- `scripts/m70b-hardening-oracle.sh` isolates every family with a runtime bound, continues through
+  semantic defects, panics, timeouts and harness errors and implements survey/check/require-clean
+  modes over the six-column golden at
+  `crates/geosolve-constraint-editor/tests/fixtures/m70b_hardening_oracle.golden.tsv`.
+- `docs/M70B_HARDENING.md` owns the fixed seed, commands, complete readable checklist and honest
+  scope limits. `proptest` is added only as a native dev-dependency; runtime and WASM dependency
+  surfaces are unchanged.
 
 The canonical single-line envelope is:
 
@@ -365,6 +382,27 @@ puts one attempted point at `(40,40)` while its accepted coordinate stays `(0,0)
 complete scene point/curve vectors and requires visible problem-marker markup. Attempted geometry
 is never substituted.
 
+## 3.3 `M70B-H1` test hardening and defect survey
+
+M70B-H1 changes no production code. The authoring oracle enumerates the exhaustive closed
+`ResolvedConstraintKind`/`DimensionKind` inventories, which makes a future enum addition a compile
+and inventory failure until it receives a case. One deterministic row checks compatible
+preselection against repeated-pick resolution; eight fixed-seed rows schedule every combination of
+span reversal, perturbed solver recovery and operand reversal. Public domain APIs, not copied
+residual equations, check exact persistent definitions, explicit contact/continuity options,
+finite accepted geometry, independent hard validity and geometric postconditions.
+
+The scene oracle covers current empty computed output, current computed Fillet output,
+Withheld/native fallback and detached historical accepted presentation beneath rejected design.
+The initial proposal included an `Absent` row, but ordinary coordinator refresh immediately creates
+a current empty computed snapshot. The final matrix therefore tests reachable state rather than
+weakening or changing runtime code to manufacture a fifth row.
+
+The integrated survey contains exactly 193 rows. All pass under the fixed seed, so the readable
+defect checklist is empty and no `M70B-F003` or payload was created. Exact results and operator
+commands are frozen in `docs/M70B_HARDENING.md`; the full release/publication gate is still required
+before this test-only source replaces the published UAT candidate.
+
 ## 4. Acceptance criteria
 
 - [x] focused codec, persistence and thin-adapter tests pass;
@@ -379,6 +417,11 @@ is never substituted.
   invalid-request and scene-authority regressions pass with no solver or authority weakening;
 - [x] the `M70B-F002` source passes the complete integrated release gate;
 - [x] its replacement distribution is frozen and byte-verified over Tailscale;
+- [x] M70B-H1 surveys all 16 relation and five dimension families plus four reachable scene states,
+  freezes exactly 193 classified rows and passes both golden check and clean-oracle modes without a
+  production fix;
+- [ ] the M70B-H1 source passes the complete integrated release gate and its fresh seven-file
+  distribution is frozen and byte-verified over Tailscale;
 - [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
 - [ ] the supervising human explicitly approves M70B.
 
@@ -391,8 +434,9 @@ payloads remain unsuitable for chat even when below the defensive limits; the UI
 size honestly rather than silently dropping content.
 
 The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, file picker,
-download flow, raw browser-storage handoff and browser E2E remain retired. M70B cannot close until
-the focused human UAT and targeted `M70B-F001`/`M70B-F002` rechecks are explicitly approved. A
+download flow, raw browser-storage handoff and browser E2E remain retired. The immediate blocker is
+fresh release qualification/publication of the clean H1 source. M70B cannot close until the focused
+human UAT and targeted `M70B-F001`/`M70B-F002` rechecks are explicitly approved. A
 Local interval whose semantic endpoint is exactly zero has no valid solution at that endpoint;
 exact edge pressure can therefore still fail closed before the one-ULP effective endpoint becomes
 active. Ordinary near-edge contacts and the supplied positive-bound payload pass, but exact

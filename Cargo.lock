@@ -585,6 +585,7 @@ version = "0.2.0"
 dependencies = [
  "geosolve-sketch",
  "geosolve-sketch-features",
+ "proptest",
  "thiserror 2.0.18",
  "wasm-bindgen-test",
 ]

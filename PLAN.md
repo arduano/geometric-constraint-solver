@@ -47,9 +47,10 @@ completes the approved ADR 0034 headless auto-constraint drafting milestone, inc
 active bounded reproduction-capsule human-UAT candidate: complete workspace v5 state can be copied as
 compressed text and restored atomically through its existing validation path. The first supplied
 payload opened `M70B-F001`; its focused branch-bound correction and exact graph regression pass,
-along with replacement release qualification, frozen publication and served-byte verification;
-targeted human recheck remains pending. M71 is deferred behind M70B and remains an unauthorized
-candidate backlog. M66's
+and `M70B-F002` has complete radial-Normal/scene-authority replacement evidence and publication.
+The clean test-only M70B-H1 survey now freezes 193/193 authoring/scene rows; fresh release
+publication and targeted human recheck remain pending. M71 is deferred behind M70B and remains an
+unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3648,11 +3649,11 @@ every scripted step. M70 is closed.
 
 ### M70B
 
-Status: active after `M70B-F002`. Bounded reproduction transport and restore remain qualified;
-`M70B-F001` has complete replacement evidence, while the second human payload finding now has a
-direct headless-authoring correction, accepted-scene authority matrix and fully qualified,
-byte-verified replacement publication. Focused human UAT remains pending. No completion or
-approval is claimed.
+Status: active after the clean `M70B-H1` test-hardening survey. Bounded reproduction transport and
+restore remain qualified; `M70B-F001` and `M70B-F002` retain complete replacement evidence.
+M70B-H1 now freezes a continue-through-failure authoring/scene oracle with 193/193 passing rows and
+no new finding. Fresh release qualification/publication and focused human UAT remain pending. No
+completion or approval is claimed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3693,6 +3694,17 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   gates on the `M70B-F002` nominated source.
 - [x] Freeze and publish that candidate through the usual Tailscale UAT path and byte-verify its
   distribution.
+- [x] Complete `M70B-H1` as a test-only defect-discovery phase: exercise all sixteen resolved
+  constraint families, all five dimension families through creation, one target edit, Undo and
+  Redo, and the four reachable current/withheld/rejected scene-authority states. Run one hostile
+  deterministic witness plus eight fixed-seed translation/scale/rotation/contact/order/branch and
+  perturbed-recovery variants per authoring family; isolate rows and continue after semantic
+  defects, panics or timeouts. Freeze all 193 classifications in one machine-readable golden and a
+  readable checklist without changing production code. `--check` and `--require-clean` pass with
+  193/193 rows clean; no `M70B-F003` finding is opened.
+- [ ] Re-pass the complete release gate on the clean M70B-H1 source, freeze a fresh seven-file UAT
+  snapshot, publish it through Tailscale and byte-verify the served distribution before resuming
+  human review.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
 Qualification/publication note (2026-08-10): source
@@ -3764,7 +3776,7 @@ browser adapter duplicates or evaluates no solver equation itself; reconstructio
 ordinary Rust domain certification path before swap. M70B closes only after direct qualification
 and its own explicit human UAT. Objective UAT solver/domain findings require owning-layer
 regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTATION.md`,
-`docs/M70B_UAT.md` and `docs/SCENARIOS.md` own the detailed ledger.
+`docs/M70B_HARDENING.md`, `docs/M70B_UAT.md` and `docs/SCENARIOS.md` own the detailed ledger.
 
 ### M71
 

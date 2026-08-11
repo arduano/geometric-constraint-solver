@@ -160,8 +160,9 @@ editable-sample cleanup, approved reduced-scope M65 predictable dragging, approv
 computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
 M68 headless Fillet direct manipulation under ADR 0032, approved M69 Profile/Construction
 semantics under ADR 0033 and approved M70 headless auto-constraint drafting under ADR 0034. M70B
-has a fully qualified and byte-verified replacement after `M70B-F001`; targeted human recheck and
-approval remain pending. M71 remains deferred behind it.
+has fully qualified and byte-verified F001/F002 replacements plus a clean 193-row test-only H1
+oracle; fresh release publication, targeted human recheck and approval remain pending. M71 remains
+deferred behind it.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1399,10 +1400,11 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 
 ## M70B acceptance: workspace reproduction handoff
 
-Status: active after `M70B-F002`. The reproduction transport criteria remain qualified;
-`M70B-F001` has complete replacement evidence, and `M70B-F002` has direct headless-authoring and
-accepted-scene fallback regressions plus a fully qualified, byte-verified replacement publication.
-Human review and approval remain pending.
+Status: active after the clean `M70B-H1` test-hardening survey. The reproduction transport criteria
+remain qualified; `M70B-F001` and `M70B-F002` retain complete replacement evidence. The new
+continue-through-failure oracle records 193/193 passing authoring and reachable scene-authority
+rows with no new finding. Fresh qualification/publication, human review and approval remain
+pending.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1432,6 +1434,23 @@ Human review and approval remain pending.
   strict malformed/corrupt/oversized rejection, complete computed-Fillet v5 round-trip and atomic
   retention after transport, workspace and coordinator failures. The same codec path must compile
   for WASM. No browser E2E or legacy route returns.
+- The manually administered M70B-H1 oracle exhaustively inventories all sixteen
+  `ResolvedConstraintKind` and five `DimensionKind` families. Every family has one deterministic
+  case and eight fixed-seed variants that schedule span reversal, operand reversal and
+  perturbed-recovery geometry while varying finite transform/contact input. Dimension variants
+  include creation, one target edit, Undo and Redo. Each accepted row independently verifies
+  finite current publication, hard validity and normalized hard residual at most `1e-9`, exact
+  typed definition/branch metadata and a public geometric postcondition.
+- The same oracle covers only the four actually reachable scene-authority states: current empty
+  computed, current computed Fillet, current native fallback while computed output is Withheld and
+  detached historical accepted presentation beneath rejected design. It verifies visible problem
+  metadata and exact authentication allow/deny behavior without manufacturing an unreachable
+  `ComputedSceneState::Absent` coordinator.
+- The oracle runs each family with bounded isolation and continues after semantic defects, panics,
+  timeouts or harness errors. Its stable six-column TSV has no duplicate/unclassified row; the
+  checked golden must match exactly and `--require-clean` must fail if any row is not `PASS`.
+  `docs/M70B_HARDENING.md` records the fixed seed, exact commands and readable checklist. The clean
+  initial survey contains exactly 193 `PASS` rows and opens no `M70B-F003` finding.
 - Circle/arc radial Normal is explicitly centre-on-complete-supporting-line incidence. Compact
   authoring ignores the arbitrary curve-click parameter, seeds the unique affine projection from
   compatible retained accepted geometry, persists SupportingLine/Interior metadata and rejects
@@ -1445,7 +1464,8 @@ Human review and approval remain pending.
   geometry remains non-authoritative and unpainted.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
   benchmark/licence/package checks, release Trunk, single-workbench inventory and Git hygiene pass
-  on one nominated source. Its frozen distribution is published and byte-verified before UAT.
+  on one nominated source. After any test-hardening cut, its fresh frozen distribution is
+  published and byte-verified before UAT.
 - The supervising human completes and explicitly approves every area in `docs/M70B_UAT.md`.
 
 M70B adds no residual, solver state, sketch constraint, branch kind, canonical sketch schema,

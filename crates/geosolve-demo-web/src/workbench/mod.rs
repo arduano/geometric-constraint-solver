@@ -4949,12 +4949,13 @@ pub(crate) mod wasm {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ConstraintIntent,
-        EditorHoverState, FeatureAuthoringCandidate, FeatureAuthoringOptions,
-        FeatureAuthoringOutcome, FeatureAuthoringPreviewMetadata, FeatureAuthoringState,
-        FeatureAuthoringTool, GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility,
-        Modifiers, PickTolerance, PointerInput, RetainedEditorCoordinator, SceneCurveOrigin,
-        ScreenPoint, SelectionItem, Viewport,
+        AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ComputedSceneState,
+        ConstraintIntent, EditorHoverState, EditorProblemScope, EditorScene,
+        FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
+        GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility, Modifiers, PickTolerance,
+        PointerInput, RetainedEditorCoordinator, SceneCurveOrigin, ScreenPoint, SelectionItem,
+        Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -5178,6 +5179,469 @@ mod tests {
         assert!(
             scene.with_retained_session(source).is_ok(),
             "a current exact-stamped composite scene retains inference authority"
+        );
+    }
+
+    type SceneOracleCheck = Result<(), &'static str>;
+
+    #[derive(Clone, Copy)]
+    struct SceneOracleResult {
+        case_id: &'static str,
+        status: &'static str,
+        failure_class: &'static str,
+        fingerprint: &'static str,
+    }
+
+    fn scene_oracle_require(condition: bool, fingerprint: &'static str) -> SceneOracleCheck {
+        if condition { Ok(()) } else { Err(fingerprint) }
+    }
+
+    fn scene_oracle_current_native_expected(
+        coordinator: &RetainedEditorCoordinator,
+        viewport: Viewport,
+    ) -> Result<EditorScene, &'static str> {
+        let source = coordinator
+            .visible_preview_session()
+            .unwrap_or(coordinator.session());
+        let accepted = source
+            .accepted_state_for_current_input()
+            .ok_or("current-accepted-state-missing")?;
+        EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.25,
+        )
+        .map_err(|_| "native-scene-construction-failed")?
+        .with_retained_session(source)
+        .map_err(|_| "native-scene-authentication-failed")
+    }
+
+    fn scene_oracle_markup(
+        coordinator: &RetainedEditorCoordinator,
+        scene: &EditorScene,
+        viewport: Viewport,
+    ) -> String {
+        let source = coordinator
+            .visible_preview_session()
+            .unwrap_or(coordinator.session());
+        let computed_problems = coordinator.computed_feature_problems();
+        let current_problem = coordinator.current_problem_metadata();
+        super::scene::svg_markup_with_computed_context(
+            Some(scene),
+            source.accepted_state(),
+            &computed_problems,
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            current_problem.as_ref(),
+            None,
+            viewport,
+        )
+    }
+
+    fn scene_oracle_current_computed_empty() -> SceneOracleCheck {
+        let (coordinator, _, _) = grouped_fillet_fixture();
+        let (expected_input, snapshot) = match coordinator.computed_scene_state() {
+            ComputedSceneState::Current { expected, snapshot } => (*expected, snapshot),
+            ComputedSceneState::Withheld | ComputedSceneState::Absent => {
+                return Err("expected-current-empty-computed-state");
+            }
+        };
+        let source = coordinator.session();
+        let accepted = source
+            .accepted_state_for_current_input()
+            .ok_or("current-accepted-state-missing")?;
+        scene_oracle_require(
+            accepted
+                .document()
+                .to_canonical_json()
+                .map_err(|_| "accepted-json-failed")?
+                == source
+                    .design_document()
+                    .to_canonical_json()
+                    .map_err(|_| "design-json-failed")?,
+            "accepted-design-geometry-diverged",
+        )?;
+
+        let viewport = super::scene::viewport();
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+            .ok_or("compose-returned-no-scene")?;
+        let accepted_input = source
+            .accepted_prepared_input()
+            .ok_or("empty-computed-accepted-input-missing")?;
+        let mut expected = EditorScene::from_accepted_with_computed(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            &accepted_input,
+            &expected_input,
+            snapshot,
+            viewport,
+            0.25,
+        )
+        .map_err(|_| "expected-empty-composite-construction-failed")?;
+        coordinator
+            .populate_computed_fillet_affordances(&mut expected, &[], 0.25)
+            .map_err(|_| "expected-empty-composite-affordances-failed")?;
+        let expected = expected
+            .with_retained_session(source)
+            .map_err(|_| "expected-empty-composite-authentication-failed")?;
+        scene_oracle_require(scene == expected, "empty-composite-provenance-mismatch")?;
+        scene_oracle_require(
+            scene.computed_input.as_ref() == Some(&expected_input)
+                && scene.computed_curves.is_empty()
+                && scene.fillet_affordances.is_empty()
+                && scene
+                    .curves
+                    .iter()
+                    .all(|curve| curve.origin == SceneCurveOrigin::Native),
+            "empty-composite-leaked-generated-geometry",
+        )?;
+        scene_oracle_require(
+            scene.clone().with_retained_session(source).is_ok(),
+            "current-empty-computed-scene-lost-authentication",
+        )?;
+        scene_oracle_require(
+            coordinator.current_problem_metadata().is_none()
+                && coordinator.computed_feature_problems().is_empty(),
+            "clean-native-scene-published-problem",
+        )?;
+        let markup = scene_oracle_markup(&coordinator, &scene, viewport);
+        scene_oracle_require(
+            markup.contains("data-scene-provenance=\"accepted\"")
+                && !markup.contains("data-problem-marker="),
+            "clean-empty-computed-scene-markup-provenance",
+        )
+    }
+
+    fn scene_oracle_current_native_withheld() -> SceneOracleCheck {
+        let (base, _, _) = grouped_fillet_fixture();
+        let features = base.feature_document().clone();
+        let coordinator = RetainedEditorCoordinator::with_features_and_high_water(
+            base.session().clone(),
+            features.clone(),
+            features.lifecycle_high_water(),
+            geosolve_sketch_features::ComputedEvaluationAllocatorHighWater {
+                next_revision: geosolve_sketch_features::ComputedEvaluationRevision::from_raw(
+                    u64::MAX,
+                ),
+            },
+        )
+        .map_err(|_| "withheld-coordinator-construction-failed")?;
+        scene_oracle_require(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some(),
+            "withheld-current-accepted-state-missing",
+        )?;
+        scene_oracle_require(
+            matches!(
+                coordinator.computed_scene_state(),
+                ComputedSceneState::Withheld
+            ),
+            "expected-withheld-computed-state",
+        )?;
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .ok_or("withheld-current-accepted-state-missing")?;
+        scene_oracle_require(
+            accepted
+                .document()
+                .to_canonical_json()
+                .map_err(|_| "accepted-json-failed")?
+                == coordinator
+                    .session()
+                    .design_document()
+                    .to_canonical_json()
+                    .map_err(|_| "design-json-failed")?,
+            "withheld-accepted-design-geometry-diverged",
+        )?;
+
+        let viewport = super::scene::viewport();
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+            .ok_or("withheld-compose-returned-no-scene")?;
+        let expected = scene_oracle_current_native_expected(&coordinator, viewport)?;
+        scene_oracle_require(scene == expected, "withheld-native-fallback-mismatch")?;
+        scene_oracle_require(
+            scene
+                .clone()
+                .with_retained_session(coordinator.session())
+                .is_ok(),
+            "withheld-current-native-lost-authentication",
+        )?;
+        scene_oracle_require(
+            scene.computed_input.is_none()
+                && scene.computed_curves.is_empty()
+                && scene.fillet_affordances.is_empty(),
+            "withheld-scene-leaked-computed-geometry",
+        )?;
+        let problems = coordinator.computed_feature_problems();
+        scene_oracle_require(
+            coordinator.current_problem_metadata().is_none()
+                && matches!(problems.as_slice(), [problem]
+                    if problem.scope == EditorProblemScope::Global
+                        && problem.message.contains("identity space is exhausted")),
+            "withheld-global-problem-metadata-missing",
+        )?;
+        let markup = scene_oracle_markup(&coordinator, &scene, viewport);
+        scene_oracle_require(
+            markup.contains("data-scene-provenance=\"accepted\"")
+                && markup.contains("data-computed-problems=\"1\"")
+                && markup.contains("class=\"wb-error-marker computed global\"")
+                && markup.contains("data-feature-id=\"global\""),
+            "withheld-global-problem-not-visible",
+        )
+    }
+
+    fn scene_oracle_current_computed_fillet() -> SceneOracleCheck {
+        let (mut coordinator, _, points) = grouped_fillet_fixture();
+        let mut state = FeatureAuthoringState::default();
+        let (_, metadata) =
+            prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
+        let (expected_input, snapshot) = match coordinator.computed_scene_state() {
+            ComputedSceneState::Current { expected, snapshot } => (*expected, snapshot),
+            ComputedSceneState::Withheld | ComputedSceneState::Absent => {
+                return Err("expected-current-computed-state");
+            }
+        };
+        let source = coordinator
+            .visible_preview_session()
+            .unwrap_or(coordinator.session());
+        let accepted = source
+            .accepted_state_for_current_input()
+            .ok_or("computed-current-accepted-state-missing")?;
+        scene_oracle_require(
+            accepted
+                .document()
+                .to_canonical_json()
+                .map_err(|_| "accepted-json-failed")?
+                == coordinator
+                    .session()
+                    .design_document()
+                    .to_canonical_json()
+                    .map_err(|_| "design-json-failed")?,
+            "computed-accepted-design-geometry-diverged",
+        )?;
+
+        let viewport = super::scene::viewport();
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+            .ok_or("computed-compose-returned-no-scene")?;
+        let accepted_input = source
+            .accepted_prepared_input()
+            .ok_or("computed-accepted-input-missing")?;
+        let mut expected = EditorScene::from_accepted_with_computed(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            &accepted_input,
+            &expected_input,
+            snapshot,
+            viewport,
+            0.25,
+        )
+        .map_err(|_| "expected-composite-construction-failed")?;
+        let mut action_items = coordinator.editor().selection().to_vec();
+        action_items.push(SelectionItem::Feature(metadata.feature));
+        action_items.sort_unstable();
+        action_items.dedup();
+        coordinator
+            .populate_computed_fillet_affordances(&mut expected, &action_items, 0.25)
+            .map_err(|_| "expected-composite-affordances-failed")?;
+        let expected = expected
+            .with_retained_session(source)
+            .map_err(|_| "expected-composite-authentication-failed")?;
+        scene_oracle_require(scene == expected, "computed-composite-provenance-mismatch")?;
+        scene_oracle_require(
+            scene.computed_input.as_ref() == Some(&metadata.input)
+                && scene.computed_curves.len() == 2
+                && scene.fillet_affordances.len() == 2
+                && scene
+                    .curves
+                    .iter()
+                    .any(|curve| matches!(curve.origin, SceneCurveOrigin::FilletDiscarded { .. })),
+            "computed-fillet-geometry-incomplete",
+        )?;
+        scene_oracle_require(
+            scene.clone().with_retained_session(source).is_ok(),
+            "current-computed-scene-lost-authentication",
+        )?;
+        scene_oracle_require(
+            coordinator.current_problem_metadata().is_none()
+                && coordinator.computed_feature_problems().is_empty(),
+            "clean-computed-scene-published-problem",
+        )?;
+        let markup = scene_oracle_markup(&coordinator, &scene, viewport);
+        scene_oracle_require(
+            markup.contains("data-scene-provenance=\"accepted\"")
+                && markup.contains("class=\"wb-computed-geometry\"")
+                && !markup.contains("data-problem-marker="),
+            "computed-scene-markup-provenance",
+        )
+    }
+
+    fn scene_oracle_rejected_historical_detached() -> SceneOracleCheck {
+        let (coordinator, _, accepted_identity, accepted_json) = rejected_constraint_fixture();
+        scene_oracle_require(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_none(),
+            "rejected-state-unexpectedly-current",
+        )?;
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .ok_or("historical-accepted-state-missing")?;
+        scene_oracle_require(
+            accepted.identity() == accepted_identity
+                && accepted
+                    .document()
+                    .to_canonical_json()
+                    .map_err(|_| "accepted-json-failed")?
+                    == accepted_json,
+            "historical-accepted-provenance-changed",
+        )?;
+        scene_oracle_require(
+            coordinator
+                .session()
+                .design_document()
+                .to_canonical_json()
+                .map_err(|_| "design-json-failed")?
+                != accepted_json,
+            "rejected-attempt-does-not-distinguish-geometry",
+        )?;
+
+        let viewport = super::scene::viewport();
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+            .ok_or("rejected-compose-returned-no-scene")?;
+        let expected = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.25,
+        )
+        .map_err(|_| "historical-scene-construction-failed")?;
+        let attempted = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            coordinator.session().design_document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.25,
+        )
+        .map_err(|_| "attempted-scene-construction-failed")?;
+        scene_oracle_require(scene == expected, "historical-accepted-scene-mismatch")?;
+        scene_oracle_require(scene != attempted, "attempted-geometry-was-painted")?;
+        scene_oracle_require(
+            scene
+                .clone()
+                .with_retained_session(coordinator.session())
+                .is_err(),
+            "detached-historical-scene-gained-authentication",
+        )?;
+        let problem = coordinator
+            .current_problem_metadata()
+            .ok_or("rejected-problem-metadata-missing")?;
+        scene_oracle_require(
+            problem.attempt == coordinator.session().last_attempt().identity(),
+            "rejected-problem-attempt-provenance-mismatch",
+        )?;
+        let markup = scene_oracle_markup(&coordinator, &scene, viewport);
+        scene_oracle_require(
+            markup.contains("data-scene-provenance=\"accepted\"")
+                && markup.contains("data-problem-scope=\"")
+                && markup.contains("data-problem-marker=\"")
+                && markup.contains("wb-error-marker-icon"),
+            "rejected-problem-not-visible-over-accepted-scene",
+        )
+    }
+
+    fn run_scene_oracle_row(
+        case_id: &'static str,
+        check: fn() -> SceneOracleCheck,
+    ) -> SceneOracleResult {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(check)) {
+            Ok(Ok(())) => SceneOracleResult {
+                case_id,
+                status: "PASS",
+                failure_class: "-",
+                fingerprint: "ok",
+            },
+            Ok(Err(fingerprint)) => SceneOracleResult {
+                case_id,
+                status: "DEFECT",
+                failure_class: "semantic-contract",
+                fingerprint,
+            },
+            Err(_) => SceneOracleResult {
+                case_id,
+                status: "PANIC",
+                failure_class: "unexpected-panic",
+                fingerprint: "row-panicked",
+            },
+        }
+    }
+
+    fn render_scene_oracle_results(rows: &[SceneOracleResult]) -> String {
+        use std::fmt::Write as _;
+
+        let mut output =
+            String::from("case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint\n");
+        for row in rows {
+            writeln!(
+                output,
+                "{}\tscene-authority\t{}\t-\t{}\t{}",
+                row.case_id, row.status, row.failure_class, row.fingerprint,
+            )
+            .expect("writing a String cannot fail");
+        }
+        output
+    }
+
+    #[test]
+    fn m70b_scene_authority_oracle_survey() {
+        let rows = [
+            run_scene_oracle_row(
+                "scene.current-computed.empty",
+                scene_oracle_current_computed_empty,
+            ),
+            run_scene_oracle_row(
+                "scene.current-native.withheld",
+                scene_oracle_current_native_withheld,
+            ),
+            run_scene_oracle_row(
+                "scene.current-computed.fillet",
+                scene_oracle_current_computed_fillet,
+            ),
+            run_scene_oracle_row(
+                "scene.rejected-historical.detached",
+                scene_oracle_rejected_historical_detached,
+            ),
+        ];
+        let output = render_scene_oracle_results(&rows);
+        if let Some(path) = std::env::var_os("GEOSOLVE_M70B_ORACLE_OUTPUT") {
+            std::fs::write(&path, output.as_bytes()).unwrap_or_else(|error| {
+                panic!(
+                    "failed to write GEOSOLVE_M70B_ORACLE_OUTPUT {}: {error}",
+                    std::path::Path::new(&path).display()
+                )
+            });
+        } else {
+            println!("{output}");
+        }
+        assert!(
+            rows.iter().all(|row| row.status == "PASS"),
+            "scene-authority oracle recorded one or more defects:\n{output}"
         );
     }
 

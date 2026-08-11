@@ -2,10 +2,11 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: ready for focused `M70B-F002` UAT. `M70B-F001` retains its owning-layer correction and
-complete prior replacement evidence; the second payload finding now has direct headless-authoring
-and accepted-scene authority regressions plus a fully qualified, byte-verified replacement.
-Every human result below remains pending; this scorecard records no human pass or approval.
+Status: paused for fresh publication after the clean test-only `M70B-H1` survey. `M70B-F001` and
+`M70B-F002` retain their owning-layer corrections and complete replacement evidence. M70B-H1 adds
+a 193/193 passing authoring/scene oracle with no new finding, but its source must pass the complete
+release gate and receive a fresh byte-verified publication before human review resumes. Every human
+result below remains pending; this scorecard records no human pass or approval.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
@@ -27,6 +28,9 @@ Current `M70B-F002` release distribution manifest aggregate:
 - [x] The complete integrated release gate passes on the `M70B-F002` clean nominated source.
 - [x] An `M70B-F002` replacement read-only release distribution is served through Tailscale.
 - [x] Every `M70B-F002` served asset and `/` matches the frozen local bytes.
+- [x] M70B-H1's checked golden and clean-oracle gate pass with 193/193 classified rows.
+- [ ] The clean M70B-H1 source passes the complete integrated release gate.
+- [ ] A fresh M70B-H1 read-only distribution is served and byte-verified through Tailscale.
 - [ ] The browser has hard-refreshed that exact candidate.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;
