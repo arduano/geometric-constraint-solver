@@ -63,11 +63,12 @@ Focused owner/golden and aggregate golden qualification, formatting, warnings-de
 Clippy, locked all-feature workspace tests and the relevant WASM check pass. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate and its fresh
 immutable seven-file Tailscale publication is byte-verified. The supervising human subsequently
-reported the F005 movement behavior fixed and requested a final investigation and closing pass.
-That close request is ready to become scoped M70B approval only after the closing audit's focused
-two-previously-Current transaction regression, CircularArc transport/domain parity regression and
-clean closing qualification pass; M70B is not yet recorded as closed. M71 is deferred behind M70B
-and remains an unauthorized candidate backlog. M66's
+reported the F005 movement behavior fixed and requested a final investigation and sign-off once
+the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
+release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
+release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
+of every prepared UAT step. M71 remains an unauthorized candidate backlog awaiting an explicit
+scope decision. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3628,7 +3629,7 @@ qualification and explicit supervising-human UAT approval.
 ledger. Equality, symmetry, concentric/quadrant, certified intersection/collinear/extension,
 nonlinear tangent/normal, grid/axis, angle-increment and durable arbitrary point-pair H/V inference
 remain outside M70. Candidate retained primitives are recorded in `docs/M71_GOALS.md`; that
-backlog is deferred behind M70B and does not make M71 active or authorized for implementation.
+backlog remains inactive and unauthorized after M70B closure until the supervising human scopes it.
 
 Historical initial-candidate qualification/publication note (2026-08-10): the focused Rust owner
 matrix and the shared
@@ -3666,7 +3667,8 @@ every scripted step. M70 is closed.
 
 ### M70B
 
-Status: active during human UAT. Bounded reproduction transport and restore remain qualified;
+Status: complete under the supervising human's requested scoped sign-off on 2026-08-12. Bounded
+reproduction transport and restore remain qualified;
 `M70B-F001` and `M70B-F002` retain complete replacement evidence. M70B-H1/H2 historically froze a
 clean continue-through-failure authoring/scene baseline with 193/193 passing rows. Subsequent UAT
 opened `M70B-F003` for Coincident-closure Fillet topology and `M70B-F004` for persisted
@@ -3695,10 +3697,12 @@ locked all-feature workspace tests and the relevant WASM check pass. Prior F003/
 seven-file distribution is retained as historical evidence. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate; its fresh immutable
 seven-file distribution is published and byte-verified through Tailscale. The supervising human
-reported that targeted movement behavior fixed and requested the final closing investigation. The
-audit's focused two-previously-Current projected-drag transaction regression, CircularArc
-transport/domain parity regression and resulting clean closing qualification must still pass before
-the scoped approval is recorded; M70B is not complete.
+reported the targeted movement behavior fixed and requested final sign-off once the closing
+regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
+the two-previously-Current projected-drag transaction and CircularArc transport/domain regressions;
+the generated seven-file distribution remains byte-identical to F005. The resulting scoped decision
+accepts the recorded M70B scope without inventing an exhaustive replay of every scripted UAT step.
+M70B is closed.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3824,10 +3828,11 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
 - [x] Add and pass one public feature-owner CircularArc/affine regression that crosses a stale
   certificate edge on the same explicit branch in both parent orders, independently validates the
   generated arc/contact geometry and keeps a genuine finite-arc endpoint escape fail-closed.
-- [ ] Re-pass the complete clean release gate after that test-only closing cut. Preserve the F005
+- [x] Re-pass the complete clean release gate after that test-only closing cut. Preserve the F005
   product bytes and publication evidence; no republish is required if the generated distribution
   remains byte-identical.
-- [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
+- [x] Complete `docs/M70B_UAT.md` under the supervising human's request for sign-off once the final
+  regressions are satisfactory.
 
 Historical `M70B-H3` test-only qualification note (2026-08-11): the four new Fillet cases ran in
 independent bounded processes and preserved the original H1/H2 193 rows byte-for-byte. The reviewed
@@ -3917,9 +3922,21 @@ release files are frozen read-only under `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` an
 `http://100.94.63.83:8080/`. Proxy- and cache-bypassed HTTP fetches of every file and `/`
 byte-match the snapshot; the ordered manifest aggregate is
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
-reported the targeted movement behavior fixed and requested the final closing investigation. The
-closing two-previously-Current transaction regression, CircularArc transport/domain parity
-regression, clean closing qualification and scoped approval record remain before closure.
+reported the targeted movement behavior fixed and requested final sign-off once the additional
+regressions were satisfactory.
+
+`M70B` close record (2026-08-12): clean source `48e3cc3` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` after adding the focused
+two-previously-Current retained-coordinator transaction regression and public CircularArc/affine
+transport/domain regression. The gate preserves the 198/198 clean golden, passes 276/276 editor
+library tests and the new feature integration test, all locked workspace tests, native/WASM parity,
+warnings-denied Clippy and rustdoc, benchmark/package/licence checks, the 149.13-second sparse
+crossover and Trunk 0.21.14 release assembly. The generated seven-file distribution is byte-
+identical to `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`, retaining ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`; PID `1841268` still serves
+that immutable snapshot through Tailscale, so no republish is needed. The supervising human asked
+for these regressions and milestone sign-off once satisfactory. That scoped decision closes M70B
+without claiming an unrecorded exhaustive replay of every prepared UAT step.
 
 `M70B-F003/F004` replacement qualification/publication note (2026-08-11): clean nominated source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
@@ -4092,15 +4109,15 @@ resolved disposition above supersedes only the current defect state, not this hi
 Gate: one copied payload reconstructs the exact persisted workspace through existing authority,
 while malformed, corrupt, oversized or semantically invalid text cannot mutate live state. The
 browser adapter duplicates or evaluates no solver equation itself; reconstruction invokes the
-ordinary Rust domain certification path before swap. M70B closes only after direct qualification
-and its own explicit human UAT. Objective UAT solver/domain findings require owning-layer
+ordinary Rust domain certification path before swap. M70B closed after direct qualification and
+explicit scoped human approval. Objective UAT solver/domain findings required owning-layer
 regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTATION.md`,
 `docs/M70B_HARDENING.md`, `docs/M70B_UAT.md` and `docs/SCENARIOS.md` own the detailed ledger.
 
 ### M71
 
-Status: deferred behind M70B. `docs/M71_GOALS.md` remains a candidate backlog, not an active plan,
-scope decision or implementation authorization.
+Status: candidate backlog after M70B closure. `docs/M71_GOALS.md` is not yet an active plan, scope
+decision or implementation authorization.
 
 ## Explicit non-goals
 

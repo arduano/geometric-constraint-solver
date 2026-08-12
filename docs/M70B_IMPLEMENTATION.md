@@ -2,8 +2,9 @@
 
 # M70B implementation — Bounded workspace reproduction capsules
 
-Status: active during human UAT. The bounded transport and restore
-remain qualified, and `M70B-F001`/`M70B-F002` retain complete replacement evidence. M70B-H1
+Status: complete under the supervising human's requested scoped sign-off on 2026-08-12. The
+bounded transport and restore remain qualified, and `M70B-F001`/`M70B-F002` retain complete
+replacement evidence. M70B-H1
 historically added a test-only continue-through-failure constraint/dimension-authoring and scene
 oracle with 193/193 passing rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring
 outside that matrix;
@@ -27,11 +28,12 @@ survey/check/clean modes, formatting, warnings-denied all-workspace Clippy, lock
 workspace tests and the relevant WASM check. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` also passes the complete release gate, and its fresh
 immutable seven-file Tailscale publication is byte-verified. Supervising-human UAT and approval
-are ready for scoped close after the closing audit's focused two-previously-Current projected-drag
-transaction and CircularArc transport/domain parity regressions plus clean closing qualification
-pass. The supervising human reported the F005 movement behavior fixed and requested this final
-investigation and closing pass; this document does not record milestone closure before those gates
-are green.
+concluded with a scoped close after the closing audit added focused two-previously-Current
+projected-drag transaction and CircularArc transport/domain parity regressions. The supervising
+human reported the F005 movement behavior fixed and requested sign-off once those additions were
+satisfactory. Clean closing source `48e3cc3` passes the complete release gate, leaves the 198/198
+golden unchanged and produces byte-identical F005 release output. M70B is closed without claiming
+an unrecorded exhaustive replay of every prepared UAT step.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
 transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
@@ -152,7 +154,7 @@ a second scene model.
   URL-safe text encoding and zlib stream handling. Their licence expressions are recorded in
   `THIRD_PARTY_LICENSES.md`; no native library, FFI or `unsafe` exception is added.
 - `PLAN.md`, `ACCEPTANCE.md`, `ARCHITECTURE.md`, `docs/SCENARIOS.md` and
-  `docs/M70B_UAT.md` own the qualified scope and pending human gate.
+  `docs/M70B_UAT.md` own the qualified scope and scoped human close record.
 - `crates/geosolve-sketch/src/compiler.rs` maps each existing semantic-open Local contact interval
   to closed effective core bounds one representable value inward. Persistent branch metadata and
   independent validation remain unchanged.
@@ -831,8 +833,9 @@ The ordered manifest aggregate is
 snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
 cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
 immutable local counterpart. The supervising human has reported the targeted movement behavior
-fixed and requested this final close investigation. Scoped approval will be recorded after the
-closing transaction regression and clean closing qualification pass.
+fixed and requested sign-off once the closing regressions were satisfactory. Clean source
+`48e3cc3` passes that qualification; the current generated distribution remains byte-identical to
+this immutable F005 snapshot, so no republish is required.
 
 ## 4. Acceptance criteria
 
@@ -883,7 +886,7 @@ closing transaction regression and clean closing qualification pass.
 - [x] one public feature-owner regression covers CircularArc/affine transport beyond a stale Local
   witness in both parent orders, independently validates the same explicit branch and keeps a
   regular supporting-circle root beyond the finite arc endpoint fail-closed;
-- [ ] the complete clean release gate re-passes after that test-only closing cut, with unchanged
+- [x] the complete clean release gate re-passes after that test-only closing cut, with unchanged
   F005 product bytes requiring no replacement publication;
 - [x] projected release is staged across session/features/allocator/checkpoint/history/transcript;
   forced durability failure is fingerprint-atomic, and non-`Edit` actions cannot persist an
@@ -902,8 +905,10 @@ closing transaction regression and clean closing qualification pass.
   `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`;
 - [x] a clean F005 replacement source passes the complete release gate and its fresh immutable
   distribution is byte-verified over Tailscale;
-- [ ] every prepared area in `docs/M70B_UAT.md` is exercised; and
-- [ ] the supervising human explicitly approves M70B.
+- [x] the scoped close decision accepts the prepared `docs/M70B_UAT.md` areas for the recorded
+  milestone scope without claiming an unrecorded exhaustive replay; and
+- [x] the supervising human requested M70B sign-off once the final regressions were satisfactory,
+  and the closing audit found them satisfactory.
 
 ## 5. Known limitations and next blocker
 
@@ -917,11 +922,10 @@ The removed M32 `GEOSOLVE_SCENE_V1` LZSS/profile-budget capsule, `/#/dev/lab`, f
 download flow, raw browser-storage handoff and browser E2E remain retired. The repaired
 198-`PASS` fixture and clean replacement source have passed the milestone-appropriate automated
 qualification and complete clean release gate; the immutable F005 replacement is served and
-byte-verified. Focused human UAT and explicit approval, including targeted
-`M70B-F001`/`M70B-F002` rechecks, remain pending.
-The supervising human has separately reported F005 movement fixed and requested the final closing
-pass; formal scoped approval awaits the focused two-previously-Current transaction and CircularArc
-transport/domain parity regressions plus clean closing qualification. A
+byte-verified. The supervising human reported F005 movement fixed and requested milestone sign-off
+once the closing regressions were satisfactory. Clean source `48e3cc3` passes that final gate, and
+the scoped decision closes M70B without claiming an unrecorded exhaustive replay of every prepared
+UAT step. A
 Local interval whose semantic endpoint is exactly zero has no valid solution at that endpoint;
 exact edge pressure can therefore still fail closed before the one-ULP effective endpoint becomes
 active. Ordinary near-edge contacts and the supplied positive-bound payload pass, but exact
@@ -933,4 +937,4 @@ M70B. The F003 topology repair deliberately recognizes only active explicit Coin
 equivalence, and the F004 complete-cell policy deliberately applies only to constant-curvature
 Circle/CircularArc support during persisted evaluation. Arbitrary nonlinear offset traversal and
 direct-manipulation remote-root selection remain guarded rather than being broadened by these
-repairs. M71 stays deferred until M70B qualification and UAT are complete.
+repairs. M71 remains an unauthorized candidate backlog awaiting an explicit scope decision.

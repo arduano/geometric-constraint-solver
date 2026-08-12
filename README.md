@@ -49,21 +49,22 @@ supervising-human approval for ADR 0033's Profile/Construction semantics, includ
 Fillet-hidden construction provenance and headless role-aware picking. M70 completed and received
 supervising-human approval for ADR 0034's headless auto-constraint drafting milestone, including
 the `M70-F001` Circle-through-point repair, replacement qualification/publication and scoped UAT.
-M70B is the active bounded reproduction-capsule cut. It packages freshly encoded authoritative
+M70B is complete under the supervising human's requested scoped sign-off. It packages freshly
+encoded authoritative
 application-workspace v5 bytes as strict, size-limited `GEOSOLVE_REPRO_V1` text for copy/paste
 failure handoff, then validates and reconstructs a complete coordinator before replacing live
-state. The transport and `M70B-F001` replacement are fully qualified and published. `M70B-F002`
-now has focused radial-Normal and accepted-scene authority corrections plus a fully qualified,
-byte-verified replacement publication; dedicated UAT recheck and approval remain pending. M71
-remains deferred behind it.
+state. F001-F005 retain owning-layer regressions; the canonical golden is 198/198 `PASS`. Clean
+closing source `48e3cc3` passes the complete release gate with the final multi-feature transaction
+and finite-arc transport regressions, while its runtime release remains the byte-verified F005
+candidate. M71 is still only an unauthorized candidate backlog awaiting an explicit scope decision.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed and approved through M70, with M70B active after its
-   second payload finding and M71 deferred behind it.
+3. `PLAN.md` — active roadmap: completed through the scoped M70B close, with M71 not yet active or
+   authorized.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.

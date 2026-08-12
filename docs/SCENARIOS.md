@@ -1309,10 +1309,11 @@ passes that complete gate, including its 198-row clean oracle and 152.49-second 
 sparse crossover. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is
 served at `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest
 aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The focused F005
-movement behavior was subsequently reported fixed by the supervising human, who requested the final
-closing investigation. The two-previously-Current transaction and CircularArc transport/domain
-parity regressions, clean closing qualification and scoped approval record remain before closure.
-M71 is deferred behind M70B.
+movement behavior was subsequently reported fixed by the supervising human, who requested sign-off
+once the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
+release gate with the two-previously-Current transaction and CircularArc transport/domain
+regressions; the golden and release bytes remain unchanged. M70B is closed under that scoped
+approval. M71 remains an unauthorized candidate backlog awaiting an explicit scope decision.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1868,9 +1869,12 @@ tests and the relevant WASM check pass. Clean source
 seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
 `http://100.94.63.83:8080/`, with ordered-manifest aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
-reported the F005 movement behavior fixed and requested the final closing investigation. The
-two-previously-Current transaction and CircularArc transport/domain parity regressions, clean
-closing qualification and scoped M70B approval record remain before closure.
+reported the F005 movement behavior fixed and requested sign-off once the closing regressions were
+satisfactory. Clean source `48e3cc3` passes the complete release gate after adding the focused
+two-previously-Current retained-coordinator transaction and finite CircularArc/affine transport/
+domain scenarios. The 198/198 golden remains byte-identical, and the generated seven-file build
+matches the immutable F005 snapshot at the same aggregate. The scoped decision accepts the recorded
+M70B scope without claiming an unrecorded exhaustive UAT replay. M70B is closed.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

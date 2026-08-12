@@ -40,7 +40,7 @@ headless auto-constraint drafting intelligence, atomic construction-plus-inferen
 ordinary editable UAT playground. Replacement source
 `3d157896c87eaf647abee1192c838100ce359ce9` passed direct/release qualification, publication and
 the repaired Circle-through-point UAT; the supervising human explicitly approved M70 on
-2026-08-10. M70B is the active bounded reproduction-payload human-UAT cut. It introduces a
+2026-08-10. M70B is complete under the supervising human's requested scoped sign-off. It introduced a
 versioned, compressed text capsule around the authoritative application-workspace v5 snapshot so
 UAT failures can be copied into a text conversation and restored through the ordinary validated
 coordinator path. The first supplied payload opened `M70B-F001`: an open Local contact branch had
@@ -66,7 +66,8 @@ seven-file Tailscale publication is byte-verified. M70B-H2 generalizes that unch
 the milestone-neutral mandatory golden gate and repository-local defect-hardening workflow. Clean
 source `47584bdb607c722df508eae56584726954a03205` passes the complete release gate, preserves the
 exact H1 golden and release bytes, and leaves the existing H1 UAT publication in place; targeted
-human recheck remains pending. At the historical test-only M70B-H3 checkpoint, the original 193
+human recheck remained pending at that historical checkpoint. At the historical test-only M70B-H3
+checkpoint, the original 193
 H1/H2 rows remained byte-identical and four isolated `feature.fillet` rows were reviewed as
 `DEFECT`; `--check` passed and `--require-clean` deliberately failed against SHA-256
 `a7fa99c3e7668c023a05c1bdeb7d2b794116f6f60b1d186e8115eff4bad117ec`, with no production or
@@ -104,8 +105,11 @@ clean oracle and 152.49-second 256-moving-body sparse crossover. Its immutable s
 at `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at `http://100.94.63.83:8080/`; every file and
 `/` byte-match, with ordered-manifest aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
-recheck and explicit M70B approval remain pending.
-M71 is deferred behind M70B and remains an unauthorized candidate backlog.
+behavior was reported fixed. Clean closing source `48e3cc3` passes the complete release gate with
+focused multi-feature transaction and finite-arc transport regressions; the 198/198 golden and
+runtime release bytes remain unchanged. M70B is closed under the requested scoped sign-off without
+claiming an unrecorded exhaustive UAT replay. M71 remains an unauthorized candidate backlog
+awaiting an explicit scope decision.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -335,7 +339,7 @@ passed its complete release gate and received explicit supervising-human approva
 M70 is complete and approved: implementation, focused direct qualification, integrated release
 qualification, frozen replacement-candidate publication, served-byte verification and scoped human
 UAT all pass. `M70-F001` is resolved. `docs/M70_IMPLEMENTATION.md`, `docs/M70_UAT.md` and ADR 0034
-own the completed record. M70B is the active reproduction-capsule cut: the current coordinator is
+own the completed record. M70B is the completed reproduction-capsule cut: the current coordinator is
 serialized freshly as authoritative `WorkspaceSnapshot` v5 bytes, transported as bounded
 `GEOSOLVE_REPRO_V1` zlib/base64url text and reconstructed completely before any live-workspace
 swap. It restores no transient tool, selection, sample, camera or command-history state and does
@@ -362,8 +366,9 @@ Clippy pass. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match the snapshot, whose ordered-manifest
 aggregate is `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
-recheck and explicit approval remain pending. The temporary
-`docs/M71_GOALS.md` backlog is deferred behind M70B and is not implementation authorization.
+behavior was reported fixed. Clean closing source `48e3cc3` passes the complete release gate with
+the final owner regressions, and M70B is closed under the requested scoped sign-off. The temporary
+`docs/M71_GOALS.md` backlog remains inactive and is not implementation authorization.
 
 Durable milestone and cleanup records:
 
@@ -410,11 +415,11 @@ Durable milestone and cleanup records:
 - `docs/M70_IMPLEMENTATION.md` (completed and approved auto-constraint ledger)
 - `docs/M70_UAT.md` (approved focused auto-constraint scorecard and finding ledger)
 - `docs/adr/0034-headless-auto-constraint-drafting-intelligence.md`
-- `docs/M70B_IMPLEMENTATION.md` (qualified reproduction-capsule/F001/F002 ledger and pending human gate)
+- `docs/M70B_IMPLEMENTATION.md` (completed reproduction-capsule/F001-F005 and close ledger)
 - `docs/M70B_HARDENING.md` (historical H1-H3 test-only authoring/scene oracle and defect checklist)
-- `docs/M70B_UAT.md` (prepared reproduction handoff/restore scorecard; not yet approved)
+- `docs/M70B_UAT.md` (scoped reproduction handoff/restore close scorecard)
 - `.agents/skills/geosolve-harden-defect/` (canonical solver/headless defect regression workflow)
-- `docs/M71_GOALS.md` (deferred post-M70B primitive backlog)
+- `docs/M71_GOALS.md` (inactive post-M70B primitive backlog)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -2,9 +2,9 @@
 
 # M70B focused UAT — Workspace reproduction handoff
 
-Status: human UAT opened `M70B-F003` and `M70B-F004`; both findings now have authorized,
-locally implemented owner repairs, and later movement finding `M70B-F005` has an implemented
-certificate-transport repair, while the milestone remains unapproved.
+Status: complete under the supervising human's requested scoped sign-off on 2026-08-12. Human UAT
+opened `M70B-F003` and `M70B-F004`; both findings have authorized owner repairs, and later movement
+finding `M70B-F005` has its certificate-transport repair.
 `M70B-F001` and `M70B-F002` retain their owning-layer corrections and complete replacement
 evidence. M70B-H1 historically added a 193/193 passing constraint/dimension-authoring and scene
 oracle; its complete release gate and fresh byte-verified Tailscale publication now pass. M70B-H2
@@ -21,12 +21,12 @@ regression, 45-test feature suite, nine-test retained movement suite, focused go
 aggregate golden modes, formatting, warnings-denied all-workspace Clippy, locked all-feature
 workspace tests and the relevant WASM check pass. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate, and its fresh
-immutable seven-file Tailscale publication is byte-verified. Targeted human rechecks and approval
-remain for the broader scoped scorecard, but the supervising human subsequently reported the F005
-movement behavior fixed and requested the final investigation and closing pass. Scoped approval
-will be recorded only after the closing two-previously-Current transaction and CircularArc
-transport/domain parity regressions plus clean closing qualification pass; this scorecard does not
-yet record milestone closure.
+immutable seven-file Tailscale publication is byte-verified. The supervising human subsequently
+reported the F005 movement behavior fixed and requested sign-off once the closing regressions were
+satisfactory. Clean source `48e3cc3` passes the complete release gate with the focused two-
+previously-Current transaction and CircularArc transport/domain regressions, while the 198/198
+golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B without
+claiming an unrecorded exhaustive replay of every prepared step below.
 
 Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 
@@ -35,6 +35,8 @@ Prior `M70B-F001` candidate source: `b4ec279e221df38816b7376a6978712e21df02c2`
 Historical `M70B-H1` candidate source: `dd645d99e705e56c80ab2a4a136f7a4d03baafbf`
 
 Qualified `M70B-H2` test-infrastructure source: `47584bdb607c722df508eae56584726954a03205`
+
+Closing regression/qualification source: `48e3cc3`
 
 Historical `M70B-H1/H2` golden SHA-256:
 `803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`
@@ -127,9 +129,10 @@ F003/F004 as the served UAT candidate.
 - [x] The closing public feature-owner CircularArc/affine regression passes in both parent orders,
   crosses a stale Local witness on the same branch and rejects a regular supporting-circle root
   beyond the finite arc endpoint.
-- [ ] The complete clean release gate re-passes after that test-only cut; if the release bytes remain
+- [x] The complete clean release gate re-passes after that test-only cut; if the release bytes remain
   identical, the current frozen F005 publication remains authoritative without a republish.
-- [ ] The browser has hard-refreshed that exact candidate.
+- [x] The browser hard-refreshed the byte-identical F005 candidate used for the accepted movement
+  recheck; the test-only closing cut requires no replacement browser build.
 
 Use only the ordinary GeoSolve Sketch Workbench. The reproduction overlay is global workbench UI;
 there is no scenario mode, protected fixture, alternate coordinator or restored legacy page. Direct
@@ -171,9 +174,9 @@ harness errors at SHA-256
 nine-test retained movement suite, focused golden tests, aggregate
 `--survey`/`--check`/`--require-clean`, formatting, warnings-denied all-workspace Clippy, locked
 all-feature workspace tests and the relevant WASM check pass. The clean F005 release qualification
-and fresh byte-verified Tailscale publication also pass; human UAT remains.
+and fresh byte-verified Tailscale publication also pass; the scoped close record appears below.
 
-Result: **F005 REPLACEMENT PUBLISHED; MOVEMENT RECHECK PASS; M70B CLOSING GATE PENDING**
+Result: **PASS — 198/198 GOLDEN, CLEAN CLOSING GATE AND SCOPED M70B APPROVAL**
 
 ## M70B-F005 — Persistent Fillet movement continuity
 
@@ -219,7 +222,7 @@ Expected: the action is discoverable and produces one complete single-line value
 available for manual copy; denial does not lose or truncate it. Opening/closing the overlay causes
 no canvas resize, geometry move, solve or accepted-state change.
 
-Result: **PENDING**
+Result: **NOT EXHAUSTIVELY REPLAYED — ACCEPTED BY SCOPED CLOSE**
 
 Notes:
 
@@ -236,7 +239,7 @@ the computed Fillet and Construction semantics. No intermediate or mixed scene i
 camera, selection, hover, active tool, sample label and pre-copy Undo stack are not restored; those
 are intentional non-persisted state. The restored workspace remains normally editable.
 
-Result: **PENDING**
+Result: **NOT EXHAUSTIVELY REPLAYED — ACCEPTED BY SCOPED CLOSE**
 
 Notes:
 
@@ -253,7 +256,7 @@ Expected: the text alone carries the complete persisted workspace needed for rep
 destination's prior browser storage neither supplies missing scene data nor overrides the capsule.
 Transient camera/tool/selection state may differ by design.
 
-Result: **PENDING**
+Result: **NOT EXHAUSTIVELY REPLAYED — ACCEPTED BY SCOPED CLOSE**
 
 Notes:
 
@@ -269,7 +272,7 @@ Expected: each bad input produces a specific visible error in the overlay. The c
 tree, accepted geometry and persisted workspace remain unchanged; no partially loaded scene,
 layout shift or frozen interaction remains. Returning to the untouched valid payload succeeds.
 
-Result: **PENDING**
+Result: **NOT EXHAUSTIVELY REPLAYED — ACCEPTED BY SCOPED CLOSE**
 
 Notes:
 
@@ -288,7 +291,7 @@ loading is mutation-free. After load, ordinary authoring and camera controls wor
 normal workspace persistence behave normally without claiming restoration of the old history
 cursor.
 
-Result: **PENDING**
+Result: **NOT EXHAUSTIVELY REPLAYED — ACCEPTED BY SCOPED CLOSE**
 
 Notes:
 
@@ -314,7 +317,7 @@ Targeted recheck after the replacement candidate is published:
 Expected: the requested endpoint follows each ordinary drag continuously; no
 `AmbiguousContactNeighborhood` rejection, branch flip, freeze or DOF loss is exposed.
 
-Result: **PENDING**
+Result: **NOT EXHAUSTIVELY REPLAYED — ACCEPTED BY SCOPED CLOSE**
 
 Notes:
 
@@ -346,7 +349,7 @@ beyond an endpoint; there is no radius collapse, stalled/global disappearance or
 difference. A rejected edit paints only historical accepted geometry and never attempted invalid
 geometry; normal inference remains unavailable until the design is repaired.
 
-Result: **PENDING**
+Result: **NOT EXHAUSTIVELY REPLAYED — ACCEPTED BY SCOPED CLOSE**
 
 Notes:
 
@@ -386,7 +389,7 @@ Targeted repair recheck on the published replacement candidate:
 Expected: active explicit Coincident closure behaves as one semantic Fillet corner through both
 public authoring routes; no coordinate-near but unconstrained endpoint is implicitly welded.
 
-Result: **RESOLVED HEADLESS — TARGETED HUMAN RECHECK PENDING**
+Result: **RESOLVED HEADLESS — ACCEPTED BY SCOPED CLOSE WITHOUT AN UNRECORDED REPLAY**
 
 ### Finding `M70B-F004` — valid line-circle Fillet branches are withheld after source edits
 
@@ -433,18 +436,16 @@ Targeted repair recheck on the published replacement candidate:
 Expected: both exact line-circle payloads evaluate inside their stored explicit cells, including
 the seam winding, while unrelated nonlinear branch-locality remains conservative.
 
-Result: **RESOLVED HEADLESS — EXACT-PAYLOAD HUMAN RECHECK PENDING**
+Result: **RESOLVED HEADLESS — ACCEPTED BY SCOPED CLOSE WITHOUT AN UNRECORDED REPLAY**
 
-M70B remains active until the supervising human records explicit approval here. The supervising
-human has reported F005 movement fixed and requested this final investigation and closing pass; that
-request is ready to become scoped approval after the closing two-previously-Current retained-
-coordinator and CircularArc transport/domain parity regressions plus clean closing qualification
-pass. A scoped approval
-may accept M70B-U1 through M70B-U5 after objective findings receive owning-layer regressions and a
-targeted recheck; it must not invent an unrecorded exhaustive replay. M71 remains deferred until
-M70B is closed. F003/F004 are resolved at their headless owners and their complete release
-qualification and immutable Tailscale publication pass. F005 is resolved across its feature,
-sketch and retained-editor owners; its current fixture records all 198 rows as `PASS`, and its
-complete qualification and fresh immutable Tailscale publication pass. The two closing regressions,
-clean closing qualification, remaining prepared human checks and scoped approval record remain
-before closure.
+The supervising human reported F005 movement fixed, requested the two closing regressions, and
+asked for M70B sign-off once the result was satisfactory. Clean source `48e3cc3` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the unchanged
+198/198 clean golden, all locked workspace tests, native/WASM parity, warnings-denied checks, the
+149.13-second sparse crossover and Trunk release assembly. The generated seven-file distribution
+byte-matches `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` at aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`, so the human-reviewed F005
+publication remains authoritative without a republish. This scoped approval accepts M70B-U1
+through M70B-U5 and the resolved F001-F005 findings for the recorded milestone scope without
+inventing an exhaustive replay of every scripted step. M70B is closed. M71 remains an unauthorized
+candidate backlog awaiting an explicit scope decision.

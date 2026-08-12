@@ -96,8 +96,10 @@ FNV-1a field detects accidental corruption only and conveys no authenticity. Suc
 decode still requires strict `WorkspaceSnapshot` validation and complete coordinator
 reconstruction before publication. No library crate API, frozen sketch v1-v4 bytes or draft-v5
 support status changes. Qualification and frozen publication pass on source
-`6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`; M70B UAT remains pending. No M71 API is authorized by
-the candidate `docs/M71_GOALS.md` backlog, which remains deferred behind M70B.
+`6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`. Subsequent F001-F005 repairs and close qualification
+change no additional public library API; closing source `48e3cc3` keeps the 198/198 golden and
+release bytes unchanged and closes M70B under the requested scoped sign-off. No M71 API is
+authorized by the inactive candidate `docs/M71_GOALS.md` backlog.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

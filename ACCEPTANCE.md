@@ -173,10 +173,12 @@ source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release ga
 seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
 `http://100.94.63.83:8080/` with ordered-manifest aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
-reported the targeted F005 movement behavior fixed and requested the final closing investigation.
-Scoped approval is ready to be recorded after the closing two-previously-Current transaction and
-CircularArc transport/domain parity regressions plus clean closing qualification pass. M71 remains
-deferred behind M70B.
+reported the targeted F005 movement behavior fixed and requested sign-off once the closing
+regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
+the two-previously-Current transaction and CircularArc transport/domain regressions, while the
+198/198 golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B
+without claiming an unrecorded exhaustive UAT replay. M71 remains an unauthorized candidate
+backlog awaiting an explicit scope decision.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1414,7 +1416,8 @@ M70-U5 without inventing an unrecorded exhaustive replay of every scripted step.
 
 ## M70B acceptance: workspace reproduction handoff
 
-Status: active during human UAT. The reproduction transport criteria remain qualified;
+Status: complete under the supervising human's requested scoped sign-off on 2026-08-12. The
+reproduction transport criteria remain qualified;
 `M70B-F001` and `M70B-F002` retain complete replacement evidence. The historical M70B-H1/H2
 continue-through-failure baseline records 193/193 passing constraint/dimension-authoring and
 reachable scene-authority rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring and
@@ -1437,9 +1440,10 @@ feature workspace tests and the relevant WASM check pass. Clean F005 source
 snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted human recheck
-was subsequently reported fixed by the supervising human, who requested the final closing
-investigation. Scoped approval remains contingent on the two closing regressions and clean
-qualification below.
+was subsequently reported fixed by the supervising human, who requested sign-off once the closing
+regressions were satisfactory. Clean source `48e3cc3` passes that qualification, and the generated
+distribution remains byte-identical to F005. The scoped close decision accepts the recorded M70B
+scope without inventing an exhaustive replay of every scripted UAT step.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1611,14 +1615,14 @@ general `mark_solved_preview` API retains its established native-only/Withheld f
 deliberate direct document edit may still publish an attributed Failed feature rather than being
 silently clamped.
 
-Closing qualification must exercise that universal rule with two distinct features that both begin
+Closing qualification exercises that universal rule with two distinct features that both begin
 Current and a projected sample that makes only one feature invalid. The focused retained-
-coordinator regression must prove that no partial or native-only candidate advances, the paired
+coordinator regression proves that no partial or native-only candidate advances, the paired
 last-valid scene and release coordinate remain authoritative, only the failing feature is
 attributed, reverse motion recovers, and terminal release commits only the last valid sample. This
 sequence belongs in the owning coordinator suite rather than as another static golden row.
 
-The constant-curvature transport claim additionally requires public feature-owner coverage for a
+The constant-curvature transport claim additionally has public feature-owner coverage for a
 finite CircularArc paired with an affine Interior parent in both parent orders. A regular source
 move must carry the contact beyond a stale Local witness while retaining the same explicit sides,
 retained endpoints, endpoint order and sweep; independent finite incidence, radius, tangency,
@@ -1655,11 +1659,17 @@ check pass. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes
 snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
-recheck was subsequently reported fixed. The closing two-previously-Current coordinator and
-CircularArc transport/domain regressions, clean closing qualification and scoped approval record
-remain before closure.
+recheck was subsequently reported fixed.
 
-M71 remains deferred behind M70B.
+Closing source `48e3cc3` passes the complete clean release gate with the focused two-previously-
+Current retained-coordinator regression and finite CircularArc/affine transport/domain regression.
+The gate keeps the reviewed golden at 198/198 `PASS`, completes the 149.13-second sparse crossover
+and Trunk release build, and produces a seven-file distribution byte-identical to the immutable
+F005 snapshot. The supervising human requested those final regressions and sign-off once
+satisfactory. This scoped decision accepts the recorded M70B deliverable without claiming an
+unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
+
+M71 remains an unauthorized candidate backlog awaiting an explicit scope decision.
 
 `docs/M71_GOALS.md` is a deferred candidate backlog and confers no implementation authority.
 

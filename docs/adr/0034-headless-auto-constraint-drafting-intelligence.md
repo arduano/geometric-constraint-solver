@@ -214,7 +214,8 @@ M70 adds no residual or new persistent constraint definition. Equality, symmetry
 quadrant, certified intersection/extension/collinear, nonlinear tangent/normal, arbitrary durable
 point-pair horizontal/vertical, grid/axis and angle-increment inference are deferred. The candidate
 primitive and branch-policy backlog is recorded in `docs/M71_GOALS.md`; that document does not make
-M71 active or authorize implementation, and the backlog is deferred behind M70B.
+M71 active or authorize implementation. M70B later closed, but that backlog still requires an
+explicit scope decision.
 
 M70 also adds no inferred-state persistence, hidden construction geometry, canonical sketch-schema
 migration, browser-owned geometric policy, browser E2E, mobile behavior, global root enumeration or

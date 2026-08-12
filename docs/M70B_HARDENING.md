@@ -17,9 +17,11 @@ formatting, warnings-denied all-workspace Clippy, locked all-feature workspace t
 relevant WASM check pass. Clean source `d400c4a8201f6afc531f5b504424d6430dbf3937`
 passes the complete release gate, and its fresh immutable seven-file publication is byte-verified
 through Tailscale. The supervising human subsequently reported the F005 movement behavior fixed and
-requested the final investigation and closing pass. Scoped approval remains contingent on the
-closing audit's focused two-previously-Current projected-drag transaction and CircularArc
-transport/domain parity regressions plus clean closing qualification.
+requested sign-off once the closing regressions were satisfactory. Clean closing source `48e3cc3`
+passes the complete release gate with the focused two-previously-Current projected-drag transaction
+and CircularArc transport/domain parity regressions. The unchanged 198/198 golden and byte-identical
+F005 release output confirm the intended layered result. The scoped decision closes M70B without
+claiming an exhaustive Cartesian oracle or unrecorded UAT replay.
 
 M70B-H1 originated this matrix. M70B-H2 moved the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
@@ -217,7 +219,8 @@ This clean result is evidence for the bounded representative matrix, not a claim
 or every family-by-primitive Cartesian product is complete. Existing M55/M62 regressions retain
 their broader applicability and curve-family ownership; M70B-F001 and M70B-F002 retain their exact
 payload-derived regressions, while resolved M70B-F003 and M70B-F004 retain focused positive
-headless regressions. M70B remains active until explicit supervising-human UAT approval.
+headless regressions. M70B is closed under the supervising human's requested scoped sign-off
+recorded below.
 
 Historical H3 F003 discovery evidence used the negative test name below:
 
@@ -543,26 +546,35 @@ snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale addre
 cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
 immutable local counterpart. This candidate supersedes the F003/F004 snapshot for the F005
 movement-continuity recheck in `docs/M70B_UAT.md`. The supervising human reported that movement
-behavior fixed and requested the final closing investigation; scoped approval awaits the focused
-two-previously-Current transaction and CircularArc transport/domain parity regressions plus clean
-closing qualification.
+behavior fixed and requested sign-off once the focused closing regressions were satisfactory.
 
 ### Closing multi-feature transaction audit
 
 The broad golden remains unchanged at 198 rows because this is a sequence-level retained-
-coordinator invariant, not a new static authoring or branch dimension. Before closure, one focused
-regression must begin with two distinct computed features that are both `Current`, make only one
-invalid during projected dragging, and prove complete-scene withholding, paired last-valid scene
+coordinator invariant, not a new static authoring or branch dimension. The focused regression
+begins with two distinct computed features that are both `Current`, makes only one invalid during
+projected dragging, and proves complete-scene withholding, paired last-valid scene
 and release-coordinate retention, failing-feature-only attribution, reverse recovery and terminal
-release of only the last valid sample.
+release of only the last valid sample. It is
+`coordinator::tests::projected_drag_rejects_one_new_failure_beside_another_current_fillet` in
+`crates/geosolve-constraint-editor/src/coordinator.rs`.
 
-The feature owner also needs one public CircularArc/affine permutation because the transport path
-admits finite arcs as well as full circles. Both parent orders must carry a regular root beyond a
-stale Local witness without changing explicit intent, independently validate finite incidence,
-radius, tangency, side and bounded-domain state, and reject a same-orientation supporting-circle
-root that lies beyond the native arc endpoint. This remains focused owner coverage, not a sixth
-golden row.
+The public feature-owner CircularArc/affine permutation covers finite arcs as well as full circles.
+Both parent orders carry a regular root beyond a stale Local witness without changing explicit
+intent, independently validate finite incidence, radius, tangency, side and bounded-domain state,
+and reject a same-orientation supporting-circle root that lies beyond the native arc endpoint. This
+remains focused owner coverage, not a sixth golden row. The public integration regression is
+`circular_arc_transport_crosses_stale_cell_and_stops_at_endpoint_in_both_orders` in
+`crates/geosolve-sketch-features/tests/m70b_circular_arc_transport.rs`.
 
-After those test-only additions, the complete clean release gate must re-pass. If the assembled F005
-distribution remains byte-identical, its current frozen publication remains the UAT evidence and no
-republish is required.
+Clean source `48e3cc3` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` with both additions. The
+gate includes the unchanged 198/198 clean golden, 276/276 editor library tests, the 45/45 feature
+library suite plus the new finite-arc integration test, all locked workspace tests, native/WASM
+parity, warnings-denied Clippy and rustdoc, benchmark/package/licence checks, the 149.13-second
+256-moving-body sparse crossover and Trunk 0.21.14 release assembly. The generated seven-file
+distribution byte-matches `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` at ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` remains live
+on the Tailscale-only endpoint, so no republish is required. The supervising human requested these
+regressions and sign-off once satisfactory; that scoped decision closes M70B without claiming an
+unrecorded exhaustive replay of every prepared UAT step.

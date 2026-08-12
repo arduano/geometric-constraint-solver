@@ -65,7 +65,7 @@ construction/NURBS UAT and certified all-family visual profiles.
   replacement-candidate publication, served-byte verification and scoped human UAT are complete.
   Circle-authoring finding `M70-F001` is resolved; the supervising human explicitly approved M70
   on 2026-08-10.
-- **Active target:** M70B adds a bounded reproduction-payload transport around the sole
+- **Completed target:** M70B adds a bounded reproduction-payload transport around the sole
   workbench's authoritative v5 snapshot. `GEOSOLVE_REPRO_V1` is deterministic zlib compressed,
   strict unpadded base64url text with an FNV-1a corruption checksum; decoded bytes still pass the
   ordinary strict workspace decoder and full coordinator reconstruction before an atomic live
@@ -81,7 +81,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   resolved constraint/dimension family through the existing headless/retained boundaries and
   directly inventories the four reachable scene-authority states. Its 193-row fixed-seed golden,
   complete release gate and byte-verified replacement publication are clean; targeted human
-  recheck remains pending. M70B-H2 gives the unchanged matrix milestone-neutral names, makes its
+  recheck remained pending at that historical checkpoint. M70B-H2 gives the unchanged matrix
+  milestone-neutral names, makes its
   clean mode a mandatory release step and installs the repo-local layered defect workflow; it adds
   no runtime layer. Test-only M70B-H3 preserved the original 193 H1/H2 rows byte-identically and
   added four process-isolated `feature.fillet` rows. Its historical 197-row checkpoint recorded
@@ -111,15 +112,18 @@ construction/NURBS UAT and certified all-family visual profiles.
   `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is byte-verified and served at
   `http://100.94.63.83:8080/`, with ordered-manifest aggregate
   `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
-  recheck and explicit approval remain pending.
-  M71 is deferred behind M70B and remains an unauthorized candidate backlog.
+  behavior was reported fixed. Clean closing source `48e3cc3` passes the complete gate with focused
+  multi-feature transaction and finite-arc transport regressions; the 198/198 golden and release
+  bytes remain unchanged. M70B is closed under the requested scoped sign-off. M71 remains an
+  unauthorized candidate backlog awaiting an explicit scope decision.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M70 sequence and active M70B reproduction cut listed in section 15.
+current ownership is the completed M10-M70 sequence and completed M70B reproduction cut listed in
+section 15.
 
 ## 3. Crate responsibilities
 
@@ -1158,7 +1162,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   UAT. Implementation, focused direct qualification, integrated release qualification, frozen-
   replacement-candidate publication, served-byte verification and scoped human UAT are complete.
   Circle-authoring finding `M70-F001` is resolved.
-- M70B: active bounded reproduction-capsule human-UAT candidate. It transports the authoritative
+- M70B: completed bounded reproduction-capsule cut under the requested scoped human sign-off. It
+  transports the authoritative
   workspace v5 envelope without copying raw browser storage, restores through the strict workspace
   decoder and a newly constructed coordinator before atomic swap, and exposes a visible
   copy/paste overlay with manual fallback. It restores no legacy lab/E2E path and serializes no
@@ -1183,7 +1188,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate. Its immutable
   seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
   `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-  `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. Dedicated human UAT
-  remains pending.
-- M71: deferred behind M70B. `docs/M71_GOALS.md` is a candidate backlog for additional retained
-  primitives, not an active or authorized plan.
+  `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. Clean closing source
+  `48e3cc3` passes the full gate with the focused multi-feature and finite-arc regressions and
+  produces byte-identical release output. M70B is closed.
+- M71: candidate backlog after M70B closure. `docs/M71_GOALS.md` records possible additional
+  retained primitives but is not an active or authorized plan.

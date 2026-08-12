@@ -2,8 +2,8 @@
 
 # M71 candidate goals — Retained primitives for richer drafting inference
 
-Status: deferred candidate backlog only. M71 is ordered after the active M70B bounded
-workspace-reproduction capsule cut, but is not scoped or authorized for implementation.
+Status: inactive candidate backlog only after M70B closure. M71 is not scoped or authorized for
+implementation.
 
 M70 deliberately proved auto-constraint interaction using constraint definitions already admitted
 by the ordinary retained editor workflow. This document records likely follow-up primitives and
@@ -100,5 +100,5 @@ implicitly.
 - Any schema or workspace migration needs its own compatibility decision. M70 and this backlog do
   not imply canonical sketch v5.
 
-Before M71 becomes active, M70B must close and the supervising user must select a bounded subset,
-accept any required ADR/schema work and define M71's own direct gate and end-of-milestone UAT.
+Before M71 becomes active, the supervising user must select a bounded subset, accept any required
+ADR/schema work and define M71's own direct gate and end-of-milestone UAT.

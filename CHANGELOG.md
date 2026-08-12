@@ -111,7 +111,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   demo-web 83/83, sketch 33/33 and M56 6/6. Its complete release gate, frozen Tailscale publication
   and served-byte verification pass. The targeted human recheck and scoped UAT are accepted; the
   supervising human explicitly approved and closed M70 on 2026-08-10.
-- The active M70B reproduction-payload candidate: deterministic single-line
+- The completed M70B reproduction-payload cut: deterministic single-line
   `GEOSOLVE_REPRO_V1` text over freshly encoded authoritative application-workspace v5 bytes, with
   zlib compression, strict unpadded URL-safe base64, canonical byte length, FNV-1a corruption
   detection and independent text/compressed/decoded resource limits. Decode remains
@@ -123,8 +123,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   mismatch between semantic-open Local contact intervals and closed effective core bounds without
   changing persisted branch metadata or strict validation. Replacement source
   `b4ec279e221df38816b7376a6978712e21df02c2` passes direct/release qualification, frozen Tailscale
-  publication and served-byte verification; focused human UAT and the targeted recheck remain
-  pending.
+  publication and served-byte verification. F002-F005 add the radial-Normal/accepted-scene,
+  Coincident-closure Fillet, certified branch traversal and movement-continuity corrections at
+  their owning layers. The canonical oracle is 198/198 `PASS`. Clean closing source `48e3cc3`
+  passes the complete gate with final multi-feature transaction and finite-arc transport
+  regressions and produces release bytes identical to the F005 candidate. M70B is closed under the
+  supervising human's requested scoped sign-off.
 
 ### Changed
 
@@ -137,9 +141,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   both received explicit supervising-human approval on 2026-08-09. M70 subsequently completed ADR
   0034 headless auto-constraint drafting intelligence. Implementation, focused direct and
   integrated release qualification, frozen replacement-candidate publication and served-byte
-  verification are complete. `M70-F001` is resolved and the scoped human UAT is approved. M70B is
-  now the qualified, frozen bounded reproduction-capsule candidate awaiting its own human UAT;
-  M71 remains deferred behind it.
+  verification are complete. `M70-F001` is resolved and the scoped human UAT is approved. M70B
+  subsequently completed its bounded reproduction-capsule work and requested scoped sign-off;
+  M71 remains an inactive, unauthorized candidate backlog.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by
