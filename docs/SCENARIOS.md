@@ -1309,7 +1309,10 @@ passes that complete gate, including its 198-row clean oracle and 152.49-second 
 sparse crossover. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is
 served at `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest
 aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The focused F005
-movement UAT and explicit approval remain pending. M71 is deferred behind them.
+movement behavior was subsequently reported fixed by the supervising human, who requested the final
+closing investigation. The two-previously-Current transaction and CircularArc transport/domain
+parity regressions, clean closing qualification and scoped approval record remain before closure.
+M71 is deferred behind M70B.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1722,6 +1725,20 @@ invalid sample commits only the previous valid preview. Mixed Current plus unrel
 exact-edit replay binding, Undo/Redo, cold restore and stale/detached scene authority are also
 frozen. Direct document edits remain free to leave a computed feature visibly Failed.
 
+The final closing audit additionally requires one focused retained-coordinator sequence with two
+distinct features that both begin `Current` and only one becoming invalid during projected
+dragging. It must withhold the entire candidate rather than paint a partial/native-only scene,
+retain the paired last-valid scene and release coordinate, attribute only the failing feature,
+recover in reverse and release only the last valid sample. This is an owning-layer transaction
+regression, not a sixth static Fillet golden row.
+
+The same closing cut directly covers the finite CircularArc member of the circular/affine transport
+path. Both parent orders move one regular contact beyond a stale Local witness while preserving
+explicit sides, retained endpoints, endpoint order and sweep; finite incidence, radius, tangency,
+signed side and bounded-domain state are independently checked. A same-orientation root on the
+complete supporting circle but beyond the finite arc endpoint remains Failed with no partial edge.
+This primitive permutation is likewise focused owner coverage rather than another golden row.
+
 Mouse-up is staged rather than repaired after publication: the candidate native session, exact
 contact-frame-only sidecar, cold no-hint computed output, allocator, checkpoint, history and replay
 transition must all succeed before live authority changes. A forced allocator exhaustion between
@@ -1779,7 +1796,7 @@ Later human UAT opened `M70B-F003` outside the matrix's constraint/dimension and
 scope; no reproduction payload was needed because the exact topology is compactly constructed
 through public Rust APIs. `docs/M70B_HARDENING.md` owns the full readable checklist,
 commands, seed and limitations. This does not replace the exact M70B-F001/F002 payload regressions,
-the broader M55/M62 family-by-primitive coverage or the pending supervising-human M70B UAT. Clean
+the broader M55/M62 family-by-primitive coverage or the supervising-human M70B close record. Clean
 source `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` also passes the complete release gate and its fresh
 seven-file Tailscale snapshot is byte-verified.
 
@@ -1836,9 +1853,11 @@ byte-identical, so the F003/F004 repair checkpoint was 197/197 `PASS` at SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. Its focused and complete
 workspace qualification passed. Clean source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate. Its immutable
-seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is served at
-`http://100.94.63.83:8080/`; every file and `/` byte-match the snapshot, whose ordered-manifest
-aggregate is `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`.
+seven-file snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` was served at
+`http://100.94.63.83:8080/` for that historical checkpoint; every file and `/` byte-matched the
+snapshot, whose ordered-manifest aggregate was
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. F005 superseded that
+publication.
 
 F005 preserves all 197 records and appends the source-rotation row at fingerprint
 `input-04658a77db2dc779`. The current fixture is 198/198 `PASS` at SHA-256
@@ -1848,8 +1867,10 @@ tests and the relevant WASM check pass. Clean source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate. Its immutable
 seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
 `http://100.94.63.83:8080/`, with ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. Targeted human rechecks and
-explicit M70B approval remain pending.
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
+reported the F005 movement behavior fixed and requested the final closing investigation. The
+two-previously-Current transaction and CircularArc transport/domain parity regressions, clean
+closing qualification and scoped M70B approval record remain before closure.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

@@ -16,7 +16,10 @@ suite, nine-test retained movement suite, focused golden tests, all aggregate go
 formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
 relevant WASM check pass. Clean source `d400c4a8201f6afc531f5b504424d6430dbf3937`
 passes the complete release gate, and its fresh immutable seven-file publication is byte-verified
-through Tailscale. The supervising-human recheck and M70B approval remain pending.
+through Tailscale. The supervising human subsequently reported the F005 movement behavior fixed and
+requested the final investigation and closing pass. Scoped approval remains contingent on the
+closing audit's focused two-previously-Current projected-drag transaction and CircularArc
+transport/domain parity regressions plus clean closing qualification.
 
 M70B-H1 originated this matrix. M70B-H2 moved the unchanged 193-row corpus and driver to
 milestone-neutral names so later findings can reuse it without rewriting H1 history. The original
@@ -411,7 +414,7 @@ compilation, M14/M32 performance budgets, package/licence and single-workbench/G
 the 256-moving-body sparse crossover in `123.32s`, and Trunk 0.21.14 release assembly. Only the
 pre-existing non-failing Cargo `license` plus `license-file` notices appeared.
 
-The fresh read-only seven-file snapshot is `/tmp/geosolve-m70b-h1-uat.viSB9G`, served at
+The fresh read-only seven-file snapshot was `/tmp/geosolve-m70b-h1-uat.viSB9G`, served at
 `http://100.94.63.83:8080/`. Its exact file hashes are:
 
 | File | SHA-256 |
@@ -428,7 +431,8 @@ The ordered manifest aggregate is
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`.
 Because H1 changes test infrastructure only, these release bytes intentionally match the F002
 candidate. Proxy- and cache-bypassed requests through the actual Tailscale address byte-compared
-`/` and every asset with the frozen snapshot. Human UAT remains pending.
+`/` and every asset with the frozen snapshot. Human UAT remained pending at that historical
+checkpoint.
 
 ### M70B-H2 canonical workflow qualification
 
@@ -450,9 +454,9 @@ two harness errors independently.
 The golden SHA-256 remains
 `803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`. Every generated release
 file retains the H1 hash listed above, and the ordered manifest aggregate remains
-`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. H2 therefore leaves the
-served H1 product candidate unchanged and requires no Tailscale republish. Human UAT remains
-pending.
+`f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. H2 therefore left the
+then-served H1 product candidate unchanged and required no Tailscale republish. Human UAT remained
+pending at that historical checkpoint.
 
 ### M70B-H3 discovery, F003/F004 gate and F005 qualified state
 
@@ -498,11 +502,12 @@ mode `0555` and each of its exactly seven files is mode `0444`:
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
 
 The ordered manifest aggregate is
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. PID `524440` serves that
-snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
-cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
-immutable local counterpart. The F003/F004 targeted human rechecks and supervising-human approval
-remain pending.
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. The historical publication
+was bound only to the Tailscale address. Proxy- and cache-bypassed fetches proved that `/` matched
+`index.html` and every served asset byte-matched its immutable local counterpart. F005 superseded
+that publication, so no obsolete PID or claim that it still occupies the shared endpoint is
+retained. The F003/F004 targeted human rechecks and supervising-human approval remained pending at
+that checkpoint.
 
 ### M70B-F005 replacement qualification and publication
 
@@ -537,4 +542,27 @@ The ordered manifest aggregate is
 snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
 cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
 immutable local counterpart. This candidate supersedes the F003/F004 snapshot for the F005
-movement-continuity recheck in `docs/M70B_UAT.md`; human UAT and explicit approval remain pending.
+movement-continuity recheck in `docs/M70B_UAT.md`. The supervising human reported that movement
+behavior fixed and requested the final closing investigation; scoped approval awaits the focused
+two-previously-Current transaction and CircularArc transport/domain parity regressions plus clean
+closing qualification.
+
+### Closing multi-feature transaction audit
+
+The broad golden remains unchanged at 198 rows because this is a sequence-level retained-
+coordinator invariant, not a new static authoring or branch dimension. Before closure, one focused
+regression must begin with two distinct computed features that are both `Current`, make only one
+invalid during projected dragging, and prove complete-scene withholding, paired last-valid scene
+and release-coordinate retention, failing-feature-only attribution, reverse recovery and terminal
+release of only the last valid sample.
+
+The feature owner also needs one public CircularArc/affine permutation because the transport path
+admits finite arcs as well as full circles. Both parent orders must carry a regular root beyond a
+stale Local witness without changing explicit intent, independently validate finite incidence,
+radius, tangency, side and bounded-domain state, and reject a same-orientation supporting-circle
+root that lies beyond the native arc endpoint. This remains focused owner coverage, not a sixth
+golden row.
+
+After those test-only additions, the complete clean release gate must re-pass. If the assembled F005
+distribution remains byte-identical, its current frozen publication remains the UAT evidence and no
+republish is required.

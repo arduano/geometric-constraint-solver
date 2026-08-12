@@ -172,8 +172,11 @@ workspace Clippy, locked all-feature workspace tests and the relevant WASM check
 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate, and its immutable
 seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
 `http://100.94.63.83:8080/` with ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
-recheck and approval remain pending. M71 remains deferred behind them.
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
+reported the targeted F005 movement behavior fixed and requested the final closing investigation.
+Scoped approval is ready to be recorded after the closing two-previously-Current transaction and
+CircularArc transport/domain parity regressions plus clean closing qualification pass. M71 remains
+deferred behind M70B.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1434,7 +1437,9 @@ feature workspace tests and the relevant WASM check pass. Clean F005 source
 snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted human recheck
-and approval remain pending.
+was subsequently reported fixed by the supervising human, who requested the final closing
+investigation. Scoped approval remains contingent on the two closing regressions and clean
+qualification below.
 
 - Copy builds a fresh deterministic application-workspace v5 snapshot from the current retained
   coordinator. It does not expose raw `localStorage`, a backup storage key, the deleted
@@ -1606,6 +1611,21 @@ general `mark_solved_preview` API retains its established native-only/Withheld f
 deliberate direct document edit may still publish an attributed Failed feature rather than being
 silently clamped.
 
+Closing qualification must exercise that universal rule with two distinct features that both begin
+Current and a projected sample that makes only one feature invalid. The focused retained-
+coordinator regression must prove that no partial or native-only candidate advances, the paired
+last-valid scene and release coordinate remain authoritative, only the failing feature is
+attributed, reverse motion recovers, and terminal release commits only the last valid sample. This
+sequence belongs in the owning coordinator suite rather than as another static golden row.
+
+The constant-curvature transport claim additionally requires public feature-owner coverage for a
+finite CircularArc paired with an affine Interior parent in both parent orders. A regular source
+move must carry the contact beyond a stale Local witness while retaining the same explicit sides,
+retained endpoints, endpoint order and sweep; independent finite incidence, radius, tangency,
+signed-side and bounded-domain checks must pass. A same-orientation supporting-circle root beyond
+the native arc endpoint remains a fail-closed domain barrier with no partial edge publication. This
+primitive permutation also remains focused rather than adding a sixth static golden row.
+
 Mouse-up must stage native geometry, durable feature intent, evaluation allocator, computed
 snapshot, checkpoint, history and transcript before one infallible publication. Any native-release,
 continuation, cold-reproduction, identity-exhaustion or checkpoint failure leaves all live and
@@ -1635,7 +1655,9 @@ check pass. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes
 snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
 `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
-recheck and explicit approval remain pending.
+recheck was subsequently reported fixed. The closing two-previously-Current coordinator and
+CircularArc transport/domain regressions, clean closing qualification and scoped approval record
+remain before closure.
 
 M71 remains deferred behind M70B.
 

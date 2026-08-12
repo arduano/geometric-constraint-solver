@@ -62,9 +62,12 @@ payload-derived owner regression and systemic row extend the reviewed fixture to
 Focused owner/golden and aggregate golden qualification, formatting, warnings-denied all-workspace
 Clippy, locked all-feature workspace tests and the relevant WASM check pass. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate and its fresh
-immutable seven-file Tailscale publication is byte-verified. The targeted movement recheck and
-approval remain pending. M71 is deferred behind M70B and remains an unauthorized candidate
-backlog. M66's
+immutable seven-file Tailscale publication is byte-verified. The supervising human subsequently
+reported the F005 movement behavior fixed and requested a final investigation and closing pass.
+That close request is ready to become scoped M70B approval only after the closing audit's focused
+two-previously-Current transaction regression, CircularArc transport/domain parity regression and
+clean closing qualification pass; M70B is not yet recorded as closed. M71 is deferred behind M70B
+and remains an unauthorized candidate backlog. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3691,8 +3694,11 @@ locked all-feature workspace tests and the relevant WASM check pass. Prior F003/
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes the complete release gate and its frozen
 seven-file distribution is retained as historical evidence. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate; its fresh immutable
-seven-file distribution is published and byte-verified through Tailscale. The targeted movement
-recheck and explicit approval remain pending; M70B is not complete.
+seven-file distribution is published and byte-verified through Tailscale. The supervising human
+reported that targeted movement behavior fixed and requested the final closing investigation. The
+audit's focused two-previously-Current projected-drag transaction regression, CircularArc
+transport/domain parity regression and resulting clean closing qualification must still pass before
+the scoped approval is recorded; M70B is not complete.
 
 Goal: make ordinary UAT failures self-contained and practical to hand off over text without
 restoring the deleted diagnostic lab or treating browser state as solver authority.
@@ -3811,6 +3817,16 @@ restoring the deleted diagnostic lab or treating browser state as solver authori
   its frozen UAT distribution.
 - [x] Pass the complete clean F005 replacement gate and publish/byte-verify a fresh immutable UAT
   distribution before asking for the targeted movement recheck.
+- [x] Add and pass one focused retained-coordinator regression in which two distinct computed
+  features begin `Current`, only one becomes invalid during projected dragging, and complete-scene
+  atomicity retains the paired last-valid native/computed scene, attributes only the failing
+  feature, recovers in reverse and releases only the last valid sample.
+- [x] Add and pass one public feature-owner CircularArc/affine regression that crosses a stale
+  certificate edge on the same explicit branch in both parent orders, independently validates the
+  generated arc/contact geometry and keeps a genuine finite-arc endpoint escape fail-closed.
+- [ ] Re-pass the complete clean release gate after that test-only closing cut. Preserve the F005
+  product bytes and publication evidence; no republish is required if the generated distribution
+  remains byte-identical.
 - [ ] Complete `docs/M70B_UAT.md` and receive explicit supervising-human approval.
 
 Historical `M70B-H3` test-only qualification note (2026-08-11): the four new Fillet cases ran in
@@ -3900,8 +3916,10 @@ benchmark compilation, M14/M32 performance budgets, package/licence and Git-hygi
 release files are frozen read-only under `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` and served at
 `http://100.94.63.83:8080/`. Proxy- and cache-bypassed HTTP fetches of every file and `/`
 byte-match the snapshot; the ordered manifest aggregate is
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. Only the targeted movement
-recheck, remaining focused UAT and explicit M70B approval remain pending.
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
+reported the targeted movement behavior fixed and requested the final closing investigation. The
+closing two-previously-Current transaction regression, CircularArc transport/domain parity
+regression, clean closing qualification and scoped approval record remain before closure.
 
 `M70B-F003/F004` replacement qualification/publication note (2026-08-11): clean nominated source
 `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
@@ -3910,11 +3928,12 @@ recheck, remaining focused UAT and explicit M70B approval remain pending.
 workspace tests, native/WASM transition parity, the demo-web WASM check, warnings-denied rustdoc,
 benchmark compilation, performance budgets including the 146.13-second 256-moving-body sparse
 crossover, package/licence checks and the Trunk 0.21.14 release build. Exactly seven release files
-are frozen read-only under `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` and served at
-`http://100.94.63.83:8080/`. Proxy-bypassed HTTP fetches of every file and `/` byte-match the
-snapshot; the ordered manifest aggregate is
+were frozen read-only under `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` and were served at
+`http://100.94.63.83:8080/` for that historical checkpoint. Proxy-bypassed HTTP fetches of every
+file and `/` byte-matched the snapshot; the ordered manifest aggregate was
 `96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. Targeted supervising-human
-recheck and explicit M70B approval remain pending.
+recheck and explicit M70B approval remained pending at that checkpoint; F005 superseded this
+candidate.
 
 `M70B-H2` qualification note (2026-08-11): clean source
 `47584bdb607c722df508eae56584726954a03205` passes the renamed 193/193 clean oracle and the complete
@@ -3928,7 +3947,8 @@ row, while a CSS-only report stays outside the workflow. The golden SHA-256 rema
 `803c443d12a7362993fd557bd96d9db496ce162579d0ae08e2feff57b009e19b`; all seven generated release
 files retain the H1 hashes and ordered manifest aggregate
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. No product-byte change or
-Tailscale republish is required; the H1 UAT candidate remains current.
+Tailscale republish was required; the H1 UAT candidate remained current at that historical
+checkpoint.
 
 `M70B-H1` qualification/publication note (2026-08-11): nominated source
 `dd645d99e705e56c80ab2a4a136f7a4d03baafbf` passes the exact 193-row clean oracle and the complete
@@ -3936,12 +3956,12 @@ integrated release gate. The gate includes formatting, warnings-denied Clippy, l
 workspace tests, native/WASM M70 parity, the demo-web WASM check, warnings-denied rustdoc,
 benchmark compilation, performance budgets, package/licence checks, static single-workbench and
 Git-hygiene checks, the 123.32-second 256-moving-body sparse crossover and Trunk 0.21.14 release
-assembly. A fresh read-only seven-file snapshot at `/tmp/geosolve-m70b-h1-uat.viSB9G` is served at
-`http://100.94.63.83:8080/`; proxy-bypassed requests for every asset and `/` byte-match the frozen
+assembly. A fresh read-only seven-file snapshot at `/tmp/geosolve-m70b-h1-uat.viSB9G` was served at
+`http://100.94.63.83:8080/`; proxy-bypassed requests for every asset and `/` byte-matched the frozen
 snapshot, with manifest aggregate
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. Because H1 changes only
-test infrastructure, the release bytes intentionally match the prior F002 candidate. Focused human
-UAT and explicit approval remain pending.
+test infrastructure, the release bytes intentionally matched the prior F002 candidate. Focused
+human UAT and explicit approval remained pending at that historical checkpoint.
 
 Qualification/publication note (2026-08-10): source
 `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b` passes the demo-web 94/94 library and 1/1 native
@@ -3949,10 +3969,10 @@ decoder tests, warnings-denied Clippy, the explicit WASM check, both platform li
 and the complete integrated release gate. The gate includes all locked workspace tests,
 cross-target M70 parity, rustdoc, benchmark compilation, performance budgets, package/licence
 checks, the required 256-moving-body sparse crossover and Trunk release assembly. A read-only
-seven-file snapshot at `/tmp/geosolve-m70b-uat.Oj9SZT` is served at
+seven-file snapshot at `/tmp/geosolve-m70b-uat.Oj9SZT` was served at
 `http://100.94.63.83:8080/`; every asset and `/` matched the frozen local bytes, with manifest
 aggregate `35ca7410d92aaf074dde7fc6265ad2f99beaea9b082169a7f0fb4ff87d153969`.
-This is retained as historical transport evidence; `M70B-F001` withdraws it as the current UAT
+This is retained as historical transport evidence; `M70B-F001` withdrew it as the current UAT
 candidate.
 
 UAT finding `M70B-F001` (2026-08-10): payload identity `8446:ea81c82137d5b13c`
@@ -3975,10 +3995,11 @@ differential/NURBS, M28, M10 and M14 collateral, warnings-denied focused Clippy 
 integrated release gate. The gate includes locked workspace tests, native/WASM M70 parity, the
 demo-web WASM check, rustdoc, benchmark compilation, performance budgets, package/licence checks,
 the 146.60-second 256-moving-body sparse crossover and Trunk release assembly. A read-only
-seven-file snapshot at `/tmp/geosolve-m70b-f001-uat.A2G9KJ` is served at
-`http://100.94.63.83:8080/`; every asset and `/` byte-matches the frozen local candidate, with
+seven-file snapshot at `/tmp/geosolve-m70b-f001-uat.A2G9KJ` was served at
+`http://100.94.63.83:8080/`; every asset and `/` byte-matched the frozen local candidate, with
 manifest aggregate `b91f25a600e09f99c67f7b8a77d2bc6a38d7a1517fead2b70942ed5681337c28`.
-Only the targeted recheck, remaining focused UAT and explicit approval remain pending.
+Only the targeted recheck, remaining focused UAT and explicit approval remained pending at that
+historical checkpoint.
 
 UAT finding `M70B-F002` (2026-08-10): payload identity `6037:eecc886c0e61208f` contains a circle,
 a line endpoint on its perimeter and a newly retained radial Normal. Compact authoring had reused
@@ -4001,10 +4022,10 @@ workspace tests, native/WASM M70 parity, the demo-web WASM check, warnings-denie
 benchmark compilation, performance budgets, package/licence checks, static single-workbench and
 Git-hygiene checks, the 147.45-second 256-moving-body sparse crossover and Trunk 0.21.14 release
 assembly. A read-only seven-file snapshot at
-`/tmp/geosolve-m70b-f002-uat.tcE3Jl` is served at `http://100.94.63.83:8080/`; every asset and `/`
-byte-matches the frozen local candidate, with manifest aggregate
+`/tmp/geosolve-m70b-f002-uat.tcE3Jl` was served at `http://100.94.63.83:8080/`; every asset and `/`
+byte-matched the frozen local candidate, with manifest aggregate
 `f33cc593dbe719f192a5a08ea293678f4c053adbe6b9bf4f44f8bae662f53019`. Only focused human UAT
-and explicit approval remain pending.
+and explicit approval remained pending at that historical checkpoint.
 
 Historical UAT finding `M70B-F003` (2026-08-11), independently reproduced against source
 `63845836d3245eccc7ab7f820ac60ba2d562f7e1`: an open three-span triangle polyline has distinct

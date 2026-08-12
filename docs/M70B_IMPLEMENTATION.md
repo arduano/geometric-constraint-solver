@@ -3,9 +3,10 @@
 # M70B implementation — Bounded workspace reproduction capsules
 
 Status: active during human UAT. The bounded transport and restore
-remain qualified, and `M70B-F001`/`M70B-F002` retain complete replacement evidence. M70B-H1 adds a
-test-only continue-through-failure constraint/dimension-authoring and scene oracle with 193/193
-passing rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring outside that matrix;
+remain qualified, and `M70B-F001`/`M70B-F002` retain complete replacement evidence. M70B-H1
+historically added a test-only continue-through-failure constraint/dimension-authoring and scene
+oracle with 193/193 passing rows. Subsequent UAT opened `M70B-F003` in computed-Fillet authoring
+outside that matrix;
 two later supplied line-circle Fillet payloads opened `M70B-F004` in persistent nonlinear branch
 traversal. Both exact failures were first characterized at their headless owners and are now
 repaired there under the authorized repair phase. The H1 nominated source passes the complete
@@ -26,7 +27,11 @@ survey/check/clean modes, formatting, warnings-denied all-workspace Clippy, lock
 workspace tests and the relevant WASM check. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` also passes the complete release gate, and its fresh
 immutable seven-file Tailscale publication is byte-verified. Supervising-human UAT and approval
-remain pending. This document records no human pass or milestone closure.
+are ready for scoped close after the closing audit's focused two-previously-Current projected-drag
+transaction and CircularArc transport/domain parity regressions plus clean closing qualification
+pass. The supervising human reported the F005 movement behavior fixed and requested this final
+investigation and closing pass; this document does not record milestone closure before those gates
+are green.
 
 Architecture owners: the existing `geosolve-demo-web` workspace-persistence boundary owns the
 transport, `geosolve-sketch` owns the pre-existing Local contact-branch lowering corrected by
@@ -719,13 +724,13 @@ fb7ea6cddc7603a876ad90d6537d42434b82565a8245606217af593598f1ab79  index.html
 49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048  styles-36c74d05d21a90c9.css
 ```
 
-Snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` is immutable at directory mode `0555` and file
+Snapshot `/tmp/geosolve-m70b-f003-f004-uat.lKC2xY` was immutable at directory mode `0555` and file
 mode `0444`. Its ordered manifest aggregate is
-`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. PID `524440` serves the
-snapshot at `http://100.94.63.83:8080/`, bound only to the Tailscale address. Proxy- and
-cache-bypassed fetches proved every served asset byte-identical to its local snapshot counterpart;
-served `/` also matches `index.html`. The distribution is ready for the still-pending targeted
-F003/F004 human rechecks and broader M70B approval.
+`96cc64dec998074ede56e3e38fb919a4854d0e0dbb8030138393e01a3d0844d3`. The historical publication
+was bound only to the Tailscale address, and proxy- and cache-bypassed fetches proved every served
+asset byte-identical to its local snapshot counterpart; served `/` also matched `index.html`. F005
+superseded that publication, so no obsolete PID or claim that it still occupies the shared endpoint
+is retained.
 
 ## 3.9 `M70B-F005` affine-source certificate transport
 
@@ -825,8 +830,9 @@ The ordered manifest aggregate is
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` serves that
 snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
 cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
-immutable local counterpart. The targeted movement recheck and supervising-human approval remain
-pending.
+immutable local counterpart. The supervising human has reported the targeted movement behavior
+fixed and requested this final close investigation. Scoped approval will be recorded after the
+closing transaction regression and clean closing qualification pass.
 
 ## 4. Acceptance criteria
 
@@ -870,6 +876,15 @@ pending.
 - [x] projected dragging publishes only a complete native-plus-computed scene, retains the last
   valid preview and release coordinate at a genuine limit, exposes local problem metadata when
   possible, recovers in reverse, and preserves the general native-only preview contract;
+- [x] one focused retained-coordinator regression begins with two distinct `Current` features,
+  makes only one invalid during projected dragging, and proves no partial/native-only publication,
+  failing-feature-only attribution, paired last-valid retention, reverse recovery and last-valid
+  release;
+- [x] one public feature-owner regression covers CircularArc/affine transport beyond a stale Local
+  witness in both parent orders, independently validates the same explicit branch and keeps a
+  regular supporting-circle root beyond the finite arc endpoint fail-closed;
+- [ ] the complete clean release gate re-passes after that test-only closing cut, with unchanged
+  F005 product bytes requiring no replacement publication;
 - [x] projected release is staged across session/features/allocator/checkpoint/history/transcript;
   forced durability failure is fingerprint-atomic, and non-`Edit` actions cannot persist an
   unrecorded re-anchor;
@@ -903,7 +918,10 @@ download flow, raw browser-storage handoff and browser E2E remain retired. The r
 198-`PASS` fixture and clean replacement source have passed the milestone-appropriate automated
 qualification and complete clean release gate; the immutable F005 replacement is served and
 byte-verified. Focused human UAT and explicit approval, including targeted
-`M70B-F001`/`M70B-F002` rechecks, remain pending. A
+`M70B-F001`/`M70B-F002` rechecks, remain pending.
+The supervising human has separately reported F005 movement fixed and requested the final closing
+pass; formal scoped approval awaits the focused two-previously-Current transaction and CircularArc
+transport/domain parity regressions plus clean closing qualification. A
 Local interval whose semantic endpoint is exactly zero has no valid solution at that endpoint;
 exact edge pressure can therefore still fail closed before the one-ULP effective endpoint becomes
 active. Ordinary near-edge contacts and the supplied positive-bound payload pass, but exact

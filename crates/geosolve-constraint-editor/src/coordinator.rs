@@ -15820,6 +15820,304 @@ mod tests {
         );
     }
 
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the complete-scene regression keeps two feature dispositions, preview retention, attribution, recovery and release in one real pointer transaction"
+    )]
+    fn projected_drag_rejects_one_new_failure_beside_another_current_fillet() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let first_candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let first = apply_grouped_fillet(&mut fixture.coordinator, &first_candidate);
+        let second_candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[2]]);
+        let second = apply_grouped_fillet(&mut fixture.coordinator, &second_candidate);
+        let initial_snapshot = fixture
+            .coordinator
+            .computed_snapshot()
+            .expect("two initially Current Fillets");
+        assert!(matches!(
+            computed_feature_state(initial_snapshot, first),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+        assert!(matches!(
+            computed_feature_state(initial_snapshot, second),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+
+        let (first_corner, mut first_sources) = {
+            let ComputedFeatureDefinition::FilletSet(set) = &fixture
+                .coordinator
+                .feature_document()
+                .feature(first)
+                .expect("first Fillet")
+                .definition;
+            let corner = set.corners[0];
+            (corner.id, vec![corner.first.source, corner.second.source])
+        };
+        first_sources.sort_unstable();
+
+        // Establish independently that this exact native candidate fails only
+        // the first set. The projected transaction below must reject that
+        // partial candidate instead of publishing the surviving second set.
+        let mut failure_probe = RetainedEditorCoordinator::with_features(
+            fixture.coordinator.session().clone(),
+            fixture.coordinator.feature_document().clone(),
+        )
+        .expect("failure probe");
+        failure_probe
+            .apply_edit(
+                failure_probe.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: fixture.points[1],
+                    position: [0.1, 0.0],
+                },
+            )
+            .expect("mixed candidate is an accepted native edit");
+        let candidate_snapshot = failure_probe
+            .computed_snapshot()
+            .expect("mixed candidate computed state");
+        assert!(matches!(
+            computed_feature_state(candidate_snapshot, first),
+            ComputedFeatureEvaluationState::Failed { .. }
+        ));
+        assert!(matches!(
+            computed_feature_state(candidate_snapshot, second),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+
+        let point = fixture.points[1];
+        let scene = current_computed_scene(&fixture.coordinator);
+        let press = scene
+            .points
+            .iter()
+            .find(|candidate| candidate.id == point)
+            .expect("shared source point")
+            .screen_position;
+        let pointer_id = 9_070;
+        let pointer = |position| PointerInput {
+            pointer_id,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        let expected_design = fixture.coordinator.session().design_identity();
+        let history_before = fixture.coordinator.history_len();
+        fixture.coordinator.pointer_down(&scene, pointer(press));
+
+        let computed_scene_fingerprint = |coordinator: &RetainedEditorCoordinator| {
+            let ComputedSceneState::Current { expected, snapshot } =
+                coordinator.computed_scene_state()
+            else {
+                panic!(
+                    "complete computed-scene fingerprint requested from {:?}",
+                    coordinator.computed_scene_state()
+                )
+            };
+            assert_eq!(*expected, snapshot.input());
+            (
+                *expected,
+                snapshot.evaluation_revision(),
+                snapshot.edges().to_vec(),
+                snapshot.construction_fragments().to_vec(),
+                snapshot.feature_evaluations().to_vec(),
+                snapshot.replaced_sources().to_vec(),
+            )
+        };
+
+        let resolve_sample = |coordinator: &mut RetainedEditorCoordinator,
+                              model_position: [f64; 2]| {
+            let scene = visible_computed_scene(coordinator);
+            let screen = scene.viewport.model_to_screen(model_position);
+            let request = coordinator
+                .editor_mut()
+                .pointer_move(&scene, pointer(screen));
+            let [
+                EditorEffect::RequestProjectedPointMove {
+                    pointer_id,
+                    request_id,
+                    point: requested,
+                    model_position,
+                },
+            ] = request.as_slice()
+            else {
+                panic!("projected sample did not emit one request: {request:?}")
+            };
+            assert_eq!(*requested, point);
+            let effects = coordinator.resolve_projected_point_move(
+                *pointer_id,
+                *request_id,
+                *requested,
+                *model_position,
+            );
+            (screen, effects)
+        };
+
+        let (_, valid_effects) = resolve_sample(&mut fixture.coordinator, [3.5, 0.0]);
+        let [
+            EditorEffect::PreviewPointMove {
+                point: previewed,
+                model_position: first_valid_position,
+            },
+        ] = valid_effects.as_slice()
+        else {
+            panic!("first regular sample did not publish one preview: {valid_effects:?}")
+        };
+        assert_eq!(*previewed, point);
+        let first_valid_position = *first_valid_position;
+        let first_valid_session = fixture
+            .coordinator
+            .solved_preview_session()
+            .expect("first valid native preview");
+        let first_valid_design_json = first_valid_session.export_design_json().unwrap();
+        let first_valid_accepted_json = first_valid_session.export_accepted_json().unwrap();
+        let first_valid_computed = computed_scene_fingerprint(&fixture.coordinator);
+        let first_valid_snapshot = match fixture.coordinator.computed_scene_state() {
+            ComputedSceneState::Current { expected, snapshot } => {
+                assert_eq!(*expected, snapshot.input());
+                snapshot
+            }
+            state => panic!("first regular sample withheld computed output: {state:?}"),
+        };
+        for feature in [first, second] {
+            assert!(matches!(
+                computed_feature_state(first_valid_snapshot, feature),
+                ComputedFeatureEvaluationState::Current { .. }
+            ));
+        }
+
+        let (_, blocked_effects) = resolve_sample(&mut fixture.coordinator, [0.1, 0.0]);
+        assert!(
+            blocked_effects.is_empty(),
+            "a partial computed candidate must not publish a native preview"
+        );
+        let blocked_work = fixture
+            .coordinator
+            .projected_drag_work_evidence()
+            .expect("blocked mixed-candidate evidence");
+        assert!(!blocked_work.accepted);
+        assert_eq!(
+            blocked_work.rejection_stage,
+            Some(ProjectedDragRejectionStage::PreviewPublication)
+        );
+        let retained_session = fixture
+            .coordinator
+            .solved_preview_session()
+            .expect("blocked sample retains the paired native preview");
+        assert_eq!(
+            retained_session.export_design_json().unwrap(),
+            first_valid_design_json
+        );
+        assert_eq!(
+            retained_session.export_accepted_json().unwrap(),
+            first_valid_accepted_json
+        );
+        assert_eq!(
+            computed_scene_fingerprint(&fixture.coordinator),
+            first_valid_computed,
+            "the blocked candidate must retain the exact computed snapshot"
+        );
+        let problems = fixture.coordinator.computed_feature_problems();
+        let [problem] = problems.as_slice() else {
+            panic!("one newly failed Fillet must publish one targeted problem: {problems:?}")
+        };
+        assert_eq!(problem.feature, Some(first));
+        assert_ne!(problem.feature, Some(second));
+        assert_eq!(problem.corners, vec![first_corner]);
+        assert_eq!(problem.sources, first_sources);
+        assert_eq!(problem.scope, EditorProblemScope::Targeted);
+
+        let (_, recovered_effects) = resolve_sample(&mut fixture.coordinator, [3.0, 0.0]);
+        let [
+            EditorEffect::PreviewPointMove {
+                point: recovered,
+                model_position: recovered_position,
+            },
+        ] = recovered_effects.as_slice()
+        else {
+            panic!("reverse sample did not recover one complete preview: {recovered_effects:?}")
+        };
+        assert_eq!(*recovered, point);
+        assert_ne!(
+            recovered_position.map(f64::to_bits),
+            first_valid_position.map(f64::to_bits),
+            "reverse recovery must publish a fresh valid sample"
+        );
+        assert!(fixture.coordinator.computed_feature_problems().is_empty());
+        let recovered_position = *recovered_position;
+        let recovered_snapshot = match fixture.coordinator.computed_scene_state() {
+            ComputedSceneState::Current { expected, snapshot } => {
+                assert_eq!(*expected, snapshot.input());
+                snapshot
+            }
+            state => panic!("reverse sample withheld computed output: {state:?}"),
+        };
+        for feature in [first, second] {
+            assert!(matches!(
+                computed_feature_state(recovered_snapshot, feature),
+                ComputedFeatureEvaluationState::Current { .. }
+            ));
+        }
+        let recovered_computed = computed_scene_fingerprint(&fixture.coordinator);
+
+        let (blocked_screen, terminal_effects) =
+            resolve_sample(&mut fixture.coordinator, [0.1, 0.0]);
+        assert!(terminal_effects.is_empty());
+        assert_eq!(
+            computed_scene_fingerprint(&fixture.coordinator),
+            recovered_computed
+        );
+        let release_scene = visible_computed_scene(&fixture.coordinator);
+        let release = fixture.coordinator.editor_mut().pointer_up(
+            &release_scene,
+            expected_design,
+            pointer(blocked_screen),
+        );
+        let [
+            commit @ EditorEffect::CommitPointMove {
+                point: committed,
+                model_position,
+                ..
+            },
+        ] = release.as_slice()
+        else {
+            panic!("terminal blocked sample did not release the last valid preview: {release:?}")
+        };
+        assert_eq!(*committed, point);
+        assert_eq!(
+            model_position.map(f64::to_bits),
+            recovered_position.map(f64::to_bits)
+        );
+        fixture
+            .coordinator
+            .apply_editor_effect(commit)
+            .expect("commit retained complete preview")
+            .expect("one native point mutation");
+        assert_eq!(fixture.coordinator.history_len(), history_before + 1);
+        assert_eq!(
+            fixture
+                .coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("committed accepted state")
+                .document()
+                .point(point)
+                .expect("committed point")
+                .position
+                .map(f64::to_bits),
+            recovered_position.map(f64::to_bits)
+        );
+        assert!(fixture.coordinator.computed_feature_problems().is_empty());
+        let committed_snapshot = fixture
+            .coordinator
+            .computed_snapshot()
+            .expect("committed complete computed output");
+        for feature in [first, second] {
+            assert!(matches!(
+                computed_feature_state(committed_snapshot, feature),
+                ComputedFeatureEvaluationState::Current { .. }
+            ));
+        }
+    }
+
     fn fillet_radius(coordinator: &RetainedEditorCoordinator, feature: ComputedFeatureId) -> f64 {
         let ComputedFeatureDefinition::FilletSet(fillet) = &coordinator
             .feature_document()
