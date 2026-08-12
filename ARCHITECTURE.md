@@ -114,8 +114,13 @@ construction/NURBS UAT and certified all-family visual profiles.
   `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
   behavior was reported fixed. Clean closing source `48e3cc3` passes the complete gate with focused
   multi-feature transaction and finite-arc transport regressions; the 198/198 golden and release
-  bytes remain unchanged. M70B is closed under the requested scoped sign-off. M71 remains an
-  unauthorized candidate backlog awaiting an explicit scope decision.
+  bytes remain unchanged. M70B is closed under the requested scoped sign-off.
+- **Active target:** M71 implements ADR 0035's retained drafting relations. Point-pair Horizontal
+  and Vertical, semantic-center Concentric and native affine-support Collinear join the ordinary
+  `DocumentConstraintDefinition` lifecycle while reusing existing runtime mathematics. Frozen
+  canonical v4 is first isolated behind private wire DTOs; unsupported draft v5 owns the complete
+  side-section round trip. The headless editor owns contextual authoring and bounded M70 inference
+  extensions. Implementation, qualification and focused human UAT are pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -1191,5 +1196,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. Clean closing source
   `48e3cc3` passes the full gate with the focused multi-feature and finite-arc regressions and
   produces byte-identical release output. M70B is closed.
-- M71: candidate backlog after M70B closure. `docs/M71_GOALS.md` records possible additional
-  retained primitives but is not an active or authorized plan.
+- M71: active ADR 0035 retained-drafting-relations milestone. It promotes point-pair
+  Horizontal/Vertical, Concentric and Collinear into the ordinary retained lifecycle, extends the
+  headless authoring/inference contract and preserves frozen v4 through explicit wire isolation.

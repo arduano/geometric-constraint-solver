@@ -1313,7 +1313,8 @@ movement behavior was subsequently reported fixed by the supervising human, who 
 once the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with the two-previously-Current transaction and CircularArc transport/domain
 regressions; the golden and release bytes remain unchanged. M70B is closed under that scoped
-approval. M71 remains an unauthorized candidate backlog awaiting an explicit scope decision.
+approval. M71 is active under ADR 0035 and will add one ordinary editable **Retained drafting
+relations** playground only after its document/editor implementation is mechanically qualified.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is

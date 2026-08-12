@@ -177,8 +177,8 @@ reported the targeted F005 movement behavior fixed and requested sign-off once t
 regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
 the two-previously-Current transaction and CircularArc transport/domain regressions, while the
 198/198 golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B
-without claiming an unrecorded exhaustive UAT replay. M71 remains an unauthorized candidate
-backlog awaiting an explicit scope decision.
+without claiming an unrecorded exhaustive UAT replay. M71 is now the active ADR 0035 retained-
+drafting-relations milestone; its target statements below are not completion claims.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1669,9 +1669,64 @@ F005 snapshot. The supervising human requested those final regressions and sign-
 satisfactory. This scoped decision accepts the recorded M70B deliverable without claiming an
 unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
 
-M71 remains an unauthorized candidate backlog awaiting an explicit scope decision.
+## M71 acceptance: retained drafting relations
 
-`docs/M71_GOALS.md` is a deferred candidate backlog and confers no implementation authority.
+Status: active; implementation, qualification and supervising-human approval are pending.
+
+- Frozen canonical sketch v1-v4 readers and bytes remain unchanged. A private frozen-v4
+  constraint wire DTO prevents in-memory enum growth from expanding v4, and v4 export of M71 state
+  returns typed `DocumentError::UnsupportedM71State` without partial output.
+- Unsupported draft-v5 round-trips complete M71 constraint records in an omitted-when-empty side
+  section while preserving the embedded graph's complete `source_order`. Decode merges before
+  final validation and transactionally rejects collisions, absent/unordered sources, foreign IDs,
+  malformed operands and unknown syntax. Existing M71-empty draft-v5 bytes remain identical.
+- `HorizontalPoints` and `VerticalPoints` accept two distinct stored `DesignPointId` operands and
+  lower to exactly one ordinary hard row. `Concentric` accepts two distinct semantic curve centers
+  and lowers to exactly two coincident-coordinate rows. `Collinear` accepts two nondegenerate
+  directed native affine supports and lowers to the existing two supporting-line rows.
+- Operand order is semantically commutative for all four relations; Collinear is additionally
+  invariant under either support's direction reversal. Distinct curves resolving to one stored
+  center are rejected as tautological, and missing, repeated, unsupported or degenerate operands
+  retain prior accepted state and history.
+- Each definition owns one ordinary persistent constraint/source identity and complete 1/1/2/2
+  audit rows. Labels, units, scales, named operands, suppression, activation, dependency closure,
+  diagnostics, redundancy/conflict evidence and source ordering remain deterministic.
+- Exact, perturbed-recovery, conflicting/redundant, translation/rotation and `1e-6`/`1`/`1e6`
+  scale fixtures independently validate finite accepted geometry and normalized hard residual
+  `<= 1e-9`. Existing residual finite-difference tests remain authoritative because M71 adds no
+  equation; lowering must prove it selects exactly those existing residual families.
+- Ordinary create, suppress/reactivate, edit-parent, delete, Undo/Redo, retained-rejection,
+  prepared-job/CAS, reload and reproduction-payload paths preserve identities, source order,
+  rank/DOF, accepted authority and transactional failure retention.
+- The headless authoring matrix exposes explicit Concentric and Collinear intents. Horizontal and
+  Vertical accept one affine span immediately or collect two stored points in either order;
+  incompatible or incomplete operands return typed progression/disabled reasons without browser
+  policy.
+- M70 inference may persist point-pair H/V only for remembered stored points, Concentric only from
+  exact accepted semantic centers, and Collinear only from certified affine supporting-line
+  evidence. Point identity outranks H/V, derived anchors remain tracking-only, Collinear replaces
+  Parallel, ties/unsupported evidence fail closed and one construction-plus-relation commit is
+  atomic and history-neutral until confirmed.
+- Prospective curve slots permit relations against geometry created in the same transaction while
+  preventing stale, foreign or partially allocated IDs from publishing. Suppression, candidate
+  bounds, scene authentication and exact accepted-input checks retain the M70 contract.
+- Headless scene/presentation DTOs cover all four relations with stable IDs, operands, labels,
+  glyph geometry, selection/hover/problem states and native/WASM parity. The workbench adds no
+  equation, applicability or geometric inference rule.
+- Reviewed systemic rows extend the canonical golden authoring/scene matrix without rewriting
+  unrelated bytes; focused owner regressions remain at their narrowest layer. `--survey`,
+  `--check` and `--require-clean` all pass.
+- Formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests, the
+  relevant WASM and release Trunk builds and one clean `./scripts/release-gate.sh` pass before a
+  candidate is nominated.
+- One immutable distribution is byte-verified and served through Tailscale. The supervising human
+  completes and explicitly approves `docs/M71_UAT.md`; mechanical qualification alone does not
+  close M71.
+
+M71 does not accept broad `DocumentPointRef` H/V operands, M37 catalog consolidation, generic
+intersections, quadrant anchors, nonlinear tangent/normal inference, equality/symmetry inference,
+axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature chaining,
+browser E2E, mobile behavior or legacy UI.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

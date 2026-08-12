@@ -108,8 +108,8 @@ at `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at `http://100.94.63.83:8080/`
 behavior was reported fixed. Clean closing source `48e3cc3` passes the complete release gate with
 focused multi-feature transaction and finite-arc transport regressions; the 198/198 golden and
 runtime release bytes remain unchanged. M70B is closed under the requested scoped sign-off without
-claiming an unrecorded exhaustive UAT replay. M71 remains an unauthorized candidate backlog
-awaiting an explicit scope decision.
+claiming an unrecorded exhaustive UAT replay. M71 is now active under ADR 0035 for exactly four
+ordinary retained drafting relations; implementation and qualification are in progress.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -368,7 +368,7 @@ release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c
 aggregate is `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
 behavior was reported fixed. Clean closing source `48e3cc3` passes the complete release gate with
 the final owner regressions, and M70B is closed under the requested scoped sign-off. The temporary
-`docs/M71_GOALS.md` backlog remains inactive and is not implementation authorization.
+`docs/M71_GOALS.md`, ADR 0035, `PLAN.md` and `ACCEPTANCE.md` now define the authorized M71 scope.
 
 Durable milestone and cleanup records:
 
@@ -419,7 +419,9 @@ Durable milestone and cleanup records:
 - `docs/M70B_HARDENING.md` (historical H1-H3 test-only authoring/scene oracle and defect checklist)
 - `docs/M70B_UAT.md` (scoped reproduction handoff/restore close scorecard)
 - `.agents/skills/geosolve-harden-defect/` (canonical solver/headless defect regression workflow)
-- `docs/M71_GOALS.md` (inactive post-M70B primitive backlog)
+- `docs/M71_GOALS.md` (active retained-drafting-relations scope)
+- `docs/M71_UAT.md` (planned focused M71 scorecard)
+- `docs/adr/0035-retained-drafting-relation-lifecycle.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

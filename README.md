@@ -56,7 +56,8 @@ failure handoff, then validates and reconstructs a complete coordinator before r
 state. F001-F005 retain owning-layer regressions; the canonical golden is 198/198 `PASS`. Clean
 closing source `48e3cc3` passes the complete release gate with the final multi-feature transaction
 and finite-arc transport regressions, while its runtime release remains the byte-verified F005
-candidate. M71 is still only an unauthorized candidate backlog awaiting an explicit scope decision.
+candidate. M71 is active under ADR 0035 for four ordinary retained drafting relations; its
+implementation and focused UAT remain pending.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here

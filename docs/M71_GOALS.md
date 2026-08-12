@@ -1,104 +1,129 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M71 candidate goals — Retained primitives for richer drafting inference
+# M71 goals — Retained drafting relations
 
-Status: inactive candidate backlog only after M70B closure. M71 is not scoped or authorized for
-implementation.
+Status: active, formally scoped and authorized for implementation planning on 2026-08-12. No M71
+production implementation or release candidate exists yet.
 
-M70 deliberately proved auto-constraint interaction using constraint definitions already admitted
-by the ordinary retained editor workflow. This document records likely follow-up primitives and
-branch contracts so they are not smuggled into M70 as fixed coordinates, zero dimensions, hidden
-construction geometry or coordinate-only guesses. It is not a replacement for a future M71 plan,
-ADR, acceptance matrix or supervising-user scope decision.
+M70 proved reusable auto-constraint interaction using only constraint definitions already owned by
+the ordinary retained document/editor workflow. M71 closes the highest-value gap exposed by that
+cut: four relations whose runtime mathematics exists but whose ordinary retained lifecycle is
+missing.
 
-## Priority A — complete high-value retained relationships
+## Active scope
 
-### Arbitrary point-pair horizontal and vertical
+M71 promotes exactly these relation definitions into `DocumentConstraintDefinition`:
 
-The M37 semantic catalog already has point-pair H/V equations, but the ordinary retained
-document/editor lifecycle does not expose them as a stable authoring/inference target. A future
-cut should either admit that existing semantic source through persistence, history, prepared-input,
-diagnostic and workspace ownership or define one deliberate supported replacement. It must not
-encode the relation as two fixed coordinates or a zero distance.
+```rust
+HorizontalPoints {
+    first: DesignPointId,
+    second: DesignPointId,
+}
+VerticalPoints {
+    first: DesignPointId,
+    second: DesignPointId,
+}
+Concentric {
+    first: DocumentCenterRef,
+    second: DocumentCenterRef,
+}
+Collinear {
+    first: DocumentLineSupportRef,
+    second: DocumentLineSupportRef,
+}
+```
 
-Architecture risk: **medium**. The mathematics exists; the risk is duplicate source languages and
-incomplete retained lifecycle/schema ownership.
+These are ordinary retained constraints, not a second source language. Each gains the same source
+identity, ordering, validation, lowering, accepted/rejected state, suppression, deletion,
+dependency closure, diagnostics, prepared-work, history, persistence, reproduction and editor
+publication behavior as existing ordinary constraints.
 
-### Certified intersections, collinearity and line extensions
+The mathematical lowering reuses existing sketch operations:
 
-Intersection inference needs certified native parameter/domain evidence for both supports and an
-explicit policy for bounded span versus supporting-line extension. A placed persistent point may
-then use an atomic pair of existing curve contacts or a deliberately retained intersection source.
-Collinearity should reuse the existing semantic relation where its lifecycle can be completed.
-Parallel/near-parallel, tangential, multiple, coincident/overlapping and out-of-domain roots must
-remain typed ambiguous or unavailable.
+- point-pair Horizontal/Vertical call `Sketch::add_horizontal_points` and
+  `Sketch::add_vertical_points`, producing one row each;
+- Concentric resolves the two stored semantic centers and calls `Sketch::add_coincident`, producing
+  two coordinate rows; and
+- Collinear resolves the two directed affine supports and calls `Sketch::add_collinear`, producing
+  the existing two line-support rows.
 
-Architecture risk: **medium-high**. The main risk is turning a visual sampled crossing into false
-topology or silently changing bounded-domain meaning.
+No new residual, equation, Jacobian or solver priority is required. The current independent hard
+validation, finite-state, rank/DOF, redundancy/conflict and branch rules remain authoritative.
 
-## Priority B — circular semantic anchors
+### Deliberately narrow operands
 
-### Concentric and quadrant inference
+Point-pair Horizontal/Vertical accepts only stored `DesignPointId` operands in M71. It does not
+accept broad `DocumentPointRef` values. A derived midpoint, endpoint projection, center or other
+semantic anchor can require extra incidence equations, causing one user relation to lower into
+several runtime sources and weakening the ordinary one-source diagnostics/lifecycle contract.
 
-Concentric inference should promote the existing semantic relation into the ordinary retained
-lifecycle rather than duplicating it. Circle/arc quadrant anchors require exact accepted centre,
-radius, orientation, span and winding evidence; bounded arcs expose only quadrants in their active
-domain. A quadrant click may combine an exact semantic anchor with an applicable retained relation,
-but cannot persist an anonymous coordinate snap.
+Consequently, alignment with a remembered persistent point may become durable HorizontalPoints or
+VerticalPoints. Alignment with a midpoint or another derived anchor remains explicitly
+tracking-only in M71. This is a semantic boundary, not an implementation shortcut.
 
-Architecture risk: **medium** for concentric lifecycle integration and **medium-high** for
-quadrants because periodic/bounded branch and semantic-anchor identity must be explicit.
+### Contextual authoring and drafting inference
 
-## Priority C — branch-sensitive nonlinear relations
+- Existing Horizontal and Vertical contextual intents accept either one affine span or two stored
+  points, in either point selection order.
+- Concentric and Collinear receive explicit contextual intents. Coincident and Parallel are not
+  overloaded to mean these different durable relationships.
+- Center-to-center inference may propose Concentric without inventing shared point identity.
+- An affine extension may propose Collinear only from exact accepted native line-support
+  projection/direction evidence. A sampled crossing, generic intersection, near-parallel guess or
+  bounded-span escape is not certified collinearity.
+- Construction commit plans gain the prospective curve slots needed for a retained relation to
+  reference a curve allocated by the same construction.
 
-### Tangent and normal inference
+All M70 rules remain in force: bounded candidate generation, deterministic ranking, hysteresis,
+semantic suppression, exact ambiguity, authenticated accepted-scene authority, one atomic
+construction-plus-relation transaction, redundancy rejection and one-step Undo/Redo.
 
-Generic tangent and sided-normal equations already exist, but automatic intent requires explicit
-contact span, parameter, winding, neighbourhood, tangent orientation, normal side and containment/
-root policy. Hover alone must not choose among tied nonlinear contacts. Candidate construction and
-the relation must validate atomically against the same accepted native sources.
+## Persistence decision
 
-Architecture risk: **high**. This is primarily a branch-selection and local-root continuity
-problem, not a missing tangent equation.
+Canonical sketch v4 is frozen. Its current implementation incorrectly reuses the evolving
+in-memory `DocumentConstraint` type directly as the v4 wire type, so M71 first separates a private
+frozen v4 constraint DTO before adding the new in-memory variants.
 
-### Equality and symmetry inference
+- Canonical-v4 export continues writing the exact frozen v4 language and rejects any M71 relation
+  with typed `DocumentError::UnsupportedM71State`.
+- The explicitly unsupported draft-v5 envelope gains an optional, dedicated retained-planar-
+  constraint side section. `#[serde(default)]` preserves decode of every existing draft-v5 value.
+- The embedded graph retains the complete `source_order`. Restore merges the side-section
+  constraints into the in-memory graph before final validation, so source order, IDs and ownership
+  remain exact.
+- Application workspace remains version 5 and continues labelling these document bytes `DraftV5`;
+  no workspace-version bump is needed.
+- Frozen v1-v4 readers and bytes remain unchanged and strictly reject M71 syntax. M71 does not
+  declare or freeze canonical sketch v5.
 
-Equal length/radius/curvature and point/entity symmetry already exist in parts of the domain and
-contextual authoring surface. Automatic inference needs a strong semantic trigger and explicit
-operand correspondence; mere geometric similarity or mirrored-looking coordinates are not enough.
-Hosts must be able to disable each family independently because accidental equality/symmetry can
-overconstrain a sketch while appearing visually harmless.
+## Architectural ownership
 
-Architecture risk: **high**. Ambiguous intent and correspondence dominate the mathematics.
+M71 does not attach `DocumentSemanticSourceCatalog` or `DocumentSemanticCatalogSession` to
+`RetainedSketchDocumentSession`. That M36/M37 catalog remains a separate compatibility/domain
+surface. Reusing its runtime math is correct; combining two lifecycle, history and persistence
+authorities is not.
 
-## Priority D — host-owned references
+ADR 0035 owns this retained-relation and persistence decision. `PLAN.md` owns execution order,
+`ACCEPTANCE.md` owns objective completion, and `docs/M71_UAT.md` owns the eventual human scorecard.
+`docs/M71_IMPLEMENTATION.md` is created only after implementation begins and can record evidence
+that actually exists.
 
-### Workplane axes, grid and increments
+## Deferred backlog
 
-Axes and grids are host/workplane input, not hidden sketch geometry. A future interface should
-consume immutable revisioned semantic axes/grid definitions, publish whether a snap is tracking-
-only or constraint-backed, and specify whether a placement creates a supported datum relation,
-ordinary constraint or no persistent source. Grid and angular increments must remain independently
-configurable from geometric relation inference.
+The rest of the former M71 candidate notes remain useful, but are not part of this milestone:
 
-Architecture risk: **high**. Host identity/revision ownership, units, workplane mapping and
-persistence must be decided without adding callbacks during solving or fixing coordinates
-implicitly.
+- broad derived `DocumentPointRef` operands for point-pair Horizontal/Vertical;
+- integration or retirement of the separate M36/M37 semantic catalog/session;
+- certified generic intersection points, multiple-root enumeration and bounded-span extension
+  contacts;
+- circular/elliptic quadrant anchors;
+- nonlinear tangent or normal inference and automatic branch selection;
+- equality, curvature-equality or symmetry inference;
+- host/workplane axes, grids and linear/angular increments;
+- canonical sketch v5 or supported draft-v5 status;
+- persistent inference wake/reference state;
+- browser-owned geometric policy, browser E2E, mobile behavior or any legacy UI.
 
-## Cross-cutting requirements for any future scope
-
-- Reuse existing residuals and semantic-source definitions when their complete retained lifecycle
-  can be made coherent; do not create equation-shaped aliases for UI convenience.
-- Every genuinely new residual requires structured audit metadata, central finite-difference
-  Jacobian coverage, transformations/scales and independent acceptance validation.
-- Every multi-root relation stores branch, span, winding, side, neighbourhood and correspondence
-  explicitly; initial coordinates are never the persistent branch authority.
-- Candidate ranking, wake memory, hysteresis, suppression, ambiguity and atomic commit stay in
-  `geosolve-constraint-editor`; hosts render typed DTOs only.
-- Incomplete certification, resource exhaustion, exact ties and stale identities fail closed and
-  never fall through to a different displayed intent.
-- Any schema or workspace migration needs its own compatibility decision. M70 and this backlog do
-  not imply canonical sketch v5.
-
-Before M71 becomes active, the supervising user must select a bounded subset, accept any required
-ADR/schema work and define M71's own direct gate and end-of-milestone UAT.
+Future milestones may select these independently. They must not be smuggled into M71 as fixed
+coordinates, zero dimensions, hidden construction geometry, coordinate proximity or implicit
+branch choices.
