@@ -264,4 +264,5 @@ the duplicate would require a broader immutable/accessor-based scene API change 
 
 M70 is closed. At this historical checkpoint M70B became the qualified, frozen bounded workspace-
 reproduction capsule candidate; subsequent records close it. `docs/M71_GOALS.md` remains an
-inactive candidate backlog, and M71 is not scoped or authorized for implementation.
+inactive candidate backlog, and M71 is not scoped or authorized for implementation. That sentence
+records the M70 checkpoint; ADR 0035 subsequently activated M71 and its M71-F003 amendment.

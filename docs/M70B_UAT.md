@@ -447,5 +447,6 @@ byte-matches `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` at aggregate
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`, so the human-reviewed F005
 publication remains authoritative without a republish. This scoped approval accepts M70B-U1
 through M70B-U5 and the resolved F001-F005 findings for the recorded milestone scope without
-inventing an exhaustive replay of every scripted step. M70B is closed. M71 remains an unauthorized
-candidate backlog awaiting an explicit scope decision.
+inventing an exhaustive replay of every scripted step. M70B is closed. At this historical
+checkpoint M71 remained an unauthorized candidate backlog; ADR 0035 subsequently activated M71
+and its M71-F003 midpoint-axis amendment.

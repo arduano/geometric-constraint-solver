@@ -1314,11 +1314,13 @@ once the closing regressions were satisfactory. Clean closing source `48e3cc3` p
 release gate with the two-previously-Current transaction and CircularArc transport/domain
 regressions; the golden and release bytes remain unchanged. M70B is closed under that scoped
 approval. M71 is active under ADR 0035 and adds one ordinary editable **Retained drafting
-relations** playground over its mechanically qualified document/editor implementation. Its four
-reviewed nine-row relation families extend the current canonical fixture to 234/234 `PASS`,
-SHA-256 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
-Every new
-fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
+relations** playground over its mechanically qualified document/editor implementation. The
+pre-F003 contribution from its original four reviewed nine-row relation families extends the
+current canonical fixture to 234/234 `PASS`, SHA-256
+`d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`. M71-F003's narrower
+midpoint-axis correction remains in its focused owner regression rather than adding a systemic
+golden dimension.
+Every new fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
 

@@ -168,5 +168,6 @@ The supervising human reported that the replacement looked good and explicitly r
 closure on 2026-08-10. This accepts M70-U1 through M70-U5 and the targeted `M70-F001` recheck for
 the recorded scope without claiming an unrecorded exhaustive replay of every scripted step. M70 is
 closed; M70B is now the qualified, frozen bounded workspace-reproduction capsule candidate
-awaiting its own human UAT. Subsequent records close M70B; M71 remains an inactive candidate
-backlog until explicitly scoped.
+awaiting its own human UAT. Subsequent records close M70B. At this historical checkpoint M71
+remained an inactive candidate backlog; ADR 0035 later supplied its explicit active scope and
+M71-F003 midpoint-axis amendment.

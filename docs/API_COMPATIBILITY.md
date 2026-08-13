@@ -98,8 +98,10 @@ reconstruction before publication. No library crate API, frozen sketch v1-v4 byt
 support status changes. Qualification and frozen publication pass on source
 `6a0d05246a3fbca7487ffd614c1d48bf5bdc9c8b`. Subsequent F001-F005 repairs and close qualification
 change no additional public library API; closing source `48e3cc3` keeps the 198/198 golden and
-release bytes unchanged and closes M70B under the requested scoped sign-off. No M71 API is
-authorized by the inactive candidate `docs/M71_GOALS.md` backlog.
+release bytes unchanged and closes M70B under the requested scoped sign-off. ADR 0035 subsequently
+activated M71's six ordinary retained definitions. They extend the in-memory document/editor API
+and unsupported draft-v5 side section while canonical sketch v1-v4 remain frozen; clean
+replacement qualification/publication and human UAT are still pending.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

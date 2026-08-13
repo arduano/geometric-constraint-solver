@@ -213,9 +213,10 @@ Native and WASM consumers must observe identical headless state transitions.
 M70 adds no residual or new persistent constraint definition. Equality, symmetry, concentric,
 quadrant, certified intersection/extension/collinear, nonlinear tangent/normal, arbitrary durable
 point-pair horizontal/vertical, grid/axis and angle-increment inference are deferred. The candidate
-primitive and branch-policy backlog is recorded in `docs/M71_GOALS.md`; that document does not make
-M71 active or authorize implementation. M70B later closed, but that backlog still requires an
-explicit scope decision.
+primitive and branch-policy backlog was recorded in `docs/M71_GOALS.md`; at this M70 checkpoint,
+that document did not make M71 active or authorize implementation. M70B later closed, and ADR 0035
+subsequently supplied the explicit scope decision for six retained M71 definitions, including the
+native-span-midpoint amendment from M71-F003.
 
 M70 also adds no inferred-state persistence, hidden construction geometry, canonical sketch-schema
 migration, browser-owned geometric policy, browser E2E, mobile behavior, global root enumeration or

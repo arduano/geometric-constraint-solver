@@ -937,4 +937,5 @@ M70B. The F003 topology repair deliberately recognizes only active explicit Coin
 equivalence, and the F004 complete-cell policy deliberately applies only to constant-curvature
 Circle/CircularArc support during persisted evaluation. Arbitrary nonlinear offset traversal and
 direct-manipulation remote-root selection remain guarded rather than being broadened by these
-repairs. M71 remains an unauthorized candidate backlog awaiting an explicit scope decision.
+repairs. At this historical M70B checkpoint, M71 remained an unauthorized candidate backlog;
+ADR 0035 subsequently supplied its explicit active scope and M71-F003 amendment.

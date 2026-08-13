@@ -13,7 +13,7 @@ qualification. Read the repository-required project documents first, then this f
 `docs/M71_GOALS.md`, `docs/M71_IMPLEMENTATION.md` and `docs/M71_UAT.md`. Do not reconstruct M71
 from chat history.
 
-## 2026-08-13 checkpoint — M71-U2 midpoint-axis correction
+## 2026-08-14 checkpoint — M71-U2 midpoint-axis correction
 
 ### Exact human finding and authorized behavior
 
@@ -42,9 +42,10 @@ is now:
 - the narrow authorized scope is certified native line/polyline span midpoints. Do not silently
   generalize this checkpoint to arbitrary nonlinear curve-parameter midpoints.
 
-This supersedes every older statement that says native line/polyline midpoint H/V must remain
-tracking-only. The active ADR, goals, implementation, UAT, plan, acceptance, architecture,
-start-here and scenario records have been corrected in the development tree.
+For current M71 guidance, this supersedes earlier statements that native line/polyline midpoint
+H/V must remain tracking-only. Historical M70/M70B records remain true to their checkpoints and
+carry ADR 0035 supersession notes; the active ADR, goals, implementation, UAT, plan, acceptance,
+architecture, start-here and scenario records describe the corrected behavior.
 
 ### Diagnosis and finding identity
 
@@ -179,13 +180,18 @@ scope/visibility filtering, ambiguity and post-overflow reacquisition are direct
 
 ## Exact checkpoint evidence
 
-The following post-F003 commands passed on the current development tree on 2026-08-13:
+The following post-F003 commands passed on the current development tree on 2026-08-14:
 
 ```text
 cargo test --locked -p geosolve-sketch --test m71_relations --test m71_persistence
 cargo test --locked -p geosolve-constraint-editor --all-features
 cargo test --locked -p geosolve-demo-web --all-features
-nix-shell shell.nix --run '<M70 WASM parity; M71 WASM parity; demo-web WASM check>'
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m70_transition_parity --target wasm32-unknown-unknown'
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m71_transition_parity --target wasm32-unknown-unknown'
+nix-shell shell.nix --run \
+  'cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
 nix-shell shell.nix --run 'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release'
 env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 \
   nix-shell shell.nix --run './scripts/release-gate.sh'

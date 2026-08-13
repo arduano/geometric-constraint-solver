@@ -3,8 +3,8 @@
 # M71 focused UAT — Retained drafting relations
 
 Status: M71-U2 exposed M71-F003. The correction passes the complete dirty-tree development gate,
-but a replacement clean candidate is not yet nominated or published; all human results remain
-pending.
+but a replacement clean candidate is not yet nominated or published. The withdrawn U2 result
+remains discovery evidence; corrected-candidate retest results remain pending.
 
 Withdrawn pre-F003 source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 

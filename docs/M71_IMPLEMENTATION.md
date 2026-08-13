@@ -110,7 +110,12 @@ cargo test --locked -p geosolve-sketch --test m71_persistence
 cargo test --locked -p geosolve-constraint-editor --all-features
 cargo test --locked -p geosolve-demo-web --all-features
 cargo test --locked -p geosolve-constraint-editor --test m71_transition_parity
-nix-shell shell.nix --run '<M70 WASM parity; M71 WASM parity; demo-web WASM check>'
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m70_transition_parity --target wasm32-unknown-unknown'
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m71_transition_parity --target wasm32-unknown-unknown'
+nix-shell shell.nix --run \
+  'cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
 nix-shell shell.nix --run 'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release'
 cargo clippy --locked -p geosolve-constraint-editor --all-targets --all-features -- -D warnings
 git diff --check

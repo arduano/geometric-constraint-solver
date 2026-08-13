@@ -4137,7 +4137,8 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
   operands transactionally.
 - [x] Reuse `Sketch::add_horizontal_points`, `Sketch::add_vertical_points`,
   `Sketch::add_coincident` over resolved centers and `Sketch::add_collinear` over resolved
-  supports. Add no new residual, solver priority or implicit branch rule.
+  supports. For these original four definitions, add no new residual, solver priority or implicit
+  branch rule.
 - [x] Add `HorizontalPointToMidpoint { point, line }` and
   `VerticalPointToMidpoint { point, line }` for certified native line/polyline spans. Each owns one
   hard row `P[c] - (A[c] + B[c]) / 2`; Horizontal constrains Y and Vertical X. Add analytic and

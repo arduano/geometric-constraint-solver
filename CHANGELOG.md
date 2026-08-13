@@ -142,8 +142,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   0034 headless auto-constraint drafting intelligence. Implementation, focused direct and
   integrated release qualification, frozen replacement-candidate publication and served-byte
   verification are complete. `M70-F001` is resolved and the scoped human UAT is approved. M70B
-  subsequently completed its bounded reproduction-capsule work and requested scoped sign-off;
-  M71 remains an inactive, unauthorized candidate backlog.
+  subsequently completed its bounded reproduction-capsule work and requested scoped sign-off.
+  M71 was then activated under ADR 0035 and now implements six ordinary retained drafting
+  definitions: point-pair and native-span-midpoint Horizontal/Vertical, Concentric and Collinear.
+  Its M71-F003 midpoint-axis correction is awaiting replacement clean qualification/publication
+  and focused human UAT.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by
