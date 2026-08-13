@@ -2,8 +2,9 @@
 
 # M71 goals — Retained drafting relations
 
-Status: active, formally scoped and authorized for implementation planning on 2026-08-12. No M71
-production implementation or release candidate exists yet.
+Status: active, formally scoped and authorized on 2026-08-12. Production implementation and
+focused direct qualification are complete; release-candidate qualification and human UAT are
+pending.
 
 M70 proved reusable auto-constraint interaction using only constraint definitions already owned by
 the ordinary retained document/editor workflow. M71 closes the highest-value gap exposed by that
@@ -68,9 +69,10 @@ tracking-only in M71. This is a semantic boundary, not an implementation shortcu
 - Concentric and Collinear receive explicit contextual intents. Coincident and Parallel are not
   overloaded to mean these different durable relationships.
 - Center-to-center inference may propose Concentric without inventing shared point identity.
-- An affine extension may propose Collinear only from exact accepted native line-support
-  projection/direction evidence. A sampled crossing, generic intersection, near-parallel guess or
-  bounded-span escape is not certified collinearity.
+- An affine extension may propose Collinear only from exact accepted native supporting-line
+  projection/direction evidence. Bounded-span escape alone, a sampled crossing, generic
+  intersection or near-parallel guess is insufficient; exact native supporting-line evidence may
+  remain valid beyond a finite endpoint.
 - Construction commit plans gain the prospective curve slots needed for a retained relation to
   reference a curve allocated by the same construction.
 

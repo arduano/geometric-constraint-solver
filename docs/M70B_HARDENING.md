@@ -10,7 +10,7 @@ matrix. H3 added four isolated, reviewed `feature.fillet` rows and recorded the 
 state as 193 `PASS` plus four `DEFECT`. The authorized F003/F004 repairs resolve both findings at
 their headless owners and produced a fully qualified 197/197-`PASS` replacement with the four input
 fingerprints unchanged. F005 then adds one source-rotation row for payload
-`4228:0823d31f269300af`; the current 198-row golden records 198 `PASS` at SHA-256
+`4228:0823d31f269300af`; the M70B closing 198-row golden records 198 `PASS` at SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Its 45-test feature-owner
 suite, nine-test retained movement suite, focused golden tests, all aggregate golden modes,
 formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests and the
@@ -35,7 +35,11 @@ the four reviewed defects and does not supersede the historical H1/H2 source or 
 below. The F003/F004 repair checkpoint changed only those four dispositions to `PASS` and had
 SHA-256 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`.
 F005 preserves those 197 records byte-for-byte, appends one passing source-rotation row and yields
-the current SHA-256 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
+the M70B closing SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. M71 subsequently appends
+four complete nine-row constraint families without rewriting the M70B records. The current
+canonical inventory is 234/234 `PASS` at SHA-256
+`d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
 
 ## Scope and authority
 
@@ -133,7 +137,7 @@ F005 appends one systemic persisted-evaluation movement dimension without changi
 
 - `feature.fillet.evaluation.line-circle.source-rotation.retained-start`.
 
-The active inventory is therefore 198 rows, all `PASS`. Its input fingerprint is
+The M70B closing inventory is therefore 198 rows, all `PASS`. Its input fingerprint is
 `input-04658a77db2dc779` and its payload identity is `4228:0823d31f269300af`.
 
 ## Driver and classification contract
@@ -143,8 +147,9 @@ own process with a 30-second runtime limit and a five-second hard-kill grace per
 failures, panics, timeouts (`124` or hard-kill `137`) and harness errors are rows rather than an
 instruction to stop; later rows still run. A nonzero child exit is never accepted merely because
 it wrote a complete TSV. Child output must match the requested case and family. H1/H2 required
-their exact 193 `(case_id, family)` pairs; H3 required 197 pairs and the current driver requires
-the exact 198-pair inventory, rejecting a missing, duplicate or unexpected Fillet row.
+their exact 193 `(case_id, family)` pairs; H3 required 197 pairs, the M70B closing driver required
+the exact 198-pair inventory, and M71 now requires 234 pairs after adding four nine-row relation
+families. Missing, duplicate or unexpected rows reject the run.
 
 The stable TSV schema is:
 
@@ -323,7 +328,7 @@ cargo test --locked -p geosolve-constraint-editor \
 ```
 
 All three focused suites pass, including F005's exact payload-derived feature-owner regression
-`m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell`. The current 198-row
+`m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell`. The M70B closing 198-row
 fixture records 198 `PASS`, zero defects, panics, timeouts or harness errors, and has SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Aggregate oracle
 `--survey`/`--check`/`--require-clean`, formatting, warnings-denied all-workspace Clippy, locked

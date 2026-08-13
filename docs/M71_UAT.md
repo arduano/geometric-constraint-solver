@@ -2,8 +2,9 @@
 
 # M71 focused UAT — Retained drafting relations
 
-Status: planned. Implementation, mechanical qualification, release candidate, Tailscale
-publication and supervising-human approval are all pending.
+Status: implementation and focused direct qualification complete. Clean integrated release
+qualification, release candidate, Tailscale publication and supervising-human approval are
+pending.
 
 Candidate source: pending
 
@@ -18,7 +19,7 @@ annotation clarity and recovery.
 
 ## Preconditions
 
-- [ ] The complete M71 acceptance matrix passes at its owning Rust layers.
+- [ ] The complete pre-UAT automated M71 acceptance matrix passes at its owning Rust layers.
 - [ ] Frozen v1-v4 compatibility and draft-v5/workspace/reproduction round trips pass.
 - [ ] The canonical golden authoring/scene oracle passes clean with reviewed M71 systemic rows.
 - [ ] Native/WASM parity, formatting, warnings-denied Clippy and locked workspace tests pass.
@@ -63,11 +64,12 @@ Notes:
 1. Author a centered primitive near the accepted center of another eligible primitive.
 2. Inspect the Concentric preview and place it, then drag/edit either parent.
 3. Repeat with reversed construction/selection order and Profile/Construction geometry.
-4. Try unsupported center-bearing and close-but-not-center targets.
+4. Try non-center-bearing/unsupported curves and close-but-not-center targets.
 
 Expected: one atomic placement creates the new geometry plus Concentric against exact semantic
-centers; it never invents a shared point or coordinate snap. Unsupported and ambiguous centers
-fail closed without losing the draft.
+centers. At a curve's stored center, centered-construction intent wins over incidental point reuse;
+ordinary point authoring still reuses that point identity. It never invents a shared point or
+coordinate snap. Unsupported and ambiguous centers fail closed without losing the draft.
 
 Result: pending
 

@@ -53,19 +53,21 @@ M70B is complete under the supervising human's requested scoped sign-off. It pac
 encoded authoritative
 application-workspace v5 bytes as strict, size-limited `GEOSOLVE_REPRO_V1` text for copy/paste
 failure handoff, then validates and reconstructs a complete coordinator before replacing live
-state. F001-F005 retain owning-layer regressions; the canonical golden is 198/198 `PASS`. Clean
+state. F001-F005 retain owning-layer regressions; M70B closed on its 198/198 `PASS` golden, while
+M71 extends the current canonical inventory to 234/234 `PASS`. Clean
 closing source `48e3cc3` passes the complete release gate with the final multi-feature transaction
 and finite-arc transport regressions, while its runtime release remains the byte-verified F005
 candidate. M71 is active under ADR 0035 for four ordinary retained drafting relations; its
-implementation and focused UAT remain pending.
+implementation is mechanically qualified, while release-candidate qualification and focused UAT
+remain pending.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed through the scoped M70B close, with M71 not yet active or
-   authorized.
+3. `PLAN.md` — active roadmap: completed through the scoped M70B close, with M71 in release/UAT
+   preparation.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.

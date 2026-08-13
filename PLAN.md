@@ -3629,7 +3629,7 @@ qualification and explicit supervising-human UAT approval.
 ledger. Equality, symmetry, concentric/quadrant, certified intersection/collinear/extension,
 nonlinear tangent/normal, grid/axis, angle-increment and durable arbitrary point-pair H/V inference
 remain outside M70. Candidate retained primitives are recorded in `docs/M71_GOALS.md`; that
-backlog remains inactive and unauthorized after M70B closure until the supervising human scopes it.
+historical M70 deferral is superseded by the formally scoped active M71 plan below.
 
 Historical initial-candidate qualification/publication note (2026-08-10): the focused Rust owner
 matrix and the shared
@@ -3688,7 +3688,7 @@ their exact input fingerprints and now yield `PASS`. F005 treats the persisted L
 branch witness rather than an immutable movement bound: a `NoLocalRoot`-only circular/affine
 fallback must prove stored-to-fresh-seed-to-fresh-candidate certificate overlap and a unique
 transverse root, without changing feature metadata or crossing a true orientation barrier. The
-current fixture is 198/198 `PASS` with SHA-256
+M70B closing fixture is 198/198 `PASS` with SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
 Focused F003-F005 owner and golden tests, the 45-test feature suite, nine-test retained movement
 suite, aggregate golden survey/check/clean modes, formatting, warnings-denied all-workspace Clippy,
@@ -4117,49 +4117,58 @@ regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTA
 ### M71
 
 Status: active as of 2026-08-12. Scope and architecture are accepted in
-`docs/M71_GOALS.md` and ADR 0035; implementation, mechanical qualification and human UAT are
-pending.
+`docs/M71_GOALS.md` and ADR 0035. Implementation and focused direct qualification are complete;
+clean release-candidate qualification, publication and human UAT are pending.
 
 Goal: promote four high-value relations whose runtime mathematics already exists into the one
 ordinary retained sketch/editor lifecycle, then let the M70 drafting engine use them without
 inventing coordinates, hidden geometry or semantically misleading aliases.
 
-- [ ] Isolate the frozen canonical-v4 wire language behind private constraint DTOs before growing
+- [x] Isolate the frozen canonical-v4 wire language behind private constraint DTOs before growing
   the in-memory ordinary constraint enum. Canonical-v4 export must reject M71 state with typed
   `UnsupportedM71State`, while all M71-empty v1-v4 and draft-v5 bytes remain unchanged.
-- [ ] Add ordinary retained `HorizontalPoints`, `VerticalPoints`, `Concentric` and `Collinear`
+- [x] Add ordinary retained `HorizontalPoints`, `VerticalPoints`, `Concentric` and `Collinear`
   definitions with stable source/constraint identity, deterministic validation/lowering, complete
   audit grouping, activation, suppression, deletion, dependency closure, accepted/rejected
   publication, prepared work and history.
-- [ ] Keep point-pair H/V deliberately limited to stored `DesignPointId` operands. Support every
+- [x] Keep point-pair H/V deliberately limited to stored `DesignPointId` operands. Support every
   stored-center curve family through `DocumentCenterRef`, and directed native line/polyline
   supports through `DocumentLineSupportRef`; reject missing, repeated, tautological or degenerate
   operands transactionally.
-- [ ] Reuse `Sketch::add_horizontal_points`, `Sketch::add_vertical_points`,
+- [x] Reuse `Sketch::add_horizontal_points`, `Sketch::add_vertical_points`,
   `Sketch::add_coincident` over resolved centers and `Sketch::add_collinear` over resolved
   supports. Add no new residual, solver priority or implicit branch rule.
-- [ ] Extend draft-v5 with an omitted-when-empty retained-planar-constraint side section. Preserve
+- [x] Extend draft-v5 with an omitted-when-empty retained-planar-constraint side section. Preserve
   the complete embedded source order, merge side records before final validation and reject ID,
   ordering, ownership or operand corruption atomically. Keep workspace version 5 and do not
   declare supported canonical sketch v5.
-- [ ] Add explicit contextual Concentric and Collinear authoring. Make Horizontal/Vertical
+- [x] Add explicit contextual Concentric and Collinear authoring. Make Horizontal/Vertical
   variable-arity so one affine span applies immediately while a first stored point waits for its
   second operand; support all commutative operand orders with precise disabled reasons.
-- [ ] Extend M70 inference so a remembered stored point can create durable point-pair H/V,
+- [x] Extend M70 inference so a remembered stored point can create durable point-pair H/V,
   accepted semantic centers can create Concentric, and certified affine supporting-line extension
   can create Collinear. Direct point identity outranks H/V; derived anchors remain tracking-only;
-  Collinear replaces rather than bundles Parallel; unsupported or tied evidence fails closed.
-- [ ] Permit construction commit plans to reference curves allocated by that same atomic
+  an exact semantic center outranks incidental center-point identity only for a centered
+  construction; Collinear replaces rather than bundles Parallel; unsupported or tied evidence
+  fails closed.
+- [x] Permit construction commit plans to reference curves allocated by that same atomic
   transaction, without exposing prospective IDs as durable authority before commit.
-- [ ] Publish typed scene annotations, constraint entries, glyphs and interaction metadata for all
+- [x] Publish typed scene annotations, constraint entries, glyphs and interaction metadata for all
   four relations through the headless boundary; the workbench only renders and dispatches them.
-- [ ] Add owner-level validation/lowering/lifecycle/persistence tests, headless authoring and
+- [x] Add owner-level validation/lowering/lifecycle/persistence tests, headless authoring and
   inference matrices, reviewed systemic golden rows, native/WASM transition parity and one
   ordinary editable **Retained drafting relations** playground.
 - [ ] Run the clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
   workspace tests, relevant WASM/Trunk builds and the complete clean release gate.
-- [ ] Freeze and byte-verify one immutable Tailscale candidate, complete
-  `docs/M71_UAT.md`, and obtain explicit supervising-human approval before closing M71.
+- [ ] Freeze and byte-verify one immutable Tailscale candidate and record its source, manifest and
+  endpoint in `docs/M71_UAT.md`.
+- [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
+
+Implementation note (2026-08-13): the four definitions, frozen-v4 isolation, draft-v5 side
+section, complete ordinary lifecycle, contextual/inferred authoring, prospective curve slots,
+typed headless entries/annotations, editable sample and reviewed golden/native-WASM fixtures are
+implemented. Focused sketch, editor and demo-web suites plus the clean golden oracle pass. Full
+workspace/release qualification and publication remain the next gate; this is not human approval.
 
 Gate: all four relations behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every

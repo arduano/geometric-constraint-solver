@@ -1286,7 +1286,7 @@ qualification and focused human UAT are complete. M70 completed ADR 0034 and add
 ordinary editable auto-constraint drafting playground; implementation and focused direct
 qualification, integrated release qualification, frozen replacement-candidate publication and
 served-byte verification are complete, and the scoped human UAT was approved on 2026-08-10. M70B
-is the active bounded reproduction-capsule cut. It adds a workbench-global copy/paste overlay rather
+is the completed bounded reproduction-capsule cut. It adds a workbench-global copy/paste overlay rather
 than a protected sample fixture; F001/F002 replacement qualification/publication pass and the
 test-only H1 authoring/scene survey, complete release gate and fresh byte-verified publication are
 historically clean. H2 preserves those exact 193 passing rows under milestone-neutral names.
@@ -1299,7 +1299,7 @@ Authorized production repairs now make the same four stable rows pass without ch
 fingerprints. The F003/F004 repair checkpoint was 197/197 `PASS`, SHA-256
 `035a72ddb611997be285bfc623d52b0dc3e6fe99eaec625d527c611fd31fd190`. F005 appends one exact
 source-rotation evaluation row at `input-04658a77db2dc779` while preserving those 197 records
-byte-for-byte; the current fixture is 198/198 `PASS`, SHA-256
+byte-for-byte; the M70B closing fixture is 198/198 `PASS`, SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Focused F005 owner/golden,
 aggregate golden, formatting and focused warnings-denied Clippy qualification pass. Prior F003/F004
 source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
@@ -1313,8 +1313,10 @@ movement behavior was subsequently reported fixed by the supervising human, who 
 once the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with the two-previously-Current transaction and CircularArc transport/domain
 regressions; the golden and release bytes remain unchanged. M70B is closed under that scoped
-approval. M71 is active under ADR 0035 and will add one ordinary editable **Retained drafting
-relations** playground only after its document/editor implementation is mechanically qualified.
+approval. M71 is active under ADR 0035 and adds one ordinary editable **Retained drafting
+relations** playground over its mechanically qualified document/editor implementation. Its four
+reviewed nine-row relation families extend the current canonical fixture to 234/234 `PASS`,
+SHA-256 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1477,6 +1479,28 @@ high-water needed for never-reuse after Undo/divergent history and process reloa
 v1-v4 fixtures migrate by deriving graph-visible maxima, while malformed, foreign or trailing
 cursors reject. This checkpoint metadata is distinct from inference wake/reference state, which
 remains ephemeral and is never serialized.
+
+### M71-R1 - Retained drafting relations
+
+The **Samples → Constraints & dimensions → Retained drafting relations** leaf is one ordinary
+editable workspace containing stored-point Horizontal/Vertical, semantic-center Concentric and
+native-support Collinear specimens. Each relation is one retained constraint/source with normal
+selection, suppression, deletion, history, dragging, persistence and diagnostic behavior; the
+sample adds no protected state, guide script or alternate coordinator.
+
+Contextual Horizontal/Vertical accepts either one affine span or two stored points. Explicit
+Concentric and Collinear remain distinct from Coincident and Parallel. M70 drafting intelligence
+may persist stored-point H/V, exact semantic-center Concentric and certified native supporting-line
+Collinear, including beyond a finite endpoint; derived midpoint alignment remains tracking-only,
+and ambiguous, stale, unsupported or exhausted evidence fails closed. One construction may create
+its geometry and a relation to that prospective curve atomically without exposing an uncommitted
+ID.
+
+Direct sketch/editor/native-WASM tests own 1/1/2/2 lowering, finite hard residuals, rank/DOF,
+commutative operands, retained parent edits, lifecycle, draft-v5 round trips, frozen-v4 rejection,
+inference ranking and exact publication authority. Human review follows `docs/M71_UAT.md` for
+discoverability, annotation clarity, predictable authoring/inference and recovery; it remains open
+until explicit supervising-human approval.
 
 ### M70B-R1 - Complete workspace reproduction payload
 
@@ -1862,7 +1886,7 @@ snapshot, whose ordered-manifest aggregate was
 publication.
 
 F005 preserves all 197 records and appends the source-rotation row at fingerprint
-`input-04658a77db2dc779`. The current fixture is 198/198 `PASS` at SHA-256
+`input-04658a77db2dc779`. The M70B closing fixture is 198/198 `PASS` at SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`; its focused owner/golden,
 aggregate golden, formatting, warnings-denied all-workspace Clippy, locked all-feature workspace
 tests and the relevant WASM check pass. Clean source

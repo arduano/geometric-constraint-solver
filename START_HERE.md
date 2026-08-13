@@ -86,7 +86,7 @@ prove connected nonzero orientation; real tangent barriers, folds, offset singul
 ambiguity remain fail-closed. Owner regression
 `m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell` and golden row
 `feature.fillet.evaluation.line-circle.source-rotation.retained-start` retain exact payload
-`4228:0823d31f269300af` and input fingerprint `input-04658a77db2dc779`. The current golden is
+`4228:0823d31f269300af` and input fingerprint `input-04658a77db2dc779`. The M70B closing golden was
 198/198 `PASS`, SHA-256
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Focused F003-F005
 regressions, focused golden tests, aggregate survey/check/clean modes, formatting and focused
@@ -109,7 +109,8 @@ behavior was reported fixed. Clean closing source `48e3cc3` passes the complete 
 focused multi-feature transaction and finite-arc transport regressions; the 198/198 golden and
 runtime release bytes remain unchanged. M70B is closed under the requested scoped sign-off without
 claiming an unrecorded exhaustive UAT replay. M71 is now active under ADR 0035 for exactly four
-ordinary retained drafting relations; implementation and qualification are in progress.
+ordinary retained drafting relations. Implementation and focused direct qualification are
+complete; release-candidate qualification, publication and human UAT are pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -359,8 +360,11 @@ checkpoint. Authorized production repairs now resolve Coincident-equivalent clos
 incidence and complete certified circular-plus-affine persisted branch traversal. F005 then makes
 that branch certificate transport with the moved affine source instead of treating a stale
 numeric cell edge as a geometric barrier. The original four stable rows remain unchanged and the
-new source-rotation row passes at fingerprint `input-04658a77db2dc779`; the current 198/198-`PASS`
-golden has SHA-256 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`.
+new source-rotation row passes at fingerprint `input-04658a77db2dc779`; the M70B closing
+198/198-`PASS` golden has SHA-256
+`bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. M71 appends four complete
+9-row relation families; the current canonical fixture is 234/234 `PASS`, SHA-256
+`d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
 Focused owner and golden tests, all aggregate golden modes, formatting and focused warnings-denied
 Clippy pass. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
@@ -420,6 +424,8 @@ Durable milestone and cleanup records:
 - `docs/M70B_UAT.md` (scoped reproduction handoff/restore close scorecard)
 - `.agents/skills/geosolve-harden-defect/` (canonical solver/headless defect regression workflow)
 - `docs/M71_GOALS.md` (active retained-drafting-relations scope)
+- `docs/M71_IMPLEMENTATION.md` (mechanically implemented retained-relation ledger)
+- `docs/M71_HANDOVER.md` (canonical fresh-session checkpoint and remaining release sequence)
 - `docs/M71_UAT.md` (planned focused M71 scorecard)
 - `docs/adr/0035-retained-drafting-relation-lifecycle.md`
 

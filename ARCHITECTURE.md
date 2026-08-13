@@ -102,7 +102,7 @@ construction/NURBS UAT and certified all-family visual profiles.
   Exact payload `4228:0823d31f269300af` is frozen by
   owner regression `m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell` and
   golden row `feature.fillet.evaluation.line-circle.source-rotation.retained-start` at
-  `input-04658a77db2dc779`. The current 198/198-`PASS` golden has SHA-256
+  `input-04658a77db2dc779`. The M70B closing 198/198-`PASS` golden has SHA-256
   `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. Focused owner/golden
   tests, aggregate survey/check/clean modes, formatting, warnings-denied all-workspace Clippy,
   locked all-feature workspace tests and the relevant WASM check pass. Clean F005 source
@@ -120,7 +120,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   `DocumentConstraintDefinition` lifecycle while reusing existing runtime mathematics. Frozen
   canonical v4 is first isolated behind private wire DTOs; unsupported draft v5 owns the complete
   side-section round trip. The headless editor owns contextual authoring and bounded M70 inference
-  extensions. Implementation, qualification and focused human UAT are pending.
+  extensions. Implementation and focused direct qualification are complete; release-candidate
+  qualification and focused human UAT are pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -1187,7 +1188,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   equivalence owns closure topology, and persisted circular-plus-affine evaluation may traverse its
   complete certified explicit branch cell. F005 adds bounded certificate transport for a moved
   affine source when fresh interval cells overlap, preserving rejection at a real tangent barrier,
-  fold, singularity or ambiguity. The current reviewed fixture is 198/198 `PASS`; F005's exact
+  fold, singularity or ambiguity. The M70B closing fixture is 198/198 `PASS`; F005's exact
   owner/golden and aggregate golden qualification, formatting, warnings-denied all-workspace
   Clippy, locked all-feature workspace tests and the relevant WASM check pass. Clean F005 source
   `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate. Its immutable
@@ -1199,3 +1200,5 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M71: active ADR 0035 retained-drafting-relations milestone. It promotes point-pair
   Horizontal/Vertical, Concentric and Collinear into the ordinary retained lifecycle, extends the
   headless authoring/inference contract and preserves frozen v4 through explicit wire isolation.
+  Its four nine-row relation families extend the current canonical fixture to 234/234 `PASS` at
+  SHA-256 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.

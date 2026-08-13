@@ -1671,15 +1671,17 @@ unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
 
 ## M71 acceptance: retained drafting relations
 
-Status: active; implementation, qualification and supervising-human approval are pending.
+Status: active; implementation and focused direct qualification are complete. Clean release
+qualification, publication and supervising-human approval are pending.
 
 - Frozen canonical sketch v1-v4 readers and bytes remain unchanged. A private frozen-v4
   constraint wire DTO prevents in-memory enum growth from expanding v4, and v4 export of M71 state
   returns typed `DocumentError::UnsupportedM71State` without partial output.
 - Unsupported draft-v5 round-trips complete M71 constraint records in an omitted-when-empty side
   section while preserving the embedded graph's complete `source_order`. Decode merges before
-  final validation and transactionally rejects collisions, absent/unordered sources, foreign IDs,
-  malformed operands and unknown syntax. Existing M71-empty draft-v5 bytes remain identical.
+  final validation and transactionally rejects collisions, missing, duplicated or unrepresented
+  source identities, foreign IDs, malformed operands and unknown syntax. Existing M71-empty
+  draft-v5 bytes remain identical; arbitrary otherwise-valid source ordering is preserved.
 - `HorizontalPoints` and `VerticalPoints` accept two distinct stored `DesignPointId` operands and
   lower to exactly one ordinary hard row. `Concentric` accepts two distinct semantic curve centers
   and lowers to exactly two coincident-coordinate rows. `Collinear` accepts two nondegenerate
@@ -1711,8 +1713,9 @@ Status: active; implementation, qualification and supervising-human approval are
   preventing stale, foreign or partially allocated IDs from publishing. Suppression, candidate
   bounds, scene authentication and exact accepted-input checks retain the M70 contract.
 - Headless scene/presentation DTOs cover all four relations with stable IDs, operands, labels,
-  glyph geometry, selection/hover/problem states and native/WASM parity. The workbench adds no
-  equation, applicability or geometric inference rule.
+  suppression and glyph geometry. Generic editor selection, hover and problem context is combined
+  with those entries and annotations at the headless interaction boundary; native/WASM parity
+  passes. The workbench adds no equation, applicability or geometric inference rule.
 - Reviewed systemic rows extend the canonical golden authoring/scene matrix without rewriting
   unrelated bytes; focused owner regressions remain at their narrowest layer. `--survey`,
   `--check` and `--require-clean` all pass.

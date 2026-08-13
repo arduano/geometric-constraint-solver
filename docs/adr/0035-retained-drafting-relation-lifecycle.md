@@ -2,7 +2,7 @@
 
 # ADR 0035: Retained drafting relation lifecycle and persistence
 
-Status: accepted for M71 planning; implementation and human UAT are pending
+Status: accepted and implemented for M71; release qualification and human UAT are pending
 
 ## Context
 
@@ -62,9 +62,9 @@ cannot parse M71 tags.
 The private unsupported draft-v5 envelope adds a default-empty side section containing only M71
 retained constraints. The embedded frozen-v4 graph carries all other graph data and the complete
 `source_order`; side constraints are merged by persistent identity before the restored document is
-validated. Duplicate, missing, unordered, foreign or malformed identities reject atomically.
-Existing draft-v5 bytes decode unchanged because the side section uses `#[serde(default)]` and is
-omitted when empty.
+validated. Duplicate, missing, unrepresented, foreign or malformed identities reject atomically;
+arbitrary otherwise-valid source ordering is preserved. Existing draft-v5 bytes decode unchanged
+because the side section uses `#[serde(default)]` and is omitted when empty.
 
 The application workspace remains v5 with `WorkspaceDocumentEncoding::DraftV5`. This is not a
 canonical sketch-v5 declaration and does not change the supported persistence table.
