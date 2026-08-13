@@ -2,13 +2,22 @@
 
 # M71 focused UAT — Retained drafting relations
 
-Status: M71-U2 exposed M71-F003. The correction passes the complete dirty-tree development gate,
-but a replacement clean candidate is not yet nominated or published. The withdrawn U2 result
-remains discovery evidence; corrected-candidate retest results remain pending.
+Status: M71-U2 exposed M71-F003. The corrected clean replacement is mechanically qualified,
+published and byte-verified. The withdrawn U2 result remains discovery evidence;
+corrected-candidate M71-U1 through M71-U5 results remain pending.
+
+Replacement source: `83bd2b575784c44b618fb3ad144f24e84702d764`
+
+Current endpoint: `http://100.94.63.83:8080/`
+
+Current immutable snapshot: `/tmp/geosolve-m71-f003-uat.hybK8W`
+
+Current release distribution manifest aggregate:
+`23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`
 
 Withdrawn pre-F003 source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
-Withdrawn endpoint, preserved only until replacement: `http://100.94.63.83:8080/`
+Historical pre-F003 endpoint (now serving the replacement instead): `http://100.94.63.83:8080/`
 
 Withdrawn immutable snapshot: `/tmp/geosolve-m71-uat.yFBsnX`
 
@@ -49,13 +58,13 @@ Exactly seven release files were copied without rebuilding, byte-compared with t
 | `index.html` | `3d87c4b54efb42c8fdcb62c841140db29b9bb7b832733b197a9b4ac50cfee128` |
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
 
-PID `49116` serves only that snapshot and listens only on `100.94.63.83:8080`; its log is outside
-the snapshot at `/tmp/geosolve-m71-uat.yFBsnX.server.log`. Proxy-disabled, cache-bypassed HTTP
-requests byte-matched every listed asset. A separate request for `/` byte-matched `index.html`.
-The fetched-file aggregate and the post-fetch snapshot aggregate both reproduced the recorded
-ordered manifest aggregate exactly. Because this endpoint reuses the historical M70B port, hard
-refresh after a replacement is published. Do not continue UAT against these withdrawn bytes. The
-historical M70B snapshot remains on disk but is no longer served.
+At that historical checkpoint, PID `49116` served only that snapshot and listened only on
+`100.94.63.83:8080`; its log was outside the snapshot at
+`/tmp/geosolve-m71-uat.yFBsnX.server.log`. Proxy-disabled, cache-bypassed HTTP requests
+byte-matched every listed asset. A separate request for `/` byte-matched `index.html`. The
+fetched-file aggregate and post-fetch snapshot aggregate both reproduced the recorded ordered
+manifest aggregate exactly. Do not continue UAT against these withdrawn bytes. The historical
+M70B and pre-F003 M71 snapshots remain on disk but are no longer served.
 
 M71-F003 was independently reproduced at the public scene/editor/coordinator boundary: remembered
 midpoints entered tracking, but only persistent-point references could become durable H/V. The
@@ -67,9 +76,8 @@ regression is `crates/geosolve-constraint-editor/tests/m71_f003_midpoint_axis.rs
 ordinary scene/editor/coordinator transition, atomic point-plus-relation publication, Horizontal
 constraining Y, Vertical constraining X, independent accepted residual evidence and later endpoint
 edits updating the live midpoint average. Post-F003 owner and full development-gate outcomes pass;
-the run used `GEOSOLVE_ALLOW_DIRTY=1`, so it is not clean candidate qualification. The checkboxes
-below remain reset until a clean replacement source passes the complete gate and its served bytes
-are independently verified.
+the initial run used `GEOSOLVE_ALLOW_DIRTY=1`, so it was not clean candidate qualification. The
+clean replacement gate and publication below supply that evidence.
 
 ## Post-F003 provisional mechanical evidence
 
@@ -89,21 +97,48 @@ env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 \
   nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
-Cargo emitted only the longstanding non-failing `license` plus `license-file` advisories. A clean
-nominated source must rerun the gate without `GEOSOLVE_ALLOW_DIRTY` before any replacement is
-frozen or served.
+Cargo emitted only the longstanding non-failing `license` plus `license-file` advisories. This
+provisional evidence was followed by the clean replacement gate and publication below.
+
+## Current replacement evidence
+
+Clean source `83bd2b575784c44b618fb3ad144f24e84702d764` passed exactly:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The gate passed the complete sequence described above, with a 145.13-second sparse crossover and
+successful Trunk 0.21.14 release assembly. Its exact seven-file `dist` was copied without
+rebuilding, byte-compared, and frozen with directory mode `0555` and file mode `0444`:
+
+| File | SHA-256 |
+| --- | --- |
+| `API_COMPATIBILITY.md` | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
+| `LICENSE` | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-f3ecc0dffeb9ce14.js` | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
+| `geosolve-demo-web-f3ecc0dffeb9ce14_bg.wasm` | `53bd9bfdc0cec56f9f3520af328c45c8a5dcda3e836c43017d2b1409b48c1a9e` |
+| `index.html` | `946d66a5e03e56b22efd3ee99fc157ba9668c10ae4393695b6200274f57aace4` |
+| `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+PID `1202735` serves only `/tmp/geosolve-m71-f003-uat.hybK8W` and listens only on
+`100.94.63.83:8080`. Proxy-disabled, cache-bypassed requests matched every listed file
+byte-for-byte. A separate request for `/` matched `index.html`. The fetched and post-fetch local
+ordered aggregates both reproduced
+`23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
 
 ## Preconditions
 
-- [ ] The complete post-F003 pre-UAT automated M71 acceptance matrix passes at its owning Rust
+- [x] The complete post-F003 pre-UAT automated M71 acceptance matrix passes at its owning Rust
   layers, including finite-difference Jacobian, structured audit and independent validation
   coverage for both midpoint-axis rows.
-- [ ] Frozen v1-v4 compatibility and corrected draft-v5/workspace/reproduction round trips pass.
-- [ ] The canonical golden authoring/scene oracle passes clean after review confirms that F003
+- [x] Frozen v1-v4 compatibility and corrected draft-v5/workspace/reproduction round trips pass.
+- [x] The canonical golden authoring/scene oracle passes clean after review confirms that F003
   remains a focused owner regression rather than a new systemic golden dimension.
-- [ ] Native/WASM parity, formatting, warnings-denied Clippy and locked workspace tests pass.
-- [ ] One clean post-F003 nominated source passes `./scripts/release-gate.sh`.
-- [ ] Its immutable release distribution is published through Tailscale and every served byte is
+- [x] Native/WASM parity, formatting, warnings-denied Clippy and locked workspace tests pass.
+- [x] One clean post-F003 nominated source passes `./scripts/release-gate.sh`.
+- [x] Its immutable release distribution is published through Tailscale and every served byte is
   verified against the local candidate.
 
 ## M71-U1 — manual authoring and canvas presentation

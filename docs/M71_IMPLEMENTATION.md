@@ -2,23 +2,28 @@
 
 # M71 implementation — Retained drafting relations
 
-Status: M71-F003 midpoint-axis correction is implemented and the complete dirty-tree development
-gate passes. The former four-definition candidate is withdrawn; clean nominated-source
-qualification, replacement publication and supervising-human UAT are pending.
+Status: M71-F003 midpoint-axis correction is implemented, clean-qualified and published as an
+immutable byte-verified replacement. Supervising-human UAT is pending.
 
 Architecture owner: ADR 0035
 
 Withdrawn pre-F003 candidate source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
-F003 development release-gate result: **pass with `GEOSOLVE_ALLOW_DIRTY=1` (provisional)**
+Replacement candidate source: `83bd2b575784c44b618fb3ad144f24e84702d764`
 
-Withdrawn Tailscale release distribution (preserved, not acceptable for continued UAT):
-`/tmp/geosolve-m71-uat.yFBsnX` at
+F003 clean release-gate result: **PASS**
+
+Replacement Tailscale release distribution: `/tmp/geosolve-m71-f003-uat.hybK8W` at
 `http://100.94.63.83:8080/`, ordered manifest aggregate
+`23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`
+
+Withdrawn Tailscale release distribution (preserved, no longer served and not acceptable for
+continued UAT): `/tmp/geosolve-m71-uat.yFBsnX`; historical endpoint
+`http://100.94.63.83:8080/`; ordered manifest aggregate
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
-No replacement source hash, clean release-gate result, immutable distribution or publication has
-yet been nominated or recorded.
+The pre-F003 distribution below remains on disk as withdrawn historical evidence and is no longer
+served.
 
 ## 1. Files and APIs
 
@@ -99,9 +104,9 @@ geometry, history and publication authority.
 
 ## 3. Commands and outcomes
 
-The following post-F003 qualification completed on the current dirty development tree. The
-integrated release-gate run is proportional mechanical evidence, but it is not a clean nominated
-candidate gate and must be repeated after commit:
+The following post-F003 qualification first completed on the development tree. The same complete
+gate then passed without `GEOSOLVE_ALLOW_DIRTY` on clean nominated source
+`83bd2b575784c44b618fb3ad144f24e84702d764`:
 
 ```text
 cargo fmt --all -- --check
@@ -121,6 +126,7 @@ cargo clippy --locked -p geosolve-constraint-editor --all-targets --all-features
 git diff --check
 env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 \
   nix-shell shell.nix --run './scripts/release-gate.sh'
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
 Outcomes:
@@ -139,12 +145,13 @@ Outcomes:
 - native and WASM M70/M71 transition parity, demo-web WASM, formatting, warnings-denied workspace
   Clippy, locked all-feature workspace tests, warnings-denied rustdoc, benchmark compilation,
   M14/M32 performance budgets, licence/package validation and Trunk 0.21.14 assembly pass;
-- the 256-moving-body sparse crossover passes in **152.53 seconds**.
+- the 256-moving-body sparse crossover passes in **152.53 seconds** in the provisional development
+  gate and **145.13 seconds** in the clean nominated-source gate.
 
 Cargo emitted only the repository's longstanding non-failing `license` plus `license-file`
 manifest advisories. An ambient-shell attempt lacked `wasm-bindgen-test-runner`, executed no test
 and was a harness invocation error; the successful WASM checks ran inside `nix-shell shell.nix`.
-The same complete gate must run without `GEOSOLVE_ALLOW_DIRTY` on the clean nominated candidate.
+The authoritative clean gate completed successfully at the replacement source above.
 
 ## 4. Acceptance state
 
@@ -158,10 +165,10 @@ typed headless entries/annotations, workspace restore, editable sample and revie
 The midpoint-axis evidence includes central finite-difference Jacobian checks, structured audit
 descriptors, independent finite hard-residual validation, explicit point-plus-native-span operands,
 live endpoint-average behavior, draft-v5 side persistence and frozen-v4 rejection. The full
-development gate passes; clean candidate qualification and publication remain open.
+development and clean candidate gates pass; immutable publication is byte-verified.
 
 `PLAN.md` items are checked only where evidence exists. The pre-F003 publication is withdrawn;
-replacement release qualification and immutable publication remain open, followed by human UAT.
+replacement release qualification and immutable publication pass, followed by pending human UAT.
 
 ## 5. Known limitations and next blocker
 
@@ -192,8 +199,8 @@ replacement release qualification and immutable publication remain open, followe
   RetainedEditorCoordinator` reproducer was frozen in
   `m71_f003_midpoint_axis.rs`. Accepted native line/polyline midpoints now publish the two explicit
   one-row relations atomically; both axes can coexist. Fillet-discarded and nonlinear midpoint
-  occurrences remain outside durable scope. Corrected focused and full development-gate outcomes
-  pass; a replacement clean release gate remains to be recorded.
+  occurrences remain outside durable scope. Corrected focused, development-gate and clean
+  replacement-gate outcomes pass.
 
 F001 and F002 change no residual, Jacobian, solver priority, branch rule or accepted geometry.
 F003 deliberately adds the authorized linear residual and durable retained behavior. All three
@@ -214,8 +221,9 @@ env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run './scripts/re
 That run included formatting/diff hygiene, warnings-denied workspace Clippy, all locked
 all-feature workspace tests, clean golden, M70/M71 WASM parity, demo-web WASM, warnings-denied
 rustdoc, benchmark compilation, M14/M32 performance budgets, the 152.53-second 256-moving-body
-sparse crossover, licence/package validation and Trunk 0.21.14 release assembly. It is provisional
-development evidence only and must be repeated on a clean nominated source.
+sparse crossover, licence/package validation and Trunk 0.21.14 release assembly. It remains
+provisional development evidence; the clean replacement gate recorded below supplied nomination
+evidence.
 
 The withdrawn pre-F003 candidate `ad01912eac28275644dcfc867a2dc70030b5406d` passed:
 
@@ -225,14 +233,45 @@ env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 
 That historical gate completed the same full sequence, including the unchanged 234/234 clean
 golden, both WASM transition oracles, a 144.08-second sparse crossover and Trunk 0.21.14 release
-assembly. Its seven-file release distribution is frozen read-only at
-`/tmp/geosolve-m71-uat.yFBsnX`. PID `49116` serves it only at
-`http://100.94.63.83:8080/`. Proxy- and cache-bypassed requests for every asset and `/` byte-match
-the snapshot; `/` equals `index.html`, and both served and post-fetch ordered aggregates equal
+assembly. Its seven-file release distribution remains frozen read-only at
+`/tmp/geosolve-m71-uat.yFBsnX`. At that historical checkpoint, PID `49116` served it only at
+`http://100.94.63.83:8080/`; proxy- and cache-bypassed requests for every asset and `/` byte-matched
+the snapshot, `/` equalled `index.html`, and both served and post-fetch ordered aggregates equalled
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`.
 
-Those bytes predate M71-F003 and are withdrawn from continued UAT. No corrected source hash,
-release-gate result, distribution manifest or served endpoint has been recorded.
+Those bytes predate M71-F003, are withdrawn from continued UAT and are no longer served.
+
+Clean replacement source `83bd2b575784c44b618fb3ad144f24e84702d764` passed:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The gate completed formatting and diff hygiene, warnings-denied workspace Clippy, all locked
+all-feature workspace tests, the unchanged 234/234 clean golden oracle, native/WASM M70 and M71
+transition parity, demo-web WASM, warnings-denied rustdoc, benchmark compilation, M14/M32
+performance budgets, the 145.13-second 256-moving-body sparse crossover, licence/package checks and
+Trunk 0.21.14 release assembly. Cargo emitted only the longstanding non-failing `license` plus
+`license-file` advisories.
+
+The exact seven-file gate output was copied without rebuilding, byte-compared and frozen at
+`/tmp/geosolve-m71-f003-uat.hybK8W` with directory mode `0555` and file mode `0444`:
+
+| File | SHA-256 |
+| --- | --- |
+| `API_COMPATIBILITY.md` | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
+| `LICENSE` | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-f3ecc0dffeb9ce14.js` | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
+| `geosolve-demo-web-f3ecc0dffeb9ce14_bg.wasm` | `53bd9bfdc0cec56f9f3520af328c45c8a5dcda3e836c43017d2b1409b48c1a9e` |
+| `index.html` | `946d66a5e03e56b22efd3ee99fc157ba9668c10ae4393695b6200274f57aace4` |
+| `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+PID `1202735` has exact argv `python3 -m http.server 8080 --bind 100.94.63.83 --directory
+/tmp/geosolve-m71-f003-uat.hybK8W` and listens on `100.94.63.83:8080`. Proxy-disabled,
+cache-bypassed requests to `http://100.94.63.83:8080/` byte-matched all seven files; `/` matched
+`index.html`. Both local and fetched ordered manifest aggregates equal
+`23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
 
 M71 deliberately excludes broad derived-point H/V operands beyond explicit native line/polyline
 midpoint axes, M37 catalog consolidation, certified generic intersections, quadrant anchors,
@@ -241,6 +280,5 @@ persistent wake state, canonical sketch v5, computed-feature chaining, browser E
 behavior. `FilletDiscarded` and nonlinear curve-parameter midpoint occurrences remain
 tracking-only.
 
-The immediate blocker is complete clean qualification and byte-verified publication of a
-replacement F003 candidate. After that, explicit supervising-human review of M71-U1 through
-M71-U5 remains required. Mechanical qualification and publication do not close M71.
+The only remaining milestone blocker is explicit supervising-human review of M71-U1 through
+M71-U5. Mechanical qualification and publication do not close M71.

@@ -2,11 +2,10 @@
 
 # M71 fresh-session handover
 
-Status: **M71-F003 implemented and provisionally development-gate qualified; clean nomination is
-next**. The previously qualified candidate remains the last clean baseline, but it is withdrawn
-for continued UAT because its midpoint alignment behavior does not satisfy the newly authorized
-durable-centering workflow. The sole worktree contains the complete uncommitted correction and
-tests; preserve it until clean qualification and nomination are complete.
+Status: **M71-F003 clean-qualified, immutably published and byte-verified; corrected human UAT is
+next**. Candidate source `83bd2b575784c44b618fb3ad144f24e84702d764` is served from the frozen
+seven-file snapshot `/tmp/geosolve-m71-f003-uat.hybK8W` at `http://100.94.63.83:8080/`.
+M71 remains open until the supervising human repeats M71-U1 through M71-U5 and explicitly approves.
 
 This document is the canonical short restart contract for the M71 correction and replacement
 qualification. Read the repository-required project documents first, then this file, ADR 0035,
@@ -83,24 +82,25 @@ through the retained coordinator and that the live relation follows later endpoi
   SHA-256 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
 - Native and WASM M70/M71 transition parity, demo-web WASM, formatting, warnings-denied workspace
   Clippy, locked all-feature workspace tests and Trunk 0.21.14 release assembly pass.
-- The complete dirty-tree development gate passed with the expected 152.53-second 256-moving-body
-  sparse crossover, licensing/package validation and final Trunk assembly. It is provisional
-  evidence only; a clean nominated commit must repeat the gate before distribution freeze.
-- Documentation now records this post-F003 evidence. Replacement source nomination, a clean gate,
-  immutable publication, served-byte verification and supervising-human UAT remain open.
+- The complete dirty-tree development gate passed with a 152.53-second sparse crossover. Clean
+  candidate `83bd2b575784c44b618fb3ad144f24e84702d764` then passed the complete gate with a
+  145.13-second sparse crossover, licensing/package validation and final Trunk assembly.
+- Its immutable seven-file snapshot and cache-bypassed served bytes are verified at ordered
+  manifest aggregate `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
+  Only supervising-human UAT remains open.
 
 ### Exact repository/worktree state
 
 - Working directory: `/home/arduano/programming/geometric-constraint-solver`.
-- Sole worktree; branch `main` at `5b29744f445f458cffabd176c123861f39392d12`.
-- `main` and `origin/main` were equal (`git rev-list --left-right --count` returned `0 0`).
-- Baseline tree was clean before the repair began. The current dirty tree contains the complete
-  implementation, tests and documentation correction; no commit has been made.
-- `git diff --check` passes. Review `git status --short --branch` and the complete diff before
-  nomination; do not reset or overwrite the worktree.
-- PID `49116` still has exact argv `python3 -m http.server 8080 --bind 100.94.63.83 --directory
-  /tmp/geosolve-m71-uat.yFBsnX` and listens on `100.94.63.83:8080`. Leave it unchanged until a
-  replacement is clean-qualified and ready for an atomic publication swap.
+- Sole worktree; branch `main` was clean at nominated candidate
+  `83bd2b575784c44b618fb3ad144f24e84702d764`, two commits ahead of `origin/main` (`0 2`).
+- Candidate commits are `c417f79` (`fix(m71): retain native midpoint axis alignment`) and
+  `83bd2b5` (`docs(m71): reconcile midpoint correction handoff`); neither has been pushed.
+- This post-publication evidence is recorded as a separate forward documentation commit after the
+  exact qualified candidate; recheck the resulting branch hash and divergence rather than treating
+  that documentation commit as the source of the frozen product bytes.
+- PID `1202735` has exact argv `python3 -m http.server 8080 --bind 100.94.63.83 --directory
+  /tmp/geosolve-m71-f003-uat.hybK8W` and listens on `100.94.63.83:8080`.
 
 ## Repository history at consolidation
 
@@ -111,15 +111,13 @@ through the retained coordinator and that the live relation follows later endpoi
 - The complete M71 implementation was confined to that worktree. The five formerly untracked
   files were all intentional M71 relation, persistence, parity and implementation records; no
   scratch, reject, backup or dangling untracked file was found.
-- Withdrawn pre-F003 candidate `ad01912eac28275644dcfc867a2dc70030b5406d` is frozen at
-  `/tmp/geosolve-m71-uat.yFBsnX` and served at `http://100.94.63.83:8080/` by PID `49116`. Every
-  asset and `/` byte-matches the snapshot; its ordered manifest aggregate is
+- Withdrawn pre-F003 candidate `ad01912eac28275644dcfc867a2dc70030b5406d` remains frozen at
+  `/tmp/geosolve-m71-uat.yFBsnX` but is no longer served. Its historical ordered aggregate is
   `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. The historical M70B
   snapshot remains on disk but is no longer served.
 
-That publication remains historical mechanical evidence only. It must not be treated as the
-current qualified state or used for continued UAT. Recheck exact divergence and candidate identity
-after the F003 correction is nominated.
+That withdrawn publication remains historical mechanical evidence only. Continued UAT must use
+the verified replacement endpoint above.
 
 After this handover is committed, use `git log -5 --oneline --decorate`, `git status --short
 --branch`, `git worktree list --porcelain` and `git rev-list --left-right --count
@@ -240,14 +238,10 @@ result makes those laws smaller and clearer.
 
 ## Next-session sequence
 
-1. Review the complete worktree diff and stale-language scan, run final format/diff hygiene, then
-   nominate one commit without rewriting history.
-2. Run the complete release gate without `GEOSOLVE_ALLOW_DIRTY` on that clean nominated source.
-   Only after it passes, freeze its exact seven-file release distribution.
-3. Replace PID `49116` only after repeating exact argv/listener checks, then byte-verify every served file and
-   `/` against the new immutable snapshot and update the manifest/source records.
-4. Ask the supervising human to repeat M71-U1 through M71-U5, especially corrected M71-U2.
-5. Close M71 only after explicit supervising-human approval. Do not infer approval from mechanical
+1. Recheck exact local/remote divergence and push only under the supervising workflow.
+2. Ask the supervising human to repeat M71-U1 through M71-U5, especially corrected M71-U2, using
+   `http://100.94.63.83:8080/` after a hard refresh.
+3. Close M71 only after explicit supervising-human approval. Do not infer approval from mechanical
    evidence.
 
 ## Deliberately deferred

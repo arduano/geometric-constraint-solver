@@ -4166,9 +4166,9 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
 - [x] Add owner-level validation/lowering/lifecycle/persistence tests, headless authoring and
   inference matrices, reviewed systemic golden rows, native/WASM transition parity and one
   ordinary editable **Retained drafting relations** playground.
-- [ ] Rerun the clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
+- [x] Rerun the clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
   workspace tests, relevant WASM/Trunk builds and the complete clean release gate.
-- [ ] Freeze and byte-verify one replacement immutable Tailscale candidate and record its source, manifest and
+- [x] Freeze and byte-verify one replacement immutable Tailscale candidate and record its source, manifest and
   endpoint in `docs/M71_UAT.md`.
 - [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
 
@@ -4210,6 +4210,20 @@ Trunk 0.21.14 release assembly. Exactly seven release files are frozen read-only
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. Those bytes are withdrawn
 from continued UAT. A post-F003 clean source, replacement gate and byte-verified publication remain
 open before M71-U1 through M71-U5 and explicit supervising-human approval.
+
+Replacement qualification/publication note (2026-08-14): clean nominated source
+`83bd2b575784c44b618fb3ad144f24e84702d764` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the unchanged
+234/234 golden oracle, all locked workspace tests, native/WASM M70 and M71 transition parity,
+warnings-denied Clippy and rustdoc, package/licence checks, M14/M32 performance budgets, the
+145.13-second sparse crossover and Trunk 0.21.14 release assembly. Its exact seven-file `dist` was
+copied without rebuilding and frozen at `/tmp/geosolve-m71-f003-uat.hybK8W` with directory mode
+`0555` and file mode `0444`. PID `1202735` serves only that snapshot at
+`http://100.94.63.83:8080/`; proxy-disabled, cache-bypassed requests for all seven files and `/`
+byte-match the snapshot, `/` equals `index.html`, and both ordered manifest aggregates equal
+`23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`. Mechanical qualification
+and publication are complete; M71 remains open only for M71-U1 through M71-U5 and explicit
+supervising-human approval.
 
 Gate: all six definitions behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every
