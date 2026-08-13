@@ -92,13 +92,14 @@ through the retained coordinator and that the live relation follows later endpoi
 ### Exact repository/worktree state
 
 - Working directory: `/home/arduano/programming/geometric-constraint-solver`.
-- Sole worktree; branch `main` was clean at nominated candidate
+- At nomination, the sole worktree's `main` was clean at candidate
   `83bd2b575784c44b618fb3ad144f24e84702d764`, two commits ahead of `origin/main` (`0 2`).
 - Candidate commits are `c417f79` (`fix(m71): retain native midpoint axis alignment`) and
-  `83bd2b5` (`docs(m71): reconcile midpoint correction handoff`); neither has been pushed.
-- This post-publication evidence is recorded as a separate forward documentation commit after the
-  exact qualified candidate; recheck the resulting branch hash and divergence rather than treating
-  that documentation commit as the source of the frozen product bytes.
+  `83bd2b5` (`docs(m71): reconcile midpoint correction handoff`); neither had been pushed at
+  nomination. Post-publication evidence is recorded in the separate forward commit `eeda588`.
+- The direct-`main` UAT workflow publishes these forward commits after qualification. Always
+  recheck the resulting local/remote hash rather than treating a documentation commit as the
+  source of the frozen product bytes.
 - PID `1202735` has exact argv `python3 -m http.server 8080 --bind 100.94.63.83 --directory
   /tmp/geosolve-m71-f003-uat.hybK8W` and listens on `100.94.63.83:8080`.
 
@@ -238,10 +239,9 @@ result makes those laws smaller and clearer.
 
 ## Next-session sequence
 
-1. Recheck exact local/remote divergence and push only under the supervising workflow.
-2. Ask the supervising human to repeat M71-U1 through M71-U5, especially corrected M71-U2, using
+1. Ask the supervising human to repeat M71-U1 through M71-U5, especially corrected M71-U2, using
    `http://100.94.63.83:8080/` after a hard refresh.
-3. Close M71 only after explicit supervising-human approval. Do not infer approval from mechanical
+2. Close M71 only after explicit supervising-human approval. Do not infer approval from mechanical
    evidence.
 
 ## Deliberately deferred
