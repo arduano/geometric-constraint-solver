@@ -148,6 +148,14 @@ pub enum SceneAnnotationKind {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SceneAnnotation {
     pub item: SelectionItem,
+    /// Exact persistent source that owns this accepted annotation.
+    ///
+    /// Presentation adapters use it to keep accepted annotation metadata tied
+    /// to the same retained source when current design entries diverge or are
+    /// absent. Constraint IDs are never reused; this remains a defensive
+    /// provenance boundary, while dimensions resolve through the accepted
+    /// document directly.
+    pub source: DocumentSourceId,
     pub kind: SceneAnnotationKind,
     pub operands: Vec<SelectionItem>,
     pub geometry: SceneAnnotationGeometry,
@@ -337,6 +345,7 @@ pub(crate) fn build_annotations(
         };
         annotations.push(SceneAnnotation {
             item: SelectionItem::Constraint(constraint.id),
+            source: constraint.source_id,
             kind: SceneAnnotationKind::Constraint(glyph),
             operands,
             geometry,
@@ -350,6 +359,7 @@ pub(crate) fn build_annotations(
         {
             annotations.push(SceneAnnotation {
                 item: SelectionItem::Dimension(dimension.id),
+                source: dimension.source_id,
                 kind,
                 operands,
                 geometry,
@@ -1426,9 +1436,9 @@ fn point_segment_distance(point: ScreenPoint, start: ScreenPoint, end: ScreenPoi
 mod tests {
     use geosolve_sketch::{
         ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentCenterRef,
-        DocumentConstraintDefinition, DocumentDirectionSense, DocumentFilletTrimEndpoint,
-        DocumentLineSupportRef, DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession,
-        ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
+        DocumentCommandEffect, DocumentConstraintDefinition, DocumentDirectionSense, DocumentEdit,
+        DocumentFilletTrimEndpoint, DocumentLineSupportRef, DocumentSolveRequest, GeometryRole,
+        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
     };
 
     use super::{
@@ -1439,7 +1449,7 @@ mod tests {
     use crate::{
         ComputedConstructionFragmentId, ComputedConstructionFragmentProvenance, ComputedCornerRef,
         ComputedEvaluationRevision, ComputedFeatureCornerId, ComputedFeatureId,
-        ComputedSourceInterval, EditorScene, NativeCurveSpanSource, SceneCurveOrigin,
+        ComputedSourceInterval, EditorError, EditorScene, NativeCurveSpanSource, SceneCurveOrigin,
         SelectionItem, Viewport,
     };
 
@@ -1886,5 +1896,86 @@ mod tests {
             SceneAnnotationGeometry::Glyph { markers }
                 if markers.len() == 2 && markers.iter().all(|marker| marker.anchor.is_finite())
         ));
+    }
+
+    #[test]
+    fn m71_f001_rejected_design_entry_is_published_without_unaccepted_annotation_geometry() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("point");
+        let second = document.add_point("second", [1.0, 1.0]).expect("point");
+        for (label, point) in [("fix first", first), ("fix second", second)] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint {
+                        point,
+                        target: document.point(point).expect("fixed point").position,
+                    },
+                )
+                .expect("fixed constraint");
+        }
+        let mut session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted session");
+        let accepted_before = session.accepted_state().expect("accepted state");
+        let accepted_identity = accepted_before.identity();
+        let accepted_document = accepted_before.document().clone();
+        let outcome = session
+            .apply(
+                session.design_identity(),
+                DocumentEdit::CreateConstraint {
+                    label: "rejected horizontal points".into(),
+                    definition: DocumentConstraintDefinition::HorizontalPoints { first, second },
+                },
+            )
+            .expect("structurally valid rejected relation");
+        let DocumentCommandEffect::CreatedConstraint(rejected) = outcome.value() else {
+            panic!("created relation effect expected")
+        };
+        assert!(outcome.published_accepted_identity().is_none());
+        assert!(session.accepted_state_for_current_input().is_none());
+        let retained_accepted = session.accepted_state().expect("retained accepted state");
+        assert_eq!(retained_accepted.identity(), accepted_identity);
+        assert_eq!(retained_accepted.document(), &accepted_document);
+
+        let scene = EditorScene::from_accepted_for_design(
+            accepted_identity.revision().get(),
+            session.design_identity(),
+            &accepted_document,
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("detached retained-accepted scene");
+        assert!(scene.constraint_entries.iter().any(|entry| {
+            entry.id == *rejected
+                && entry.source
+                    == session
+                        .design_document()
+                        .constraint(*rejected)
+                        .expect("retained rejected constraint")
+                        .source_id
+                && entry.label == "rejected horizontal points"
+                && entry.glyph == SceneConstraintGlyph::Horizontal
+                && entry.operands == [SelectionItem::Point(first), SelectionItem::Point(second)]
+        }));
+        assert!(
+            scene
+                .annotations
+                .iter()
+                .all(|annotation| annotation.item != SelectionItem::Constraint(*rejected)),
+            "rejected coordinates must not acquire accepted annotation geometry"
+        );
+        assert_eq!(scene.accepted_document, accepted_document);
+        assert!(
+            matches!(
+                scene.with_retained_session(&session),
+                Err(EditorError::StalePreparedSketchInput)
+            ),
+            "a historical accepted scene beneath rejected design must remain detached"
+        );
     }
 }

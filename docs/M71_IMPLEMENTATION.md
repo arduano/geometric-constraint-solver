@@ -120,6 +120,55 @@ immutable publication and human UAT remain open and M71 is not closed.
 
 ## 5. Known limitations and next blocker
 
+### Resolved findings
+
+- `M71-F001` — `EditorScene::from_accepted_for_design` built both accepted annotation geometry
+  and current constraint entries from the retained accepted document. A newer rejected design
+  relation was therefore absent from the public scene even though the ordinary workbench's
+  separate design-document entry query masked that loss. The scene now keeps geometry and
+  annotation coordinates accepted-document-owned while publishing constraint entries from the
+  supplied design document. The exact owner regression proves the rejected entry is visible,
+  receives no unaccepted annotation geometry, leaves the retained accepted document exactly
+  unchanged and cannot authenticate the detached historical
+  scene for publication. The existing ordinary workbench composition regression additionally
+  proves that the thin adapter carries the exact-source design-only entry without creating a
+  canvas annotation for it. A focused renderer regression
+  also proves that an accepted annotation whose entry was deleted from the newer rejected design
+  retains the accepted document's exact-source label rather than disappearing or borrowing newer
+  design metadata.
+- `M71-F002` — the compatibility `ConstraintEditor::available_constraints` path advertised
+  relations for foreign persistent point IDs and for invalid curve-span occurrences, while the
+  contextual coordinator rejected the same operands as `MissingObject`. Direct availability now
+  applies the coordinator's exact selection-existence predicate before relation-specific
+  applicability. Its focused regression covers foreign point-pair M71 relations and invalid-span
+  Concentric without removing either public authoring surface.
+
+Neither finding changes a residual, Jacobian, solver priority, branch rule or accepted geometry.
+They remain focused owner regressions because they expose no missing systemic golden dimension.
+Both were independently classified `DEFECT` against source
+`95d54581748292ecf2d1fb3687387b2a2a7805f8`. Exact pre-fix reproduction failed each proposed
+owner regression; after repair the exact F001 and F002 commands pass 1/1, the complete editor
+crate passes 299/299 unit tests plus every integration/doc-test suite. The current demo-web suite
+passes 103/103 plus its decoder/doc tests. M71 sketch relation/persistence matrices pass 11/11 and
+7/7, inference passes 56/56, native transition parity passes, and the 234-row golden survey,
+check, and clean modes remain unchanged. These are focused and collateral repair results; clean replacement-candidate
+qualification and publication remain pending.
+
+A complete development-mode release gate passed on the then-current five-file repair snapshot
+before the later demo-adapter regression and Clippy-only scene-builder extraction:
+
+```text
+env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+That historical run included formatting/diff hygiene, warnings-denied workspace Clippy, all locked
+all-feature workspace tests, clean golden, M70/M71 WASM parity, demo-web WASM, warnings-denied
+rustdoc, benchmark compilation, M14/M32 performance budgets, the 147.66-second 256-moving-body
+sparse crossover, licence/package validation and Trunk 0.21.14 release assembly. It is provisional
+development evidence only and does not qualify the current tree: the dirty override cannot
+nominate a release candidate or authorize publication. The clean gate must be rerun after an
+authorized candidate commit.
+
 M71 deliberately excludes derived-point H/V operands, M37 catalog consolidation, certified
 generic intersections, quadrant anchors, nonlinear tangent/normal inference, equality/symmetry
 inference, host axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature

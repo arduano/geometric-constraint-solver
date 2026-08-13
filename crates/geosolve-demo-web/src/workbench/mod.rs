@@ -5130,6 +5130,7 @@ mod tests {
         assert_eq!(scene.curves, expected.curves);
         assert_eq!(scene.curves.len(), 2);
         assert_eq!(scene.points.len(), 4);
+        assert_rejected_constraint_scene_authority(&coordinator, accepted, &scene);
         assert!(
             scene
                 .clone()
@@ -5155,6 +5156,40 @@ mod tests {
         for line in lines {
             assert!(markup.contains(&format!("data-persistent-id=\"{}\"", line.curve)));
         }
+    }
+
+    fn assert_rejected_constraint_scene_authority(
+        coordinator: &RetainedEditorCoordinator,
+        accepted: &geosolve_sketch::SketchAcceptedDocumentState,
+        scene: &EditorScene,
+    ) {
+        let rejected_constraint = coordinator
+            .session()
+            .design_document()
+            .constraints()
+            .iter()
+            .find(|constraint| constraint.label == "conflicting attempted point")
+            .expect("design-only rejected constraint");
+        assert!(
+            accepted
+                .document()
+                .constraint(rejected_constraint.id)
+                .is_none(),
+            "the rejected constraint must not enter accepted geometry authority"
+        );
+        let rejected_entry = scene
+            .constraint_entries
+            .iter()
+            .find(|entry| entry.id == rejected_constraint.id)
+            .expect("composed scene must retain rejected design intent");
+        assert_eq!(rejected_entry.source, rejected_constraint.source_id);
+        assert_eq!(rejected_entry.label, rejected_constraint.label);
+        assert!(
+            scene.annotations.iter().all(|annotation| {
+                annotation.item != SelectionItem::Constraint(rejected_constraint.id)
+            }),
+            "the composed scene must not invent annotation geometry for rejected intent"
+        );
     }
 
     #[test]

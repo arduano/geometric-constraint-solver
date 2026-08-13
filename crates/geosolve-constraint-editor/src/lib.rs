@@ -766,6 +766,7 @@ struct DraftInferenceSceneSeal {
     design_identity: SketchDesignIdentity,
     viewport: Viewport,
     curves: Vec<SceneCurve>,
+    constraint_entries: Vec<SceneConstraintEntry>,
     construction_snap_points: Vec<ScenePoint>,
 }
 
@@ -776,6 +777,7 @@ impl DraftInferenceSceneSeal {
             design_identity: scene.design_identity,
             viewport: scene.viewport,
             curves: scene.curves.clone(),
+            constraint_entries: scene.constraint_entries.clone(),
             construction_snap_points: scene.construction_snap_points.clone(),
         }
     }
@@ -785,6 +787,7 @@ impl DraftInferenceSceneSeal {
             && self.design_identity == scene.design_identity
             && self.viewport == scene.viewport
             && self.curves == scene.curves
+            && self.constraint_entries == scene.constraint_entries
             && self.construction_snap_points == scene.construction_snap_points
     }
 }
@@ -857,11 +860,14 @@ impl EditorScene {
         )
     }
 
-    /// Builds the accepted visible scene while restricting construction snaps to
-    /// point identities that still exist in the current retained design.
+    /// Builds the accepted visible scene while publishing the current retained
+    /// design's constraint entries and restricting construction snaps to design
+    /// identities that still exist.
     ///
-    /// Picking continues to use every accepted visible point. Only construction
-    /// operand snapping crosses this design-topology boundary.
+    /// Picking, curve geometry and annotation coordinates continue to use only
+    /// accepted geometry. Constraint entries require no solved coordinates, so
+    /// they follow the supplied design and keep rejected intent visible without
+    /// giving rejected geometry presentation authority.
     ///
     /// # Errors
     ///
@@ -887,16 +893,16 @@ impl EditorScene {
     fn from_accepted_with_snap_filter(
         accepted_revision: u64,
         design_identity: SketchDesignIdentity,
-        document: &SketchDocument,
-        snap_design: Option<&SketchDocument>,
+        accepted_document: &SketchDocument,
+        design_document: Option<&SketchDocument>,
         viewport: Viewport,
         chord_tolerance_pixels: f64,
     ) -> Result<Self, EditorError> {
         if !chord_tolerance_pixels.is_finite() || chord_tolerance_pixels <= 0.0 {
             return Err(EditorError::InvalidTolerance);
         }
-        let point_roles = point_role_incidence(document);
-        let points: Vec<_> = document
+        let point_roles = point_role_incidence(accepted_document);
+        let points: Vec<_> = accepted_document
             .points()
             .iter()
             .map(|point| ScenePoint {
@@ -914,57 +920,18 @@ impl EditorScene {
         let construction_snap_points = points
             .iter()
             .copied()
-            .filter(|point| snap_design.is_none_or(|design| design.point(point.id).is_some()))
+            .filter(|point| design_document.is_none_or(|design| design.point(point.id).is_some()))
             .collect();
-        let mut curves = Vec::new();
-        for curve in document.curves() {
-            let role = document.geometry_role(curve.id).unwrap_or_default();
-            for span in document.curve_spans(curve.id)? {
-                for interval in document.visible_intervals(span)? {
-                    let start = document.evaluate_curve_jet(span, interval.start)?;
-                    let end = document.evaluate_curve_jet(span, interval.end)?;
-                    let start = viewport.model_to_screen([start.position.x, start.position.y]);
-                    let end = viewport.model_to_screen([end.position.x, end.position.y]);
-                    let mut screen_polyline = vec![start];
-                    let mut screen_parameters = vec![interval.start];
-                    tessellate(
-                        document,
-                        viewport,
-                        span,
-                        interval.start,
-                        start,
-                        interval.end,
-                        end,
-                        chord_tolerance_pixels,
-                        0,
-                        &mut screen_polyline,
-                        &mut screen_parameters,
-                    )?;
-                    curves.push(SceneCurve {
-                        span,
-                        authoring_eligible: snap_design.is_none_or(|design| {
-                            design
-                                .curve_spans(span.curve)
-                                .is_ok_and(|spans| spans.contains(&span))
-                        }),
-                        affine: is_linear_span(document, span),
-                        contact_domain: painted_contact_domain(document, span)?,
-                        role,
-                        source_role: role,
-                        origin: SceneCurveOrigin::Native,
-                        screen_polyline,
-                        screen_parameters,
-                        drag_handle_point: match &curve.definition {
-                            CurveDefinition::Circle { center, .. }
-                            | CurveDefinition::CircularArc { center, .. } => Some(*center),
-                            _ => None,
-                        },
-                    });
-                }
-            }
-        }
-        let annotations = annotations::build_annotations(document, &points, &curves, viewport);
-        let constraint_entries = annotations::build_constraint_entries(document);
+        let curves = build_native_scene_curves(
+            accepted_document,
+            design_document,
+            viewport,
+            chord_tolerance_pixels,
+        )?;
+        let annotations =
+            annotations::build_annotations(accepted_document, &points, &curves, viewport);
+        let constraint_entries =
+            annotations::build_constraint_entries(design_document.unwrap_or(accepted_document));
         let mut scene = Self {
             accepted_revision,
             design_identity,
@@ -982,7 +949,7 @@ impl EditorScene {
             annotations,
             constraint_entries,
             construction_snap_points,
-            accepted_document: document.clone(),
+            accepted_document: accepted_document.clone(),
         };
         scene.refresh_draft_inference_seal();
         Ok(scene)
@@ -1069,7 +1036,8 @@ impl EditorScene {
                 ),
             })
             .collect::<Vec<_>>();
-        self.construction_snap_points == expected_snap_points
+        self.constraint_entries == annotations::build_constraint_entries(design)
+            && self.construction_snap_points == expected_snap_points
             && self.curves.iter().all(|curve| {
                 curve.authoring_eligible
                     == design
@@ -1449,7 +1417,6 @@ impl EditorScene {
             &scene.curves,
             viewport,
         );
-        scene.constraint_entries = annotations::build_constraint_entries(accepted_document);
         scene.refresh_draft_inference_seal();
         Ok(scene)
     }
@@ -6167,6 +6134,64 @@ pub enum EditorError {
     Curve(#[from] geosolve_sketch::DocumentCurveEvaluationError),
 }
 
+fn build_native_scene_curves(
+    accepted_document: &SketchDocument,
+    design_document: Option<&SketchDocument>,
+    viewport: Viewport,
+    chord_tolerance_pixels: f64,
+) -> Result<Vec<SceneCurve>, EditorError> {
+    let mut curves = Vec::new();
+    for curve in accepted_document.curves() {
+        let role = accepted_document
+            .geometry_role(curve.id)
+            .unwrap_or_default();
+        for span in accepted_document.curve_spans(curve.id)? {
+            for interval in accepted_document.visible_intervals(span)? {
+                let start = accepted_document.evaluate_curve_jet(span, interval.start)?;
+                let end = accepted_document.evaluate_curve_jet(span, interval.end)?;
+                let start = viewport.model_to_screen([start.position.x, start.position.y]);
+                let end = viewport.model_to_screen([end.position.x, end.position.y]);
+                let mut screen_polyline = vec![start];
+                let mut screen_parameters = vec![interval.start];
+                tessellate(
+                    accepted_document,
+                    viewport,
+                    span,
+                    interval.start,
+                    start,
+                    interval.end,
+                    end,
+                    chord_tolerance_pixels,
+                    0,
+                    &mut screen_polyline,
+                    &mut screen_parameters,
+                )?;
+                curves.push(SceneCurve {
+                    span,
+                    authoring_eligible: design_document.is_none_or(|design| {
+                        design
+                            .curve_spans(span.curve)
+                            .is_ok_and(|spans| spans.contains(&span))
+                    }),
+                    affine: is_linear_span(accepted_document, span),
+                    contact_domain: painted_contact_domain(accepted_document, span)?,
+                    role,
+                    source_role: role,
+                    origin: SceneCurveOrigin::Native,
+                    screen_polyline,
+                    screen_parameters,
+                    drag_handle_point: match &curve.definition {
+                        CurveDefinition::Circle { center, .. }
+                        | CurveDefinition::CircularArc { center, .. } => Some(*center),
+                        _ => None,
+                    },
+                });
+            }
+        }
+    }
+    Ok(curves)
+}
+
 fn scene_curve_for_interval(
     document: &SketchDocument,
     viewport: Viewport,
@@ -7569,6 +7594,12 @@ fn available_constraints(
     document: &SketchDocument,
     selection: &[SelectionItem],
 ) -> Vec<ConstraintKind> {
+    if selection
+        .iter()
+        .any(|item| !coordinator::selection_exists(document, *item))
+    {
+        return Vec::new();
+    }
     match selection {
         [SelectionItem::Point(_)] => vec![ConstraintKind::Fixed],
         [SelectionItem::Point(first), SelectionItem::Point(second)] => {
@@ -13245,6 +13276,108 @@ mod tests {
             SelectionItem::Curve(spans[0]),
         ];
         assert_rejected(&document, &repeated_support, ConstraintKind::Collinear);
+    }
+
+    #[test]
+    fn m71_f002_direct_relation_availability_rejects_missing_objects_and_invalid_spans() {
+        let (mut document, _spans, points) = line_document();
+        let foreign_point = DesignPointId(geosolve_sketch::PersistentId::from_u128(u128::MAX));
+        let foreign_points = [
+            SelectionItem::Point(points[0]),
+            SelectionItem::Point(foreign_point),
+        ];
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection(foreign_points);
+        assert!(editor.available_constraints(&document).is_empty());
+        for kind in [
+            ConstraintKind::Coincident,
+            ConstraintKind::HorizontalPoints,
+            ConstraintKind::VerticalPoints,
+        ] {
+            assert!(matches!(
+                editor.constraint_edit(&document, kind, "missing point"),
+                Err(EditorError::IncompatibleConstraint(actual)) if actual == kind
+            ));
+        }
+        let session = RetainedSketchDocumentSession::new(
+            document.clone(),
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("coordinator session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator.editor_mut().set_selection(foreign_points);
+        assert_eq!(
+            coordinator
+                .actions()
+                .into_iter()
+                .find(|availability| {
+                    availability.action
+                        == CoordinatorActionKind::Constraint(ConstraintIntent::Horizontal)
+                })
+                .expect("contextual horizontal availability")
+                .state,
+            ActionState::Disabled(DisabledReason::MissingObject)
+        );
+
+        let centers = [
+            document.add_point("center a", [0.0, 0.0]).expect("point"),
+            document.add_point("center b", [2.0, 0.0]).expect("point"),
+        ];
+        let radii = [1.0, 2.0].map(|value| {
+            document
+                .add_scalar("radius", value, ScalarUnit::Length, ScalarDomain::Positive)
+                .expect("radius")
+        });
+        let curves = [0, 1].map(|index| {
+            document
+                .add_curve(
+                    "circle",
+                    CurveDefinition::Circle {
+                        center: centers[index],
+                        radius: radii[index],
+                    },
+                )
+                .expect("circle")
+        });
+        let invalid_span = CurveSpan {
+            curve: curves[0],
+            segment: 71,
+        };
+        editor.set_selection([
+            SelectionItem::Curve(invalid_span),
+            SelectionItem::Curve(CurveSpan::line(curves[1])),
+        ]);
+        assert!(editor.available_constraints(&document).is_empty());
+        assert!(matches!(
+            editor.constraint_edit(&document, ConstraintKind::Concentric, "invalid span"),
+            Err(EditorError::IncompatibleConstraint(
+                ConstraintKind::Concentric
+            ))
+        ));
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("coordinator session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator.editor_mut().set_selection([
+            SelectionItem::Curve(invalid_span),
+            SelectionItem::Curve(CurveSpan::line(curves[1])),
+        ]);
+        assert_eq!(
+            coordinator
+                .actions()
+                .into_iter()
+                .find(|availability| {
+                    availability.action
+                        == CoordinatorActionKind::Constraint(ConstraintIntent::Concentric)
+                })
+                .expect("contextual concentric availability")
+                .state,
+            ActionState::Disabled(DisabledReason::MissingObject)
+        );
     }
 
     #[test]

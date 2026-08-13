@@ -1502,6 +1502,42 @@ inference ranking and exact publication authority. Human review follows `docs/M7
 discoverability, annotation clarity, predictable authoring/inference and recovery; it remains open
 until explicit supervising-human approval.
 
+### M71-F001 - Rejected design intent remains visible over retained accepted geometry
+
+Create a design whose accepted document contains two fixed points, then attempt a point-pair
+Horizontal relation that is structurally retained but solver-rejected. Build the ordinary
+historical scene through `EditorScene::from_accepted_for_design`, using the retained accepted
+document for geometry and the newer design document for intent.
+
+The rejected relation must appear in the scene's constraint-entry list with its stable
+constraint/source semantics, while no accepted annotation geometry is invented for it. The
+retained accepted identity and document remain unchanged, and the detached historical scene cannot
+be rebound as current publication authority. `M71-F001` is resolved by the exact headless scene
+owner regression
+`annotations::tests::m71_f001_rejected_design_entry_is_published_without_unaccepted_annotation_geometry`.
+The thin-adapter regression
+`workbench::tests::rejected_constraint_keeps_a_detached_accepted_canvas_scene` also requires the
+ordinary composed scene to carry the design-only entry while publishing no annotation for it.
+It was independently classified `DEFECT` against source
+`95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
+regression passes 1/1. Clean replacement qualification/publication remain pending.
+
+### M71-F002 - Direct relation applicability rejects missing selections
+
+Select a valid stored point together with a foreign persistent point ID through the compatibility
+`ConstraintEditor` API, then select two center-bearing curves where one selected span occurrence
+does not exist. Direct availability must advertise no relation and direct edit construction must
+fail with its compatibility error; it must not disagree with contextual authoring's
+`MissingObject` classification by manufacturing a point-pair or curve-only definition.
+
+`M71-F002` is resolved by sharing the contextual owner's exact selection-existence predicate at
+the direct availability boundary. The focused regression
+`tests::m71_f002_direct_relation_availability_rejects_missing_objects_and_invalid_spans` preserves
+both public authoring surfaces without expanding M71 into a broader applicability refactor.
+It was independently classified `DEFECT` against source
+`95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
+regression passes 1/1. Clean replacement qualification/publication remain pending.
+
 ### M70B-R1 - Complete workspace reproduction payload
 
 Create or open any ordinary editable workspace containing representative persistent sketch state,

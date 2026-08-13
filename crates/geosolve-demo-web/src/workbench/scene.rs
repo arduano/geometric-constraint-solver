@@ -1109,15 +1109,28 @@ fn render_annotations(
         );
         let (editor_kind, id, kind, label, value, mode) = match annotation.item {
             SelectionItem::Constraint(id) => {
-                let Some(constraint) = scene.constraint_entries.iter().find(|entry| entry.id == id)
-                else {
-                    continue;
-                };
+                let constraint = scene
+                    .constraint_entries
+                    .iter()
+                    .find(|entry| entry.id == id && entry.source == annotation.source);
+                let label = constraint.map_or_else(
+                    || {
+                        accepted
+                            .document()
+                            .constraint(id)
+                            .filter(|constraint| constraint.source_id == annotation.source)
+                            .map_or_else(
+                                || "Accepted constraint".into(),
+                                |constraint| constraint.label.clone(),
+                            )
+                    },
+                    |constraint| constraint.label.clone(),
+                );
                 (
                     "constraint",
                     id.to_string(),
                     annotation_kind(annotation.kind),
-                    constraint.label.clone(),
+                    label,
                     String::new(),
                     String::new(),
                 )
@@ -2043,7 +2056,7 @@ mod tests {
         ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
         DocumentAngleOrientation, DocumentCenterRef, DocumentConstraintDefinition,
         DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
-        DocumentLineSupportRef, DocumentParameterId, DocumentParameterKind,
+        DocumentLineSupportRef, DocumentObjectId, DocumentParameterId, DocumentParameterKind,
         DocumentParameterTarget, DocumentSolveRequest, ParameterBatch, ParameterBatchEntry,
         ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
         SketchDesignIdentity, SketchDocument,
@@ -2576,6 +2589,100 @@ mod tests {
             "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"reference\" data-dimension-value=\"3\"",
             rectangle.dimensions[1]
         )));
+    }
+
+    #[test]
+    fn historical_constraint_annotation_uses_accepted_label_after_design_deletion() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("point");
+        let second = document.add_point("second", [2.0, 0.0]).expect("point");
+        for (label, point) in [("fix first", first), ("fix second", second)] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint {
+                        point,
+                        target: document.point(point).expect("fixed point").position,
+                    },
+                )
+                .expect("fixed constraint");
+        }
+        let historical = document
+            .add_constraint(
+                "accepted horizontal",
+                DocumentConstraintDefinition::HorizontalPoints { first, second },
+            )
+            .expect("historical constraint");
+        let mut session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted session");
+        let accepted_before = session.accepted_state().expect("accepted state");
+        let accepted_identity = accepted_before.identity();
+        let historical_source = accepted_before
+            .document()
+            .constraint(historical)
+            .expect("accepted constraint")
+            .source_id;
+
+        let outcome = session
+            .transact(session.design_identity(), |document| {
+                document.remove_with_owned_state(DocumentObjectId::Constraint(historical))?;
+                document.set_point_position(first, [40.0, 40.0])?;
+                document.add_constraint(
+                    "newer rejected fixed point",
+                    DocumentConstraintDefinition::FixedPoint {
+                        point: first,
+                        target: [40.0, 40.0],
+                    },
+                )
+            })
+            .expect("retained rejected design");
+        assert!(outcome.published_accepted_identity().is_none());
+        assert!(session.accepted_state_for_current_input().is_none());
+        assert!(session.design_document().constraint(historical).is_none());
+
+        let accepted = session.accepted_state().expect("historical accepted state");
+        assert_eq!(accepted.identity(), accepted_identity);
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport(),
+            0.8,
+        )
+        .expect("detached historical scene");
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(historical))
+            .expect("historical annotation");
+        assert_eq!(annotation.source, historical_source);
+        assert!(
+            scene
+                .constraint_entries
+                .iter()
+                .all(|entry| entry.id != historical)
+        );
+
+        let markup = svg_markup(
+            Some(&scene),
+            Some(accepted),
+            &[SelectionItem::Constraint(historical)],
+            None,
+            None,
+            viewport(),
+        );
+        let identity = format!("data-persistent-id=\"{historical}\"");
+        assert_eq!(markup.matches(&identity).count(), 1);
+        assert!(markup.contains(&format!(
+            "aria-label=\"accepted horizontal\" data-editor-item=\"constraint\" {identity}"
+        )));
+        assert!(!markup.contains("aria-label=\"Accepted constraint\""));
+        assert!(!markup.contains("aria-label=\"newer rejected fixed point\""));
     }
 
     #[test]

@@ -4170,6 +4170,16 @@ typed headless entries/annotations, editable sample and reviewed golden/native-W
 implemented. Focused sketch, editor and demo-web suites plus the clean golden oracle pass. Full
 workspace/release qualification and publication remain the next gate; this is not human approval.
 
+Hardening note (2026-08-13): focused headless owner regressions resolve `M71-F001`, where
+accepted-scene construction omitted a newer rejected design constraint entry, and `M71-F002`,
+where the compatibility direct editor path advertised relations for foreign IDs or invalid curve
+spans that contextual authoring rejected. Geometry and annotation coordinates remain accepted-
+document authority; current constraint entries remain design intent. Direct and contextual
+authoring APIs both remain, with exact selection existence shared at their applicability boundary.
+Neither correction changes solver mathematics or expands the golden matrix. Exact owner and
+focused collateral qualification pass; clean replacement-candidate qualification and publication
+remain pending.
+
 Gate: all four relations behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every
 accepted result independently validates finite hard residuals at `<= 1e-9`; rejected, stale,
