@@ -140,6 +140,17 @@ fn affine_anchor(span: CurveSpan, model_position: [f64; 2]) -> DraftReferenceAnc
     }
 }
 
+fn midpoint_anchor(span: CurveSpan, model_position: [f64; 2]) -> DraftReferenceAnchor {
+    DraftReferenceAnchor::Midpoint {
+        span,
+        model_position,
+        affine_direction: [1.0, 0.0],
+        role: GeometryRole::Profile,
+        source_role: GeometryRole::Profile,
+        origin: DraftReferenceOrigin::Native,
+    }
+}
+
 fn push_inference(transcript: &mut String, label: &str, relation: DraftInferenceRelation) {
     write!(transcript, "{label}=").expect("string write");
     match relation {
@@ -148,6 +159,22 @@ fn push_inference(transcript: &mut String, label: &str, relation: DraftInference
         }
         DraftInferenceRelation::VerticalPoints { reference } => {
             writeln!(transcript, "vertical-points:{reference}").expect("string write");
+        }
+        DraftInferenceRelation::HorizontalPointToMidpoint { reference } => {
+            writeln!(
+                transcript,
+                "horizontal-to-midpoint:{}:{}",
+                reference.curve, reference.segment
+            )
+            .expect("string write");
+        }
+        DraftInferenceRelation::VerticalPointToMidpoint { reference } => {
+            writeln!(
+                transcript,
+                "vertical-to-midpoint:{}:{}",
+                reference.curve, reference.segment
+            )
+            .expect("string write");
         }
         DraftInferenceRelation::Collinear { reference } => {
             writeln!(
@@ -300,6 +327,42 @@ fn transition_transcript() -> Vec<u8> {
             DraftInferenceSubject::PointOperand,
             None,
             Vec::new(),
+        ),
+    );
+
+    let mut engine = DraftInferenceEngine::default();
+    let midpoint = midpoint_anchor(lines[0], [-3.0, 0.0]);
+    engine
+        .remember_reference(midpoint)
+        .expect("remember midpoint");
+    push_inference(
+        &mut transcript,
+        "remembered-midpoint-horizontal",
+        resolve_relation(
+            &scene,
+            &mut engine,
+            [0.0, 0.05],
+            DraftInferenceSubject::PointOperand,
+            None,
+            vec![midpoint],
+        ),
+    );
+
+    let mut engine = DraftInferenceEngine::default();
+    let midpoint = midpoint_anchor(lines[0], [-3.0, 0.0]);
+    engine
+        .remember_reference(midpoint)
+        .expect("remember midpoint");
+    push_inference(
+        &mut transcript,
+        "remembered-midpoint-vertical",
+        resolve_relation(
+            &scene,
+            &mut engine,
+            [-2.95, 2.0],
+            DraftInferenceSubject::PointOperand,
+            None,
+            vec![midpoint],
         ),
     );
 
@@ -466,6 +529,60 @@ fn transition_transcript() -> Vec<u8> {
     )
     .expect("string write");
 
+    let expected = coordinator
+        .session()
+        .accepted_prepared_input()
+        .expect("accepted input");
+    let midpoint_plan = ConstructionCommitPlan {
+        proposal: geosolve_constraint_editor::ConstructionProposal::Point {
+            point: ConstructionPoint::New([-2.8, 0.2]),
+        },
+        role: GeometryRole::Profile,
+        relations: vec![
+            InferredRelation::HorizontalPointToMidpoint {
+                point: DraftPointSlot::Created { point_index: 0 },
+                line: DraftSpanSlot::Existing(lines[0]),
+            },
+            InferredRelation::VerticalPointToMidpoint {
+                point: DraftPointSlot::Created { point_index: 0 },
+                line: DraftSpanSlot::Existing(lines[0]),
+            },
+        ],
+    };
+    let midpoint_committed = coordinator
+        .apply_construction_plan(&expected, &midpoint_plan)
+        .expect("both midpoint axes publication");
+    assert!(midpoint_committed.published_accepted.is_some());
+    let midpoint_definitions = midpoint_committed
+        .value
+        .constraints
+        .iter()
+        .map(|created| {
+            &coordinator
+                .session()
+                .design_document()
+                .constraint(created.constraint)
+                .expect("durable midpoint-axis constraint")
+                .definition
+        })
+        .collect::<Vec<_>>();
+    assert!(matches!(
+        midpoint_definitions.as_slice(),
+        [
+            DocumentConstraintDefinition::HorizontalPointToMidpoint { .. },
+            DocumentConstraintDefinition::VerticalPointToMidpoint { .. }
+        ]
+    ));
+    writeln!(
+        transcript,
+        "atomic-midpoint=points:{},constraints:{},sources:{}+{}",
+        midpoint_committed.value.construction.points.len(),
+        midpoint_committed.value.constraints.len(),
+        midpoint_committed.value.constraints[0].source,
+        midpoint_committed.value.constraints[1].source
+    )
+    .expect("string write");
+
     let created_circle = ConstructionCommitPlan {
         proposal: geosolve_constraint_editor::ConstructionProposal::Circle {
             center: ConstructionPoint::New([-3.0, 3.0]),
@@ -569,6 +686,8 @@ fn transition_transcript() -> Vec<u8> {
                 constraint.definition,
                 DocumentConstraintDefinition::HorizontalPoints { .. }
                     | DocumentConstraintDefinition::VerticalPoints { .. }
+                    | DocumentConstraintDefinition::HorizontalPointToMidpoint { .. }
+                    | DocumentConstraintDefinition::VerticalPointToMidpoint { .. }
                     | DocumentConstraintDefinition::Concentric { .. }
                     | DocumentConstraintDefinition::Collinear { .. }
             )

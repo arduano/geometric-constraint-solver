@@ -115,13 +115,15 @@ construction/NURBS UAT and certified all-family visual profiles.
   behavior was reported fixed. Clean closing source `48e3cc3` passes the complete gate with focused
   multi-feature transaction and finite-arc transport regressions; the 198/198 golden and release
   bytes remain unchanged. M70B is closed under the requested scoped sign-off.
-- **Active target:** M71 implements ADR 0035's retained drafting relations. Point-pair Horizontal
-  and Vertical, semantic-center Concentric and native affine-support Collinear join the ordinary
-  `DocumentConstraintDefinition` lifecycle while reusing existing runtime mathematics. Frozen
+- **Active target:** M71 implements amended ADR 0035's retained drafting relations. Point-pair
+  Horizontal and Vertical, native line/polyline midpoint-axis Horizontal and Vertical,
+  semantic-center Concentric and native affine-support Collinear join the ordinary
+  `DocumentConstraintDefinition` lifecycle. The midpoint-axis family owns one linear hard row per
+  axis with independent validation; the original four reuse existing runtime mathematics. Frozen
   canonical v4 is first isolated behind private wire DTOs; unsupported draft v5 owns the complete
   side-section round trip. The headless editor owns contextual authoring and bounded M70 inference
-  extensions. Implementation, clean release-candidate qualification and immutable publication are
-  complete; focused human UAT is pending.
+  extensions. M71-F003 passes the complete dirty-tree development gate, but the former candidate
+  is withdrawn; replacement clean qualification/publication and focused human UAT are pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -1198,7 +1200,10 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `48e3cc3` passes the full gate with the focused multi-feature and finite-arc regressions and
   produces byte-identical release output. M70B is closed.
 - M71: active ADR 0035 retained-drafting-relations milestone. It promotes point-pair
-  Horizontal/Vertical, Concentric and Collinear into the ordinary retained lifecycle, extends the
-  headless authoring/inference contract and preserves frozen v4 through explicit wire isolation.
-  Its four nine-row relation families extend the current canonical fixture to 234/234 `PASS` at
+  Horizontal/Vertical, point-to-native-span-midpoint Horizontal/Vertical, Concentric and Collinear
+  into the ordinary retained lifecycle, extends the headless authoring/inference contract and
+  preserves frozen v4 through explicit wire isolation. Its original four nine-row relation
+  families extend the current canonical fixture to 234/234 `PASS` at
   SHA-256 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
+  Focused `M71-F003` coverage owns the midpoint-axis correction; the complete dirty-tree
+  development gate passes and replacement clean qualification remains open.

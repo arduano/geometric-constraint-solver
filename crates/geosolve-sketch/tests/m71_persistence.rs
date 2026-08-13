@@ -101,6 +101,24 @@ fn m71_document() -> SketchDocument {
         )
         .unwrap();
     document
+        .add_constraint(
+            "point horizontal to midpoint",
+            DocumentConstraintDefinition::HorizontalPointToMidpoint {
+                point: points[3],
+                line: CurveSpan::line(lines[0]),
+            },
+        )
+        .unwrap();
+    document
+        .add_constraint(
+            "point vertical to midpoint",
+            DocumentConstraintDefinition::VerticalPointToMidpoint {
+                point: points[1],
+                line: CurveSpan::line(lines[1]),
+            },
+        )
+        .unwrap();
+    document
 }
 
 fn mixed_m71_document() -> SketchDocument {
@@ -170,8 +188,26 @@ fn all_retained_planar_records_round_trip_only_through_draft_v5() {
             .as_array()
             .unwrap()
             .len(),
-        4
+        6
     );
+    let definitions = value["retained_planar_constraints"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| &record["definition"])
+        .collect::<Vec<_>>();
+    assert!(definitions.iter().any(|definition| {
+        definition["kind"] == "horizontal_point_to_midpoint"
+            && definition["point"].is_string()
+            && definition["line"]["curve"].is_string()
+            && definition["line"]["segment"] == 0
+    }));
+    assert!(definitions.iter().any(|definition| {
+        definition["kind"] == "vertical_point_to_midpoint"
+            && definition["point"].is_string()
+            && definition["line"]["curve"].is_string()
+            && definition["line"]["segment"] == 0
+    }));
     assert!(
         value["document"]["constraints"]
             .as_array()
@@ -249,7 +285,7 @@ fn frozen_v4_rejects_every_m71_definition_even_when_injected_into_embedded_const
         .as_array()
         .unwrap()
         .clone();
-    assert_eq!(retained.len(), 4);
+    assert_eq!(retained.len(), 6);
 
     for record in retained {
         let mut injected = root.clone();
@@ -273,6 +309,10 @@ fn frozen_v4_rejects_every_m71_definition_even_when_injected_into_embedded_const
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one corruption matrix keeps cross-record identity, ordering, operands, and next-ID accounting contiguous"
+)]
 fn draft_v5_rejects_side_identity_order_and_operand_corruption() {
     let document = m71_document();
     let draft = document.to_draft_v5_json().unwrap();
@@ -326,6 +366,50 @@ fn draft_v5_rejects_side_identity_order_and_operand_corruption() {
             serde_json::Value::String("ffffffffffffffffffffffffffffffff".into());
     });
     assert!(SketchDocument::from_draft_v5_json(&unknown_operand).is_err());
+
+    let unknown_midpoint_point = mutate_json(&draft, |value| {
+        let record = value["retained_planar_constraints"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|record| {
+                record["definition"]["kind"]
+                    == serde_json::Value::String("horizontal_point_to_midpoint".into())
+            })
+            .unwrap();
+        record["definition"]["point"] =
+            serde_json::Value::String("ffffffffffffffffffffffffffffffff".into());
+    });
+    assert!(SketchDocument::from_draft_v5_json(&unknown_midpoint_point).is_err());
+
+    let unknown_midpoint_line = mutate_json(&draft, |value| {
+        let record = value["retained_planar_constraints"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|record| {
+                record["definition"]["kind"]
+                    == serde_json::Value::String("vertical_point_to_midpoint".into())
+            })
+            .unwrap();
+        record["definition"]["line"]["curve"] =
+            serde_json::Value::String("ffffffffffffffffffffffffffffffff".into());
+    });
+    assert!(SketchDocument::from_draft_v5_json(&unknown_midpoint_line).is_err());
+
+    let invalid_midpoint_span = mutate_json(&draft, |value| {
+        let record = value["retained_planar_constraints"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|record| {
+                record["definition"]["kind"]
+                    == serde_json::Value::String("horizontal_point_to_midpoint".into())
+            })
+            .unwrap();
+        record["definition"]["line"]["segment"] = serde_json::Value::from(1);
+    });
+    assert!(SketchDocument::from_draft_v5_json(&invalid_midpoint_span).is_err());
 
     let invalid_next_id = mutate_json(&draft, |value| {
         value["document"]["next_id"] = serde_json::Value::String(document.id().0.to_string());

@@ -22,18 +22,18 @@ use crate::model::{
     SketchDimensionId, SketchError, SketchScalarRef, validate_model_scale, validate_point,
 };
 use crate::residuals::{
-    AxisDifferenceResidual, AxisDimensionResidual, BezierIncidence, CircleArcTangencyResidual,
-    CircleTangencyResidual, CircularArcLengthResidual, CircularSweepResidual, CoincidentResidual,
-    CollinearResidual, ConicPropertyResidual, ConicPropertyResidualKind, CurveParameterIncidence,
-    DistanceResidual, EqualAngleResidual, EqualDistanceResidual, ExternalLineCollinearResidual,
-    FixedCoordinateResidual, GenericCurveDirectionResidual, GenericCurveFilletResidual,
-    GenericCurveIncidence, GenericCurvePairResidual, GenericEndpointContinuityResidual,
-    GenericEqualCurvatureResidual, GenericPathLengthResidual, GenericPointOnCurveResidual,
-    LineBezierTangencyResidual, LineCircleTangencyResidual, LineOffsetResidual,
-    LineOffsetResidualMode, M38DimensionResidual, MidpointResidual, NurbsWeightIncidence,
-    OrientedAngleResidual, PointOnBezierResidual, PointOnCircleResidual, PointOnLineResidual,
-    PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual, SegmentPairEquation,
-    SegmentPairResidual, SymmetryResidual,
+    AxisDifferenceResidual, AxisDimensionResidual, AxisMidpointResidual, BezierIncidence,
+    CircleArcTangencyResidual, CircleTangencyResidual, CircularArcLengthResidual,
+    CircularSweepResidual, CoincidentResidual, CollinearResidual, ConicPropertyResidual,
+    ConicPropertyResidualKind, CurveParameterIncidence, DistanceResidual, EqualAngleResidual,
+    EqualDistanceResidual, ExternalLineCollinearResidual, FixedCoordinateResidual,
+    GenericCurveDirectionResidual, GenericCurveFilletResidual, GenericCurveIncidence,
+    GenericCurvePairResidual, GenericEndpointContinuityResidual, GenericEqualCurvatureResidual,
+    GenericPathLengthResidual, GenericPointOnCurveResidual, LineBezierTangencyResidual,
+    LineCircleTangencyResidual, LineOffsetResidual, LineOffsetResidualMode, M38DimensionResidual,
+    MidpointResidual, NurbsWeightIncidence, OrientedAngleResidual, PointOnBezierResidual,
+    PointOnCircleResidual, PointOnLineResidual, PointTargetResidual, ScalarEqualityResidual,
+    ScalarTargetResidual, SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
 };
 
 /// Temporary point target supplied for one solve only.
@@ -2755,6 +2755,40 @@ impl Sketch {
                         }
                     }
                 }
+                SketchConstraintKind::HorizontalPointToMidpoint { point, segment }
+                | SketchConstraintKind::VerticalPointToMidpoint { point, segment } => {
+                    let coordinate = match constraint.kind() {
+                        SketchConstraintKind::HorizontalPointToMidpoint { .. } => 1,
+                        SketchConstraintKind::VerticalPointToMidpoint { .. } => 0,
+                        _ => unreachable!(),
+                    };
+                    let segment = self.segments.get(segment).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "axis-midpoint constraint references a stale segment".into(),
+                        )
+                    })?;
+                    let constrained = candidate.geometry.point(point).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "axis-midpoint constrained point is missing".into(),
+                        )
+                    })?;
+                    let start = candidate.geometry.point(segment.start()).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "axis-midpoint span start is missing".into(),
+                        )
+                    })?;
+                    let end = candidate.geometry.point(segment.end()).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "axis-midpoint span end is missing".into(),
+                        )
+                    })?;
+                    let row = (constrained[coordinate]
+                        - 0.5 * (start[coordinate] + end[coordinate]))
+                        / self.model_scale;
+                    independent_advanced_max = independent_advanced_max.max(
+                        validate_independent_constraint_rows(constraint_id, &[row], tolerance)?,
+                    );
+                }
                 SketchConstraintKind::PointOnCircle { .. } => {
                     let angle = latent_value(
                         &candidate.latents,
@@ -4258,6 +4292,52 @@ fn compile_constraint(
                     pair_bindings(first_name, second_name),
                 )],
                 AxisDifferenceResidual { coordinate },
+            )?;
+            (label, residual)
+        }
+        SketchConstraintKind::HorizontalPointToMidpoint { point, segment }
+        | SketchConstraintKind::VerticalPointToMidpoint { point, segment } => {
+            let (coordinate, orientation, coordinate_name) = match constraint.kind() {
+                SketchConstraintKind::HorizontalPointToMidpoint { .. } => (1, "horizontal", "y"),
+                SketchConstraintKind::VerticalPointToMidpoint { .. } => (0, "vertical", "x"),
+                _ => unreachable!(),
+            };
+            let (start, end, segment_value) = segment_points(sketch, segment)?;
+            let point_name = sketch.point_name(point)?;
+            let start_name = sketch.point_name(start)?;
+            let end_name = sketch.point_name(end)?;
+            let label = format!(
+                "constraint {}: {point_name} {orientation} with midpoint of {}",
+                constraint.ordinal(),
+                segment_value.label()
+            );
+            let source_id = problem.add_source(SourceConstraint::new(&label)?);
+            let mut incidence = IncidenceBuilder::default();
+            let evaluator = AxisMidpointResidual {
+                point: incidence.add(point_variable(point_variables, point)?),
+                start: incidence.add(point_variable(point_variables, start)?),
+                end: incidence.add(point_variable(point_variables, end)?),
+                coordinate,
+            };
+            let bindings = vec![
+                AuditBinding::new("point", point_name),
+                AuditBinding::new("segment", segment_value.label()),
+                AuditBinding::new("start", start_name),
+                AuditBinding::new("end", end_name),
+            ];
+            let residual = ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                incidence.variables,
+                1,
+                vec![scale],
+                vec![audit_row(
+                    format!(
+                        "({point_name}.{coordinate_name} - ({start_name}.{coordinate_name} + {end_name}.{coordinate_name})/2) / model_scale"
+                    ),
+                    bindings,
+                )],
+                evaluator,
             )?;
             (label, residual)
         }

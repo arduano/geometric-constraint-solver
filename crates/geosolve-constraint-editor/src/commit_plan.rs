@@ -100,6 +100,14 @@ pub enum InferredRelation {
         first: DraftPointSlot,
         second: DraftPointSlot,
     },
+    HorizontalPointToMidpoint {
+        point: DraftPointSlot,
+        line: DraftSpanSlot,
+    },
+    VerticalPointToMidpoint {
+        point: DraftPointSlot,
+        line: DraftSpanSlot,
+    },
     Concentric {
         first: DraftCurveSlot,
         second: DraftCurveSlot,
@@ -323,6 +331,20 @@ impl InferredRelation {
                 },
                 None,
             ),
+            Self::HorizontalPointToMidpoint { point, line } => (
+                DocumentConstraintDefinition::HorizontalPointToMidpoint {
+                    point: point.resolve(document, construction)?,
+                    line: line.resolve(document, construction)?,
+                },
+                None,
+            ),
+            Self::VerticalPointToMidpoint { point, line } => (
+                DocumentConstraintDefinition::VerticalPointToMidpoint {
+                    point: point.resolve(document, construction)?,
+                    line: line.resolve(document, construction)?,
+                },
+                None,
+            ),
             Self::Concentric { first, second } => (
                 DocumentConstraintDefinition::Concentric {
                     first: DocumentCenterRef {
@@ -366,6 +388,8 @@ impl InferredRelation {
             Self::Vertical { .. } => "auto vertical",
             Self::HorizontalPoints { .. } => "auto horizontal points",
             Self::VerticalPoints { .. } => "auto vertical points",
+            Self::HorizontalPointToMidpoint { .. } => "auto horizontal to midpoint",
+            Self::VerticalPointToMidpoint { .. } => "auto vertical to midpoint",
             Self::Concentric { .. } => "auto concentric",
             Self::Collinear { .. } => "auto collinear",
             Self::Parallel { .. } => "auto parallel",

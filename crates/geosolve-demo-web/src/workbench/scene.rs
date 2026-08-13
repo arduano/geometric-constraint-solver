@@ -1481,9 +1481,11 @@ const fn constraint_glyph(
         DocumentConstraintDefinition::Coincident { .. }
         | DocumentConstraintDefinition::ExternalPointCoincident { .. } => ("coincident", "Coin"),
         DocumentConstraintDefinition::Horizontal { .. }
-        | DocumentConstraintDefinition::HorizontalPoints { .. } => ("horizontal", "H"),
+        | DocumentConstraintDefinition::HorizontalPoints { .. }
+        | DocumentConstraintDefinition::HorizontalPointToMidpoint { .. } => ("horizontal", "H"),
         DocumentConstraintDefinition::Vertical { .. }
-        | DocumentConstraintDefinition::VerticalPoints { .. } => ("vertical", "V"),
+        | DocumentConstraintDefinition::VerticalPoints { .. }
+        | DocumentConstraintDefinition::VerticalPointToMidpoint { .. } => ("vertical", "V"),
         DocumentConstraintDefinition::PointOnCurve { .. } => ("point-on-curve", "On"),
         DocumentConstraintDefinition::Parallel { .. } => ("parallel", "∥"),
         DocumentConstraintDefinition::Perpendicular { .. } => ("perpendicular", "⊥"),
@@ -1775,6 +1777,8 @@ const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
         DraftInferenceFamily::Perpendicular => "perpendicular",
         DraftInferenceFamily::HorizontalPoints => "horizontal-points",
         DraftInferenceFamily::VerticalPoints => "vertical-points",
+        DraftInferenceFamily::HorizontalPointToMidpoint => "horizontal-point-to-midpoint",
+        DraftInferenceFamily::VerticalPointToMidpoint => "vertical-point-to-midpoint",
         DraftInferenceFamily::Concentric => "concentric",
         DraftInferenceFamily::Collinear => "collinear",
         DraftInferenceFamily::PointTracking => "point-tracking",
@@ -1793,6 +1797,8 @@ const fn inference_family_label(family: DraftInferenceFamily) -> &'static str {
         DraftInferenceFamily::Perpendicular => "Perpendicular",
         DraftInferenceFamily::HorizontalPoints => "Horizontal points",
         DraftInferenceFamily::VerticalPoints => "Vertical points",
+        DraftInferenceFamily::HorizontalPointToMidpoint => "Horizontal to midpoint",
+        DraftInferenceFamily::VerticalPointToMidpoint => "Vertical to midpoint",
         DraftInferenceFamily::Concentric => "Concentric",
         DraftInferenceFamily::Collinear => "Collinear",
         DraftInferenceFamily::PointTracking => "Alignment tracking only",
@@ -1843,6 +1849,16 @@ const fn inference_relation_presentation(
         DraftInferenceRelation::VerticalPoints { .. } => (
             "vertical-points",
             "Vertical points",
+            SceneConstraintGlyph::Vertical,
+        ),
+        DraftInferenceRelation::HorizontalPointToMidpoint { .. } => (
+            "horizontal-point-to-midpoint",
+            "Horizontal to midpoint",
+            SceneConstraintGlyph::Horizontal,
+        ),
+        DraftInferenceRelation::VerticalPointToMidpoint { .. } => (
+            "vertical-point-to-midpoint",
+            "Vertical to midpoint",
             SceneConstraintGlyph::Vertical,
         ),
         DraftInferenceRelation::Concentric { .. } => {
@@ -2047,9 +2063,10 @@ mod tests {
         ComputedFeatureProblemMetadata, ConstructionPreviewGeometry, DraftInferenceBehavior,
         DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy,
         DraftInferenceResolution, DraftInferenceSample, DraftInferenceSubject,
-        DraftReferenceAnchor, EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene,
-        GeometryInteractionPolicy, RetainedEditorCoordinator, SceneAnnotationGeometry,
-        SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
+        DraftReferenceAnchor, DraftReferenceOrigin, EditorHoverState, EditorHoverTarget,
+        EditorProblemScope, EditorScene, GeometryInteractionPolicy, RetainedEditorCoordinator,
+        SceneAnnotationGeometry, SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint,
+        SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -2057,9 +2074,9 @@ mod tests {
         DocumentAngleOrientation, DocumentCenterRef, DocumentConstraintDefinition,
         DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
         DocumentLineSupportRef, DocumentObjectId, DocumentParameterId, DocumentParameterKind,
-        DocumentParameterTarget, DocumentSolveRequest, ParameterBatch, ParameterBatchEntry,
-        ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-        SketchDesignIdentity, SketchDocument,
+        DocumentParameterTarget, DocumentSolveRequest, GeometryRole, ParameterBatch,
+        ParameterBatchEntry, ParameterValue, PersistentId, RetainedSketchDocumentSession,
+        ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
     };
     use geosolve_sketch_features::{
         ComputedFeatureCornerId, ComputedFeatureId, NativeCurveSpanSource,
@@ -2236,6 +2253,35 @@ mod tests {
         assert!(tracking_markup.contains("data-inference-family=\"point-tracking\""));
         assert!(tracking_markup.contains("data-inference-classification=\"tracking-only\""));
         assert!(!tracking_markup.contains("data-inference-relation="));
+    }
+
+    #[test]
+    fn inference_markup_presents_native_midpoint_axes_as_constraint_backed() {
+        let (design, accepted_revision, viewport, _) = inference_fixture();
+        let span = CurveSpan::line(CurveId(PersistentId::from_u128(71)));
+        let midpoint = DraftReferenceAnchor::Midpoint {
+            span,
+            model_position: [0.0, 1.0],
+            affine_direction: [1.0, 0.0],
+            role: GeometryRole::Profile,
+            source_role: GeometryRole::Profile,
+            origin: DraftReferenceOrigin::Native,
+        };
+        let mut engine = DraftInferenceEngine::default();
+        engine
+            .remember_reference(midpoint)
+            .expect("remember midpoint");
+        let frame = inference_frame(design, accepted_revision, viewport, [3.0, 1.05], Vec::new());
+        let resolved = engine
+            .resolve(&frame, DraftInferenceInput::default())
+            .expect("midpoint-axis inference");
+
+        let markup = inference_markup(&resolved, viewport);
+        assert!(markup.contains("data-inference-status=\"resolved\""));
+        assert!(markup.contains("data-inference-classification=\"constraint-backed\""));
+        assert!(markup.contains("data-inference-family=\"horizontal-point-to-midpoint\""));
+        assert!(markup.contains("data-inference-relation=\"horizontal-point-to-midpoint\""));
+        assert!(markup.contains("aria-label=\"Horizontal to midpoint\""));
     }
 
     #[test]

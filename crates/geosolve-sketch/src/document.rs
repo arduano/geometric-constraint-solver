@@ -1025,6 +1025,14 @@ pub enum DocumentConstraintDefinition {
         first: DesignPointId,
         second: DesignPointId,
     },
+    HorizontalPointToMidpoint {
+        point: DesignPointId,
+        line: CurveSpan,
+    },
+    VerticalPointToMidpoint {
+        point: DesignPointId,
+        line: CurveSpan,
+    },
     PointOnCurve {
         point: DesignPointId,
         contact: ContactId,
@@ -2749,6 +2757,8 @@ impl TryFrom<&DocumentConstraintDefinition> for DocumentConstraintDefinitionV4 {
             },
             C::HorizontalPoints { .. }
             | C::VerticalPoints { .. }
+            | C::HorizontalPointToMidpoint { .. }
+            | C::VerticalPointToMidpoint { .. }
             | C::Concentric { .. }
             | C::Collinear { .. } => return Err(DocumentError::UnsupportedM71State),
         })
@@ -3174,6 +3184,14 @@ enum DraftRetainedPlanarConstraintDefinition {
         first: DesignPointId,
         second: DesignPointId,
     },
+    HorizontalPointToMidpoint {
+        point: DesignPointId,
+        line: CurveSpan,
+    },
+    VerticalPointToMidpoint {
+        point: DesignPointId,
+        line: CurveSpan,
+    },
     Concentric {
         first: DocumentCenterRef,
         second: DocumentCenterRef,
@@ -3192,6 +3210,12 @@ impl DraftRetainedPlanarConstraint {
             }
             DocumentConstraintDefinition::VerticalPoints { first, second } => {
                 DraftRetainedPlanarConstraintDefinition::VerticalPoints { first, second }
+            }
+            DocumentConstraintDefinition::HorizontalPointToMidpoint { point, line } => {
+                DraftRetainedPlanarConstraintDefinition::HorizontalPointToMidpoint { point, line }
+            }
+            DocumentConstraintDefinition::VerticalPointToMidpoint { point, line } => {
+                DraftRetainedPlanarConstraintDefinition::VerticalPointToMidpoint { point, line }
             }
             DocumentConstraintDefinition::Concentric { first, second } => {
                 DraftRetainedPlanarConstraintDefinition::Concentric { first, second }
@@ -3219,6 +3243,12 @@ impl From<DraftRetainedPlanarConstraint> for DocumentConstraint {
             }
             DraftRetainedPlanarConstraintDefinition::VerticalPoints { first, second } => {
                 DocumentConstraintDefinition::VerticalPoints { first, second }
+            }
+            DraftRetainedPlanarConstraintDefinition::HorizontalPointToMidpoint { point, line } => {
+                DocumentConstraintDefinition::HorizontalPointToMidpoint { point, line }
+            }
+            DraftRetainedPlanarConstraintDefinition::VerticalPointToMidpoint { point, line } => {
+                DocumentConstraintDefinition::VerticalPointToMidpoint { point, line }
             }
             DraftRetainedPlanarConstraintDefinition::Concentric { first, second } => {
                 DocumentConstraintDefinition::Concentric { first, second }
@@ -10443,6 +10473,12 @@ impl SketchDocument {
             C::HorizontalPoints { first, second } | C::VerticalPoints { first, second } => {
                 self.require_distinct_points(*first, *second)?;
             }
+            C::HorizontalPointToMidpoint { point, line }
+            | C::VerticalPointToMidpoint { point, line }
+            | C::Midpoint { point, line } => {
+                self.require_point(*point)?;
+                self.validate_line_span(*line)?;
+            }
             C::PointOnCurve { point, contact } => {
                 self.require_point(*point)?;
                 if self
@@ -10502,10 +10538,6 @@ impl SketchDocument {
                 if first == second {
                     return invalid("constraint.definition", "circles must be distinct");
                 }
-            }
-            C::Midpoint { point, line } => {
-                self.require_point(*point)?;
-                self.validate_line_span(*line)?;
             }
             C::SymmetricAboutLine {
                 first,
@@ -12047,6 +12079,8 @@ const fn is_retained_planar_constraint(definition: &DocumentConstraintDefinition
         definition,
         DocumentConstraintDefinition::HorizontalPoints { .. }
             | DocumentConstraintDefinition::VerticalPoints { .. }
+            | DocumentConstraintDefinition::HorizontalPointToMidpoint { .. }
+            | DocumentConstraintDefinition::VerticalPointToMidpoint { .. }
             | DocumentConstraintDefinition::Concentric { .. }
             | DocumentConstraintDefinition::Collinear { .. }
     )
@@ -12260,6 +12294,8 @@ fn constraint_references_object(
             | DocumentConstraintDefinition::FixedCoordinate { point, .. }
             | DocumentConstraintDefinition::PointOnCurve { point, .. }
             | DocumentConstraintDefinition::Midpoint { point, .. }
+            | DocumentConstraintDefinition::HorizontalPointToMidpoint { point, .. }
+            | DocumentConstraintDefinition::VerticalPointToMidpoint { point, .. }
             | DocumentConstraintDefinition::ExternalPointCoincident { point, .. },
             DocumentObjectId::Point(selected),
         ) => *point == selected,
@@ -12278,6 +12314,8 @@ fn constraint_references_object(
             DocumentConstraintDefinition::Horizontal { line }
             | DocumentConstraintDefinition::Vertical { line }
             | DocumentConstraintDefinition::Midpoint { line, .. }
+            | DocumentConstraintDefinition::HorizontalPointToMidpoint { line, .. }
+            | DocumentConstraintDefinition::VerticalPointToMidpoint { line, .. }
             | DocumentConstraintDefinition::SymmetricAboutLine { line, .. }
             | DocumentConstraintDefinition::LineCurveTangency { line, .. }
             | DocumentConstraintDefinition::CurveDirection { line, .. },

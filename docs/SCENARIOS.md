@@ -1484,23 +1484,51 @@ remains ephemeral and is never serialized.
 
 The **Samples → Constraints & dimensions → Retained drafting relations** leaf is one ordinary
 editable workspace containing stored-point Horizontal/Vertical, semantic-center Concentric and
-native-support Collinear specimens. Each relation is one retained constraint/source with normal
+native-support Collinear specimens. M71-F003 additionally owns point-to-native-line/polyline-
+midpoint Horizontal/Vertical definitions. Each relation is one retained constraint/source with normal
 selection, suppression, deletion, history, dragging, persistence and diagnostic behavior; the
 sample adds no protected state, guide script or alternate coordinator.
 
 Contextual Horizontal/Vertical accepts either one affine span or two stored points. Explicit
 Concentric and Collinear remain distinct from Coincident and Parallel. M70 drafting intelligence
 may persist stored-point H/V, exact semantic-center Concentric and certified native supporting-line
-Collinear, including beyond a finite endpoint; derived midpoint alignment remains tracking-only,
-and ambiguous, stale, unsupported or exhausted evidence fails closed. One construction may create
+Collinear, including beyond a finite endpoint. A remembered accepted native line/polyline midpoint
+may create `HorizontalPointToMidpoint` and/or `VerticalPointToMidpoint`; the point follows the live
+endpoint average as the support changes. Fillet-discarded and nonlinear midpoint occurrences
+remain tracking-only, and ambiguous, stale, unsupported or exhausted evidence fails closed. One construction may create
 its geometry and a relation to that prospective curve atomically without exposing an uncommitted
 ID.
 
-Direct sketch/editor/native-WASM tests own 1/1/2/2 lowering, finite hard residuals, rank/DOF,
+Direct sketch/editor/native-WASM tests own 1/1/1/1/2/2 lowering, finite hard residuals, rank/DOF,
 commutative operands, retained parent edits, lifecycle, draft-v5 round trips, frozen-v4 rejection,
 inference ranking and exact publication authority. Human review follows `docs/M71_UAT.md` for
 discoverability, annotation clarity, predictable authoring/inference and recovery; it remains open
 until explicit supervising-human approval.
+
+### M71-F003 - Native midpoint axis alignment is durable
+
+On clean source `5b29744f445f458cffabd176c123861f39392d12`, draw or load one accepted native
+line, hover its exact midpoint to wake the semantic reference, move horizontally or vertically and
+place a new point. The obsolete behavior published a tracking-only guide and committed geometry
+without any retained relation because `DraftInferenceEngine::point_tracking_candidates` made only
+`PersistentPoint` references durable.
+
+The corrected public `EditorScene → ConstraintEditor → RetainedEditorCoordinator` transition must
+atomically create the point plus `HorizontalPointToMidpoint` for Y alignment or
+`VerticalPointToMidpoint` for X alignment. Each source owns one hard row
+`P[c] - (A[c] + B[c]) / 2`; both axes may coexist and keep the point at the live midpoint after
+either endpoint moves. Accepted geometry and normalized hard residuals are independently checked,
+and rejection retains prior accepted authority. Only accepted native line/polyline spans qualify:
+fillet-discarded and nonlinear midpoint occurrences remain tracking-only. Ambiguity, suppression,
+hysteresis, stale preference and candidate bounds remain fail-closed.
+
+The focused owner regression is
+`crates/geosolve-constraint-editor/tests/m71_f003_midpoint_axis.rs`. Sketch owner proofs cover the
+Jacobian, audit metadata, scales, endpoint aliases, both axes, lifecycle, deletion, invalid
+operands and prepared CAS. Native transition and web DTO tests prove adapter parity without browser
+equations. This is a focused defect correction, not a new systemic golden dimension. The pre-F003
+publication is withdrawn; replacement clean qualification and publication are required before
+human retest.
 
 ### M71-F001 - Rejected design intent remains visible over retained accepted geometry
 
@@ -1520,8 +1548,9 @@ The thin-adapter regression
 ordinary composed scene to carry the design-only entry while publishing no annotation for it.
 It was independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
-regression passes 1/1. Clean replacement qualification and publication subsequently pass at the
-M71 candidate recorded in `docs/M71_UAT.md`.
+regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so clean
+replacement qualification and publication remain required at the candidate eventually recorded
+in `docs/M71_UAT.md`.
 
 ### M71-F002 - Direct relation applicability rejects missing selections
 
@@ -1537,8 +1566,9 @@ the direct availability boundary. The focused regression
 both public authoring surfaces without expanding M71 into a broader applicability refactor.
 It was independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
-regression passes 1/1. Clean replacement qualification and publication subsequently pass at the
-M71 candidate recorded in `docs/M71_UAT.md`.
+regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so clean
+replacement qualification and publication remain required at the candidate eventually recorded
+in `docs/M71_UAT.md`.
 
 ### M70B-R1 - Complete workspace reproduction payload
 

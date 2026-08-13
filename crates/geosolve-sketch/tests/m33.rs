@@ -520,6 +520,12 @@ fn relation_kind(definition: &DocumentConstraintDefinition) -> &'static str {
         DocumentConstraintDefinition::Vertical { .. } => "vertical_line",
         DocumentConstraintDefinition::HorizontalPoints { .. } => "horizontal_points",
         DocumentConstraintDefinition::VerticalPoints { .. } => "vertical_points",
+        DocumentConstraintDefinition::HorizontalPointToMidpoint { .. } => {
+            "horizontal_point_to_midpoint"
+        }
+        DocumentConstraintDefinition::VerticalPointToMidpoint { .. } => {
+            "vertical_point_to_midpoint"
+        }
         DocumentConstraintDefinition::PointOnCurve { .. } => "point_on_curve",
         DocumentConstraintDefinition::Parallel { .. } => "parallel_lines",
         DocumentConstraintDefinition::Perpendicular { .. } => "perpendicular_lines",

@@ -172,9 +172,9 @@ pub struct DraftInferencePolicy {
     pub concentric: DraftInferenceBehavior,
     /// Certified native affine supporting-line extension.
     pub collinear: DraftInferenceBehavior,
-    /// Point-to-point horizontal/vertical guidance. M71 permits this to be
-    /// constraint-backed only when the remembered origin is a stored point;
-    /// derived anchors remain tracking-only regardless of this switch.
+    /// Remembered-origin horizontal/vertical guidance. M71 permits this to be
+    /// constraint-backed for stored points and accepted native line/polyline
+    /// midpoints; fillet-discarded and nonlinear derived anchors remain tracking-only.
     pub point_tracking: DraftInferenceBehavior,
     pub tolerances: DraftInferenceTolerances,
     pub limits: DraftInferenceLimits,
@@ -829,6 +829,12 @@ pub enum DraftInferenceRelation {
     VerticalPoints {
         reference: DesignPointId,
     },
+    HorizontalPointToMidpoint {
+        reference: CurveSpan,
+    },
+    VerticalPointToMidpoint {
+        reference: CurveSpan,
+    },
     Concentric {
         reference: CurveId,
         prospective_curve_index: usize,
@@ -851,6 +857,8 @@ pub enum DraftInferenceFamily {
     Perpendicular,
     HorizontalPoints,
     VerticalPoints,
+    HorizontalPointToMidpoint,
+    VerticalPointToMidpoint,
     Concentric,
     Collinear,
     PointTracking,
@@ -1055,6 +1063,8 @@ impl DraftInferenceCandidate {
                     | DraftInferenceRelation::Perpendicular { .. }
                     | DraftInferenceRelation::HorizontalPoints { .. }
                     | DraftInferenceRelation::VerticalPoints { .. }
+                    | DraftInferenceRelation::HorizontalPointToMidpoint { .. }
+                    | DraftInferenceRelation::VerticalPointToMidpoint { .. }
                     | DraftInferenceRelation::Concentric { .. }
                     | DraftInferenceRelation::Collinear { .. } => true,
                 })
@@ -2100,7 +2110,7 @@ impl DraftInferenceEngine {
 
     #[allow(
         clippy::too_many_lines,
-        reason = "stored-point durable relations and derived tracking-only guides share one audited traversal"
+        reason = "stored-point and certified-native-midpoint durable relations share one audited tracking traversal"
     )]
     fn point_tracking_candidates(
         &mut self,
@@ -2157,24 +2167,56 @@ impl DraftInferenceEngine {
                         },
                         reference: Some(reference),
                     };
+                    let durable = match axis {
+                        PointTrackingAxis::Horizontal => match reference {
+                            DraftReferenceAnchor::PersistentPoint { point, .. } => Some((
+                                DraftInferenceRelation::HorizontalPoints { reference: point },
+                                DraftInferenceFamily::HorizontalPoints,
+                            )),
+                            DraftReferenceAnchor::Midpoint {
+                                span,
+                                origin: DraftReferenceOrigin::Native,
+                                ..
+                            } => Some((
+                                DraftInferenceRelation::HorizontalPointToMidpoint {
+                                    reference: span,
+                                },
+                                DraftInferenceFamily::HorizontalPointToMidpoint,
+                            )),
+                            DraftReferenceAnchor::Midpoint {
+                                origin: DraftReferenceOrigin::FilletDiscarded,
+                                ..
+                            }
+                            | DraftReferenceAnchor::CurvePoint { .. }
+                            | DraftReferenceAnchor::AffineSupport { .. } => None,
+                        },
+                        PointTrackingAxis::Vertical => match reference {
+                            DraftReferenceAnchor::PersistentPoint { point, .. } => Some((
+                                DraftInferenceRelation::VerticalPoints { reference: point },
+                                DraftInferenceFamily::VerticalPoints,
+                            )),
+                            DraftReferenceAnchor::Midpoint {
+                                span,
+                                origin: DraftReferenceOrigin::Native,
+                                ..
+                            } => Some((
+                                DraftInferenceRelation::VerticalPointToMidpoint { reference: span },
+                                DraftInferenceFamily::VerticalPointToMidpoint,
+                            )),
+                            DraftReferenceAnchor::Midpoint {
+                                origin: DraftReferenceOrigin::FilletDiscarded,
+                                ..
+                            }
+                            | DraftReferenceAnchor::CurvePoint { .. }
+                            | DraftReferenceAnchor::AffineSupport { .. } => None,
+                        },
+                    };
                     if self.policy.point_tracking.persist_constraint
-                        && let DraftReferenceAnchor::PersistentPoint { point, .. } = reference
+                        && let Some((relation, family)) = durable
                     {
-                        let relation = match axis {
-                            PointTrackingAxis::Horizontal => {
-                                DraftInferenceRelation::HorizontalPoints { reference: point }
-                            }
-                            PointTrackingAxis::Vertical => {
-                                DraftInferenceRelation::VerticalPoints { reference: point }
-                            }
-                        };
                         let adjusted = match axis {
                             PointTrackingAxis::Horizontal => [raw_model[0], origin[1]],
                             PointTrackingAxis::Vertical => [origin[0], raw_model[1]],
-                        };
-                        let family = match axis {
-                            PointTrackingAxis::Horizontal => DraftInferenceFamily::HorizontalPoints,
-                            PointTrackingAxis::Vertical => DraftInferenceFamily::VerticalPoints,
                         };
                         let mut guide = guide;
                         guide.family = family;
@@ -2368,7 +2410,9 @@ impl DraftInferenceEngine {
             DraftInferenceFamily::Collinear => self.policy.collinear,
             DraftInferenceFamily::PointTracking
             | DraftInferenceFamily::HorizontalPoints
-            | DraftInferenceFamily::VerticalPoints => self.policy.point_tracking,
+            | DraftInferenceFamily::VerticalPoints
+            | DraftInferenceFamily::HorizontalPointToMidpoint
+            | DraftInferenceFamily::VerticalPointToMidpoint => self.policy.point_tracking,
         }
     }
 
@@ -2384,6 +2428,8 @@ impl DraftInferenceEngine {
             | DraftInferenceFamily::Perpendicular
             | DraftInferenceFamily::HorizontalPoints
             | DraftInferenceFamily::VerticalPoints
+            | DraftInferenceFamily::HorizontalPointToMidpoint
+            | DraftInferenceFamily::VerticalPointToMidpoint
             | DraftInferenceFamily::Concentric
             | DraftInferenceFamily::Collinear
             | DraftInferenceFamily::PointTracking => 0.0,
@@ -2402,6 +2448,8 @@ impl DraftInferenceEngine {
             | DraftInferenceFamily::Perpendicular
             | DraftInferenceFamily::HorizontalPoints
             | DraftInferenceFamily::VerticalPoints
+            | DraftInferenceFamily::HorizontalPointToMidpoint
+            | DraftInferenceFamily::VerticalPointToMidpoint
             | DraftInferenceFamily::Concentric
             | DraftInferenceFamily::Collinear
             | DraftInferenceFamily::PointTracking => 0.0,
@@ -3761,23 +3809,203 @@ mod tests {
     }
 
     #[test]
-    fn remembered_derived_alignment_is_honestly_tracking_only() {
+    fn remembered_native_midpoint_alignment_is_constraint_backed_on_both_axes() {
         let view = viewport(50.0);
         let point = midpoint_anchor(60, [0.0, 1.0], [1.0, 0.0]);
+        for (raw, adjusted, expected_relation, expected_family) in [
+            (
+                [4.0, 1.05],
+                [4.0, 1.0],
+                DraftInferenceRelation::HorizontalPointToMidpoint {
+                    reference: curve_span(60),
+                },
+                DraftInferenceFamily::HorizontalPointToMidpoint,
+            ),
+            (
+                [0.05, 5.0],
+                [0.0, 5.0],
+                DraftInferenceRelation::VerticalPointToMidpoint {
+                    reference: curve_span(60),
+                },
+                DraftInferenceFamily::VerticalPointToMidpoint,
+            ),
+        ] {
+            let mut engine = DraftInferenceEngine::default();
+            engine.remember_reference(point).expect("remember");
+            let resolution = engine
+                .resolve(
+                    &frame(view, view.model_to_screen(raw), None, Vec::new()),
+                    DraftInferenceInput::default(),
+                )
+                .expect("resolve");
+            let candidate = resolved_candidate(&resolution);
+            assert_eq!(candidate.adjusted_model_position, adjusted);
+            assert_eq!(candidate.relations, vec![expected_relation]);
+            assert!(candidate.guides.iter().any(|guide| {
+                guide.classification == DraftGuideClassification::ConstraintBacked
+                    && guide.family == expected_family
+            }));
+        }
+    }
+
+    #[test]
+    fn midpoint_axis_uses_tracking_hysteresis_and_suppression_clears_wake_state() {
+        let view = viewport(50.0);
+        let midpoint = midpoint_anchor(602, [0.0, 0.0], [1.0, 0.0]);
+        let enter_angle = 4.0_f64.to_radians();
+        let exit_angle = 6.0_f64.to_radians();
+        let enter_target = [3.0 * enter_angle.cos(), 3.0 * enter_angle.sin()];
+        let exit_target = [3.0 * exit_angle.cos(), 3.0 * exit_angle.sin()];
+        let enter_sample = view.screen_to_model(view.model_to_screen(enter_target));
+        let exit_sample = view.screen_to_model(view.model_to_screen(exit_target));
+        let mut policy = DraftInferencePolicy::default();
+        policy.tolerances.direction_enter_radians =
+            undirected_angle_error(enter_sample, [1.0, 0.0]);
+        policy.tolerances.direction_exit_radians = undirected_angle_error(exit_sample, [1.0, 0.0]);
+        let resolve = |engine: &mut DraftInferenceEngine, target: [f64; 2]| {
+            engine
+                .resolve(
+                    &frame(view, view.model_to_screen(target), None, Vec::new()),
+                    DraftInferenceInput::default(),
+                )
+                .expect("midpoint-axis resolution")
+        };
+        let is_horizontal_midpoint = |resolution: &DraftInferenceResolution| {
+            matches!(
+                &resolution.status,
+                DraftInferenceStatus::Resolved { candidate }
+                    if resolution.candidates.iter().any(|value| {
+                        value.id == *candidate
+                            && matches!(
+                                value.relations.as_slice(),
+                                [DraftInferenceRelation::HorizontalPointToMidpoint { reference }]
+                                    if *reference == curve_span(602)
+                            )
+                    })
+            )
+        };
+
+        let mut engine = DraftInferenceEngine::new(policy).expect("boundary policy");
+        engine
+            .remember_reference(midpoint)
+            .expect("remember midpoint");
+        assert!(is_horizontal_midpoint(&resolve(&mut engine, enter_sample)));
+        assert!(is_horizontal_midpoint(&resolve(&mut engine, exit_sample)));
+        let outside_angle = exit_angle + 1.0e-6;
+        assert!(!is_horizontal_midpoint(&resolve(
+            &mut engine,
+            [3.0 * outside_angle.cos(), 3.0 * outside_angle.sin(),],
+        )));
+
+        let mut fresh = DraftInferenceEngine::new(policy).expect("fresh boundary policy");
+        fresh
+            .remember_reference(midpoint)
+            .expect("remember midpoint");
+        assert!(!is_horizontal_midpoint(&resolve(&mut fresh, exit_sample)));
+        fresh
+            .remember_reference(midpoint)
+            .expect("remember midpoint");
+        let suppressed = fresh
+            .resolve(
+                &frame(view, view.model_to_screen(enter_sample), None, Vec::new()),
+                DraftInferenceInput {
+                    suppressed: true,
+                    preferred_candidate: None,
+                },
+            )
+            .expect("suppression");
+        assert_eq!(suppressed.status, DraftInferenceStatus::Suppressed);
+        assert!(suppressed.candidates.is_empty());
+        assert!(suppressed.guides.is_empty());
+        assert!(fresh.remembered_references().is_empty());
+    }
+
+    #[test]
+    fn distinct_remembered_midpoints_tie_ambiguously_and_stale_preference_fails_closed() {
+        let view = viewport(50.0);
+        let first = midpoint_anchor(603, [0.0, 0.0], [1.0, 0.0]);
+        let second = midpoint_anchor(604, [0.0, 0.0], [1.0, 0.0]);
+        let target = [3.0, 0.05];
+        let input_frame = frame(view, view.model_to_screen(target), None, Vec::new());
         let mut engine = DraftInferenceEngine::default();
-        engine.remember_reference(point).expect("remember");
+        engine.remember_reference(first).expect("first midpoint");
+        engine.remember_reference(second).expect("second midpoint");
+        let ambiguous = engine
+            .resolve(&input_frame, DraftInferenceInput::default())
+            .expect("ambiguous midpoint axes");
+        let DraftInferenceStatus::Ambiguous { candidates } = &ambiguous.status else {
+            panic!("distinct midpoint operands must not be selected by identity")
+        };
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(ambiguous.adjusted_model_position, target);
+        assert_eq!(ambiguous.candidates.len(), 2);
+        assert!(ambiguous.candidates.iter().all(|candidate| {
+            matches!(
+                candidate.relations.as_slice(),
+                [DraftInferenceRelation::HorizontalPointToMidpoint { reference }]
+                    if [curve_span(603), curve_span(604)].contains(reference)
+            )
+        }));
+
+        let preferred = candidates[0];
+        let resolved = engine
+            .resolve(
+                &input_frame,
+                DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate: Some(preferred),
+                },
+            )
+            .expect("explicit midpoint preference");
+        assert!(matches!(
+            resolved.status,
+            DraftInferenceStatus::Resolved { candidate } if candidate == preferred
+        ));
+
+        let stale = engine
+            .resolve(
+                &input_frame,
+                DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate: Some(DraftInferenceCandidateId(u64::MAX)),
+                },
+            )
+            .expect("stale midpoint preference");
+        assert!(matches!(
+            stale.status,
+            DraftInferenceStatus::StalePreferredCandidate { .. }
+        ));
+        assert_eq!(stale.adjusted_model_position, target);
+        assert!(engine.remembered_references().is_empty());
+        assert!(engine.active_point_tracking.is_empty());
+    }
+
+    #[test]
+    fn implicit_fillet_midpoint_alignment_cannot_create_a_retained_axis_relation() {
+        let view = viewport(50.0);
         let raw = [4.0, 1.05];
+        let mut midpoint = midpoint_anchor(601, [0.0, 1.0], [1.0, 0.0]);
+        let DraftReferenceAnchor::Midpoint { origin, .. } = &mut midpoint else {
+            unreachable!()
+        };
+        *origin = DraftReferenceOrigin::FilletDiscarded;
+
+        let mut engine = DraftInferenceEngine::default();
+        engine.remember_reference(midpoint).expect("remember");
         let resolution = engine
             .resolve(
                 &frame(view, view.model_to_screen(raw), None, Vec::new()),
                 DraftInferenceInput::default(),
             )
             .expect("resolve");
+
         assert_eq!(resolution.status, DraftInferenceStatus::None);
         assert_eq!(resolution.adjusted_model_position, raw);
+        assert!(resolution.candidates.is_empty());
         assert!(resolution.guides.iter().any(|guide| {
             guide.classification == DraftGuideClassification::TrackingOnly
                 && guide.family == DraftInferenceFamily::PointTracking
+                && guide.reference == Some(midpoint)
         }));
     }
 

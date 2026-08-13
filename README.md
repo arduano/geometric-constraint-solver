@@ -57,9 +57,11 @@ state. F001-F005 retain owning-layer regressions; M70B closed on its 198/198 `PA
 M71 extends the current canonical inventory to 234/234 `PASS`. Clean
 closing source `48e3cc3` passes the complete release gate with the final multi-feature transaction
 and finite-arc transport regressions, while its runtime release remains the byte-verified F005
-candidate. M71 is active under ADR 0035 for four ordinary retained drafting relations; its
-implementation, clean release-candidate qualification and immutable publication pass, while
-focused human UAT remains pending.
+candidate. M71 is active under amended ADR 0035 for six ordinary retained drafting definitions:
+point-pair Horizontal/Vertical, native line/polyline midpoint-axis Horizontal/Vertical,
+Concentric and Collinear. The M71-F003 correction is provisionally development-gate qualified;
+clean nominated-source qualification, immutable replacement publication and focused human UAT
+remain pending.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here

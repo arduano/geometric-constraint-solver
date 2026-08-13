@@ -2571,6 +2571,44 @@ pub(crate) struct MidpointResidual {
     pub(crate) end: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct AxisMidpointResidual {
+    pub(crate) point: usize,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) coordinate: usize,
+}
+
+impl ResidualEvaluator for AxisMidpointResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let point = point_at(variables, self.point, "axis midpoint")?;
+        let start = point_at(variables, self.start, "axis midpoint")?;
+        let end = point_at(variables, self.end, "axis midpoint")?;
+        Ok(vec![
+            point[self.coordinate] - 0.5 * (start[self.coordinate] + end[self.coordinate]),
+        ])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        self.evaluate(variables)?;
+        let mut blocks = zero_blocks(variables, 1)?;
+        let point = if self.coordinate == 0 {
+            [[1.0, 0.0]]
+        } else {
+            [[0.0, 1.0]]
+        };
+        let endpoint = if self.coordinate == 0 {
+            [[-0.5, 0.0]]
+        } else {
+            [[0.0, -0.5]]
+        };
+        add_point_row(&mut blocks, self.point, point[0])?;
+        add_point_row(&mut blocks, self.start, endpoint[0])?;
+        add_point_row(&mut blocks, self.end, endpoint[0])?;
+        Ok(finish_blocks(blocks, 1))
+    }
+}
+
 impl ResidualEvaluator for MidpointResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
         let point = point_at(variables, self.point, "midpoint")?;
@@ -3332,6 +3370,63 @@ mod tests {
 
         let report = problem.check_jacobians(1.0e-6).unwrap();
         assert!(report.all_within(1.0e-9), "{report:#?}");
+    }
+
+    #[test]
+    fn axis_midpoint_has_a_finite_difference_checked_jacobian_at_all_supported_scales() {
+        for scale in [1.0e-6, 1.0, 1.0e6] {
+            for coordinate in [0, 1] {
+                let translation = [17.0 * scale, -23.0 * scale];
+                let mut problem = Problem::new();
+                let point = problem.add_variable(
+                    VariableBlock::vec2(
+                        [translation[0] + 2.0 * scale, translation[1] - 3.0 * scale],
+                        [scale, scale],
+                    )
+                    .unwrap(),
+                );
+                let start = problem.add_variable(
+                    VariableBlock::vec2(
+                        [translation[0] - 4.0 * scale, translation[1] + 5.0 * scale],
+                        [scale, scale],
+                    )
+                    .unwrap(),
+                );
+                let end = problem.add_variable(
+                    VariableBlock::vec2(
+                        [translation[0] + 8.0 * scale, translation[1] - 7.0 * scale],
+                        [scale, scale],
+                    )
+                    .unwrap(),
+                );
+                let source = problem.add_source(SourceConstraint::new("axis midpoint").unwrap());
+                problem
+                    .add_residual(
+                        ResidualBlock::new(
+                            source,
+                            ResidualCategory::Hard,
+                            vec![point, start, end],
+                            1,
+                            vec![scale],
+                            vec![row("axis midpoint")],
+                            AxisMidpointResidual {
+                                point: 0,
+                                start: 1,
+                                end: 2,
+                                coordinate,
+                            },
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap();
+
+                let report = problem.check_jacobians(1.0e-6).unwrap();
+                assert!(
+                    report.all_within(1.0e-8),
+                    "scale={scale:e}, coordinate={coordinate}: {report:#?}"
+                );
+            }
+        }
     }
 
     #[test]

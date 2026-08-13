@@ -1671,8 +1671,9 @@ unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
 
 ## M71 acceptance: retained drafting relations
 
-Status: active; implementation, clean release qualification and immutable publication are
-complete. Supervising-human approval is pending.
+Status: active and amended for M71-F003; the correction passes the complete dirty-tree development
+gate, while replacement clean release qualification, immutable publication and supervising-human
+approval are pending.
 
 - Frozen canonical sketch v1-v4 readers and bytes remain unchanged. A private frozen-v4
   constraint wire DTO prevents in-memory enum growth from expanding v4, and v4 export of M71 state
@@ -1686,17 +1687,24 @@ complete. Supervising-human approval is pending.
   lower to exactly one ordinary hard row. `Concentric` accepts two distinct semantic curve centers
   and lowers to exactly two coincident-coordinate rows. `Collinear` accepts two nondegenerate
   directed native affine supports and lowers to the existing two supporting-line rows.
-- Operand order is semantically commutative for all four relations; Collinear is additionally
+- `HorizontalPointToMidpoint` and `VerticalPointToMidpoint` accept one stored `DesignPointId` plus
+  a certified native line/polyline `CurveSpan`. Each lowers to one ordinary hard row
+  `P[c] - (A[c] + B[c]) / 2`; Horizontal constrains Y and Vertical X. Both may coexist on one point
+  and must follow live endpoint edits without creating a hidden point or fixed coordinate.
+- Operand order is semantically commutative for the original four relations; the midpoint-axis
+  definitions are directional by operand type. Collinear is additionally
   invariant under either support's direction reversal. Distinct curves resolving to one stored
   center are rejected as tautological, and missing, repeated, unsupported or degenerate operands
   retain prior accepted state and history.
-- Each definition owns one ordinary persistent constraint/source identity and complete 1/1/2/2
+- Each definition owns one ordinary persistent constraint/source identity and complete
+  1/1/1/1/2/2
   audit rows. Labels, units, scales, named operands, suppression, activation, dependency closure,
   diagnostics, redundancy/conflict evidence and source ordering remain deterministic.
 - Exact, perturbed-recovery, conflicting/redundant, translation/rotation and `1e-6`/`1`/`1e6`
   scale fixtures independently validate finite accepted geometry and normalized hard residual
-  `<= 1e-9`. Existing residual finite-difference tests remain authoritative because M71 adds no
-  equation; lowering must prove it selects exactly those existing residual families.
+  `<= 1e-9`. The midpoint-axis residual has analytic `[+1, -1/2, -1/2]` derivatives and central
+  finite-difference coverage at `1e-6`/`1`/`1e6`; its audit descriptor names point/span/endpoints
+  and its residual is independently recomputed before acceptance.
 - Ordinary create, suppress/reactivate, edit-parent, delete, Undo/Redo, retained-rejection,
   prepared-job/CAS, reload and reproduction-payload paths preserve identities, source order,
   rank/DOF, accepted authority and transactional failure retention.
@@ -1706,13 +1714,15 @@ complete. Supervising-human approval is pending.
   policy.
 - M70 inference may persist point-pair H/V only for remembered stored points, Concentric only from
   exact accepted semantic centers, and Collinear only from certified affine supporting-line
-  evidence. Point identity outranks H/V, derived anchors remain tracking-only, Collinear replaces
+  evidence. It may additionally persist midpoint-axis H/V only from remembered accepted native
+  line/polyline midpoints. `FilletDiscarded` and nonlinear midpoint occurrences remain
+  tracking-only. Point identity outranks H/V, Collinear replaces
   Parallel, ties/unsupported evidence fail closed and one construction-plus-relation commit is
   atomic and history-neutral until confirmed.
 - Prospective curve slots permit relations against geometry created in the same transaction while
   preventing stale, foreign or partially allocated IDs from publishing. Suppression, candidate
   bounds, scene authentication and exact accepted-input checks retain the M70 contract.
-- Headless scene/presentation DTOs cover all four relations with stable IDs, operands, labels,
+- Headless scene/presentation DTOs cover all six definitions with stable IDs, operands, labels,
   suppression and glyph geometry. Generic editor selection, hover and problem context is combined
   with those entries and annotations at the headless interaction boundary; native/WASM parity
   passes. The workbench adds no equation, applicability or geometric inference rule.
@@ -1726,7 +1736,8 @@ complete. Supervising-human approval is pending.
   completes and explicitly approves `docs/M71_UAT.md`; mechanical qualification alone does not
   close M71.
 
-M71 does not accept broad `DocumentPointRef` H/V operands, M37 catalog consolidation, generic
+M71 does not accept broad `DocumentPointRef` H/V operands beyond explicit native-span midpoint
+axes, M37 catalog consolidation, generic
 intersections, quadrant anchors, nonlinear tangent/normal inference, equality/symmetry inference,
 axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature chaining,
 browser E2E, mobile behavior or legacy UI.

@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use geosolve_core::{AuditEvaluationStatus, OperationOutcome, ResidualCategory, SolverConfig};
+use geosolve_core::{
+    AuditEvaluationStatus, OperationOutcome, ResidualCategory, ResidualId, SolverConfig,
+    VariableValue,
+};
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DesignPointId, DocumentArcSweep, DocumentCenterRef,
+    CompiledSketch, CurveDefinition, CurveSpan, DesignPointId, DocumentArcSweep, DocumentCenterRef,
     DocumentCommand, DocumentCommandEffect, DocumentConstraintDefinition, DocumentConstraintId,
-    DocumentDirectionSense, DocumentEdit, DocumentError, DocumentHyperbolaBranch,
-    DocumentLineSupportRef, DocumentObjectId, DocumentSessionError, DocumentSolveRequest,
-    DocumentSourceId, PreparedSketchOperation, PreparedSketchPatch, RetainedSketchDocumentSession,
-    RuntimeSource, ScalarDomain, ScalarUnit, SketchDocument, SketchDocumentSession,
-    SketchSolveRequest, SketchSource,
+    DocumentDirectionSense, DocumentEdit, DocumentElementId, DocumentError,
+    DocumentHyperbolaBranch, DocumentLineSupportRef, DocumentObjectId, DocumentSessionError,
+    DocumentSolveRequest, DocumentSourceId, PersistentId, PreparedSketchOperation,
+    PreparedSketchPatch, RetainedSketchDocumentSession, RuntimeSource, ScalarDomain, ScalarUnit,
+    SketchDocument, SketchDocumentSession, SketchSolveRequest, SketchSource,
 };
 
 const HARD_TOLERANCE: f64 = 1.0e-9;
@@ -48,6 +51,69 @@ impl RelationKind {
     const fn expected_rank_gain(self) -> usize {
         self.expected_rows()
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AxisMidpointKind {
+    Horizontal,
+    Vertical,
+}
+
+impl AxisMidpointKind {
+    const ALL: [Self; 2] = [Self::Horizontal, Self::Vertical];
+
+    const fn coordinate(self) -> usize {
+        match self {
+            Self::Horizontal => 1,
+            Self::Vertical => 0,
+        }
+    }
+
+    const fn coordinate_name(self) -> &'static str {
+        match self {
+            Self::Horizontal => "y",
+            Self::Vertical => "x",
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Horizontal => "horizontal point to midpoint",
+            Self::Vertical => "vertical point to midpoint",
+        }
+    }
+
+    const fn definition(
+        self,
+        point: DesignPointId,
+        line: CurveSpan,
+    ) -> DocumentConstraintDefinition {
+        match self {
+            Self::Horizontal => {
+                DocumentConstraintDefinition::HorizontalPointToMidpoint { point, line }
+            }
+            Self::Vertical => DocumentConstraintDefinition::VerticalPointToMidpoint { point, line },
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AxisMidpointSpanFamily {
+    Line,
+    Polyline,
+}
+
+impl AxisMidpointSpanFamily {
+    const ALL: [Self; 2] = [Self::Line, Self::Polyline];
+}
+
+struct AxisMidpointFixture {
+    document: SketchDocument,
+    point: DesignPointId,
+    start: DesignPointId,
+    end: DesignPointId,
+    span: CurveSpan,
+    runtime_segment_label: &'static str,
 }
 
 #[derive(Clone, Copy)]
@@ -190,6 +256,96 @@ fn line(
             },
         )
         .unwrap()
+}
+
+fn scaled_position(position: [f64; 2], scale: f64, translation: [f64; 2]) -> [f64; 2] {
+    [
+        position[0] * scale + translation[0],
+        position[1] * scale + translation[1],
+    ]
+}
+
+fn unit_direction(start: [f64; 2], end: [f64; 2]) -> [f64; 2] {
+    let delta = [end[0] - start[0], end[1] - start[1]];
+    let length = delta[0].hypot(delta[1]);
+    assert!(length.is_finite() && length > 0.0);
+    [delta[0] / length, delta[1] / length]
+}
+
+fn axis_midpoint_fixture(
+    family: AxisMidpointSpanFamily,
+    scale: f64,
+    translation: [f64; 2],
+) -> AxisMidpointFixture {
+    let mut document = SketchDocument::new(scale).unwrap();
+    let point = document
+        .add_point(
+            "tracked point",
+            scaled_position([3.4, -2.3], scale, translation),
+        )
+        .unwrap();
+    let (start, end, span, runtime_segment_label) = match family {
+        AxisMidpointSpanFamily::Line => {
+            let start = document
+                .add_point(
+                    "span start",
+                    scaled_position([-2.0, -1.0], scale, translation),
+                )
+                .unwrap();
+            let end = document
+                .add_point("span end", scaled_position([4.0, 3.0], scale, translation))
+                .unwrap();
+            let curve = line(&mut document, "support line", start, end);
+            (start, end, CurveSpan::line(curve), "support line")
+        }
+        AxisMidpointSpanFamily::Polyline => {
+            let prefix = document
+                .add_point(
+                    "polyline prefix",
+                    scaled_position([-4.0, 2.0], scale, translation),
+                )
+                .unwrap();
+            let start = document
+                .add_point(
+                    "span start",
+                    scaled_position([-1.0, -2.0], scale, translation),
+                )
+                .unwrap();
+            let end = document
+                .add_point("span end", scaled_position([5.0, 4.0], scale, translation))
+                .unwrap();
+            let prefix_position = document.point(prefix).unwrap().position;
+            let start_position = document.point(start).unwrap().position;
+            let end_position = document.point(end).unwrap().position;
+            let curve = document
+                .add_curve(
+                    "support polyline",
+                    CurveDefinition::Polyline {
+                        points: vec![prefix, start, end],
+                        closed: false,
+                        branch_directions: vec![
+                            unit_direction(prefix_position, start_position),
+                            unit_direction(start_position, end_position),
+                        ],
+                    },
+                )
+                .unwrap();
+            (
+                start,
+                end,
+                CurveSpan { curve, segment: 1 },
+                "support polyline.segment_2",
+            )
+        }
+    };
+    AxisMidpointFixture {
+        document,
+        point,
+        start,
+        end,
+        span,
+        runtime_segment_label,
+    }
 }
 
 fn circle(
@@ -429,6 +585,100 @@ fn runtime_row_count(document: &SketchDocument, constraint: DocumentConstraintId
     )
 }
 
+fn compiled_axis_midpoint(
+    document: &SketchDocument,
+    constraint: DocumentConstraintId,
+) -> (CompiledSketch, ResidualId) {
+    let source = source_id(document, constraint);
+    let lowered = document.lower().unwrap();
+    let RuntimeSource::Constraint(runtime) = lowered.mappings().runtime_source(source).unwrap()
+    else {
+        panic!("axis-midpoint relation must lower to a runtime constraint")
+    };
+    let compiled = lowered
+        .sketch()
+        .compile(SketchSolveRequest::default().without_previous_state_preferences())
+        .unwrap();
+    let residual_ids = compiled
+        .source_mappings()
+        .iter()
+        .find(|mapping| mapping.source == SketchSource::Constraint(runtime))
+        .unwrap()
+        .residual_ids
+        .clone();
+    assert_eq!(residual_ids.len(), 1);
+    (compiled, residual_ids[0])
+}
+
+fn axis_midpoint_raw(
+    document: &SketchDocument,
+    kind: AxisMidpointKind,
+    point: DesignPointId,
+    start: DesignPointId,
+    end: DesignPointId,
+) -> f64 {
+    let coordinate = kind.coordinate();
+    let point = document.point(point).unwrap().position;
+    let start = document.point(start).unwrap().position;
+    let end = document.point(end).unwrap().position;
+    point[coordinate] - 0.5 * (start[coordinate] + end[coordinate])
+}
+
+fn assert_axis_midpoint_formula(
+    document: &SketchDocument,
+    kind: AxisMidpointKind,
+    point: DesignPointId,
+    start: DesignPointId,
+    end: DesignPointId,
+) {
+    let raw = axis_midpoint_raw(document, kind, point, start, end);
+    let normalized = raw / document.model_scale();
+    assert!(raw.is_finite(), "{kind:?} raw residual: {raw:e}");
+    assert!(
+        normalized.is_finite() && normalized.abs() <= HARD_TOLERANCE,
+        "{kind:?} independently normalized residual: {normalized:e}"
+    );
+}
+
+fn assert_accepted_axis_midpoint_audit(
+    session: &RetainedSketchDocumentSession,
+    constraint: DocumentConstraintId,
+    kind: AxisMidpointKind,
+    point: DesignPointId,
+    start: DesignPointId,
+    end: DesignPointId,
+) {
+    let accepted = session.accepted_state().unwrap();
+    let document = accepted.document();
+    let raw = axis_midpoint_raw(document, kind, point, start, end);
+    let normalized = raw / document.model_scale();
+    let source = source_id(document, constraint);
+    let RuntimeSource::Constraint(runtime) = accepted.mappings().runtime_source(source).unwrap()
+    else {
+        panic!("axis-midpoint relation must retain a runtime constraint mapping")
+    };
+    let core_source = accepted
+        .solve_result()
+        .source_mappings
+        .iter()
+        .find(|mapping| mapping.source == SketchSource::Constraint(runtime))
+        .and_then(|mapping| mapping.core_source_id)
+        .unwrap();
+    let audit = accepted
+        .solve_result()
+        .display_audit
+        .sources
+        .iter()
+        .find(|audit| audit.source_id == core_source)
+        .unwrap();
+    assert_eq!(audit.rows.len(), 1);
+    let row = &audit.rows[0];
+    assert_eq!(row.raw_residual.to_bits(), raw.to_bits());
+    assert_eq!(row.normalized_residual.to_bits(), normalized.to_bits());
+    assert_eq!(row.scale.to_bits(), document.model_scale().to_bits());
+    assert_axis_midpoint_formula(document, kind, point, start, end);
+}
+
 fn accepted_session(document: SketchDocument) -> RetainedSketchDocumentSession {
     RetainedSketchDocumentSession::new(
         document,
@@ -599,6 +849,571 @@ fn contains_object(document: &SketchDocument, object: DocumentObjectId) -> bool 
         DocumentObjectId::Dimension(dimension) => document.dimension(dimension).is_some(),
         DocumentObjectId::Parameter(parameter) => document.parameter(parameter).is_some(),
         DocumentObjectId::ExternalBinding(binding) => document.external_binding(binding).is_some(),
+    }
+}
+
+fn assert_retained_edit_rejects_without_advancing(
+    session: &mut RetainedSketchDocumentSession,
+    edit: DocumentEdit,
+) {
+    let before_input = session.prepared_input();
+    let before_design = session.design_document().clone();
+    let before_attempt = session.last_attempt().identity();
+    let before_accepted = session
+        .accepted_state()
+        .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
+    assert!(session.apply(session.design_identity(), edit).is_err());
+    assert_eq!(session.prepared_input(), before_input);
+    assert_eq!(session.design_document(), &before_design);
+    assert_eq!(session.last_attempt().identity(), before_attempt);
+    assert_eq!(
+        session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+        before_accepted
+    );
+}
+
+#[test]
+fn m71_axis_midpoint_relations_have_exact_runtime_audit_and_geometry_across_supported_spans_and_scales()
+ {
+    for kind in AxisMidpointKind::ALL {
+        for family in AxisMidpointSpanFamily::ALL {
+            for scale in [1.0e-6, 1.0, 1.0e6] {
+                let translation = [19.0 * scale, -31.0 * scale];
+                let mut fixture = axis_midpoint_fixture(family, scale, translation);
+                let constraint = fixture
+                    .document
+                    .add_constraint(kind.label(), kind.definition(fixture.point, fixture.span))
+                    .unwrap();
+                assert_eq!(runtime_row_count(&fixture.document, constraint), Some(1));
+
+                let (compiled, residual_id) = compiled_axis_midpoint(&fixture.document, constraint);
+                let residual = compiled.problem().residual(residual_id).unwrap();
+                assert_eq!(residual.output_dimension(), 1);
+                assert_eq!(residual.category(), ResidualCategory::Hard);
+                assert_eq!(residual.incident_variables().len(), 3);
+                let rows = compiled.problem().audit_rows().unwrap();
+                let row = rows
+                    .iter()
+                    .find(|row| row.residual_id == residual_id)
+                    .unwrap();
+                assert_eq!(row.category, ResidualCategory::Hard);
+                assert_eq!(row.row_in_block, 0);
+                assert_eq!(row.unit, "model-unit");
+                assert_eq!(row.scale.to_bits(), scale.to_bits());
+                assert_eq!(
+                    row.template,
+                    format!(
+                        "(tracked point.{coordinate} - (span start.{coordinate} + span end.{coordinate})/2) / model_scale",
+                        coordinate = kind.coordinate_name()
+                    )
+                );
+                assert_eq!(
+                    row.bindings
+                        .iter()
+                        .map(|binding| (binding.name.as_str(), binding.value.as_str()))
+                        .collect::<Vec<_>>(),
+                    vec![
+                        ("point", "tracked point"),
+                        ("segment", fixture.runtime_segment_label),
+                        ("start", "span start"),
+                        ("end", "span end"),
+                    ]
+                );
+
+                let snapshot = compiled.problem().audit_snapshot().unwrap();
+                let snapshot_row = snapshot
+                    .sources
+                    .iter()
+                    .flat_map(|source| &source.rows)
+                    .find(|row| row.residual_id == residual_id)
+                    .unwrap();
+                assert_eq!(snapshot_row.incident_variables.len(), 3);
+                assert!(snapshot_row.incident_variables.iter().all(|variable| {
+                    matches!(variable.value, VariableValue::Vec2(values) if values.iter().all(|value| value.is_finite()))
+                }));
+                let incident_values = snapshot_row
+                    .incident_variables
+                    .iter()
+                    .map(|variable| variable.value)
+                    .collect::<Vec<_>>();
+                let [
+                    VariableValue::Vec2(point),
+                    VariableValue::Vec2(start),
+                    VariableValue::Vec2(end),
+                ] = incident_values.as_slice()
+                else {
+                    panic!("axis-midpoint incidence must be P/A/B Vec2 variables")
+                };
+                let coordinate = kind.coordinate();
+                let raw = point[coordinate] - 0.5 * (start[coordinate] + end[coordinate]);
+                assert_eq!(snapshot_row.raw_residual.to_bits(), raw.to_bits());
+                assert_eq!(
+                    snapshot_row.normalized_residual.to_bits(),
+                    (raw / scale).to_bits()
+                );
+
+                let session = accepted_session(fixture.document);
+                assert_finite_accepted_relation(&session, constraint, 1);
+                assert_accepted_axis_midpoint_audit(
+                    &session,
+                    constraint,
+                    kind,
+                    fixture.point,
+                    fixture.start,
+                    fixture.end,
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn m71_axis_midpoint_endpoint_aliases_compile_with_deduplicated_incidence() {
+    for kind in AxisMidpointKind::ALL {
+        for alias_start in [true, false] {
+            let mut document = SketchDocument::new(1.0).unwrap();
+            let start = document.add_point("alias start", [-2.0, -1.0]).unwrap();
+            let end = document.add_point("alias end", [4.0, 3.0]).unwrap();
+            let curve = line(&mut document, "alias line", start, end);
+            let point = if alias_start { start } else { end };
+            let constraint = document
+                .add_constraint(kind.label(), kind.definition(point, CurveSpan::line(curve)))
+                .unwrap();
+            let (compiled, residual_id) = compiled_axis_midpoint(&document, constraint);
+            let residual = compiled.problem().residual(residual_id).unwrap();
+            assert_eq!(residual.output_dimension(), 1);
+            assert_eq!(residual.incident_variables().len(), 2);
+            let snapshot = compiled.problem().audit_snapshot().unwrap();
+            let row = snapshot
+                .sources
+                .iter()
+                .flat_map(|source| &source.rows)
+                .find(|row| row.residual_id == residual_id)
+                .unwrap();
+            assert_eq!(row.incident_variables.len(), 2);
+            assert!(row.incident_variables.iter().all(|variable| {
+                variable
+                    .value
+                    .ambient_values()
+                    .iter()
+                    .all(|value| value.is_finite())
+            }));
+
+            let session = accepted_session(document);
+            assert_finite_accepted_relation(&session, constraint, 1);
+            assert_accepted_axis_midpoint_audit(&session, constraint, kind, point, start, end);
+            let accepted = session.accepted_state().unwrap().document();
+            let start_position = accepted.point(start).unwrap().position;
+            let end_position = accepted.point(end).unwrap().position;
+            let unconstrained_coordinate = 1 - kind.coordinate();
+            assert!(
+                (end_position[unconstrained_coordinate] - start_position[unconstrained_coordinate])
+                    .abs()
+                    > HARD_TOLERANCE
+            );
+        }
+    }
+}
+
+#[test]
+fn m71_axis_midpoint_axes_coexist_and_follow_live_endpoint_edits_without_identity_churn() {
+    let mut fixture = axis_midpoint_fixture(AxisMidpointSpanFamily::Line, 1.0, [0.0, 0.0]);
+    let horizontal = fixture
+        .document
+        .add_constraint(
+            AxisMidpointKind::Horizontal.label(),
+            AxisMidpointKind::Horizontal.definition(fixture.point, fixture.span),
+        )
+        .unwrap();
+    let vertical = fixture
+        .document
+        .add_constraint(
+            AxisMidpointKind::Vertical.label(),
+            AxisMidpointKind::Vertical.definition(fixture.point, fixture.span),
+        )
+        .unwrap();
+    let horizontal_source = source_id(&fixture.document, horizontal);
+    let vertical_source = source_id(&fixture.document, vertical);
+    let mut session = accepted_session(fixture.document);
+
+    for (point, position) in [
+        (fixture.start, [-5.0, 2.0]),
+        (fixture.end, [7.0, -4.0]),
+        (fixture.start, [-1.5, -3.5]),
+    ] {
+        let outcome = session
+            .apply(
+                session.design_identity(),
+                DocumentEdit::SetPointPosition { point, position },
+            )
+            .unwrap();
+        assert!(outcome.published_accepted_identity().is_some());
+        assert_eq!(
+            source_id(session.design_document(), horizontal),
+            horizontal_source
+        );
+        assert_eq!(
+            source_id(session.design_document(), vertical),
+            vertical_source
+        );
+        assert_eq!(
+            runtime_row_count(session.design_document(), horizontal),
+            Some(1)
+        );
+        assert_eq!(
+            runtime_row_count(session.design_document(), vertical),
+            Some(1)
+        );
+        assert_accepted_axis_midpoint_audit(
+            &session,
+            horizontal,
+            AxisMidpointKind::Horizontal,
+            fixture.point,
+            fixture.start,
+            fixture.end,
+        );
+        assert_accepted_axis_midpoint_audit(
+            &session,
+            vertical,
+            AxisMidpointKind::Vertical,
+            fixture.point,
+            fixture.start,
+            fixture.end,
+        );
+        let accepted = session.accepted_state().unwrap().document();
+        let tracked = accepted.point(fixture.point).unwrap().position;
+        let start = accepted.point(fixture.start).unwrap().position;
+        let end = accepted.point(fixture.end).unwrap().position;
+        for coordinate in [0, 1] {
+            assert!(
+                (tracked[coordinate] - 0.5 * (start[coordinate] + end[coordinate])).abs()
+                    <= HARD_TOLERANCE
+            );
+        }
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn m71_axis_midpoint_suppression_history_and_rejected_conflict_preserve_authority() {
+    for kind in AxisMidpointKind::ALL {
+        let fixture = axis_midpoint_fixture(AxisMidpointSpanFamily::Line, 1.0, [0.0, 0.0]);
+        let definition = kind.definition(fixture.point, fixture.span);
+        let mut history = SketchDocumentSession::new(
+            fixture.document.clone(),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let created = history
+            .apply(DocumentCommand::new(
+                history.revision(),
+                DocumentEdit::CreateConstraint {
+                    label: kind.label().into(),
+                    definition: definition.clone(),
+                },
+            ))
+            .unwrap();
+        let Some(DocumentCommandEffect::CreatedConstraint(constraint)) = created.effect else {
+            panic!("created axis-midpoint constraint expected")
+        };
+        let source = source_id(history.document(), constraint);
+        assert_eq!(runtime_row_count(history.document(), constraint), Some(1));
+        history
+            .apply(DocumentCommand::new(
+                history.revision(),
+                DocumentEdit::SetSourceSuppressed {
+                    source,
+                    suppressed: true,
+                },
+            ))
+            .unwrap();
+        assert!(history.document().source(source).unwrap().suppressed);
+        assert_eq!(runtime_row_count(history.document(), constraint), None);
+        history.undo(history.revision()).unwrap();
+        assert!(!history.document().source(source).unwrap().suppressed);
+        assert_eq!(runtime_row_count(history.document(), constraint), Some(1));
+        history.redo(history.revision()).unwrap();
+        assert!(history.document().source(source).unwrap().suppressed);
+        assert_eq!(runtime_row_count(history.document(), constraint), None);
+        history
+            .apply(DocumentCommand::new(
+                history.revision(),
+                DocumentEdit::SetSourceSuppressed {
+                    source,
+                    suppressed: false,
+                },
+            ))
+            .unwrap();
+        assert_eq!(runtime_row_count(history.document(), constraint), Some(1));
+        assert_eq!(source_id(history.document(), constraint), source);
+
+        let mut conflict = fixture.document;
+        for point in [fixture.point, fixture.start, fixture.end] {
+            let target = conflict.point(point).unwrap().position;
+            conflict
+                .add_constraint(
+                    "fixed conflict witness",
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .unwrap();
+        }
+        let mut retained = accepted_session(conflict);
+        let before_accepted = retained.accepted_state().unwrap().clone();
+        let before_input = retained.prepared_input();
+        let rejected = retained
+            .apply(
+                retained.design_identity(),
+                DocumentEdit::CreateConstraint {
+                    label: format!("conflicting {}", kind.label()),
+                    definition,
+                },
+            )
+            .unwrap();
+        let DocumentCommandEffect::CreatedConstraint(rejected_constraint) = rejected.value() else {
+            panic!("created conflicting axis-midpoint constraint expected")
+        };
+        assert!(rejected.published_accepted_identity().is_none());
+        assert_ne!(retained.prepared_input(), before_input);
+        assert!(
+            retained
+                .last_attempt()
+                .solve_result()
+                .unwrap()
+                .rejection
+                .is_some()
+        );
+        assert_eq!(
+            retained.accepted_state().unwrap().identity(),
+            before_accepted.identity()
+        );
+        assert_eq!(
+            retained.accepted_state().unwrap().document(),
+            before_accepted.document()
+        );
+        assert_eq!(
+            retained
+                .accepted_state()
+                .unwrap()
+                .solve_result()
+                .display_audit,
+            before_accepted.solve_result().display_audit
+        );
+        assert!(retained.accepted_state_for_current_input().is_none());
+
+        let rejected_source = source_id(retained.design_document(), *rejected_constraint);
+        let repaired = retained
+            .apply(
+                retained.design_identity(),
+                DocumentEdit::SetSourceSuppressed {
+                    source: rejected_source,
+                    suppressed: true,
+                },
+            )
+            .unwrap();
+        assert!(repaired.published_accepted_identity().is_some());
+        let repaired_accepted = retained.accepted_state().unwrap().clone();
+        let rejected_again = retained
+            .apply(
+                retained.design_identity(),
+                DocumentEdit::SetSourceSuppressed {
+                    source: rejected_source,
+                    suppressed: false,
+                },
+            )
+            .unwrap();
+        assert!(rejected_again.published_accepted_identity().is_none());
+        assert_eq!(
+            retained.accepted_state().unwrap().identity(),
+            repaired_accepted.identity()
+        );
+        assert!(
+            retained
+                .accepted_state()
+                .unwrap()
+                .document()
+                .source(rejected_source)
+                .unwrap()
+                .suppressed
+        );
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn m71_axis_midpoint_dependencies_and_invalid_operands_are_transactional() {
+    for kind in AxisMidpointKind::ALL {
+        let mut fixture = axis_midpoint_fixture(AxisMidpointSpanFamily::Polyline, 1.0, [0.0, 0.0]);
+        let constraint = fixture
+            .document
+            .add_constraint(kind.label(), kind.definition(fixture.point, fixture.span))
+            .unwrap();
+        let closure = fixture.document.dependency_closure(constraint);
+        for dependency in [
+            DocumentElementId::Point(fixture.point),
+            DocumentElementId::Curve(fixture.span.curve),
+            DocumentElementId::Point(fixture.start),
+            DocumentElementId::Point(fixture.end),
+        ] {
+            assert!(closure.contains(&dependency), "{kind:?}: {dependency:?}");
+            let object = match dependency {
+                DocumentElementId::Point(point) => DocumentObjectId::Point(point),
+                DocumentElementId::Curve(curve) => DocumentObjectId::Curve(curve),
+                _ => unreachable!(),
+            };
+            let mut conservative = fixture.document.clone();
+            assert!(matches!(
+                conservative.remove(object),
+                Err(DocumentError::ObjectInUse(_))
+            ));
+            assert!(conservative.constraint(constraint).is_some());
+            let mut cascade = fixture.document.clone();
+            cascade.remove_many_with_dependents(&[object]).unwrap();
+            assert!(cascade.constraint(constraint).is_none());
+            assert!(!contains_object(&cascade, object));
+        }
+        let mut relation_only = fixture.document;
+        relation_only
+            .remove_with_owned_state(DocumentObjectId::Constraint(constraint))
+            .unwrap();
+        assert!(relation_only.constraint(constraint).is_none());
+        for dependency in [
+            DocumentObjectId::Point(fixture.point),
+            DocumentObjectId::Curve(fixture.span.curve),
+            DocumentObjectId::Point(fixture.start),
+            DocumentObjectId::Point(fixture.end),
+        ] {
+            assert!(contains_object(&relation_only, dependency));
+        }
+        accepted_session(relation_only);
+
+        let valid = axis_midpoint_fixture(AxisMidpointSpanFamily::Line, 1.0, [0.0, 0.0]);
+        let mut missing_point_session = accepted_session(valid.document.clone());
+        let missing = DesignPointId(PersistentId::from_u128(u128::MAX - 1));
+        assert_retained_edit_rejects_without_advancing(
+            &mut missing_point_session,
+            DocumentEdit::CreateConstraint {
+                label: "missing point axis midpoint".into(),
+                definition: kind.definition(missing, valid.span),
+            },
+        );
+
+        let mut nonlinear = valid.document.clone();
+        let center = nonlinear.add_point("circle center", [8.0, 5.0]).unwrap();
+        let circle = circle(&mut nonlinear, "nonlinear circle", center, 2.0);
+        let mut nonlinear_session = accepted_session(nonlinear);
+        assert_retained_edit_rejects_without_advancing(
+            &mut nonlinear_session,
+            DocumentEdit::CreateConstraint {
+                label: "nonlinear axis midpoint".into(),
+                definition: kind.definition(valid.point, CurveSpan::line(circle)),
+            },
+        );
+
+        let polyline = axis_midpoint_fixture(AxisMidpointSpanFamily::Polyline, 1.0, [0.0, 0.0]);
+        let mut invalid_span_session = accepted_session(polyline.document);
+        assert_retained_edit_rejects_without_advancing(
+            &mut invalid_span_session,
+            DocumentEdit::CreateConstraint {
+                label: "invalid span axis midpoint".into(),
+                definition: kind.definition(
+                    polyline.point,
+                    CurveSpan {
+                        curve: polyline.span.curve,
+                        segment: 99,
+                    },
+                ),
+            },
+        );
+
+        let mut degenerate = valid.document;
+        let degenerate_constraint = degenerate
+            .add_constraint(kind.label(), kind.definition(valid.point, valid.span))
+            .unwrap();
+        let mut degenerate_session = accepted_session(degenerate);
+        let degenerate_source =
+            source_id(degenerate_session.design_document(), degenerate_constraint);
+        let end_position = degenerate_session
+            .design_document()
+            .point(valid.end)
+            .unwrap()
+            .position;
+        assert_retained_edit_rejects_without_advancing(
+            &mut degenerate_session,
+            DocumentEdit::SetPointPosition {
+                point: valid.start,
+                position: end_position,
+            },
+        );
+        assert_eq!(
+            source_id(degenerate_session.design_document(), degenerate_constraint),
+            degenerate_source
+        );
+        assert_eq!(
+            runtime_row_count(degenerate_session.design_document(), degenerate_constraint),
+            Some(1)
+        );
+        assert_accepted_axis_midpoint_audit(
+            &degenerate_session,
+            degenerate_constraint,
+            kind,
+            valid.point,
+            valid.start,
+            valid.end,
+        );
+    }
+}
+
+#[test]
+fn m71_axis_midpoint_prepared_work_is_non_mutating_until_exact_cas() {
+    for kind in AxisMidpointKind::ALL {
+        let fixture = axis_midpoint_fixture(AxisMidpointSpanFamily::Line, 1.0, [0.0, 0.0]);
+        let mut session = accepted_session(fixture.document);
+        let before = session.prepared_input();
+        let snapshot = session.prepared_snapshot();
+        let first = snapshot.clone().prepare(PreparedSketchOperation::Apply(
+            DocumentEdit::CreateConstraint {
+                label: format!("prepared {}", kind.label()),
+                definition: kind.definition(fixture.point, fixture.span),
+            },
+        ));
+        let second = snapshot.prepare(PreparedSketchOperation::Apply(
+            DocumentEdit::CreateConstraint {
+                label: format!("stale prepared {}", kind.label()),
+                definition: kind.definition(fixture.point, fixture.span),
+            },
+        ));
+        let first = completed_patch(
+            first
+                .execute(geosolve_core::OperationControl::unlimited())
+                .unwrap(),
+        );
+        let second = completed_patch(
+            second
+                .execute(geosolve_core::OperationControl::unlimited())
+                .unwrap(),
+        );
+        assert_eq!(session.prepared_input(), before);
+        assert!(session.design_document().constraints().is_empty());
+
+        let proposed = first.proposed_commit();
+        assert!(proposed.accepted_state_identity().is_some());
+        assert_eq!(session.commit_prepared_patch(first).unwrap(), proposed);
+        assert_eq!(session.design_document().constraints().len(), 1);
+        let constraint = session.design_document().constraints()[0].id;
+        assert_eq!(
+            runtime_row_count(session.design_document(), constraint),
+            Some(1)
+        );
+        let committed = session.prepared_input();
+        assert!(matches!(
+            session.commit_prepared_patch(second),
+            Err(DocumentSessionError::StalePreparedPatch { .. })
+        ));
+        assert_eq!(session.prepared_input(), committed);
+        assert_eq!(session.design_document().constraints().len(), 1);
     }
 }
 

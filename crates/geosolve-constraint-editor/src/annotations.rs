@@ -440,6 +440,14 @@ fn constraint_entry_presentation(
             SceneConstraintGlyph::Vertical,
             vec![SelectionItem::Point(*first), SelectionItem::Point(*second)],
         ),
+        Constraint::HorizontalPointToMidpoint { point, line } => (
+            SceneConstraintGlyph::Horizontal,
+            vec![SelectionItem::Point(*point), SelectionItem::Curve(*line)],
+        ),
+        Constraint::VerticalPointToMidpoint { point, line } => (
+            SceneConstraintGlyph::Vertical,
+            vec![SelectionItem::Point(*point), SelectionItem::Curve(*line)],
+        ),
         Constraint::PointOnCurve { point, contact } => (
             SceneConstraintGlyph::PointOnCurve,
             std::iter::once(SelectionItem::Point(*point))
@@ -628,6 +636,20 @@ fn constraint_presentation(
         Constraint::VerticalPoints { first, second } => {
             point_pair_relation(SceneConstraintGlyph::Vertical, points, *first, *second)
         }
+        Constraint::HorizontalPointToMidpoint { point, line } => point_span_relation(
+            SceneConstraintGlyph::Horizontal,
+            points,
+            curves,
+            *point,
+            *line,
+        ),
+        Constraint::VerticalPointToMidpoint { point, line } => point_span_relation(
+            SceneConstraintGlyph::Vertical,
+            points,
+            curves,
+            *point,
+            *line,
+        ),
         Constraint::PointOnCurve { point, contact } => point_contact_relation(
             SceneConstraintGlyph::PointOnCurve,
             document,
@@ -981,6 +1003,22 @@ fn point_pair_relation(
         paired_point_anchor(points, first, second)
             .into_iter()
             .collect(),
+    )
+}
+
+fn point_span_relation(
+    glyph: SceneConstraintGlyph,
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    point: geosolve_sketch::DesignPointId,
+    span: CurveSpan,
+) -> (SceneConstraintGlyph, Vec<SelectionItem>, Vec<ScreenPoint>) {
+    let mut anchors = point_anchor(points, point).into_iter().collect::<Vec<_>>();
+    anchors.extend(line_relation_anchor(curves, span));
+    (
+        glyph,
+        vec![SelectionItem::Point(point), SelectionItem::Curve(span)],
+        anchors,
     )
 }
 
@@ -1559,7 +1597,7 @@ mod tests {
     #[test]
     #[allow(
         clippy::too_many_lines,
-        reason = "one exact owner matrix freezes all four M71 scene relations and interaction states"
+        reason = "one exact owner matrix freezes all six M71 scene relations and interaction states"
     )]
     fn retained_drafting_relations_publish_exact_headless_annotations() {
         let mut document = SketchDocument::new(1.0).expect("document");
@@ -1699,6 +1737,28 @@ mod tests {
             )
             .expect("collinear");
 
+        let midpoint_point = document
+            .add_point("midpoint-axis point", [4.5, -2.0])
+            .expect("point");
+        let horizontal_to_midpoint = document
+            .add_constraint(
+                "horizontal to midpoint",
+                DocumentConstraintDefinition::HorizontalPointToMidpoint {
+                    point: midpoint_point,
+                    line: first_span,
+                },
+            )
+            .expect("horizontal to midpoint");
+        let vertical_to_midpoint = document
+            .add_constraint(
+                "vertical to midpoint",
+                DocumentConstraintDefinition::VerticalPointToMidpoint {
+                    point: midpoint_point,
+                    line: first_span,
+                },
+            )
+            .expect("vertical to midpoint");
+
         let session = RetainedSketchDocumentSession::new(
             document,
             DocumentSolveRequest::default(),
@@ -1718,8 +1778,8 @@ mod tests {
             0.5,
         )
         .expect("scene");
-        assert_eq!(scene.annotations.len(), 4);
-        assert_eq!(scene.constraint_entries.len(), 4);
+        assert_eq!(scene.annotations.len(), 6);
+        assert_eq!(scene.constraint_entries.len(), 6);
 
         let entry = |id| {
             scene
@@ -1759,6 +1819,26 @@ mod tests {
                 vec![
                     SelectionItem::Curve(first_span),
                     SelectionItem::Curve(second_span),
+                ],
+                false,
+            ),
+            (
+                horizontal_to_midpoint,
+                "horizontal to midpoint",
+                SceneConstraintGlyph::Horizontal,
+                vec![
+                    SelectionItem::Point(midpoint_point),
+                    SelectionItem::Curve(first_span),
+                ],
+                false,
+            ),
+            (
+                vertical_to_midpoint,
+                "vertical to midpoint",
+                SceneConstraintGlyph::Vertical,
+                vec![
+                    SelectionItem::Point(midpoint_point),
+                    SelectionItem::Curve(first_span),
                 ],
                 false,
             ),
@@ -1896,14 +1976,55 @@ mod tests {
             SceneAnnotationGeometry::Glyph { markers }
                 if markers.len() == 2 && markers.iter().all(|marker| marker.anchor.is_finite())
         ));
+
+        for (id, glyph) in [
+            (horizontal_to_midpoint, SceneConstraintGlyph::Horizontal),
+            (vertical_to_midpoint, SceneConstraintGlyph::Vertical),
+        ] {
+            let midpoint_annotation = annotation(id);
+            assert_eq!(
+                midpoint_annotation.kind,
+                SceneAnnotationKind::Constraint(glyph)
+            );
+            assert_eq!(
+                midpoint_annotation.operands,
+                vec![
+                    SelectionItem::Point(midpoint_point),
+                    SelectionItem::Curve(first_span),
+                ]
+            );
+            assert!(matches!(
+                &midpoint_annotation.geometry,
+                SceneAnnotationGeometry::Glyph { markers }
+                    if markers.len() == 2
+                        && markers.iter().all(|marker| marker.anchor.is_finite())
+            ));
+        }
     }
 
     #[test]
     fn m71_f001_rejected_design_entry_is_published_without_unaccepted_annotation_geometry() {
         let mut document = SketchDocument::new(1.0).expect("document");
         let first = document.add_point("first", [0.0, 0.0]).expect("point");
-        let second = document.add_point("second", [1.0, 1.0]).expect("point");
-        for (label, point) in [("fix first", first), ("fix second", second)] {
+        let line_end = document.add_point("line end", [2.0, 0.0]).expect("point");
+        let constrained = document
+            .add_point("constrained", [1.0, 1.0])
+            .expect("point");
+        let line = document
+            .add_curve(
+                "reference line",
+                CurveDefinition::Line {
+                    start: first,
+                    end: line_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        for (label, point) in [
+            ("fix first", first),
+            ("fix line end", line_end),
+            ("fix constrained", constrained),
+        ] {
             document
                 .add_constraint(
                     label,
@@ -1927,8 +2048,11 @@ mod tests {
             .apply(
                 session.design_identity(),
                 DocumentEdit::CreateConstraint {
-                    label: "rejected horizontal points".into(),
-                    definition: DocumentConstraintDefinition::HorizontalPoints { first, second },
+                    label: "rejected horizontal to midpoint".into(),
+                    definition: DocumentConstraintDefinition::HorizontalPointToMidpoint {
+                        point: constrained,
+                        line: CurveSpan::line(line),
+                    },
                 },
             )
             .expect("structurally valid rejected relation");
@@ -1958,9 +2082,13 @@ mod tests {
                         .constraint(*rejected)
                         .expect("retained rejected constraint")
                         .source_id
-                && entry.label == "rejected horizontal points"
+                && entry.label == "rejected horizontal to midpoint"
                 && entry.glyph == SceneConstraintGlyph::Horizontal
-                && entry.operands == [SelectionItem::Point(first), SelectionItem::Point(second)]
+                && entry.operands
+                    == [
+                        SelectionItem::Point(constrained),
+                        SelectionItem::Curve(CurveSpan::line(line)),
+                    ]
         }));
         assert!(
             scene

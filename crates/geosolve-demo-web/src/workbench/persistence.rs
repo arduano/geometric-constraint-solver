@@ -1657,7 +1657,7 @@ mod tests {
     #[test]
     #[allow(
         clippy::too_many_lines,
-        reason = "one adapter regression keeps all four retained M71 records and exact workspace authority contiguous"
+        reason = "one adapter regression keeps all six retained M71 records and exact workspace authority contiguous"
     )]
     fn v5_round_trips_all_m71_relations_through_the_workspace_adapter() {
         let mut document = SketchDocument::new(1.0).expect("document");
@@ -1712,6 +1712,20 @@ mod tests {
                 DocumentConstraintDefinition::VerticalPoints {
                     first: points[2],
                     second: points[3],
+                },
+            ),
+            (
+                "M71 horizontal point to midpoint",
+                DocumentConstraintDefinition::HorizontalPointToMidpoint {
+                    point: points[2],
+                    line: CurveSpan::line(lines[0]),
+                },
+            ),
+            (
+                "M71 vertical point to midpoint",
+                DocumentConstraintDefinition::VerticalPointToMidpoint {
+                    point: points[3],
+                    line: CurveSpan::line(lines[1]),
                 },
             ),
             (

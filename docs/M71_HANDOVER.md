@@ -2,13 +2,104 @@
 
 # M71 fresh-session handover
 
-Status: the clean M71 candidate is qualified and published for supervising-human UAT. M71 is not
-closed; M71-U1 through M71-U5 and explicit approval remain pending.
+Status: **M71-F003 implemented and provisionally development-gate qualified; clean nomination is
+next**. The previously qualified candidate remains the last clean baseline, but it is withdrawn
+for continued UAT because its midpoint alignment behavior does not satisfy the newly authorized
+durable-centering workflow. The sole worktree contains the complete uncommitted correction and
+tests; preserve it until clean qualification and nomination are complete.
 
-This document is the canonical short restart contract for the interrupted M71 implementation
-session. Read the repository-required project documents first, then this file, ADR 0035,
+This document is the canonical short restart contract for the M71 correction and replacement
+qualification. Read the repository-required project documents first, then this file, ADR 0035,
 `docs/M71_GOALS.md`, `docs/M71_IMPLEMENTATION.md` and `docs/M71_UAT.md`. Do not reconstruct M71
 from chat history.
+
+## 2026-08-13 checkpoint — M71-U2 midpoint-axis correction
+
+### Exact human finding and authorized behavior
+
+The supervising human reproduced this in the published UI:
+
+1. Draw a line, hover one of its stored endpoints, move right and place a second line. The teal
+   constraint-backed guide creates retained `HorizontalPoints`: **pass**.
+2. Repeat after hovering the middle of the line. A differently styled dotted guide appears, but
+   placement creates no relation: **fail**.
+
+The old M71 contract deliberately made a remembered midpoint tracking-only. After the diagnosis
+was explained, the supervising human explicitly rejected that boundary because durable midpoint
+axes are essential when centering sketch geometry in a rectangle. The authorized semantic outcome
+is now:
+
+- horizontal alignment to a remembered native line/polyline span midpoint creates one durable
+  relation tying the constructed point's Y coordinate to the live average of the span endpoints;
+- vertical alignment creates the analogous X-coordinate relation;
+- both relations may coexist on one point and thereby keep it exactly at the live span midpoint as
+  the rectangle/support moves or resizes;
+- this is not a one-time coordinate snap, `FixedCoordinate`, zero dimension, or hidden midpoint
+  point;
+- each axis is one ordinary retained source with one hard row, explicit point-plus-span operands,
+  structured audit text, dependency/lifecycle behavior, persistence, and independent residual
+  validation;
+- the narrow authorized scope is certified native line/polyline span midpoints. Do not silently
+  generalize this checkpoint to arbitrary nonlinear curve-parameter midpoints.
+
+This supersedes every older statement that says native line/polyline midpoint H/V must remain
+tracking-only. The active ADR, goals, implementation, UAT, plan, acceptance, architecture,
+start-here and scenario records have been corrected in the development tree.
+
+### Diagnosis and finding identity
+
+The exact headless cause is known. `DraftInferenceEngine::point_tracking_candidates` accepts both
+`PersistentPoint` and `Midpoint` as remembered guide origins, but its durable branch matches only
+`PersistentPoint`. A midpoint therefore publishes a standalone `PointTracking` /
+`TrackingOnly` guide, leaves the raw coordinate unchanged, resolves no candidate, and eventually
+commits geometry without an inferred relation. The browser accurately rendered that old semantic
+classification; this is now a **headless contract defect**, not merely a CSS/discoverability issue.
+
+The fresh session independently reproduced this exact public scene/editor-to-retained transition
+against clean source `5b29744f445f458cffabd176c123861f39392d12`. It is assigned `M71-F003`.
+The focused owner regression is
+`crates/geosolve-constraint-editor/tests/m71_f003_midpoint_axis.rs`; it proves both axes publish
+through the retained coordinator and that the live relation follows later endpoint edits.
+
+### Current correction checkpoint
+
+- Both runtime/document definitions, independent validation, draft-v5 side persistence,
+  dependency/lifecycle behavior, editor inference/commit DTOs, annotations, workbench presentation,
+  native transition parity and focused owner regression are implemented.
+- `AxisMidpointResidual` has an analytic `[+1, -1/2, -1/2]` Jacobian and central finite-difference
+  checks at model scales `1e-6`, `1` and `1e6`.
+- The sketch owner matrix passes 17/17 and persistence passes 7/7. It covers line/polyline spans,
+  exact audit metadata, normalization, endpoint alias incidence, both axes, live edits,
+  suppression/history/rejection authority, dependencies/deletion, invalid operands and prepared
+  CAS.
+- Midpoint-specific inference ambiguity, hysteresis, suppression and stale-preference proofs pass.
+  Fillet-discarded midpoint occurrences remain tracking-only.
+- The public F003 coordinator regression passes 2/2, native transition parity passes, web
+  presentation/persistence focused tests pass, and exact annotation-owner tests pass.
+- Constraint-editor all-feature tests pass 302/302 unit tests plus every integration/doc-test;
+  demo-web passes 104/104 unit tests, its decoder test and doc tests.
+- The unchanged canonical golden passes 234/234 `PASS` in survey/check/require-clean modes at
+  SHA-256 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
+- Native and WASM M70/M71 transition parity, demo-web WASM, formatting, warnings-denied workspace
+  Clippy, locked all-feature workspace tests and Trunk 0.21.14 release assembly pass.
+- The complete dirty-tree development gate passed with the expected 152.53-second 256-moving-body
+  sparse crossover, licensing/package validation and final Trunk assembly. It is provisional
+  evidence only; a clean nominated commit must repeat the gate before distribution freeze.
+- Documentation now records this post-F003 evidence. Replacement source nomination, a clean gate,
+  immutable publication, served-byte verification and supervising-human UAT remain open.
+
+### Exact repository/worktree state
+
+- Working directory: `/home/arduano/programming/geometric-constraint-solver`.
+- Sole worktree; branch `main` at `5b29744f445f458cffabd176c123861f39392d12`.
+- `main` and `origin/main` were equal (`git rev-list --left-right --count` returned `0 0`).
+- Baseline tree was clean before the repair began. The current dirty tree contains the complete
+  implementation, tests and documentation correction; no commit has been made.
+- `git diff --check` passes. Review `git status --short --branch` and the complete diff before
+  nomination; do not reset or overwrite the worktree.
+- PID `49116` still has exact argv `python3 -m http.server 8080 --bind 100.94.63.83 --directory
+  /tmp/geosolve-m71-uat.yFBsnX` and listens on `100.94.63.83:8080`. Leave it unchanged until a
+  replacement is clean-qualified and ready for an atomic publication swap.
 
 ## Repository history at consolidation
 
@@ -19,16 +110,15 @@ from chat history.
 - The complete M71 implementation was confined to that worktree. The five formerly untracked
   files were all intentional M71 relation, persistence, parity and implementation records; no
   scratch, reject, backup or dangling untracked file was found.
-- Clean candidate `ad01912eac28275644dcfc867a2dc70030b5406d` is frozen at
+- Withdrawn pre-F003 candidate `ad01912eac28275644dcfc867a2dc70030b5406d` is frozen at
   `/tmp/geosolve-m71-uat.yFBsnX` and served at `http://100.94.63.83:8080/` by PID `49116`. Every
   asset and `/` byte-matches the snapshot; its ordered manifest aggregate is
   `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. The historical M70B
   snapshot remains on disk but is no longer served.
 
-The current qualified state supersedes those historical branch bullets: candidate source
-`ad01912eac28275644dcfc867a2dc70030b5406d` has qualification/publication documentation prepared
-for the final record commit and push. Recheck exact divergence after that commit rather than using
-the pre-consolidation hashes below as current state.
+That publication remains historical mechanical evidence only. It must not be treated as the
+current qualified state or used for continued UAT. Recheck exact divergence and candidate identity
+after the F003 correction is nominated.
 
 After this handover is committed, use `git log -5 --oneline --decorate`, `git status --short
 --branch`, `git worktree list --porcelain` and `git rev-list --left-right --count
@@ -37,10 +127,12 @@ the latter command and `git ls-remote origin refs/heads/main` agree.
 
 ## Implemented scope
 
-M71 promotes exactly four already-existing mathematical relations into the ordinary retained
+M71 promotes six definitions across five relation families into the ordinary retained
 document/editor lifecycle:
 
 - stored-point `HorizontalPoints` and `VerticalPoints`;
+- stored-point-to-native-span-midpoint `HorizontalPointToMidpoint` and
+  `VerticalPointToMidpoint`;
 - semantic-center `Concentric`; and
 - directed native-support `Collinear`.
 
@@ -55,9 +147,10 @@ ranking, bounds, prospective same-transaction operands, atomic commit plans and 
 metadata. The browser adapter renders and dispatches those public DTOs and supplies one ordinary
 editable **Retained drafting relations** sample. It owns no equations or applicability policy.
 
-M71 adds no residual, Jacobian, solver priority or implicit branch rule. It lowers to existing
-`add_horizontal_points`, `add_vertical_points`, center `add_coincident` and `add_collinear`
-operations, followed by the existing independent finite hard-residual validation.
+The original four definitions lower to existing `add_horizontal_points`, `add_vertical_points`,
+center `add_coincident` and `add_collinear` operations. F003 adds one `AxisMidpointResidual`
+family with analytic and finite-difference-checked Jacobian. Every path is followed by independent
+finite hard-residual validation; no solver priority or implicit branch rule changes.
 
 ## Implicit-correctness law
 
@@ -86,32 +179,39 @@ scope/visibility filtering, ambiguity and post-overflow reacquisition are direct
 
 ## Exact checkpoint evidence
 
-The following commands passed on the consolidated tree on 2026-08-13:
+The following post-F003 commands passed on the current development tree on 2026-08-13:
 
 ```text
 cargo test --locked -p geosolve-sketch --test m71_relations --test m71_persistence
 cargo test --locked -p geosolve-constraint-editor --all-features
 cargo test --locked -p geosolve-demo-web --all-features
-./scripts/golden-authoring-scene-oracle.sh --check
-./scripts/golden-authoring-scene-oracle.sh --require-clean
-git diff --check
+nix-shell shell.nix --run '<M70 WASM parity; M71 WASM parity; demo-web WASM check>'
+nix-shell shell.nix --run 'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release'
+env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
 Observed results:
 
-- M71 relation owner matrix: 11/11 pass;
+- M71 relation owner matrix: 17/17 pass;
 - M71 persistence matrix: 7/7 pass;
-- constraint editor: 297/297 unit tests plus every integration and doc-test suite pass;
-- demo web: 102/102 library tests, 1/1 decoder test and doc tests pass;
+- exact AxisMidpointResidual finite-difference test: 1/1 pass;
+- public F003 coordinator regression: 2/2 pass;
+- constraint editor: 302/302 unit tests plus every integration and doc-test suite pass;
+- demo web: 104/104 library tests, 1/1 decoder test and doc tests pass;
 - canonical golden: 234/234 `PASS`, SHA-256
   `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`;
-- `git diff --check`: pass.
+- M70 and M71 WASM transition parity: 1/1 each; demo-web WASM check: pass;
+- standalone and gate-owned Trunk 0.21.14 release assembly: pass;
+- warnings-denied workspace Clippy, locked all-feature workspace tests, rustdoc, benchmark
+  compilation, M14/M32 budgets, licensing/package checks and diff hygiene: pass;
+- 256-moving-body sparse crossover: pass in 152.53 seconds.
 
-Earlier in the same implementation checkpoint, focused warnings-denied editor Clippy, native M71
-parity, M71 WASM parity inside `nix-shell shell.nix`, and the demo-web WASM check passed. Treat an
-ambient-shell WASM invocation that could not find `wasm-bindgen-test-runner` as a harness error,
-not test evidence. The fresh session should rerun the complete gates below rather than relying on
-that narrative for release nomination.
+Cargo emitted only the existing non-failing `license` plus `license-file` manifest advisories.
+An ambient-shell WASM attempt could not find `wasm-bindgen-test-runner`; it executed no test and is
+a harness error, not product evidence. The successful WASM results above ran inside `nix-shell`.
+Because `GEOSOLVE_ALLOW_DIRTY=1` was used, the integrated gate is provisional development evidence,
+not clean candidate qualification.
 
 ## Review before release nomination
 
@@ -134,18 +234,20 @@ result makes those laws smaller and clearer.
 
 ## Next-session sequence
 
-1. Confirm the documented candidate is still served by PID `49116`; hard-refresh because the
-   endpoint reuses port 8080.
-2. Complete M71-U1 through M71-U5 in `docs/M71_UAT.md`, recording observations and any exact
-   reproduction payloads.
-3. Route any solver/headless defect through `geosolve-harden-defect`; a material correction
-   requires a new clean gate and replacement immutable publication before retest.
-4. Close M71 only after explicit supervising-human approval. Do not infer approval from the
-   mechanical evidence.
+1. Review the complete worktree diff and stale-language scan, run final format/diff hygiene, then
+   nominate one commit without rewriting history.
+2. Run the complete release gate without `GEOSOLVE_ALLOW_DIRTY` on that clean nominated source.
+   Only after it passes, freeze its exact seven-file release distribution.
+3. Replace PID `49116` only after repeating exact argv/listener checks, then byte-verify every served file and
+   `/` against the new immutable snapshot and update the manifest/source records.
+4. Ask the supervising human to repeat M71-U1 through M71-U5, especially corrected M71-U2.
+5. Close M71 only after explicit supervising-human approval. Do not infer approval from mechanical
+   evidence.
 
 ## Deliberately deferred
 
-Do not expand M71 into derived-point H/V operands, M37 catalog consolidation, generic
+Do not expand M71 into broad derived-point H/V operands beyond the two explicit native-span
+midpoint-axis definitions, M37 catalog consolidation, generic
 intersections, quadrant anchors, nonlinear tangent/normal inference, equality/symmetry inference,
 host axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature chaining,
 browser E2E, mobile support or legacy UI.

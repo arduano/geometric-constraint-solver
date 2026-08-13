@@ -1261,6 +1261,14 @@ fn lower_constraint(
             runtime_point(mappings, *first)?,
             runtime_point(mappings, *second)?,
         )?,
+        C::HorizontalPointToMidpoint { point, line } => sketch.add_horizontal_point_to_midpoint(
+            runtime_point(mappings, *point)?,
+            runtime_segment(mappings, *line)?,
+        )?,
+        C::VerticalPointToMidpoint { point, line } => sketch.add_vertical_point_to_midpoint(
+            runtime_point(mappings, *point)?,
+            runtime_segment(mappings, *line)?,
+        )?,
         C::PointOnCurve { point, contact } => {
             let slot = document
                 .contact(*contact)

@@ -286,6 +286,14 @@ fn push_relation(transcript: &mut String, relation: DraftInferenceRelation) {
         DraftInferenceRelation::VerticalPoints { reference } => {
             let _ = write!(transcript, "vertical-points({reference})");
         }
+        DraftInferenceRelation::HorizontalPointToMidpoint { reference } => {
+            transcript.push_str("horizontal-to-midpoint:");
+            push_span(transcript, reference);
+        }
+        DraftInferenceRelation::VerticalPointToMidpoint { reference } => {
+            transcript.push_str("vertical-to-midpoint:");
+            push_span(transcript, reference);
+        }
         DraftInferenceRelation::Concentric {
             reference,
             prospective_curve_index,

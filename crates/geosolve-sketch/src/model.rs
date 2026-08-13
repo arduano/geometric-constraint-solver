@@ -477,6 +477,14 @@ pub enum SketchConstraintKind {
         first: PointId,
         second: PointId,
     },
+    HorizontalPointToMidpoint {
+        point: PointId,
+        segment: SegmentId,
+    },
+    VerticalPointToMidpoint {
+        point: PointId,
+        segment: SegmentId,
+    },
     PointOnLine {
         point: PointId,
         segment: SegmentId,
@@ -1247,6 +1255,40 @@ impl Sketch {
     ) -> Result<SketchConstraintId, SketchError> {
         self.validate_point_pair(first, second)?;
         Ok(self.insert_constraint(SketchConstraintKind::VerticalPoints { first, second }))
+    }
+
+    /// Constrains a stored point to share the segment midpoint's Y coordinate.
+    ///
+    /// # Errors
+    /// Returns an error for a missing point or stale/degenerate segment.
+    pub fn add_horizontal_point_to_midpoint(
+        &mut self,
+        point: PointId,
+        segment: SegmentId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.point_position(point)?;
+        self.validate_segment_geometry(segment)?;
+        Ok(self
+            .insert_constraint(SketchConstraintKind::HorizontalPointToMidpoint { point, segment }))
+    }
+
+    /// Constrains a stored point to share the segment midpoint's X coordinate.
+    ///
+    /// # Errors
+    /// Returns an error for a missing point or stale/degenerate segment.
+    pub fn add_vertical_point_to_midpoint(
+        &mut self,
+        point: PointId,
+        segment: SegmentId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.point_position(point)?;
+        self.validate_segment_geometry(segment)?;
+        Ok(
+            self.insert_constraint(SketchConstraintKind::VerticalPointToMidpoint {
+                point,
+                segment,
+            }),
+        )
     }
 
     /// Constrains two directed line supports to the same infinite supporting line.
@@ -2108,6 +2150,14 @@ fn constraint_references_point(
         | SketchConstraintKind::Midpoint {
             point: constrained,
             segment,
+        }
+        | SketchConstraintKind::HorizontalPointToMidpoint {
+            point: constrained,
+            segment,
+        }
+        | SketchConstraintKind::VerticalPointToMidpoint {
+            point: constrained,
+            segment,
         } => {
             constrained == point
                 || sketch
@@ -2351,7 +2401,9 @@ fn constraint_references_segment(kind: SketchConstraintKind, segment: SegmentId)
         SketchConstraintKind::Horizontal { segment: id }
         | SketchConstraintKind::Vertical { segment: id }
         | SketchConstraintKind::PointOnLine { segment: id, .. }
-        | SketchConstraintKind::Midpoint { segment: id, .. } => id == segment,
+        | SketchConstraintKind::Midpoint { segment: id, .. }
+        | SketchConstraintKind::HorizontalPointToMidpoint { segment: id, .. }
+        | SketchConstraintKind::VerticalPointToMidpoint { segment: id, .. } => id == segment,
         SketchConstraintKind::Parallel { first, second }
         | SketchConstraintKind::Perpendicular { first, second }
         | SketchConstraintKind::EqualSegmentLength { first, second } => {

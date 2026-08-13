@@ -4116,13 +4116,13 @@ regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTA
 
 ### M71
 
-Status: active as of 2026-08-12. Scope and architecture are accepted in
-`docs/M71_GOALS.md` and ADR 0035. Implementation, clean release-candidate qualification and
-publication are complete; human UAT is pending.
+Status: active and amended for M71-F003 on 2026-08-13. Scope and architecture are accepted in
+`docs/M71_GOALS.md` and ADR 0035. The correction passes the complete dirty-tree development gate;
+replacement clean release-candidate qualification, publication and human UAT are pending.
 
-Goal: promote four high-value relations whose runtime mathematics already exists into the one
-ordinary retained sketch/editor lifecycle, then let the M70 drafting engine use them without
-inventing coordinates, hidden geometry or semantically misleading aliases.
+Goal: promote the original four high-value relations plus two narrowly scoped native-span
+midpoint-axis definitions into the one ordinary retained sketch/editor lifecycle, then let the M70
+drafting engine use them without fixed coordinates, hidden geometry or misleading aliases.
 
 - [x] Isolate the frozen canonical-v4 wire language behind private constraint DTOs before growing
   the in-memory ordinary constraint enum. Canonical-v4 export must reject M71 state with typed
@@ -4138,6 +4138,11 @@ inventing coordinates, hidden geometry or semantically misleading aliases.
 - [x] Reuse `Sketch::add_horizontal_points`, `Sketch::add_vertical_points`,
   `Sketch::add_coincident` over resolved centers and `Sketch::add_collinear` over resolved
   supports. Add no new residual, solver priority or implicit branch rule.
+- [x] Add `HorizontalPointToMidpoint { point, line }` and
+  `VerticalPointToMidpoint { point, line }` for certified native line/polyline spans. Each owns one
+  hard row `P[c] - (A[c] + B[c]) / 2`; Horizontal constrains Y and Vertical X. Add analytic and
+  central finite-difference Jacobian coverage, structured audit metadata, model-scale
+  normalization and independent acceptance validation.
 - [x] Extend draft-v5 with an omitted-when-empty retained-planar-constraint side section. Preserve
   the complete embedded source order, merge side records before final validation and reject ID,
   ordering, ownership or operand corruption atomically. Keep workspace version 5 and do not
@@ -4147,29 +4152,32 @@ inventing coordinates, hidden geometry or semantically misleading aliases.
   second operand; support all commutative operand orders with precise disabled reasons.
 - [x] Extend M70 inference so a remembered stored point can create durable point-pair H/V,
   accepted semantic centers can create Concentric, and certified affine supporting-line extension
-  can create Collinear. Direct point identity outranks H/V; derived anchors remain tracking-only;
+  can create Collinear. A remembered accepted native line/polyline midpoint can create either
+  midpoint-axis relation and an atomic plan may carry both; `FilletDiscarded` and nonlinear
+  midpoint occurrences remain tracking-only. Direct point identity outranks H/V;
   an exact semantic center outranks incidental center-point identity only for a centered
   construction; Collinear replaces rather than bundles Parallel; unsupported or tied evidence
   fails closed.
 - [x] Permit construction commit plans to reference curves allocated by that same atomic
   transaction, without exposing prospective IDs as durable authority before commit.
 - [x] Publish typed scene annotations, constraint entries, glyphs and interaction metadata for all
-  four relations through the headless boundary; the workbench only renders and dispatches them.
+  six definitions through the headless boundary; the workbench only renders and dispatches them.
 - [x] Add owner-level validation/lowering/lifecycle/persistence tests, headless authoring and
   inference matrices, reviewed systemic golden rows, native/WASM transition parity and one
   ordinary editable **Retained drafting relations** playground.
-- [x] Run the clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
+- [ ] Rerun the clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
   workspace tests, relevant WASM/Trunk builds and the complete clean release gate.
-- [x] Freeze and byte-verify one immutable Tailscale candidate and record its source, manifest and
+- [ ] Freeze and byte-verify one replacement immutable Tailscale candidate and record its source, manifest and
   endpoint in `docs/M71_UAT.md`.
 - [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
 
-Implementation note (2026-08-13): the four definitions, frozen-v4 isolation, draft-v5 side
+Implementation note (2026-08-13): all six definitions, frozen-v4 isolation, draft-v5 side
 section, complete ordinary lifecycle, contextual/inferred authoring, prospective curve slots,
 typed headless entries/annotations, editable sample and reviewed golden/native-WASM fixtures are
-implemented. Focused sketch, editor and demo-web suites plus the clean golden oracle pass. Full
-workspace/release qualification and immutable publication now also pass; this is not human
-approval.
+implemented. F003 focused sketch, editor and demo-web tests pass. The complete dirty-tree release
+gate passes, including the unchanged 234/234 golden, workspace/WASM/Trunk checks and the
+152.53-second sparse crossover. Clean nominated-source qualification and immutable publication
+remain open; this is not human approval.
 
 Hardening note (2026-08-13): focused headless owner regressions resolve `M71-F001`, where
 accepted-scene construction omitted a newer rejected design constraint entry, and `M71-F002`,
@@ -4180,7 +4188,16 @@ authoring APIs both remain, with exact selection existence shared at their appli
 Neither correction changes solver mathematics or expands the golden matrix. Exact owner and
 focused collateral qualification pass.
 
-Qualification/publication note (2026-08-13): clean source
+M71-F003 hardening note (2026-08-13): clean base
+`5b29744f445f458cffabd176c123861f39392d12` was independently reproduced through
+`EditorScene → ConstraintEditor → RetainedEditorCoordinator`. Midpoint anchors reached tracking,
+but only persistent points entered durable H/V construction. The focused owner regression
+`m71_f003_midpoint_axis.rs` now proves both one-axis publications and later live endpoint edits;
+sketch lifecycle, persistence, annotations, ambiguity, hysteresis, suppression, stale preference,
+native-only origin and transition parity have dedicated coverage. This narrow defect correction
+does not require new systemic golden rows.
+
+Withdrawn qualification/publication note (2026-08-13): pre-F003 source
 `ad01912eac28275644dcfc867a2dc70030b5406d` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the 234/234
 clean golden, all locked workspace tests, native/WASM transition parity, warnings-denied Clippy
@@ -4189,16 +4206,17 @@ Trunk 0.21.14 release assembly. Exactly seven release files are frozen read-only
 `/tmp/geosolve-m71-uat.yFBsnX` and served only through Tailscale at
 `http://100.94.63.83:8080/` by PID `49116`. Proxy- and cache-bypassed requests for every file and
 `/` byte-match the snapshot; the ordered manifest aggregate is
-`43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. Only M71-U1 through M71-U5
-and explicit supervising-human approval remain open.
+`43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. Those bytes are withdrawn
+from continued UAT. A post-F003 clean source, replacement gate and byte-verified publication remain
+open before M71-U1 through M71-U5 and explicit supervising-human approval.
 
-Gate: all four relations behave as one ordinary retained source throughout validation, solving,
+Gate: all six definitions behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every
 accepted result independently validates finite hard residuals at `<= 1e-9`; rejected, stale,
 ambiguous and exhausted work retains the complete prior authority; and the supervising human
 approves the focused M71 UAT.
 
-Explicitly deferred: broad derived-point operands, M37 catalog consolidation, generic certified
+Explicitly deferred: broad derived-point operands beyond explicit native-span midpoint axes, M37 catalog consolidation, generic certified
 intersections, quadrant anchors, nonlinear tangent/normal inference, equality/symmetry inference,
 host axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature chaining,
 browser E2E, mobile work and legacy UI.

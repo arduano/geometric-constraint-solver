@@ -5273,6 +5273,8 @@ impl ConstraintEditor {
                 | DraftInferenceRelation::Perpendicular { .. }
                 | DraftInferenceRelation::HorizontalPoints { .. }
                 | DraftInferenceRelation::VerticalPoints { .. }
+                | DraftInferenceRelation::HorizontalPointToMidpoint { .. }
+                | DraftInferenceRelation::VerticalPointToMidpoint { .. }
                 | DraftInferenceRelation::Concentric { .. }
                 | DraftInferenceRelation::Collinear { .. } => None,
             });
@@ -5771,6 +5773,18 @@ fn construction_commit_plan(
                         second: DraftPointSlot::Existing(reference),
                     });
                 }
+                DraftInferenceRelation::HorizontalPointToMidpoint { reference } => {
+                    relations.push(InferredRelation::HorizontalPointToMidpoint {
+                        point: draft_point_slot(draft, confirmed.stage_index)?,
+                        line: DraftSpanSlot::Existing(reference),
+                    });
+                }
+                DraftInferenceRelation::VerticalPointToMidpoint { reference } => {
+                    relations.push(InferredRelation::VerticalPointToMidpoint {
+                        point: draft_point_slot(draft, confirmed.stage_index)?,
+                        line: DraftSpanSlot::Existing(reference),
+                    });
+                }
                 DraftInferenceRelation::Concentric {
                     reference,
                     prospective_curve_index,
@@ -5865,6 +5879,8 @@ fn confirmed_positional_references(
                 | DraftInferenceRelation::Midpoint { .. }
                 | DraftInferenceRelation::HorizontalPoints { .. }
                 | DraftInferenceRelation::VerticalPoints { .. }
+                | DraftInferenceRelation::HorizontalPointToMidpoint { .. }
+                | DraftInferenceRelation::VerticalPointToMidpoint { .. }
         )
     });
     let Some(relation) = relation else {
@@ -5887,7 +5903,13 @@ fn confirmed_positional_references(
                 DraftReferenceAnchor::PersistentPoint { point, .. },
             ) => *point == *expected,
             (
-                DraftInferenceRelation::Midpoint { span: expected },
+                DraftInferenceRelation::HorizontalPointToMidpoint {
+                    reference: expected,
+                }
+                | DraftInferenceRelation::VerticalPointToMidpoint {
+                    reference: expected,
+                }
+                | DraftInferenceRelation::Midpoint { span: expected },
                 DraftReferenceAnchor::Midpoint { span, .. },
             ) => *span == *expected,
             (
@@ -8944,6 +8966,8 @@ mod tests {
                         | DraftInferenceRelation::Perpendicular { .. }
                         | DraftInferenceRelation::HorizontalPoints { .. }
                         | DraftInferenceRelation::VerticalPoints { .. }
+                        | DraftInferenceRelation::HorizontalPointToMidpoint { .. }
+                        | DraftInferenceRelation::VerticalPointToMidpoint { .. }
                         | DraftInferenceRelation::Concentric { .. }
                         | DraftInferenceRelation::Collinear { .. } => {
                             panic!("unexpected midpoint-scene relation")
