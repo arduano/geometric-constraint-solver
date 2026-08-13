@@ -518,6 +518,8 @@ fn relation_kind(definition: &DocumentConstraintDefinition) -> &'static str {
         DocumentConstraintDefinition::Coincident { .. } => "coincident",
         DocumentConstraintDefinition::Horizontal { .. } => "horizontal_line",
         DocumentConstraintDefinition::Vertical { .. } => "vertical_line",
+        DocumentConstraintDefinition::HorizontalPoints { .. } => "horizontal_points",
+        DocumentConstraintDefinition::VerticalPoints { .. } => "vertical_points",
         DocumentConstraintDefinition::PointOnCurve { .. } => "point_on_curve",
         DocumentConstraintDefinition::Parallel { .. } => "parallel_lines",
         DocumentConstraintDefinition::Perpendicular { .. } => "perpendicular_lines",
@@ -538,6 +540,8 @@ fn relation_kind(definition: &DocumentConstraintDefinition) -> &'static str {
         DocumentConstraintDefinition::CurveCurveFillet { .. } => "curve_curve_fillet",
         DocumentConstraintDefinition::ExternalPointCoincident { .. } => "external_point_coincident",
         DocumentConstraintDefinition::ExternalLineCollinear { .. } => "external_line_collinear",
+        DocumentConstraintDefinition::Concentric { .. } => "concentric",
+        DocumentConstraintDefinition::Collinear { .. } => "collinear",
     }
 }
 

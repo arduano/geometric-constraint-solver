@@ -1258,6 +1258,9 @@ pub enum DisabledReason {
     WrongOperandKind,
     MissingObject,
     InvalidSpan,
+    /// The selected semantic operands already resolve to one underlying object,
+    /// so adding the requested relation would be tautological.
+    SameSemanticOperand,
     AlreadyInRequestedState,
     NothingToUndo,
     NothingToRedo,
@@ -6189,6 +6192,10 @@ impl RetainedEditorCoordinator {
         }
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one auditable request builder authenticates every contextual constraint family and its contact metadata"
+    )]
     fn authoring_constraint_request(
         &self,
         intent: ConstraintIntent,
@@ -6225,6 +6232,10 @@ impl RetainedEditorCoordinator {
             | ResolvedConstraintKind::CoincidentPoints
             | ResolvedConstraintKind::HorizontalLine
             | ResolvedConstraintKind::VerticalLine
+            | ResolvedConstraintKind::HorizontalPoints
+            | ResolvedConstraintKind::VerticalPoints
+            | ResolvedConstraintKind::ConcentricCurves
+            | ResolvedConstraintKind::CollinearSupports
             | ResolvedConstraintKind::ParallelLines
             | ResolvedConstraintKind::PerpendicularLines
             | ResolvedConstraintKind::EqualLength
@@ -8312,6 +8323,8 @@ fn constraint_action_matrix(
         ConstraintIntent::Coincident,
         ConstraintIntent::Horizontal,
         ConstraintIntent::Vertical,
+        ConstraintIntent::Concentric,
+        ConstraintIntent::Collinear,
         ConstraintIntent::Parallel,
         ConstraintIntent::Perpendicular,
         ConstraintIntent::Equal,
@@ -8423,6 +8436,56 @@ pub(crate) fn resolve_constraint(
             ResolvedConstraintKind::VerticalLine
         }
         (
+            ConstraintIntent::Horizontal,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) if first != second => ResolvedConstraintKind::HorizontalPoints,
+        (
+            ConstraintIntent::Horizontal,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) if first == second => return Err(DisabledReason::SameSemanticOperand),
+        (
+            ConstraintIntent::Vertical,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) if first != second => ResolvedConstraintKind::VerticalPoints,
+        (
+            ConstraintIntent::Vertical,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) if first == second => return Err(DisabledReason::SameSemanticOperand),
+        (
+            ConstraintIntent::Concentric,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if first.curve != second.curve => {
+            let first = document
+                .resolve_center_ref(geosolve_sketch::DocumentCenterRef { curve: first.curve })
+                .map_err(|_| DisabledReason::WrongOperandKind)?;
+            let second = document
+                .resolve_center_ref(geosolve_sketch::DocumentCenterRef {
+                    curve: second.curve,
+                })
+                .map_err(|_| DisabledReason::WrongOperandKind)?;
+            if first == second {
+                return Err(DisabledReason::SameSemanticOperand);
+            }
+            ResolvedConstraintKind::ConcentricCurves
+        }
+        (
+            ConstraintIntent::Concentric,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if first.curve == second.curve => return Err(DisabledReason::SameSemanticOperand),
+        (
+            ConstraintIntent::Collinear,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if first != second
+            && line_endpoints(document, *first).is_ok()
+            && line_endpoints(document, *second).is_ok() =>
+        {
+            ResolvedConstraintKind::CollinearSupports
+        }
+        (
+            ConstraintIntent::Collinear,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if first == second => return Err(DisabledReason::SameSemanticOperand),
+        (
             ConstraintIntent::Parallel,
             [SelectionItem::Curve(first), SelectionItem::Curve(second)],
         ) if line_endpoints(document, *first).is_ok()
@@ -8491,20 +8554,23 @@ pub(crate) fn resolve_constraint(
             ResolvedConstraintKind::EndpointContinuity
         }
         _ => {
-            let expected = match intent {
-                ConstraintIntent::Lock
-                | ConstraintIntent::Horizontal
-                | ConstraintIntent::Vertical => 1,
+            let valid_arity = match intent {
+                ConstraintIntent::Lock => selection.len() == 1,
+                ConstraintIntent::Horizontal | ConstraintIntent::Vertical => {
+                    matches!(selection.len(), 1 | 2)
+                }
                 ConstraintIntent::Coincident
                 | ConstraintIntent::Parallel
                 | ConstraintIntent::Perpendicular
                 | ConstraintIntent::Equal
                 | ConstraintIntent::Midpoint
                 | ConstraintIntent::Tangent
-                | ConstraintIntent::Continuity => 2,
-                ConstraintIntent::Symmetric => 3,
+                | ConstraintIntent::Continuity
+                | ConstraintIntent::Concentric
+                | ConstraintIntent::Collinear => selection.len() == 2,
+                ConstraintIntent::Symmetric => selection.len() == 3,
             };
-            return Err(if selection.len() == expected {
+            return Err(if valid_arity {
                 DisabledReason::WrongOperandKind
             } else {
                 DisabledReason::WrongArity
@@ -8591,7 +8657,7 @@ fn segment_length_target(
         .ok_or(DisabledReason::WrongOperandKind)
 }
 
-fn line_endpoints(
+pub(crate) fn line_endpoints(
     document: &SketchDocument,
     span: CurveSpan,
 ) -> Result<(DesignPointId, DesignPointId), DisabledReason> {
@@ -8972,6 +9038,10 @@ const fn simple_constraint_kind(resolved: ResolvedConstraintKind) -> Option<Cons
         ResolvedConstraintKind::CoincidentPoints => Some(ConstraintKind::Coincident),
         ResolvedConstraintKind::HorizontalLine => Some(ConstraintKind::Horizontal),
         ResolvedConstraintKind::VerticalLine => Some(ConstraintKind::Vertical),
+        ResolvedConstraintKind::HorizontalPoints => Some(ConstraintKind::HorizontalPoints),
+        ResolvedConstraintKind::VerticalPoints => Some(ConstraintKind::VerticalPoints),
+        ResolvedConstraintKind::ConcentricCurves => Some(ConstraintKind::Concentric),
+        ResolvedConstraintKind::CollinearSupports => Some(ConstraintKind::Collinear),
         ResolvedConstraintKind::ParallelLines => Some(ConstraintKind::Parallel),
         ResolvedConstraintKind::PerpendicularLines => Some(ConstraintKind::Perpendicular),
         ResolvedConstraintKind::EqualLength => Some(ConstraintKind::EqualLength),
@@ -12675,6 +12745,25 @@ mod tests {
                 )
                 .unwrap(),
         );
+        let other_radius = document
+            .add_scalar(
+                "other radius",
+                1.5,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let other_circle = CurveSpan::line(
+            document
+                .add_curve(
+                    "other circle",
+                    CurveDefinition::Circle {
+                        center: points[0],
+                        radius: other_radius,
+                    },
+                )
+                .unwrap(),
+        );
         let session = RetainedSketchDocumentSession::new(
             document,
             DocumentSolveRequest::default(),
@@ -12725,6 +12814,30 @@ mod tests {
                 ConstraintIntent::Vertical,
                 ResolvedConstraintKind::VerticalLine,
                 vec![curve(first_line)],
+                0,
+            ),
+            (
+                ConstraintIntent::Horizontal,
+                ResolvedConstraintKind::HorizontalPoints,
+                vec![point(0), point(1)],
+                0,
+            ),
+            (
+                ConstraintIntent::Vertical,
+                ResolvedConstraintKind::VerticalPoints,
+                vec![point(0), point(2)],
+                0,
+            ),
+            (
+                ConstraintIntent::Concentric,
+                ResolvedConstraintKind::ConcentricCurves,
+                vec![curve(circle), curve(other_circle)],
+                0,
+            ),
+            (
+                ConstraintIntent::Collinear,
+                ResolvedConstraintKind::CollinearSupports,
+                vec![curve(first_line), curve(second_line)],
                 0,
             ),
             (
@@ -12788,7 +12901,7 @@ mod tests {
                 2,
             ),
         ];
-        assert_eq!(cases.len(), 16);
+        assert_eq!(cases.len(), 20);
         for (intent, resolved, selection, expected_contacts) in cases {
             let mut curve_occurrence = 0_u8;
             let operands = selection

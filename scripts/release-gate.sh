@@ -20,6 +20,9 @@ cargo test --locked --workspace --all-features
 env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
   cargo test --locked -p geosolve-constraint-editor --test m70_transition_parity \
   --target wasm32-unknown-unknown
+env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+  cargo test --locked -p geosolve-constraint-editor --test m71_transition_parity \
+  --target wasm32-unknown-unknown
 cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
 cargo bench --locked --workspace --all-features --no-run

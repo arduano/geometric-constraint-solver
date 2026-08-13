@@ -471,9 +471,10 @@ mod tests {
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveId, CurveSpan,
-        DesignPointId, DocumentBSplineForm, DocumentCommandEffect, DocumentConstraintDefinition,
-        DocumentEdit, DocumentObjectId, DocumentSolveRequest, GeometryRole,
-        RetainedSketchDocumentSession, SketchDocument, alpha_scenario,
+        DesignPointId, DocumentBSplineForm, DocumentCenterRef, DocumentCommandEffect,
+        DocumentConstraintDefinition, DocumentDirectionSense, DocumentEdit, DocumentError,
+        DocumentLineSupportRef, DocumentObjectId, DocumentSolveRequest, GeometryRole,
+        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, alpha_scenario,
     };
 
     use super::{
@@ -1651,6 +1652,156 @@ mod tests {
         );
         migrated.design_document().unwrap();
         assert!(migrated.feature_document().unwrap().features().is_empty());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one adapter regression keeps all four retained M71 records and exact workspace authority contiguous"
+    )]
+    fn v5_round_trips_all_m71_relations_through_the_workspace_adapter() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let points = [
+            [0.0, 0.0],
+            [2.0, 0.0],
+            [4.0, 0.0],
+            [4.0, 2.0],
+            [7.0, 0.0],
+            [7.0, 0.0],
+            [10.0, 0.0],
+            [12.0, 0.0],
+            [13.0, 0.0],
+            [15.0, 0.0],
+        ]
+        .map(|position| document.add_point("M71 point", position).expect("point"));
+        let circles = [(points[4], 1.0), (points[5], 2.0)].map(|(center, value)| {
+            let radius = document
+                .add_scalar(
+                    "M71 radius",
+                    value,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+                .expect("radius");
+            document
+                .add_curve("M71 circle", CurveDefinition::Circle { center, radius })
+                .expect("circle")
+        });
+        let lines = [(points[6], points[7]), (points[8], points[9])].map(|(start, end)| {
+            document
+                .add_curve(
+                    "M71 line",
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("line")
+        });
+        for (label, definition) in [
+            (
+                "M71 horizontal points",
+                DocumentConstraintDefinition::HorizontalPoints {
+                    first: points[0],
+                    second: points[1],
+                },
+            ),
+            (
+                "M71 vertical points",
+                DocumentConstraintDefinition::VerticalPoints {
+                    first: points[2],
+                    second: points[3],
+                },
+            ),
+            (
+                "M71 concentric",
+                DocumentConstraintDefinition::Concentric {
+                    first: DocumentCenterRef { curve: circles[0] },
+                    second: DocumentCenterRef { curve: circles[1] },
+                },
+            ),
+            (
+                "M71 collinear",
+                DocumentConstraintDefinition::Collinear {
+                    first: DocumentLineSupportRef {
+                        span: CurveSpan::line(lines[0]),
+                        direction: DocumentDirectionSense::Forward,
+                    },
+                    second: DocumentLineSupportRef {
+                        span: CurveSpan::line(lines[1]),
+                        direction: DocumentDirectionSense::Reverse,
+                    },
+                },
+            ),
+        ] {
+            document
+                .add_constraint(label, definition)
+                .expect("M71 relation");
+        }
+
+        let exact_draft = document.to_draft_v5_json().expect("draft-v5 document");
+        assert!(matches!(
+            document.to_canonical_json(),
+            Err(DocumentError::UnsupportedM71State)
+        ));
+        let expected_definitions = document
+            .constraints()
+            .iter()
+            .map(|constraint| constraint.definition.clone())
+            .collect::<Vec<_>>();
+        let expected_source_order = document.source_order().to_vec();
+        let coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .expect("accepted M71 session"),
+        )
+        .expect("M71 coordinator");
+
+        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("workspace");
+        assert_eq!(
+            snapshot.design.encoding,
+            super::WorkspaceDocumentEncoding::DraftV5
+        );
+        assert_eq!(snapshot.design.json, exact_draft);
+        assert_eq!(
+            snapshot.accepted.as_ref().map(|payload| payload.encoding),
+            Some(super::WorkspaceDocumentEncoding::DraftV5)
+        );
+        assert!(snapshot.accepted_belongs_to_current_design);
+
+        let decoded = WorkspaceSnapshot::decode(&snapshot.encode().expect("encode workspace"))
+            .expect("decode workspace");
+        let restored = coordinator_from_snapshot(&decoded).expect("restore coordinator");
+        let restored_document = restored.session().design_document();
+        assert_eq!(
+            restored_document
+                .constraints()
+                .iter()
+                .map(|constraint| constraint.definition.clone())
+                .collect::<Vec<_>>(),
+            expected_definitions
+        );
+        assert_eq!(restored_document.source_order(), expected_source_order);
+        assert_eq!(
+            restored_document
+                .to_draft_v5_json()
+                .expect("restored draft-v5 document"),
+            exact_draft
+        );
+        assert!(matches!(
+            restored_document.to_canonical_json(),
+            Err(DocumentError::UnsupportedM71State)
+        ));
+        assert!(
+            restored
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
     }
 
     #[test]

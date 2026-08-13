@@ -244,7 +244,7 @@ fn horizontal_authoring_pick(
     scene: &EditorScene,
     position: ScreenPoint,
     value: GeometryInteractionPolicy,
-) -> Option<CurveSpan> {
+) -> HorizontalAuthoringPick {
     let mut authoring = AuthoringState::default();
     assert!(matches!(
         authoring.activate(
@@ -257,12 +257,20 @@ fn horizontal_authoring_pick(
     match authoring.pick_at_with_policy(document, scene, position, PickTolerance::default(), value)
     {
         AuthoringOutcome::Apply(application) => match application.operands[0].item {
-            SelectionItem::Curve(span) => Some(span),
+            SelectionItem::Curve(span) => HorizontalAuthoringPick::Applied(span),
             item => panic!("Horizontal resolved a non-curve operand: {item:?}"),
         },
-        AuthoringOutcome::Warning(_) => None,
+        AuthoringOutcome::Collecting { .. } => HorizontalAuthoringPick::PointPrefix,
+        AuthoringOutcome::Warning(_) => HorizontalAuthoringPick::Unavailable,
         outcome => panic!("unexpected Horizontal authoring outcome: {outcome:?}"),
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HorizontalAuthoringPick {
+    Applied(CurveSpan),
+    PointPrefix,
+    Unavailable,
 }
 
 struct ImplicitFragmentFixture {
@@ -757,7 +765,11 @@ fn implicit_fillet_fragment_hit_retains_provenance_and_selects_its_native_source
                 fixture.position,
                 policy(scope),
             ),
-            expected.then_some(fixture.span)
+            if expected {
+                HorizontalAuthoringPick::Applied(fixture.span)
+            } else {
+                HorizontalAuthoringPick::Unavailable
+            }
         );
     }
     let hidden = policy_with_visibility(GeometryPickScope::Construction, true, false);
@@ -767,7 +779,7 @@ fn implicit_fillet_fragment_hit_retains_provenance_and_selects_its_native_source
     );
     assert_eq!(
         horizontal_authoring_pick(&fixture.document, &fixture.scene, fixture.position, hidden,),
-        None
+        HorizontalAuthoringPick::Unavailable
     );
 }
 
@@ -861,13 +873,20 @@ fn compatibility_aware_constraint_authoring_obeys_role_and_visibility_matrix() {
         .expect("point");
     let viewport = Viewport::new([800.0, 500.0], [0.0, 0.0], 50.0).expect("viewport");
     let scene = accepted_scene(&document, viewport);
-    for (span, point, model_position, role) in [
-        (profile, profile_point, [0.0, -1.0], GeometryRole::Profile),
+    for (span, point, model_position, role, excluded_pick) in [
+        (
+            profile,
+            profile_point,
+            [0.0, -1.0],
+            GeometryRole::Profile,
+            HorizontalAuthoringPick::Unavailable,
+        ),
         (
             construction,
             construction_point,
             [0.0, 1.0],
             GeometryRole::Construction,
+            HorizontalAuthoringPick::PointPrefix,
         ),
     ] {
         let position = viewport.model_to_screen(model_position);
@@ -891,7 +910,12 @@ fn compatibility_aware_constraint_authoring_obeys_role_and_visibility_matrix() {
                 );
             assert_eq!(
                 horizontal_authoring_pick(&document, &scene, position, policy(scope)),
-                expected.then_some(span)
+                if expected {
+                    HorizontalAuthoringPick::Applied(span)
+                } else {
+                    excluded_pick
+                },
+                "Horizontal authoring path diverged for {role:?} in {scope:?}"
             );
         }
     }
@@ -902,7 +926,7 @@ fn compatibility_aware_constraint_authoring_obeys_role_and_visibility_matrix() {
             viewport.model_to_screen([0.0, 1.0]),
             policy_with_visibility(GeometryPickScope::All, false, true),
         ),
-        None
+        HorizontalAuthoringPick::PointPrefix
     );
 }
 

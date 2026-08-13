@@ -19,11 +19,11 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{
     ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveSpan, DesignPointId,
-    DesignScalarId, DocumentAngleOrientation, DocumentConstraintDefinition,
+    DesignScalarId, DocumentAngleOrientation, DocumentCenterRef, DocumentConstraintDefinition,
     DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentId, DocumentSolveRequest, PersistentId,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SketchHardValidity,
-    SolverConfig, TangentOrientation,
+    DocumentDimensionMode, DocumentDirectionSense, DocumentId, DocumentLineSupportRef,
+    DocumentSolveRequest, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+    SketchDocument, SketchHardValidity, SolverConfig, TangentOrientation,
 };
 use proptest::prelude::{Strategy, any};
 use proptest::test_runner::{Config, RngAlgorithm, TestCaseError, TestRng, TestRunner};
@@ -37,13 +37,17 @@ const SEEDED_VARIANTS: u32 = 8;
 const MAX_SHRINK_ITERS: u32 = 512;
 const TSV_HEADER: &str = "case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint";
 
-const CONSTRAINT_KINDS: [ResolvedConstraintKind; 16] = [
+const CONSTRAINT_KINDS: [ResolvedConstraintKind; 20] = [
     ResolvedConstraintKind::FixedPoint,
     ResolvedConstraintKind::CoincidentPoints,
     ResolvedConstraintKind::PointOnCurve,
     ResolvedConstraintKind::CurveContact,
     ResolvedConstraintKind::HorizontalLine,
     ResolvedConstraintKind::VerticalLine,
+    ResolvedConstraintKind::HorizontalPoints,
+    ResolvedConstraintKind::VerticalPoints,
+    ResolvedConstraintKind::ConcentricCurves,
+    ResolvedConstraintKind::CollinearSupports,
     ResolvedConstraintKind::ParallelLines,
     ResolvedConstraintKind::PerpendicularLines,
     ResolvedConstraintKind::RadialLine,
@@ -79,7 +83,7 @@ struct OracleFamily {
     subject: FamilySubject,
 }
 
-const FAMILIES: [OracleFamily; 21] = [
+const FAMILIES: [OracleFamily; 25] = [
     constraint_family(ResolvedConstraintKind::FixedPoint, ConstraintIntent::Lock),
     constraint_family(
         ResolvedConstraintKind::CoincidentPoints,
@@ -137,6 +141,24 @@ const FAMILIES: [OracleFamily; 21] = [
     dimension_family(DimensionKind::Radius),
     dimension_family(DimensionKind::Diameter),
     dimension_family(DimensionKind::OrientedAngle),
+    // Append-only M71 inventory: preserve every historical family ordinal and
+    // byte while adding the newly retained drafting relations.
+    constraint_family(
+        ResolvedConstraintKind::HorizontalPoints,
+        ConstraintIntent::Horizontal,
+    ),
+    constraint_family(
+        ResolvedConstraintKind::VerticalPoints,
+        ConstraintIntent::Vertical,
+    ),
+    constraint_family(
+        ResolvedConstraintKind::ConcentricCurves,
+        ConstraintIntent::Concentric,
+    ),
+    constraint_family(
+        ResolvedConstraintKind::CollinearSupports,
+        ConstraintIntent::Collinear,
+    ),
 ];
 
 const fn constraint_family(kind: ResolvedConstraintKind, intent: ConstraintIntent) -> OracleFamily {
@@ -161,6 +183,10 @@ const fn constraint_family_id(kind: ResolvedConstraintKind) -> &'static str {
         ResolvedConstraintKind::CurveContact => "constraint.curve-contact",
         ResolvedConstraintKind::HorizontalLine => "constraint.horizontal-line",
         ResolvedConstraintKind::VerticalLine => "constraint.vertical-line",
+        ResolvedConstraintKind::HorizontalPoints => "constraint.horizontal-points",
+        ResolvedConstraintKind::VerticalPoints => "constraint.vertical-points",
+        ResolvedConstraintKind::ConcentricCurves => "constraint.concentric-curves",
+        ResolvedConstraintKind::CollinearSupports => "constraint.collinear-supports",
         ResolvedConstraintKind::ParallelLines => "constraint.parallel-lines",
         ResolvedConstraintKind::PerpendicularLines => "constraint.perpendicular-lines",
         ResolvedConstraintKind::RadialLine => "constraint.radial-line",
@@ -404,7 +430,7 @@ const fn fnv1a64(bytes: &[u8]) -> u64 {
 
 #[test]
 fn golden_oracle_inventory_and_tsv_schema_are_exhaustive() {
-    assert_eq!(CONSTRAINT_KINDS.len(), 16);
+    assert_eq!(CONSTRAINT_KINDS.len(), 20);
     assert_eq!(DIMENSION_KINDS.len(), 5);
     assert_eq!(
         FAMILIES.len(),
@@ -627,7 +653,10 @@ fn effective_variant(
     if matches!(
         family.subject,
         FamilySubject::Constraint {
-            kind: ResolvedConstraintKind::HorizontalLine | ResolvedConstraintKind::VerticalLine,
+            kind: ResolvedConstraintKind::HorizontalLine
+                | ResolvedConstraintKind::VerticalLine
+                | ResolvedConstraintKind::HorizontalPoints
+                | ResolvedConstraintKind::VerticalPoints,
             ..
         }
     ) {
@@ -727,13 +756,16 @@ impl MatrixFixture {
         let intersection_x = -2.0 + 4.0 * p;
         let primary_end = [
             2.0,
-            if displaced(ResolvedConstraintKind::HorizontalLine) {
+            if displaced(ResolvedConstraintKind::HorizontalLine)
+                || displaced(ResolvedConstraintKind::HorizontalPoints)
+            {
                 0.3
             } else {
                 0.0
             },
         ];
         let cross_x_offset = if displaced(ResolvedConstraintKind::VerticalLine)
+            || displaced(ResolvedConstraintKind::VerticalPoints)
             || displaced(ResolvedConstraintKind::PerpendicularLines)
         {
             0.3
@@ -770,7 +802,25 @@ impl MatrixFixture {
                 &mut document,
                 transform,
                 "f",
-                [intersection_x + 3.0, 3.0 + symmetric_y_offset],
+                if matches!(
+                    subject,
+                    FamilySubject::Constraint {
+                        kind: ResolvedConstraintKind::ConcentricCurves,
+                        ..
+                    }
+                ) {
+                    [
+                        intersection_x - 3.0
+                            + if displaced(ResolvedConstraintKind::ConcentricCurves) {
+                                0.25
+                            } else {
+                                0.0
+                            },
+                        3.0,
+                    ]
+                } else {
+                    [intersection_x + 3.0, 3.0 + symmetric_y_offset]
+                },
             ),
         ];
         let first_line = add_line_from_points(
@@ -943,7 +993,9 @@ impl MatrixFixture {
                     .expect("quadratic Bezier"),
             )
         });
-        let tangent_shift = if displaced(ResolvedConstraintKind::CurveTangency) {
+        let tangent_shift = if displaced(ResolvedConstraintKind::CurveTangency)
+            || displaced(ResolvedConstraintKind::CollinearSupports)
+        {
             0.2
         } else {
             0.0
@@ -1147,7 +1199,26 @@ fn constraint_operands(
         ResolvedConstraintKind::VerticalLine => {
             vec![selected(SelectionItem::Curve(fixture.lines[1]))]
         }
-        ResolvedConstraintKind::ParallelLines | ResolvedConstraintKind::EqualLength => vec![
+        ResolvedConstraintKind::HorizontalPoints => fixture.points[0..2]
+            .iter()
+            .copied()
+            .map(SelectionItem::Point)
+            .map(selected)
+            .collect(),
+        ResolvedConstraintKind::VerticalPoints => fixture.points[2..4]
+            .iter()
+            .copied()
+            .map(SelectionItem::Point)
+            .map(selected)
+            .collect(),
+        ResolvedConstraintKind::ConcentricCurves | ResolvedConstraintKind::EqualRadius => fixture
+            .circles
+            .map(SelectionItem::Curve)
+            .map(selected)
+            .to_vec(),
+        ResolvedConstraintKind::CollinearSupports
+        | ResolvedConstraintKind::ParallelLines
+        | ResolvedConstraintKind::EqualLength => vec![
             selected(SelectionItem::Curve(fixture.lines[0])),
             selected(SelectionItem::Curve(fixture.overlapping_line)),
         ],
@@ -1163,11 +1234,6 @@ fn constraint_operands(
                 variant.contact_parameter,
             ),
         ],
-        ResolvedConstraintKind::EqualRadius => fixture
-            .circles
-            .map(SelectionItem::Curve)
-            .map(selected)
-            .to_vec(),
         ResolvedConstraintKind::EqualCurvature => fixture
             .beziers
             .map(|span| picked(SelectionItem::Curve(span), 0.5))
@@ -1201,6 +1267,10 @@ fn constraint_operands(
             ResolvedConstraintKind::CoincidentPoints
             | ResolvedConstraintKind::PointOnCurve
             | ResolvedConstraintKind::CurveContact
+            | ResolvedConstraintKind::HorizontalPoints
+            | ResolvedConstraintKind::VerticalPoints
+            | ResolvedConstraintKind::ConcentricCurves
+            | ResolvedConstraintKind::CollinearSupports
             | ResolvedConstraintKind::ParallelLines
             | ResolvedConstraintKind::PerpendicularLines
             | ResolvedConstraintKind::RadialLine
@@ -1813,6 +1883,14 @@ fn validate_constraint_definition(
         (
             ResolvedConstraintKind::CoincidentPoints,
             DocumentConstraintDefinition::Coincident { first, second },
+        )
+        | (
+            ResolvedConstraintKind::HorizontalPoints,
+            DocumentConstraintDefinition::HorizontalPoints { first, second },
+        )
+        | (
+            ResolvedConstraintKind::VerticalPoints,
+            DocumentConstraintDefinition::VerticalPoints { first, second },
         ) => Some(*first) == point(0) && Some(*second) == point(1),
         (
             ResolvedConstraintKind::PointOnCurve,
@@ -1859,6 +1937,20 @@ fn validate_constraint_definition(
         ) => Some(*line) == span(0),
         (ResolvedConstraintKind::VerticalLine, DocumentConstraintDefinition::Vertical { line }) => {
             Some(*line) == span(0)
+        }
+        (
+            ResolvedConstraintKind::ConcentricCurves,
+            DocumentConstraintDefinition::Concentric { first, second },
+        ) => {
+            span(0).map(|value| DocumentCenterRef { curve: value.curve }) == Some(*first)
+                && span(1).map(|value| DocumentCenterRef { curve: value.curve }) == Some(*second)
+        }
+        (
+            ResolvedConstraintKind::CollinearSupports,
+            DocumentConstraintDefinition::Collinear { first, second },
+        ) => {
+            span(0).map(forward_line_support) == Some(*first)
+                && span(1).map(forward_line_support) == Some(*second)
         }
         (
             ResolvedConstraintKind::ParallelLines,
@@ -1976,6 +2068,13 @@ fn validate_constraint_definition(
         ));
     }
     Ok(())
+}
+
+const fn forward_line_support(span: CurveSpan) -> DocumentLineSupportRef {
+    DocumentLineSupportRef {
+        span,
+        direction: DocumentDirectionSense::Forward,
+    }
 }
 
 fn validate_curve_pair_contacts(
@@ -2391,6 +2490,48 @@ fn validate_constraint_geometry(
             let [a, b] = line_points(document, *line)?;
             (a[0] - b[0]).abs() <= tolerance
         }
+        DocumentConstraintDefinition::HorizontalPoints { first, second } => {
+            let first = document
+                .point(*first)
+                .expect("first horizontal point")
+                .position;
+            let second = document
+                .point(*second)
+                .expect("second horizontal point")
+                .position;
+            (first[1] - second[1]).abs() <= tolerance
+        }
+        DocumentConstraintDefinition::VerticalPoints { first, second } => {
+            let first = document
+                .point(*first)
+                .expect("first vertical point")
+                .position;
+            let second = document
+                .point(*second)
+                .expect("second vertical point")
+                .position;
+            (first[0] - second[0]).abs() <= tolerance
+        }
+        DocumentConstraintDefinition::Concentric { first, second } => {
+            let first = document
+                .resolve_center_ref(*first)
+                .map_err(|error| defect("geometry.evaluation", error.to_string()))?;
+            let second = document
+                .resolve_center_ref(*second)
+                .map_err(|error| defect("geometry.evaluation", error.to_string()))?;
+            let first = document
+                .point(first)
+                .ok_or_else(|| defect("geometry.missing", "first center disappeared"))?
+                .position;
+            let second = document
+                .point(second)
+                .ok_or_else(|| defect("geometry.missing", "second center disappeared"))?
+                .position;
+            distance(first, second) <= tolerance
+        }
+        DocumentConstraintDefinition::Collinear { first, second } => {
+            supporting_lines_are_collinear(document, *first, *second, tolerance)?
+        }
         DocumentConstraintDefinition::Parallel { first, second } => {
             normalized_dot_or_cross(document, *first, *second, true)?.abs() <= 2.0e-8
         }
@@ -2593,6 +2734,42 @@ fn validate_constraint_geometry(
         ));
     }
     Ok(())
+}
+
+fn supporting_lines_are_collinear(
+    document: &SketchDocument,
+    first: DocumentLineSupportRef,
+    second: DocumentLineSupportRef,
+    tolerance: f64,
+) -> OracleResult<bool> {
+    let [first_start, first_end] = directed_line_points(document, first)?;
+    let [second_start, second_end] = directed_line_points(document, second)?;
+    let first_direction = [first_end[0] - first_start[0], first_end[1] - first_start[1]];
+    let second_direction = [
+        second_end[0] - second_start[0],
+        second_end[1] - second_start[1],
+    ];
+    let offset = [
+        second_start[0] - first_start[0],
+        second_start[1] - first_start[1],
+    ];
+    let first_length = vector_length(first_direction);
+    let second_length = vector_length(second_direction);
+    Ok(
+        cross(first_direction, second_direction).abs() <= 2.0e-8 * first_length * second_length
+            && cross(first_direction, offset).abs() <= tolerance * first_length,
+    )
+}
+
+fn directed_line_points(
+    document: &SketchDocument,
+    support: DocumentLineSupportRef,
+) -> OracleResult<[[f64; 2]; 2]> {
+    let mut points = line_points(document, support.span)?;
+    if support.direction == DocumentDirectionSense::Reverse {
+        points.reverse();
+    }
+    Ok(points)
 }
 
 fn endpoint_path_sign(

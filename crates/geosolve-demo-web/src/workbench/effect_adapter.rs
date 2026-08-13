@@ -137,13 +137,13 @@ pub(super) fn dispatch_construction_effect(
 mod tests {
     use geosolve_constraint_editor::{
         ConstraintEditor, ConstructionPoint, ConstructionPreview, ConstructionProposal,
-        EditorEffect, EditorScene, EditorTool, Modifiers, PointerInput, RetainedEditorCoordinator,
-        ScreenPoint, Viewport,
+        DraftCurveSlot, EditorEffect, EditorScene, EditorTool, InferredRelation, Modifiers,
+        PointerInput, RetainedEditorCoordinator, ScreenPoint, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, DocumentConstraintDefinition, DocumentSolveRequest, GeometryRole,
-        RetainedSketchDocumentSession, SketchDocument,
+        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
     };
 
     use super::{
@@ -309,6 +309,121 @@ mod tests {
                 .pending_construction_commit_token()
                 .is_none()
         );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one thin browser-adapter regression keeps default input, emitted plan, dispatch, and retained result together"
+    )]
+    fn ordinary_browser_centered_input_commits_concentric_over_colocated_point_identity() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let stored_center = document
+            .add_point("stored center", [0.0, 0.0])
+            .expect("stored center");
+        let radius = document
+            .add_scalar(
+                "reference radius",
+                3.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("reference radius");
+        let reference = document
+            .add_curve(
+                "reference circle",
+                CurveDefinition::Circle {
+                    center: stored_center,
+                    radius,
+                },
+            )
+            .expect("reference circle");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator.editor_mut().activate_tool(EditorTool::Circle);
+
+        let browser_input = draft_inference_input(Modifiers::default());
+        assert_eq!(browser_input.preferred_candidate, None);
+        let center = scene.viewport.model_to_screen([0.0, 0.0]);
+        coordinator.pointer_down_with_draft_inference(
+            &scene,
+            input(71, [center.x, center.y]),
+            browser_input,
+        );
+        let rim = scene.viewport.model_to_screen([1.5, 0.0]);
+        let effect = coordinator
+            .pointer_down_with_draft_inference(
+                &scene,
+                input(71, [rim.x, rim.y]),
+                draft_inference_input(Modifiers::default()),
+            )
+            .into_iter()
+            .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+            .expect("ordinary browser input must emit an inferred circle plan");
+        let EditorEffect::CommitConstructionPlan { plan, .. } = &effect else {
+            unreachable!("filtered construction-plan effect")
+        };
+        assert!(matches!(
+            plan.proposal,
+            ConstructionProposal::Circle {
+                center: ConstructionPoint::New(position),
+                ..
+            } if position == [0.0, 0.0]
+        ));
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [InferredRelation::Concentric {
+                first: DraftCurveSlot::Created { curve_index: 0 },
+                second: DraftCurveSlot::Existing(existing),
+            }] if *existing == reference
+        ));
+
+        let PlannedConstructionDispatch::Handled(outcome) =
+            dispatch_planned_construction_effect(&mut coordinator, &effect)
+        else {
+            panic!("planned effect was not handled");
+        };
+        assert!(outcome.accepted, "{:?}", outcome.error);
+        assert!(
+            outcome
+                .acknowledgement
+                .contains(&EditorEffect::ClearConstructionPreview)
+        );
+
+        let retained = coordinator.session().design_document();
+        let created = retained
+            .curves()
+            .iter()
+            .find(|curve| curve.id != reference)
+            .expect("created circle");
+        assert!(matches!(
+            created.definition,
+            CurveDefinition::Circle { center, .. } if center != stored_center
+        ));
+        assert!(retained.constraints().iter().any(|constraint| matches!(
+            constraint.definition,
+            DocumentConstraintDefinition::Concentric { first, second }
+                if first.curve == created.id && second.curve == reference
+        )));
     }
 
     #[test]

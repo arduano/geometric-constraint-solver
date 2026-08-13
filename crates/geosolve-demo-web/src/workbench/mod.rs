@@ -3828,8 +3828,10 @@ pub(crate) mod wasm {
             }),
         )?;
         let design = coordinator.session().design_document();
+        let constraint_entries = geosolve_constraint_editor::constraint_entries(design);
         required(document, "wb-tree")?.set_inner_html(&super::panels::tree_markup_with_features(
             design,
+            &constraint_entries,
             coordinator.feature_document(),
             coordinator.computed_snapshot(),
             &computed_problems,
@@ -4570,6 +4572,7 @@ pub(crate) mod wasm {
             DisabledReason::WrongOperandKind => "wrong-operand-kind",
             DisabledReason::MissingObject => "missing-object",
             DisabledReason::InvalidSpan => "invalid-span",
+            DisabledReason::SameSemanticOperand => "same-semantic-operand",
             DisabledReason::AlreadyInRequestedState => "already-in-requested-state",
             DisabledReason::NothingToUndo => "nothing-to-undo",
             DisabledReason::NothingToRedo => "nothing-to-redo",
@@ -6823,6 +6826,7 @@ mod tests {
         };
         let tree = super::panels::tree_markup_with_features(
             document,
+            &[],
             coordinator.feature_document(),
             coordinator.computed_snapshot(),
             &[problem],

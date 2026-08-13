@@ -9,10 +9,10 @@
 //! plan and remains responsible for independent solve validation.
 
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch::{
-    ContactDomain, ContactNeighborhood, CurveSpan, DesignPointId, GeometryRole,
+    ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId, GeometryRole,
     PreparedSketchInput, SketchDesignIdentity,
 };
 use thiserror::Error;
@@ -168,8 +168,13 @@ pub struct DraftInferencePolicy {
     pub vertical: DraftInferenceBehavior,
     pub parallel: DraftInferenceBehavior,
     pub perpendicular: DraftInferenceBehavior,
-    /// Point-to-point horizontal/vertical tracking has no honest persistent
-    /// primitive in the current sketch domain and therefore remains guide-only.
+    /// Exact semantic-center equality for centered constructions.
+    pub concentric: DraftInferenceBehavior,
+    /// Certified native affine supporting-line extension.
+    pub collinear: DraftInferenceBehavior,
+    /// Point-to-point horizontal/vertical guidance. M71 permits this to be
+    /// constraint-backed only when the remembered origin is a stored point;
+    /// derived anchors remain tracking-only regardless of this switch.
     pub point_tracking: DraftInferenceBehavior,
     pub tolerances: DraftInferenceTolerances,
     pub limits: DraftInferenceLimits,
@@ -186,7 +191,9 @@ impl Default for DraftInferencePolicy {
             vertical: backed,
             parallel: backed,
             perpendicular: backed,
-            point_tracking: DraftInferenceBehavior::tracking_only(),
+            concentric: backed,
+            collinear: backed,
+            point_tracking: backed,
             tolerances: DraftInferenceTolerances::default(),
             limits: DraftInferenceLimits::default(),
         }
@@ -209,8 +216,7 @@ impl DraftInferencePolicy {
             return Err(DraftInferenceError::InvalidPolicy);
         }
         if (self.point_identity.persist_constraint && !self.point_identity.adjust_coordinates)
-            || self.point_tracking.adjust_coordinates
-            || self.point_tracking.persist_constraint
+            || (self.point_tracking.persist_constraint && !self.point_tracking.adjust_coordinates)
         {
             return Err(DraftInferenceError::InvalidPolicy);
         }
@@ -348,6 +354,36 @@ pub enum DraftReferenceOrigin {
     FilletDiscarded,
 }
 
+/// Exact accepted curve-center evidence used by centered-curve inference.
+///
+/// The persistent curve identity is the prospective relation operand. The
+/// stored center point remains separate semantic evidence: curves that share
+/// it are still distinct retained operands with distinct deletion lifecycles.
+/// Coordinate proximity alone never certifies semantic identity.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DraftSemanticCenterAnchor {
+    pub curve: CurveId,
+    pub center: DesignPointId,
+    pub model_position: [f64; 2],
+    pub role: GeometryRole,
+}
+
+impl DraftSemanticCenterAnchor {
+    fn is_valid(self) -> bool {
+        self.model_position.into_iter().all(f64::is_finite)
+    }
+
+    fn is_interactive(self, policy: GeometryInteractionPolicy) -> bool {
+        match self.role {
+            GeometryRole::Profile => !matches!(policy.scope, GeometryPickScope::Construction),
+            GeometryRole::Construction => {
+                policy.visibility.explicit_construction
+                    && !matches!(policy.scope, GeometryPickScope::Profile)
+            }
+        }
+    }
+}
+
 /// Scene resource whose deterministic pre-inference bound was exceeded.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DraftInferenceSceneResource {
@@ -370,6 +406,24 @@ pub struct DraftInferenceSceneLimit {
 #[derive(Clone, Debug, PartialEq)]
 pub enum DraftInferenceAnchorCollection {
     Complete { anchors: Vec<DraftReferenceAnchor> },
+    ResourceLimited(DraftInferenceSceneLimit),
+}
+
+/// Complete subject-specific scene inputs for one drafting-inference sample.
+///
+/// Ordinary anchors and semantic centers share one all-or-nothing resource
+/// bound. A limited collection never exposes a prefix that could select a
+/// different semantic winner.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DraftInferenceSceneInputs {
+    pub anchors: Vec<DraftReferenceAnchor>,
+    pub semantic_centers: Vec<DraftSemanticCenterAnchor>,
+}
+
+/// Bounded result of collecting every scene input relevant to one subject.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DraftInferenceSceneInputCollection {
+    Complete(DraftInferenceSceneInputs),
     ResourceLimited(DraftInferenceSceneLimit),
 }
 
@@ -525,21 +579,22 @@ impl DraftReferenceAnchor {
         subject: DraftInferenceSubject,
     ) -> Option<(DraftInferenceFamily, DraftInferenceRelation)> {
         match (subject, self) {
-            (DraftInferenceSubject::PointOperand, Self::PersistentPoint { point, .. }) => Some((
+            (subject, Self::PersistentPoint { point, .. }) if subject.is_point_operand() => Some((
                 DraftInferenceFamily::PointIdentity,
                 DraftInferenceRelation::PointIdentity { point },
             )),
-            (DraftInferenceSubject::PointOperand, Self::Midpoint { span, .. }) => Some((
+            (subject, Self::Midpoint { span, .. }) if subject.is_point_operand() => Some((
                 DraftInferenceFamily::Midpoint,
                 DraftInferenceRelation::Midpoint { span },
             )),
-            (
-                DraftInferenceSubject::PointOperand,
-                Self::CurvePoint { contact, .. } | Self::AffineSupport { contact, .. },
-            ) => Some((
-                DraftInferenceFamily::PointOnCurve,
-                DraftInferenceRelation::PointOnCurve { contact },
-            )),
+            (subject, Self::CurvePoint { contact, .. } | Self::AffineSupport { contact, .. })
+                if subject.is_point_operand() =>
+            {
+                Some((
+                    DraftInferenceFamily::PointOnCurve,
+                    DraftInferenceRelation::PointOnCurve { contact },
+                ))
+            }
             (DraftInferenceSubject::CircleCircumference, Self::PersistentPoint { point, .. }) => {
                 Some((
                     DraftInferenceFamily::PointOnCreatedCurve,
@@ -549,6 +604,11 @@ impl DraftReferenceAnchor {
             (
                 DraftInferenceSubject::CircleCircumference,
                 Self::Midpoint { .. } | Self::CurvePoint { .. } | Self::AffineSupport { .. },
+            )
+            | (
+                DraftInferenceSubject::PointOperand
+                | DraftInferenceSubject::CenteredPointOperand { .. },
+                _,
             ) => None,
         }
     }
@@ -568,6 +628,31 @@ pub enum DraftInferenceSubject {
     PointOperand,
     /// The coordinate samples a prospective circle's radius without allocating a rim point.
     CircleCircumference,
+    /// A persistent point operand that also centers the curve allocated by this
+    /// construction. Ordinary point identity, midpoint, and point-on-curve
+    /// inference remain eligible; exact accepted semantic centers additionally
+    /// permit a Concentric candidate without structural point reuse.
+    CenteredPointOperand { prospective_curve_index: usize },
+}
+
+impl DraftInferenceSubject {
+    /// Whether the sampled coordinate is a persistent construction point.
+    #[must_use]
+    pub const fn is_point_operand(self) -> bool {
+        matches!(self, Self::PointOperand | Self::CenteredPointOperand { .. })
+    }
+
+    /// Curve occurrence allocated around this point, when Concentric inference
+    /// is semantically available.
+    #[must_use]
+    pub const fn prospective_centered_curve_index(self) -> Option<usize> {
+        match self {
+            Self::CenteredPointOperand {
+                prospective_curve_index,
+            } => Some(prospective_curve_index),
+            Self::PointOperand | Self::CircleCircumference => None,
+        }
+    }
 }
 
 /// Normalized pointer sample for the current construction point.
@@ -596,6 +681,9 @@ pub struct DraftInferenceFrame {
     pub geometry_policy: GeometryInteractionPolicy,
     pub sample: DraftInferenceSample,
     pub anchors: Vec<DraftReferenceAnchor>,
+    /// Exact accepted semantic centers. They are separate from point anchors:
+    /// equality of a center coordinate never means structural point reuse.
+    pub semantic_centers: Vec<DraftSemanticCenterAnchor>,
 }
 
 impl DraftInferenceFrame {
@@ -616,6 +704,25 @@ impl DraftInferenceFrame {
             geometry_policy,
             sample,
             anchors,
+            semantic_centers: Vec::new(),
+        }
+    }
+
+    /// Captures a scene together with already bounded semantic-center inputs.
+    ///
+    /// Collection stays outside this pure frame constructor so suppression and
+    /// subject-specific resource policy can avoid irrelevant scene traversal.
+    #[must_use]
+    pub fn from_scene_with_semantic_centers(
+        scene: &EditorScene,
+        geometry_policy: GeometryInteractionPolicy,
+        sample: DraftInferenceSample,
+        anchors: Vec<DraftReferenceAnchor>,
+        semantic_centers: Vec<DraftSemanticCenterAnchor>,
+    ) -> Self {
+        Self {
+            semantic_centers,
+            ..Self::from_scene(scene, geometry_policy, sample, anchors)
         }
     }
 
@@ -632,13 +739,32 @@ impl DraftInferenceFrame {
         Ok(())
     }
 
-    fn validate_anchors(&self) -> Result<(), DraftInferenceError> {
-        if self
-            .anchors
-            .iter()
-            .copied()
-            .any(|anchor| !anchor.is_valid())
-        {
+    fn validate_relevant_anchors(&self) -> Result<(), DraftInferenceError> {
+        let invalid_ordinary = match self.sample.subject {
+            DraftInferenceSubject::PointOperand
+            | DraftInferenceSubject::CenteredPointOperand { .. } => self
+                .anchors
+                .iter()
+                .copied()
+                .any(|anchor| !anchor.is_valid()),
+            DraftInferenceSubject::CircleCircumference => {
+                self.anchors.iter().copied().any(|anchor| {
+                    matches!(anchor, DraftReferenceAnchor::PersistentPoint { .. })
+                        && !anchor.is_valid()
+                })
+            }
+        };
+        let invalid_centers = match self.sample.subject {
+            DraftInferenceSubject::CenteredPointOperand { .. } => self
+                .semantic_centers
+                .iter()
+                .copied()
+                .any(|center| !center.is_valid()),
+            DraftInferenceSubject::PointOperand | DraftInferenceSubject::CircleCircumference => {
+                false
+            }
+        };
+        if invalid_ordinary || invalid_centers {
             return Err(DraftInferenceError::InvalidFrame);
         }
         Ok(())
@@ -697,6 +823,19 @@ pub enum DraftInferenceRelation {
     Perpendicular {
         reference: CurveSpan,
     },
+    HorizontalPoints {
+        reference: DesignPointId,
+    },
+    VerticalPoints {
+        reference: DesignPointId,
+    },
+    Concentric {
+        reference: CurveId,
+        prospective_curve_index: usize,
+    },
+    Collinear {
+        reference: CurveSpan,
+    },
 }
 
 /// Relation family exposed to policy and presentation consumers.
@@ -710,6 +849,10 @@ pub enum DraftInferenceFamily {
     Vertical,
     Parallel,
     Perpendicular,
+    HorizontalPoints,
+    VerticalPoints,
+    Concentric,
+    Collinear,
     PointTracking,
 }
 
@@ -760,6 +903,7 @@ impl DraftGuide {
 /// Point-anchor precedence used in deterministic ranking evidence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DraftAnchorPriority {
+    SemanticCenter,
     PointIdentity,
     Midpoint,
     PointOnCurve,
@@ -770,9 +914,10 @@ impl DraftAnchorPriority {
     const fn rank(self) -> u8 {
         match self {
             Self::PointIdentity => 0,
-            Self::Midpoint => 1,
-            Self::PointOnCurve => 2,
-            Self::None => 3,
+            Self::SemanticCenter => 1,
+            Self::Midpoint => 2,
+            Self::PointOnCurve => 3,
+            Self::None => 4,
         }
     }
 }
@@ -821,7 +966,7 @@ impl DraftInferenceRankingEvidence {
             && self.angular_error_radians <= std::f64::consts::FRAC_PI_2
     }
 
-    fn compare(self, other: Self) -> Ordering {
+    fn compare_for_subject(self, other: Self, subject: DraftInferenceSubject) -> Ordering {
         // `true` is preferred and every semantic/error rank is
         // smaller-is-better.  Relation count is published as evidence but is
         // deliberately not a discriminator: an incidental extra relation
@@ -831,9 +976,8 @@ impl DraftInferenceRankingEvidence {
             .constraint_backed
             .cmp(&self.constraint_backed)
             .then_with(|| {
-                self.anchor_priority
-                    .rank()
-                    .cmp(&other.anchor_priority.rank())
+                subject_anchor_rank(subject, self.anchor_priority)
+                    .cmp(&subject_anchor_rank(subject, other.anchor_priority))
             })
             .then_with(|| {
                 self.direction_priority
@@ -849,6 +993,24 @@ impl DraftInferenceRankingEvidence {
                 self.angular_error_radians
                     .total_cmp(&other.angular_error_radians)
             })
+    }
+}
+
+const fn subject_anchor_rank(subject: DraftInferenceSubject, priority: DraftAnchorPriority) -> u8 {
+    match (subject, priority) {
+        // A center operand expresses a semantic-center relationship more
+        // precisely than structural reuse of the point that happens to store
+        // that center. Every other point operand retains the ordinary M70
+        // anchor order.
+        (
+            DraftInferenceSubject::CenteredPointOperand { .. },
+            DraftAnchorPriority::SemanticCenter,
+        ) => 0,
+        (
+            DraftInferenceSubject::CenteredPointOperand { .. },
+            DraftAnchorPriority::PointIdentity,
+        ) => 1,
+        _ => priority.rank(),
     }
 }
 
@@ -890,7 +1052,11 @@ impl DraftInferenceCandidate {
                     | DraftInferenceRelation::Horizontal
                     | DraftInferenceRelation::Vertical
                     | DraftInferenceRelation::Parallel { .. }
-                    | DraftInferenceRelation::Perpendicular { .. } => true,
+                    | DraftInferenceRelation::Perpendicular { .. }
+                    | DraftInferenceRelation::HorizontalPoints { .. }
+                    | DraftInferenceRelation::VerticalPoints { .. }
+                    | DraftInferenceRelation::Concentric { .. }
+                    | DraftInferenceRelation::Collinear { .. } => true,
                 })
             && self.ranking.is_valid()
     }
@@ -956,6 +1122,7 @@ pub enum DraftInferenceError {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum AnchorKey {
     Point(DesignPointId),
+    SemanticCenter(CurveId),
     Midpoint(CurveSpan),
     PointOnCurve(CurveSpan, DraftCurveBranchCandidate),
 }
@@ -966,6 +1133,7 @@ enum DirectionKey {
     Vertical,
     Parallel(CurveSpan),
     Perpendicular(CurveSpan),
+    Collinear(CurveSpan),
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -1031,6 +1199,7 @@ pub struct DraftInferenceEngine {
     remembered_references: Vec<DraftReferenceAnchor>,
     active_anchor: Option<AnchorKey>,
     active_direction: Option<DirectionKey>,
+    active_concentric: Option<CurveId>,
     active_point_tracking: BTreeSet<PointTrackingKey>,
     candidate_ids: Vec<(CandidateKey, DraftInferenceCandidateId)>,
     next_candidate_id: u64,
@@ -1044,6 +1213,7 @@ impl Default for DraftInferenceEngine {
             remembered_references: Vec::new(),
             active_anchor: None,
             active_direction: None,
+            active_concentric: None,
             active_point_tracking: BTreeSet::new(),
             candidate_ids: Vec::new(),
             next_candidate_id: 1,
@@ -1118,6 +1288,7 @@ impl DraftInferenceEngine {
         self.remembered_references.clear();
         self.active_anchor = None;
         self.active_direction = None;
+        self.active_concentric = None;
         self.active_point_tracking.clear();
         self.candidate_ids.clear();
     }
@@ -1167,24 +1338,6 @@ impl DraftInferenceEngine {
             return Err(DraftInferenceError::InvalidFrame);
         }
 
-        // Enforce the public-engine boundary independently of EditorScene's
-        // bounded collector.  Count before traversing, sorting or allocating
-        // from caller-supplied anchors so direct embedders receive the same
-        // fail-closed scene-limit contract and never a semantic prefix.
-        if frame.anchors.len() > self.policy.limits.max_scene_anchors {
-            self.clear_stage();
-            return Ok(scene_limit_resolution(
-                DraftInferenceSceneLimit {
-                    resource: DraftInferenceSceneResource::Anchors,
-                    required: frame.anchors.len(),
-                    limit: self.policy.limits.max_scene_anchors,
-                },
-                raw_model,
-                raw_screen,
-            ));
-        }
-        frame.validate_anchors()?;
-
         let stamp = frame.stamp();
         if self.frame_stamp.is_some_and(|current| current != stamp) {
             self.clear_session();
@@ -1200,11 +1353,40 @@ impl DraftInferenceEngine {
             ));
         }
 
+        // Enforce the public-engine boundary independently of EditorScene's
+        // bounded collector. Count only semantic inputs relevant to this
+        // subject, before traversing, sorting or allocating them. Suppression
+        // above is intentionally traversal-free and never resource-limited.
+        let semantic_anchor_count = match frame.sample.subject {
+            DraftInferenceSubject::PointOperand => frame.anchors.len(),
+            DraftInferenceSubject::CircleCircumference => frame
+                .anchors
+                .iter()
+                .filter(|anchor| matches!(anchor, DraftReferenceAnchor::PersistentPoint { .. }))
+                .count(),
+            DraftInferenceSubject::CenteredPointOperand { .. } => frame
+                .anchors
+                .len()
+                .saturating_add(frame.semantic_centers.len()),
+        };
+        if semantic_anchor_count > self.policy.limits.max_scene_anchors {
+            self.clear_stage();
+            return Ok(scene_limit_resolution(
+                DraftInferenceSceneLimit {
+                    resource: DraftInferenceSceneResource::Anchors,
+                    required: semantic_anchor_count,
+                    limit: self.policy.limits.max_scene_anchors,
+                },
+                raw_model,
+                raw_screen,
+            ));
+        }
+        frame.validate_relevant_anchors()?;
+
         let mut eligible_anchors = self.eligible_anchors(frame, raw_screen);
         deduplicate_anchor_works(&mut eligible_anchors, frame.geometry_policy.scope);
 
-        let wake_references: Vec<_> = if frame.sample.subject == DraftInferenceSubject::PointOperand
-        {
+        let wake_references: Vec<_> = if frame.sample.subject.is_point_operand() {
             eligible_anchors
                 .iter()
                 .filter(|work| {
@@ -1238,7 +1420,10 @@ impl DraftInferenceEngine {
                 .retain(|work| work.distance_pixels <= self.enter_distance(work.family));
         }
 
-        let retained_direction = (frame.sample.subject == DraftInferenceSubject::PointOperand)
+        let retained_direction = frame
+            .sample
+            .subject
+            .is_point_operand()
             .then(|| self.retained_direction(frame, raw_model))
             .flatten();
         if retained_direction.is_none() {
@@ -1247,17 +1432,34 @@ impl DraftInferenceEngine {
 
         let mut works = Vec::new();
         let mut standalone_guides = Vec::new();
+        let mut centered_generation_complete = true;
+        if let Some(prospective_curve_index) =
+            frame.sample.subject.prospective_centered_curve_index()
+        {
+            let (candidates, complete) = self.concentric_candidates(
+                frame,
+                raw_model,
+                raw_screen,
+                prospective_curve_index,
+                self.policy.limits.max_candidates,
+            );
+            works = candidates;
+            centered_generation_complete = complete;
+        }
         let no_anchor: Option<AnchorWork> = None;
-        let mut generation_complete = self.generate_candidate_family(
-            frame,
-            raw_model,
-            raw_screen,
-            no_anchor,
-            retained_direction,
-            &mut works,
-            &mut standalone_guides,
-            self.policy.limits.max_candidates,
-        );
+        let mut generation_complete = centered_generation_complete;
+        if generation_complete {
+            generation_complete = self.generate_candidate_family(
+                frame,
+                raw_model,
+                raw_screen,
+                no_anchor,
+                retained_direction,
+                &mut works,
+                &mut standalone_guides,
+                self.policy.limits.max_candidates,
+            );
+        }
         for anchor in eligible_anchors.iter().copied() {
             if !generation_complete {
                 break;
@@ -1274,12 +1476,29 @@ impl DraftInferenceEngine {
             );
         }
 
-        if frame.sample.subject == DraftInferenceSubject::PointOperand {
-            standalone_guides.extend(self.point_tracking_guides(frame, raw_model));
+        if frame.sample.subject.is_point_operand() {
+            let mut tracking_candidates = self.point_tracking_candidates(
+                frame,
+                raw_model,
+                raw_screen,
+                &mut standalone_guides,
+            );
+            for candidate in tracking_candidates.drain(..) {
+                if !push_candidate_bounded(
+                    &mut works,
+                    candidate,
+                    self.policy.limits.max_candidates,
+                    frame.sample.subject,
+                ) {
+                    generation_complete = false;
+                    break;
+                }
+            }
         }
         if !generation_complete {
             self.active_anchor = None;
             self.active_direction = None;
+            self.active_concentric = None;
             self.active_point_tracking.clear();
             self.candidate_ids.clear();
             return Ok(DraftInferenceResolution {
@@ -1325,13 +1544,14 @@ impl DraftInferenceEngine {
             first
                 .candidate
                 .ranking
-                .compare(second.candidate.ranking)
+                .compare_for_subject(second.candidate.ranking, frame.sample.subject)
                 .then_with(|| first.key.cmp(&second.key))
         });
 
         if works.is_empty() {
             self.active_anchor = None;
             self.active_direction = None;
+            self.active_concentric = None;
             self.candidate_ids.clear();
             return Ok(DraftInferenceResolution {
                 guides: standalone_guides,
@@ -1358,12 +1578,18 @@ impl DraftInferenceEngine {
             let best = works[0].candidate.ranking;
             let tied: Vec<_> = works
                 .iter()
-                .take_while(|work| work.candidate.ranking.compare(best) == Ordering::Equal)
+                .take_while(|work| {
+                    work.candidate
+                        .ranking
+                        .compare_for_subject(best, frame.sample.subject)
+                        == Ordering::Equal
+                })
                 .map(|work| work.candidate.id)
                 .collect();
             if tied.len() > 1 {
                 self.active_anchor = None;
                 self.active_direction = None;
+                self.active_concentric = None;
                 let mut guides = standalone_guides;
                 for work in works.iter().take(tied.len()) {
                     guides.extend(work.candidate.guides.iter().copied());
@@ -1386,6 +1612,11 @@ impl DraftInferenceEngine {
         let selected = &works[selected_index].candidate;
         self.active_anchor = selected_key.anchor;
         self.active_direction = selected_key.direction;
+        self.active_concentric = match selected_key.anchor {
+            Some(AnchorKey::SemanticCenter(center)) => Some(center),
+            Some(AnchorKey::Point(_) | AnchorKey::Midpoint(_) | AnchorKey::PointOnCurve(_, _))
+            | None => None,
+        };
         let mut guides = standalone_guides;
         guides.extend(selected.guides.iter().copied());
         let resolution = DraftInferenceResolution {
@@ -1435,6 +1666,139 @@ impl DraftInferenceEngine {
     }
 
     #[allow(
+        clippy::too_many_lines,
+        reason = "semantic-center grouping, hysteresis, ranking, and bounded publication remain reviewable as one candidate pipeline"
+    )]
+    fn concentric_candidates(
+        &self,
+        frame: &DraftInferenceFrame,
+        raw_model: [f64; 2],
+        raw_screen: ScreenPoint,
+        prospective_curve_index: usize,
+        max_candidates: usize,
+    ) -> (Vec<CandidateWork>, bool) {
+        let behavior = self.policy.concentric;
+        if !behavior.show_guides && !behavior.has_effect() {
+            return (Vec::new(), true);
+        }
+        let threshold = |center| {
+            if self.active_concentric == Some(center) {
+                self.policy.tolerances.point_exit_pixels
+            } else {
+                self.policy.tolerances.point_enter_pixels
+            }
+        };
+        // A curve may have several scene occurrences, but its persistent curve
+        // identity owns the retained Concentric operand and its lifecycle.
+        // Distinct curves remain distinct candidates even when they resolve to
+        // one stored center; persistent IDs never break the resulting semantic
+        // tie. Coordinate proximity is never an identity relation.
+        let mut by_curve = BTreeMap::<CurveId, (DraftSemanticCenterAnchor, f64)>::new();
+        for center in frame
+            .semantic_centers
+            .iter()
+            .copied()
+            .filter(|center| center.is_interactive(frame.geometry_policy))
+        {
+            let distance = screen_distance(
+                raw_screen,
+                frame.viewport.model_to_screen(center.model_position),
+            );
+            if distance > threshold(center.curve) {
+                continue;
+            }
+            let replace = by_curve
+                .get(&center.curve)
+                .is_none_or(|(current, current_distance)| {
+                    u8::from(center.role == GeometryRole::Construction)
+                        .cmp(&u8::from(current.role == GeometryRole::Construction))
+                        .then_with(|| distance.total_cmp(current_distance))
+                        .then_with(|| center.curve.cmp(&current.curve))
+                        == Ordering::Less
+                });
+            if replace {
+                by_curve.insert(center.curve, (center, distance));
+                // Distinct retained curve operands only increase during this
+                // traversal. Once the public candidate budget is exceeded, no
+                // later occurrence can make the complete result fit.
+                if by_curve.len() > max_candidates {
+                    return (Vec::new(), false);
+                }
+            }
+        }
+        let mut centers = by_curve.into_values().collect::<Vec<_>>();
+        centers.sort_by(|(first, first_distance), (second, second_distance)| {
+            first_distance
+                .total_cmp(second_distance)
+                .then_with(|| {
+                    u8::from(first.role == GeometryRole::Construction)
+                        .cmp(&u8::from(second.role == GeometryRole::Construction))
+                })
+                .then_with(|| first.center.cmp(&second.center))
+                .then_with(|| first.curve.cmp(&second.curve))
+        });
+        let candidates = centers
+            .into_iter()
+            .map(|(center, distance_pixels)| {
+                let adjusted = if behavior.adjust_coordinates {
+                    center.model_position
+                } else {
+                    raw_model
+                };
+                let relation = DraftInferenceRelation::Concentric {
+                    reference: center.curve,
+                    prospective_curve_index,
+                };
+                let guide = DraftGuide {
+                    id: DraftGuideId {
+                        candidate: None,
+                        ordinal: 0,
+                    },
+                    family: DraftInferenceFamily::Concentric,
+                    classification: behavior.guide_classification(),
+                    geometry: DraftGuideGeometry::Point {
+                        position: center.model_position,
+                    },
+                    reference: None,
+                };
+                CandidateWork {
+                    key: CandidateKey {
+                        anchor: Some(AnchorKey::SemanticCenter(center.curve)),
+                        direction: None,
+                    },
+                    candidate: DraftInferenceCandidate {
+                        id: DraftInferenceCandidateId(0),
+                        raw_model_position: raw_model,
+                        adjusted_model_position: adjusted,
+                        raw_screen_position: raw_screen,
+                        adjusted_screen_position: frame.viewport.model_to_screen(adjusted),
+                        relations: behavior
+                            .persist_constraint
+                            .then_some(relation)
+                            .into_iter()
+                            .collect(),
+                        references: Vec::new(),
+                        guides: behavior.show_guides.then_some(guide).into_iter().collect(),
+                        ranking: DraftInferenceRankingEvidence {
+                            constraint_backed: behavior.persist_constraint,
+                            persistent_relation_count: u8::from(behavior.persist_constraint),
+                            anchor_priority: DraftAnchorPriority::SemanticCenter,
+                            direction_priority: DraftDirectionPriority::None,
+                            positional_geometry_role_priority: u8::from(
+                                center.role == GeometryRole::Construction,
+                            ),
+                            directional_geometry_role_priority: 2,
+                            distance_pixels,
+                            angular_error_radians: 0.0,
+                        },
+                    },
+                }
+            })
+            .collect();
+        (candidates, true)
+    }
+
+    #[allow(
         clippy::too_many_arguments,
         reason = "one bounded candidate-family transition keeps its input/output state explicit"
     )]
@@ -1456,6 +1820,7 @@ impl DraftInferenceEngine {
                     works,
                     Self::build_candidate(frame, raw_model, raw_screen, Some(anchor), None),
                     candidate_limit,
+                    frame.sample.subject,
                 ) {
                     return false;
                 }
@@ -1491,6 +1856,7 @@ impl DraftInferenceEngine {
                         Some(direction),
                     ),
                     candidate_limit,
+                    frame.sample.subject,
                 ) {
                     return false;
                 }
@@ -1699,12 +2065,15 @@ impl DraftInferenceEngine {
             if !reference.is_interactive(frame.geometry_policy) {
                 continue;
             }
+            let support_relation = if reference_is_certified_native_support(reference)
+                && point_is_on_affine_support(start, reference.model_position(), direction)
+            {
+                (DirectionKey::Collinear(span), self.policy.collinear)
+            } else {
+                (DirectionKey::Parallel(span), self.policy.parallel)
+            };
             for (key, axis, behavior) in [
-                (
-                    DirectionKey::Parallel(span),
-                    direction,
-                    self.policy.parallel,
-                ),
+                (support_relation.0, direction, support_relation.1),
                 (
                     DirectionKey::Perpendicular(span),
                     [-direction[1], direction[0]],
@@ -1729,16 +2098,22 @@ impl DraftInferenceEngine {
         works
     }
 
-    fn point_tracking_guides(
+    #[allow(
+        clippy::too_many_lines,
+        reason = "stored-point durable relations and derived tracking-only guides share one audited traversal"
+    )]
+    fn point_tracking_candidates(
         &mut self,
         frame: &DraftInferenceFrame,
         raw_model: [f64; 2],
-    ) -> Vec<DraftGuide> {
-        if !self.policy.point_tracking.show_guides {
+        raw_screen: ScreenPoint,
+        standalone_guides: &mut Vec<DraftGuide>,
+    ) -> Vec<CandidateWork> {
+        if !self.policy.point_tracking.show_guides && !self.policy.point_tracking.has_effect() {
             self.active_point_tracking.clear();
             return Vec::new();
         }
-        let mut guides = Vec::new();
+        let mut candidates = Vec::new();
         let mut next_active = BTreeSet::new();
         for reference in self.remembered_references.iter().rev().copied() {
             if !reference.is_interactive(frame.geometry_policy) {
@@ -1769,7 +2144,7 @@ impl DraftInferenceEngine {
                 };
                 if undirected_angle_error(delta, direction) <= threshold {
                     next_active.insert(key);
-                    guides.push(DraftGuide {
+                    let guide = DraftGuide {
                         id: DraftGuideId {
                             candidate: None,
                             ordinal: 0,
@@ -1781,12 +2156,76 @@ impl DraftInferenceEngine {
                             end: raw_model,
                         },
                         reference: Some(reference),
-                    });
+                    };
+                    if self.policy.point_tracking.persist_constraint
+                        && let DraftReferenceAnchor::PersistentPoint { point, .. } = reference
+                    {
+                        let relation = match axis {
+                            PointTrackingAxis::Horizontal => {
+                                DraftInferenceRelation::HorizontalPoints { reference: point }
+                            }
+                            PointTrackingAxis::Vertical => {
+                                DraftInferenceRelation::VerticalPoints { reference: point }
+                            }
+                        };
+                        let adjusted = match axis {
+                            PointTrackingAxis::Horizontal => [raw_model[0], origin[1]],
+                            PointTrackingAxis::Vertical => [origin[0], raw_model[1]],
+                        };
+                        let family = match axis {
+                            PointTrackingAxis::Horizontal => DraftInferenceFamily::HorizontalPoints,
+                            PointTrackingAxis::Vertical => DraftInferenceFamily::VerticalPoints,
+                        };
+                        let mut guide = guide;
+                        guide.family = family;
+                        guide.classification = DraftGuideClassification::ConstraintBacked;
+                        guide.geometry = DraftGuideGeometry::Segment {
+                            start: origin,
+                            end: adjusted,
+                        };
+                        candidates.push(CandidateWork {
+                            key: CandidateKey {
+                                anchor: Some(reference.key()),
+                                direction: Some(match axis {
+                                    PointTrackingAxis::Horizontal => DirectionKey::Horizontal,
+                                    PointTrackingAxis::Vertical => DirectionKey::Vertical,
+                                }),
+                            },
+                            candidate: DraftInferenceCandidate {
+                                id: DraftInferenceCandidateId(0),
+                                raw_model_position: raw_model,
+                                adjusted_model_position: adjusted,
+                                raw_screen_position: raw_screen,
+                                adjusted_screen_position: frame.viewport.model_to_screen(adjusted),
+                                relations: vec![relation],
+                                references: vec![reference],
+                                guides: self
+                                    .policy
+                                    .point_tracking
+                                    .show_guides
+                                    .then_some(guide)
+                                    .into_iter()
+                                    .collect(),
+                                ranking: DraftInferenceRankingEvidence {
+                                    constraint_backed: true,
+                                    persistent_relation_count: 1,
+                                    anchor_priority: DraftAnchorPriority::None,
+                                    direction_priority: DraftDirectionPriority::WorldAxis,
+                                    positional_geometry_role_priority: 2,
+                                    directional_geometry_role_priority: 2,
+                                    distance_pixels: 0.0,
+                                    angular_error_radians: undirected_angle_error(delta, direction),
+                                },
+                            },
+                        });
+                    } else {
+                        standalone_guides.push(guide);
+                    }
                 }
             }
         }
         self.active_point_tracking = next_active;
-        guides
+        candidates
     }
 
     fn assign_candidate_ids(
@@ -1925,7 +2364,11 @@ impl DraftInferenceEngine {
             DraftInferenceFamily::Vertical => self.policy.vertical,
             DraftInferenceFamily::Parallel => self.policy.parallel,
             DraftInferenceFamily::Perpendicular => self.policy.perpendicular,
-            DraftInferenceFamily::PointTracking => self.policy.point_tracking,
+            DraftInferenceFamily::Concentric => self.policy.concentric,
+            DraftInferenceFamily::Collinear => self.policy.collinear,
+            DraftInferenceFamily::PointTracking
+            | DraftInferenceFamily::HorizontalPoints
+            | DraftInferenceFamily::VerticalPoints => self.policy.point_tracking,
         }
     }
 
@@ -1939,6 +2382,10 @@ impl DraftInferenceEngine {
             | DraftInferenceFamily::Vertical
             | DraftInferenceFamily::Parallel
             | DraftInferenceFamily::Perpendicular
+            | DraftInferenceFamily::HorizontalPoints
+            | DraftInferenceFamily::VerticalPoints
+            | DraftInferenceFamily::Concentric
+            | DraftInferenceFamily::Collinear
             | DraftInferenceFamily::PointTracking => 0.0,
         }
     }
@@ -1953,6 +2400,10 @@ impl DraftInferenceEngine {
             | DraftInferenceFamily::Vertical
             | DraftInferenceFamily::Parallel
             | DraftInferenceFamily::Perpendicular
+            | DraftInferenceFamily::HorizontalPoints
+            | DraftInferenceFamily::VerticalPoints
+            | DraftInferenceFamily::Concentric
+            | DraftInferenceFamily::Collinear
             | DraftInferenceFamily::PointTracking => 0.0,
         }
     }
@@ -2035,6 +2486,35 @@ fn direction_work(
     }
 }
 
+fn reference_is_certified_native_support(reference: DraftReferenceAnchor) -> bool {
+    matches!(
+        reference,
+        DraftReferenceAnchor::AffineSupport {
+            origin: DraftReferenceOrigin::Native,
+            ..
+        }
+    )
+}
+
+fn point_is_on_affine_support(
+    point: [f64; 2],
+    support_point: [f64; 2],
+    support_direction: [f64; 2],
+) -> bool {
+    let Some(unit) = normalized(support_direction) else {
+        return false;
+    };
+    let delta = [point[0] - support_point[0], point[1] - support_point[1]];
+    let transverse = dot(delta, [-unit[1], unit[0]]).abs();
+    // Certification is relative to the represented support displacement, not
+    // an implicit one-model-unit floor or the absolute world origin.  A unit
+    // floor would classify genuinely offset micro-scale spans as collinear;
+    // absolute-coordinate scaling would make the decision translation
+    // dependent.  The zero-displacement case remains exact (`0 <= 0`).
+    let scale = delta.into_iter().map(f64::abs).fold(0.0, f64::max);
+    transverse.is_finite() && transverse <= 64.0 * f64::EPSILON * scale
+}
+
 fn compare_direction_work_priority(first: DirectionWork, second: DirectionWork) -> Ordering {
     second
         .behavior
@@ -2053,6 +2533,7 @@ fn direction_relation(key: DirectionKey) -> DraftInferenceRelation {
         DirectionKey::Perpendicular(reference) => {
             DraftInferenceRelation::Perpendicular { reference }
         }
+        DirectionKey::Collinear(reference) => DraftInferenceRelation::Collinear { reference },
     }
 }
 
@@ -2085,6 +2566,7 @@ fn direction_guide(
             DirectionKey::Vertical => DraftInferenceFamily::Vertical,
             DirectionKey::Parallel(_) => DraftInferenceFamily::Parallel,
             DirectionKey::Perpendicular(_) => DraftInferenceFamily::Perpendicular,
+            DirectionKey::Collinear(_) => DraftInferenceFamily::Collinear,
         },
         classification: work.behavior.guide_classification(),
         geometry: DraftGuideGeometry::Segment {
@@ -2223,12 +2705,13 @@ fn push_candidate_bounded(
     works: &mut Vec<CandidateWork>,
     candidate: CandidateWork,
     limit: usize,
+    subject: DraftInferenceSubject,
 ) -> bool {
     if let Some(existing) = works.iter_mut().find(|work| work.key == candidate.key) {
         if candidate
             .candidate
             .ranking
-            .compare(existing.candidate.ranking)
+            .compare_for_subject(existing.candidate.ranking, subject)
             == Ordering::Less
         {
             *existing = candidate;
@@ -2434,6 +2917,7 @@ mod tests {
                 span_start,
             },
             anchors,
+            semantic_centers: Vec::new(),
         }
     }
 
@@ -2445,6 +2929,20 @@ mod tests {
                 profile: true,
                 construction: false,
             },
+        }
+    }
+
+    fn semantic_center(
+        curve: u128,
+        center: u128,
+        position: [f64; 2],
+        role: GeometryRole,
+    ) -> DraftSemanticCenterAnchor {
+        DraftSemanticCenterAnchor {
+            curve: curve_span(curve).curve,
+            center: point_id(center),
+            model_position: position,
+            role,
         }
     }
 
@@ -2539,11 +3037,16 @@ mod tests {
         assert_eq!(policy.limits.max_scene_curve_segments, 16_384);
 
         let invalid = DraftInferencePolicy {
-            point_tracking: DraftInferenceBehavior::constraint_backed(),
+            point_tracking: DraftInferenceBehavior {
+                show_guides: true,
+                adjust_coordinates: false,
+                persist_constraint: true,
+            },
             ..policy
         };
         assert_eq!(
-            DraftInferenceEngine::new(invalid).expect_err("tracking cannot persist"),
+            DraftInferenceEngine::new(invalid)
+                .expect_err("durable stored-point alignment must also adjust the draft"),
             DraftInferenceError::InvalidPolicy
         );
         let persist_only_identity = DraftInferencePolicy {
@@ -2888,7 +3391,11 @@ mod tests {
     fn point_hysteresis_uses_inclusive_enter_and_exit_boundaries() {
         let view = viewport(1.0);
         let anchor = point_anchor(1, [0.0, 0.0]);
-        let mut engine = DraftInferenceEngine::default();
+        let policy = DraftInferencePolicy {
+            point_tracking: DraftInferenceBehavior::tracking_only(),
+            ..DraftInferencePolicy::default()
+        };
+        let mut engine = DraftInferenceEngine::new(policy).expect("point boundary policy");
         let enter = frame(view, ScreenPoint { x: 508.0, y: 350.0 }, None, vec![anchor]);
         assert!(matches!(
             engine
@@ -3055,7 +3562,10 @@ mod tests {
         let exit_screen = view.model_to_screen(exit_target);
         let enter_sample = view.screen_to_model(enter_screen);
         let exit_sample = view.screen_to_model(exit_screen);
-        let mut policy = DraftInferencePolicy::default();
+        let mut policy = DraftInferencePolicy {
+            point_tracking: DraftInferenceBehavior::tracking_only(),
+            ..DraftInferencePolicy::default()
+        };
         policy.tolerances.direction_enter_radians =
             undirected_angle_error(enter_sample, [1.0, 0.0]);
         policy.tolerances.direction_exit_radians = undirected_angle_error(exit_sample, [1.0, 0.0]);
@@ -3127,7 +3637,7 @@ mod tests {
     }
 
     #[test]
-    fn remembered_parallel_beats_equivalent_world_axis() {
+    fn remembered_collinear_beats_equivalent_world_axis() {
         let view = viewport(50.0);
         let reference = affine_anchor(40, [0.0, 0.0], [1.0, 0.0]);
         let mut engine = DraftInferenceEngine::default();
@@ -3146,10 +3656,46 @@ mod tests {
             .expect("resolve");
         assert_eq!(
             resolved_candidate(&resolution).relations,
-            vec![DraftInferenceRelation::Parallel {
+            vec![DraftInferenceRelation::Collinear {
                 reference: curve_span(40)
             }]
         );
+    }
+
+    #[test]
+    fn offset_span_start_keeps_parallel_distinct_from_collinear() {
+        let view = viewport(50.0);
+        let reference = affine_anchor(401, [0.0, 0.0], [1.0, 0.0]);
+        let mut engine = DraftInferenceEngine::default();
+        engine.remember_reference(reference).expect("remember");
+        let start = [0.0, 1.0];
+        let endpoint = [3.0, 1.1];
+        let resolution = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen(endpoint),
+                    Some(start),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("resolve");
+        assert_eq!(
+            resolved_candidate(&resolution).relations,
+            vec![DraftInferenceRelation::Parallel {
+                reference: curve_span(401)
+            }]
+        );
+        assert!(resolution.candidates.iter().all(|candidate| {
+            !candidate.relations.iter().any(|relation| {
+                matches!(
+                    relation,
+                    DraftInferenceRelation::Collinear { reference }
+                        if *reference == curve_span(401)
+                )
+            })
+        }));
     }
 
     #[test]
@@ -3182,7 +3728,7 @@ mod tests {
                     .expect("remembered override")
             )
             .relations,
-            vec![DraftInferenceRelation::Parallel {
+            vec![DraftInferenceRelation::Collinear {
                 reference: curve_span(41)
             }]
         );
@@ -3215,9 +3761,9 @@ mod tests {
     }
 
     #[test]
-    fn remembered_point_alignment_is_honestly_tracking_only() {
+    fn remembered_derived_alignment_is_honestly_tracking_only() {
         let view = viewport(50.0);
-        let point = point_anchor(60, [0.0, 1.0]);
+        let point = midpoint_anchor(60, [0.0, 1.0], [1.0, 0.0]);
         let mut engine = DraftInferenceEngine::default();
         engine.remember_reference(point).expect("remember");
         let raw = [4.0, 1.05];
@@ -3277,6 +3823,7 @@ mod tests {
             vertical: tracking,
             parallel: tracking,
             perpendicular: tracking,
+            point_tracking: tracking,
             ..DraftInferencePolicy::default()
         };
         let mut engine = DraftInferenceEngine::new(policy).expect("tracking-only policy");
@@ -3374,7 +3921,7 @@ mod tests {
                 DraftInferenceRelation::PointIdentity {
                     point: point_id(73),
                 },
-                DraftInferenceRelation::Parallel {
+                DraftInferenceRelation::Collinear {
                     reference: curve_span(75),
                 },
             ]
@@ -3389,7 +3936,7 @@ mod tests {
                 candidate.relations.iter().any(|relation| {
                     matches!(
                         relation,
-                        DraftInferenceRelation::Parallel { reference }
+                        DraftInferenceRelation::Collinear { reference }
                             if *reference == curve_span(74)
                     )
                 })
@@ -3546,6 +4093,33 @@ mod tests {
                 .expect("scaled parallel resolution");
             assert_eq!(
                 resolved_candidate(&parallel).relations,
+                vec![DraftInferenceRelation::Collinear {
+                    reference: curve_span(732),
+                }]
+            );
+
+            let offset_start = [0.0, 2.0 * model_scale];
+            let offset_target = [
+                offset_start[0] + direction[0],
+                offset_start[1] + direction[1],
+            ];
+            let mut offset_parallel_engine = DraftInferenceEngine::default();
+            offset_parallel_engine
+                .remember_reference(reference)
+                .expect("scaled affine reference");
+            let offset_parallel = offset_parallel_engine
+                .resolve(
+                    &frame(
+                        view,
+                        view.model_to_screen(offset_target),
+                        Some(offset_start),
+                        Vec::new(),
+                    ),
+                    DraftInferenceInput::default(),
+                )
+                .expect("scaled offset parallel resolution");
+            assert_eq!(
+                resolved_candidate(&offset_parallel).relations,
                 vec![DraftInferenceRelation::Parallel {
                     reference: curve_span(732),
                 }]
@@ -3792,6 +4366,480 @@ mod tests {
         assert_eq!(curve_only.status, DraftInferenceStatus::None);
         assert!(curve_only.candidates.is_empty());
         assert!(curve_only.guides.is_empty());
+    }
+
+    #[test]
+    fn concentric_inference_deduplicates_curve_occurrences_and_keeps_enter_exit_hysteresis() {
+        let view = viewport(50.0);
+        let target = [2.0, 1.0];
+        let mut input = frame_for_subject(
+            view,
+            view.model_to_screen([2.1, 1.0]),
+            DraftInferenceSubject::CenteredPointOperand {
+                prospective_curve_index: 3,
+            },
+            None,
+            Vec::new(),
+        );
+        input.semantic_centers = vec![
+            semantic_center(31, 30, target, GeometryRole::Profile),
+            semantic_center(31, 30, target, GeometryRole::Profile),
+        ];
+        let mut engine = DraftInferenceEngine::default();
+        let entered = engine
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("concentric enter");
+        let candidate = resolved_candidate(&entered);
+        assert_eq!(candidate.adjusted_model_position, target);
+        assert!(matches!(
+            candidate.relations.as_slice(),
+            [DraftInferenceRelation::Concentric {
+                reference,
+                prospective_curve_index: 3,
+            }] if *reference == curve_span(31).curve
+        ));
+        assert_eq!(entered.candidates.len(), 1);
+
+        input.sample.raw_screen_position = view.model_to_screen([2.2, 1.0]);
+        let retained = engine
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("concentric exit band");
+        assert_eq!(
+            resolved_candidate(&retained).adjusted_model_position,
+            target
+        );
+
+        input.sample.raw_screen_position = view.model_to_screen([2.26, 1.0]);
+        let left = engine
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("concentric leave");
+        assert_eq!(left.status, DraftInferenceStatus::None);
+    }
+
+    #[test]
+    fn distinct_curves_sharing_a_center_remain_ambiguous_retained_operands() {
+        let view = viewport(50.0);
+        let target = [2.0, 1.0];
+        let mut input = frame_for_subject(
+            view,
+            view.model_to_screen(target),
+            DraftInferenceSubject::CenteredPointOperand {
+                prospective_curve_index: 3,
+            },
+            None,
+            Vec::new(),
+        );
+        input.semantic_centers = vec![
+            semantic_center(31, 30, target, GeometryRole::Profile),
+            semantic_center(32, 30, target, GeometryRole::Profile),
+        ];
+        let mut engine = DraftInferenceEngine::default();
+        let ambiguous = engine
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("shared-center curve ambiguity");
+        let DraftInferenceStatus::Ambiguous { candidates } = &ambiguous.status else {
+            panic!("distinct retained operands must remain ambiguous");
+        };
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(ambiguous.candidates.len(), 2);
+        assert_eq!(ambiguous.adjusted_model_position, target);
+
+        let selected_id = ambiguous
+            .candidates
+            .iter()
+            .find(|candidate| {
+                matches!(
+                    candidate.relations.as_slice(),
+                    [DraftInferenceRelation::Concentric { reference, .. }]
+                        if *reference == curve_span(32).curve
+                )
+            })
+            .expect("second curve remains selectable")
+            .id;
+        let preferred = engine
+            .resolve(
+                &input,
+                DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate: Some(selected_id),
+                },
+            )
+            .expect("explicit shared-center curve preference");
+        assert!(matches!(
+            resolved_candidate(&preferred).relations.as_slice(),
+            [DraftInferenceRelation::Concentric { reference, .. }]
+                if *reference == curve_span(32).curve
+        ));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one property test keeps ordinary anchors, centered precedence, explicit choice, and fallback together"
+    )]
+    fn centered_subject_preserves_m70_point_anchors_beside_concentric_candidates() {
+        let view = viewport(50.0);
+        let target = [2.0, 1.0];
+        let raw_screen = view.model_to_screen([2.05, 1.02]);
+        let subject = DraftInferenceSubject::CenteredPointOperand {
+            prospective_curve_index: 0,
+        };
+        let ordinary = [
+            point_anchor(10, target),
+            midpoint_anchor(20, target, [1.0, 0.0]),
+            affine_anchor(30, target, [1.0, 0.0]),
+        ];
+        let expected = [
+            DraftInferenceFamily::PointIdentity,
+            DraftInferenceFamily::Midpoint,
+            DraftInferenceFamily::PointOnCurve,
+        ];
+        for (anchor, family) in ordinary.into_iter().zip(expected) {
+            let frame = frame_for_subject(view, raw_screen, subject, None, vec![anchor]);
+            let resolution = DraftInferenceEngine::default()
+                .resolve(&frame, DraftInferenceInput::default())
+                .expect("centered ordinary inference");
+            let candidate = resolved_candidate(&resolution);
+            assert_eq!(candidate.adjusted_model_position, target);
+            assert!(candidate.guides.iter().all(|guide| guide.family == family));
+        }
+
+        let mut compound = frame_for_subject(
+            view,
+            raw_screen,
+            subject,
+            None,
+            vec![point_anchor(10, target)],
+        );
+        compound.semantic_centers = vec![semantic_center(40, 10, target, GeometryRole::Profile)];
+        let mut engine = DraftInferenceEngine::default();
+        let resolution = engine
+            .resolve(&compound, DraftInferenceInput::default())
+            .expect("compound centered inference");
+        assert_eq!(resolution.candidates.len(), 2);
+        let point = resolution
+            .candidates
+            .iter()
+            .find(|candidate| {
+                matches!(
+                    candidate.relations.as_slice(),
+                    [DraftInferenceRelation::PointIdentity { point }] if *point == point_id(10)
+                )
+            })
+            .expect("point identity candidate");
+        let concentric = resolution
+            .candidates
+            .iter()
+            .find(|candidate| {
+                matches!(
+                    candidate.relations.as_slice(),
+                    [DraftInferenceRelation::Concentric { reference, .. }]
+                        if *reference == curve_span(40).curve
+                )
+            })
+            .expect("concentric candidate");
+        assert_ne!(point.id, concentric.id);
+        assert_eq!(resolved_candidate(&resolution).id, concentric.id);
+
+        let preferred = engine
+            .resolve(
+                &compound,
+                DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate: Some(point.id),
+                },
+            )
+            .expect("preferred point identity");
+        assert!(matches!(
+            resolved_candidate(&preferred).relations.as_slice(),
+            [DraftInferenceRelation::PointIdentity { point }] if *point == point_id(10)
+        ));
+
+        let policy = DraftInferencePolicy {
+            concentric: DraftInferenceBehavior {
+                show_guides: false,
+                adjust_coordinates: false,
+                persist_constraint: false,
+            },
+            ..DraftInferencePolicy::default()
+        };
+        let fallback = DraftInferenceEngine::new(policy)
+            .expect("policy")
+            .resolve(&compound, DraftInferenceInput::default())
+            .expect("ordinary fallback");
+        assert!(matches!(
+            resolved_candidate(&fallback).relations.as_slice(),
+            [DraftInferenceRelation::PointIdentity { point }] if *point == point_id(10)
+        ));
+
+        let ordinary = DraftInferenceEngine::default()
+            .resolve(
+                &frame_for_subject(
+                    view,
+                    raw_screen,
+                    DraftInferenceSubject::PointOperand,
+                    None,
+                    vec![point_anchor(10, target)],
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("ordinary point identity");
+        assert!(matches!(
+            resolved_candidate(&ordinary).relations.as_slice(),
+            [DraftInferenceRelation::PointIdentity { point }] if *point == point_id(10)
+        ));
+    }
+
+    #[test]
+    fn irrelevant_subject_inputs_are_ignored_but_centered_inputs_share_one_bound() {
+        let view = viewport(50.0);
+        let screen = view.model_to_screen([0.0, 0.0]);
+        let mut point_frame = frame_for_subject(
+            view,
+            screen,
+            DraftInferenceSubject::PointOperand,
+            None,
+            vec![point_anchor(1, [0.0, 0.0])],
+        );
+        point_frame.semantic_centers = vec![semantic_center(
+            2,
+            3,
+            [f64::NAN, 0.0],
+            GeometryRole::Profile,
+        )];
+        assert!(matches!(
+            DraftInferenceEngine::default()
+                .resolve(&point_frame, DraftInferenceInput::default())
+                .expect("irrelevant center ignored")
+                .status,
+            DraftInferenceStatus::Resolved { .. }
+        ));
+
+        let mut circumference = frame_for_subject(
+            view,
+            screen,
+            DraftInferenceSubject::CircleCircumference,
+            None,
+            vec![
+                point_anchor(1, [0.0, 0.0]),
+                midpoint_anchor(4, [f64::NAN, 0.0], [1.0, 0.0]),
+            ],
+        );
+        circumference.semantic_centers = point_frame.semantic_centers.clone();
+        assert!(matches!(
+            DraftInferenceEngine::default()
+                .resolve(&circumference, DraftInferenceInput::default())
+                .expect("irrelevant curve and center inputs ignored")
+                .status,
+            DraftInferenceStatus::Resolved { .. }
+        ));
+
+        let mut policy = DraftInferencePolicy::default();
+        policy.limits.max_scene_anchors = 1;
+        let mut centered = frame_for_subject(
+            view,
+            screen,
+            DraftInferenceSubject::CenteredPointOperand {
+                prospective_curve_index: 0,
+            },
+            None,
+            vec![point_anchor(1, [0.0, 0.0])],
+        );
+        centered.semantic_centers = vec![semantic_center(2, 3, [0.0, 0.0], GeometryRole::Profile)];
+        let limited = DraftInferenceEngine::new(policy)
+            .expect("bounded policy")
+            .resolve(&centered, DraftInferenceInput::default())
+            .expect("typed mixed bound");
+        assert_eq!(
+            limited.completeness,
+            DraftInferenceCompleteness::SceneLimit(DraftInferenceSceneLimit {
+                resource: DraftInferenceSceneResource::Anchors,
+                required: 2,
+                limit: 1,
+            })
+        );
+        assert!(limited.candidates.is_empty());
+        assert!(limited.guides.is_empty());
+    }
+
+    #[test]
+    fn concentric_exact_tie_is_ambiguous_and_scale_invariant() {
+        for scale in [1.0e-6, 1.0, 1.0e6] {
+            let view = viewport(50.0 / scale);
+            let raw = [0.0, 0.0];
+            let mut input = frame_for_subject(
+                view,
+                view.model_to_screen(raw),
+                DraftInferenceSubject::CenteredPointOperand {
+                    prospective_curve_index: 0,
+                },
+                None,
+                Vec::new(),
+            );
+            input.semantic_centers = vec![
+                semantic_center(41, 40, [-0.1 * scale, 0.0], GeometryRole::Profile),
+                semantic_center(43, 42, [0.1 * scale, 0.0], GeometryRole::Profile),
+            ];
+            let resolution = DraftInferenceEngine::default()
+                .resolve(&input, DraftInferenceInput::default())
+                .expect("concentric tie");
+            assert!(matches!(
+                resolution.status,
+                DraftInferenceStatus::Ambiguous { ref candidates } if candidates.len() == 2
+            ));
+            assert_eq!(resolution.adjusted_model_position, raw);
+        }
+    }
+
+    #[test]
+    fn concentric_candidate_limit_and_suppression_are_fail_closed() {
+        let view = viewport(50.0);
+        let mut input = frame_for_subject(
+            view,
+            view.model_to_screen([0.0, 0.0]),
+            DraftInferenceSubject::CenteredPointOperand {
+                prospective_curve_index: 0,
+            },
+            None,
+            Vec::new(),
+        );
+        input.semantic_centers = (1..=4_096_u128)
+            .map(|value| semantic_center(value, value + 10_000, [0.0, 0.0], GeometryRole::Profile))
+            .collect();
+        let mut policy = DraftInferencePolicy::default();
+        policy.limits.max_scene_anchors = 8_192;
+        policy.limits.max_candidates = 2;
+        let mut engine = DraftInferenceEngine::new(policy).expect("bounded engine");
+        let limited = engine
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("candidate bound");
+        assert_eq!(limited.status, DraftInferenceStatus::ResourceLimited);
+        assert_eq!(
+            limited.completeness,
+            DraftInferenceCompleteness::CandidateLimit {
+                required: 3,
+                limit: 2,
+            }
+        );
+        assert!(limited.candidates.is_empty());
+
+        policy.limits.max_scene_anchors = 1;
+        let mut suppressed_engine = DraftInferenceEngine::new(policy).expect("suppression engine");
+        let suppressed = suppressed_engine
+            .resolve(
+                &input,
+                DraftInferenceInput {
+                    suppressed: true,
+                    preferred_candidate: None,
+                },
+            )
+            .expect("traversal-free suppression");
+        assert_eq!(suppressed.status, DraftInferenceStatus::Suppressed);
+        assert!(suppressed.candidates.is_empty());
+    }
+
+    #[test]
+    fn semantic_center_candidates_obey_scope_visibility_and_reacquire_after_exhaustion() {
+        let view = viewport(50.0);
+        let subject = DraftInferenceSubject::CenteredPointOperand {
+            prospective_curve_index: 0,
+        };
+        let mut input = frame_for_subject(
+            view,
+            view.model_to_screen([0.0, 0.0]),
+            subject,
+            None,
+            Vec::new(),
+        );
+        input.semantic_centers = vec![
+            semantic_center(1, 11, [0.0, 0.0], GeometryRole::Profile),
+            semantic_center(2, 12, [0.01, 0.0], GeometryRole::Construction),
+        ];
+
+        input.geometry_policy.scope = GeometryPickScope::Profile;
+        let profile = DraftInferenceEngine::default()
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("profile center");
+        assert!(matches!(
+            resolved_candidate(&profile).relations.as_slice(),
+            [DraftInferenceRelation::Concentric { reference, .. }]
+                if *reference == curve_span(1).curve
+        ));
+
+        input.geometry_policy.scope = GeometryPickScope::Construction;
+        let construction = DraftInferenceEngine::default()
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("construction center");
+        assert!(matches!(
+            resolved_candidate(&construction).relations.as_slice(),
+            [DraftInferenceRelation::Concentric { reference, .. }]
+                if *reference == curve_span(2).curve
+        ));
+
+        input.geometry_policy.visibility.explicit_construction = false;
+        assert_eq!(
+            DraftInferenceEngine::default()
+                .resolve(&input, DraftInferenceInput::default())
+                .expect("hidden construction center")
+                .status,
+            DraftInferenceStatus::None
+        );
+
+        let mut policy = DraftInferencePolicy::default();
+        policy.limits.max_candidates = 1;
+        policy.limits.max_scene_anchors = 3;
+        let mut engine = DraftInferenceEngine::new(policy).expect("bounded engine");
+        input.geometry_policy = GeometryInteractionPolicy::default();
+        let limited = engine
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("distinct-center overflow");
+        assert_eq!(limited.status, DraftInferenceStatus::ResourceLimited);
+        assert!(limited.candidates.is_empty());
+
+        input.semantic_centers.truncate(1);
+        let recovered = engine
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("post-limit reacquisition");
+        assert!(matches!(
+            recovered.status,
+            DraftInferenceStatus::Resolved { .. }
+        ));
+    }
+
+    #[test]
+    fn durable_point_tracking_works_without_guides_and_projects_visible_guide_endpoint() {
+        let view = viewport(50.0);
+        let reference = point_anchor(52, [0.0, 1.0]);
+        let raw = [3.0, 1.05];
+        let input = frame(view, view.model_to_screen(raw), None, Vec::new());
+
+        let mut policy = DraftInferencePolicy::default();
+        policy.point_tracking.show_guides = false;
+        let mut headless = DraftInferenceEngine::new(policy).expect("headless policy");
+        headless.remember_reference(reference).expect("reference");
+        let resolution = headless
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("durable no-guide tracking");
+        assert_eq!(
+            resolved_candidate(&resolution).adjusted_model_position,
+            [3.0, 1.0]
+        );
+        assert!(resolution.guides.is_empty());
+
+        let mut visible = DraftInferenceEngine::default();
+        visible.remember_reference(reference).expect("reference");
+        let resolution = visible
+            .resolve(&input, DraftInferenceInput::default())
+            .expect("visible tracking");
+        assert!(resolution.guides.iter().any(|guide| {
+            matches!(
+                guide.geometry,
+                DraftGuideGeometry::Segment {
+                    start: [0.0, 1.0],
+                    end: [3.0, 1.0],
+                }
+            )
+        }));
     }
 
     #[test]
@@ -4052,7 +5100,7 @@ mod tests {
             .expect("remembered inference");
         assert_eq!(
             resolved_candidate(&before).relations,
-            vec![DraftInferenceRelation::Parallel {
+            vec![DraftInferenceRelation::Collinear {
                 reference: curve_span(91)
             }]
         );
@@ -4081,6 +5129,7 @@ mod tests {
                     relation,
                     DraftInferenceRelation::Parallel { .. }
                         | DraftInferenceRelation::Perpendicular { .. }
+                        | DraftInferenceRelation::Collinear { .. }
                 )
             })
         }));

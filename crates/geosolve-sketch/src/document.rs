@@ -168,6 +168,8 @@ pub enum DocumentError {
     UnsupportedM43State,
     #[error("supported sketch-v4 encoding cannot represent M58 operation trim topology")]
     UnsupportedM58State,
+    #[error("supported sketch-v4 encoding cannot represent M71 retained planar relations")]
+    UnsupportedM71State,
     #[error("activation revision {actual} is not newer than retained revision {retained}")]
     StaleActivationRevision { actual: u64, retained: u64 },
     #[error("activation input contains duplicate element {0:?}")]
@@ -1015,6 +1017,14 @@ pub enum DocumentConstraintDefinition {
     Vertical {
         line: CurveSpan,
     },
+    HorizontalPoints {
+        first: DesignPointId,
+        second: DesignPointId,
+    },
+    VerticalPoints {
+        first: DesignPointId,
+        second: DesignPointId,
+    },
     PointOnCurve {
         point: DesignPointId,
         contact: ContactId,
@@ -1030,6 +1040,14 @@ pub enum DocumentConstraintDefinition {
     ExternalLineCollinear {
         line: DocumentLineSupportRef,
         external: DocumentExternalLineSupportRef,
+    },
+    Concentric {
+        first: DocumentCenterRef,
+        second: DocumentCenterRef,
+    },
+    Collinear {
+        first: DocumentLineSupportRef,
+        second: DocumentLineSupportRef,
     },
     EqualLength {
         first: CurveSpan,
@@ -2232,6 +2250,511 @@ struct DocumentConstraintV3 {
     definition: DocumentConstraintDefinitionV3,
 }
 
+/// Frozen sketch-v4 constraint wire record. Keep this exhaustive over the language
+/// accepted before M71 rather than serializing the evolving in-memory enum directly.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DocumentConstraintV4 {
+    id: DocumentConstraintId,
+    source_id: DocumentSourceId,
+    label: String,
+    suppressed: bool,
+    definition: DocumentConstraintDefinitionV4,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum DocumentConstraintDefinitionV4 {
+    FixedPoint {
+        point: DesignPointId,
+        target: [f64; 2],
+    },
+    FixedCoordinate {
+        point: DesignPointId,
+        axis: DocumentCoordinateAxis,
+        target: f64,
+    },
+    Coincident {
+        first: DesignPointId,
+        second: DesignPointId,
+    },
+    ExternalPointCoincident {
+        point: DesignPointId,
+        external: DocumentExternalPointRef,
+    },
+    Horizontal {
+        line: CurveSpan,
+    },
+    Vertical {
+        line: CurveSpan,
+    },
+    PointOnCurve {
+        point: DesignPointId,
+        contact: ContactId,
+    },
+    Parallel {
+        first: CurveSpan,
+        second: CurveSpan,
+    },
+    Perpendicular {
+        first: CurveSpan,
+        second: CurveSpan,
+    },
+    ExternalLineCollinear {
+        line: DocumentLineSupportRef,
+        external: DocumentExternalLineSupportRef,
+    },
+    EqualLength {
+        first: CurveSpan,
+        second: CurveSpan,
+    },
+    EqualRadius {
+        first: CurveId,
+        second: CurveId,
+    },
+    Midpoint {
+        point: DesignPointId,
+        line: CurveSpan,
+    },
+    SymmetricAboutLine {
+        first: DesignPointId,
+        second: DesignPointId,
+        line: CurveSpan,
+    },
+    LineCircleTangency {
+        line_contact: ContactId,
+        circle_contact: ContactId,
+        side: DocumentLineSide,
+    },
+    CircleCircleTangency {
+        first: CurveId,
+        second: CurveId,
+        mode: DocumentCircleTangencyMode,
+        center_direction: [f64; 2],
+    },
+    CircleArcTangency {
+        circle_contact: ContactId,
+        arc_contact: ContactId,
+        side: DocumentArcTangencySide,
+    },
+    LineCurveTangency {
+        line: CurveSpan,
+        endpoint: FeatureEndpoint,
+        curve_contact: ContactId,
+    },
+    CurveCurveContact {
+        first_contact: ContactId,
+        second_contact: ContactId,
+    },
+    CurveCurveTangency {
+        first_contact: ContactId,
+        second_contact: ContactId,
+    },
+    CurveDirection {
+        line: CurveSpan,
+        curve_contact: ContactId,
+        relation: DocumentCurveDirectionRelation,
+    },
+    EqualCurvature {
+        first_contact: ContactId,
+        second_contact: ContactId,
+        relation: DocumentCurveCurvatureRelation,
+    },
+    EndpointContinuity {
+        first_contact: ContactId,
+        second_contact: ContactId,
+        continuity: DocumentCurveContinuity,
+    },
+    LineLineFillet {
+        arc: CurveId,
+        first_contact: ContactId,
+        first_side: DocumentCurveNormalSide,
+        second_contact: ContactId,
+        second_side: DocumentCurveNormalSide,
+        endpoint_order: DocumentFilletEndpointOrder,
+    },
+    CurveCurveFillet {
+        arc: CurveId,
+        first_contact: ContactId,
+        first_side: DocumentCurveNormalSide,
+        first_trim_endpoint: DocumentFilletTrimEndpoint,
+        second_contact: ContactId,
+        second_side: DocumentCurveNormalSide,
+        second_trim_endpoint: DocumentFilletTrimEndpoint,
+        endpoint_order: DocumentFilletEndpointOrder,
+    },
+}
+
+impl From<DocumentConstraintV4> for DocumentConstraint {
+    fn from(value: DocumentConstraintV4) -> Self {
+        Self {
+            id: value.id,
+            source_id: value.source_id,
+            label: value.label,
+            suppressed: value.suppressed,
+            definition: value.definition.into(),
+        }
+    }
+}
+
+impl From<DocumentConstraintDefinitionV4> for DocumentConstraintDefinition {
+    #[allow(clippy::too_many_lines)]
+    fn from(value: DocumentConstraintDefinitionV4) -> Self {
+        use DocumentConstraintDefinitionV4 as V;
+        match value {
+            V::FixedPoint { point, target } => Self::FixedPoint { point, target },
+            V::FixedCoordinate {
+                point,
+                axis,
+                target,
+            } => Self::FixedCoordinate {
+                point,
+                axis,
+                target,
+            },
+            V::Coincident { first, second } => Self::Coincident { first, second },
+            V::ExternalPointCoincident { point, external } => {
+                Self::ExternalPointCoincident { point, external }
+            }
+            V::Horizontal { line } => Self::Horizontal { line },
+            V::Vertical { line } => Self::Vertical { line },
+            V::PointOnCurve { point, contact } => Self::PointOnCurve { point, contact },
+            V::Parallel { first, second } => Self::Parallel { first, second },
+            V::Perpendicular { first, second } => Self::Perpendicular { first, second },
+            V::ExternalLineCollinear { line, external } => {
+                Self::ExternalLineCollinear { line, external }
+            }
+            V::EqualLength { first, second } => Self::EqualLength { first, second },
+            V::EqualRadius { first, second } => Self::EqualRadius { first, second },
+            V::Midpoint { point, line } => Self::Midpoint { point, line },
+            V::SymmetricAboutLine {
+                first,
+                second,
+                line,
+            } => Self::SymmetricAboutLine {
+                first,
+                second,
+                line,
+            },
+            V::LineCircleTangency {
+                line_contact,
+                circle_contact,
+                side,
+            } => Self::LineCircleTangency {
+                line_contact,
+                circle_contact,
+                side,
+            },
+            V::CircleCircleTangency {
+                first,
+                second,
+                mode,
+                center_direction,
+            } => Self::CircleCircleTangency {
+                first,
+                second,
+                mode,
+                center_direction,
+            },
+            V::CircleArcTangency {
+                circle_contact,
+                arc_contact,
+                side,
+            } => Self::CircleArcTangency {
+                circle_contact,
+                arc_contact,
+                side,
+            },
+            V::LineCurveTangency {
+                line,
+                endpoint,
+                curve_contact,
+            } => Self::LineCurveTangency {
+                line,
+                endpoint,
+                curve_contact,
+            },
+            V::CurveCurveContact {
+                first_contact,
+                second_contact,
+            } => Self::CurveCurveContact {
+                first_contact,
+                second_contact,
+            },
+            V::CurveCurveTangency {
+                first_contact,
+                second_contact,
+            } => Self::CurveCurveTangency {
+                first_contact,
+                second_contact,
+            },
+            V::CurveDirection {
+                line,
+                curve_contact,
+                relation,
+            } => Self::CurveDirection {
+                line,
+                curve_contact,
+                relation,
+            },
+            V::EqualCurvature {
+                first_contact,
+                second_contact,
+                relation,
+            } => Self::EqualCurvature {
+                first_contact,
+                second_contact,
+                relation,
+            },
+            V::EndpointContinuity {
+                first_contact,
+                second_contact,
+                continuity,
+            } => Self::EndpointContinuity {
+                first_contact,
+                second_contact,
+                continuity,
+            },
+            V::LineLineFillet {
+                arc,
+                first_contact,
+                first_side,
+                second_contact,
+                second_side,
+                endpoint_order,
+            } => Self::LineLineFillet {
+                arc,
+                first_contact,
+                first_side,
+                second_contact,
+                second_side,
+                endpoint_order,
+            },
+            V::CurveCurveFillet {
+                arc,
+                first_contact,
+                first_side,
+                first_trim_endpoint,
+                second_contact,
+                second_side,
+                second_trim_endpoint,
+                endpoint_order,
+            } => Self::CurveCurveFillet {
+                arc,
+                first_contact,
+                first_side,
+                first_trim_endpoint,
+                second_contact,
+                second_side,
+                second_trim_endpoint,
+                endpoint_order,
+            },
+        }
+    }
+}
+
+impl TryFrom<&DocumentConstraint> for DocumentConstraintV4 {
+    type Error = DocumentError;
+
+    fn try_from(value: &DocumentConstraint) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: value.id,
+            source_id: value.source_id,
+            label: value.label.clone(),
+            suppressed: value.suppressed,
+            definition: DocumentConstraintDefinitionV4::try_from(&value.definition)?,
+        })
+    }
+}
+
+impl TryFrom<&DocumentConstraintDefinition> for DocumentConstraintDefinitionV4 {
+    type Error = DocumentError;
+
+    #[allow(clippy::too_many_lines)]
+    fn try_from(value: &DocumentConstraintDefinition) -> Result<Self, Self::Error> {
+        use DocumentConstraintDefinition as C;
+        Ok(match value {
+            C::FixedPoint { point, target } => Self::FixedPoint {
+                point: *point,
+                target: *target,
+            },
+            C::FixedCoordinate {
+                point,
+                axis,
+                target,
+            } => Self::FixedCoordinate {
+                point: *point,
+                axis: *axis,
+                target: *target,
+            },
+            C::Coincident { first, second } => Self::Coincident {
+                first: *first,
+                second: *second,
+            },
+            C::ExternalPointCoincident { point, external } => Self::ExternalPointCoincident {
+                point: *point,
+                external: *external,
+            },
+            C::Horizontal { line } => Self::Horizontal { line: *line },
+            C::Vertical { line } => Self::Vertical { line: *line },
+            C::PointOnCurve { point, contact } => Self::PointOnCurve {
+                point: *point,
+                contact: *contact,
+            },
+            C::Parallel { first, second } => Self::Parallel {
+                first: *first,
+                second: *second,
+            },
+            C::Perpendicular { first, second } => Self::Perpendicular {
+                first: *first,
+                second: *second,
+            },
+            C::ExternalLineCollinear { line, external } => Self::ExternalLineCollinear {
+                line: *line,
+                external: *external,
+            },
+            C::EqualLength { first, second } => Self::EqualLength {
+                first: *first,
+                second: *second,
+            },
+            C::EqualRadius { first, second } => Self::EqualRadius {
+                first: *first,
+                second: *second,
+            },
+            C::Midpoint { point, line } => Self::Midpoint {
+                point: *point,
+                line: *line,
+            },
+            C::SymmetricAboutLine {
+                first,
+                second,
+                line,
+            } => Self::SymmetricAboutLine {
+                first: *first,
+                second: *second,
+                line: *line,
+            },
+            C::LineCircleTangency {
+                line_contact,
+                circle_contact,
+                side,
+            } => Self::LineCircleTangency {
+                line_contact: *line_contact,
+                circle_contact: *circle_contact,
+                side: *side,
+            },
+            C::CircleCircleTangency {
+                first,
+                second,
+                mode,
+                center_direction,
+            } => Self::CircleCircleTangency {
+                first: *first,
+                second: *second,
+                mode: *mode,
+                center_direction: *center_direction,
+            },
+            C::CircleArcTangency {
+                circle_contact,
+                arc_contact,
+                side,
+            } => Self::CircleArcTangency {
+                circle_contact: *circle_contact,
+                arc_contact: *arc_contact,
+                side: *side,
+            },
+            C::LineCurveTangency {
+                line,
+                endpoint,
+                curve_contact,
+            } => Self::LineCurveTangency {
+                line: *line,
+                endpoint: *endpoint,
+                curve_contact: *curve_contact,
+            },
+            C::CurveCurveContact {
+                first_contact,
+                second_contact,
+            } => Self::CurveCurveContact {
+                first_contact: *first_contact,
+                second_contact: *second_contact,
+            },
+            C::CurveCurveTangency {
+                first_contact,
+                second_contact,
+            } => Self::CurveCurveTangency {
+                first_contact: *first_contact,
+                second_contact: *second_contact,
+            },
+            C::CurveDirection {
+                line,
+                curve_contact,
+                relation,
+            } => Self::CurveDirection {
+                line: *line,
+                curve_contact: *curve_contact,
+                relation: *relation,
+            },
+            C::EqualCurvature {
+                first_contact,
+                second_contact,
+                relation,
+            } => Self::EqualCurvature {
+                first_contact: *first_contact,
+                second_contact: *second_contact,
+                relation: *relation,
+            },
+            C::EndpointContinuity {
+                first_contact,
+                second_contact,
+                continuity,
+            } => Self::EndpointContinuity {
+                first_contact: *first_contact,
+                second_contact: *second_contact,
+                continuity: *continuity,
+            },
+            C::LineLineFillet {
+                arc,
+                first_contact,
+                first_side,
+                second_contact,
+                second_side,
+                endpoint_order,
+            } => Self::LineLineFillet {
+                arc: *arc,
+                first_contact: *first_contact,
+                first_side: *first_side,
+                second_contact: *second_contact,
+                second_side: *second_side,
+                endpoint_order: *endpoint_order,
+            },
+            C::CurveCurveFillet {
+                arc,
+                first_contact,
+                first_side,
+                first_trim_endpoint,
+                second_contact,
+                second_side,
+                second_trim_endpoint,
+                endpoint_order,
+            } => Self::CurveCurveFillet {
+                arc: *arc,
+                first_contact: *first_contact,
+                first_side: *first_side,
+                first_trim_endpoint: *first_trim_endpoint,
+                second_contact: *second_contact,
+                second_side: *second_side,
+                second_trim_endpoint: *second_trim_endpoint,
+                endpoint_order: *endpoint_order,
+            },
+            C::HorizontalPoints { .. }
+            | C::VerticalPoints { .. }
+            | C::Concentric { .. }
+            | C::Collinear { .. } => return Err(DocumentError::UnsupportedM71State),
+        })
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(untagged)]
 enum DocumentConstraintDefinitionV3 {
@@ -2539,13 +3062,13 @@ struct SketchDocumentV4 {
     curves: Vec<DesignCurve>,
     contacts: Vec<ContactSlot>,
     trim_views: Vec<DocumentCurveTrimView>,
-    constraints: Vec<DocumentConstraint>,
+    constraints: Vec<DocumentConstraintV4>,
     dimensions: Vec<DocumentDimension>,
     source_order: Vec<DocumentSourceId>,
 }
 
-impl From<&SketchDocument> for SketchDocumentV4 {
-    fn from(document: &SketchDocument) -> Self {
+impl SketchDocumentV4 {
+    fn with_constraints(document: &SketchDocument, constraints: Vec<DocumentConstraintV4>) -> Self {
         Self {
             version: document.version,
             id: document.id,
@@ -2556,10 +3079,23 @@ impl From<&SketchDocument> for SketchDocumentV4 {
             curves: document.curves.clone(),
             contacts: document.contacts.clone(),
             trim_views: document.trim_views.clone(),
-            constraints: document.constraints.clone(),
+            constraints,
             dimensions: document.dimensions.clone(),
             source_order: document.source_order.clone(),
         }
+    }
+}
+
+impl TryFrom<&SketchDocument> for SketchDocumentV4 {
+    type Error = DocumentError;
+
+    fn try_from(document: &SketchDocument) -> Result<Self, Self::Error> {
+        let constraints = document
+            .constraints
+            .iter()
+            .map(DocumentConstraintV4::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::with_constraints(document, constraints))
     }
 }
 
@@ -2575,7 +3111,11 @@ impl From<SketchDocumentV4> for SketchDocument {
             curves: document.curves,
             contacts: document.contacts,
             trim_views: document.trim_views,
-            constraints: document.constraints,
+            constraints: document
+                .constraints
+                .into_iter()
+                .map(DocumentConstraint::from)
+                .collect(),
             dimensions: document.dimensions,
             parameters: Vec::new(),
             parameter_bindings: Vec::new(),
@@ -2609,6 +3149,92 @@ struct SketchDocumentDraftV5 {
     parameter_outputs: Vec<DocumentParameterOutput>,
     #[serde(default)]
     external_bindings: Vec<DocumentExternalBinding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    retained_planar_constraints: Vec<DraftRetainedPlanarConstraint>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DraftRetainedPlanarConstraint {
+    id: DocumentConstraintId,
+    source_id: DocumentSourceId,
+    label: String,
+    suppressed: bool,
+    definition: DraftRetainedPlanarConstraintDefinition,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum DraftRetainedPlanarConstraintDefinition {
+    HorizontalPoints {
+        first: DesignPointId,
+        second: DesignPointId,
+    },
+    VerticalPoints {
+        first: DesignPointId,
+        second: DesignPointId,
+    },
+    Concentric {
+        first: DocumentCenterRef,
+        second: DocumentCenterRef,
+    },
+    Collinear {
+        first: DocumentLineSupportRef,
+        second: DocumentLineSupportRef,
+    },
+}
+
+impl DraftRetainedPlanarConstraint {
+    fn from_constraint(value: &DocumentConstraint) -> Option<Self> {
+        let definition = match value.definition {
+            DocumentConstraintDefinition::HorizontalPoints { first, second } => {
+                DraftRetainedPlanarConstraintDefinition::HorizontalPoints { first, second }
+            }
+            DocumentConstraintDefinition::VerticalPoints { first, second } => {
+                DraftRetainedPlanarConstraintDefinition::VerticalPoints { first, second }
+            }
+            DocumentConstraintDefinition::Concentric { first, second } => {
+                DraftRetainedPlanarConstraintDefinition::Concentric { first, second }
+            }
+            DocumentConstraintDefinition::Collinear { first, second } => {
+                DraftRetainedPlanarConstraintDefinition::Collinear { first, second }
+            }
+            _ => return None,
+        };
+        Some(Self {
+            id: value.id,
+            source_id: value.source_id,
+            label: value.label.clone(),
+            suppressed: value.suppressed,
+            definition,
+        })
+    }
+}
+
+impl From<DraftRetainedPlanarConstraint> for DocumentConstraint {
+    fn from(value: DraftRetainedPlanarConstraint) -> Self {
+        let definition = match value.definition {
+            DraftRetainedPlanarConstraintDefinition::HorizontalPoints { first, second } => {
+                DocumentConstraintDefinition::HorizontalPoints { first, second }
+            }
+            DraftRetainedPlanarConstraintDefinition::VerticalPoints { first, second } => {
+                DocumentConstraintDefinition::VerticalPoints { first, second }
+            }
+            DraftRetainedPlanarConstraintDefinition::Concentric { first, second } => {
+                DocumentConstraintDefinition::Concentric { first, second }
+            }
+            DraftRetainedPlanarConstraintDefinition::Collinear { first, second } => {
+                DocumentConstraintDefinition::Collinear { first, second }
+            }
+        };
+        Self {
+            id: value.id,
+            source_id: value.source_id,
+            label: value.label,
+            suppressed: value.suppressed,
+            definition,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -4543,6 +5169,34 @@ impl SketchDocument {
         self.validate_feature(FeatureRef::CurveCenter {
             curve: center.curve,
         })
+    }
+
+    /// Resolves a validated semantic-center operand to its stored design point.
+    ///
+    /// This exposes semantic identity rather than an evaluated coordinate, so
+    /// interaction policy can reject tautological center relations without
+    /// reproducing curve-family rules.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the curve is missing or has no stored semantic center.
+    pub fn resolve_center_ref(
+        &self,
+        center: DocumentCenterRef,
+    ) -> Result<DesignPointId, DocumentError> {
+        self.validate_center_ref(center)?;
+        match &self
+            .curve(center.curve)
+            .ok_or_else(|| unknown("curve", center.curve.0))?
+            .definition
+        {
+            CurveDefinition::Circle { center, .. }
+            | CurveDefinition::CircularArc { center, .. }
+            | CurveDefinition::Ellipse { center, .. }
+            | CurveDefinition::EllipticalArc { center, .. }
+            | CurveDefinition::HyperbolaSegment { center, .. } => Ok(*center),
+            _ => invalid("center feature", "curve has no stored semantic center"),
+        }
     }
 
     /// Validates an endpoint operand without manufacturing an endpoint for periodic topology.
@@ -8486,6 +9140,13 @@ impl SketchDocument {
     /// Returns a validation or JSON serialization error.
     pub fn to_canonical_json(&self) -> Result<String, DocumentError> {
         self.validate()?;
+        if self
+            .constraints
+            .iter()
+            .any(|constraint| is_retained_planar_constraint(&constraint.definition))
+        {
+            return Err(DocumentError::UnsupportedM71State);
+        }
         if !self.geometry_roles.is_empty()
             || !self.user_inactive_elements.is_empty()
             || self.host_activation.is_some()
@@ -8514,7 +9175,9 @@ impl SketchDocument {
         }
         let mut canonical = self.clone();
         canonical.canonicalize();
-        Ok(serde_json::to_string(&SketchDocumentV4::from(&canonical))?)
+        Ok(serde_json::to_string(&SketchDocumentV4::try_from(
+            &canonical,
+        )?)?)
     }
 
     /// Explicitly unsupported draft-v5 codec for pre-M62 M41 state.
@@ -8531,9 +9194,19 @@ impl SketchDocument {
                 role: *role,
             })
             .collect();
+        let mut constraints = Vec::with_capacity(canonical.constraints.len());
+        let mut retained_planar_constraints = Vec::new();
+        for constraint in &canonical.constraints {
+            if let Some(retained) = DraftRetainedPlanarConstraint::from_constraint(constraint) {
+                retained_planar_constraints.push(retained);
+            } else {
+                constraints.push(DocumentConstraintV4::try_from(constraint)?);
+            }
+        }
+        let document = SketchDocumentV4::with_constraints(&canonical, constraints);
         let draft = SketchDocumentDraftV5 {
             version: 5,
-            document: SketchDocumentV4::from(&canonical),
+            document,
             geometry_roles,
             user_inactive_elements: canonical.user_inactive_elements.iter().copied().collect(),
             host_activation: canonical.host_activation,
@@ -8541,6 +9214,7 @@ impl SketchDocument {
             parameter_bindings: canonical.parameter_bindings,
             parameter_outputs: canonical.parameter_outputs,
             external_bindings: canonical.external_bindings,
+            retained_planar_constraints,
         };
         Ok(serde_json::to_string(&draft)?)
     }
@@ -8569,6 +9243,43 @@ impl SketchDocument {
             });
         }
         let mut document = Self::from(draft.document);
+        let side_constraint_count = draft.retained_planar_constraints.len();
+        if document
+            .constraints
+            .len()
+            .saturating_add(side_constraint_count)
+            > MAX_DOCUMENT_OBJECTS / 2
+        {
+            return Err(DocumentError::ResourceLimit {
+                resource: "retained planar constraints",
+                actual: side_constraint_count,
+                limit: MAX_DOCUMENT_OBJECTS / 2,
+            });
+        }
+        let embedded_source_order = document
+            .source_order
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let mut side_ids = BTreeSet::new();
+        let mut side_sources = BTreeSet::new();
+        for constraint in draft.retained_planar_constraints {
+            if !side_ids.insert(constraint.id) || !side_sources.insert(constraint.source_id) {
+                return invalid(
+                    "retained planar constraints",
+                    "constraint and source identities must be unique",
+                );
+            }
+            if !embedded_source_order.contains(&constraint.source_id) {
+                return invalid(
+                    "retained planar constraints",
+                    "every side constraint source must occur in the embedded source order",
+                );
+            }
+            document
+                .constraints
+                .push(DocumentConstraint::from(constraint));
+        }
         for role in draft.geometry_roles {
             if role.role == GeometryRole::Profile
                 || document
@@ -9729,6 +10440,9 @@ impl SketchDocument {
             C::Horizontal { line } | C::Vertical { line } => {
                 self.validate_line_span(*line)?;
             }
+            C::HorizontalPoints { first, second } | C::VerticalPoints { first, second } => {
+                self.require_distinct_points(*first, *second)?;
+            }
             C::PointOnCurve { point, contact } => {
                 self.require_point(*point)?;
                 if self
@@ -9761,6 +10475,25 @@ impl SketchDocument {
                         "external line operand",
                         "binding must expect a line-segment feature",
                     );
+                }
+            }
+            C::Concentric { first, second } => {
+                self.validate_center_ref(*first)?;
+                self.validate_center_ref(*second)?;
+                let first_center = self.resolve_center_ref(*first)?;
+                let second_center = self.resolve_center_ref(*second)?;
+                if first_center == second_center {
+                    return invalid(
+                        "concentric operands",
+                        "curve centers must resolve to distinct stored points",
+                    );
+                }
+            }
+            C::Collinear { first, second } => {
+                self.validate_line_support_ref(*first)?;
+                self.validate_line_support_ref(*second)?;
+                if first.span == second.span {
+                    return invalid("collinear operands", "line supports must be distinct");
                 }
             }
             C::EqualRadius { first, second } => {
@@ -11309,6 +12042,16 @@ fn constraint_contacts(definition: &DocumentConstraintDefinition) -> Vec<Contact
     }
 }
 
+const fn is_retained_planar_constraint(definition: &DocumentConstraintDefinition) -> bool {
+    matches!(
+        definition,
+        DocumentConstraintDefinition::HorizontalPoints { .. }
+            | DocumentConstraintDefinition::VerticalPoints { .. }
+            | DocumentConstraintDefinition::Concentric { .. }
+            | DocumentConstraintDefinition::Collinear { .. }
+    )
+}
+
 #[allow(clippy::too_many_lines)]
 const fn canonical_element_key(element: DocumentElementId) -> (u128, u8) {
     let kind = match element {
@@ -11522,6 +12265,8 @@ fn constraint_references_object(
         ) => *point == selected,
         (
             DocumentConstraintDefinition::Coincident { first, second }
+            | DocumentConstraintDefinition::HorizontalPoints { first, second }
+            | DocumentConstraintDefinition::VerticalPoints { first, second }
             | DocumentConstraintDefinition::SymmetricAboutLine { first, second, .. },
             DocumentObjectId::Point(selected),
         ) => *first == selected || *second == selected,
@@ -11542,6 +12287,14 @@ fn constraint_references_object(
             DocumentConstraintDefinition::ExternalLineCollinear { line, .. },
             DocumentObjectId::Curve(selected),
         ) => line.span.curve == selected,
+        (
+            DocumentConstraintDefinition::Concentric { first, second },
+            DocumentObjectId::Curve(selected),
+        ) => first.curve == selected || second.curve == selected,
+        (
+            DocumentConstraintDefinition::Collinear { first, second },
+            DocumentObjectId::Curve(selected),
+        ) => first.span.curve == selected || second.span.curve == selected,
         (
             DocumentConstraintDefinition::ExternalLineCollinear { external, .. },
             DocumentObjectId::ExternalBinding(selected),

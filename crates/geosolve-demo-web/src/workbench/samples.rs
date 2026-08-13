@@ -9,9 +9,10 @@ use geosolve_constraint_editor::{
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan,
-    DesignPointId, DocumentConstraintDefinition, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentId, GeometryRole, PersistentId, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation, alpha_scenario,
+    DesignPointId, DocumentCenterRef, DocumentConstraintDefinition, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentDirectionSense, DocumentId, DocumentLineSupportRef,
+    GeometryRole, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+    SketchDocument, TangentOrientation, alpha_scenario,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -31,6 +32,7 @@ pub(crate) enum SampleId {
     DrawingArm,
     ConstraintSampler,
     AutoConstraintDrafting,
+    RetainedDraftingRelations,
     TangentRadialNormal,
     ContactBranch,
     AngleDimensions,
@@ -43,7 +45,7 @@ pub(crate) enum SampleId {
 }
 
 impl SampleId {
-    pub(crate) const ALL: [Self; 24] = [
+    pub(crate) const ALL: [Self; 25] = [
         Self::DraftingCompass,
         Self::BezierContinuityBridge,
         Self::TwinRollerCam,
@@ -59,6 +61,7 @@ impl SampleId {
         Self::DrawingArm,
         Self::ConstraintSampler,
         Self::AutoConstraintDrafting,
+        Self::RetainedDraftingRelations,
         Self::TangentRadialNormal,
         Self::ContactBranch,
         Self::AngleDimensions,
@@ -87,6 +90,7 @@ impl SampleId {
             Self::DrawingArm => "three-link-drawing-arm",
             Self::ConstraintSampler => "constraint-dimension-sampler",
             Self::AutoConstraintDrafting => "auto-constraint-drafting",
+            Self::RetainedDraftingRelations => "retained-drafting-relations",
             Self::TangentRadialNormal => "tangent-radial-normal",
             Self::ContactBranch => "contact-branch-specimen",
             Self::AngleDimensions => "angle-dimension-annotations",
@@ -109,6 +113,7 @@ enum SampleSource {
     Alpha(AlphaScenarioKind),
     ConstructionReference,
     AutoConstraintDrafting,
+    RetainedDraftingRelations,
     TangentRadialNormal,
     FilletWorkshop,
 }
@@ -194,7 +199,7 @@ const MECHANISMS: [SampleDefinition; 13] = [
     ),
 ];
 
-const CONSTRAINTS: [SampleDefinition; 7] = [
+const CONSTRAINTS: [SampleDefinition; 8] = [
     sample(
         SampleId::ConstraintSampler,
         "Constraint and dimension sampler",
@@ -204,6 +209,11 @@ const CONSTRAINTS: [SampleDefinition; 7] = [
         id: SampleId::AutoConstraintDrafting,
         title: "Auto-constraint drafting playground",
         source: SampleSource::AutoConstraintDrafting,
+    },
+    SampleDefinition {
+        id: SampleId::RetainedDraftingRelations,
+        title: "Retained drafting relations",
+        source: SampleSource::RetainedDraftingRelations,
     },
     SampleDefinition {
         id: SampleId::TangentRadialNormal,
@@ -349,6 +359,7 @@ fn coordinator_from_source(source: SampleSource) -> Result<RetainedEditorCoordin
         }
         SampleSource::ConstructionReference => construction_reference_document()?,
         SampleSource::AutoConstraintDrafting => auto_constraint_drafting_document()?,
+        SampleSource::RetainedDraftingRelations => retained_drafting_relations_document()?,
         SampleSource::TangentRadialNormal => tangent_radial_normal_document()?,
         SampleSource::FilletWorkshop => fillet_workshop_document()?,
     };
@@ -555,6 +566,117 @@ fn auto_constraint_drafting_document()
             &format!("exact ambiguity reference {suffix}"),
         )?;
     }
+
+    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one spatially separated ordinary-document retained-relation playground"
+)]
+fn retained_drafting_relations_document()
+-> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
+    let mut document = workshop_document(0x7100_0000_0000_0000_0000_0000_0000_0001_u128)?;
+
+    let horizontal = [
+        ("Horizontal relation first point", [-10.0, 6.0]),
+        ("Horizontal relation second point", [-4.0, 6.0]),
+    ]
+    .map(|(label, position)| document.add_point(label, position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Retained horizontal points",
+            DocumentConstraintDefinition::HorizontalPoints {
+                first: horizontal[0],
+                second: horizontal[1],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let vertical = [
+        ("Vertical relation first point", [-10.0, -1.0]),
+        ("Vertical relation second point", [-10.0, -7.0]),
+    ]
+    .map(|(label, position)| document.add_point(label, position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Retained vertical points",
+            DocumentConstraintDefinition::VerticalPoints {
+                first: vertical[0],
+                second: vertical[1],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let concentric_center = document
+        .add_point("Concentric relation shared position A", [2.0, 5.0])
+        .map_err(|error| error.to_string())?;
+    let concentric_center_b = document
+        .add_point("Concentric relation shared position B", [2.0, 5.0])
+        .map_err(|error| error.to_string())?;
+    let concentric_curves = [
+        ("Concentric outer circle", concentric_center, 3.0),
+        ("Concentric inner circle", concentric_center_b, 1.5),
+    ]
+    .map(|(label, center, value)| {
+        let radius = document.add_scalar(
+            format!("{label} radius"),
+            value,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )?;
+        document.add_curve(label, CurveDefinition::Circle { center, radius })
+    })
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Retained concentric curves",
+            DocumentConstraintDefinition::Concentric {
+                first: DocumentCenterRef {
+                    curve: concentric_curves[0],
+                },
+                second: DocumentCenterRef {
+                    curve: concentric_curves[1],
+                },
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let first_collinear = add_line(
+        &mut document,
+        "Collinear relation first support",
+        ("Collinear first start", [7.0, -3.0]),
+        ("Collinear first end", [11.0, -1.0]),
+    )?;
+    let second_collinear = add_line(
+        &mut document,
+        "Collinear relation second support",
+        ("Collinear second start", [12.0, -0.5]),
+        ("Collinear second end", [16.0, 1.5]),
+    )?;
+    document
+        .add_constraint(
+            "Retained collinear supports",
+            DocumentConstraintDefinition::Collinear {
+                first: DocumentLineSupportRef {
+                    span: CurveSpan::line(first_collinear),
+                    direction: DocumentDirectionSense::Forward,
+                },
+                second: DocumentLineSupportRef {
+                    span: CurveSpan::line(second_collinear),
+                    direction: DocumentDirectionSense::Forward,
+                },
+            },
+        )
+        .map_err(|error| error.to_string())?;
 
     Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
 }
@@ -1069,7 +1191,10 @@ mod tests {
     };
     use geosolve_sketch_features::ComputedFeatureFailure;
 
-    use super::super::persistence::WorkspaceSnapshot;
+    use super::super::persistence::{
+        WorkspaceSnapshot, coordinator_from_reproduction_payload,
+        reproduction_payload_from_coordinator,
+    };
     use super::{GROUPS, SampleCatalogState, SampleId};
 
     fn fillet_playground_scene(coordinator: &RetainedEditorCoordinator) -> EditorScene {
@@ -1219,6 +1344,7 @@ mod tests {
     #[test]
     fn catalog_is_flat_by_purpose_with_unique_stable_keys() {
         assert_eq!(GROUPS.len(), 3);
+        assert_eq!(SampleId::ALL.len(), 25);
         assert_eq!(
             GROUPS.map(|group| group.title),
             [
@@ -1232,6 +1358,7 @@ mod tests {
             .flat_map(|group| group.samples.iter())
             .collect::<Vec<_>>();
         assert_eq!(leaves.len(), SampleId::ALL.len());
+        assert_eq!(leaves.len(), 25);
         assert_eq!(
             leaves
                 .iter()
@@ -1851,6 +1978,210 @@ mod tests {
             .expect("visible Construction-only guide point");
         assert!(guide_point.contains("data-interactive=\"false\""));
         assert!(!guide_point.contains("data-editor-item="));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one ordinary sample lifecycle proves all retained relations, history and transport"
+    )]
+    fn retained_drafting_relations_sample_is_ordinary_editable_and_round_trips() {
+        let mut catalog = SampleCatalogState::default();
+        let mut coordinator = catalog
+            .open_key(SampleId::RetainedDraftingRelations.key())
+            .expect("retained drafting relations sample");
+        assert_eq!(catalog.selected_key(), Some("retained-drafting-relations"));
+        assert_eq!(
+            catalog.selected_title(),
+            Some("Retained drafting relations")
+        );
+
+        let definitions = coordinator
+            .session()
+            .design_document()
+            .constraints()
+            .iter()
+            .map(|constraint| (constraint.id, constraint.definition.clone()))
+            .collect::<Vec<_>>();
+        assert_eq!(definitions.len(), 4);
+        for expected in [
+            "Retained horizontal points",
+            "Retained vertical points",
+            "Retained concentric curves",
+            "Retained collinear supports",
+        ] {
+            assert!(
+                coordinator
+                    .session()
+                    .design_document()
+                    .constraints()
+                    .iter()
+                    .any(|constraint| constraint.label == expected),
+                "missing retained-relation specimen `{expected}`"
+            );
+        }
+        assert_eq!(
+            definitions
+                .iter()
+                .filter(|(_, definition)| matches!(
+                    definition,
+                    DocumentConstraintDefinition::HorizontalPoints { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            definitions
+                .iter()
+                .filter(|(_, definition)| matches!(
+                    definition,
+                    DocumentConstraintDefinition::VerticalPoints { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            definitions
+                .iter()
+                .filter(|(_, definition)| matches!(
+                    definition,
+                    DocumentConstraintDefinition::Concentric { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            definitions
+                .iter()
+                .filter(|(_, definition)| matches!(
+                    definition,
+                    DocumentConstraintDefinition::Collinear { .. }
+                ))
+                .count(),
+            1
+        );
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
+        assert_eq!(coordinator.history_len(), 1);
+        assert!(!coordinator.can_undo());
+        assert!(!coordinator.can_redo());
+        assert!(coordinator.editor().selection().is_empty());
+        assert!(coordinator.feature_document().features().is_empty());
+
+        let horizontal = definitions
+            .iter()
+            .find_map(|(id, definition)| {
+                matches!(
+                    definition,
+                    DocumentConstraintDefinition::HorizontalPoints { .. }
+                )
+                .then_some(*id)
+            })
+            .expect("horizontal-points identity");
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Constraint(horizontal)]);
+        assert_eq!(
+            coordinator.editor().selection(),
+            &[SelectionItem::Constraint(horizontal)]
+        );
+        coordinator
+            .delete_selected(coordinator.session().design_identity())
+            .expect("ordinary retained-relation deletion");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(horizontal)
+                .is_none()
+        );
+        assert_eq!(coordinator.history_len(), 2);
+        assert!(coordinator.can_undo());
+        assert!(!coordinator.can_redo());
+
+        coordinator.undo().expect("restore retained relation");
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(horizontal)
+                .expect("restored retained relation")
+                .id,
+            horizontal,
+            "Undo must restore the exact persistent relation identity"
+        );
+        assert!(coordinator.can_redo());
+        coordinator.redo().expect("remove retained relation again");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(horizontal)
+                .is_none()
+        );
+        coordinator
+            .undo()
+            .expect("restore relation before transport");
+
+        let design_json = coordinator
+            .session()
+            .design_document()
+            .to_draft_v5_json()
+            .expect("retained-relation design JSON");
+        let workspace = WorkspaceSnapshot::from_coordinator(&coordinator)
+            .expect("capture retained-relation workspace");
+        let decoded = WorkspaceSnapshot::decode(
+            &workspace
+                .encode()
+                .expect("encode retained-relation workspace"),
+        )
+        .expect("decode retained-relation workspace");
+        assert_eq!(
+            decoded
+                .design_document()
+                .expect("decoded retained-relation design")
+                .to_draft_v5_json()
+                .expect("decoded retained-relation JSON"),
+            design_json
+        );
+
+        let payload = reproduction_payload_from_coordinator(&coordinator)
+            .expect("encode retained-relation reproduction payload");
+        let mut restored = coordinator_from_reproduction_payload(&payload)
+            .expect("restore retained-relation reproduction payload");
+        assert_eq!(
+            restored
+                .session()
+                .design_document()
+                .to_draft_v5_json()
+                .expect("restored retained-relation JSON"),
+            design_json
+        );
+        assert!(
+            restored
+                .session()
+                .design_document()
+                .constraint(horizontal)
+                .is_some()
+        );
+        restored
+            .editor_mut()
+            .set_selection([SelectionItem::Constraint(horizontal)]);
+        restored
+            .delete_selected(restored.session().design_identity())
+            .expect("delete restored retained relation");
+        restored.undo().expect("undo restored retained relation");
+        assert!(
+            restored
+                .session()
+                .design_document()
+                .constraint(horizontal)
+                .is_some()
+        );
     }
 
     #[test]

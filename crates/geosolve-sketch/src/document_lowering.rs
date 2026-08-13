@@ -1242,8 +1242,25 @@ fn lower_constraint(
                 external_provenance(document, entry, inputs),
             )?
         }
+        C::Concentric { first, second } => sketch.add_coincident(
+            runtime_point(mappings, document.resolve_center_ref(*first)?)?,
+            runtime_point(mappings, document.resolve_center_ref(*second)?)?,
+        )?,
+        C::Collinear { first, second } => {
+            let first = directed_runtime_segment(mappings, sketch, *first)?;
+            let second = directed_runtime_segment(mappings, sketch, *second)?;
+            sketch.add_collinear(first, second)?
+        }
         C::Horizontal { line } => sketch.add_horizontal(runtime_segment(mappings, *line)?)?,
         C::Vertical { line } => sketch.add_vertical(runtime_segment(mappings, *line)?)?,
+        C::HorizontalPoints { first, second } => sketch.add_horizontal_points(
+            runtime_point(mappings, *first)?,
+            runtime_point(mappings, *second)?,
+        )?,
+        C::VerticalPoints { first, second } => sketch.add_vertical_points(
+            runtime_point(mappings, *first)?,
+            runtime_point(mappings, *second)?,
+        )?,
         C::PointOnCurve { point, contact } => {
             let slot = document
                 .contact(*contact)
@@ -1795,6 +1812,24 @@ fn runtime_segment(
     mappings
         .runtime_segment(span)
         .ok_or_else(|| unknown_runtime("curve span", span.curve.0))
+}
+
+fn directed_runtime_segment(
+    mappings: &DocumentRuntimeMap,
+    sketch: &mut Sketch,
+    support: crate::DocumentLineSupportRef,
+) -> Result<SegmentId, DocumentError> {
+    let segment = runtime_segment(mappings, support.span)?;
+    if support.direction == crate::DocumentDirectionSense::Forward {
+        return Ok(segment);
+    }
+    let (start, end) = sketch.segment_endpoints(segment)?;
+    let label = sketch
+        .segment(segment)
+        .ok_or_else(|| unknown_runtime("segment", support.span.curve.0))?
+        .label()
+        .to_owned();
+    Ok(sketch.add_named_segment(label, end, start)?)
 }
 
 fn runtime_circle(mappings: &DocumentRuntimeMap, id: CurveId) -> Result<CircleId, DocumentError> {

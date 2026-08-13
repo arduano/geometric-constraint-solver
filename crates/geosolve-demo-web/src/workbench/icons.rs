@@ -72,6 +72,7 @@ const PARALLEL: &str = concat!(
     "<path d=\"M-5-1h3v-3M1 3h3V0\"/>",
 );
 const PERPENDICULAR: &str = "<path d=\"M-7-7V6H7M-7 2h4v4\"/>";
+const CONCENTRIC: &str = "<circle r=\"7\"/><circle r=\"3.5\"/><circle r=\"1\"/>";
 const COLLINEAR: &str = concat!(
     "<path d=\"M-8 5L8-5\"/>",
     "<circle cx=\"-4\" cy=\"2.5\" r=\"1.35\"/>",
@@ -251,6 +252,7 @@ pub(crate) const fn constraint_icon_key(glyph: SceneConstraintGlyph) -> &'static
         SceneConstraintGlyph::PointOnCurve => "point-on-curve",
         SceneConstraintGlyph::Parallel => "parallel",
         SceneConstraintGlyph::Perpendicular => "perpendicular",
+        SceneConstraintGlyph::Concentric => "concentric",
         SceneConstraintGlyph::Collinear => "collinear",
         SceneConstraintGlyph::EqualLength => "equal-length",
         SceneConstraintGlyph::EqualRadius => "equal-radius",
@@ -275,6 +277,7 @@ pub(crate) const fn constraint_icon_fragment(glyph: SceneConstraintGlyph) -> &'s
         SceneConstraintGlyph::PointOnCurve => POINT_ON_CURVE,
         SceneConstraintGlyph::Parallel => PARALLEL,
         SceneConstraintGlyph::Perpendicular => PERPENDICULAR,
+        SceneConstraintGlyph::Concentric => CONCENTRIC,
         SceneConstraintGlyph::Collinear => COLLINEAR,
         SceneConstraintGlyph::EqualLength => EQUAL_LENGTH,
         SceneConstraintGlyph::EqualRadius => EQUAL_RADIUS,
@@ -322,6 +325,8 @@ const fn constraint_intent_icon(intent: ConstraintIntent) -> (&'static str, &'st
         ConstraintIntent::Symmetric => ("symmetric", SYMMETRY),
         ConstraintIntent::Tangent => ("tangent", TANGENCY),
         ConstraintIntent::Continuity => ("continuity", CONTINUITY),
+        ConstraintIntent::Concentric => ("concentric", CONCENTRIC),
+        ConstraintIntent::Collinear => ("collinear", COLLINEAR),
     }
 }
 
@@ -408,6 +413,7 @@ mod tests {
             SceneConstraintGlyph::PointOnCurve,
             SceneConstraintGlyph::Parallel,
             SceneConstraintGlyph::Perpendicular,
+            SceneConstraintGlyph::Concentric,
             SceneConstraintGlyph::Collinear,
             SceneConstraintGlyph::EqualLength,
             SceneConstraintGlyph::EqualRadius,
@@ -452,6 +458,8 @@ mod tests {
             AuthoringTool::Constraint(ConstraintIntent::Coincident),
             AuthoringTool::Constraint(ConstraintIntent::Horizontal),
             AuthoringTool::Constraint(ConstraintIntent::Vertical),
+            AuthoringTool::Constraint(ConstraintIntent::Concentric),
+            AuthoringTool::Constraint(ConstraintIntent::Collinear),
             AuthoringTool::Constraint(ConstraintIntent::Parallel),
             AuthoringTool::Constraint(ConstraintIntent::Perpendicular),
             AuthoringTool::Constraint(ConstraintIntent::Equal),
@@ -506,6 +514,11 @@ mod tests {
                 SceneConstraintGlyph::Horizontal,
             ),
             (ConstraintIntent::Vertical, SceneConstraintGlyph::Vertical),
+            (
+                ConstraintIntent::Concentric,
+                SceneConstraintGlyph::Concentric,
+            ),
+            (ConstraintIntent::Collinear, SceneConstraintGlyph::Collinear),
             (ConstraintIntent::Parallel, SceneConstraintGlyph::Parallel),
             (
                 ConstraintIntent::Perpendicular,

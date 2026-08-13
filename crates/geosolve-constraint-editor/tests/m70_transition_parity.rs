@@ -4,11 +4,11 @@ use std::fmt::Write as _;
 
 use geosolve_constraint_editor::{
     ConstructionCommitPlan, ConstructionPoint, DraftCurveBranchCandidate, DraftCurveContact,
-    DraftGuideClassification, DraftGuideGeometry, DraftInferenceCandidate,
+    DraftGuideClassification, DraftGuideGeometry, DraftInferenceBehavior, DraftInferenceCandidate,
     DraftInferenceCompleteness, DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput,
-    DraftInferenceRelation, DraftInferenceResolution, DraftInferenceSample, DraftInferenceStatus,
-    DraftInferenceSubject, DraftPointSlot, DraftReferenceAnchor, DraftReferenceOrigin,
-    DraftSpanSlot, EditorEffect, EditorMutation, EditorScene, EditorTool,
+    DraftInferencePolicy, DraftInferenceRelation, DraftInferenceResolution, DraftInferenceSample,
+    DraftInferenceStatus, DraftInferenceSubject, DraftPointSlot, DraftReferenceAnchor,
+    DraftReferenceOrigin, DraftSpanSlot, EditorEffect, EditorMutation, EditorScene, EditorTool,
     GeometryInteractionPolicy, InferredRelation, Modifiers, PointerInput,
     RetainedEditorCoordinator, ScenePointRoleIncidence, ScreenPoint, Viewport,
 };
@@ -199,6 +199,17 @@ fn inference_frame_for_subject(
     )
 }
 
+fn m70_inference_engine() -> DraftInferenceEngine {
+    // This byte-frozen fixture records M70, where remembered-point alignment
+    // was deliberately visual tracking only. M71 has its own parity coverage
+    // for the newly durable point-pair relation.
+    let policy = DraftInferencePolicy {
+        point_tracking: DraftInferenceBehavior::tracking_only(),
+        ..DraftInferencePolicy::default()
+    };
+    DraftInferenceEngine::new(policy).expect("valid M70 inference policy")
+}
+
 fn push_span(transcript: &mut String, span: CurveSpan) {
     write!(transcript, "{}:{}", span.curve, span.segment).expect("string write");
 }
@@ -267,6 +278,25 @@ fn push_relation(transcript: &mut String, relation: DraftInferenceRelation) {
         }
         DraftInferenceRelation::Perpendicular { reference } => {
             transcript.push_str("perpendicular:");
+            push_span(transcript, reference);
+        }
+        DraftInferenceRelation::HorizontalPoints { reference } => {
+            let _ = write!(transcript, "horizontal-points({reference})");
+        }
+        DraftInferenceRelation::VerticalPoints { reference } => {
+            let _ = write!(transcript, "vertical-points({reference})");
+        }
+        DraftInferenceRelation::Concentric {
+            reference,
+            prospective_curve_index,
+        } => {
+            let _ = write!(
+                transcript,
+                "concentric({reference},created:{prospective_curve_index})"
+            );
+        }
+        DraftInferenceRelation::Collinear { reference } => {
+            transcript.push_str("collinear:");
             push_span(transcript, reference);
         }
     }
@@ -403,7 +433,7 @@ fn inference_transition_transcript(
             .expect("deterministic inference transition")
     };
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     let identity = resolve(
         &mut engine,
         [-4.0, 1.0],
@@ -413,7 +443,7 @@ fn inference_transition_transcript(
     );
     push_resolution(&mut transcript, "identity", &identity);
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     let circle_through_point = engine
         .resolve(
             &inference_frame_for_subject(
@@ -432,7 +462,7 @@ fn inference_transition_transcript(
         &circle_through_point,
     );
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     let curve = resolve(
         &mut engine,
         [2.0, 1.0],
@@ -442,7 +472,7 @@ fn inference_transition_transcript(
     );
     push_resolution(&mut transcript, "curve", &curve);
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     let midpoint = resolve(
         &mut engine,
         [0.0, 1.0],
@@ -452,7 +482,7 @@ fn inference_transition_transcript(
     );
     push_resolution(&mut transcript, "midpoint", &midpoint);
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     let horizontal = resolve(
         &mut engine,
         [2.0, 0.05],
@@ -462,7 +492,7 @@ fn inference_transition_transcript(
     );
     push_resolution(&mut transcript, "horizontal", &horizontal);
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     let vertical = resolve(
         &mut engine,
         [0.05, 2.0],
@@ -473,7 +503,7 @@ fn inference_transition_transcript(
     push_resolution(&mut transcript, "vertical", &vertical);
 
     let reference_anchor = affine_anchor(reference, [0.0, 1.0]);
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     engine
         .remember_reference(reference_anchor)
         .expect("parallel reference");
@@ -486,7 +516,7 @@ fn inference_transition_transcript(
     );
     push_resolution(&mut transcript, "parallel", &parallel);
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     engine
         .remember_reference(reference_anchor)
         .expect("perpendicular reference");
@@ -499,7 +529,7 @@ fn inference_transition_transcript(
     );
     push_resolution(&mut transcript, "perpendicular", &perpendicular);
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     engine
         .remember_reference(point_anchor(reference_points[0], [-4.0, 1.0]))
         .expect("tracking reference");
@@ -518,7 +548,7 @@ fn inference_transition_transcript(
         )),
         segment: 0,
     };
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     let ambiguity = resolve(
         &mut engine,
         [2.0, 1.0],
@@ -531,7 +561,7 @@ fn inference_transition_transcript(
     );
     push_resolution(&mut transcript, "ambiguity", &ambiguity);
 
-    let mut engine = DraftInferenceEngine::default();
+    let mut engine = m70_inference_engine();
     let wake = resolve(
         &mut engine,
         [-4.0, 1.0],

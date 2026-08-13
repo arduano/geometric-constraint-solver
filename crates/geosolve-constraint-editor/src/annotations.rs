@@ -3,8 +3,10 @@
 //! Geometry-derived, presentation-neutral constraint annotations.
 
 use geosolve_sketch::{
-    ContactId, CurveDefinition, CurveId, CurveSpan, DocumentConstraintDefinition as Constraint,
-    DocumentDimensionDefinition as Dimension, DocumentDimensionMode, SketchDocument,
+    ContactId, CurveDefinition, CurveId, CurveSpan, DocumentCenterRef,
+    DocumentConstraintDefinition as Constraint, DocumentConstraintId,
+    DocumentDimensionDefinition as Dimension, DocumentDimensionMode, DocumentSourceId,
+    SketchDocument,
 };
 
 use crate::{SceneCurve, ScenePoint, ScreenPoint, SelectionItem, Viewport};
@@ -19,6 +21,7 @@ pub enum SceneConstraintGlyph {
     PointOnCurve,
     Parallel,
     Perpendicular,
+    Concentric,
     Collinear,
     EqualLength,
     EqualRadius,
@@ -31,6 +34,47 @@ pub enum SceneConstraintGlyph {
     EqualCurvature,
     Continuity,
     Fillet,
+}
+
+/// One persistent constraint entry published by the headless scene owner.
+///
+/// Entries exist independently of drawable annotation geometry, so a host can
+/// render a complete constraint tree without re-reading document definitions or
+/// reconstructing operands and presentation families. Their order is the
+/// document's ordinary persistent constraint order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SceneConstraintEntry {
+    pub id: DocumentConstraintId,
+    pub source: DocumentSourceId,
+    pub label: String,
+    pub glyph: SceneConstraintGlyph,
+    pub operands: Vec<SelectionItem>,
+    pub suppressed: bool,
+}
+
+/// Publishes the complete constraint-entry surface for any validated retained
+/// document, including a current design that has no accepted geometry.
+///
+/// Unlike canvas annotations, entries require no solved positions. This keeps
+/// rejected design intent visible without letting rejected coordinates become
+/// presentation authority.
+#[must_use]
+pub fn constraint_entries(document: &SketchDocument) -> Vec<SceneConstraintEntry> {
+    document
+        .constraints()
+        .iter()
+        .map(|constraint| {
+            let (glyph, operands) = constraint_entry_presentation(document, &constraint.definition);
+            SceneConstraintEntry {
+                id: constraint.id,
+                source: constraint.source_id,
+                label: constraint.label.clone(),
+                glyph,
+                operands,
+                suppressed: constraint.suppressed,
+            }
+        })
+        .collect()
 }
 
 /// Default presentation density for one accepted annotation.
@@ -325,6 +369,210 @@ pub(crate) fn build_annotations(
     annotations
 }
 
+pub(crate) fn build_constraint_entries(document: &SketchDocument) -> Vec<SceneConstraintEntry> {
+    constraint_entries(document)
+}
+
+#[allow(clippy::too_many_lines)]
+fn constraint_entry_presentation(
+    document: &SketchDocument,
+    definition: &Constraint,
+) -> (SceneConstraintGlyph, Vec<SelectionItem>) {
+    let contact_span = |contact| document.contact(contact).map(|slot| slot.curve);
+    let curve_span = |curve| {
+        document
+            .curve_spans(curve)
+            .ok()
+            .and_then(|spans| spans.into_iter().next())
+    };
+    let contact_operands = |contacts: [ContactId; 2]| {
+        unique_items(
+            contacts
+                .into_iter()
+                .filter_map(contact_span)
+                .map(SelectionItem::Curve)
+                .collect(),
+        )
+    };
+    let curve_operands = |curves: [CurveId; 2]| {
+        curves
+            .into_iter()
+            .filter_map(curve_span)
+            .map(SelectionItem::Curve)
+            .collect()
+    };
+    match definition {
+        Constraint::FixedPoint { point, .. } | Constraint::FixedCoordinate { point, .. } => (
+            SceneConstraintGlyph::Fixed,
+            vec![SelectionItem::Point(*point)],
+        ),
+        Constraint::Coincident { first, second } => (
+            SceneConstraintGlyph::Coincident,
+            vec![SelectionItem::Point(*first), SelectionItem::Point(*second)],
+        ),
+        Constraint::ExternalPointCoincident { point, .. } => (
+            SceneConstraintGlyph::Coincident,
+            vec![SelectionItem::Point(*point)],
+        ),
+        Constraint::Horizontal { line } => (
+            SceneConstraintGlyph::Horizontal,
+            vec![SelectionItem::Curve(*line)],
+        ),
+        Constraint::Vertical { line } => (
+            SceneConstraintGlyph::Vertical,
+            vec![SelectionItem::Curve(*line)],
+        ),
+        Constraint::HorizontalPoints { first, second } => (
+            SceneConstraintGlyph::Horizontal,
+            vec![SelectionItem::Point(*first), SelectionItem::Point(*second)],
+        ),
+        Constraint::VerticalPoints { first, second } => (
+            SceneConstraintGlyph::Vertical,
+            vec![SelectionItem::Point(*first), SelectionItem::Point(*second)],
+        ),
+        Constraint::PointOnCurve { point, contact } => (
+            SceneConstraintGlyph::PointOnCurve,
+            std::iter::once(SelectionItem::Point(*point))
+                .chain(contact_span(*contact).map(SelectionItem::Curve))
+                .collect(),
+        ),
+        Constraint::Parallel { first, second } => (
+            SceneConstraintGlyph::Parallel,
+            vec![SelectionItem::Curve(*first), SelectionItem::Curve(*second)],
+        ),
+        Constraint::Perpendicular { first, second } => (
+            SceneConstraintGlyph::Perpendicular,
+            vec![SelectionItem::Curve(*first), SelectionItem::Curve(*second)],
+        ),
+        Constraint::ExternalLineCollinear { line, .. } => (
+            SceneConstraintGlyph::Collinear,
+            vec![SelectionItem::Curve(line.span)],
+        ),
+        Constraint::Concentric { first, second } => (
+            SceneConstraintGlyph::Concentric,
+            curve_operands([first.curve, second.curve]),
+        ),
+        Constraint::Collinear { first, second } => (
+            SceneConstraintGlyph::Collinear,
+            vec![
+                SelectionItem::Curve(first.span),
+                SelectionItem::Curve(second.span),
+            ],
+        ),
+        Constraint::EqualLength { first, second } => (
+            SceneConstraintGlyph::EqualLength,
+            vec![SelectionItem::Curve(*first), SelectionItem::Curve(*second)],
+        ),
+        Constraint::EqualRadius { first, second } => (
+            SceneConstraintGlyph::EqualRadius,
+            curve_operands([*first, *second]),
+        ),
+        Constraint::Midpoint { point, line } => (
+            SceneConstraintGlyph::Midpoint,
+            vec![SelectionItem::Point(*point), SelectionItem::Curve(*line)],
+        ),
+        Constraint::SymmetricAboutLine {
+            first,
+            second,
+            line,
+        } => (
+            SceneConstraintGlyph::Symmetry,
+            vec![
+                SelectionItem::Point(*first),
+                SelectionItem::Point(*second),
+                SelectionItem::Curve(*line),
+            ],
+        ),
+        Constraint::LineCircleTangency {
+            line_contact,
+            circle_contact,
+            ..
+        }
+        | Constraint::CircleArcTangency {
+            circle_contact: line_contact,
+            arc_contact: circle_contact,
+            ..
+        }
+        | Constraint::CurveCurveTangency {
+            first_contact: line_contact,
+            second_contact: circle_contact,
+        } => (
+            SceneConstraintGlyph::Tangency,
+            contact_operands([*line_contact, *circle_contact]),
+        ),
+        Constraint::CircleCircleTangency { first, second, .. } => (
+            SceneConstraintGlyph::Tangency,
+            curve_operands([*first, *second]),
+        ),
+        Constraint::LineCurveTangency {
+            line,
+            curve_contact,
+            ..
+        } => (
+            SceneConstraintGlyph::Tangency,
+            std::iter::once(SelectionItem::Curve(*line))
+                .chain(contact_span(*curve_contact).map(SelectionItem::Curve))
+                .collect(),
+        ),
+        Constraint::CurveCurveContact {
+            first_contact,
+            second_contact,
+        } => (
+            SceneConstraintGlyph::Contact,
+            contact_operands([*first_contact, *second_contact]),
+        ),
+        Constraint::CurveDirection {
+            line,
+            curve_contact,
+            relation,
+        } => (
+            match relation {
+                geosolve_sketch::DocumentCurveDirectionRelation::Tangent { .. } => {
+                    SceneConstraintGlyph::Direction
+                }
+                geosolve_sketch::DocumentCurveDirectionRelation::Normal { .. } => {
+                    SceneConstraintGlyph::Normal
+                }
+            },
+            std::iter::once(SelectionItem::Curve(*line))
+                .chain(contact_span(*curve_contact).map(SelectionItem::Curve))
+                .collect(),
+        ),
+        Constraint::EqualCurvature {
+            first_contact,
+            second_contact,
+            ..
+        } => (
+            SceneConstraintGlyph::EqualCurvature,
+            contact_operands([*first_contact, *second_contact]),
+        ),
+        Constraint::EndpointContinuity {
+            first_contact,
+            second_contact,
+            ..
+        } => (
+            SceneConstraintGlyph::Continuity,
+            contact_operands([*first_contact, *second_contact]),
+        ),
+        Constraint::LineLineFillet {
+            arc,
+            first_contact,
+            second_contact,
+            ..
+        }
+        | Constraint::CurveCurveFillet {
+            arc,
+            first_contact,
+            second_contact,
+            ..
+        } => {
+            let mut operands = contact_operands([*first_contact, *second_contact]);
+            operands.extend(curve_span(*arc).map(SelectionItem::Curve));
+            (SceneConstraintGlyph::Fillet, unique_items(operands))
+        }
+    }
+}
+
 fn glyph_geometry(anchors: Vec<ScreenPoint>) -> SceneAnnotationGeometry {
     SceneAnnotationGeometry::Glyph {
         markers: anchors
@@ -364,6 +612,12 @@ fn constraint_presentation(
         Constraint::Vertical { line } => {
             curve_relation(SceneConstraintGlyph::Vertical, curves, [*line])
         }
+        Constraint::HorizontalPoints { first, second } => {
+            point_pair_relation(SceneConstraintGlyph::Horizontal, points, *first, *second)
+        }
+        Constraint::VerticalPoints { first, second } => {
+            point_pair_relation(SceneConstraintGlyph::Vertical, points, *first, *second)
+        }
         Constraint::PointOnCurve { point, contact } => point_contact_relation(
             SceneConstraintGlyph::PointOnCurve,
             document,
@@ -383,6 +637,14 @@ fn constraint_presentation(
         Constraint::ExternalLineCollinear { line, .. } => {
             curve_relation(SceneConstraintGlyph::Collinear, curves, [line.span])
         }
+        Constraint::Concentric { first, second } => {
+            concentric_relation(document, points, curves, *first, *second)
+        }
+        Constraint::Collinear { first, second } => curve_relation(
+            SceneConstraintGlyph::Collinear,
+            curves,
+            [first.span, second.span],
+        ),
         Constraint::EqualLength { first, second } => {
             curve_relation(SceneConstraintGlyph::EqualLength, curves, [*first, *second])
         }
@@ -697,6 +959,21 @@ fn point_relation(
     )
 }
 
+fn point_pair_relation(
+    glyph: SceneConstraintGlyph,
+    points: &[ScenePoint],
+    first: geosolve_sketch::DesignPointId,
+    second: geosolve_sketch::DesignPointId,
+) -> (SceneConstraintGlyph, Vec<SelectionItem>, Vec<ScreenPoint>) {
+    (
+        glyph,
+        vec![SelectionItem::Point(first), SelectionItem::Point(second)],
+        paired_point_anchor(points, first, second)
+            .into_iter()
+            .collect(),
+    )
+}
+
 fn curve_relation<const N: usize>(
     glyph: SceneConstraintGlyph,
     curves: &[SceneCurve],
@@ -728,6 +1005,35 @@ fn curve_ids_relation<const N: usize>(
             .iter()
             .filter_map(|span| curve_anchor(curves, *span))
             .collect(),
+    )
+}
+
+fn concentric_relation(
+    document: &SketchDocument,
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    first: DocumentCenterRef,
+    second: DocumentCenterRef,
+) -> (SceneConstraintGlyph, Vec<SelectionItem>, Vec<ScreenPoint>) {
+    let spans = [first.curve, second.curve]
+        .into_iter()
+        .filter_map(|id| first_curve_span(curves, id))
+        .collect::<Vec<_>>();
+    let anchors = document
+        .resolve_center_ref(first)
+        .and_then(|first| {
+            document
+                .resolve_center_ref(second)
+                .map(|second| (first, second))
+        })
+        .ok()
+        .and_then(|(first, second)| paired_point_anchor(points, first, second))
+        .into_iter()
+        .collect();
+    (
+        SceneConstraintGlyph::Concentric,
+        spans.into_iter().map(SelectionItem::Curve).collect(),
+        anchors,
     )
 }
 
@@ -1119,15 +1425,22 @@ fn point_segment_distance(point: ScreenPoint, start: ScreenPoint, end: ScreenPoi
 #[cfg(test)]
 mod tests {
     use geosolve_sketch::{
-        ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentFilletTrimEndpoint,
-        GeometryRole, SketchDocument,
+        ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentCenterRef,
+        DocumentConstraintDefinition, DocumentDirectionSense, DocumentFilletTrimEndpoint,
+        DocumentLineSupportRef, DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession,
+        ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
     };
 
-    use super::{SceneCurve, ScreenPoint, contact_operand_anchor, curve_parameter_anchor};
+    use super::{
+        SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationVisibility,
+        SceneConstraintGlyph, SceneCurve, ScreenPoint, contact_operand_anchor,
+        curve_parameter_anchor,
+    };
     use crate::{
         ComputedConstructionFragmentId, ComputedConstructionFragmentProvenance, ComputedCornerRef,
         ComputedEvaluationRevision, ComputedFeatureCornerId, ComputedFeatureId,
-        ComputedSourceInterval, NativeCurveSpanSource, SceneCurveOrigin, SelectionItem,
+        ComputedSourceInterval, EditorScene, NativeCurveSpanSource, SceneCurveOrigin,
+        SelectionItem, Viewport,
     };
 
     fn point(x: f64) -> ScreenPoint {
@@ -1231,5 +1544,347 @@ mod tests {
                 "Native wins an exact retained/discarded boundary tie before fragment identity"
             );
         }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact owner matrix freezes all four M71 scene relations and interaction states"
+    )]
+    fn retained_drafting_relations_publish_exact_headless_annotations() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let horizontal_points = [
+            document
+                .add_point("horizontal first", [-8.0, 5.0])
+                .expect("point"),
+            document
+                .add_point("horizontal second", [-4.0, 5.0])
+                .expect("point"),
+        ];
+        let horizontal = document
+            .add_constraint(
+                "horizontal points",
+                DocumentConstraintDefinition::HorizontalPoints {
+                    first: horizontal_points[0],
+                    second: horizontal_points[1],
+                },
+            )
+            .expect("horizontal");
+
+        let vertical_points = [
+            document
+                .add_point("vertical first", [-8.0, 1.0])
+                .expect("point"),
+            document
+                .add_point("vertical second", [-8.0, -3.0])
+                .expect("point"),
+        ];
+        let vertical = document
+            .add_constraint(
+                "vertical points",
+                DocumentConstraintDefinition::VerticalPoints {
+                    first: vertical_points[0],
+                    second: vertical_points[1],
+                },
+            )
+            .expect("vertical");
+        document
+            .set_element_user_suppressed(
+                geosolve_sketch::DocumentElementId::Constraint(vertical),
+                true,
+            )
+            .expect("suppress vertical");
+
+        let centers = [
+            document
+                .add_point("outer center", [0.0, 4.0])
+                .expect("point"),
+            document
+                .add_point("inner center", [0.0, 4.0])
+                .expect("point"),
+        ];
+        let radii = [2.0, 1.0].map(|value| {
+            document
+                .add_scalar("radius", value, ScalarUnit::Length, ScalarDomain::Positive)
+                .expect("radius")
+        });
+        let circles = [0, 1].map(|index| {
+            document
+                .add_curve(
+                    "circle",
+                    CurveDefinition::Circle {
+                        center: centers[index],
+                        radius: radii[index],
+                    },
+                )
+                .expect("circle")
+        });
+        let concentric = document
+            .add_constraint(
+                "concentric",
+                DocumentConstraintDefinition::Concentric {
+                    first: DocumentCenterRef { curve: circles[0] },
+                    second: DocumentCenterRef { curve: circles[1] },
+                },
+            )
+            .expect("concentric");
+
+        let first_line_points = [
+            document
+                .add_point("first line start", [3.0, -2.0])
+                .expect("point"),
+            document
+                .add_point("first line end", [6.0, -2.0])
+                .expect("point"),
+        ];
+        let first_line = document
+            .add_curve(
+                "first line",
+                CurveDefinition::Line {
+                    start: first_line_points[0],
+                    end: first_line_points[1],
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        let polyline_points = [
+            document
+                .add_point("polyline first", [7.0, -2.0])
+                .expect("point"),
+            document
+                .add_point("polyline second", [9.0, -2.0])
+                .expect("point"),
+            document
+                .add_point("polyline third", [11.0, -2.0])
+                .expect("point"),
+        ];
+        let polyline = document
+            .add_curve(
+                "polyline",
+                CurveDefinition::Polyline {
+                    points: polyline_points.to_vec(),
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [1.0, 0.0]],
+                },
+            )
+            .expect("polyline");
+        let first_span = CurveSpan::line(first_line);
+        let second_span = CurveSpan {
+            curve: polyline,
+            segment: 1,
+        };
+        let collinear = document
+            .add_constraint(
+                "collinear",
+                DocumentConstraintDefinition::Collinear {
+                    first: DocumentLineSupportRef {
+                        span: first_span,
+                        direction: DocumentDirectionSense::Forward,
+                    },
+                    second: DocumentLineSupportRef {
+                        span: second_span,
+                        direction: DocumentDirectionSense::Reverse,
+                    },
+                },
+            )
+            .expect("collinear");
+
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let viewport = Viewport::new([1200.0, 800.0], [0.0, 0.0], 40.0).expect("viewport");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.5,
+        )
+        .expect("scene");
+        assert_eq!(scene.annotations.len(), 4);
+        assert_eq!(scene.constraint_entries.len(), 4);
+
+        let entry = |id| {
+            scene
+                .constraint_entries
+                .iter()
+                .find(|entry| entry.id == id)
+                .expect("constraint entry")
+        };
+        let expected_entries = [
+            (
+                horizontal,
+                "horizontal points",
+                SceneConstraintGlyph::Horizontal,
+                horizontal_points.map(SelectionItem::Point).to_vec(),
+                false,
+            ),
+            (
+                vertical,
+                "vertical points",
+                SceneConstraintGlyph::Vertical,
+                vertical_points.map(SelectionItem::Point).to_vec(),
+                true,
+            ),
+            (
+                concentric,
+                "concentric",
+                SceneConstraintGlyph::Concentric,
+                circles
+                    .map(|curve| SelectionItem::Curve(CurveSpan::line(curve)))
+                    .to_vec(),
+                false,
+            ),
+            (
+                collinear,
+                "collinear",
+                SceneConstraintGlyph::Collinear,
+                vec![
+                    SelectionItem::Curve(first_span),
+                    SelectionItem::Curve(second_span),
+                ],
+                false,
+            ),
+        ];
+        assert_eq!(
+            scene
+                .constraint_entries
+                .iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            expected_entries
+                .iter()
+                .map(|expected| expected.0)
+                .collect::<Vec<_>>()
+        );
+        for (id, label, glyph, operands, suppressed) in expected_entries {
+            let entry = entry(id);
+            assert_eq!(entry.label, label);
+            assert_eq!(entry.glyph, glyph);
+            assert_eq!(entry.operands, operands);
+            assert_eq!(entry.suppressed, suppressed);
+            assert_eq!(
+                entry.source,
+                session
+                    .design_document()
+                    .constraint(id)
+                    .expect("document constraint")
+                    .source_id
+            );
+        }
+
+        let annotation = |id| {
+            scene
+                .annotations
+                .iter()
+                .find(|annotation| annotation.item == SelectionItem::Constraint(id))
+                .expect("annotation")
+        };
+        for annotation in &scene.annotations {
+            if let SelectionItem::Constraint(id) = annotation.item {
+                let entry = entry(id);
+                assert_eq!(
+                    annotation.kind,
+                    SceneAnnotationKind::Constraint(entry.glyph)
+                );
+                assert_eq!(annotation.operands, entry.operands);
+                assert_eq!(annotation.suppressed, entry.suppressed);
+            }
+        }
+        let horizontal_annotation = annotation(horizontal);
+        assert_eq!(
+            horizontal_annotation.kind,
+            SceneAnnotationKind::Constraint(SceneConstraintGlyph::Horizontal)
+        );
+        assert_eq!(
+            horizontal_annotation.operands,
+            horizontal_points.map(SelectionItem::Point)
+        );
+        assert_eq!(
+            horizontal_annotation.visibility,
+            SceneAnnotationVisibility::Contextual
+        );
+        assert!(!horizontal_annotation.suppressed);
+        assert!(!horizontal_annotation.is_visible(&[], None, &[]));
+        assert!(horizontal_annotation.is_visible(
+            &[],
+            Some(SelectionItem::Point(horizontal_points[0])),
+            &[]
+        ));
+        assert!(horizontal_annotation.is_visible(
+            &[SelectionItem::Constraint(horizontal)],
+            None,
+            &[]
+        ));
+        assert!(horizontal_annotation.is_visible(
+            &[],
+            None,
+            &[SelectionItem::Constraint(horizontal)]
+        ));
+
+        let vertical_annotation = annotation(vertical);
+        assert_eq!(
+            vertical_annotation.kind,
+            SceneAnnotationKind::Constraint(SceneConstraintGlyph::Vertical)
+        );
+        assert_eq!(
+            vertical_annotation.operands,
+            vertical_points.map(SelectionItem::Point)
+        );
+        assert!(vertical_annotation.suppressed);
+
+        let concentric_annotation = annotation(concentric);
+        assert_eq!(
+            concentric_annotation.kind,
+            SceneAnnotationKind::Constraint(SceneConstraintGlyph::Concentric)
+        );
+        assert_eq!(
+            concentric_annotation.operands,
+            circles.map(|curve| SelectionItem::Curve(CurveSpan::line(curve)))
+        );
+        let expected_center = viewport.model_to_screen(
+            accepted
+                .document()
+                .point(centers[0])
+                .expect("accepted center")
+                .position,
+        );
+        let SceneAnnotationGeometry::Glyph { markers } = &concentric_annotation.geometry else {
+            panic!("concentric must use one glyph")
+        };
+        assert_eq!(markers.len(), 1);
+        assert_eq!(markers[0].anchor, expected_center);
+        assert_eq!(markers[0].leader_from, None);
+        assert!(concentric_annotation.hit_test(expected_center, 0.0));
+        assert!(concentric_annotation.is_visible(
+            &[SelectionItem::Curve(CurveSpan::line(circles[1]))],
+            None,
+            &[]
+        ));
+
+        let collinear_annotation = annotation(collinear);
+        assert_eq!(
+            collinear_annotation.kind,
+            SceneAnnotationKind::Constraint(SceneConstraintGlyph::Collinear)
+        );
+        assert_eq!(
+            collinear_annotation.operands,
+            vec![
+                SelectionItem::Curve(first_span),
+                SelectionItem::Curve(second_span)
+            ]
+        );
+        assert!(matches!(
+            &collinear_annotation.geometry,
+            SceneAnnotationGeometry::Glyph { markers }
+                if markers.len() == 2 && markers.iter().all(|marker| marker.anchor.is_finite())
+        ));
     }
 }

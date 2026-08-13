@@ -9,9 +9,10 @@
 //! adds every inferred contact and constraint to the same cloned document.
 
 use geosolve_sketch::{
-    ContactDomain, ContactId, ContactNeighborhood, CurveSpan, DesignPointId,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentError, DocumentSourceId,
-    GeometryRole, OperationCheckpoint, OperationController, OperationWorkCounter, SketchDocument,
+    ContactDomain, ContactId, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
+    DocumentCenterRef, DocumentConstraintDefinition, DocumentConstraintId, DocumentDirectionSense,
+    DocumentError, DocumentLineSupportRef, DocumentSourceId, GeometryRole, OperationCheckpoint,
+    OperationController, OperationWorkCounter, SketchDocument,
 };
 
 use crate::{ConstructionProposal, ConstructionResult};
@@ -45,6 +46,20 @@ pub enum DraftSpanSlot {
     Created { curve_index: usize, segment: u32 },
 }
 
+/// One curve operand available to a relation in the same construction transaction.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DraftCurveSlot {
+    Existing(CurveId),
+    Created { curve_index: usize },
+}
+
+/// One directed affine support available to a same-transaction relation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DraftLineSupportSlot {
+    pub span: DraftSpanSlot,
+    pub direction: DocumentDirectionSense,
+}
+
 /// Exact contact state retained when point-on-curve inference is committed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DraftContactDescriptor {
@@ -76,6 +91,22 @@ pub enum InferredRelation {
     },
     Vertical {
         line: DraftSpanSlot,
+    },
+    HorizontalPoints {
+        first: DraftPointSlot,
+        second: DraftPointSlot,
+    },
+    VerticalPoints {
+        first: DraftPointSlot,
+        second: DraftPointSlot,
+    },
+    Concentric {
+        first: DraftCurveSlot,
+        second: DraftCurveSlot,
+    },
+    Collinear {
+        first: DraftLineSupportSlot,
+        second: DraftLineSupportSlot,
     },
     Parallel {
         first: DraftSpanSlot,
@@ -278,6 +309,38 @@ impl InferredRelation {
                 },
                 None,
             ),
+            Self::HorizontalPoints { first, second } => (
+                DocumentConstraintDefinition::HorizontalPoints {
+                    first: first.resolve(document, construction)?,
+                    second: second.resolve(document, construction)?,
+                },
+                None,
+            ),
+            Self::VerticalPoints { first, second } => (
+                DocumentConstraintDefinition::VerticalPoints {
+                    first: first.resolve(document, construction)?,
+                    second: second.resolve(document, construction)?,
+                },
+                None,
+            ),
+            Self::Concentric { first, second } => (
+                DocumentConstraintDefinition::Concentric {
+                    first: DocumentCenterRef {
+                        curve: first.resolve(document, construction)?,
+                    },
+                    second: DocumentCenterRef {
+                        curve: second.resolve(document, construction)?,
+                    },
+                },
+                None,
+            ),
+            Self::Collinear { first, second } => (
+                DocumentConstraintDefinition::Collinear {
+                    first: first.resolve(document, construction)?,
+                    second: second.resolve(document, construction)?,
+                },
+                None,
+            ),
             Self::Parallel { first, second } => (
                 DocumentConstraintDefinition::Parallel {
                     first: first.resolve(document, construction)?,
@@ -301,6 +364,10 @@ impl InferredRelation {
             Self::Midpoint { .. } => "auto midpoint",
             Self::Horizontal { .. } => "auto horizontal",
             Self::Vertical { .. } => "auto vertical",
+            Self::HorizontalPoints { .. } => "auto horizontal points",
+            Self::VerticalPoints { .. } => "auto vertical points",
+            Self::Concentric { .. } => "auto concentric",
+            Self::Collinear { .. } => "auto collinear",
             Self::Parallel { .. } => "auto parallel",
             Self::Perpendicular { .. } => "auto perpendicular",
         }
@@ -365,6 +432,47 @@ impl DraftSpanSlot {
                 "draft span slot",
                 "resolved curve is absent from the candidate document",
             )
+        })
+    }
+}
+
+impl DraftCurveSlot {
+    fn resolve(
+        self,
+        document: &SketchDocument,
+        construction: &ConstructionResult,
+    ) -> Result<CurveId, DocumentError> {
+        let curve = match self {
+            Self::Existing(curve) => curve,
+            Self::Created { curve_index } => construction
+                .curves
+                .get(curve_index)
+                .copied()
+                .ok_or_else(|| {
+                    invalid_slot(
+                        "draft curve slot",
+                        "created-curve occurrence is outside the construction result",
+                    )
+                })?,
+        };
+        document.curve(curve).map(|_| curve).ok_or_else(|| {
+            invalid_slot(
+                "draft curve slot",
+                "resolved curve is absent from the candidate document",
+            )
+        })
+    }
+}
+
+impl DraftLineSupportSlot {
+    fn resolve(
+        self,
+        document: &SketchDocument,
+        construction: &ConstructionResult,
+    ) -> Result<DocumentLineSupportRef, DocumentError> {
+        Ok(DocumentLineSupportRef {
+            span: self.span.resolve(document, construction)?,
+            direction: self.direction,
         })
     }
 }
@@ -589,6 +697,95 @@ mod tests {
                 contact: resolved_contact,
             } if *resolved_point == point && *resolved_contact == contact
         ));
+    }
+
+    #[test]
+    fn created_curve_slot_supports_same_transaction_concentric_relation() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let existing = add_circle(&mut document, [0.0, 0.0], 4.0).curve;
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Circle {
+                center: ConstructionPoint::New([0.3, -0.2]),
+                radius: 2.0,
+            },
+            role: GeometryRole::Profile,
+            relations: vec![InferredRelation::Concentric {
+                first: DraftCurveSlot::Created { curve_index: 0 },
+                second: DraftCurveSlot::Existing(existing),
+            }],
+        };
+
+        let result = plan.apply(&mut document).expect("concentric commit");
+        let created = result.construction.curves[0];
+        assert!(matches!(
+            document
+                .constraint(result.constraints[0].constraint)
+                .expect("constraint")
+                .definition,
+            DocumentConstraintDefinition::Concentric { first, second }
+                if first.curve == created && second.curve == existing
+        ));
+    }
+
+    #[test]
+    fn created_span_slot_supports_same_transaction_collinear_relation() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let existing = add_line(&mut document, [-3.0, 0.0], [-1.0, 0.0]);
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Line {
+                start: ConstructionPoint::New([1.0, 0.0]),
+                end: ConstructionPoint::New([3.0, 0.0]),
+            },
+            role: GeometryRole::Profile,
+            relations: vec![InferredRelation::Collinear {
+                first: DraftLineSupportSlot {
+                    span: DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0,
+                    },
+                    direction: DocumentDirectionSense::Reverse,
+                },
+                second: DraftLineSupportSlot {
+                    span: DraftSpanSlot::Existing(existing),
+                    direction: DocumentDirectionSense::Forward,
+                },
+            }],
+        };
+
+        let result = plan.apply(&mut document).expect("collinear commit");
+        let created = CurveSpan::line(result.construction.curves[0]);
+        assert!(matches!(
+            document
+                .constraint(result.constraints[0].constraint)
+                .expect("constraint")
+                .definition,
+            DocumentConstraintDefinition::Collinear { first, second }
+                if first.span == created
+                    && first.direction == DocumentDirectionSense::Reverse
+                    && second.span == existing
+                    && second.direction == DocumentDirectionSense::Forward
+        ));
+    }
+
+    #[test]
+    fn invalid_created_curve_slot_rolls_back_geometry_and_allocations() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let existing = add_circle(&mut document, [0.0, 0.0], 4.0).curve;
+        let before = document.clone();
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Circle {
+                center: ConstructionPoint::New([0.3, -0.2]),
+                radius: 2.0,
+            },
+            role: GeometryRole::Profile,
+            relations: vec![InferredRelation::Concentric {
+                first: DraftCurveSlot::Created { curve_index: 9 },
+                second: DraftCurveSlot::Existing(existing),
+            }],
+        };
+
+        assert!(plan.apply(&mut document).is_err());
+        assert_eq!(document, before);
     }
 
     #[test]

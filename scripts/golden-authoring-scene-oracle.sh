@@ -58,6 +58,10 @@ families=(
   dimension.radius
   dimension.diameter
   dimension.oriented-angle
+  constraint.horizontal-points
+  constraint.vertical-points
+  constraint.concentric-curves
+  constraint.collinear-supports
 )
 
 authoring_cases=(

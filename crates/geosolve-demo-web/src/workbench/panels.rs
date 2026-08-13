@@ -3,7 +3,9 @@
 
 use std::{collections::BTreeSet, fmt::Write as _};
 
-use geosolve_constraint_editor::{ComputedFeatureProblemMetadata, LifecycleStatus, SelectionItem};
+use geosolve_constraint_editor::{
+    ComputedFeatureProblemMetadata, LifecycleStatus, SceneConstraintEntry, SelectionItem,
+};
 use geosolve_sketch::{GeometryRole, SketchDocument};
 use geosolve_sketch_features::{
     ComputedCornerRef, ComputedFeatureDefinition, ComputedFeatureDocument,
@@ -33,16 +35,23 @@ pub(crate) fn problem_markup(problem: &str) -> String {
 
 #[cfg(test)]
 pub(crate) fn tree_markup(document: &SketchDocument, selection: &[SelectionItem]) -> String {
-    tree_markup_with_pending(document, selection, &[])
+    tree_markup_with_pending(document, &[], selection, &[])
 }
 
 #[cfg(test)]
 pub(crate) fn tree_markup_with_pending(
     document: &SketchDocument,
+    constraint_entries: &[SceneConstraintEntry],
     selection: &[SelectionItem],
     pending: &[SelectionItem],
 ) -> String {
-    tree_markup_with_pending_and_implicit(document, selection, pending, &BTreeSet::new())
+    tree_markup_with_pending_and_implicit(
+        document,
+        constraint_entries,
+        selection,
+        pending,
+        &BTreeSet::new(),
+    )
 }
 
 #[allow(
@@ -51,6 +60,7 @@ pub(crate) fn tree_markup_with_pending(
 )]
 fn tree_markup_with_pending_and_implicit(
     document: &SketchDocument,
+    constraint_entries: &[SceneConstraintEntry],
     selection: &[SelectionItem],
     pending: &[SelectionItem],
     implicit_spans: &BTreeSet<geosolve_sketch::CurveSpan>,
@@ -117,10 +127,10 @@ fn tree_markup_with_pending_and_implicit(
             }
         }
     }
-    if !document.constraints().is_empty() {
-        group_label(&mut output, "Constraints", document.constraints().len());
+    if !constraint_entries.is_empty() {
+        group_label(&mut output, "Constraints", constraint_entries.len());
     }
-    for constraint in document.constraints() {
+    for constraint in constraint_entries {
         row(
             &mut output,
             "constraint",
@@ -185,6 +195,7 @@ fn tree_markup_with_pending_and_implicit(
 
 pub(crate) fn tree_markup_with_features(
     document: &SketchDocument,
+    constraint_entries: &[SceneConstraintEntry],
     features: &ComputedFeatureDocument,
     snapshot: Option<&ComputedFeatureSnapshot>,
     problems: &[ComputedFeatureProblemMetadata],
@@ -196,8 +207,13 @@ pub(crate) fn tree_markup_with_features(
         .flat_map(ComputedFeatureSnapshot::construction_fragments)
         .map(|fragment| fragment.source.span)
         .collect::<BTreeSet<_>>();
-    let mut output =
-        tree_markup_with_pending_and_implicit(document, selection, pending, &implicit_spans);
+    let mut output = tree_markup_with_pending_and_implicit(
+        document,
+        constraint_entries,
+        selection,
+        pending,
+        &implicit_spans,
+    );
     let _ = write!(
         output,
         "<div class=\"wb-tree-group-label\"><span>Features</span><span>{}</span></div>",
@@ -348,7 +364,7 @@ mod tests {
         assert!(markup.contains("class=\"wb-tree-symbol\""));
         assert!(markup.contains("data-tree-icon=\"point\""));
         assert!(!markup.contains("<span class=\"wb-tree-icon\"></span>"));
-        let pending = tree_markup_with_pending(&document, &[], &[SelectionItem::Point(point)]);
+        let pending = tree_markup_with_pending(&document, &[], &[], &[SelectionItem::Point(point)]);
         assert!(pending.contains("wb-tree-row authoring-pending"));
         assert!(pending.contains("aria-selected=\"false\""));
         assert_eq!(
@@ -359,5 +375,42 @@ mod tests {
         assert!(problem.contains("aria-label=\"Current sketch or computed-feature problem\""));
         assert!(problem.contains("role=\"status\""));
         assert!(problem.contains("bad &lt; geometry"));
+    }
+
+    #[test]
+    fn constraint_rows_consume_headless_entries_even_for_rejected_design_intent() {
+        use geosolve_constraint_editor::constraint_entries;
+        use geosolve_sketch::DocumentConstraintDefinition;
+
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("point");
+        let second = document.add_point("second", [1.0, 2.0]).expect("point");
+        let constraint = document
+            .add_constraint(
+                "Design-only horizontal < relation",
+                DocumentConstraintDefinition::HorizontalPoints { first, second },
+            )
+            .expect("constraint");
+        let entries = constraint_entries(&document);
+        let markup = tree_markup_with_pending(
+            &document,
+            &entries,
+            &[SelectionItem::Constraint(constraint)],
+            &[],
+        );
+        assert!(markup.contains("Design-only horizontal &lt; relation"));
+        assert!(markup.contains(&format!("data-persistent-id=\"{constraint}\"")));
+        assert!(markup.contains("aria-selected=\"true\""));
+
+        let without_entries = tree_markup_with_pending(
+            &document,
+            &[],
+            &[SelectionItem::Constraint(constraint)],
+            &[],
+        );
+        assert!(
+            !without_entries.contains("Design-only horizontal"),
+            "the workbench must not silently fall back to interpreting document constraints"
+        );
     }
 }

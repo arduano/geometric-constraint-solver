@@ -5,11 +5,13 @@ use geosolve_constraint_editor::{
     AuthoringTool, ConstraintIntent, DimensionKind, FeatureAuthoringTool,
 };
 
-pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); 11] = [
+pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); 13] = [
     ("lock", "Lock", ConstraintIntent::Lock),
     ("coincident", "Coincident", ConstraintIntent::Coincident),
     ("horizontal", "Horizontal", ConstraintIntent::Horizontal),
     ("vertical", "Vertical", ConstraintIntent::Vertical),
+    ("concentric", "Concentric", ConstraintIntent::Concentric),
+    ("collinear", "Collinear", ConstraintIntent::Collinear),
     ("parallel", "Parallel", ConstraintIntent::Parallel),
     (
         "perpendicular",
@@ -97,6 +99,8 @@ mod tests {
             ConstraintIntent::Coincident,
             ConstraintIntent::Horizontal,
             ConstraintIntent::Vertical,
+            ConstraintIntent::Concentric,
+            ConstraintIntent::Collinear,
             ConstraintIntent::Parallel,
             ConstraintIntent::Perpendicular,
             ConstraintIntent::Equal,

@@ -7,7 +7,9 @@ use geosolve_sketch::{
     DocumentCurveCurvatureRelation, DocumentDimensionMode, SketchDocument, TangentOrientation,
 };
 
-use crate::coordinator::{resolve_constraint, selection_exists, validate_dimension_selection};
+use crate::coordinator::{
+    line_endpoints, resolve_constraint, selection_exists, validate_dimension_selection,
+};
 use crate::{
     ConstraintIntent, DimensionKind, DisabledReason, EditorScene, GeometryInteractionPolicy,
     PickTolerance, ResolvedConstraintKind, ScreenPoint, SelectionItem,
@@ -23,13 +25,14 @@ pub enum AuthoringTool {
 }
 
 impl AuthoringTool {
-    /// Number of operands required before the tool can apply.
+    /// Maximum number of operands collected before the tool applies.
+    ///
+    /// Horizontal and Vertical are variable-arity: one affine span is already
+    /// complete, while one stored point is a compatible prefix for a second.
     #[must_use]
     pub const fn arity(self) -> usize {
         match self {
-            Self::Constraint(
-                ConstraintIntent::Lock | ConstraintIntent::Horizontal | ConstraintIntent::Vertical,
-            )
+            Self::Constraint(ConstraintIntent::Lock)
             | Self::Dimension(
                 DimensionKind::SegmentLength | DimensionKind::Radius | DimensionKind::Diameter,
             ) => 1,
@@ -41,7 +44,11 @@ impl AuthoringTool {
                 | ConstraintIntent::Equal
                 | ConstraintIntent::Midpoint
                 | ConstraintIntent::Tangent
-                | ConstraintIntent::Continuity,
+                | ConstraintIntent::Continuity
+                | ConstraintIntent::Horizontal
+                | ConstraintIntent::Vertical
+                | ConstraintIntent::Concentric
+                | ConstraintIntent::Collinear,
             )
             | Self::Dimension(DimensionKind::PointDistance | DimensionKind::OrientedAngle) => 2,
         }
@@ -210,6 +217,18 @@ impl AuthoringState {
                 expected: expected_operands(document, tool, &[]),
             };
         }
+        if !selection_is_complete(document, tool, selection)
+            && selection.len() < tool.arity()
+            && prefix_is_compatible(document, tool, selection)
+        {
+            self.active = Some(tool);
+            self.pending = selection.to_vec();
+            return AuthoringOutcome::Collecting {
+                tool,
+                operands: self.pending.clone(),
+                expected: expected_operands(document, tool, &self.pending),
+            };
+        }
         match application(document, tool, selection, self.options) {
             Ok(application) => AuthoringOutcome::Apply(application),
             Err(warning) => AuthoringOutcome::Warning(warning),
@@ -236,6 +255,27 @@ impl AuthoringState {
         }
         let mut candidate = self.pending.clone();
         candidate.push(operand);
+        if selection_is_complete(document, tool, &candidate) {
+            return match application(document, tool, &candidate, self.options) {
+                Ok(application) => {
+                    self.pending.clone_from(&application.operands);
+                    AuthoringOutcome::Apply(application)
+                }
+                Err(warning) => AuthoringOutcome::Warning(warning),
+            };
+        }
+        if let AuthoringTool::Constraint(intent) = tool {
+            let selection = candidate
+                .iter()
+                .map(|operand| operand.item)
+                .collect::<Vec<_>>();
+            if let Err(reason) = resolve_constraint(document, &selection, intent)
+                && (candidate.len() >= tool.arity()
+                    || reason == DisabledReason::SameSemanticOperand)
+            {
+                return AuthoringOutcome::Warning(warning(document, tool, &self.pending, reason));
+            }
+        }
         if candidate.len() < tool.arity() {
             if !prefix_is_compatible(document, tool, &candidate) {
                 return AuthoringOutcome::Warning(warning(
@@ -260,13 +300,12 @@ impl AuthoringState {
                 DisabledReason::WrongArity,
             ));
         }
-        match application(document, tool, &candidate, self.options) {
-            Ok(application) => {
-                self.pending.clone_from(&application.operands);
-                AuthoringOutcome::Apply(application)
-            }
-            Err(warning) => AuthoringOutcome::Warning(warning),
-        }
+        AuthoringOutcome::Warning(warning(
+            document,
+            tool,
+            &self.pending,
+            DisabledReason::WrongOperandKind,
+        ))
     }
 
     /// Resolves one screen click through bounded compatibility-aware native
@@ -300,6 +339,7 @@ impl AuthoringState {
             }
         };
         let mut first_warning = None;
+        let mut first_collecting = None;
         for hit in hits {
             let mut trial = self.clone();
             let outcome = trial.pick(
@@ -307,9 +347,19 @@ impl AuthoringState {
                 AuthoringOperand::picked(hit.item, hit.curve_parameter),
             );
             match outcome {
-                AuthoringOutcome::Collecting { .. } | AuthoringOutcome::Apply(_) => {
+                AuthoringOutcome::Apply(_) => {
                     *self = trial;
                     return outcome;
+                }
+                AuthoringOutcome::Collecting { .. } => {
+                    // A newly admissible variable-arity prefix (for example a
+                    // stored point under Horizontal/Vertical) must not mask a
+                    // complete compatible operand painted under the same
+                    // click. Retain the first valid prefix only if no later
+                    // hit can apply immediately.
+                    if first_collecting.is_none() {
+                        first_collecting = Some((trial, outcome));
+                    }
                 }
                 AuthoringOutcome::Warning(value) => {
                     first_warning.get_or_insert(value);
@@ -319,6 +369,10 @@ impl AuthoringState {
                 | AuthoringOutcome::ModeExited
                 | AuthoringOutcome::Inactive => {}
             }
+        }
+        if let Some((trial, outcome)) = first_collecting {
+            *self = trial;
+            return outcome;
         }
         AuthoringOutcome::Warning(first_warning.unwrap_or_else(|| {
             warning(
@@ -380,7 +434,16 @@ fn application(
     operands: &[AuthoringOperand],
     options: AuthoringOptions,
 ) -> Result<AuthoringApplication, AuthoringWarning> {
-    if operands.len() != tool.arity() {
+    if !selection_is_complete(document, tool, operands) {
+        if let AuthoringTool::Constraint(intent) = tool {
+            let selection = operands
+                .iter()
+                .map(|operand| operand.item)
+                .collect::<Vec<_>>();
+            if let Err(reason) = resolve_constraint(document, &selection, intent) {
+                return Err(warning(document, tool, operands, reason));
+            }
+        }
         return Err(warning(
             document,
             tool,
@@ -452,6 +515,47 @@ fn normalize_operands(tool: AuthoringTool, operands: &[AuthoringOperand]) -> Vec
     normalized
 }
 
+fn selection_is_complete(
+    document: &SketchDocument,
+    tool: AuthoringTool,
+    operands: &[AuthoringOperand],
+) -> bool {
+    let has_complete_arity = match tool {
+        AuthoringTool::Constraint(ConstraintIntent::Horizontal | ConstraintIntent::Vertical) => {
+            matches!(
+                operands,
+                [AuthoringOperand {
+                    item: SelectionItem::Curve(_),
+                    ..
+                }] | [
+                    AuthoringOperand {
+                        item: SelectionItem::Point(_),
+                        ..
+                    },
+                    AuthoringOperand {
+                        item: SelectionItem::Point(_),
+                        ..
+                    }
+                ]
+            )
+        }
+        _ => operands.len() == tool.arity(),
+    };
+    if !has_complete_arity {
+        return false;
+    }
+    match tool {
+        AuthoringTool::Constraint(intent) => {
+            let selection = operands
+                .iter()
+                .map(|operand| operand.item)
+                .collect::<Vec<_>>();
+            resolve_constraint(document, &selection, intent).is_ok()
+        }
+        AuthoringTool::Dimension(_) => true,
+    }
+}
+
 fn prefix_is_compatible(
     document: &SketchDocument,
     tool: AuthoringTool,
@@ -477,9 +581,9 @@ fn operand_matches(
     match (item, kind) {
         (SelectionItem::Point(_), AuthoringOperandKind::Point)
         | (SelectionItem::Curve(_), AuthoringOperandKind::Curve) => true,
-        (SelectionItem::Curve(span), AuthoringOperandKind::Line) => document
-            .curve(span.curve)
-            .is_some_and(|curve| matches!(curve.definition, CurveDefinition::Line { .. })),
+        (SelectionItem::Curve(span), AuthoringOperandKind::Line) => {
+            line_endpoints(document, span).is_ok()
+        }
         (SelectionItem::Curve(span), AuthoringOperandKind::CircleOrArc) => {
             document.curve(span.curve).is_some_and(|curve| {
                 matches!(
@@ -501,15 +605,31 @@ fn expected_operands(
     match tool {
         AuthoringTool::Constraint(ConstraintIntent::Lock)
         | AuthoringTool::Dimension(DimensionKind::PointDistance) => vec![Point],
-        AuthoringTool::Constraint(ConstraintIntent::Horizontal | ConstraintIntent::Vertical)
-        | AuthoringTool::Dimension(DimensionKind::SegmentLength | DimensionKind::OrientedAngle) => {
-            vec![Line]
+        AuthoringTool::Constraint(ConstraintIntent::Horizontal | ConstraintIntent::Vertical) => {
+            if matches!(
+                operands,
+                [AuthoringOperand {
+                    item: SelectionItem::Point(_),
+                    ..
+                }]
+            ) {
+                vec![Point]
+            } else {
+                vec![Point, Line]
+            }
         }
         AuthoringTool::Constraint(ConstraintIntent::Coincident) => vec![Point, Curve],
-        AuthoringTool::Constraint(ConstraintIntent::Parallel) => vec![Line],
-        AuthoringTool::Constraint(ConstraintIntent::Continuity) => vec![Curve],
+        AuthoringTool::Dimension(DimensionKind::SegmentLength | DimensionKind::OrientedAngle)
+        | AuthoringTool::Constraint(ConstraintIntent::Parallel | ConstraintIntent::Collinear) => {
+            vec![Line]
+        }
         AuthoringTool::Constraint(ConstraintIntent::Perpendicular) => vec![Line, CircleOrArc],
-        AuthoringTool::Constraint(ConstraintIntent::Equal | ConstraintIntent::Tangent) => {
+        AuthoringTool::Constraint(
+            ConstraintIntent::Concentric
+            | ConstraintIntent::Continuity
+            | ConstraintIntent::Equal
+            | ConstraintIntent::Tangent,
+        ) => {
             vec![Curve]
         }
         AuthoringTool::Constraint(ConstraintIntent::Midpoint) => {
@@ -560,6 +680,9 @@ fn warning(
         DisabledReason::WrongOperandKind => "that item is not compatible with the active tool",
         DisabledReason::MissingObject => "that operand no longer exists in the current design",
         DisabledReason::InvalidSpan => "that curve span is not valid for the active tool",
+        DisabledReason::SameSemanticOperand => {
+            "those selections resolve to the same semantic operand"
+        }
         DisabledReason::AlreadyInRequestedState
         | DisabledReason::NothingToUndo
         | DisabledReason::NothingToRedo => "the requested authoring action is unavailable",
@@ -577,7 +700,10 @@ fn warning(
 
 #[cfg(test)]
 mod tests {
-    use geosolve_sketch::{CurveSpan, ScalarDomain, ScalarUnit, SketchDocument};
+    use geosolve_sketch::{
+        CurveDefinition, CurveSpan, DocumentConstraintDefinition, ScalarDomain, ScalarUnit,
+        SketchDocument,
+    };
 
     use super::*;
 
@@ -751,5 +877,254 @@ mod tests {
             AuthoringState::default().options(),
             AuthoringOptions::default()
         );
+    }
+
+    #[test]
+    fn horizontal_and_vertical_apply_one_line_or_collect_two_points_in_either_order() {
+        let (document, items) = document();
+        for intent in [ConstraintIntent::Horizontal, ConstraintIntent::Vertical] {
+            let mut state = AuthoringState::default();
+            let line = state.activate(
+                &document,
+                AuthoringTool::Constraint(intent),
+                &[AuthoringOperand::selected(items[2])],
+            );
+            assert!(matches!(line, AuthoringOutcome::Apply(_)));
+
+            for points in [[items[0], items[1]], [items[1], items[0]]] {
+                let mut state = AuthoringState::default();
+                let first = state.activate(
+                    &document,
+                    AuthoringTool::Constraint(intent),
+                    &[AuthoringOperand::selected(points[0])],
+                );
+                assert!(matches!(first, AuthoringOutcome::Collecting { .. }));
+                assert_eq!(state.pending().len(), 1);
+                let second = state.pick(&document, AuthoringOperand::selected(points[1]));
+                assert!(matches!(second, AuthoringOutcome::Apply(_)));
+            }
+        }
+    }
+
+    #[test]
+    fn horizontal_and_vertical_report_operand_kind_separately_from_arity() {
+        let (document, items) = document();
+        for intent in [ConstraintIntent::Horizontal, ConstraintIntent::Vertical] {
+            assert_eq!(
+                resolve_constraint(&document, &[items[0], items[3]], intent),
+                Err(DisabledReason::WrongOperandKind)
+            );
+            assert_eq!(
+                resolve_constraint(&document, &items[..3], intent),
+                Err(DisabledReason::WrongArity)
+            );
+
+            let mixed_pair = AuthoringState::default().activate(
+                &document,
+                AuthoringTool::Constraint(intent),
+                &[
+                    AuthoringOperand::selected(items[0]),
+                    AuthoringOperand::selected(items[3]),
+                ],
+            );
+            assert!(matches!(
+                mixed_pair,
+                AuthoringOutcome::Warning(AuthoringWarning {
+                    reason: DisabledReason::WrongOperandKind,
+                    ..
+                })
+            ));
+
+            let too_many = AuthoringState::default().activate(
+                &document,
+                AuthoringTool::Constraint(intent),
+                &items[..3]
+                    .iter()
+                    .copied()
+                    .map(AuthoringOperand::selected)
+                    .collect::<Vec<_>>(),
+            );
+            assert!(matches!(
+                too_many,
+                AuthoringOutcome::Warning(AuthoringWarning {
+                    reason: DisabledReason::WrongArity,
+                    ..
+                })
+            ));
+        }
+    }
+
+    #[test]
+    fn incompatible_pick_preserves_pending_point_and_same_point_is_precise() {
+        let (document, items) = document();
+        let mut state = AuthoringState::default();
+        let _ = state.activate(
+            &document,
+            AuthoringTool::Constraint(ConstraintIntent::Horizontal),
+            &[],
+        );
+        assert!(matches!(
+            state.pick(&document, AuthoringOperand::selected(items[0])),
+            AuthoringOutcome::Collecting { .. }
+        ));
+        assert!(matches!(
+            state.pick(&document, AuthoringOperand::selected(items[3])),
+            AuthoringOutcome::Warning(AuthoringWarning {
+                reason: DisabledReason::WrongOperandKind,
+                ..
+            })
+        ));
+        assert_eq!(state.pending().len(), 1);
+        assert!(matches!(
+            state.pick(&document, AuthoringOperand::selected(items[0])),
+            AuthoringOutcome::Warning(AuthoringWarning {
+                reason: DisabledReason::SameSemanticOperand,
+                ..
+            })
+        ));
+        assert_eq!(state.pending().len(), 1);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one fixture proves commutative acceptance and exact semantic-operand rejection for both new curve relations"
+    )]
+    fn concentric_and_collinear_are_commutative_and_polyline_supports_are_lines() {
+        let (mut document, items) = document();
+        let other_center = document.add_point("other center", [4.0, 2.0]).unwrap();
+        let other_radius = document
+            .add_scalar(
+                "other radius",
+                1.5,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let other_circle = document
+            .add_curve(
+                "other circle",
+                CurveDefinition::Circle {
+                    center: other_center,
+                    radius: other_radius,
+                },
+            )
+            .unwrap();
+        let third = document.add_point("third", [4.0, 0.0]).unwrap();
+        let polyline = document
+            .add_curve(
+                "polyline",
+                CurveDefinition::Polyline {
+                    points: vec![
+                        match items[1] {
+                            SelectionItem::Point(point) => point,
+                            _ => unreachable!(),
+                        },
+                        third,
+                    ],
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0]],
+                },
+            )
+            .unwrap();
+        let other_circle = SelectionItem::Curve(CurveSpan::line(other_circle));
+        let polyline = SelectionItem::Curve(CurveSpan::line(polyline));
+
+        for selection in [[items[3], other_circle], [other_circle, items[3]]] {
+            let outcome = AuthoringState::default().activate(
+                &document,
+                AuthoringTool::Constraint(ConstraintIntent::Concentric),
+                &selection.map(AuthoringOperand::selected),
+            );
+            assert!(matches!(
+                outcome,
+                AuthoringOutcome::Apply(AuthoringApplication {
+                    resolved_constraint: Some(ResolvedConstraintKind::ConcentricCurves),
+                    ..
+                })
+            ));
+        }
+        for selection in [[items[2], polyline], [polyline, items[2]]] {
+            let outcome = AuthoringState::default().activate(
+                &document,
+                AuthoringTool::Constraint(ConstraintIntent::Collinear),
+                &selection.map(AuthoringOperand::selected),
+            );
+            assert!(matches!(
+                outcome,
+                AuthoringOutcome::Apply(AuthoringApplication {
+                    resolved_constraint: Some(ResolvedConstraintKind::CollinearSupports),
+                    ..
+                })
+            ));
+        }
+
+        let same_center_radius = document
+            .add_scalar(
+                "alias radius",
+                0.5,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let CurveDefinition::Circle {
+            center: original_center,
+            ..
+        } = document
+            .curve(match items[3] {
+                SelectionItem::Curve(span) => span.curve,
+                _ => unreachable!(),
+            })
+            .unwrap()
+            .definition
+        else {
+            unreachable!()
+        };
+        let alias = document
+            .add_curve(
+                "center alias",
+                CurveDefinition::Circle {
+                    center: original_center,
+                    radius: same_center_radius,
+                },
+            )
+            .unwrap();
+        let warning = AuthoringState::default().activate(
+            &document,
+            AuthoringTool::Constraint(ConstraintIntent::Concentric),
+            &[
+                AuthoringOperand::selected(items[3]),
+                AuthoringOperand::selected(SelectionItem::Curve(CurveSpan::line(alias))),
+            ],
+        );
+        assert!(matches!(
+            warning,
+            AuthoringOutcome::Warning(AuthoringWarning {
+                reason: DisabledReason::SameSemanticOperand,
+                ..
+            })
+        ));
+
+        let repeated = AuthoringState::default().activate(
+            &document,
+            AuthoringTool::Constraint(ConstraintIntent::Collinear),
+            &[
+                AuthoringOperand::selected(items[2]),
+                AuthoringOperand::selected(items[2]),
+            ],
+        );
+        assert!(matches!(
+            repeated,
+            AuthoringOutcome::Warning(AuthoringWarning {
+                reason: DisabledReason::SameSemanticOperand,
+                ..
+            })
+        ));
+
+        assert!(document.constraints().iter().all(|constraint| !matches!(
+            constraint.definition,
+            DocumentConstraintDefinition::Concentric { .. }
+                | DocumentConstraintDefinition::Collinear { .. }
+        )));
     }
 }

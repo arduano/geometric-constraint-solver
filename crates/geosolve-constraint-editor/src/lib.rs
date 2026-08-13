@@ -16,7 +16,7 @@ mod inference;
 
 pub use annotations::{
     SceneAnnotation, SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationVisibility,
-    SceneConstraintGlyph, SceneGlyphMarker,
+    SceneConstraintEntry, SceneConstraintGlyph, SceneGlyphMarker, constraint_entries,
 };
 pub use authoring::{
     AuthoringApplication, AuthoringOperand, AuthoringOperandKind, AuthoringOptions,
@@ -24,8 +24,8 @@ pub use authoring::{
 };
 pub use commit_plan::{
     ConstructionCommitPlan, ConstructionCommitResult, ConstructionConstraintResult,
-    ConstructionContactResult, DraftContactDescriptor, DraftPointSlot, DraftSpanSlot,
-    InferredRelation, MAX_CONSTRUCTION_PLAN_RELATIONS,
+    ConstructionContactResult, DraftContactDescriptor, DraftCurveSlot, DraftLineSupportSlot,
+    DraftPointSlot, DraftSpanSlot, InferredRelation, MAX_CONSTRUCTION_PLAN_RELATIONS,
 };
 pub use coordinator::{
     ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
@@ -67,12 +67,12 @@ use std::cmp::Ordering;
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveContinuity,
+    DocumentCenterRef, DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveContinuity,
     DocumentCurveCurvatureRelation, DocumentCurveNormalSide, DocumentCurveSpanRef,
-    DocumentDimensionId, DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch,
-    DocumentObjectId, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
-    TangentOrientation,
+    DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
+    DocumentHyperbolaBranch, DocumentLineSupportRef, DocumentObjectId, GeometryRole,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -820,6 +820,10 @@ pub struct EditorScene {
     pub computed_fillet_continuation_statuses: Vec<ComputedFilletContinuationStatus>,
     /// Accepted, geometry-derived constraint and dimension presentation.
     pub annotations: Vec<SceneAnnotation>,
+    /// Complete persistent constraint list for presentation surfaces such as
+    /// trees and inspectors. This remains populated even when a constraint has
+    /// no drawable annotation anchor.
+    pub constraint_entries: Vec<SceneConstraintEntry>,
     construction_snap_points: Vec<ScenePoint>,
     /// Exact accepted-domain evaluator used after screen-space tessellation has
     /// selected a semantic parameter.  This keeps preview correction on the
@@ -960,6 +964,7 @@ impl EditorScene {
             }
         }
         let annotations = annotations::build_annotations(document, &points, &curves, viewport);
+        let constraint_entries = annotations::build_constraint_entries(document);
         let mut scene = Self {
             accepted_revision,
             design_identity,
@@ -975,6 +980,7 @@ impl EditorScene {
             fillet_affordances: Vec::new(),
             computed_fillet_continuation_statuses: Vec::new(),
             annotations,
+            constraint_entries,
             construction_snap_points,
             accepted_document: document.clone(),
         };
@@ -1166,6 +1172,146 @@ impl EditorScene {
         DraftInferenceAnchorCollection::Complete { anchors }
     }
 
+    /// Collects every exact scene input relevant to one inference subject.
+    ///
+    /// The ordinary M70 point/curve anchors and M71 semantic centers share one
+    /// complete bound for centered tools. Circle-circumference inference only
+    /// reads stored points, so unrelated curve tessellation cannot disable a
+    /// valid through-point placement. Suppressed authoring bypasses this query
+    /// entirely at the editor boundary.
+    #[must_use]
+    pub fn draft_inference_scene_inputs(
+        &self,
+        pointer: ScreenPoint,
+        subject: DraftInferenceSubject,
+        limits: DraftInferenceLimits,
+    ) -> DraftInferenceSceneInputCollection {
+        if !pointer.is_finite() {
+            return DraftInferenceSceneInputCollection::Complete(DraftInferenceSceneInputs {
+                anchors: Vec::new(),
+                semantic_centers: Vec::new(),
+            });
+        }
+        match subject {
+            DraftInferenceSubject::PointOperand => {
+                let anchors = match self.draft_inference_anchors(pointer, limits) {
+                    DraftInferenceAnchorCollection::Complete { anchors } => anchors,
+                    DraftInferenceAnchorCollection::ResourceLimited(evidence) => {
+                        return DraftInferenceSceneInputCollection::ResourceLimited(evidence);
+                    }
+                };
+                DraftInferenceSceneInputCollection::Complete(DraftInferenceSceneInputs {
+                    anchors,
+                    semantic_centers: Vec::new(),
+                })
+            }
+            DraftInferenceSubject::CircleCircumference => {
+                let required = self.construction_snap_points.len();
+                if required > limits.max_scene_anchors {
+                    return DraftInferenceSceneInputCollection::ResourceLimited(
+                        DraftInferenceSceneLimit {
+                            resource: DraftInferenceSceneResource::Anchors,
+                            required,
+                            limit: limits.max_scene_anchors,
+                        },
+                    );
+                }
+                let anchors = self
+                    .construction_snap_points
+                    .iter()
+                    .map(|point| DraftReferenceAnchor::PersistentPoint {
+                        point: point.id,
+                        model_position: point.model_position,
+                        role_incidence: point.role_incidence,
+                    })
+                    .collect();
+                DraftInferenceSceneInputCollection::Complete(DraftInferenceSceneInputs {
+                    anchors,
+                    semantic_centers: Vec::new(),
+                })
+            }
+            DraftInferenceSubject::CenteredPointOperand { .. } => {
+                let semantic_centers = self.bounded_draft_semantic_center_anchors(limits);
+                let semantic_centers = match semantic_centers {
+                    Ok(centers) => centers,
+                    Err(evidence) => {
+                        return DraftInferenceSceneInputCollection::ResourceLimited(evidence);
+                    }
+                };
+                let ordinary_limit = DraftInferenceLimits {
+                    max_scene_anchors: limits
+                        .max_scene_anchors
+                        .saturating_sub(semantic_centers.len()),
+                    ..limits
+                };
+                let anchors = match self.draft_inference_anchors(pointer, ordinary_limit) {
+                    DraftInferenceAnchorCollection::Complete { anchors } => anchors,
+                    DraftInferenceAnchorCollection::ResourceLimited(mut evidence) => {
+                        if evidence.resource == DraftInferenceSceneResource::Anchors {
+                            evidence.required =
+                                evidence.required.saturating_add(semantic_centers.len());
+                            evidence.limit = limits.max_scene_anchors;
+                        }
+                        return DraftInferenceSceneInputCollection::ResourceLimited(evidence);
+                    }
+                };
+                DraftInferenceSceneInputCollection::Complete(DraftInferenceSceneInputs {
+                    anchors,
+                    semantic_centers,
+                })
+            }
+        }
+    }
+
+    fn bounded_draft_semantic_center_anchors(
+        &self,
+        limits: DraftInferenceLimits,
+    ) -> Result<Vec<DraftSemanticCenterAnchor>, DraftInferenceSceneLimit> {
+        // Prove the existing scene-input bound before allocating the semantic
+        // join set. Every eligible curve occurrence contributes at least one
+        // ordinary anchor, so a successful allocation-free census also bounds
+        // the number of distinct curve identities collected below.
+        if let Some(evidence) = draft_inference_scene_resource_limit(self, limits) {
+            return Err(evidence);
+        }
+        let eligible_curves = self
+            .curves
+            .iter()
+            .filter(|curve| curve.authoring_eligible)
+            .map(|curve| curve.span.curve)
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut centers = Vec::new();
+        for curve in eligible_curves {
+            let Some(anchor) = (|| {
+                let center = self
+                    .accepted_document
+                    .resolve_center_ref(DocumentCenterRef { curve })
+                    .ok()?;
+                let model_position = self.accepted_document.point(center)?.position;
+                Some(DraftSemanticCenterAnchor {
+                    curve,
+                    center,
+                    model_position,
+                    role: self
+                        .accepted_document
+                        .geometry_role(curve)
+                        .unwrap_or_default(),
+                })
+            })() else {
+                continue;
+            };
+            centers.push(anchor);
+            if centers.len() > limits.max_scene_anchors {
+                return Err(DraftInferenceSceneLimit {
+                    resource: DraftInferenceSceneResource::Anchors,
+                    required: centers.len(),
+                    limit: limits.max_scene_anchors,
+                });
+            }
+        }
+        Ok(centers)
+    }
+
     /// Builds one composite scene from exact-stamped accepted sketch and computed
     /// output. Replaced native supports use evaluated source fragments, while
     /// generated arcs retain stable feature/corner selection provenance.
@@ -1303,6 +1449,7 @@ impl EditorScene {
             &scene.curves,
             viewport,
         );
+        scene.constraint_entries = annotations::build_constraint_entries(accepted_document);
         scene.refresh_draft_inference_seal();
         Ok(scene)
     }
@@ -5156,10 +5303,14 @@ impl ConstraintEditor {
                 | DraftInferenceRelation::Horizontal
                 | DraftInferenceRelation::Vertical
                 | DraftInferenceRelation::Parallel { .. }
-                | DraftInferenceRelation::Perpendicular { .. } => None,
+                | DraftInferenceRelation::Perpendicular { .. }
+                | DraftInferenceRelation::HorizontalPoints { .. }
+                | DraftInferenceRelation::VerticalPoints { .. }
+                | DraftInferenceRelation::Concentric { .. }
+                | DraftInferenceRelation::Collinear { .. } => None,
             });
         let position = candidate.adjusted_model_position;
-        let operand = if subject == DraftInferenceSubject::PointOperand
+        let operand = if subject.is_point_operand()
             && let Some(id) = point_identity
         {
             let accepted_position = candidate.references.iter().find_map(|reference| {
@@ -5214,14 +5365,19 @@ impl ConstraintEditor {
         let span_start = directional_span_stage(tool, stage_index)
             .then(|| draft.and_then(|draft| draft.positions.last().copied()))
             .flatten();
-        let anchors = if input.suppressed {
-            Vec::new()
+        let scene_inputs = if input.suppressed {
+            DraftInferenceSceneInputs {
+                anchors: Vec::new(),
+                semantic_centers: Vec::new(),
+            }
         } else {
-            match scene
-                .draft_inference_anchors(pointer, self.draft_inference_engine.policy().limits)
-            {
-                DraftInferenceAnchorCollection::Complete { anchors } => anchors,
-                DraftInferenceAnchorCollection::ResourceLimited(evidence) => {
+            match scene.draft_inference_scene_inputs(
+                pointer,
+                subject,
+                self.draft_inference_engine.policy().limits,
+            ) {
+                DraftInferenceSceneInputCollection::Complete(inputs) => inputs,
+                DraftInferenceSceneInputCollection::ResourceLimited(evidence) => {
                     self.draft_inference_engine.clear_stage();
                     let raw_model = scene.viewport.screen_to_model(pointer);
                     return Ok(Some(DraftInferenceResolution {
@@ -5237,7 +5393,7 @@ impl ConstraintEditor {
                 }
             }
         };
-        let frame = DraftInferenceFrame::from_scene(
+        let frame = DraftInferenceFrame::from_scene_with_semantic_centers(
             scene,
             self.geometry_policy,
             DraftInferenceSample {
@@ -5245,7 +5401,8 @@ impl ConstraintEditor {
                 subject,
                 span_start,
             },
-            anchors,
+            scene_inputs.anchors,
+            scene_inputs.semantic_centers,
         );
         self.draft_inference_engine.resolve(&frame, input).map(Some)
     }
@@ -5481,29 +5638,6 @@ fn draft_inference_blocks_confirmation(resolution: &DraftInferenceResolution) ->
     )
 }
 
-/// Explicit table of stages whose coordinates are persistent point operands.
-///
-/// Keeping this separate from `Draft.positions` prevents inference from being
-/// attached to radius/extents/weighted-coordinate clicks that a proposal would
-/// otherwise discard.
-const fn construction_point_stage(tool: EditorTool, stage_index: usize) -> bool {
-    match tool {
-        EditorTool::Point | EditorTool::Circle | EditorTool::CounterClockwiseArc => {
-            stage_index == 0
-        }
-        EditorTool::Line
-        | EditorTool::Ellipse
-        | EditorTool::EllipticalArc
-        | EditorTool::Parabola
-        | EditorTool::Hyperbola => stage_index < 2,
-        EditorTool::Polyline | EditorTool::Nurbs => true,
-        EditorTool::Rectangle | EditorTool::Select => false,
-        EditorTool::QuadraticBezier => stage_index < 3,
-        EditorTool::CubicBezier => stage_index < 4,
-        EditorTool::RationalQuadraticConic => stage_index == 0 || stage_index == 2,
-    }
-}
-
 /// Classifies construction coordinates that participate in draft inference.
 ///
 /// Most inferred coordinates are persistent point operands. The circle radius
@@ -5514,13 +5648,77 @@ const fn draft_inference_subject(
     tool: EditorTool,
     stage_index: usize,
 ) -> Option<DraftInferenceSubject> {
-    if construction_point_stage(tool, stage_index) {
-        Some(DraftInferenceSubject::PointOperand)
-    } else if matches!(tool, EditorTool::Circle) && stage_index == 1 {
-        Some(DraftInferenceSubject::CircleCircumference)
-    } else {
-        None
+    let centered = DraftInferenceSubject::CenteredPointOperand {
+        prospective_curve_index: 0,
+    };
+    match tool {
+        EditorTool::Select | EditorTool::Rectangle => None,
+        EditorTool::Point => {
+            if stage_index == 0 {
+                Some(DraftInferenceSubject::PointOperand)
+            } else {
+                None
+            }
+        }
+        EditorTool::Line | EditorTool::Parabola => {
+            if stage_index < 2 {
+                Some(DraftInferenceSubject::PointOperand)
+            } else {
+                None
+            }
+        }
+        EditorTool::Polyline | EditorTool::Nurbs => Some(DraftInferenceSubject::PointOperand),
+        EditorTool::Circle => match stage_index {
+            0 => Some(centered),
+            1 => Some(DraftInferenceSubject::CircleCircumference),
+            _ => None,
+        },
+        EditorTool::CounterClockwiseArc => {
+            if stage_index == 0 {
+                Some(centered)
+            } else {
+                None
+            }
+        }
+        EditorTool::Ellipse | EditorTool::EllipticalArc | EditorTool::Hyperbola => {
+            match stage_index {
+                0 => Some(centered),
+                1 => Some(DraftInferenceSubject::PointOperand),
+                _ => None,
+            }
+        }
+        EditorTool::QuadraticBezier => {
+            if stage_index < 3 {
+                Some(DraftInferenceSubject::PointOperand)
+            } else {
+                None
+            }
+        }
+        EditorTool::CubicBezier => {
+            if stage_index < 4 {
+                Some(DraftInferenceSubject::PointOperand)
+            } else {
+                None
+            }
+        }
+        EditorTool::RationalQuadraticConic => {
+            if stage_index == 0 || stage_index == 2 {
+                Some(DraftInferenceSubject::PointOperand)
+            } else {
+                None
+            }
+        }
     }
+}
+
+const fn construction_point_stage(tool: EditorTool, stage_index: usize) -> bool {
+    matches!(
+        draft_inference_subject(tool, stage_index),
+        Some(
+            DraftInferenceSubject::PointOperand
+                | DraftInferenceSubject::CenteredPointOperand { .. }
+        )
+    )
 }
 
 const fn directional_span_stage(tool: EditorTool, stage_index: usize) -> bool {
@@ -5528,6 +5726,10 @@ const fn directional_span_stage(tool: EditorTool, stage_index: usize) -> bool {
         || matches!(tool, EditorTool::Polyline) && stage_index >= 1
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive lowering keeps every authenticated inference relation in a single atomic construction plan"
+)]
 fn construction_commit_plan(
     draft: &Draft,
     proposal: ConstructionProposal,
@@ -5588,6 +5790,41 @@ fn construction_commit_plan(
                     relations.push(InferredRelation::Perpendicular {
                         first: draft_span_slot(draft.tool, confirmed.stage_index)?,
                         second: DraftSpanSlot::Existing(reference),
+                    });
+                }
+                DraftInferenceRelation::HorizontalPoints { reference } => {
+                    relations.push(InferredRelation::HorizontalPoints {
+                        first: draft_point_slot(draft, confirmed.stage_index)?,
+                        second: DraftPointSlot::Existing(reference),
+                    });
+                }
+                DraftInferenceRelation::VerticalPoints { reference } => {
+                    relations.push(InferredRelation::VerticalPoints {
+                        first: draft_point_slot(draft, confirmed.stage_index)?,
+                        second: DraftPointSlot::Existing(reference),
+                    });
+                }
+                DraftInferenceRelation::Concentric {
+                    reference,
+                    prospective_curve_index,
+                } => {
+                    relations.push(InferredRelation::Concentric {
+                        first: DraftCurveSlot::Created {
+                            curve_index: prospective_curve_index,
+                        },
+                        second: DraftCurveSlot::Existing(reference),
+                    });
+                }
+                DraftInferenceRelation::Collinear { reference } => {
+                    relations.push(InferredRelation::Collinear {
+                        first: DraftLineSupportSlot {
+                            span: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                            direction: DocumentDirectionSense::Forward,
+                        },
+                        second: DraftLineSupportSlot {
+                            span: DraftSpanSlot::Existing(reference),
+                            direction: DocumentDirectionSense::Forward,
+                        },
                     });
                 }
             }
@@ -5659,6 +5896,8 @@ fn confirmed_positional_references(
                 | DraftInferenceRelation::PointOnCurve { .. }
                 | DraftInferenceRelation::PointOnCreatedCurve { .. }
                 | DraftInferenceRelation::Midpoint { .. }
+                | DraftInferenceRelation::HorizontalPoints { .. }
+                | DraftInferenceRelation::VerticalPoints { .. }
         )
     });
     let Some(relation) = relation else {
@@ -5671,7 +5910,13 @@ fn confirmed_positional_references(
         .filter(|reference| match (relation, reference) {
             (
                 DraftInferenceRelation::PointIdentity { point: expected }
-                | DraftInferenceRelation::PointOnCreatedCurve { point: expected },
+                | DraftInferenceRelation::PointOnCreatedCurve { point: expected }
+                | DraftInferenceRelation::HorizontalPoints {
+                    reference: expected,
+                }
+                | DraftInferenceRelation::VerticalPoints {
+                    reference: expected,
+                },
                 DraftReferenceAnchor::PersistentPoint { point, .. },
             ) => *point == *expected,
             (
@@ -5749,6 +5994,10 @@ pub enum ConstraintKind {
     Symmetry,
     GenericContact,
     GenericTangency,
+    HorizontalPoints,
+    VerticalPoints,
+    Concentric,
+    Collinear,
 }
 
 /// Compact selection-sensitive authoring vocabulary.
@@ -5768,6 +6017,8 @@ pub enum ConstraintIntent {
     Symmetric,
     Tangent,
     Continuity,
+    Concentric,
+    Collinear,
 }
 
 /// Exact persistent constraint family selected by contextual dispatch.
@@ -5779,6 +6030,10 @@ pub enum ResolvedConstraintKind {
     CurveContact,
     HorizontalLine,
     VerticalLine,
+    HorizontalPoints,
+    VerticalPoints,
+    ConcentricCurves,
+    CollinearSupports,
     ParallelLines,
     PerpendicularLines,
     RadialLine,
@@ -5802,6 +6057,10 @@ impl ResolvedConstraintKind {
             Self::CurveContact => "Curve contact",
             Self::HorizontalLine => "Horizontal",
             Self::VerticalLine => "Vertical",
+            Self::HorizontalPoints => "Horizontal points",
+            Self::VerticalPoints => "Vertical points",
+            Self::ConcentricCurves => "Concentric",
+            Self::CollinearSupports => "Collinear",
             Self::ParallelLines => "Parallel",
             Self::PerpendicularLines => "Perpendicular",
             Self::RadialLine => "Normal to circle / arc",
@@ -7312,7 +7571,16 @@ fn available_constraints(
 ) -> Vec<ConstraintKind> {
     match selection {
         [SelectionItem::Point(_)] => vec![ConstraintKind::Fixed],
-        [SelectionItem::Point(_), SelectionItem::Point(_)] => vec![ConstraintKind::Coincident],
+        [SelectionItem::Point(first), SelectionItem::Point(second)] => {
+            let mut kinds = vec![ConstraintKind::Coincident];
+            if first != second {
+                kinds.extend([
+                    ConstraintKind::HorizontalPoints,
+                    ConstraintKind::VerticalPoints,
+                ]);
+            }
+            kinds
+        }
         [SelectionItem::Point(_), SelectionItem::Curve(span)]
         | [SelectionItem::Curve(span), SelectionItem::Point(_)]
             if supports_contact(document, *span) =>
@@ -7334,6 +7602,15 @@ fn available_constraints(
                     ConstraintKind::Perpendicular,
                     ConstraintKind::EqualLength,
                 ]);
+                if first != second {
+                    kinds.push(ConstraintKind::Collinear);
+                }
+            }
+            if semantic_center(document, first.curve).is_some_and(|first_center| {
+                semantic_center(document, second.curve)
+                    .is_some_and(|second_center| first_center != second_center)
+            }) {
+                kinds.push(ConstraintKind::Concentric);
             }
             if is_radius_curve(document, first.curve) && is_radius_curve(document, second.curve) {
                 kinds.push(ConstraintKind::EqualRadius);
@@ -7355,6 +7632,10 @@ fn available_constraints(
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "the exhaustive public relation-to-document mapping is clearer beside its applicability guard"
+)]
 pub(crate) fn constraint_edit(
     document: &SketchDocument,
     selection: &[SelectionItem],
@@ -7382,6 +7663,20 @@ pub(crate) fn constraint_edit(
             first: *first,
             second: *second,
         },
+        (
+            ConstraintKind::HorizontalPoints,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) => DocumentConstraintDefinition::HorizontalPoints {
+            first: *first,
+            second: *second,
+        },
+        (
+            ConstraintKind::VerticalPoints,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) => DocumentConstraintDefinition::VerticalPoints {
+            first: *first,
+            second: *second,
+        },
         (ConstraintKind::Horizontal, [SelectionItem::Curve(line)]) => {
             DocumentConstraintDefinition::Horizontal { line: *line }
         }
@@ -7400,6 +7695,22 @@ pub(crate) fn constraint_edit(
         ) => DocumentConstraintDefinition::Perpendicular {
             first: *first,
             second: *second,
+        },
+        (
+            ConstraintKind::Collinear,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::Collinear {
+            first: line_support(*first),
+            second: line_support(*second),
+        },
+        (
+            ConstraintKind::Concentric,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::Concentric {
+            first: DocumentCenterRef { curve: first.curve },
+            second: DocumentCenterRef {
+                curve: second.curve,
+            },
         },
         (
             ConstraintKind::EqualLength,
@@ -7451,6 +7762,19 @@ fn is_radius_curve(document: &SketchDocument, curve: CurveId) -> bool {
             CurveDefinition::Circle { .. } | CurveDefinition::CircularArc { .. }
         )
     })
+}
+
+fn semantic_center(document: &SketchDocument, curve: CurveId) -> Option<DesignPointId> {
+    document
+        .resolve_center_ref(DocumentCenterRef { curve })
+        .ok()
+}
+
+const fn line_support(span: CurveSpan) -> DocumentLineSupportRef {
+    DocumentLineSupportRef {
+        span,
+        direction: DocumentDirectionSense::Forward,
+    }
 }
 
 fn is_linear_span(document: &SketchDocument, span: CurveSpan) -> bool {
@@ -7809,7 +8133,7 @@ mod tests {
     }
 
     #[test]
-    fn construction_point_stage_table_excludes_coordinate_only_clicks() {
+    fn draft_inference_subject_table_excludes_coordinate_only_clicks() {
         let cases: &[(EditorTool, &[bool])] = &[
             (EditorTool::Point, &[true, false]),
             (EditorTool::Line, &[true, true, false]),
@@ -7831,13 +8155,23 @@ mod tests {
         ];
         for (tool, expected) in cases {
             for (stage, expected) in expected.iter().copied().enumerate() {
-                assert_eq!(
-                    construction_point_stage(*tool, stage),
-                    expected,
-                    "unexpected operand ownership for {tool:?} stage {stage}"
-                );
                 let expected_subject = if expected {
-                    Some(DraftInferenceSubject::PointOperand)
+                    if stage == 0
+                        && matches!(
+                            tool,
+                            EditorTool::Circle
+                                | EditorTool::CounterClockwiseArc
+                                | EditorTool::Ellipse
+                                | EditorTool::EllipticalArc
+                                | EditorTool::Hyperbola
+                        )
+                    {
+                        Some(DraftInferenceSubject::CenteredPointOperand {
+                            prospective_curve_index: 0,
+                        })
+                    } else {
+                        Some(DraftInferenceSubject::PointOperand)
+                    }
                 } else if *tool == EditorTool::Circle && stage == 1 {
                     Some(DraftInferenceSubject::CircleCircumference)
                 } else {
@@ -8015,8 +8349,8 @@ mod tests {
     #[test]
     fn scene_anchor_resource_limit_fails_closed_without_a_partial_prefix() {
         let (document, _, _) = line_document();
-        let scene = scene(&document);
-        let pointer_position = scene.viewport.model_to_screen([0.0, 1.0]);
+        let line_scene = scene(&document);
+        let pointer_position = line_scene.viewport.model_to_screen([0.0, 1.0]);
         let mut policy = DraftInferencePolicy::default();
         policy.limits.max_scene_anchors = 7;
         let evidence = DraftInferenceSceneLimit {
@@ -8025,7 +8359,7 @@ mod tests {
             limit: 7,
         };
         assert_eq!(
-            scene.draft_inference_anchors(pointer_position, policy.limits),
+            line_scene.draft_inference_anchors(pointer_position, policy.limits),
             DraftInferenceAnchorCollection::ResourceLimited(evidence)
         );
         let segment_limits = DraftInferenceLimits {
@@ -8033,7 +8367,7 @@ mod tests {
             ..DraftInferenceLimits::default()
         };
         assert_eq!(
-            scene.draft_inference_anchors(pointer_position, segment_limits),
+            line_scene.draft_inference_anchors(pointer_position, segment_limits),
             DraftInferenceAnchorCollection::ResourceLimited(DraftInferenceSceneLimit {
                 resource: DraftInferenceSceneResource::CurveSegments,
                 required: 2,
@@ -8047,7 +8381,7 @@ mod tests {
             .expect("bounded policy");
         let resolution = editor
             .resolve_draft_inference(
-                &scene,
+                &line_scene,
                 pointer_position,
                 DraftInferenceInput::default(),
                 EditorTool::Point,
@@ -8066,7 +8400,7 @@ mod tests {
 
         editor.activate_tool(EditorTool::Point);
         let effects = editor.pointer_down(
-            &scene,
+            &line_scene,
             pointer(
                 91,
                 pointer_position.x,
@@ -8083,6 +8417,360 @@ mod tests {
                     && resolution.completeness
                         == DraftInferenceCompleteness::SceneLimit(evidence)
         )));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one collection contract covers subject routing, shared exact bounds, and suppression bypass"
+    )]
+    fn subject_specific_scene_collection_is_complete_bounded_and_traversal_minimal() {
+        let (document, _, _) = line_document();
+        let line_scene = scene(&document);
+        let pointer_position = line_scene.viewport.model_to_screen([0.0, 1.0]);
+        let segment_limits = DraftInferenceLimits {
+            max_scene_curve_segments: 0,
+            ..DraftInferenceLimits::default()
+        };
+        assert!(matches!(
+            line_scene.draft_inference_scene_inputs(
+                pointer_position,
+                DraftInferenceSubject::CircleCircumference,
+                segment_limits,
+            ),
+            DraftInferenceSceneInputCollection::Complete(DraftInferenceSceneInputs {
+                ref anchors,
+                ref semantic_centers,
+            }) if anchors.len() == 4
+                && semantic_centers.is_empty()
+                && anchors.iter().all(|anchor| matches!(
+                    anchor,
+                    DraftReferenceAnchor::PersistentPoint { .. }
+                ))
+        ));
+        assert!(matches!(
+            line_scene.draft_inference_scene_inputs(
+                pointer_position,
+                DraftInferenceSubject::PointOperand,
+                segment_limits,
+            ),
+            DraftInferenceSceneInputCollection::ResourceLimited(DraftInferenceSceneLimit {
+                resource: DraftInferenceSceneResource::CurveSegments,
+                ..
+            })
+        ));
+
+        let mut centered_document = SketchDocument::new(10.0).expect("document");
+        for (label, center, radius_value) in
+            [("first", [-2.0, 0.0], 1.0), ("second", [2.0, 0.0], 1.5)]
+        {
+            let center = centered_document.add_point(label, center).expect("center");
+            let radius = centered_document
+                .add_scalar(
+                    label,
+                    radius_value,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+                .expect("radius");
+            centered_document
+                .add_curve(label, CurveDefinition::Circle { center, radius })
+                .expect("circle");
+        }
+        let centered_scene = scene(&centered_document);
+        let pointer_position = centered_scene.viewport.model_to_screen([0.0, 0.0]);
+        let exact = DraftInferenceLimits {
+            max_scene_anchors: 7,
+            ..DraftInferenceLimits::default()
+        };
+        let exact_inputs = centered_scene.draft_inference_scene_inputs(
+            pointer_position,
+            DraftInferenceSubject::CenteredPointOperand {
+                prospective_curve_index: 0,
+            },
+            exact,
+        );
+        assert!(
+            matches!(
+                exact_inputs,
+                DraftInferenceSceneInputCollection::Complete(DraftInferenceSceneInputs {
+                    ref anchors,
+                    ref semantic_centers,
+                }) if anchors.len() == 5 && semantic_centers.len() == 2
+            ),
+            "unexpected exact centered inputs: {exact_inputs:?}"
+        );
+        let limited = DraftInferenceLimits {
+            max_scene_anchors: 6,
+            ..DraftInferenceLimits::default()
+        };
+        assert_eq!(
+            centered_scene.draft_inference_scene_inputs(
+                pointer_position,
+                DraftInferenceSubject::CenteredPointOperand {
+                    prospective_curve_index: 0,
+                },
+                limited,
+            ),
+            DraftInferenceSceneInputCollection::ResourceLimited(DraftInferenceSceneLimit {
+                resource: DraftInferenceSceneResource::Anchors,
+                required: 7,
+                limit: 6,
+            })
+        );
+
+        let mut editor = ConstraintEditor::default();
+        let mut policy = DraftInferencePolicy::default();
+        policy.limits.max_scene_anchors = 1;
+        editor.set_draft_inference_policy(policy).expect("policy");
+        let suppressed = editor
+            .resolve_draft_inference(
+                &centered_scene,
+                pointer_position,
+                DraftInferenceInput {
+                    suppressed: true,
+                    preferred_candidate: None,
+                },
+                EditorTool::Circle,
+                0,
+                None,
+            )
+            .expect("suppressed collection bypass")
+            .expect("center stage");
+        assert_eq!(suppressed.status, DraftInferenceStatus::Suppressed);
+        assert_eq!(
+            suppressed.completeness,
+            DraftInferenceCompleteness::Complete
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one tool-agnostic matrix proves the centered-operand law across every centered construction"
+    )]
+    fn every_centered_tool_defaults_to_concentric_and_can_explicitly_reuse_identity() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let center = document.add_point("center", [0.0, 0.0]).expect("center");
+        let radius = document
+            .add_scalar("radius", 2.0, ScalarUnit::Length, ScalarDomain::Positive)
+            .expect("radius");
+        let reference = document
+            .add_curve("reference", CurveDefinition::Circle { center, radius })
+            .expect("circle");
+        let scene = scene(&document);
+        let center_screen = scene.viewport.model_to_screen([0.0, 0.0]);
+        let tools = [
+            (EditorTool::Circle, [3.0, 0.0]),
+            (EditorTool::CounterClockwiseArc, [3.0, 0.0]),
+            (EditorTool::Ellipse, [3.0, 0.5]),
+            (EditorTool::EllipticalArc, [3.0, 0.5]),
+            (EditorTool::Hyperbola, [3.0, 0.5]),
+        ];
+        for (ordinal, (tool, second_position)) in tools.into_iter().enumerate() {
+            let mut editor = ConstraintEditor::default();
+            editor.activate_tool(tool);
+            let near_center = scene.viewport.model_to_screen([0.05, 0.02]);
+            let pointer_id = 300 + u64::try_from(ordinal).expect("ordinal");
+            let preview = editor.pointer_move(
+                &scene,
+                pointer(
+                    pointer_id,
+                    near_center.x,
+                    near_center.y,
+                    Modifiers::default(),
+                ),
+            );
+            assert!(preview.iter().any(|effect| matches!(
+                effect,
+                EditorEffect::DraftInferenceChanged(Some(DraftInferenceResolution {
+                    status: DraftInferenceStatus::Resolved { candidate },
+                    candidates,
+                    ..
+                })) if candidates.iter().any(|candidate_value| {
+                    candidate_value.id == *candidate
+                        && matches!(
+                            candidate_value.relations.as_slice(),
+                            [DraftInferenceRelation::Concentric {
+                                reference: inferred,
+                                prospective_curve_index: 0,
+                            }] if *inferred == reference
+                        )
+                })
+            )));
+            editor.pointer_down(
+                &scene,
+                pointer(
+                    pointer_id,
+                    near_center.x,
+                    near_center.y,
+                    Modifiers::default(),
+                ),
+            );
+            let first = editor.draft.as_ref().expect("centered draft");
+            assert!(
+                matches!(
+                    first.points[0],
+                    ConstructionPoint::New(position) if model_points_close(position, [0.0, 0.0])
+                ),
+                "unexpected {tool:?} center operand: {:?}",
+                first.points[0]
+            );
+            assert!(matches!(
+                first.confirmed_inference[0].relations.as_slice(),
+                [DraftInferenceRelation::Concentric {
+                    reference: inferred,
+                    prospective_curve_index: 0,
+                }] if *inferred == reference
+            ));
+
+            let second = scene.viewport.model_to_screen(second_position);
+            let mut effects = editor.pointer_down_with_draft_inference(
+                &scene,
+                pointer(pointer_id, second.x, second.y, Modifiers::default()),
+                DraftInferenceInput {
+                    suppressed: true,
+                    preferred_candidate: None,
+                },
+            );
+            if tool == EditorTool::CounterClockwiseArc {
+                let third = scene.viewport.model_to_screen([0.0, 3.0]);
+                effects = editor.pointer_down_with_draft_inference(
+                    &scene,
+                    pointer(pointer_id, third.x, third.y, Modifiers::default()),
+                    DraftInferenceInput {
+                        suppressed: true,
+                        preferred_candidate: None,
+                    },
+                );
+            }
+            let (_, plan) = construction_plan_effect(&effects);
+            assert!(matches!(
+                plan.relations.as_slice(),
+                [InferredRelation::Concentric {
+                    first: DraftCurveSlot::Created { curve_index: 0 },
+                    second: DraftCurveSlot::Existing(existing),
+                }] if *existing == reference
+            ));
+            let mut candidate = document.clone();
+            let result = plan.apply(&mut candidate).expect("atomic concentric plan");
+            assert_eq!(result.construction.curves.len(), 1);
+            assert_eq!(result.constraints.len(), 1);
+            assert!(matches!(
+                candidate
+                    .constraint(result.constraints[0].constraint)
+                    .expect("concentric constraint")
+                    .definition,
+                DocumentConstraintDefinition::Concentric { first, second }
+                    if first.curve == result.construction.curves[0]
+                        && second.curve == reference
+            ));
+
+            let mut identity_editor = ConstraintEditor::default();
+            let identity_policy = DraftInferencePolicy {
+                concentric: DraftInferenceBehavior {
+                    show_guides: false,
+                    adjust_coordinates: false,
+                    persist_constraint: false,
+                },
+                ..DraftInferencePolicy::default()
+            };
+            identity_editor
+                .set_draft_inference_policy(identity_policy)
+                .expect("identity policy");
+            identity_editor.activate_tool(tool);
+            identity_editor.pointer_down(
+                &scene,
+                pointer(
+                    200 + u64::try_from(ordinal).expect("ordinal"),
+                    center_screen.x,
+                    center_screen.y,
+                    Modifiers::default(),
+                ),
+            );
+            assert!(matches!(
+                identity_editor
+                    .draft
+                    .as_ref()
+                    .expect("centered identity draft")
+                    .points[0],
+                ConstructionPoint::Existing { id, .. } if id == center
+            ));
+        }
+    }
+
+    #[test]
+    fn centered_circle_preserves_midpoint_and_generic_point_on_curve_authoring() {
+        let (line_document, lines, _) = line_document();
+        let line_scene = scene(&line_document);
+        let midpoint = [0.0, 1.0];
+        let mut midpoint_editor = ConstraintEditor::default();
+        midpoint_editor.activate_tool(EditorTool::Circle);
+        let center = line_scene.viewport.model_to_screen(midpoint);
+        midpoint_editor.pointer_down(
+            &line_scene,
+            pointer(410, center.x, center.y, Modifiers::default()),
+        );
+        let rim = line_scene.viewport.model_to_screen([1.0, 1.0]);
+        let effects = midpoint_editor.pointer_down_with_draft_inference(
+            &line_scene,
+            pointer(410, rim.x, rim.y, Modifiers::default()),
+            DraftInferenceInput {
+                suppressed: true,
+                preferred_candidate: None,
+            },
+        );
+        let (_, plan) = construction_plan_effect(&effects);
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [InferredRelation::Midpoint {
+                point: DraftPointSlot::Created { point_index: 0 },
+                line: DraftSpanSlot::Existing(line),
+            }] if *line == lines[0]
+        ));
+        plan.apply(&mut line_document.clone())
+            .expect("center-at-midpoint plan");
+
+        let (_, curve_document, curve, parameter) = native_point_on_curve_fixtures()
+            .into_iter()
+            .find(|(family, ..)| *family == "cubic Bezier")
+            .expect("cubic fixture");
+        let curve_scene = scene(&curve_document);
+        let jet = curve_document
+            .evaluate_curve_jet(curve, parameter)
+            .expect("curve point");
+        let curve_center = [jet.position.x, jet.position.y];
+        let center = curve_scene.viewport.model_to_screen(curve_center);
+        let mut curve_editor = ConstraintEditor::default();
+        curve_editor.activate_tool(EditorTool::Circle);
+        curve_editor.pointer_down(
+            &curve_scene,
+            pointer(411, center.x, center.y, Modifiers::default()),
+        );
+        let rim = curve_scene
+            .viewport
+            .model_to_screen([curve_center[0] + 1.0, curve_center[1]]);
+        let effects = curve_editor.pointer_down_with_draft_inference(
+            &curve_scene,
+            pointer(411, rim.x, rim.y, Modifiers::default()),
+            DraftInferenceInput {
+                suppressed: true,
+                preferred_candidate: None,
+            },
+        );
+        let (_, plan) = construction_plan_effect(&effects);
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [InferredRelation::PointOnCurve {
+                point: DraftPointSlot::Created { point_index: 0 },
+                contact: DraftContactDescriptor {
+                    span: DraftSpanSlot::Existing(span),
+                    ..
+                },
+            }] if *span == curve
+        ));
+        plan.apply(&mut curve_document.clone())
+            .expect("center-on-curve plan");
     }
 
     #[test]
@@ -8222,7 +8910,11 @@ mod tests {
                         | DraftInferenceRelation::Horizontal
                         | DraftInferenceRelation::Vertical
                         | DraftInferenceRelation::Parallel { .. }
-                        | DraftInferenceRelation::Perpendicular { .. } => {
+                        | DraftInferenceRelation::Perpendicular { .. }
+                        | DraftInferenceRelation::HorizontalPoints { .. }
+                        | DraftInferenceRelation::VerticalPoints { .. }
+                        | DraftInferenceRelation::Concentric { .. }
+                        | DraftInferenceRelation::Collinear { .. } => {
                             panic!("unexpected midpoint-scene relation")
                         }
                     };
@@ -8999,7 +9691,11 @@ mod tests {
         assert_eq!(editor.tool(), EditorTool::Line);
         let inference_policy = editor.draft_inference_policy();
         let invalid_inference_policy = DraftInferencePolicy {
-            point_tracking: DraftInferenceBehavior::constraint_backed(),
+            point_tracking: DraftInferenceBehavior {
+                show_guides: true,
+                adjust_coordinates: false,
+                persist_constraint: true,
+            },
             ..inference_policy
         };
         assert_eq!(
@@ -12458,6 +13154,7 @@ mod tests {
                 ConstraintKind::Parallel,
                 ConstraintKind::Perpendicular,
                 ConstraintKind::EqualLength,
+                ConstraintKind::Collinear,
                 ConstraintKind::GenericContact,
                 ConstraintKind::GenericTangency,
             ]
@@ -12472,6 +13169,82 @@ mod tests {
                 ..
             } if first == spans[0] && second == spans[1]
         ));
+    }
+
+    #[test]
+    fn m71_direct_relation_availability_rejects_semantic_tautologies() {
+        let (mut document, spans, points) = line_document();
+        let assert_rejected =
+            |document: &SketchDocument, selection: &[SelectionItem], kind: ConstraintKind| {
+                let mut editor = ConstraintEditor::default();
+                editor.set_selection(selection.iter().copied());
+                assert!(!editor.available_constraints(document).contains(&kind));
+                assert!(matches!(
+                    editor.constraint_edit(document, kind, "tautology"),
+                    Err(EditorError::IncompatibleConstraint(actual)) if actual == kind
+                ));
+            };
+
+        let repeated_point = [
+            SelectionItem::Point(points[0]),
+            SelectionItem::Point(points[0]),
+        ];
+        for kind in [
+            ConstraintKind::HorizontalPoints,
+            ConstraintKind::VerticalPoints,
+        ] {
+            assert_rejected(&document, &repeated_point, kind);
+        }
+
+        let first_radius = document
+            .add_scalar(
+                "first radius",
+                1.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("first radius");
+        let second_radius = document
+            .add_scalar(
+                "second radius",
+                2.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("second radius");
+        let first_circle = CurveSpan::line(
+            document
+                .add_curve(
+                    "first circle",
+                    CurveDefinition::Circle {
+                        center: points[0],
+                        radius: first_radius,
+                    },
+                )
+                .expect("first circle"),
+        );
+        let second_circle = CurveSpan::line(
+            document
+                .add_curve(
+                    "second circle",
+                    CurveDefinition::Circle {
+                        center: points[0],
+                        radius: second_radius,
+                    },
+                )
+                .expect("second circle"),
+        );
+        let shared_center = [
+            SelectionItem::Curve(first_circle),
+            SelectionItem::Curve(second_circle),
+        ];
+        assert_rejected(&document, &shared_center, ConstraintKind::Concentric);
+
+        let repeated_support = [
+            SelectionItem::Curve(spans[0]),
+            SelectionItem::Curve(spans[0]),
+        ];
+        assert_rejected(&document, &repeated_support, ConstraintKind::Collinear);
     }
 
     #[test]

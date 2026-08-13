@@ -1077,7 +1077,6 @@ fn render_annotations(
     problem_items: &[SelectionItem],
     problem: Option<&EditorProblemMetadata>,
 ) {
-    let document = accepted.document();
     let visibility_context = hover
         .context_owner
         .or_else(|| hover.target.map(EditorHoverTarget::item));
@@ -1110,7 +1109,8 @@ fn render_annotations(
         );
         let (editor_kind, id, kind, label, value, mode) = match annotation.item {
             SelectionItem::Constraint(id) => {
-                let Some(constraint) = document.constraint(id) else {
+                let Some(constraint) = scene.constraint_entries.iter().find(|entry| entry.id == id)
+                else {
                     continue;
                 };
                 (
@@ -1123,7 +1123,7 @@ fn render_annotations(
                 )
             }
             SelectionItem::Dimension(id) => {
-                let Some(dimension) = document.dimension(id) else {
+                let Some(dimension) = accepted.document().dimension(id) else {
                     continue;
                 };
                 let (value_attribute, displayed) = dimension_display(accepted, dimension);
@@ -1467,12 +1467,16 @@ const fn constraint_glyph(
         | DocumentConstraintDefinition::FixedCoordinate { .. } => ("fixed", "Fix"),
         DocumentConstraintDefinition::Coincident { .. }
         | DocumentConstraintDefinition::ExternalPointCoincident { .. } => ("coincident", "Coin"),
-        DocumentConstraintDefinition::Horizontal { .. } => ("horizontal", "H"),
-        DocumentConstraintDefinition::Vertical { .. } => ("vertical", "V"),
+        DocumentConstraintDefinition::Horizontal { .. }
+        | DocumentConstraintDefinition::HorizontalPoints { .. } => ("horizontal", "H"),
+        DocumentConstraintDefinition::Vertical { .. }
+        | DocumentConstraintDefinition::VerticalPoints { .. } => ("vertical", "V"),
         DocumentConstraintDefinition::PointOnCurve { .. } => ("point-on-curve", "On"),
         DocumentConstraintDefinition::Parallel { .. } => ("parallel", "∥"),
         DocumentConstraintDefinition::Perpendicular { .. } => ("perpendicular", "⊥"),
-        DocumentConstraintDefinition::ExternalLineCollinear { .. } => ("collinear", "Col"),
+        DocumentConstraintDefinition::ExternalLineCollinear { .. }
+        | DocumentConstraintDefinition::Collinear { .. } => ("collinear", "Col"),
+        DocumentConstraintDefinition::Concentric { .. } => ("concentric", "Con"),
         DocumentConstraintDefinition::EqualLength { .. } => ("equal-length", "L="),
         DocumentConstraintDefinition::EqualRadius { .. } => ("equal-radius", "R="),
         DocumentConstraintDefinition::Midpoint { .. } => ("midpoint", "Mid"),
@@ -1756,6 +1760,10 @@ const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
         DraftInferenceFamily::Vertical => "vertical",
         DraftInferenceFamily::Parallel => "parallel",
         DraftInferenceFamily::Perpendicular => "perpendicular",
+        DraftInferenceFamily::HorizontalPoints => "horizontal-points",
+        DraftInferenceFamily::VerticalPoints => "vertical-points",
+        DraftInferenceFamily::Concentric => "concentric",
+        DraftInferenceFamily::Collinear => "collinear",
         DraftInferenceFamily::PointTracking => "point-tracking",
     }
 }
@@ -1770,6 +1778,10 @@ const fn inference_family_label(family: DraftInferenceFamily) -> &'static str {
         DraftInferenceFamily::Vertical => "Vertical",
         DraftInferenceFamily::Parallel => "Parallel",
         DraftInferenceFamily::Perpendicular => "Perpendicular",
+        DraftInferenceFamily::HorizontalPoints => "Horizontal points",
+        DraftInferenceFamily::VerticalPoints => "Vertical points",
+        DraftInferenceFamily::Concentric => "Concentric",
+        DraftInferenceFamily::Collinear => "Collinear",
         DraftInferenceFamily::PointTracking => "Alignment tracking only",
     }
 }
@@ -1810,6 +1822,22 @@ const fn inference_relation_presentation(
             "Perpendicular",
             SceneConstraintGlyph::Perpendicular,
         ),
+        DraftInferenceRelation::HorizontalPoints { .. } => (
+            "horizontal-points",
+            "Horizontal points",
+            SceneConstraintGlyph::Horizontal,
+        ),
+        DraftInferenceRelation::VerticalPoints { .. } => (
+            "vertical-points",
+            "Vertical points",
+            SceneConstraintGlyph::Vertical,
+        ),
+        DraftInferenceRelation::Concentric { .. } => {
+            ("concentric", "Concentric", SceneConstraintGlyph::Concentric)
+        }
+        DraftInferenceRelation::Collinear { .. } => {
+            ("collinear", "Collinear", SceneConstraintGlyph::Collinear)
+        }
     }
 }
 
@@ -2003,18 +2031,19 @@ fn escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        ComputedFeatureProblemMetadata, ConstructionPreviewGeometry, DraftInferenceEngine,
-        DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy, DraftInferenceResolution,
-        DraftInferenceSample, DraftInferenceSubject, DraftReferenceAnchor, EditorHoverState,
-        EditorHoverTarget, EditorProblemScope, EditorScene, GeometryInteractionPolicy,
-        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationOccurrence,
-        ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
+        ComputedFeatureProblemMetadata, ConstructionPreviewGeometry, DraftInferenceBehavior,
+        DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy,
+        DraftInferenceResolution, DraftInferenceSample, DraftInferenceSubject,
+        DraftReferenceAnchor, EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene,
+        GeometryInteractionPolicy, RetainedEditorCoordinator, SceneAnnotationGeometry,
+        SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
-        DocumentAngleOrientation, DocumentConstraintDefinition, DocumentDimensionDefinition,
-        DocumentDimensionMode, DocumentEdit, DocumentParameterId, DocumentParameterKind,
+        DocumentAngleOrientation, DocumentCenterRef, DocumentConstraintDefinition,
+        DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
+        DocumentLineSupportRef, DocumentParameterId, DocumentParameterKind,
         DocumentParameterTarget, DocumentSolveRequest, ParameterBatch, ParameterBatchEntry,
         ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
         SketchDesignIdentity, SketchDocument,
@@ -2111,6 +2140,7 @@ mod tests {
                 span_start: None,
             },
             anchors,
+            semantic_centers: Vec::new(),
         }
     }
 
@@ -2175,7 +2205,12 @@ mod tests {
         assert!(resolved_markup.contains("data-inference-relation=\"point-identity\""));
         assert!(resolved_markup.contains("aria-label=\"Reuse existing point\""));
 
-        let mut tracking_engine = DraftInferenceEngine::default();
+        let tracking_policy = DraftInferencePolicy {
+            point_tracking: DraftInferenceBehavior::tracking_only(),
+            ..DraftInferencePolicy::default()
+        };
+        let mut tracking_engine =
+            DraftInferenceEngine::new(tracking_policy).expect("tracking-only display policy");
         tracking_engine
             .remember_reference(anchor)
             .expect("remember point reference");
@@ -2330,6 +2365,14 @@ mod tests {
             },
             DocumentConstraintDefinition::Horizontal { line: line(3) },
             DocumentConstraintDefinition::Vertical { line: line(3) },
+            DocumentConstraintDefinition::HorizontalPoints {
+                first: point(1),
+                second: point(2),
+            },
+            DocumentConstraintDefinition::VerticalPoints {
+                first: point(1),
+                second: point(2),
+            },
             DocumentConstraintDefinition::PointOnCurve {
                 point: point(1),
                 contact: contact(4),
@@ -2341,6 +2384,20 @@ mod tests {
             DocumentConstraintDefinition::Perpendicular {
                 first: line(3),
                 second: line(5),
+            },
+            DocumentConstraintDefinition::Concentric {
+                first: DocumentCenterRef { curve: curve(6) },
+                second: DocumentCenterRef { curve: curve(7) },
+            },
+            DocumentConstraintDefinition::Collinear {
+                first: DocumentLineSupportRef {
+                    span: line(3),
+                    direction: DocumentDirectionSense::Forward,
+                },
+                second: DocumentLineSupportRef {
+                    span: line(5),
+                    direction: DocumentDirectionSense::Reverse,
+                },
             },
             DocumentConstraintDefinition::EqualLength {
                 first: line(3),
@@ -2373,9 +2430,13 @@ mod tests {
             "coincident",
             "horizontal",
             "vertical",
+            "horizontal",
+            "vertical",
             "point-on-curve",
             "parallel",
             "perpendicular",
+            "concentric",
+            "collinear",
             "equal-length",
             "equal-radius",
             "midpoint",
@@ -2467,7 +2528,12 @@ mod tests {
             None,
             viewport(),
         );
-        let tree = crate::workbench::panels::tree_markup(accepted.document(), &selection);
+        let tree = crate::workbench::panels::tree_markup_with_pending(
+            accepted.document(),
+            &scene.constraint_entries,
+            &selection,
+            &[],
+        );
         let point_identity = format!("data-persistent-id=\"{}\"", rectangle.points[0]);
         assert!(markup.contains("class=\"wb-point selected\""));
         assert!(markup.contains(&point_identity));
