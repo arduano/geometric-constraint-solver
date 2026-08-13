@@ -120,8 +120,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   `DocumentConstraintDefinition` lifecycle while reusing existing runtime mathematics. Frozen
   canonical v4 is first isolated behind private wire DTOs; unsupported draft v5 owns the complete
   side-section round trip. The headless editor owns contextual authoring and bounded M70 inference
-  extensions. Implementation and focused direct qualification are complete; release-candidate
-  qualification and focused human UAT are pending.
+  extensions. Implementation, clean release-candidate qualification and immutable publication are
+  complete; focused human UAT is pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 

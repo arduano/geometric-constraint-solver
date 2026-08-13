@@ -58,16 +58,16 @@ M71 extends the current canonical inventory to 234/234 `PASS`. Clean
 closing source `48e3cc3` passes the complete release gate with the final multi-feature transaction
 and finite-arc transport regressions, while its runtime release remains the byte-verified F005
 candidate. M71 is active under ADR 0035 for four ordinary retained drafting relations; its
-implementation is mechanically qualified, while release-candidate qualification and focused UAT
-remain pending.
+implementation, clean release-candidate qualification and immutable publication pass, while
+focused human UAT remains pending.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed through the scoped M70B close, with M71 in release/UAT
-   preparation.
+3. `PLAN.md` — active roadmap: completed through the scoped M70B close, with M71 in focused human
+   UAT.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.

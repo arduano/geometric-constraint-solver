@@ -4117,8 +4117,8 @@ regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTA
 ### M71
 
 Status: active as of 2026-08-12. Scope and architecture are accepted in
-`docs/M71_GOALS.md` and ADR 0035. Implementation and focused direct qualification are complete;
-clean release-candidate qualification, publication and human UAT are pending.
+`docs/M71_GOALS.md` and ADR 0035. Implementation, clean release-candidate qualification and
+publication are complete; human UAT is pending.
 
 Goal: promote four high-value relations whose runtime mathematics already exists into the one
 ordinary retained sketch/editor lifecycle, then let the M70 drafting engine use them without
@@ -4158,9 +4158,9 @@ inventing coordinates, hidden geometry or semantically misleading aliases.
 - [x] Add owner-level validation/lowering/lifecycle/persistence tests, headless authoring and
   inference matrices, reviewed systemic golden rows, native/WASM transition parity and one
   ordinary editable **Retained drafting relations** playground.
-- [ ] Run the clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
+- [x] Run the clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
   workspace tests, relevant WASM/Trunk builds and the complete clean release gate.
-- [ ] Freeze and byte-verify one immutable Tailscale candidate and record its source, manifest and
+- [x] Freeze and byte-verify one immutable Tailscale candidate and record its source, manifest and
   endpoint in `docs/M71_UAT.md`.
 - [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
 
@@ -4168,7 +4168,8 @@ Implementation note (2026-08-13): the four definitions, frozen-v4 isolation, dra
 section, complete ordinary lifecycle, contextual/inferred authoring, prospective curve slots,
 typed headless entries/annotations, editable sample and reviewed golden/native-WASM fixtures are
 implemented. Focused sketch, editor and demo-web suites plus the clean golden oracle pass. Full
-workspace/release qualification and publication remain the next gate; this is not human approval.
+workspace/release qualification and immutable publication now also pass; this is not human
+approval.
 
 Hardening note (2026-08-13): focused headless owner regressions resolve `M71-F001`, where
 accepted-scene construction omitted a newer rejected design constraint entry, and `M71-F002`,
@@ -4177,8 +4178,19 @@ spans that contextual authoring rejected. Geometry and annotation coordinates re
 document authority; current constraint entries remain design intent. Direct and contextual
 authoring APIs both remain, with exact selection existence shared at their applicability boundary.
 Neither correction changes solver mathematics or expands the golden matrix. Exact owner and
-focused collateral qualification pass; clean replacement-candidate qualification and publication
-remain pending.
+focused collateral qualification pass.
+
+Qualification/publication note (2026-08-13): clean source
+`ad01912eac28275644dcfc867a2dc70030b5406d` passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the 234/234
+clean golden, all locked workspace tests, native/WASM transition parity, warnings-denied Clippy
+and rustdoc, package/licence checks, performance budgets, the 144.08-second sparse crossover and
+Trunk 0.21.14 release assembly. Exactly seven release files are frozen read-only at
+`/tmp/geosolve-m71-uat.yFBsnX` and served only through Tailscale at
+`http://100.94.63.83:8080/` by PID `49116`. Proxy- and cache-bypassed requests for every file and
+`/` byte-match the snapshot; the ordered manifest aggregate is
+`43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. Only M71-U1 through M71-U5
+and explicit supervising-human approval remain open.
 
 Gate: all four relations behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every

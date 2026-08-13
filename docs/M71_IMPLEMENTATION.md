@@ -2,16 +2,18 @@
 
 # M71 implementation — Retained drafting relations
 
-Status: implementation and focused direct qualification complete on 2026-08-13. Clean integrated
-release qualification, immutable Tailscale publication and supervising-human UAT are pending.
+Status: implementation, clean integrated release qualification and immutable Tailscale
+publication complete on 2026-08-13. Supervising-human UAT is pending.
 
 Architecture owner: ADR 0035
 
-Candidate source: pending clean nomination
+Candidate source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
-Integrated release-gate result: pending
+Integrated release-gate result: **PASS**
 
-Tailscale release distribution: pending
+Tailscale release distribution: `/tmp/geosolve-m71-uat.yFBsnX` at
+`http://100.94.63.83:8080/`, ordered manifest aggregate
+`43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
 ## 1. Files and APIs
 
@@ -115,8 +117,8 @@ operands, invalid/redundant/conflicting behavior, dependency deletion, suppressi
 prepared CAS, history, explicit and contextual authoring, bounded inference, prospective geometry,
 typed headless entries/annotations, workspace restore, editable sample and reviewed golden parity.
 
-`PLAN.md` implementation items are checked only where this evidence exists. Release qualification,
-immutable publication and human UAT remain open and M71 is not closed.
+`PLAN.md` items are checked only where evidence exists. Release qualification and immutable
+publication now pass; human UAT remains open and M71 is not closed.
 
 ## 5. Known limitations and next blocker
 
@@ -151,8 +153,7 @@ owner regression; after repair the exact F001 and F002 commands pass 1/1, the co
 crate passes 299/299 unit tests plus every integration/doc-test suite. The current demo-web suite
 passes 103/103 plus its decoder/doc tests. M71 sketch relation/persistence matrices pass 11/11 and
 7/7, inference passes 56/56, native transition parity passes, and the 234-row golden survey,
-check, and clean modes remain unchanged. These are focused and collateral repair results; clean replacement-candidate
-qualification and publication remain pending.
+check, and clean modes remain unchanged.
 
 A complete development-mode release gate passed on the then-current five-file repair snapshot
 before the later demo-adapter regression and Clippy-only scene-builder extraction:
@@ -165,15 +166,26 @@ That historical run included formatting/diff hygiene, warnings-denied workspace 
 all-feature workspace tests, clean golden, M70/M71 WASM parity, demo-web WASM, warnings-denied
 rustdoc, benchmark compilation, M14/M32 performance budgets, the 147.66-second 256-moving-body
 sparse crossover, licence/package validation and Trunk 0.21.14 release assembly. It is provisional
-development evidence only and does not qualify the current tree: the dirty override cannot
-nominate a release candidate or authorize publication. The clean gate must be rerun after an
-authorized candidate commit.
+development evidence only. It has now been superseded by the clean candidate evidence below.
+
+Clean candidate `ad01912eac28275644dcfc867a2dc70030b5406d` passed:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+That authoritative gate completed the same full sequence, including the unchanged 234/234 clean
+golden, both WASM transition oracles, a 144.08-second sparse crossover and Trunk 0.21.14 release
+assembly. Its seven-file release distribution is frozen read-only at
+`/tmp/geosolve-m71-uat.yFBsnX`. PID `49116` serves it only at
+`http://100.94.63.83:8080/`. Proxy- and cache-bypassed requests for every asset and `/` byte-match
+the snapshot; `/` equals `index.html`, and both served and post-fetch ordered aggregates equal
+`43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`.
 
 M71 deliberately excludes derived-point H/V operands, M37 catalog consolidation, certified
 generic intersections, quadrant anchors, nonlinear tangent/normal inference, equality/symmetry
 inference, host axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature
 chaining, browser E2E and mobile behavior.
 
-The next blocker is procedural rather than architectural: nominate clean commits, run the complete
-workspace and release gate, freeze and byte-verify one immutable Tailscale distribution, then hand
-`docs/M71_UAT.md` to the supervising human. Explicit approval is required to close M71.
+The remaining blocker is explicit supervising-human review of M71-U1 through M71-U5 in
+`docs/M71_UAT.md`. Mechanical qualification and publication do not close M71.

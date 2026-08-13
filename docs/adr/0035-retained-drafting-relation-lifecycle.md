@@ -2,7 +2,7 @@
 
 # ADR 0035: Retained drafting relation lifecycle and persistence
 
-Status: accepted and implemented for M71; release qualification and human UAT are pending
+Status: accepted, implemented, release-qualified and published for M71; human UAT is pending
 
 ## Context
 

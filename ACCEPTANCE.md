@@ -1671,8 +1671,8 @@ unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
 
 ## M71 acceptance: retained drafting relations
 
-Status: active; implementation and focused direct qualification are complete. Clean release
-qualification, publication and supervising-human approval are pending.
+Status: active; implementation, clean release qualification and immutable publication are
+complete. Supervising-human approval is pending.
 
 - Frozen canonical sketch v1-v4 readers and bytes remain unchanged. A private frozen-v4
   constraint wire DTO prevents in-memory enum growth from expanding v4, and v4 export of M71 state

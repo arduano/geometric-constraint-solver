@@ -110,7 +110,9 @@ focused multi-feature transaction and finite-arc transport regressions; the 198/
 runtime release bytes remain unchanged. M70B is closed under the requested scoped sign-off without
 claiming an unrecorded exhaustive UAT replay. M71 is now active under ADR 0035 for exactly four
 ordinary retained drafting relations. Implementation and focused direct qualification are
-complete; release-candidate qualification, publication and human UAT are pending.
+complete. Clean source `ad01912eac28275644dcfc867a2dc70030b5406d` passes the complete release
+gate and its immutable seven-file candidate is byte-verified at
+`http://100.94.63.83:8080/`; human UAT is pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 

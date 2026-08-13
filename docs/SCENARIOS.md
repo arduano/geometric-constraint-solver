@@ -1520,7 +1520,8 @@ The thin-adapter regression
 ordinary composed scene to carry the design-only entry while publishing no annotation for it.
 It was independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
-regression passes 1/1. Clean replacement qualification/publication remain pending.
+regression passes 1/1. Clean replacement qualification and publication subsequently pass at the
+M71 candidate recorded in `docs/M71_UAT.md`.
 
 ### M71-F002 - Direct relation applicability rejects missing selections
 
@@ -1536,7 +1537,8 @@ the direct availability boundary. The focused regression
 both public authoring surfaces without expanding M71 into a broader applicability refactor.
 It was independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
-regression passes 1/1. Clean replacement qualification/publication remain pending.
+regression passes 1/1. Clean replacement qualification and publication subsequently pass at the
+M71 candidate recorded in `docs/M71_UAT.md`.
 
 ### M70B-R1 - Complete workspace reproduction payload
 

@@ -2,16 +2,15 @@
 
 # M71 fresh-session handover
 
-Status: recoverable engineering checkpoint committed for a fresh session. M71 is not a release
-candidate and is not closed. Full workspace qualification, clean release gating, publication and
-human UAT remain pending.
+Status: the clean M71 candidate is qualified and published for supervising-human UAT. M71 is not
+closed; M71-U1 through M71-U5 and explicit approval remain pending.
 
 This document is the canonical short restart contract for the interrupted M71 implementation
 session. Read the repository-required project documents first, then this file, ADR 0035,
 `docs/M71_GOALS.md`, `docs/M71_IMPLEMENTATION.md` and `docs/M71_UAT.md`. Do not reconstruct M71
 from chat history.
 
-## Repository state at consolidation
+## Repository history at consolidation
 
 - Sole worktree: `/home/arduano/programming/geometric-constraint-solver`.
 - Branch: `main`.
@@ -20,8 +19,16 @@ from chat history.
 - The complete M71 implementation was confined to that worktree. The five formerly untracked
   files were all intentional M71 relation, persistence, parity and implementation records; no
   scratch, reject, backup or dangling untracked file was found.
-- The old M70B distribution remains served at `http://100.94.63.83:8080/` from immutable snapshot
-  `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`. It is historical M70B evidence, not an M71 candidate.
+- Clean candidate `ad01912eac28275644dcfc867a2dc70030b5406d` is frozen at
+  `/tmp/geosolve-m71-uat.yFBsnX` and served at `http://100.94.63.83:8080/` by PID `49116`. Every
+  asset and `/` byte-matches the snapshot; its ordered manifest aggregate is
+  `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. The historical M70B
+  snapshot remains on disk but is no longer served.
+
+The current qualified state supersedes those historical branch bullets: candidate source
+`ad01912eac28275644dcfc867a2dc70030b5406d` has qualification/publication documentation prepared
+for the final record commit and push. Recheck exact divergence after that commit rather than using
+the pre-consolidation hashes below as current state.
 
 After this handover is committed, use `git log -5 --oneline --decorate`, `git status --short
 --branch`, `git worktree list --porcelain` and `git rev-list --left-right --count
@@ -127,28 +134,14 @@ result makes those laws smaller and clearer.
 
 ## Next-session sequence
 
-1. Confirm clean status, sole worktree, branch/upstream and exact remote divergence.
-2. Read the full M71 diff and the two review questions above. Make a small cleanup only if it
-   genuinely reduces duplicated semantic ownership without broadening M71.
-3. Rerun focused relation/persistence/editor/demo/golden tests after any change.
-4. Run:
-
-   ```text
-   cargo fmt --all -- --check
-   cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-   cargo test --locked --workspace --all-features
-   nix-shell shell.nix --run 'cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
-   ```
-
-5. Review the complete committed diff and ensure no new untracked files exist.
-6. From a clean nominated source run
-   `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`.
-7. Freeze the seven-file `dist`, hash it, replace the historical server only after the new
-   candidate passes, and byte-verify `/` plus every asset over Tailscale.
-8. Record source commit, snapshot, ordered-manifest aggregate, gate evidence and endpoint in
-   `docs/M71_UAT.md`.
-9. Push `main`, then hand off M71-U1 through M71-U5. M71 remains open until explicit supervising-
-   human approval.
+1. Confirm the documented candidate is still served by PID `49116`; hard-refresh because the
+   endpoint reuses port 8080.
+2. Complete M71-U1 through M71-U5 in `docs/M71_UAT.md`, recording observations and any exact
+   reproduction payloads.
+3. Route any solver/headless defect through `geosolve-harden-defect`; a material correction
+   requires a new clean gate and replacement immutable publication before retest.
+4. Close M71 only after explicit supervising-human approval. Do not infer approval from the
+   mechanical evidence.
 
 ## Deliberately deferred
 

@@ -2,9 +2,8 @@
 
 # M71 goals — Retained drafting relations
 
-Status: active, formally scoped and authorized on 2026-08-12. Production implementation and
-focused direct qualification are complete; release-candidate qualification and human UAT are
-pending.
+Status: active, formally scoped and authorized on 2026-08-12. Production implementation, clean
+release-candidate qualification and immutable publication are complete; human UAT is pending.
 
 M70 proved reusable auto-constraint interaction using only constraint definitions already owned by
 the ordinary retained document/editor workflow. M71 closes the highest-value gap exposed by that

@@ -2,29 +2,67 @@
 
 # M71 focused UAT — Retained drafting relations
 
-Status: implementation and focused direct qualification complete. Clean integrated release
-qualification, release candidate, Tailscale publication and supervising-human approval are
-pending.
+Status: implementation, clean integrated release qualification and immutable Tailscale
+publication complete on 2026-08-13. Supervising-human approval is pending.
 
-Candidate source: pending
+Candidate source: `ad01912eac28275644dcfc867a2dc70030b5406d`, nominated from `main`
 
-Tailscale endpoint: pending
+Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Release distribution manifest aggregate: pending
+Immutable snapshot: `/tmp/geosolve-m71-uat.yFBsnX`
+
+Release distribution manifest aggregate:
+`43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
 Use only the ordinary GeoSolve Sketch Workbench and one editable **Retained drafting relations**
 playground. Direct Rust/native-WASM tests are authoritative for equations, residuals, lifecycle,
 persistence, ranking and publication. Human review assesses discoverability, predictability,
 annotation clarity and recovery.
 
+## Qualified candidate evidence
+
+The clean nominated source passed exactly:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The gate completed formatting and diff hygiene, warnings-denied workspace Clippy, all locked
+all-feature workspace tests, the 234/234 clean golden oracle at SHA-256
+`d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`, native/WASM M70 and M71
+transition parity, the demo-web WASM check, warnings-denied rustdoc, benchmark compilation, M14
+and M32 performance budgets, the 144.08-second 256-moving-body sparse crossover, licence and
+package checks, and Trunk 0.21.14 release assembly. It exited successfully. Cargo emitted only the
+repository's longstanding non-failing `license` plus `license-file` advisories.
+
+Exactly seven release files were copied without rebuilding, byte-compared with the clean-gate
+`dist`, and frozen with directory mode `0555` and file mode `0444`:
+
+| File | SHA-256 |
+| --- | --- |
+| `API_COMPATIBILITY.md` | `d97357c908774e51f39724d25d1f5fdabacd30cf13f7371a6df0d8957209a98b` |
+| `LICENSE` | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-49ba2a1c36571a17.js` | `a51b4caefd9c38224a75820a44d5a3b49e3bd6d4eeeb7aba3930ecd9a558e31d` |
+| `geosolve-demo-web-49ba2a1c36571a17_bg.wasm` | `c51cb77d38ab682e21b940eb5f26a4e73ff92a5ac007c5fc3de7e70323290fc2` |
+| `index.html` | `3d87c4b54efb42c8fdcb62c841140db29b9bb7b832733b197a9b4ac50cfee128` |
+| `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+PID `49116` serves only that snapshot and listens only on `100.94.63.83:8080`; its log is outside
+the snapshot at `/tmp/geosolve-m71-uat.yFBsnX.server.log`. Proxy-disabled, cache-bypassed HTTP
+requests byte-matched every listed asset. A separate request for `/` byte-matched `index.html`.
+The fetched-file aggregate and the post-fetch snapshot aggregate both reproduced the recorded
+ordered manifest aggregate exactly. Because this endpoint reuses the historical M70B port, hard
+refresh before review. The historical M70B snapshot remains on disk but is no longer served.
+
 ## Preconditions
 
-- [ ] The complete pre-UAT automated M71 acceptance matrix passes at its owning Rust layers.
-- [ ] Frozen v1-v4 compatibility and draft-v5/workspace/reproduction round trips pass.
-- [ ] The canonical golden authoring/scene oracle passes clean with reviewed M71 systemic rows.
-- [ ] Native/WASM parity, formatting, warnings-denied Clippy and locked workspace tests pass.
-- [ ] One clean nominated source passes `./scripts/release-gate.sh`.
-- [ ] Its immutable release distribution is published through Tailscale and every served byte is
+- [x] The complete pre-UAT automated M71 acceptance matrix passes at its owning Rust layers.
+- [x] Frozen v1-v4 compatibility and draft-v5/workspace/reproduction round trips pass.
+- [x] The canonical golden authoring/scene oracle passes clean with reviewed M71 systemic rows.
+- [x] Native/WASM parity, formatting, warnings-denied Clippy and locked workspace tests pass.
+- [x] One clean nominated source passes `./scripts/release-gate.sh`.
+- [x] Its immutable release distribution is published through Tailscale and every served byte is
   verified against the local candidate.
 
 ## M71-U1 — manual authoring and canvas presentation
