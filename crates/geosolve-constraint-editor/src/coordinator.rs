@@ -4892,10 +4892,11 @@ impl RetainedEditorCoordinator {
     ///
     /// Current and checkpoint high-water metadata are merged, so reload cannot reuse
     /// any revision already observed by either lifecycle. When the checkpoint's
-    /// native design and accepted payload are byte-identical to the current
+    /// native design and accepted payload are byte-identical to a healthy current
     /// retained session, only the feature sidecar is restored; this preserves the
     /// exact accepted sketch identity, audit rows and rank/DOF across feature-only
-    /// save/reload without weakening ordinary changed-sketch reload semantics.
+    /// save/reload. A failed live attempt is reconstructed from the checkpoint so
+    /// stale attempt metadata cannot survive the reload shortcut.
     ///
     /// # Errors
     ///
@@ -4906,7 +4907,8 @@ impl RetainedEditorCoordinator {
             &self.features,
             &self.computed_evaluation_allocator,
         )?;
-        let sketch_unchanged = saved_checkpoint.design_json == current_checkpoint.design_json
+        let sketch_unchanged = self.session.accepted_state_for_current_input().is_some()
+            && saved_checkpoint.design_json == current_checkpoint.design_json
             && saved_checkpoint.design_is_draft_v5 == current_checkpoint.design_is_draft_v5
             && saved_checkpoint.accepted_json == current_checkpoint.accepted_json
             && saved_checkpoint.accepted_is_draft_v5 == current_checkpoint.accepted_is_draft_v5
@@ -7458,7 +7460,8 @@ impl RetainedEditorCoordinator {
     fn restore_history(&mut self, target: usize) -> Result<(), CoordinatorError> {
         let checkpoint = self.history[target].clone();
         let current_checkpoint = &self.history[self.history_cursor];
-        let sketch_unchanged = checkpoint.design_json == current_checkpoint.design_json
+        let sketch_unchanged = self.session.accepted_state_for_current_input().is_some()
+            && checkpoint.design_json == current_checkpoint.design_json
             && checkpoint.design_is_draft_v5 == current_checkpoint.design_is_draft_v5
             && checkpoint.accepted_json == current_checkpoint.accepted_json
             && checkpoint.accepted_is_draft_v5 == current_checkpoint.accepted_is_draft_v5
@@ -7645,16 +7648,21 @@ impl RetainedEditorCoordinator {
         self.refresh_computed_features_continuing(None, false, None);
     }
 
+    fn begin_durable_computed_refresh(&mut self) {
+        self.computed_evaluation_problem = None;
+        self.computed_preview_snapshot = None;
+        self.computed_preview_input = None;
+        self.computed_fillet_preview = None;
+        self.computed_preview_evaluation_problem = None;
+    }
+
     fn refresh_computed_features_continuing(
         &mut self,
         previous: Option<&ComputedFeatureSnapshot>,
         promote_current_branch: bool,
         recorded_edit: Option<&DocumentEdit>,
     ) -> Option<RecordedComputedFeatureTransition> {
-        self.computed_preview_snapshot = None;
-        self.computed_preview_input = None;
-        self.computed_fillet_preview = None;
-        self.computed_preview_evaluation_problem = None;
+        self.begin_durable_computed_refresh();
         let before = self.features.identity();
         let previous = previous.filter(|snapshot| snapshot.input().features == before);
         let before_sketch = previous.map(|snapshot| snapshot.input().sketch);
@@ -11608,6 +11616,13 @@ mod tests {
                 .and_then(|failure| failure.external_snapshot_error()),
             Some(ExternalSnapshotInputError::WrongKind { .. })
         ));
+        assert!(matches!(
+            coordinator.computed_feature_problems().as_slice(),
+            [ComputedFeatureProblemMetadata {
+                scope: EditorProblemScope::Global,
+                ..
+            }]
+        ));
         assert_eq!(
             coordinator
                 .session()
@@ -11631,6 +11646,13 @@ mod tests {
         assert!(matches!(
             coordinator.session().last_attempt().failure().and_then(|failure| failure.external_snapshot_error()),
             Some(ExternalSnapshotInputError::MissingBinding { binding: actual }) if *actual == binding
+        ));
+        assert!(matches!(
+            coordinator.computed_feature_problems().as_slice(),
+            [ComputedFeatureProblemMetadata {
+                scope: EditorProblemScope::Global,
+                ..
+            }]
         ));
         assert_eq!(
             coordinator
@@ -11846,6 +11868,13 @@ mod tests {
         assert_eq!(metadata.scope, EditorProblemScope::Global);
         assert!(metadata.targets.is_empty());
         assert!(metadata.message.contains("wrong kind"));
+        assert!(matches!(
+            coordinator.computed_feature_problems().as_slice(),
+            [ComputedFeatureProblemMetadata {
+                scope: EditorProblemScope::Global,
+                ..
+            }]
+        ));
         assert_eq!(
             coordinator
                 .session()
@@ -11870,6 +11899,7 @@ mod tests {
             )
             .expect("recover");
         assert!(coordinator.current_problem_metadata().is_none());
+        assert!(coordinator.computed_feature_problems().is_empty());
     }
 
     #[test]
@@ -11927,6 +11957,14 @@ mod tests {
             1
         );
         assert_eq!(coordinator.history_len(), 2);
+        assert!(coordinator.current_problem_metadata().is_some());
+        assert!(matches!(
+            coordinator.computed_feature_problems().as_slice(),
+            [ComputedFeatureProblemMetadata {
+                scope: EditorProblemScope::Global,
+                ..
+            }]
+        ));
 
         let rejected_revision = coordinator.session().design_identity().revision().get();
         coordinator.undo().expect("undo");
@@ -11939,11 +11977,30 @@ mod tests {
         );
         assert!(coordinator.session().design_identity().revision().get() > rejected_revision);
         assert!(rejected_revision > initial_revision);
+        assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
+        assert!(coordinator.current_problem_metadata().is_none());
+        assert!(coordinator.computed_feature_problems().is_empty());
         coordinator.redo().expect("redo");
         assert_eq!(
             coordinator.session().design_document().dimensions().len(),
             1
         );
+        assert_eq!(
+            coordinator.lifecycle().status,
+            LifecycleStatus::RejectedAttempt
+        );
+        assert!(coordinator.current_problem_metadata().is_some());
+        assert!(matches!(
+            coordinator.computed_feature_problems().as_slice(),
+            [ComputedFeatureProblemMetadata {
+                scope: EditorProblemScope::Global,
+                ..
+            }]
+        ));
+        coordinator.undo().expect("second undo");
+        assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
+        assert!(coordinator.current_problem_metadata().is_none());
+        assert!(coordinator.computed_feature_problems().is_empty());
     }
 
     #[test]
@@ -11973,6 +12030,8 @@ mod tests {
             coordinator.lifecycle().status,
             LifecycleStatus::RejectedAttempt
         );
+        assert!(coordinator.current_problem_metadata().is_some());
+        assert!(!coordinator.computed_feature_problems().is_empty());
         assert_eq!(
             coordinator
                 .session()
@@ -11990,6 +12049,8 @@ mod tests {
             .expect("suppression repair");
         assert!(repair.published_accepted.is_some());
         assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
+        assert!(coordinator.current_problem_metadata().is_none());
+        assert!(coordinator.computed_feature_problems().is_empty());
         assert_ne!(
             coordinator
                 .session()
@@ -15747,6 +15808,115 @@ mod tests {
             .apply_feature_authoring_preview(metadata.token, candidate)
             .expect("computed publication")
             .value
+    }
+
+    fn seed_failed_no_history_temporary_attempt(coordinator: &mut RetainedEditorCoordinator) {
+        let expected = coordinator.session().design_identity();
+        let invalid_point = DesignPointId(PersistentId::from_u128(0xffff_ffff_ffff));
+        let invalid_request = coordinator
+            .session()
+            .last_attempt()
+            .input()
+            .candidate_request()
+            .with_drag(invalid_point, [1.0, 1.0]);
+        coordinator
+            .session
+            .reattempt(expected, invalid_request)
+            .expect("seed failed temporary request");
+        coordinator
+            .reattempt(expected)
+            .expect("publish failed no-history attempt");
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_none()
+        );
+        assert!(coordinator.current_problem_metadata().is_some());
+        assert!(matches!(
+            coordinator.computed_feature_problems().as_slice(),
+            [ComputedFeatureProblemMetadata {
+                scope: EditorProblemScope::Global,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn feature_only_undo_restores_a_fresh_session_after_a_failed_no_history_attempt() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        assert_eq!(fixture.coordinator.history_len(), 2);
+        assert!(
+            fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .is_some()
+        );
+
+        seed_failed_no_history_temporary_attempt(&mut fixture.coordinator);
+        fixture.coordinator.undo().expect("feature-only undo");
+
+        assert!(
+            fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .is_none()
+        );
+        assert_eq!(
+            fixture.coordinator.lifecycle().status,
+            LifecycleStatus::Accepted
+        );
+        assert!(
+            fixture
+                .coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
+        assert!(fixture.coordinator.current_problem_metadata().is_none());
+        assert!(fixture.coordinator.computed_feature_problems().is_empty());
+    }
+
+    #[test]
+    fn same_sketch_reload_restores_a_fresh_session_after_a_failed_no_history_attempt() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let saved = fixture
+            .coordinator
+            .persistence_checkpoint()
+            .expect("healthy feature checkpoint");
+
+        seed_failed_no_history_temporary_attempt(&mut fixture.coordinator);
+        fixture
+            .coordinator
+            .reload(&saved)
+            .expect("same-sketch reload");
+
+        assert!(
+            fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .is_some()
+        );
+        assert_eq!(
+            fixture.coordinator.lifecycle().status,
+            LifecycleStatus::Accepted
+        );
+        assert!(
+            fixture
+                .coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
+        assert!(fixture.coordinator.current_problem_metadata().is_none());
+        assert!(fixture.coordinator.computed_feature_problems().is_empty());
     }
 
     #[test]
