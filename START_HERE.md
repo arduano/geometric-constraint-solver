@@ -114,9 +114,12 @@ ordinary retained definitions: the original point-pair H/V, Concentric and Colli
 native line/polyline midpoint-axis H/V authorized by `M71-F003`. `M71-F004` additionally composes
 one remembered point/native-midpoint axis with a complementary exact Cartesian new-span direction.
 The F003 source `83bd2b575784c44b618fb3ad144f24e84702d764` and its immutable snapshot are
-preserved but withdrawn from continued UAT; the former server has exited and the shared Tailscale
-endpoint is currently offline. The F004 correction passes the complete dirty-tree development
-gate; replacement clean qualification/publication and human UAT remain pending.
+preserved but withdrawn from continued UAT; the former server has exited and those bytes are no
+longer served. F004 product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, passes the complete unchanged-source clean release
+gate. Its immutable seven-file replacement snapshot `/tmp/geosolve-m71-f004-uat.SaXMVY` is
+byte-verified at `http://100.94.63.83:8080/` under PID `2848202`. Only M71-U1 through M71-U5 and
+explicit supervising-human approval remain.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -375,7 +378,12 @@ M71-F003 and M71-F004 stay in focused owner regressions because they are narrow 
 rather than missing systemic golden dimensions. The complete F004 dirty-tree development gate
 passes, including unchanged aggregate golden, native/WASM parity, warnings-denied workspace
 Clippy, locked all-feature workspace tests, performance/licence/package checks and Trunk assembly;
-the clean replacement gate remains open.
+clean product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089` subsequently passes the
+complete unchanged-source replacement gate. Its read-only seven-file snapshot
+`/tmp/geosolve-m71-f004-uat.SaXMVY`, with ordered-manifest aggregate
+`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`, is served only through
+Tailscale at `http://100.94.63.83:8080/` and every asset plus `/` byte-matches the snapshot. Only
+M71-U1 through M71-U5 and explicit supervising-human approval remain.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -436,8 +444,8 @@ Durable milestone and cleanup records:
 - `.agents/skills/geosolve-harden-defect/` (canonical solver/headless defect regression workflow)
 - `docs/M71_GOALS.md` (active retained-drafting-relations scope)
 - `docs/M71_IMPLEMENTATION.md` (mechanically implemented retained-relation ledger)
-- `docs/M71_HANDOVER.md` (canonical fresh-session checkpoint and remaining release sequence)
-- `docs/M71_UAT.md` (planned focused M71 scorecard)
+- `docs/M71_HANDOVER.md` (canonical fresh-session checkpoint and remaining human-UAT sequence)
+- `docs/M71_UAT.md` (current focused M71 scorecard)
 - `docs/adr/0035-retained-drafting-relation-lifecycle.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

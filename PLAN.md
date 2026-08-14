@@ -4119,8 +4119,8 @@ regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTA
 
 Status: active and amended for M71-F004 on 2026-08-14. Scope and architecture are accepted in
 `docs/M71_GOALS.md` and ADR 0035. The simultaneous endpoint-axis correction is implemented and
-passes the complete dirty-tree development gate; replacement clean release-candidate
-qualification/publication and human UAT are pending.
+its replacement clean release-candidate qualification and immutable Tailscale publication pass.
+Only M71-U1 through M71-U5 and explicit supervising-human approval remain.
 
 Goal: promote the original four high-value relations plus two narrowly scoped native-span
 midpoint-axis definitions into the one ordinary retained sketch/editor lifecycle, then let the M70
@@ -4173,20 +4173,20 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
 - [x] Add owner-level validation/lowering/lifecycle/persistence tests, headless authoring and
   inference matrices, reviewed systemic golden rows, native/WASM transition parity and one
   ordinary editable **Retained drafting relations** playground.
-- [ ] Rerun the clean golden oracle, formatting, warnings-denied workspace Clippy, locked
+- [x] Rerun the clean golden oracle, formatting, warnings-denied workspace Clippy, locked
   all-feature workspace tests, relevant WASM/Trunk builds and the complete clean release gate on
   the post-F004 nominated source.
-- [ ] Freeze and byte-verify one post-F004 replacement immutable Tailscale candidate and record its
+- [x] Freeze and byte-verify one post-F004 replacement immutable Tailscale candidate and record its
   source, manifest and endpoint in `docs/M71_UAT.md`.
 - [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
 
-Implementation note (2026-08-13): all six definitions, frozen-v4 isolation, draft-v5 side
+Historical implementation checkpoint (2026-08-13): all six definitions, frozen-v4 isolation, draft-v5 side
 section, complete ordinary lifecycle, contextual/inferred authoring, prospective curve slots,
 typed headless entries/annotations, editable sample and reviewed golden/native-WASM fixtures are
 implemented. F003 focused sketch, editor and demo-web tests pass. The complete dirty-tree release
 gate passes, including the unchanged 234/234 golden, workspace/WASM/Trunk checks and the
 152.53-second sparse crossover. Clean nominated-source qualification and immutable publication
-remain open; this is not human approval.
+remained open at that checkpoint; this was not human approval.
 
 Hardening note (2026-08-13): focused headless owner regressions resolve `M71-F001`, where
 accepted-scene construction omitted a newer rejected design constraint entry, and `M71-F002`,
@@ -4219,7 +4219,7 @@ identity, shared hysteresis, conservative angular ranking and streaming candidat
 residual, Jacobian, solver priority, branch, persistence or public-API change is involved, and the
 unchanged canonical golden remains the correct broad oracle.
 
-M71-F004 development qualification note (2026-08-14):
+Historical M71-F004 development qualification note (2026-08-14):
 `env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run
 './scripts/release-gate.sh'` passes the complete provisional gate: formatting/diff hygiene,
 warnings-denied workspace Clippy, all locked all-feature workspace tests, unchanged 234/234 golden,
@@ -4227,18 +4227,39 @@ native/WASM M70 and M71 parity, demo-web WASM, warnings-denied rustdoc, benchmar
 M14/M32 budgets, the 151.18-second 256-moving-body sparse crossover, licence/package checks and
 Trunk 0.21.14 release assembly. Because the source is dirty, this is not clean nomination evidence.
 
+M71-F004 replacement qualification/publication note (2026-08-14): clean product source
+`a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14` on `main`, passes
+`env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run
+'./scripts/release-gate.sh'`. The unchanged-source run started at `13:04:17+10`, finished at
+`13:11:13+10` and is preserved at `/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`; it includes the
+125.55-second 256-moving-body sparse crossover and reports only the longstanding
+`license`/`license-file` advisories. The worktree was empty before and after, origin/main
+divergence was `0 3`, and exactly one worktree existed. The exact seven-file release distribution
+was copied without rebuilding to `/tmp/geosolve-m71-f004-uat.SaXMVY`, verified as regular
+non-symlink files, frozen with directory mode `0555` and file mode `0444`, and has ordered-manifest
+aggregate `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`. PID `2848202`
+serves that snapshot at `http://100.94.63.83:8080/` through the Tailscale listener only; the
+unrelated VS Code listener on localhost is not part of this publication. Proxy- and cache-bypassed,
+identity-encoded requests for all seven assets and `/` returned HTTP 200 from remote
+`100.94.63.83`, matched exact sizes and compared byte-for-byte; `/` equalled `index.html`, and the
+fetched, local and post-publication aggregates all equal the frozen aggregate above. The later
+publication-documentation commit is intentionally distinct from this qualified product source and
+has no identifier at this checkpoint. Only M71-U1 through M71-U5 and explicit supervising-human
+approval remain.
+
 Withdrawn qualification/publication note (2026-08-13): pre-F003 source
 `ad01912eac28275644dcfc867a2dc70030b5406d` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the 234/234
 clean golden, all locked workspace tests, native/WASM transition parity, warnings-denied Clippy
 and rustdoc, package/licence checks, performance budgets, the 144.08-second sparse crossover and
-Trunk 0.21.14 release assembly. Exactly seven release files are frozen read-only at
-`/tmp/geosolve-m71-uat.yFBsnX` and served only through Tailscale at
-`http://100.94.63.83:8080/` by PID `49116`. Proxy- and cache-bypassed requests for every file and
-`/` byte-match the snapshot; the ordered manifest aggregate is
+Trunk 0.21.14 release assembly. Exactly seven release files remain frozen read-only at
+`/tmp/geosolve-m71-uat.yFBsnX`. At that historical checkpoint PID `49116` served them only through
+Tailscale at `http://100.94.63.83:8080/`; proxy- and cache-bypassed requests for every file and
+`/` byte-matched the snapshot, and the ordered manifest aggregate was
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. Those bytes are withdrawn
-from continued UAT. A post-F003 clean source, replacement gate and byte-verified publication remain
-open before M71-U1 through M71-U5 and explicit supervising-human approval.
+from continued UAT and no longer served. F003 and then F004 subsequently supplied replacement
+qualification/publication; the current remaining work is recorded above.
 
 F003 qualification/publication note (2026-08-14; withdrawn after M71-F004): clean nominated source
 `83bd2b575784c44b618fb3ad144f24e84702d764` passes
@@ -4255,7 +4276,8 @@ aggregates equalled
 and publication are complete; M71 remains open only for M71-U1 through M71-U5 and explicit
 supervising-human approval at that historical checkpoint. F004 now withdraws those bytes from
 continued UAT while preserving the immutable snapshot. PID `1202735` has since exited and the
-shared Tailscale endpoint is offline until a verified F004 replacement is ready.
+F003 bytes are no longer served; the shared Tailscale endpoint now serves only the verified F004
+replacement recorded above.
 
 Gate: all six definitions behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every

@@ -2,14 +2,25 @@
 
 # M71 focused UAT — Retained drafting relations
 
-Status: M71-U2 subsequently exposed M71-F004. The simultaneous endpoint-axis correction is
-implemented and passes the complete dirty-tree development gate, but a clean replacement has not
-yet been nominated or published. All M71-U1 through M71-U5 results are reset to pending.
+Status: the clean M71-F004 UAT candidate is mechanically qualified, frozen and byte-verified at
+the endpoint below. All M71-U1 through M71-U5 results remain pending; M71 is not complete until
+the supervising human records an explicit approval decision.
+
+Qualified F004 product source: `a2e51efba7d79f684d264094ffd7dd0e37a4d089`
+
+Qualified F004 product tree: `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`
+
+Current F004 endpoint: `http://100.94.63.83:8080/`
+
+Current F004 immutable snapshot: `/tmp/geosolve-m71-f004-uat.SaXMVY`
+
+Current F004 release distribution manifest aggregate:
+`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`
 
 Withdrawn F003 source: `83bd2b575784c44b618fb3ad144f24e84702d764`
 
-Former F003 endpoint, currently offline — **do not use for UAT**:
-`http://100.94.63.83:8080/`
+Former F003 endpoint — the shared address now serves F004; **do not use the preserved F003
+snapshot for UAT**: `http://100.94.63.83:8080/`
 
 Preserved F003 immutable snapshot: `/tmp/geosolve-m71-f003-uat.hybK8W`
 
@@ -18,8 +29,8 @@ Preserved F003 release distribution manifest aggregate:
 
 Withdrawn pre-F003 source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
-Shared historical endpoint, currently offline — **do not use for UAT**:
-`http://100.94.63.83:8080/`
+Shared historical endpoint — the shared address now serves F004; **do not use the withdrawn
+snapshot for UAT**: `http://100.94.63.83:8080/`
 
 Withdrawn immutable snapshot: `/tmp/geosolve-m71-uat.yFBsnX`
 
@@ -31,7 +42,7 @@ playground. Direct Rust/native-WASM tests are authoritative for equations, resid
 persistence, ranking and publication. Human review assesses discoverability, predictability,
 annotation clarity and recovery.
 
-## M71-F004 discovery and required replacement
+## M71-F004 discovery and corrected contract
 
 While drawing a vertical line, the top endpoint could not simultaneously remain vertical to the
 line start and horizontally aligned with a remembered point to the side. At the exact intersection,
@@ -56,12 +67,65 @@ changes.
 
 The F003 snapshot is preserved unchanged so release evidence is not destroyed, but its former
 server has exited. Those bytes lack F004 and are withdrawn from continued UAT. Do not perform any
-scorecard step until this document records a clean F004 source and byte-verified replacement
-distribution.
+scorecard step against those historical bytes; use only the clean, byte-verified F004 candidate
+published above.
 
-## Post-F004 provisional mechanical evidence
+## Clean F004 candidate qualification and publication
 
-The current dirty F004 tree based on HEAD `603194947a642917b9e44359326708de37f1a1d2`
+The qualified product source was HEAD `a2e51efba7d79f684d264094ffd7dd0e37a4d089` with tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14` on `main`. Before and after qualification, `git
+status --short` was empty, origin divergence was `0 3`, and exactly one worktree existed. The clean
+gate ran from `2026-08-14T13:04:17+10:00` through `2026-08-14T13:11:13+10:00` using exactly:
+
+```text
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+It passed completely; the retained log is
+`/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`. The canonical golden remained unchanged at 234
+rows, the 256-moving-body sparse crossover took 125.55 seconds, and Trunk 0.21.14 completed the
+release assembly. Cargo emitted only the repository's longstanding non-failing `license` plus
+`license-file` advisories. HEAD, tree and empty status were unchanged after the gate.
+
+Without rebuilding, exactly seven regular, non-symlink files were copied directly from that
+gate's `crates/geosolve-demo-web/dist`, byte-compared by manifest and frozen at
+`/tmp/geosolve-m71-f004-uat.SaXMVY` with directory mode `0555` and file modes `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 14165 | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
+| `LICENSE` | 35148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-4c3212f5ba819fe0.js` | 33327 | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
+| `geosolve-demo-web-4c3212f5ba819fe0_bg.wasm` | 6014468 | `f5dfccd077120d4ed0876f318c4cd6a86bfc672a74c40e496a01bd232923a911` |
+| `index.html` | 22977 | `98c30dd76cb6f9cd5c33d86b41b3769e5fabbf25fe7f87b612acfbd2d865104c` |
+| `styles-36c74d05d21a90c9.css` | 29304 | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+The C-locale ordered `sha256sum *` manifest aggregate is
+`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`.
+
+PID `2848202` serves only that immutable snapshot at `http://100.94.63.83:8080/` with argv
+`/run/current-system/sw/bin/python3 -u -m http.server 8080 --bind 100.94.63.83 --directory
+/tmp/geosolve-m71-f004-uat.SaXMVY`. Its resolved executable is
+`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`; its log is
+`/tmp/geosolve-m71-f004-uat.SaXMVY.server.log`. The candidate server listens only on
+`100.94.63.83:8080`; the unrelated VS Code listener on `127.0.0.1:8080` is not part of this
+publication.
+
+At `2026-08-14T13:13:48+10:00`, proxy-disabled and cache-bypassed requests with
+`Accept-Encoding: identity` fetched all seven assets and `/`. Every request returned HTTP 200 from
+remote IP `100.94.63.83`, each named asset had the exact recorded size and compared byte-for-byte
+equal, and `/` equalled `index.html`. The fetched aggregate, post-fetch snapshot aggregate and
+recorded aggregate all matched. Fetch evidence is retained at
+`/tmp/geosolve-m71-f004-fetch.aDfzU7`.
+
+This publication documents the already-qualified product source. The later documentation commit
+that records the evidence is not part of, and must not replace, the product source identity above.
+
+## Historical post-F004 provisional mechanical evidence
+
+The dirty F004 development tree based on HEAD `603194947a642917b9e44359326708de37f1a1d2`
 passed exactly:
 
 ```text
@@ -81,11 +145,11 @@ and owner results include the 2/2 F004 public regression,
 plus decoder/doc tests, 17/17 M71 sketch relation tests and 7/7 persistence tests. Cargo emitted
 only the longstanding non-failing `license` plus `license-file` advisories.
 
-This is complete development evidence but not clean nomination evidence. The implementation/test
+This was complete development evidence but not clean nomination evidence. The implementation/test
 repair is committed as `1f542555d7fcaf98ecf92c69a10b951fbfcc3dff`, and the supervising human
-has granted ordinary reviewable-commit authority. The complete source must be clean and the gate
-repeated without `GEOSOLVE_ALLOW_DIRTY` before a replacement distribution may be frozen or
-published.
+has granted ordinary reviewable-commit authority. At that checkpoint the complete source still had
+to be clean and the gate repeated without `GEOSOLVE_ALLOW_DIRTY`; the clean qualification and
+publication above subsequently satisfied that requirement.
 
 ## Withdrawn candidate evidence
 
@@ -187,7 +251,7 @@ byte-for-byte. A separate request for `/` matched `index.html`. The fetched and 
 ordered aggregates both reproduced
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
 These bytes are now withdrawn because they predate M71-F004. PID `1202735` has since exited and
-the endpoint is offline.
+that F003 server is offline; the shared endpoint now serves only the F004 snapshot recorded above.
 
 ## Preconditions
 
@@ -197,10 +261,12 @@ the endpoint is offline.
 - [x] The complete post-F004 dirty-tree development gate passes, including the owning Rust
   acceptance matrix, finite-difference Jacobian and audit coverage, frozen compatibility,
   persistence, clean golden, native/WASM parity, formatting, warnings-denied Clippy and locked
-  workspace tests. This remains provisional until repeated from the clean nominated source.
-- [ ] Repeat the complete matrix on an unchanged clean nominated F004 source.
-- [ ] One clean post-F004 nominated source passes `./scripts/release-gate.sh`.
-- [ ] Its immutable release distribution is published through Tailscale and every served byte is
+  workspace tests. This historical dirty-tree result remains provisional evidence only.
+- [x] The complete matrix passes on unchanged clean nominated F004 product source
+  `a2e51efba7d79f684d264094ffd7dd0e37a4d089`.
+- [x] That clean post-F004 nominated source passes `./scripts/release-gate.sh` without a dirty-tree
+  override.
+- [x] Its immutable release distribution is published through Tailscale and every served byte is
   verified against the local candidate.
 
 ## M71-U1 — manual authoring and canvas presentation
@@ -222,22 +288,35 @@ Notes:
 
 1. Wake a stored persistent point, then author another point or suitable construction near its
    horizontal and vertical guide.
-2. While drawing a vertical line, place its endpoint level with a remembered point to the side;
-   verify one preview/placement carries `HorizontalPoints + Vertical`. Repeat symmetrically with a
-   horizontal line and `VerticalPoints + Horizontal`, including the polyline path.
-3. Confirm the displayed constraint-backed guides and place each bundle; move either point and the
-   new span start afterward.
-4. Repeat from native line and polyline midpoints, first one axis at a time and then both axes on
-   the same point; move and resize the source span afterward.
-5. Repeat with a fillet-discarded midpoint occurrence and an unsupported nonlinear derived anchor.
-6. Exercise suppression, shared leave/re-enter hysteresis and an exact ambiguous tie.
+2. While drawing a vertical **line**, place its endpoint level with a remembered stored point to
+   the side and require one preview and atomic placement carrying exactly
+   `HorizontalPoints + Vertical`. Repeat the same bundle through the **polyline** path.
+3. While drawing a horizontal **line**, place its endpoint vertically aligned with a remembered
+   stored point and require exactly `VerticalPoints + Horizontal`. Repeat the same bundle through
+   the **polyline** path.
+4. For every stored-point bundle above, confirm both constraint-backed guides end at the same exact
+   intersection. After placement, edit the remembered point and then the new span start; require
+   both retained relations to remain present and jointly satisfied after each edit.
+5. Wake native midpoints from both a line and a polyline span. For each source kind, exercise both
+   the line and polyline authoring paths: a vertical new span must place
+   `HorizontalPointToMidpoint + Vertical`, and a horizontal new span must place
+   `VerticalPointToMidpoint + Horizontal`.
+6. For every native-midpoint bundle, confirm both guides and the exact intersection, then move and
+   resize the remembered midpoint's source span and edit the new span start. Require both retained
+   relations to survive and remain jointly satisfied after every edit.
+7. Also exercise native midpoint alignment one axis at a time, then repeat with a fillet-discarded
+   midpoint occurrence and an unsupported nonlinear derived anchor.
+8. Exercise suppression, shared leave/re-enter hysteresis and an exact ambiguous tie.
 
 Expected: stored-point alignment may atomically create HorizontalPoints/VerticalPoints and remains
 durable during later edits. A complementary exact Cartesian line/polyline direction may be retained
-in that same atomic placement, with both guides ending at the exact intersection. A native
-line/polyline midpoint may create
-HorizontalPointToMidpoint and/or VerticalPointToMidpoint: Horizontal constrains Y and Vertical X,
-and both axes keep the point at the live endpoint average as the span moves or resizes.
+in that same atomic placement, with both guides ending at the exact intersection. This must work
+for both line and polyline authoring paths in both Cartesian orientations. A native line/polyline
+midpoint may create HorizontalPointToMidpoint and/or VerticalPointToMidpoint: Horizontal constrains
+Y and Vertical X. Its complementary new-span direction must be retained in the same atomic
+placement for both line and polyline paths. Editing the remembered point or midpoint source, or
+editing the new span start, preserves both relations; midpoint alignment continues to use the live
+endpoint average as its source span moves or resizes.
 `FilletDiscarded` and nonlinear curve-parameter midpoint occurrences remain visibly tracking-only.
 No case creates a fixed coordinate, zero dimension or hidden midpoint point. Suppression and
 ambiguity never commit a stale or arbitrary candidate.

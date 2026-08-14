@@ -2,9 +2,8 @@
 
 # M71 implementation — Retained drafting relations
 
-Status: M71-F004 simultaneous endpoint-axis inference is implemented and passes the complete
-dirty-tree development gate. Clean replacement nomination/publication and supervising-human UAT
-remain pending.
+Status: M71-F004 simultaneous endpoint-axis inference is implemented, clean-qualified and
+published as a byte-verified immutable replacement. Supervising-human UAT remains pending.
 
 Architecture owner: ADR 0035
 
@@ -12,7 +11,16 @@ Withdrawn pre-F003 candidate source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
 Withdrawn F003 candidate source: `83bd2b575784c44b618fb3ad144f24e84702d764`
 
-F004 clean candidate source: **not yet nominated**
+F004 clean product source: `a2e51efba7d79f684d264094ffd7dd0e37a4d089`
+
+F004 clean product tree: `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`
+
+F004 clean release-gate result: **PASS**; log
+`/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`
+
+Current F004 release distribution: `/tmp/geosolve-m71-f004-uat.SaXMVY`; endpoint
+`http://100.94.63.83:8080/`; PID `2848202`; ordered manifest aggregate
+`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`
 
 Historical F003 clean release-gate result: **PASS**
 
@@ -26,9 +34,9 @@ continued UAT): `/tmp/geosolve-m71-uat.yFBsnX`; historical endpoint
 `http://100.94.63.83:8080/`; ordered manifest aggregate
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
-Both earlier distributions remain historical evidence. The preserved F003 snapshot must remain
-unchanged; its former server has exited. Publish a fresh server only after a clean F004
-distribution has been frozen and byte-verified.
+Both earlier distributions remain historical evidence. The preserved F003 snapshot remains
+unchanged and its former server has exited. The shared Tailscale endpoint now serves only the
+verified F004 snapshot above.
 
 ## 1. Files and APIs
 
@@ -127,9 +135,9 @@ geometry, history and publication authority.
 
 ## 3. Commands and outcomes
 
-The following focused qualification and complete development gate pass on the current post-F004
-tree. The final command without `GEOSOLVE_ALLOW_DIRTY` is the historical F003 clean gate only;
-clean F004 nomination has not yet occurred:
+The following focused qualification and complete development gate pass on the post-F004 product.
+The dirty command is retained as historical development evidence; the final command is the clean
+F004 qualification of the unchanged nominated source:
 
 ```text
 cargo fmt --all -- --check
@@ -150,7 +158,8 @@ cargo clippy --locked -p geosolve-constraint-editor --all-targets --all-features
 git diff --check
 env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 \
   nix-shell shell.nix --run './scripts/release-gate.sh'
-env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
 Outcomes:
@@ -172,13 +181,13 @@ Outcomes:
 - demo-web WASM, formatting, warnings-denied workspace Clippy, locked all-feature workspace tests,
   warnings-denied rustdoc, benchmark compilation, M14/M32 performance budgets, licence/package
   validation and Trunk 0.21.14 assembly pass;
-- the 256-moving-body sparse crossover passes in **151.18 seconds** in the post-F004 provisional
-  development gate.
+- the 256-moving-body sparse crossover passed in **151.18 seconds** in the historical dirty
+  development gate and **125.55 seconds** in the clean F004 gate.
 
 Cargo emitted only the repository's longstanding non-failing `license` plus `license-file`
-manifest advisories. The successful WASM checks ran inside `nix-shell shell.nix`. Because the F004
-gate used `GEOSOLVE_ALLOW_DIRTY=1`, it is provisional development evidence rather than clean
-candidate qualification.
+manifest advisories. The successful WASM checks ran inside `nix-shell shell.nix`. Product source
+`a2e51efba7d79f684d264094ffd7dd0e37a4d089` remained at the same tree with empty status before and
+after the clean gate; the later publication-document commit is not part of that qualified product.
 
 ## 4. Acceptance state
 
@@ -196,8 +205,8 @@ F003 development and clean-candidate gates passed and its immutable publication 
 F004 has since withdrawn that candidate from continued UAT.
 
 `PLAN.md` items are checked only where evidence exists. The pre-F003 and F003 publications are
-withdrawn; the post-F004 dirty development gate passes, while clean replacement qualification,
-immutable publication and human UAT remain pending.
+withdrawn; the post-F004 clean replacement gate and immutable byte-verified publication pass.
+Human UAT remains pending.
 
 ## 5. Known limitations and next blocker
 
@@ -264,14 +273,52 @@ sparse crossover, licence/package validation and Trunk 0.21.14 release assembly.
 provisional development evidence; the clean replacement gate recorded below supplied nomination
 evidence.
 
-The current post-F004 tree passed the same complete development-mode gate with
+The historical post-F004 dirty tree passed the same complete development-mode gate with
 `GEOSOLVE_ALLOW_DIRTY=1`. It includes the focused 2/2 F004 public regression, 311/311
 constraint-editor unit tests plus every integration/doc test, the unchanged 234/234 golden,
 native/WASM M70 and M71 parity, demo-web WASM, warnings-denied workspace Clippy and rustdoc, all
 locked all-feature workspace tests, benchmark compilation, M14/M32 budgets, the 151.18-second
 256-moving-body sparse crossover, licence/package validation and Trunk 0.21.14 release assembly.
-This remains provisional until the complete gate is repeated from an unchanged clean nominated
-F004 source.
+That run remains provisional development evidence only.
+
+The clean F004 product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, passed exactly:
+
+```text
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The sole worktree on `main` had empty status before and after the gate, and HEAD/tree were
+unchanged. The complete log is `/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`; the gate ran from
+2026-08-14 13:04:17 to 13:11:13 AEST, the 256-moving-body sparse crossover passed in 125.55
+seconds, and Trunk 0.21.14 produced the authoritative seven-file `dist`. Cargo emitted only the
+longstanding non-failing `license` plus `license-file` advisories.
+
+That `dist` was copied without rebuilding, manifest-compared and frozen at
+`/tmp/geosolve-m71-f004-uat.SaXMVY` with directory mode `0555` and file mode `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 14165 | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
+| `LICENSE` | 35148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-4c3212f5ba819fe0.js` | 33327 | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
+| `geosolve-demo-web-4c3212f5ba819fe0_bg.wasm` | 6014468 | `f5dfccd077120d4ed0876f318c4cd6a86bfc672a74c40e496a01bd232923a911` |
+| `index.html` | 22977 | `98c30dd76cb6f9cd5c33d86b41b3769e5fabbf25fe7f87b612acfbd2d865104c` |
+| `styles-36c74d05d21a90c9.css` | 29304 | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+The C-locale ordered-manifest aggregate is
+`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`. PID `2848202`, executable
+`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`, serves only that
+snapshot with argv `/run/current-system/sw/bin/python3 -u -m http.server 8080 --bind
+100.94.63.83 --directory /tmp/geosolve-m71-f004-uat.SaXMVY` and listens only on
+`100.94.63.83:8080`; its log is `/tmp/geosolve-m71-f004-uat.SaXMVY.server.log`.
+
+Proxy-disabled, cache-bypassed, identity-encoded HTTP requests returned status 200 from remote IP
+`100.94.63.83` for all seven assets with exact recorded sizes and byte equality. A separate `/`
+request equalled `index.html`. The frozen, fetched and post-fetch manifests all reproduced the
+same aggregate above. The fetched evidence is at `/tmp/geosolve-m71-f004-fetch.aDfzU7`.
 
 The withdrawn pre-F003 candidate `ad01912eac28275644dcfc867a2dc70030b5406d` passed:
 
@@ -321,7 +368,8 @@ At the F003 checkpoint PID `1202735` had exact argv `python3 -m http.server 8080
 `100.94.63.83:8080`. Proxy-disabled, cache-bypassed requests byte-matched all seven files; `/`
 matched `index.html`. Both local and fetched ordered manifest aggregates equalled
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
-PID `1202735` has since exited and the endpoint is offline.
+PID `1202735` has since exited and those F003 bytes are no longer served. The shared endpoint is
+now owned by the verified F004 server identified above.
 
 M71 deliberately excludes broad derived-point H/V operands beyond explicit native line/polyline
 midpoint axes, M37 catalog consolidation, certified generic intersections, quadrant anchors,
@@ -330,6 +378,5 @@ persistent wake state, canonical sketch v5, computed-feature chaining, browser E
 behavior. `FilletDiscarded` and nonlinear curve-parameter midpoint occurrences remain
 tracking-only.
 
-The next blockers are explicit authority to commit a clean F004 candidate, an unchanged-source
-clean release gate, immutable replacement publication and then explicit supervising-human review
-of M71-U1 through M71-U5. Mechanical qualification and publication do not close M71.
+The sole remaining blocker is explicit supervising-human review and approval of M71-U1 through
+M71-U5. Mechanical qualification and publication do not close M71.

@@ -2,14 +2,13 @@
 
 # M71 fresh-session handover
 
-Status: **M71-F004 is reproduced, corrected and passes the complete dirty-tree development gate;
-clean replacement qualification/publication are next**. The F003 source
-`83bd2b575784c44b618fb3ad144f24e84702d764` remains byte-preserved at
-`/tmp/geosolve-m71-f003-uat.hybK8W`, but it is withdrawn from continued UAT because it cannot
-compose a remembered point axis with a complementary new-span direction. Its former PID has exited
-and `http://100.94.63.83:8080/` is offline until this handover records a verified F004 replacement.
-M71 remains open through replacement qualification/publication and explicit supervising-human
-approval of M71-U1 through M71-U5.
+Status: **M71-F004 is reproduced, corrected, clean-qualified and published as a byte-verified
+immutable replacement**. Product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, is served from
+`/tmp/geosolve-m71-f004-uat.SaXMVY` at `http://100.94.63.83:8080/` by PID `2848202`; its ordered
+manifest aggregate is `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`.
+The F003 snapshot remains byte-preserved but withdrawn and no longer served. M71 remains open only
+for supervising-human M71-U1 through M71-U5 and explicit approval.
 
 This document is the canonical short restart contract for the M71 correction and replacement
 qualification. Read the repository-required project documents first, then this file, ADR 0035,
@@ -103,26 +102,56 @@ decoder/doc tests, 17/17 M71 sketch relation tests and 7/7 persistence tests. Th
 non-failing `license` plus `license-file` advisories. Because the source was dirty, this is
 development evidence rather than clean nomination evidence.
 
+### Clean qualification and current F004 publication
+
+Clean product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, passed exactly:
+
+```text
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The sole worktree on `main` had empty status before and after the gate, and HEAD/tree stayed
+unchanged. The gate log is `/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`; it ran from 13:04:17 to
+13:11:13 AEST on 2026-08-14, passed the 256-moving-body sparse crossover in 125.55 seconds and
+completed Trunk 0.21.14 release assembly. Cargo emitted only the longstanding non-failing
+`license` plus `license-file` advisories.
+
+The gate-produced seven-file `dist` was copied without rebuilding, byte-compared and frozen at
+`/tmp/geosolve-m71-f004-uat.SaXMVY` with directory mode `0555`, file mode `0444` and C-locale
+ordered-manifest aggregate
+`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`. PID `2848202` has exact
+argv `/run/current-system/sw/bin/python3 -u -m http.server 8080 --bind 100.94.63.83 --directory
+/tmp/geosolve-m71-f004-uat.SaXMVY`, executable
+`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`, and listens only on
+`100.94.63.83:8080`; its log is `/tmp/geosolve-m71-f004-uat.SaXMVY.server.log`.
+
+Proxy-disabled, cache-bypassed, identity-encoded requests returned HTTP 200 from remote IP
+`100.94.63.83` for every asset with exact size and byte equality. `/` equalled `index.html`; the
+snapshot, fetched and post-fetch aggregates all equalled the value above. The fetch evidence is
+`/tmp/geosolve-m71-f004-fetch.aDfzU7`.
+
 ### Preserved F003 publication
 
 The immutable seven-file snapshot remains mode `0555` with `0444` regular files and ordered
 aggregate
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`. It must remain untouched
-until a clean F004 distribution has been frozen and verified. PID `1202735` is absent and no
-process listens on `100.94.63.83:8080`; the snapshot alone remains preservation evidence.
+as historical evidence. PID `1202735` is absent and those bytes are no longer served; the shared
+endpoint now serves only the verified F004 snapshot above.
 
-### Pre-nomination repository checkpoint
+### Qualified product and repository checkpoint
 
-At the dirty-gate checkpoint, the sole worktree was
-`/home/arduano/programming/geometric-constraint-solver` on `main`, with local `main` and
-`origin/main` both at commit
-`603194947a642917b9e44359326708de37f1a1d2`, tree
-`1ac8b8ab3aaeeaa2770efc06180e2625cca902a1`. The F004 implementation, focused regression and
-transition parity are now committed as
-`1f542555d7fcaf98ecf92c69a10b951fbfcc3dff`. On 2026-08-14 the supervising human granted ordinary
-reviewable-commit authority for this repository. The exact clean nominated HEAD/tree/status must
-be captured after the pre-release documentation commit and before the clean gate; no push has been
-made.
+At qualification, the sole worktree was
+`/home/arduano/programming/geometric-constraint-solver` on `main`, HEAD
+`a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, empty status and `origin/main...HEAD` divergence
+`0 3`. The F004 implementation/focused regression is commit
+`1f542555d7fcaf98ecf92c69a10b951fbfcc3dff`; pre-release documentation is
+`ee27de77838a5adb1220c3316ddfcbf4b0380163`; the offline-server correction is
+`a2e51efba7d79f684d264094ffd7dd0e37a4d089`. The publication-evidence documentation is distinct
+from that qualified product source; its commit ID must be read from repository history. No push
+has been made.
 
 ## Historical 2026-08-14 checkpoint — M71-U2 midpoint-axis correction
 
@@ -231,13 +260,15 @@ through the retained coordinator and that the live relation follows later endpoi
   `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. The historical M70B
   snapshot remains on disk but is no longer served.
 
-Those earlier publications remain historical mechanical evidence only. Continued UAT must wait
-for the clean, byte-verified F004 replacement described at the top of this handover.
+Those earlier publications remain historical mechanical evidence only. Continued UAT must use
+only the clean, byte-verified F004 replacement described at the top of this handover.
 
-After this handover is committed, use `git log -5 --oneline --decorate`, `git status --short
---branch`, `git worktree list --porcelain` and `git rev-list --left-right --count
-origin/main...main` to establish the exact new checkpoint. Do not assume it has been pushed unless
-the latter command and `git ls-remote origin refs/heads/main` agree.
+At resume, verify PID `2848202`, its exact argv/listener, the immutable snapshot modes and the
+ordered aggregate before continuing UAT. Use `git log -5 --oneline --decorate`, `git status
+--short --branch`, `git worktree list --porcelain` and `git rev-list --left-right --count
+origin/main...main` to establish the later documentation checkpoint while preserving
+`a2e51efba7d79f684d264094ffd7dd0e37a4d089` as the qualified product source. Do not assume any
+commit has been pushed unless the divergence and `git ls-remote origin refs/heads/main` agree.
 
 ## Implemented scope
 
@@ -332,7 +363,7 @@ a harness error, not product evidence. The successful WASM results above ran ins
 Because `GEOSOLVE_ALLOW_DIRTY=1` was used, the integrated gate is provisional development evidence,
 not clean candidate qualification.
 
-## Review before release nomination
+## Deferred cleanup review
 
 The completed audit found no solver or mathematical blocker, but two cleanup questions remain.
 They should be resolved by semantic consolidation, not by adding more examples:
@@ -353,18 +384,14 @@ result makes those laws smaller and clearer.
 
 ## Next-session sequence
 
-1. Capture the exact clean HEAD/tree/status before and after the clean gate. The implementation/test
-   commit is `1f542555d7fcaf98ecf92c69a10b951fbfcc3dff`; the pre-release documentation commit is
-   `ee27de77838a5adb1220c3316ddfcbf4b0380163`.
-2. Run `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` without a dirty
-   override on that unchanged clean source.
-3. Copy that gate-produced seven-file `dist` without rebuilding, byte-compare and freeze a new
-   immutable F004 snapshot. Then start a fresh Tailscale-only server, verify the exact listener and
-   fetch every asset plus `/` with proxy/cache bypass; PID `1202735` is already absent.
-4. Record the clean source, gate, manifest, PID/listener and served-byte evidence in a forward
-   documentation commit. Then ask the supervising human to repeat M71-U1 through M71-U5, with U2
-   explicitly covering simultaneous endpoint-axis plus span-direction placement.
-5. Close M71 only after explicit supervising-human approval. Do not infer approval from mechanical
+1. Keep the verified F004 snapshot and PID `2848202` available at the Tailscale-only endpoint;
+   recheck PID, argv, listener, modes and aggregate before resuming after any interruption.
+2. Ask the supervising human to perform M71-U1 through M71-U5 from `docs/M71_UAT.md`. U2 must cover
+   stored-point and native-midpoint axes in both complementary pairings, on both line and polyline
+   construction, plus later edits proving both retained relations survive.
+3. Record each human result without inferring unperformed coverage or approval from the mechanical
+   gate.
+4. Close M71 only after explicit supervising-human approval. Do not infer approval from mechanical
    evidence.
 
 ## Deliberately deferred
