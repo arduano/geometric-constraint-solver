@@ -464,6 +464,8 @@ Durable milestone and cleanup records:
 - `docs/M71_UAT.md` (current focused M71 scorecard)
 - `docs/adr/0035-retained-drafting-relation-lifecycle.md`
 - `docs/M72_GOALS.md` (active public-workbench bulk-fix and Pages-release scope)
+- `docs/M72_IMPLEMENTATION.md` (implemented F001-F003, Pages pipeline and qualification ledger)
+- `docs/M72_UAT.md` (focused public-workbench review and approval checklist)
 - `docs/M73_GOALS.md` (inactive retained-authoring semantic-consolidation proposal)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

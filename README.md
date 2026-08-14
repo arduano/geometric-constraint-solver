@@ -80,7 +80,8 @@ Physics, collision and a production rendering system remain out of scope.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
 7. `docs/M72_GOALS.md` — active public-workbench bulk-fix and Pages-release scope.
-8. `docs/M73_GOALS.md` — deferred semantic-consolidation proposal; not activated.
+8. `docs/M72_IMPLEMENTATION.md` and `docs/M72_UAT.md` — implementation evidence and focused review.
+9. `docs/M73_GOALS.md` — deferred semantic-consolidation proposal; not activated.
 
 ## Workspace
 

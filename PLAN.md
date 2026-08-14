@@ -4355,10 +4355,10 @@ Status: activated by the supervising caller on 2026-08-14, replacing the previou
 semantic-consolidation proposal. `docs/M72_GOALS.md` owns the accepted scope.
 
 - [x] Preserve M71's qualified source and move its deferred semantic-consolidation proposal to M73.
-- [ ] M72-F001: clear stale native/computed Problems across successful recovery and add exact-set
+- [x] M72-F001: clear stale native/computed Problems across successful recovery and add exact-set
   presentation-only dismissal.
-- [ ] M72-F002: make interactive rectangles free-size while preserving the constrained macro.
-- [ ] M72-F003: move all option-bearing tool and Construction-display controls into one accessible
+- [x] M72-F002: make interactive rectangles free-size while preserving the constrained macro.
+- [x] M72-F003: move all option-bearing tool and Construction-display controls into one accessible
   bottom-left canvas overlay.
 - [ ] M72-F004: qualify, publish and verify the public GitHub Pages workbench.
 - [ ] Run the complete clean release gate and receive focused supervising-human UAT approval.
