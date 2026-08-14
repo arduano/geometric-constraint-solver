@@ -5870,57 +5870,49 @@ fn created_circle_contact(
 fn confirmed_positional_references(
     confirmed: &ConfirmedDraftInference,
 ) -> Vec<DraftReferenceAnchor> {
-    let relation = confirmed.relations.iter().find(|relation| {
-        matches!(
-            relation,
-            DraftInferenceRelation::PointIdentity { .. }
-                | DraftInferenceRelation::PointOnCurve { .. }
-                | DraftInferenceRelation::PointOnCreatedCurve { .. }
-                | DraftInferenceRelation::Midpoint { .. }
-                | DraftInferenceRelation::HorizontalPoints { .. }
-                | DraftInferenceRelation::VerticalPoints { .. }
-                | DraftInferenceRelation::HorizontalPointToMidpoint { .. }
-                | DraftInferenceRelation::VerticalPointToMidpoint { .. }
-        )
-    });
-    let Some(relation) = relation else {
-        return Vec::new();
-    };
-    confirmed
-        .references
-        .iter()
-        .copied()
-        .filter(|reference| match (relation, reference) {
-            (
-                DraftInferenceRelation::PointIdentity { point: expected }
-                | DraftInferenceRelation::PointOnCreatedCurve { point: expected }
-                | DraftInferenceRelation::HorizontalPoints {
-                    reference: expected,
-                }
-                | DraftInferenceRelation::VerticalPoints {
-                    reference: expected,
-                },
-                DraftReferenceAnchor::PersistentPoint { point, .. },
-            ) => *point == *expected,
-            (
-                DraftInferenceRelation::HorizontalPointToMidpoint {
-                    reference: expected,
-                }
-                | DraftInferenceRelation::VerticalPointToMidpoint {
-                    reference: expected,
-                }
-                | DraftInferenceRelation::Midpoint { span: expected },
-                DraftReferenceAnchor::Midpoint { span, .. },
-            ) => *span == *expected,
-            (
-                DraftInferenceRelation::PointOnCurve { contact: expected },
-                DraftReferenceAnchor::CurvePoint { contact, .. }
-                | DraftReferenceAnchor::AffineSupport { contact, .. },
-            ) => *contact == *expected,
-            _ => false,
-        })
-        .take(1)
-        .collect()
+    let mut references = Vec::new();
+    for relation in &confirmed.relations {
+        let reference =
+            confirmed
+                .references
+                .iter()
+                .copied()
+                .find(|reference| match (relation, reference) {
+                    (
+                        DraftInferenceRelation::PointIdentity { point: expected }
+                        | DraftInferenceRelation::PointOnCreatedCurve { point: expected }
+                        | DraftInferenceRelation::HorizontalPoints {
+                            reference: expected,
+                        }
+                        | DraftInferenceRelation::VerticalPoints {
+                            reference: expected,
+                        },
+                        DraftReferenceAnchor::PersistentPoint { point, .. },
+                    ) => *point == *expected,
+                    (
+                        DraftInferenceRelation::HorizontalPointToMidpoint {
+                            reference: expected,
+                        }
+                        | DraftInferenceRelation::VerticalPointToMidpoint {
+                            reference: expected,
+                        }
+                        | DraftInferenceRelation::Midpoint { span: expected },
+                        DraftReferenceAnchor::Midpoint { span, .. },
+                    ) => *span == *expected,
+                    (
+                        DraftInferenceRelation::PointOnCurve { contact: expected },
+                        DraftReferenceAnchor::CurvePoint { contact, .. }
+                        | DraftReferenceAnchor::AffineSupport { contact, .. },
+                    ) => *contact == *expected,
+                    _ => false,
+                });
+        if let Some(reference) = reference
+            && !references.contains(&reference)
+        {
+            references.push(reference);
+        }
+    }
+    references
 }
 
 fn draft_point_slot(draft: &Draft, stage_index: usize) -> Option<DraftPointSlot> {
@@ -9481,7 +9473,7 @@ mod tests {
     #[test]
     fn point_identity_preview_direction_and_branch_share_the_accepted_operand() {
         let (mut coordinator, scene, existing) = point_identity_branch_fixture();
-        let raw_start = [0.15, 0.0];
+        let raw_start = [0.1, 0.0];
         let start = scene.viewport.model_to_screen(raw_start);
         let first =
             coordinator.pointer_down(&scene, pointer(63, start.x, start.y, Modifiers::default()));
@@ -9499,7 +9491,7 @@ mod tests {
             [DraftInferenceRelation::PointIdentity { point }] if *point == existing
         ));
 
-        let raw_end = [0.1, 0.0];
+        let raw_end = [0.15, 0.0];
         let end = scene.viewport.model_to_screen(raw_end);
         let suppressed = DraftInferenceInput {
             suppressed: true,
