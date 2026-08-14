@@ -102,7 +102,8 @@ release bytes unchanged and closes M70B under the requested scoped sign-off. ADR
 activated M71's six ordinary retained definitions. They extend the in-memory document/editor API
 and unsupported draft-v5 side section while canonical sketch v1-v4 remain frozen; clean
 F005/F006 replacement qualification and byte-verified publication pass on source
-`f8a45ae7b355ab9874bf268c9950e369814e8432`; human UAT and explicit approval remain pending.
+`f8a45ae7b355ab9874bf268c9950e369814e8432`; scoped human UAT and explicit M71 approval pass on
+2026-08-14. These later lifecycle additions do not alter the frozen sketch v1-v4 wire contract.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

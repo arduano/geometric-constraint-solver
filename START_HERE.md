@@ -109,7 +109,7 @@ retired. The targeted movement
 behavior was reported fixed. Clean closing source `48e3cc3` passes the complete release gate with
 focused multi-feature transaction and finite-arc transport regressions; the 198/198 golden and
 runtime release bytes remain unchanged. M70B is closed under the requested scoped sign-off without
-claiming an unrecorded exhaustive UAT replay. M71 is active under amended ADR 0035 for six
+claiming an unrecorded exhaustive UAT replay. M71 is complete under amended ADR 0035 for six
 ordinary retained definitions: the original point-pair H/V, Concentric and Collinear relations plus
 native line/polyline midpoint-axis H/V authorized by `M71-F003`. `M71-F004` additionally composes
 one remembered point/native-midpoint axis with a complementary exact Cartesian new-span direction.
@@ -123,8 +123,9 @@ servers have exited and those bytes are no longer served. Current clean product 
 `f7bccc58f301a715bc91f40115ce6424ec5f391d`, passes the complete unchanged-source release gate.
 Its immutable seven-file snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, aggregate
 `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`, is byte-verified at
-`http://100.94.63.83:8080/` under PID `3245562`. Only M71-U1 through M71-U5 and explicit
-supervising-human approval remain.
+`http://100.94.63.83:8080/` under PID `3245562`. On 2026-08-14 the supervising human confirmed the
+corrected two-constraint auto-placement, accepted the recorded M71-U1 through M71-U5 review points
+and explicitly requested closure without claiming an unrecorded exhaustive replay.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -192,7 +193,7 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M70 are complete and approved. M70 implementation and focused
+direction-at-contact domain API. M61-M71 are complete and approved. M70 implementation and focused
 direct qualification, integrated release qualification, frozen-candidate publication, served-byte
 verification and scoped human UAT are complete under ADR 0034. It
 uses only existing ordinary retained relations for persistent-point reuse, native PointOnCurve,
@@ -386,8 +387,8 @@ including the unchanged golden, native/WASM parity, warnings-denied workspace Cl
 all-feature tests, performance/licence/package checks and Trunk assembly. Its read-only seven-file
 snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, with ordered-manifest aggregate
 `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`, is served only through
-Tailscale at `http://100.94.63.83:8080/`; every asset plus `/` byte-matches the snapshot. M71-U1
-through M71-U5 and explicit supervising-human approval remain.
+Tailscale at `http://100.94.63.83:8080/`; every asset plus `/` byte-matches the snapshot. The scoped
+M71-U1 through M71-U5 review and explicit supervising-human approval pass; M71 is closed.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -395,7 +396,8 @@ manifest aggregate was `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712
 That server has since been retired. The targeted movement
 behavior was reported fixed. Clean closing source `48e3cc3` passes the complete release gate with
 the final owner regressions, and M70B is closed under the requested scoped sign-off. The temporary
-`docs/M71_GOALS.md`, amended ADR 0035, `PLAN.md` and `ACCEPTANCE.md` define the corrected M71 scope.
+`docs/M71_GOALS.md`, amended ADR 0035, `PLAN.md`, `ACCEPTANCE.md` and `docs/M71_UAT.md` preserve the
+completed M71 scope and approval record.
 
 Durable milestone and cleanup records:
 

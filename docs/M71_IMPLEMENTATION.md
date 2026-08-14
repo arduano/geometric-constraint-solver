@@ -4,8 +4,9 @@
 
 Status: M71-F005 distinct-reference cross-axis point composition and M71-F006's tighter default
 capture envelope are implemented, clean-qualified and published as the current byte-verified UAT
-candidate. All mechanical acceptance evidence passes. M71-U1 through M71-U5 and explicit
-supervising-human approval remain pending.
+candidate and approved closing product. All mechanical acceptance evidence and the scoped M71-U1
+through M71-U5 human review pass; the supervising human explicitly approved closure on
+2026-08-14. M71 is complete.
 
 Architecture owner: ADR 0035
 
@@ -328,8 +329,9 @@ returned HTTP 200 for all seven files and `/`; every named response matched its 
 byte-for-byte and `/` matched `index.html`. Fetch evidence is retained at
 `/tmp/geosolve-m71-f005-f006-fetch.yPRcIT`. Historical F004 PID `2848202` has exited.
 
-The later publication-evidence documentation commit records this already-qualified product; it is
-not part of, and must not replace, the product source identity above.
+Publication-evidence documentation commit `905a414` records this already-qualified product; it is
+not part of, and must not replace, the product source identity above. The later close-off
+documentation records scoped human approval under the same rule.
 
 ## 4. Acceptance state
 
@@ -351,9 +353,10 @@ replacement publication.
 
 `PLAN.md` items are checked only where evidence exists. The pre-F003, F003 and F004 publications
 are withdrawn from continued UAT. All mechanical qualification and publication items pass;
-M71-U1 through M71-U5 and explicit supervising-human approval remain pending.
+the supervising human accepted M71-U1 through M71-U5 under the explicit 2026-08-14 scoped close
+decision without claiming an unrecorded exhaustive replay.
 
-## 5. Known limitations and next blocker
+## 5. Known limitations and closure
 
 ### Resolved findings
 
@@ -538,6 +541,6 @@ persistent wake state, canonical sketch v5, computed-feature chaining, browser E
 behavior. `FilletDiscarded` and nonlinear curve-parameter midpoint occurrences remain
 tracking-only.
 
-The next blocker is human UAT. Run M71-U1 through M71-U5 against only the current verified
-F005/F006 endpoint and record each result. Explicit supervising-human approval remains required;
-complete mechanical qualification and publication do not close M71.
+M71 has no remaining blocker. The approved F005/F006 source and immutable publication remain the
+closing product authority; any later milestone must establish its own scope and qualification
+without reinterpreting M71's historical evidence.

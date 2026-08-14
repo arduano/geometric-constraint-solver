@@ -1314,7 +1314,7 @@ movement behavior was subsequently reported fixed by the supervising human, who 
 once the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with the two-previously-Current transaction and CircularArc transport/domain
 regressions; the golden and release bytes remain unchanged. M70B is closed under that scoped
-approval. M71 is active under ADR 0035 and adds one ordinary editable **Retained drafting
+approval. M71 is complete under ADR 0035 and adds one ordinary editable **Retained drafting
 relations** playground over its mechanically qualified document/editor implementation. The
 pre-F003 contribution from its original four reviewed nine-row relation families extends the
 current canonical fixture to 234/234 `PASS`, SHA-256
@@ -1323,7 +1323,8 @@ correction, M71-F004's endpoint-axis/direction composition, M71-F005's distinct-
 orthogonal point-axis intersection and M71-F006's tighter default capture envelope remain in
 focused owner regressions rather than adding systemic golden dimensions. Clean post-F005/F006
 qualification and byte-verified replacement publication pass; F003/F004 evidence remains
-historical and focused human review remains pending.
+historical. The supervising human accepted the scoped U1-U5 review and explicitly closed M71 on
+2026-08-14.
 Every new fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1331,7 +1332,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M70. Every newly scoped milestone from M70 onward ends in
+recorded at completed M40.7, M53 and M61-M71. Every newly scoped milestone from M70 onward ends in
 its own UAT after direct automated qualification.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
@@ -1519,8 +1520,8 @@ Direct sketch/editor/native-WASM tests own 1/1/1/1/2/2 lowering, finite hard res
 commutative operands, retained parent edits, lifecycle, draft-v5 round trips, frozen-v4 rejection,
 inference ranking and exact publication authority. Human review follows `docs/M71_UAT.md` for
 discoverability, annotation clarity, predictable authoring/inference and recovery. The clean,
-byte-verified F005/F006 replacement is current UAT authority; review remains open until explicit
-supervising-human approval.
+byte-verified F005/F006 replacement is the approved M71 closing product; the scoped review and
+explicit supervising-human approval pass.
 
 ### M71-F003 - Native midpoint axis alignment is durable
 
@@ -1636,7 +1637,7 @@ It was independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
 regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so the clean
 F005/F006 replacement qualification and publication recorded in `docs/M71_UAT.md` now supply
-current UAT authority.
+approved M71 closing product authority.
 
 ### M71-F002 - Direct relation applicability rejects missing selections
 
@@ -1654,7 +1655,7 @@ It was independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
 regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so the clean
 F005/F006 replacement qualification and publication recorded in `docs/M71_UAT.md` now supply
-current UAT authority.
+approved M71 closing product authority.
 
 ### M70B-R1 - Complete workspace reproduction payload
 

@@ -2,16 +2,17 @@
 
 # M71 goals — Retained drafting relations
 
-Status: active and amended on 2026-08-14 for M71-F005/M71-F006. Cross-axis point-pair composition
-and the tighter default capture envelope are clean-qualified and published as a byte-verified
-immutable replacement. Earlier publications remain historical; supervising-human UAT is pending.
+Status: complete and explicitly approved by the supervising human on 2026-08-14. Cross-axis
+point-pair composition and the tighter default capture envelope are clean-qualified, published as
+a byte-verified immutable replacement and accepted under the scoped M71 close decision. Earlier
+publications remain historical.
 
 M70 proved reusable auto-constraint interaction using only constraint definitions already owned by
 the ordinary retained document/editor workflow. M71 closes the highest-value gap exposed by that
 cut: four relation families whose runtime mathematics existed but whose ordinary retained
 lifecycle was missing, plus the narrowly authorized M71-F003 native-span midpoint-axis family.
 
-## Active scope
+## Closed scope
 
 M71 promotes exactly these six relation definitions into `DocumentConstraintDefinition`:
 
@@ -140,7 +141,7 @@ endpoint axis with a complementary new-span direction. The clean, byte-verified 
 now also withdrawn from continued UAT because it predates the F005 cross-axis point-pair and F006
 default-capture corrections. All earlier immutable snapshots remain historical evidence. Clean
 source `f8a45ae7b355ab9874bf268c9950e369814e8432` and its byte-verified F005/F006 replacement are the
-current mechanical UAT authority.
+approved M71 closing product authority.
 
 ## Architectural ownership
 
@@ -150,9 +151,8 @@ surface. Reusing its runtime math is correct; combining two lifecycle, history a
 authorities is not.
 
 ADR 0035 owns this retained-relation and persistence decision. `PLAN.md` owns execution order,
-`ACCEPTANCE.md` owns objective completion, and `docs/M71_UAT.md` owns the eventual human scorecard.
-`docs/M71_IMPLEMENTATION.md` is created only after implementation begins and can record evidence
-that actually exists.
+`ACCEPTANCE.md` owns objective completion, and `docs/M71_UAT.md` records the completed scoped human
+scorecard. `docs/M71_IMPLEMENTATION.md` records the implementation and qualification evidence.
 
 ## Deferred backlog
 

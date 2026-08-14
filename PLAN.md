@@ -171,7 +171,7 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M70 are complete and approved, and
+- Keep human acceptance records explicit: M40.7, M53 and M61-M71 are complete and approved, and
   every newly scoped milestone from M70 onward ends in its own supervising-human UAT. Every
   objective correctness, persistence, compatibility and presentation-adapter assertion must pass
   through direct unit or integration tests at its owning layer before a human checkpoint begins;
@@ -4121,11 +4121,11 @@ regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTA
 
 ### M71
 
-Status: active and amended for M71-F005/F006 on 2026-08-14. Scope and architecture are accepted in
-`docs/M71_GOALS.md` and ADR 0035. F005's distinct-reference orthogonal point-axis composition and
-F006's tighter default capture envelope are implemented, clean-qualified and published as one
-byte-verified immutable replacement. The F003/F004 publications remain historical evidence. Only
-M71-U1 through M71-U5 and explicit supervising-human approval remain.
+Status: complete and explicitly approved by the supervising human on 2026-08-14. Scope and
+architecture are accepted in `docs/M71_GOALS.md` and ADR 0035. F005's distinct-reference
+orthogonal point-axis composition and F006's tighter default capture envelope are implemented,
+clean-qualified and published as one byte-verified immutable replacement. The F003/F004
+publications remain historical evidence; scoped M71-U1 through M71-U5 approval closes M71.
 
 Goal: promote the original four high-value relations plus two narrowly scoped native-span
 midpoint-axis definitions into the one ordinary retained sketch/editor lifecycle, then let the M70
@@ -4197,8 +4197,8 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
   workspace Clippy, locked all-feature workspace tests, relevant WASM/Trunk builds and the complete
   clean release gate on one unchanged post-F005/F006 nominated source.
 - [x] Freeze and byte-verify one post-F005/F006 replacement immutable Tailscale candidate; the F004
-  distribution remains historical evidence and is not current UAT authority.
-- [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
+  distribution remains historical evidence and is not closing product authority.
+- [x] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
 
 Historical implementation checkpoint (2026-08-13): all six definitions, frozen-v4 isolation, draft-v5 side
 section, complete ordinary lifecycle, contextual/inferred authoring, prospective curve slots,
@@ -4266,7 +4266,14 @@ seven files were copied without rebuilding, frozen at `/tmp/geosolve-m71-f005-f0
 and byte-verified at `http://100.94.63.83:8080/` under PID `3245562`; the C-locale ordered-manifest
 aggregate is `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`. Every asset and `/`
 returned HTTP 200 from `100.94.63.83` and matched byte-for-byte. The later publication-evidence
-commit is intentionally distinct from the qualified product source.
+commit `905a414` is intentionally distinct from the qualified product source.
+
+M71 close note (2026-08-14): the supervising human confirmed that the corrected two-constraint
+auto-placement works, approved the listed U1-U5 review points and explicitly requested milestone
+closure. This scoped decision accepts the recorded review without claiming an unrecorded
+exhaustive replay of every scripted permutation. Qualified product source
+`f8a45ae7b355ab9874bf268c9950e369814e8432` and its immutable bytes remain the closing product
+authority; later close-off documentation does not replace that identity. M71 is complete.
 
 Historical M71-F004 development qualification note (2026-08-14):
 `env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run
@@ -4328,8 +4335,8 @@ and publication are complete; M71 remains open only for M71-U1 through M71-U5 an
 supervising-human approval at that historical checkpoint. F004 now withdraws those bytes from
 continued UAT while preserving the immutable snapshot. PID `1202735` has since exited and the
 F003 bytes are no longer served. The verified F004 replacement recorded above later occupied the
-shared endpoint, but F005/F006 now withdraw those bytes from current UAT authority. The clean,
-byte-verified F005/F006 replacement recorded above is current UAT authority.
+shared endpoint, but F005/F006 now withdraw those bytes from closing product authority. The clean,
+byte-verified F005/F006 replacement recorded above is the approved M71 closing product.
 
 Gate: all six definitions behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every

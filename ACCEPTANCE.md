@@ -1677,10 +1677,10 @@ unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
 
 ## M71 acceptance: retained drafting relations
 
-Status: active and amended for M71-F005/F006. The distinct-reference orthogonal point-axis
-composition and tighter default capture-envelope corrections are implemented, clean-qualified and
-published as a byte-verified immutable replacement. F003/F004 evidence remains historical; only
-M71-U1 through M71-U5 and explicit supervising-human approval are pending.
+Status: complete and explicitly approved by the supervising human on 2026-08-14. The
+distinct-reference orthogonal point-axis composition and tighter default capture-envelope
+corrections are implemented, clean-qualified and published as a byte-verified immutable
+replacement. F003/F004 evidence remains historical; scoped M71-U1 through M71-U5 approval passes.
 
 - Frozen canonical sketch v1-v4 readers and bytes remain unchanged. A private frozen-v4
   constraint wire DTO prevents in-memory enum growth from expanding v4, and v4 export of M71 state
@@ -1758,9 +1758,11 @@ M71-U1 through M71-U5 and explicit supervising-human approval are pending.
 - Formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests, relevant
   WASM and Trunk builds and the complete clean release gate pass on that unchanged source.
 - Its seven-file immutable distribution is byte-verified and served through Tailscale from
-  `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`; the preserved F004 distribution is historical. The
-  supervising human must then complete and explicitly approve `docs/M71_UAT.md`; mechanical
-  qualification alone does not close M71.
+  `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`; the preserved F004 distribution is historical.
+- The supervising human confirmed the corrected two-constraint auto-placement, accepted the
+  recorded M71-U1 through M71-U5 review points and explicitly requested closure on 2026-08-14.
+  This scoped approval does not claim an unrecorded exhaustive replay. All M71 acceptance gates
+  pass.
 
 M71 does not accept broad `DocumentPointRef` H/V operands beyond explicit native-span midpoint
 axes, M37 catalog consolidation, generic

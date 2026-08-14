@@ -57,21 +57,20 @@ state. F001-F005 retain owning-layer regressions; M70B closed on its 198/198 `PA
 M71 extends the current canonical inventory to 234/234 `PASS`. Clean
 closing source `48e3cc3` passes the complete release gate with the final multi-feature transaction
 and finite-arc transport regressions; its release bytes matched the historical byte-verified
-M70B-F005 candidate. M71 is active under amended ADR 0035 for six ordinary retained drafting
+M70B-F005 candidate. M71 is complete under amended ADR 0035 for six ordinary retained drafting
 definitions:
 point-pair Horizontal/Vertical, native line/polyline midpoint-axis Horizontal/Vertical,
 Concentric and Collinear. M71-F003 through M71-F006 are resolved; clean product source
 `f8a45ae7b355ab9874bf268c9950e369814e8432` passes the complete release gate and its immutable
-F005/F006 replacement is byte-verified at the current UAT endpoint. Focused human UAT and explicit
-approval remain pending.
+F005/F006 replacement is byte-verified at the published endpoint. The supervising human accepted
+the scoped U1-U5 review and explicitly closed M71 on 2026-08-14.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed through the scoped M70B close, with M71 in focused human
-   UAT.
+3. `PLAN.md` — authoritative roadmap, complete through the explicitly approved M71 close.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -98,7 +97,7 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. Human UAT is complete at M40.7, M53 and M61-M70; every newly scoped
+and application undo. Human UAT is complete at M40.7, M53 and M61-M71; every newly scoped
 milestone from M70 onward ends in its own UAT and all objective behavior is directly automated
 first. The desktop demo has no future mobile support requirement.
 

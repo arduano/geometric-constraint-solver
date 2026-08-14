@@ -1,22 +1,23 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M71 fresh-session handover
+# M71 closing handover
 
-Status: **M71-F005/F006 are corrected, clean-qualified and published as the current UAT
-candidate**. Product source `f8a45ae7b355ab9874bf268c9950e369814e8432`, tree
+Status: **M71 is complete and explicitly approved by the supervising human on 2026-08-14**.
+M71-F005/F006 are corrected, clean-qualified and published as the approved closing product.
+Product source `f8a45ae7b355ab9874bf268c9950e369814e8432`, tree
 `f7bccc58f301a715bc91f40115ce6424ec5f391d`, and immutable snapshot
-`/tmp/geosolve-m71-f005-f006-uat.QPuMdT` are the current mechanical authority. PID `3245562`
+`/tmp/geosolve-m71-f005-f006-uat.QPuMdT` are the closing product authority. PID `3245562`
 serves those exact bytes at `http://100.94.63.83:8080/`; their ordered manifest aggregate is
-`657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`. M71-U1 through M71-U5
-and explicit supervising-human approval remain pending. Historical F004 source
+`657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`. Scoped M71-U1 through
+M71-U5 approval passes. Historical F004 source
 `a2e51efba7d79f684d264094ffd7dd0e37a4d089` and snapshot
 `/tmp/geosolve-m71-f004-uat.SaXMVY` remain preserved but withdrawn; former PID `2848202` has
 exited.
 
-This document is the canonical short restart contract for the M71 correction and replacement
-qualification. Read the repository-required project documents first, then this file, ADR 0035,
-`docs/M71_GOALS.md`, `docs/M71_IMPLEMENTATION.md` and `docs/M71_UAT.md`. Do not reconstruct M71
-from chat history.
+This document is the canonical closing contract for the M71 correction, qualification,
+publication and approval. Read the repository-required project documents first, then this file,
+ADR 0035, `docs/M71_GOALS.md`, `docs/M71_IMPLEMENTATION.md` and `docs/M71_UAT.md`. Do not
+reconstruct M71 from chat history.
 
 ## 2026-08-14 checkpoint — M71-F005/F006 cross-axis points and tighter capture
 
@@ -145,8 +146,9 @@ The F005/F006 implementation and focused public regression are committed as
 `4f5339fa0de6b12794647835ac9066af5520887e` (`fix(m71): compose distinct point axis snaps`). The
 pre-release milestone records are committed as
 `f8a45ae7b355ab9874bf268c9950e369814e8432` (`docs(m71): prepare F005 F006 qualification`), which
-is the clean qualified product source. The later publication-evidence documentation commit records
-that product without changing its identity. No push has been authorized or performed.
+is the clean qualified product source. Publication-evidence documentation commit `905a414`
+records that product without changing its identity; the later close-off documentation records the
+scoped approval under the same rule. No push has been authorized or performed.
 
 Historical F004 source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
 `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, clean-gate log
@@ -154,7 +156,7 @@ Historical F004 source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
 `/tmp/geosolve-m71-f004-uat.SaXMVY` and aggregate
 `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b` remain exact historical
 evidence. PID `2848202` has exited, while the immutable snapshot remains preserved. The current
-F005/F006 publication alone is UAT authority.
+F005/F006 publication alone is the approved M71 closing product authority.
 
 ## Historical 2026-08-14 checkpoint — M71-F004 simultaneous endpoint-axis inference
 
@@ -403,15 +405,16 @@ through the retained coordinator and that the live relation follows later endpoi
   snapshot remains on disk but is no longer served.
 
 Those earlier publications remain historical mechanical evidence only. The clean, byte-verified
-F005/F006 replacement is current UAT authority; only human review and explicit approval remain.
+F005/F006 replacement is the approved M71 closing product. The supervising human accepted the
+recorded U1-U5 review points and explicitly requested closure on 2026-08-14.
 
 At resume, use `git log -5 --oneline --decorate`, `git status --short --branch`, `git worktree
 list --porcelain` and `git rev-list --left-right --count origin/main...main` to establish the
 current checkpoint. Preserve `f8a45ae7b355ab9874bf268c9950e369814e8432` as the qualified
 F005/F006 product source and `a2e51efba7d79f684d264094ffd7dd0e37a4d089` only as historical
 F004 evidence. Recheck current PID `3245562`, its exact argv/listener, snapshot modes and aggregate
-before UAT. Do not assume any commit has been pushed unless the divergence and
-`git ls-remote origin refs/heads/main` agree.
+before repurposing or retiring the publication. Do not assume any commit has been pushed unless
+the divergence and `git ls-remote origin refs/heads/main` agree.
 
 ## Implemented scope
 
@@ -537,13 +540,12 @@ result makes those laws smaller and clearer.
    `f8a45ae7b355ab9874bf268c9950e369814e8432`, implementation commit `4f5339f`, current PID
    `3245562`, snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT` and aggregate
    `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`. Preserve every F004
-   snapshot/hash/log fact as historical evidence; do not use those withdrawn bytes for UAT.
-2. Ask the supervising human to perform M71-U1 through M71-U5 from `docs/M71_UAT.md`. U2 must cover
-   two distinct stored points contributing Horizontal Y and Vertical X, the F004 point-axis-plus-
-   span-direction pairings, native-midpoint pairings, line/polyline paths, exact ties, same-anchor
-   exclusion, tighter capture feel and later edits proving both relations survive.
-3. Record each human result without inferring unperformed coverage or approval from the mechanical
-   gate. Close M71 only after explicit supervising-human approval.
+   snapshot/hash/log fact as historical evidence; do not use those withdrawn bytes as current
+   product authority.
+2. Treat M71 as closed. Do not add scope, reinterpret the scoped human approval or replace the
+   qualified source identity through a later documentation or planning commit.
+3. Begin only an explicitly accepted next-milestone scope. The semantic-consolidation questions
+   above are planning inputs, not authorization to refactor or broaden the constraint catalog.
 
 ## Deliberately deferred
 

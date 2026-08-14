@@ -148,7 +148,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   M71-F003 through M71-F006 resolve native-midpoint durability, endpoint-axis/direction bundling,
   distinct-reference orthogonal point-axis composition and overly broad default capture. Clean
   source `f8a45ae7b355ab9874bf268c9950e369814e8432` passes the complete gate and supplies the current
-  byte-verified replacement; focused human UAT and explicit approval remain pending.
+  byte-verified replacement. On 2026-08-14 the supervising human confirmed the corrected
+  two-constraint auto-placement, accepted the scoped U1-U5 review and explicitly closed M71.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

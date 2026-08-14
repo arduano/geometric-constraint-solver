@@ -24,7 +24,7 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M70. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting. M1-M7 remain the frozen regression baseline.
+- **Baseline:** implemented and accepted behavior through M71. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations. M1-M7 remain the frozen regression baseline.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -116,7 +116,7 @@ construction/NURBS UAT and certified all-family visual profiles.
   behavior was reported fixed. Clean closing source `48e3cc3` passes the complete gate with focused
   multi-feature transaction and finite-arc transport regressions; the 198/198 golden and release
   bytes remain unchanged. M70B is closed under the requested scoped sign-off.
-- **Active target:** M71 implements amended ADR 0035's retained drafting relations. Point-pair
+- **Completed target:** M71 implements amended ADR 0035's retained drafting relations. Point-pair
   Horizontal and Vertical, native line/polyline midpoint-axis Horizontal and Vertical,
   semantic-center Concentric and native affine-support Collinear join the ordinary
   `DocumentConstraintDefinition` lifecycle. The midpoint-axis family owns one linear hard row per
@@ -133,7 +133,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   explicit custom policy remains authoritative. Same-axis, same-reference, oblique, ambiguous and
   exhausted evidence remains fail-closed. Clean source `f8a45ae7b355ab9874bf268c9950e369814e8432`
   passes the complete release gate and its seven-file replacement is byte-verified through the
-  Tailscale-only endpoint. F003/F004 evidence remains historical; focused human UAT is pending.
+  Tailscale-only endpoint. F003/F004 evidence remains historical; the supervising human accepted
+  the scoped U1-U5 review and explicitly closed M71 on 2026-08-14.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -644,7 +645,7 @@ gesture, drafting, lifecycle and history policy and made this crate a thin adapt
 `geosolve-constraint-editor`. Cleanup M46-M50 replaces direct-test ownership and removes the
 second legacy application and old browser E2E; M51 consolidates the survivor around one workspace
 snapshot and direct presentation/evidence owners. Human acceptance is recorded at completed M40.7,
-M53 and M61-M70; every newly scoped milestone from M70 onward ends in its own UAT after direct
+M53 and M61-M71; every newly scoped milestone from M70 onward ends in its own UAT after direct
 qualification.
 
 M55 makes the surviving workbench render and dispatch the complete alpha action surface returned by
@@ -1216,7 +1217,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   retired. Clean closing source
   `48e3cc3` passes the full gate with the focused multi-feature and finite-arc regressions and
   produces byte-identical release output. M70B is closed.
-- M71: active ADR 0035 retained-drafting-relations milestone. It promotes point-pair
+- M71: completed and explicitly approved ADR 0035 retained-drafting-relations milestone. It
+  promotes point-pair
   Horizontal/Vertical, point-to-native-span-midpoint Horizontal/Vertical, Concentric and Collinear
   into the ordinary retained lifecycle, extends the headless authoring/inference contract and
   preserves frozen v4 through explicit wire isolation. Its original four nine-row relation
@@ -1226,4 +1228,4 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   complementary endpoint-axis/direction composition, `M71-F005` owns distinct-reference
   Horizontal-plus-Vertical point-axis intersection and `M71-F006` owns the tighter default capture
   envelope. Clean post-F005/F006 qualification and byte-verified replacement publication pass;
-  F003/F004 evidence remains historical and only focused human UAT remains open.
+  F003/F004 evidence remains historical and the scoped focused human UAT is approved.

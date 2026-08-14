@@ -2,9 +2,10 @@
 
 # M71 focused UAT — Retained drafting relations
 
-Status: the clean M71-F005/F006 UAT candidate is mechanically qualified, frozen and byte-verified
-at the endpoint below. All M71-U1 through M71-U5 results and explicit supervising-human approval
-remain pending; mechanical qualification does not complete M71.
+Status: complete and explicitly approved by the supervising human on 2026-08-14. Implementation,
+focused and integrated mechanical qualification, immutable publication, served-byte verification
+and the scoped M71-U1 through M71-U5 review all pass. The approval accepts the recorded review
+points without claiming an unrecorded exhaustive replay of every scripted permutation below.
 
 Qualified F005/F006 product source: `f8a45ae7b355ab9874bf268c9950e369814e8432`
 
@@ -135,8 +136,9 @@ equal, and `/` equalled `index.html`. The fetched aggregate, post-fetch snapshot
 recorded aggregate all matched. Fetch evidence is retained at
 `/tmp/geosolve-m71-f005-f006-fetch.yPRcIT`.
 
-This publication documents the already-qualified product source. The later documentation commit
-that records this evidence is not part of, and must not replace, the product source identity above.
+Publication-evidence documentation commit `905a414` records the already-qualified product. It is
+not part of, and must not replace, the product source identity above; later close-off documentation
+records the scoped human approval under the same rule.
 
 ## Historical M71-F004 discovery and corrected contract
 
@@ -396,7 +398,8 @@ Expected: applicability and labels describe the actual relation; operand order d
 meaning; every accepted relation remains editable and attributable to one ordinary source. Invalid
 selections show a precise disabled reason and create nothing.
 
-Result: pending
+Result: Accepted under the explicit 2026-08-14 scoped close decision; no separate exhaustive
+scripted replay is claimed.
 
 Notes:
 
@@ -458,7 +461,9 @@ authoritative.
 No case creates a fixed coordinate, zero dimension or hidden midpoint point. Suppression and
 ambiguity never commit a stale or arbitrary candidate.
 
-Result: pending
+Result: Accepted under the explicit 2026-08-14 scoped close decision. The supervising human
+specifically confirmed that the two-constraint auto-placement works and reported that the
+replacement interaction works very nicely; no separate exhaustive scripted replay is claimed.
 
 Notes:
 
@@ -474,7 +479,8 @@ centers. At a curve's stored center, centered-construction intent wins over inci
 ordinary point authoring still reuses that point identity. It never invents a shared point or
 coordinate snap. Unsupported and ambiguous centers fail closed without losing the draft.
 
-Result: pending
+Result: Accepted under the explicit 2026-08-14 scoped close decision; no separate exhaustive
+scripted replay is claimed.
 
 Notes:
 
@@ -491,7 +497,8 @@ explicitly a supporting-line relationship, not a hidden contact outside the boun
 intersections and uncertified cases remain unavailable or ambiguous, and the accepted relation
 tracks later edits.
 
-Result: pending
+Result: Accepted under the explicit 2026-08-14 scoped close decision; no separate exhaustive
+scripted replay is claimed.
 
 Notes:
 
@@ -507,11 +514,14 @@ Suppression, deletion and history use ordinary retained behavior. Rejected, stal
 resource-exhausted work changes no live document/history and never publishes partial geometry or a
 different relation.
 
-Result: pending
+Result: Accepted under the explicit 2026-08-14 scoped close decision; no separate exhaustive
+scripted replay is claimed.
 
 Notes:
 
 ## Approval
 
-Pending explicit supervising-human approval after M71-U1 through M71-U5. M71 is not complete until
-that decision is recorded; mechanical qualification alone is insufficient.
+On 2026-08-14, the supervising human confirmed the corrected two-constraint auto-placement,
+approved the listed remaining M71 review points and explicitly requested milestone closure. This
+accepts M71-U1 through M71-U5 for the recorded scope without replacing the direct qualification or
+inventing a separate exhaustive replay. M71 is closed with no remaining finding or blocker.
