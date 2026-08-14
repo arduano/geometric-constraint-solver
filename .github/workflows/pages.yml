@@ -51,10 +51,12 @@ jobs:
             /*) ;;
             *) printf '%s\n' "Pages base path must be absolute" >&2; exit 1 ;;
           esac
-          cd crates/geosolve-demo-web
-          env -u NO_COLOR trunk build --release --locked \
-            --public-url "${GEOSOLVE_PAGES_BASE}/" \
-            --dist "$GEOSOLVE_PAGES_DIST"
+          nix-shell shell.nix --run '
+            cd crates/geosolve-demo-web
+            env -u NO_COLOR trunk build --release --locked \
+              --public-url "${GEOSOLVE_PAGES_BASE}/" \
+              --dist "$GEOSOLVE_PAGES_DIST"
+          '
 
       - name: Validate the Pages artifact
         env:
