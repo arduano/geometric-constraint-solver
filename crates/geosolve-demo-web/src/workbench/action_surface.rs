@@ -250,7 +250,8 @@ mod tests {
         );
         assert!(html.contains("title=\"Perpendicular / normal\""));
         assert!(html.contains("id=\"wb-dimension-target-editor\""));
-        assert!(html.contains("class=\"wb-palette-flyout\""));
+        assert!(html.contains("id=\"wb-tool-options-overlay\""));
+        assert!(html.contains("aria-haspopup=\"dialog\""));
     }
 
     #[test]

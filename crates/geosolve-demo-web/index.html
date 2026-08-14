@@ -47,12 +47,30 @@
             <button type="button" data-wb-tool="arc" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Arc</span></button>
             <button type="button" data-wb-tool="quadratic-bezier" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Bezier²</span></button>
             <button type="button" data-wb-tool="cubic-bezier" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Bezier³</span></button>
-            <button type="button" data-wb-tool="ellipse" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Ellipse</span></button>
-            <button type="button" data-wb-tool="elliptical-arc" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Ellipse arc</span></button>
-            <button type="button" data-wb-tool="rational-conic" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Rational</span></button>
-            <button type="button" data-wb-tool="parabola" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Parabola</span></button>
-            <button type="button" data-wb-tool="hyperbola" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Hyperbola</span></button>
-            <button type="button" data-wb-tool="nurbs" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>NURBS</span></button>
+            <div class="wb-palette-option-tool">
+              <button id="wb-tool-ellipse" type="button" data-wb-tool="ellipse" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Ellipse</span></button>
+              <button id="wb-tool-ellipse-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-ellipse" aria-label="Ellipse options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-tool-elliptical-arc" type="button" data-wb-tool="elliptical-arc" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Ellipse arc</span></button>
+              <button id="wb-tool-elliptical-arc-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-elliptical-arc" aria-label="Elliptical arc options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-tool-rational-conic" type="button" data-wb-tool="rational-conic" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Rational</span></button>
+              <button id="wb-tool-rational-conic-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-rational-conic" aria-label="Rational conic options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-tool-parabola" type="button" data-wb-tool="parabola" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Parabola</span></button>
+              <button id="wb-tool-parabola-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-parabola" aria-label="Parabola options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-tool-hyperbola" type="button" data-wb-tool="hyperbola" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Hyperbola</span></button>
+              <button id="wb-tool-hyperbola-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-hyperbola" aria-label="Hyperbola options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-tool-nurbs" type="button" data-wb-tool="nurbs" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>NURBS</span></button>
+              <button id="wb-tool-nurbs-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="nurbs" aria-label="NURBS options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
             <button id="wb-geometry-role" type="button" data-wb-action="geometry-role" aria-pressed="false" title="With curves selected, toggle their complete persistent curve role. Otherwise choose the role for newly drawn curves."><span class="wb-role-icon" aria-hidden="true"></span><span>Construction</span></button>
           </div>
         </section>
@@ -68,38 +86,52 @@
             <button type="button" data-wb-authoring="parallel" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Parallel</span></button>
             <button type="button" data-wb-authoring="perpendicular" aria-pressed="false" title="Perpendicular / normal"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Perp / normal</span></button>
             <div class="wb-palette-option-tool">
-              <button type="button" data-wb-authoring="equal" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Equal</span></button>
-              <details><summary aria-label="Equal options">›</summary><div class="wb-palette-flyout"><label>Curvature<select id="wb-authoring-curvature"><option value="signed">Signed</option><option value="same-sign">Magnitude, same sign</option><option value="opposite-sign">Magnitude, opposite sign</option></select></label></div></details>
+              <button id="wb-authoring-equal-tool" type="button" data-wb-authoring="equal" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Equal</span></button>
+              <button id="wb-authoring-equal-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="equal" aria-label="Equal options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <button type="button" data-wb-authoring="midpoint" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Midpoint</span></button>
             <button type="button" data-wb-authoring="symmetric" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Symmetric</span></button>
             <div class="wb-palette-option-tool">
-              <button type="button" data-wb-authoring="tangent" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Tangent</span></button>
-              <details><summary aria-label="Tangent options">›</summary><div class="wb-palette-flyout"><label>Orientation<select id="wb-authoring-tangent-orientation"><option value="aligned">Aligned</option><option value="opposed">Opposed</option></select></label></div></details>
+              <button id="wb-authoring-tangent-tool" type="button" data-wb-authoring="tangent" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Tangent</span></button>
+              <button id="wb-authoring-tangent-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="tangent" aria-label="Tangent options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
-              <button type="button" data-wb-authoring="continuity" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Continuity</span></button>
-              <details><summary aria-label="Continuity options">›</summary><div class="wb-palette-flyout"><label>Order<select id="wb-authoring-continuity"><option value="g0">G0</option><option value="g1" selected>G1</option><option value="g2">G2</option><option value="c2">Parametric C2</option></select></label><label>First C2 rate<input id="wb-authoring-first-rate" type="number" min="0" step="any" value="1" /></label><label>Second C2 rate<input id="wb-authoring-second-rate" type="number" min="0" step="any" value="1" /></label></div></details>
+              <button id="wb-authoring-continuity-tool" type="button" data-wb-authoring="continuity" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Continuity</span></button>
+              <button id="wb-authoring-continuity-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="continuity" aria-label="Continuity options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
           </div>
         </section>
         <section class="wb-palette-section">
           <strong>Dimensions</strong>
           <div class="wb-palette-grid">
-            <button type="button" data-wb-authoring="point-distance" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Distance</span></button>
-            <button type="button" data-wb-authoring="segment-length" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Length</span></button>
-            <button type="button" data-wb-authoring="radius" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Radius</span></button>
-            <button type="button" data-wb-authoring="diameter" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Diameter</span></button>
-            <button type="button" data-wb-authoring="oriented-angle" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Angle</span></button>
+            <div class="wb-palette-option-tool">
+              <button id="wb-authoring-point-distance-tool" type="button" data-wb-authoring="point-distance" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Distance</span></button>
+              <button id="wb-authoring-point-distance-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-point-distance" aria-label="Point distance options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-authoring-segment-length-tool" type="button" data-wb-authoring="segment-length" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Length</span></button>
+              <button id="wb-authoring-segment-length-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-segment-length" aria-label="Segment length options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-authoring-radius-tool" type="button" data-wb-authoring="radius" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Radius</span></button>
+              <button id="wb-authoring-radius-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-radius" aria-label="Radius options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-authoring-diameter-tool" type="button" data-wb-authoring="diameter" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Diameter</span></button>
+              <button id="wb-authoring-diameter-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-diameter" aria-label="Diameter options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-authoring-oriented-angle-tool" type="button" data-wb-authoring="oriented-angle" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Angle</span></button>
+              <button id="wb-authoring-oriented-angle-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-oriented-angle" aria-label="Oriented angle options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
+            </div>
           </div>
-          <details class="wb-palette-group-options"><summary>Dimension options ›</summary><div class="wb-palette-flyout"><label>Mode<select id="wb-authoring-dimension-mode"><option value="driving">Driving</option><option value="reference">Reference</option></select></label><label>Angle direction<select id="wb-authoring-angle-orientation"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label></div></details>
         </section>
         <section class="wb-palette-section">
           <strong>Modify</strong>
           <div class="wb-palette-grid">
             <div class="wb-palette-option-tool">
-              <button id="wb-feature-fillet-trigger" type="button" data-wb-feature="fillet" aria-pressed="false"><span class="wb-feature-icon" aria-hidden="true"></span><span>Fillet</span></button>
-              <button id="wb-feature-fillet-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-action="fillet-options" aria-label="Fillet options" aria-controls="wb-feature-options-overlay" aria-expanded="false"><span aria-hidden="true">›</span></button>
+              <button id="wb-feature-fillet-trigger" type="button" data-wb-feature="fillet" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-feature-icon" aria-hidden="true"></span><span>Fillet</span></button>
+              <button id="wb-feature-fillet-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="fillet" aria-label="Fillet options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
           </div>
         </section>
@@ -132,34 +164,69 @@
             <span>If clipboard access is blocked, use Select text and press Ctrl/Cmd+C.</span>
           </div>
         </section>
-        <div id="wb-feature-options-overlay" class="wb-feature-options wb-canvas-feature-options" role="dialog" aria-label="Fillet options" hidden>
-          <div class="wb-feature-options-title"><strong>Fillet options</strong><button type="button" data-wb-action="fillet-options-close" aria-label="Close Fillet options">×</button></div>
-          <label>Shared radius<input id="wb-feature-fillet-radius" type="number" min="0" step="any" /></label>
-          <p class="wb-feature-help">Select a preview arc to use its explicit retained-direction and local-alternative controls on the canvas or in the Inspector.</p>
-          <p class="wb-feature-help">Pick one or more corners, then Apply. Every corner in this batch shares the radius.</p>
-        </div>
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>
           <span id="wb-draft-guide-text">Click to add the next point</span>
           <button id="wb-guide-finish" type="button" data-wb-action="finish">Finish curve</button>
           <button id="wb-guide-apply" type="button" data-wb-action="feature-apply" hidden>Apply</button>
           <button type="button" data-wb-action="cancel">Cancel</button>
         </div>
-        <section class="wb-problems" id="wb-problems" aria-label="Problems" aria-live="assertive" hidden>
-          <div><strong>Problems</strong><span>Current sketch &amp; computed features</span></div>
-          <p id="wb-problem-text">No current solver or computed-feature problem</p>
-        </section>
+        <div id="wb-canvas-overlay-stack" class="wb-canvas-overlay-stack">
+          <section id="wb-tool-options-overlay" class="wb-tool-options-overlay" role="dialog" aria-modal="false" aria-labelledby="wb-tool-options-title" hidden>
+            <div class="wb-overlay-title"><strong id="wb-tool-options-title">Tool options</strong><button type="button" data-wb-action="options-close" aria-label="Close tool options">×</button></div>
+            <div id="wb-option-panel-equal" class="wb-option-panel" data-wb-option-panel="equal" hidden>
+              <label>Curvature<select id="wb-authoring-curvature"><option value="signed">Signed</option><option value="same-sign">Magnitude, same sign</option><option value="opposite-sign">Magnitude, opposite sign</option></select></label>
+            </div>
+            <div id="wb-option-panel-tangent" class="wb-option-panel" data-wb-option-panel="tangent" hidden>
+              <label>Orientation<select id="wb-authoring-tangent-orientation"><option value="aligned">Aligned</option><option value="opposed">Opposed</option></select></label>
+            </div>
+            <div id="wb-option-panel-continuity" class="wb-option-panel" data-wb-option-panel="continuity" hidden>
+              <label>Order<select id="wb-authoring-continuity"><option value="g0">G0</option><option value="g1" selected>G1</option><option value="g2">G2</option><option value="c2">Parametric C2</option></select></label>
+              <label id="wb-authoring-first-rate-field" hidden>First C2 rate<input id="wb-authoring-first-rate" type="number" min="0" step="any" value="1" /></label>
+              <label id="wb-authoring-second-rate-field" hidden>Second C2 rate<input id="wb-authoring-second-rate" type="number" min="0" step="any" value="1" /></label>
+            </div>
+            <div id="wb-option-panel-dimension" class="wb-option-panel" data-wb-option-panel="dimension" hidden>
+              <label>Mode<select id="wb-authoring-dimension-mode"><option value="driving">Driving</option><option value="reference">Reference</option></select></label>
+              <label id="wb-authoring-angle-orientation-field" hidden>Angle direction<select id="wb-authoring-angle-orientation"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label>
+            </div>
+            <div id="wb-option-panel-fillet" class="wb-option-panel" data-wb-option-panel="fillet" hidden>
+              <label>Shared radius<input id="wb-feature-fillet-radius" type="number" min="0" step="any" /></label>
+              <p class="wb-option-help">Select a preview arc to use its explicit retained-direction and local-alternative controls on the canvas or in the Inspector.</p>
+              <p class="wb-option-help">Pick one or more corners, then Apply. Every corner in this batch shares the radius.</p>
+            </div>
+            <div id="wb-option-panel-conic" class="wb-option-panel" data-wb-option-panel="conic" hidden>
+              <label id="wb-conic-ratio-field">Minor-axis ratio<input id="wb-conic-ratio" type="number" min="0" max="1" step="any" value="0.5" /></label>
+              <label id="wb-conic-weight-field">Rational weight<input id="wb-conic-weight" type="number" min="0" step="any" value="1" /></label>
+              <label id="wb-conic-arc-start-field">Arc start (degrees)<input id="wb-conic-arc-start" type="number" step="any" value="0" /></label>
+              <label id="wb-conic-arc-end-field">Arc end (degrees)<input id="wb-conic-arc-end" type="number" step="any" value="90" /></label>
+              <label id="wb-conic-arc-sweep-field">Arc sweep<select id="wb-conic-arc-sweep"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label>
+              <label id="wb-conic-trim-start-field">Trim start<input id="wb-conic-trim-start" type="number" step="any" value="-1" /></label>
+              <label id="wb-conic-trim-end-field">Trim end<input id="wb-conic-trim-end" type="number" step="any" value="1" /></label>
+              <label id="wb-conic-semi-conjugate-field">Semi-conjugate<input id="wb-conic-semi-conjugate" type="number" min="0" step="any" value="1" /></label>
+              <label id="wb-conic-hyperbola-branch-field">Hyperbola branch<select id="wb-conic-hyperbola-branch"><option value="positive">Positive</option><option value="negative">Negative</option></select></label>
+            </div>
+            <div id="wb-option-panel-nurbs" class="wb-option-panel" data-wb-option-panel="nurbs" hidden>
+              <label>Form<select id="wb-nurbs-form"><option value="clamped">Clamped</option><option value="periodic">Periodic</option></select></label>
+              <label>Degree<input id="wb-nurbs-degree" type="number" min="1" step="1" value="3" /></label>
+              <label>Weights<input id="wb-nurbs-weights" type="text" placeholder="empty = unit; or 1, 0.8, 1, 1" /></label>
+              <label>Gauge index<input id="wb-nurbs-gauge" type="number" min="0" step="1" value="0" /></label>
+              <p class="wb-option-help">Add more than <em>degree</em> controls, then use Finish. Explicit weights must match the final control count.</p>
+            </div>
+            <div id="wb-option-panel-construction-display" class="wb-option-panel" data-wb-option-panel="construction-display" hidden>
+              <label>Canvas picks<select id="wb-geometry-pick-scope"><option value="all">All geometry</option><option value="profile">Profile only</option><option value="construction">Construction only</option></select></label>
+              <label class="wb-option-check"><input id="wb-show-explicit-construction" type="checkbox" checked />Explicit guides</label>
+              <label class="wb-option-check"><input id="wb-show-implicit-construction" type="checkbox" checked />Fillet-hidden portions</label>
+              <p class="wb-option-help">Profile wins near-identical overlaps. A hidden Fillet portion still selects its complete native source.</p>
+            </div>
+          </section>
+          <section class="wb-problems" id="wb-problems" aria-label="Problems" aria-live="assertive" hidden>
+            <div class="wb-problems-title"><div><strong>Problems</strong><span>Current sketch &amp; computed features</span></div><button type="button" data-wb-action="problems-close" aria-label="Dismiss current problems">×</button></div>
+            <p id="wb-problem-text">No current solver or computed-feature problem</p>
+          </section>
+        </div>
         <div class="wb-canvas-hud">
           <span>XY plane</span>
           <span id="wb-camera-scale">50.0 px / unit</span>
-          <details id="wb-construction-display" class="wb-construction-display">
-            <summary>Construction</summary>
-            <div class="wb-construction-display-popover">
-              <label>Canvas picks<select id="wb-geometry-pick-scope"><option value="all">All geometry</option><option value="profile">Profile only</option><option value="construction">Construction only</option></select></label>
-              <label class="wb-check-label"><input id="wb-show-explicit-construction" type="checkbox" checked />Explicit guides</label>
-              <label class="wb-check-label"><input id="wb-show-implicit-construction" type="checkbox" checked />Fillet-hidden portions</label>
-              <p>Profile wins near-identical overlaps. A hidden Fillet portion still selects its complete native source.</p>
-            </div>
-          </details>
+          <button id="wb-construction-display-trigger" class="wb-construction-display-trigger" type="button" data-wb-option="construction-display" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog">◇ Construction</button>
           <div class="wb-camera-controls" aria-label="Canvas view controls">
             <button type="button" data-wb-action="zoom-out" aria-label="Zoom out">−</button>
             <button type="button" data-wb-action="zoom-fit">Fit</button>
@@ -181,34 +248,6 @@
           <strong id="wb-geometry-role-state">Profile</strong>
           <p id="wb-geometry-role-detail">Role changes target complete persistent curves, including every span and any Fillet-hidden portion.</p>
           <button type="button" data-wb-action="geometry-role">Toggle Profile / Construction</button>
-        </section>
-        <section class="wb-inspector-section wb-construction-options">
-          <span class="wb-field-label">Advanced curve authoring</span>
-          <p>Values are explicit authoring state. Choose a curve tool, then place its labelled controls on the canvas.</p>
-          <details>
-            <summary>Conic options</summary>
-            <div class="wb-option-grid">
-              <label>Minor-axis ratio<input id="wb-conic-ratio" type="number" min="0" max="1" step="any" value="0.5" /></label>
-              <label>Rational weight<input id="wb-conic-weight" type="number" min="0" step="any" value="1" /></label>
-              <label>Arc start (degrees)<input id="wb-conic-arc-start" type="number" step="any" value="0" /></label>
-              <label>Arc end (degrees)<input id="wb-conic-arc-end" type="number" step="any" value="90" /></label>
-              <label>Arc sweep<select id="wb-conic-arc-sweep"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label>
-              <label>Trim start<input id="wb-conic-trim-start" type="number" step="any" value="-1" /></label>
-              <label>Trim end<input id="wb-conic-trim-end" type="number" step="any" value="1" /></label>
-              <label>Semi-conjugate<input id="wb-conic-semi-conjugate" type="number" min="0" step="any" value="1" /></label>
-              <label>Hyperbola branch<select id="wb-conic-hyperbola-branch"><option value="positive">Positive</option><option value="negative">Negative</option></select></label>
-            </div>
-          </details>
-          <details>
-            <summary>NURBS options</summary>
-            <div class="wb-option-grid">
-              <label>Form<select id="wb-nurbs-form"><option value="clamped">Clamped</option><option value="periodic">Periodic</option></select></label>
-              <label>Degree<input id="wb-nurbs-degree" type="number" min="1" step="1" value="3" /></label>
-              <label>Weights<input id="wb-nurbs-weights" type="text" placeholder="empty = unit; or 1, 0.8, 1, 1" /></label>
-              <label>Gauge index<input id="wb-nurbs-gauge" type="number" min="0" step="1" value="0" /></label>
-            </div>
-            <p>Add more than <em>degree</em> controls, then use Finish. Explicit weights must match the final control count.</p>
-          </details>
         </section>
         <section id="wb-dimension-target-editor" class="wb-inspector-section" hidden>
           <label class="wb-field-label" for="wb-dimension-target">Dimension target</label>
@@ -240,6 +279,7 @@
       <footer class="wb-status-bar">
         <button type="button" data-wb-action="problems">Problems</button>
         <span id="wb-status-message" aria-live="polite">Ready</span>
+        <span class="wb-project-links"><a href="https://github.com/arduano/geometric-constraint-solver" target="_blank" rel="noopener noreferrer">Source</a><span aria-hidden="true">·</span><a href="https://github.com/arduano/geometric-constraint-solver/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a></span>
         <span>Desktop workbench · GPL-3.0-or-later</span>
       </footer>
     </main>
