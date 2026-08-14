@@ -80,6 +80,10 @@ fn pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one end-to-end regression keeps topology, residual, projected resize, and construction/resize history evidence together"
+)]
 fn m72_interactive_rectangle_has_free_size_and_retained_history() {
     let document = SketchDocument::with_id(
         1.0,
