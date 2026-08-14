@@ -2958,6 +2958,10 @@ impl ConstructionProposal {
                 let width = (second[0] - first[0]).abs();
                 let height = (second[1] - first[1]).abs();
                 let ids = document.add_rectangle("rectangle", origin, width, height)?;
+                document.remove_with_owned_state(DocumentObjectId::Constraint(ids.anchor))?;
+                for dimension in ids.dimensions {
+                    document.remove_with_owned_state(DocumentObjectId::Dimension(dimension))?;
+                }
                 result.points.extend(ids.points);
                 result.curves.extend(ids.curves);
             }
