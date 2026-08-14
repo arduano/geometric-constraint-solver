@@ -153,15 +153,35 @@ fn midpoint_anchor(span: CurveSpan, model_position: [f64; 2]) -> DraftReferenceA
 
 fn push_inference(transcript: &mut String, label: &str, relation: DraftInferenceRelation) {
     write!(transcript, "{label}=").expect("string write");
+    push_inference_relation(transcript, relation);
+    transcript.push('\n');
+}
+
+fn push_inference_bundle(
+    transcript: &mut String,
+    label: &str,
+    relations: &[DraftInferenceRelation],
+) {
+    write!(transcript, "{label}=").expect("string write");
+    for (index, relation) in relations.iter().copied().enumerate() {
+        if index > 0 {
+            transcript.push('+');
+        }
+        push_inference_relation(transcript, relation);
+    }
+    transcript.push('\n');
+}
+
+fn push_inference_relation(transcript: &mut String, relation: DraftInferenceRelation) {
     match relation {
         DraftInferenceRelation::HorizontalPoints { reference } => {
-            writeln!(transcript, "horizontal-points:{reference}").expect("string write");
+            write!(transcript, "horizontal-points:{reference}").expect("string write");
         }
         DraftInferenceRelation::VerticalPoints { reference } => {
-            writeln!(transcript, "vertical-points:{reference}").expect("string write");
+            write!(transcript, "vertical-points:{reference}").expect("string write");
         }
         DraftInferenceRelation::HorizontalPointToMidpoint { reference } => {
-            writeln!(
+            write!(
                 transcript,
                 "horizontal-to-midpoint:{}:{}",
                 reference.curve, reference.segment
@@ -169,7 +189,7 @@ fn push_inference(transcript: &mut String, label: &str, relation: DraftInference
             .expect("string write");
         }
         DraftInferenceRelation::VerticalPointToMidpoint { reference } => {
-            writeln!(
+            write!(
                 transcript,
                 "vertical-to-midpoint:{}:{}",
                 reference.curve, reference.segment
@@ -177,7 +197,7 @@ fn push_inference(transcript: &mut String, label: &str, relation: DraftInference
             .expect("string write");
         }
         DraftInferenceRelation::Collinear { reference } => {
-            writeln!(
+            write!(
                 transcript,
                 "collinear:{}:{}",
                 reference.curve, reference.segment
@@ -188,12 +208,14 @@ fn push_inference(transcript: &mut String, label: &str, relation: DraftInference
             reference,
             prospective_curve_index,
         } => {
-            writeln!(
+            write!(
                 transcript,
                 "concentric:{reference}:created:{prospective_curve_index}"
             )
             .expect("string write");
         }
+        DraftInferenceRelation::Horizontal => transcript.push_str("horizontal"),
+        DraftInferenceRelation::Vertical => transcript.push_str("vertical"),
         other => panic!("unexpected M71 inference relation: {other:?}"),
     }
 }
@@ -206,6 +228,20 @@ fn resolve_relation(
     span_start: Option<[f64; 2]>,
     anchors: Vec<DraftReferenceAnchor>,
 ) -> DraftInferenceRelation {
+    resolve_relations(scene, engine, sample, subject, span_start, anchors)
+        .into_iter()
+        .next()
+        .expect("resolved relation")
+}
+
+fn resolve_relations(
+    scene: &EditorScene,
+    engine: &mut DraftInferenceEngine,
+    sample: [f64; 2],
+    subject: DraftInferenceSubject,
+    span_start: Option<[f64; 2]>,
+    anchors: Vec<DraftReferenceAnchor>,
+) -> Vec<DraftInferenceRelation> {
     let scene_inputs = scene.draft_inference_scene_inputs(
         scene.viewport.model_to_screen(sample),
         subject,
@@ -247,9 +283,7 @@ fn resolve_relation(
         .find(|value| value.id == candidate)
         .expect("resolved candidate")
         .relations
-        .first()
-        .copied()
-        .expect("resolved relation")
+        .clone()
 }
 
 fn apply_authoring(
@@ -327,6 +361,24 @@ fn transition_transcript() -> Vec<u8> {
             DraftInferenceSubject::PointOperand,
             None,
             Vec::new(),
+        ),
+    );
+
+    let mut engine = DraftInferenceEngine::default();
+    let axis_reference = point_anchor(points[0], [-4.0, 0.0]);
+    engine
+        .remember_reference(axis_reference)
+        .expect("remember bundled point axis");
+    push_inference_bundle(
+        &mut transcript,
+        "remembered-axis-bundle",
+        &resolve_relations(
+            &scene,
+            &mut engine,
+            [0.04, 0.05],
+            DraftInferenceSubject::PointOperand,
+            Some([0.0, -4.0]),
+            vec![axis_reference],
         ),
     );
 

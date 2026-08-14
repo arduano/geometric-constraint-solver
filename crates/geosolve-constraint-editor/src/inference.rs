@@ -1161,6 +1161,7 @@ struct PointTrackingKey {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct CandidateKey {
     anchor: Option<AnchorKey>,
+    point_tracking: Option<PointTrackingKey>,
     direction: Option<DirectionKey>,
 }
 
@@ -1187,12 +1188,24 @@ struct AnchorWork {
 struct DirectionWork {
     key: DirectionKey,
     behavior: DraftInferenceBehavior,
+    cartesian_axis: Option<PointTrackingAxis>,
     adjusted_position: [f64; 2],
     target_is_on_axis: bool,
     angular_error: f64,
     reference: Option<DraftReferenceAnchor>,
     priority: DraftDirectionPriority,
     role_priority: u8,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PointTrackingWork {
+    key: PointTrackingKey,
+    reference: DraftReferenceAnchor,
+    origin: [f64; 2],
+    relation: DraftInferenceRelation,
+    family: DraftInferenceFamily,
+    adjusted_position: [f64; 2],
+    angular_error: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -1486,24 +1499,19 @@ impl DraftInferenceEngine {
             );
         }
 
-        if frame.sample.subject.is_point_operand() {
-            let mut tracking_candidates = self.point_tracking_candidates(
+        if generation_complete
+            && frame.sample.subject.is_point_operand()
+            && !self.generate_point_tracking_candidates(
                 frame,
                 raw_model,
                 raw_screen,
+                retained_direction,
                 &mut standalone_guides,
-            );
-            for candidate in tracking_candidates.drain(..) {
-                if !push_candidate_bounded(
-                    &mut works,
-                    candidate,
-                    self.policy.limits.max_candidates,
-                    frame.sample.subject,
-                ) {
-                    generation_complete = false;
-                    break;
-                }
-            }
+                &mut works,
+                self.policy.limits.max_candidates,
+            )
+        {
+            generation_complete = false;
         }
         if !generation_complete {
             self.active_anchor = None;
@@ -1774,6 +1782,7 @@ impl DraftInferenceEngine {
                 CandidateWork {
                     key: CandidateKey {
                         anchor: Some(AnchorKey::SemanticCenter(center.curve)),
+                        point_tracking: None,
                         direction: None,
                     },
                     candidate: DraftInferenceCandidate {
@@ -1891,6 +1900,7 @@ impl DraftInferenceEngine {
     ) -> CandidateWork {
         let key = CandidateKey {
             anchor: anchor.map(|work| work.key),
+            point_tracking: None,
             direction: direction.map(|work| work.key),
         };
         let mut adjusted = raw_model;
@@ -2109,21 +2119,25 @@ impl DraftInferenceEngine {
     }
 
     #[allow(
+        clippy::too_many_arguments,
         clippy::too_many_lines,
-        reason = "stored-point and certified-native-midpoint durable relations share one audited tracking traversal"
+        reason = "one bounded stored-point/native-midpoint traversal keeps latch, guide, and candidate state explicit"
     )]
-    fn point_tracking_candidates(
+    fn generate_point_tracking_candidates(
         &mut self,
         frame: &DraftInferenceFrame,
         raw_model: [f64; 2],
         raw_screen: ScreenPoint,
+        retained_direction: Option<DirectionKey>,
         standalone_guides: &mut Vec<DraftGuide>,
-    ) -> Vec<CandidateWork> {
+        works: &mut Vec<CandidateWork>,
+        candidate_limit: usize,
+    ) -> bool {
         if !self.policy.point_tracking.show_guides && !self.policy.point_tracking.has_effect() {
             self.active_point_tracking.clear();
-            return Vec::new();
+            return true;
         }
-        let mut candidates = Vec::new();
+        let mut tracking_works = Vec::new();
         let mut next_active = BTreeSet::new();
         for reference in self.remembered_references.iter().rev().copied() {
             if !reference.is_interactive(frame.geometry_policy) {
@@ -2152,7 +2166,8 @@ impl DraftInferenceEngine {
                 } else {
                     self.policy.tolerances.direction_enter_radians
                 };
-                if undirected_angle_error(delta, direction) <= threshold {
+                let angular_error = undirected_angle_error(delta, direction);
+                if angular_error <= threshold {
                     next_active.insert(key);
                     let guide = DraftGuide {
                         id: DraftGuideId {
@@ -2218,47 +2233,14 @@ impl DraftInferenceEngine {
                             PointTrackingAxis::Horizontal => [raw_model[0], origin[1]],
                             PointTrackingAxis::Vertical => [origin[0], raw_model[1]],
                         };
-                        let mut guide = guide;
-                        guide.family = family;
-                        guide.classification = DraftGuideClassification::ConstraintBacked;
-                        guide.geometry = DraftGuideGeometry::Segment {
-                            start: origin,
-                            end: adjusted,
-                        };
-                        candidates.push(CandidateWork {
-                            key: CandidateKey {
-                                anchor: Some(reference.key()),
-                                direction: Some(match axis {
-                                    PointTrackingAxis::Horizontal => DirectionKey::Horizontal,
-                                    PointTrackingAxis::Vertical => DirectionKey::Vertical,
-                                }),
-                            },
-                            candidate: DraftInferenceCandidate {
-                                id: DraftInferenceCandidateId(0),
-                                raw_model_position: raw_model,
-                                adjusted_model_position: adjusted,
-                                raw_screen_position: raw_screen,
-                                adjusted_screen_position: frame.viewport.model_to_screen(adjusted),
-                                relations: vec![relation],
-                                references: vec![reference],
-                                guides: self
-                                    .policy
-                                    .point_tracking
-                                    .show_guides
-                                    .then_some(guide)
-                                    .into_iter()
-                                    .collect(),
-                                ranking: DraftInferenceRankingEvidence {
-                                    constraint_backed: true,
-                                    persistent_relation_count: 1,
-                                    anchor_priority: DraftAnchorPriority::None,
-                                    direction_priority: DraftDirectionPriority::WorldAxis,
-                                    positional_geometry_role_priority: 2,
-                                    directional_geometry_role_priority: 2,
-                                    distance_pixels: 0.0,
-                                    angular_error_radians: undirected_angle_error(delta, direction),
-                                },
-                            },
+                        tracking_works.push(PointTrackingWork {
+                            key,
+                            reference,
+                            origin,
+                            relation,
+                            family,
+                            adjusted_position: adjusted,
+                            angular_error,
                         });
                     } else {
                         standalone_guides.push(guide);
@@ -2267,7 +2249,167 @@ impl DraftInferenceEngine {
             }
         }
         self.active_point_tracking = next_active;
-        candidates
+
+        let directions = self.direction_works(frame, raw_model, retained_direction);
+        // Identify the direction singletons replaced by conjunction bundles
+        // without first allocating every possible point-axis x direction
+        // candidate. Candidate construction below remains streaming and stops
+        // at the first unique bundle that proves the configured bound too low.
+        let composed_directions = directions
+            .iter()
+            .copied()
+            .filter(|direction| {
+                tracking_works.iter().any(|tracking| {
+                    point_tracking_direction_adjustment(frame, tracking, *direction).is_some()
+                })
+            })
+            .map(|direction| direction.key)
+            .collect::<BTreeSet<_>>();
+        works.retain(|work| {
+            work.key.anchor.is_some()
+                || work.key.point_tracking.is_some()
+                || work
+                    .key
+                    .direction
+                    .is_none_or(|direction| !composed_directions.contains(&direction))
+        });
+
+        for tracking in &tracking_works {
+            let mut composed = false;
+            for direction in directions.iter().copied() {
+                let Some(adjusted) =
+                    point_tracking_direction_adjustment(frame, tracking, direction)
+                else {
+                    continue;
+                };
+                composed = true;
+                if !push_candidate_bounded(
+                    works,
+                    self.build_point_tracking_candidate(
+                        frame,
+                        raw_model,
+                        raw_screen,
+                        tracking,
+                        Some(direction),
+                        adjusted,
+                    ),
+                    candidate_limit,
+                    frame.sample.subject,
+                ) {
+                    return false;
+                }
+            }
+            if !composed
+                && !push_candidate_bounded(
+                    works,
+                    self.build_point_tracking_candidate(
+                        frame,
+                        raw_model,
+                        raw_screen,
+                        tracking,
+                        None,
+                        tracking.adjusted_position,
+                    ),
+                    candidate_limit,
+                    frame.sample.subject,
+                )
+            {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn build_point_tracking_candidate(
+        &self,
+        frame: &DraftInferenceFrame,
+        raw_model: [f64; 2],
+        raw_screen: ScreenPoint,
+        tracking: &PointTrackingWork,
+        direction: Option<DirectionWork>,
+        adjusted: [f64; 2],
+    ) -> CandidateWork {
+        let mut relations = vec![tracking.relation];
+        let mut references = vec![tracking.reference];
+        let mut guides = Vec::new();
+        if self.policy.point_tracking.show_guides {
+            guides.push(DraftGuide {
+                id: DraftGuideId {
+                    candidate: None,
+                    ordinal: 0,
+                },
+                family: tracking.family,
+                classification: DraftGuideClassification::ConstraintBacked,
+                geometry: DraftGuideGeometry::Segment {
+                    start: tracking.origin,
+                    end: adjusted,
+                },
+                reference: Some(tracking.reference),
+            });
+        }
+        if let Some(direction) = direction {
+            if direction.behavior.persist_constraint {
+                relations.push(direction_relation(direction.key));
+            }
+            if let Some(reference) = direction.reference
+                && !references.contains(&reference)
+            {
+                references.push(reference);
+            }
+            if direction.behavior.show_guides {
+                let mut guide = direction_guide(
+                    None,
+                    u32::try_from(guides.len())
+                        .expect("candidate guide count is structurally bounded"),
+                    frame.sample.span_start,
+                    direction,
+                );
+                guide.geometry = DraftGuideGeometry::Segment {
+                    start: frame
+                        .sample
+                        .span_start
+                        .expect("composed direction requires a live span start"),
+                    end: adjusted,
+                };
+                guides.push(guide);
+            }
+        }
+        let persistent_relation_count = u8::try_from(relations.len()).unwrap_or(u8::MAX);
+        // A conjunction is only as strong as its weaker angular component.
+        // Publishing the maximum keeps this scalar evidence conservative and
+        // prevents a near-perfect component from masking a marginal one.
+        let angular_error_radians = direction.map_or(tracking.angular_error, |work| {
+            tracking.angular_error.max(work.angular_error)
+        });
+        CandidateWork {
+            key: CandidateKey {
+                anchor: None,
+                point_tracking: Some(tracking.key),
+                direction: direction.map(|work| work.key),
+            },
+            candidate: DraftInferenceCandidate {
+                id: DraftInferenceCandidateId(0),
+                raw_model_position: raw_model,
+                adjusted_model_position: adjusted,
+                raw_screen_position: raw_screen,
+                adjusted_screen_position: frame.viewport.model_to_screen(adjusted),
+                relations,
+                references,
+                guides,
+                ranking: DraftInferenceRankingEvidence {
+                    constraint_backed: persistent_relation_count > 0,
+                    persistent_relation_count,
+                    anchor_priority: DraftAnchorPriority::None,
+                    direction_priority: direction
+                        .map_or(DraftDirectionPriority::WorldAxis, |work| work.priority),
+                    positional_geometry_role_priority: 2,
+                    directional_geometry_role_priority: direction
+                        .map_or(2, |work| work.role_priority),
+                    distance_pixels: 0.0,
+                    angular_error_radians,
+                },
+            },
+        }
     }
 
     fn assign_candidate_ids(
@@ -2506,6 +2648,13 @@ fn direction_work(
     priority: DraftDirectionPriority,
     role_priority: u8,
 ) -> DirectionWork {
+    let cartesian_axis = if axis[1] == 0.0 && axis[0] != 0.0 {
+        Some(PointTrackingAxis::Horizontal)
+    } else if axis[0] == 0.0 && axis[1] != 0.0 {
+        Some(PointTrackingAxis::Vertical)
+    } else {
+        None
+    };
     let unit = normalized(axis).expect("direction references are validated before resolution");
     let delta = [target[0] - start[0], target[1] - start[1]];
     let delta_scale = delta[0].abs().max(delta[1].abs());
@@ -2521,6 +2670,7 @@ fn direction_work(
     DirectionWork {
         key,
         behavior,
+        cartesian_axis,
         adjusted_position: [
             (projection * unit[0]).mul_add(delta_scale, start[0]),
             (projection * unit[1]).mul_add(delta_scale, start[1]),
@@ -2582,6 +2732,33 @@ fn direction_relation(key: DirectionKey) -> DraftInferenceRelation {
             DraftInferenceRelation::Perpendicular { reference }
         }
         DirectionKey::Collinear(reference) => DraftInferenceRelation::Collinear { reference },
+    }
+}
+
+fn point_tracking_direction_adjustment(
+    frame: &DraftInferenceFrame,
+    tracking: &PointTrackingWork,
+    direction: DirectionWork,
+) -> Option<[f64; 2]> {
+    if !direction.behavior.adjust_coordinates || !direction.behavior.persist_constraint {
+        return None;
+    }
+    let start = frame.sample.span_start?;
+    let direction_axis = direction.cartesian_axis?;
+    match (tracking.key.axis, direction_axis) {
+        (PointTrackingAxis::Horizontal, PointTrackingAxis::Vertical) => {
+            Some([start[0], tracking.origin[1]])
+        }
+        (PointTrackingAxis::Vertical, PointTrackingAxis::Horizontal) => {
+            Some([tracking.origin[0], start[1]])
+        }
+        // Same-axis relations constrain the same endpoint coordinate through
+        // different operands and leave the complementary coordinate free.
+        // Their targets may conflict now; even when they currently agree,
+        // later edits can separate them and overconstrain the point. Only
+        // complementary coordinate ownership is composed here.
+        (PointTrackingAxis::Horizontal, PointTrackingAxis::Horizontal)
+        | (PointTrackingAxis::Vertical, PointTrackingAxis::Vertical) => None,
     }
 }
 
@@ -3846,6 +4023,450 @@ mod tests {
                     && guide.family == expected_family
             }));
         }
+    }
+
+    #[test]
+    fn orthogonal_point_axes_and_world_directions_form_exact_bundles() {
+        let view = viewport(50.0);
+        for (reference, start, raw, adjusted, expected) in [
+            (
+                point_anchor(605, [-4.0, 4.0]),
+                [0.0, 0.0],
+                [0.04, 4.05],
+                [0.0, 4.0],
+                vec![
+                    DraftInferenceRelation::HorizontalPoints {
+                        reference: point_id(605),
+                    },
+                    DraftInferenceRelation::Vertical,
+                ],
+            ),
+            (
+                point_anchor(606, [4.0, -4.0]),
+                [0.0, 0.0],
+                [4.05, 0.04],
+                [4.0, 0.0],
+                vec![
+                    DraftInferenceRelation::VerticalPoints {
+                        reference: point_id(606),
+                    },
+                    DraftInferenceRelation::Horizontal,
+                ],
+            ),
+            (
+                midpoint_anchor(607, [-4.0, 4.0], [1.0, 1.0]),
+                [0.0, 0.0],
+                [0.04, 4.05],
+                [0.0, 4.0],
+                vec![
+                    DraftInferenceRelation::HorizontalPointToMidpoint {
+                        reference: curve_span(607),
+                    },
+                    DraftInferenceRelation::Vertical,
+                ],
+            ),
+            (
+                midpoint_anchor(608, [4.0, -4.0], [1.0, 1.0]),
+                [0.0, 0.0],
+                [4.05, 0.04],
+                [4.0, 0.0],
+                vec![
+                    DraftInferenceRelation::VerticalPointToMidpoint {
+                        reference: curve_span(608),
+                    },
+                    DraftInferenceRelation::Horizontal,
+                ],
+            ),
+        ] {
+            let mut engine = DraftInferenceEngine::default();
+            engine.remember_reference(reference).expect("remember axis");
+            let input = frame(view, view.model_to_screen(raw), Some(start), Vec::new());
+            let first = engine
+                .resolve(&input, DraftInferenceInput::default())
+                .expect("composed axis resolution");
+            let candidate = resolved_candidate(&first);
+            assert_eq!(candidate.adjusted_model_position, adjusted);
+            assert_eq!(candidate.relations, expected);
+            assert_eq!(candidate.ranking.persistent_relation_count, 2);
+            assert_eq!(first.candidates.len(), 1);
+            assert!(candidate.guides.iter().all(|guide| {
+                guide.classification == DraftGuideClassification::ConstraintBacked
+            }));
+
+            let id = candidate.id;
+            let repeated = engine
+                .resolve(&input, DraftInferenceInput::default())
+                .expect("stable composed axis resolution");
+            assert!(matches!(
+                repeated.status,
+                DraftInferenceStatus::Resolved { candidate } if candidate == id
+            ));
+        }
+    }
+
+    #[test]
+    fn axis_bundle_composes_axis_aligned_remembered_directions_too() {
+        let view = viewport(50.0);
+        let midpoint = midpoint_anchor(609, [-4.0, 4.0], [1.0, 0.0]);
+        let mut engine = DraftInferenceEngine::default();
+        engine
+            .remember_reference(midpoint)
+            .expect("remember midpoint");
+        let resolution = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen([0.04, 4.05]),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("midpoint axis plus normal");
+        assert_eq!(
+            resolved_candidate(&resolution).relations,
+            vec![
+                DraftInferenceRelation::HorizontalPointToMidpoint {
+                    reference: curve_span(609),
+                },
+                DraftInferenceRelation::Perpendicular {
+                    reference: curve_span(609),
+                },
+            ]
+        );
+        assert_eq!(resolution.adjusted_model_position, [0.0, 4.0]);
+    }
+
+    #[test]
+    fn finite_non_cartesian_direction_cannot_become_an_axis_bundle_after_normalization() {
+        let view = viewport(50.0);
+        let point = point_anchor(610, [4.0, -4.0]);
+        let support = affine_anchor(611, [0.0, 1.0], [f64::MAX, f64::MIN_POSITIVE]);
+        let policy = DraftInferencePolicy {
+            horizontal: DraftInferenceBehavior {
+                show_guides: false,
+                adjust_coordinates: false,
+                persist_constraint: false,
+            },
+            ..DraftInferencePolicy::default()
+        };
+        let mut engine = DraftInferenceEngine::new(policy).expect("engine");
+        engine.remember_reference(point).expect("point reference");
+        engine
+            .remember_reference(support)
+            .expect("non-Cartesian support");
+        let resolution = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen([4.05, 0.04]),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("non-Cartesian direction resolution");
+        assert!(resolution.candidates.iter().all(|candidate| {
+            !(candidate
+                .relations
+                .contains(&DraftInferenceRelation::VerticalPoints {
+                    reference: point_id(610),
+                })
+                && candidate
+                    .relations
+                    .contains(&DraftInferenceRelation::Parallel {
+                        reference: curve_span(611),
+                    }))
+        }));
+        assert!(matches!(
+            resolved_candidate(&resolution).relations.as_slice(),
+            [DraftInferenceRelation::Parallel { reference }]
+                if *reference == curve_span(611)
+        ));
+    }
+
+    #[test]
+    fn same_axis_relations_remain_alternatives_because_they_can_conflict_after_edits() {
+        let view = viewport(50.0);
+        let raw = [4.0, 0.05];
+        for (id, reference_y) in [(612, 0.0), (613, 0.1)] {
+            let reference = point_anchor(id, [-4.0, reference_y]);
+            let mut engine = DraftInferenceEngine::default();
+            engine.remember_reference(reference).expect("reference");
+            let resolution = engine
+                .resolve(
+                    &frame(
+                        view,
+                        view.model_to_screen(raw),
+                        Some([0.0, 0.0]),
+                        Vec::new(),
+                    ),
+                    DraftInferenceInput::default(),
+                )
+                .expect("same-axis alternatives");
+            assert!(resolution.candidates.iter().all(|candidate| {
+                !(candidate
+                    .relations
+                    .contains(&DraftInferenceRelation::Horizontal)
+                    && candidate
+                        .relations
+                        .contains(&DraftInferenceRelation::HorizontalPoints {
+                            reference: point_id(id),
+                        }))
+            }));
+            assert!(resolution.candidates.iter().any(|candidate| {
+                candidate.relations == vec![DraftInferenceRelation::Horizontal]
+            }));
+            assert!(resolution.candidates.iter().any(|candidate| {
+                candidate.relations
+                    == vec![DraftInferenceRelation::HorizontalPoints {
+                        reference: point_id(id),
+                    }]
+            }));
+        }
+    }
+
+    #[test]
+    fn distinct_axis_bundle_operands_remain_ambiguous_and_candidate_ids_do_not_alias_singletons() {
+        let view = viewport(50.0);
+        let first = point_anchor(614, [-4.0, 4.0]);
+        let second = point_anchor(615, [-5.0, 4.0]);
+        let raw = [0.0, 4.0];
+        let mut ambiguous_engine = DraftInferenceEngine::default();
+        ambiguous_engine
+            .remember_reference(first)
+            .expect("first reference");
+        ambiguous_engine
+            .remember_reference(second)
+            .expect("second reference");
+        let ambiguous = ambiguous_engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen(raw),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("ambiguous composed axes");
+        assert!(matches!(
+            ambiguous.status,
+            DraftInferenceStatus::Ambiguous { ref candidates } if candidates.len() == 2
+        ));
+        assert_eq!(ambiguous.candidates.len(), 2);
+        assert!(
+            ambiguous
+                .candidates
+                .iter()
+                .all(|candidate| candidate.relations.len() == 2)
+        );
+
+        let mut identity_engine = DraftInferenceEngine::default();
+        identity_engine
+            .remember_reference(first)
+            .expect("identity reference");
+        let standalone = identity_engine
+            .resolve(
+                &frame(view, view.model_to_screen(raw), None, Vec::new()),
+                DraftInferenceInput::default(),
+            )
+            .expect("standalone point axis");
+        let standalone_id = resolved_candidate(&standalone).id;
+        let stale = identity_engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen(raw),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate: Some(standalone_id),
+                },
+            )
+            .expect("singleton preference must not alias composed semantics");
+        assert_eq!(
+            stale.status,
+            DraftInferenceStatus::StalePreferredCandidate {
+                preferred: standalone_id,
+            }
+        );
+        assert!(identity_engine.remembered_references().is_empty());
+    }
+
+    #[test]
+    fn one_axis_bundle_fits_one_candidate_limit() {
+        let view = viewport(50.0);
+        let mut policy = DraftInferencePolicy::default();
+        policy.limits.max_candidates = 1;
+        let mut engine = DraftInferenceEngine::new(policy).expect("one-candidate engine");
+        engine
+            .remember_reference(point_anchor(616, [-4.0, 4.0]))
+            .expect("reference");
+        let resolution = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen([0.04, 4.05]),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("one bounded composed candidate");
+        assert!(matches!(
+            resolved_candidate(&resolution).relations.as_slice(),
+            [
+                DraftInferenceRelation::HorizontalPoints { reference },
+                DraftInferenceRelation::Vertical,
+            ] if *reference == point_id(616)
+        ));
+        assert_eq!(resolution.candidates.len(), 1);
+    }
+
+    #[test]
+    fn axis_bundle_ranking_publishes_the_worse_component_angular_error() {
+        let view = viewport(50.0);
+        let origin = [-4.0, 4.0];
+        let start = [0.0, 0.0];
+        let raw = [0.04, 4.05];
+        let mut engine = DraftInferenceEngine::default();
+        engine
+            .remember_reference(point_anchor(617, origin))
+            .expect("reference");
+        let resolution = engine
+            .resolve(
+                &frame(view, view.model_to_screen(raw), Some(start), Vec::new()),
+                DraftInferenceInput::default(),
+            )
+            .expect("ranked axis bundle");
+        let candidate = resolved_candidate(&resolution);
+        let sampled = candidate.raw_model_position;
+        let tracking_error =
+            undirected_angle_error([sampled[0] - origin[0], sampled[1] - origin[1]], [1.0, 0.0]);
+        let direction_error =
+            undirected_angle_error([sampled[0] - start[0], sampled[1] - start[1]], [0.0, 1.0]);
+        assert_eq!(
+            candidate.ranking.angular_error_radians.to_bits(),
+            tracking_error.max(direction_error).to_bits()
+        );
+    }
+
+    #[test]
+    fn axis_bundle_retains_both_components_through_the_shared_exit_band() {
+        let view = viewport(50.0);
+        let origin = [-4.0, 4.0];
+        let start = [0.0, 0.0];
+        let symmetric_target = |angle_degrees: f64| {
+            let tangent = angle_degrees.to_radians().tan();
+            let offset = 4.0 * tangent / (1.0 - tangent);
+            [offset, 4.0 + offset]
+        };
+        let mut engine = DraftInferenceEngine::default();
+        engine
+            .remember_reference(point_anchor(620, origin))
+            .expect("reference");
+
+        let entered = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen(symmetric_target(3.0)),
+                    Some(start),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("bundle enter band");
+        let entered_candidate = resolved_candidate(&entered);
+        let entered_id = entered_candidate.id;
+        assert_eq!(
+            entered_candidate.relations,
+            vec![
+                DraftInferenceRelation::HorizontalPoints {
+                    reference: point_id(620),
+                },
+                DraftInferenceRelation::Vertical,
+            ]
+        );
+
+        let retained = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen(symmetric_target(5.0)),
+                    Some(start),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("bundle exit-only band");
+        assert!(matches!(
+            retained.status,
+            DraftInferenceStatus::Resolved { candidate } if candidate == entered_id
+        ));
+        assert_eq!(
+            resolved_candidate(&retained)
+                .adjusted_model_position
+                .map(f64::to_bits),
+            [0.0, 4.0].map(f64::to_bits)
+        );
+
+        let outside = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen(symmetric_target(6.1)),
+                    Some(start),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("outside both exit bands");
+        assert_eq!(outside.status, DraftInferenceStatus::None);
+        assert!(engine.active_point_tracking.is_empty());
+        assert!(engine.active_direction.is_none());
+    }
+
+    #[test]
+    fn second_axis_bundle_proves_candidate_overflow_without_publishing_a_prefix() {
+        let view = viewport(50.0);
+        let mut policy = DraftInferencePolicy::default();
+        policy.limits.max_candidates = 1;
+        let mut engine = DraftInferenceEngine::new(policy).expect("one-candidate engine");
+        engine
+            .remember_reference(point_anchor(618, [-4.0, 4.0]))
+            .expect("first reference");
+        engine
+            .remember_reference(point_anchor(619, [-5.0, 4.0]))
+            .expect("second reference");
+        let resolution = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen([0.04, 4.05]),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("bounded bundle overflow");
+        assert_eq!(resolution.status, DraftInferenceStatus::ResourceLimited);
+        assert_eq!(
+            resolution.completeness,
+            DraftInferenceCompleteness::CandidateLimit {
+                required: 2,
+                limit: 1,
+            }
+        );
+        assert_eq!(resolution.adjusted_model_position, [0.04, 4.05]);
+        assert!(resolution.candidates.is_empty());
+        assert!(resolution.guides.is_empty());
+        assert!(engine.active_point_tracking.is_empty());
+        assert!(engine.active_direction.is_none());
+        assert!(engine.candidate_ids.is_empty());
     }
 
     #[test]
@@ -5427,6 +6048,7 @@ mod tests {
         let target = [0.0, 0.0];
         let retained_key = CandidateKey {
             anchor: Some(AnchorKey::Point(point_id(105))),
+            point_tracking: None,
             direction: None,
         };
         let retained_id = DraftInferenceCandidateId(41);
