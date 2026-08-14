@@ -178,8 +178,9 @@ reported the targeted F005 movement behavior fixed and requested sign-off once t
 regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
 the two-previously-Current transaction and CircularArc transport/domain regressions, while the
 198/198 golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B
-without claiming an unrecorded exhaustive UAT replay. M71 is now the active ADR 0035 retained-
-drafting-relations milestone; its target statements below are not completion claims.
+without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72 is the
+active public-workbench bulk-fix and GitHub Pages release milestone; its target statements below
+are not completion claims.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1769,6 +1770,25 @@ axes, M37 catalog consolidation, generic
 intersections, quadrant anchors, nonlinear tangent/normal inference, equality/symmetry inference,
 axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature chaining,
 browser E2E, mobile behavior or legacy UI.
+
+## M72 acceptance: public workbench bulk fixes
+
+Status: active. `docs/M72_GOALS.md` owns the approved scope.
+
+- A successful recovery operation cannot retain a problem from a prior computed refresh or a
+  rejected same-sketch attempt. Genuine failures under current parameters/external inputs remain
+  visible, and presentation-only dismissal never mutates headless diagnostic authority.
+- Interactive rectangle construction publishes four shared-corner line curves, four H/V sources,
+  explicit edge branches, finite validated residuals and four equality DOF. It publishes no fixed
+  source, dimensions or private targets; the canonical constrained rectangle macro is unchanged.
+- One bottom-left canvas surface owns every option-bearing tool and Construction display. Only one
+  surface is open, only active controls are shown/validated, keyboard focus is deterministic, and
+  panels remain contained at desktop and compact-desktop sizes without clipping the palette.
+- The clean complete release gate precedes an artifact-based GitHub Pages deployment. The public
+  repository serves correctly prefixed seven-file release output at the approved project URL and
+  browser-local workspace persistence survives a Chromium reload.
+- Focused Chromium UAT and explicit supervising-human approval close the milestone. M73 semantic
+  consolidation, mobile work and broader authoring behavior remain outside M72.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -126,8 +126,10 @@ Its immutable seven-file snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, aggr
 `http://100.94.63.83:8080/` under PID `3245562`. On 2026-08-14 the supervising human confirmed the
 corrected two-constraint auto-placement, accepted the recorded M71-U1 through M71-U5 review points
 and explicitly requested closure without claiming an unrecorded exhaustive replay.
-No M72 scope is active. `docs/M72_GOALS.md` is a non-activated proposal for behavior-preserving
-retained-authoring semantic consolidation before any broader M37 catalog expansion.
+M72 is active as the supervising-caller-approved public-workbench bulk-fix and GitHub Pages
+release milestone. `docs/M72_GOALS.md` owns its bounded defects, UI consolidation, qualification
+and public-deployment scope. The prior semantic-consolidation proposal moved to
+`docs/M73_GOALS.md` and remains inactive.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -140,7 +142,8 @@ support and physics remain outside future acceptance.
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
 7. `docs/adr/0001-*.md` through `docs/adr/0035-*.md`
-8. `docs/M72_GOALS.md` — proposal only; it is not an activated implementation milestone.
+8. `docs/M72_GOALS.md` — active M72 bulk-fix and public-release milestone.
+9. `docs/M73_GOALS.md` — proposal only; it is not an activated implementation milestone.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -392,9 +395,10 @@ snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, with ordered-manifest aggrega
 `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`, is served only through
 Tailscale at `http://100.94.63.83:8080/`; every asset plus `/` byte-matches the snapshot. The scoped
 M71-U1 through M71-U5 review and explicit supervising-human approval pass; M71 is closed.
-The next numbered scope is not activated. The prepared M72 proposal recommends consolidating the
-duplicated construction-stage and relation-applicability semantics while preserving all accepted
-M70/M71 behavior; explicit caller acceptance is required before implementation.
+M72 is activated for the accepted rectangle, stale-Problem, option-overlay and public Pages work.
+Its focused owner regressions must preserve the M71 golden and all solver/persistence semantics.
+The duplicated construction-stage and relation-applicability consolidation remains an inactive
+M73 proposal requiring a later caller decision.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -454,11 +458,13 @@ Durable milestone and cleanup records:
 - `docs/M70B_HARDENING.md` (historical H1-H3 test-only authoring/scene oracle and defect checklist)
 - `docs/M70B_UAT.md` (scoped reproduction handoff/restore close scorecard)
 - `.agents/skills/geosolve-harden-defect/` (canonical solver/headless defect regression workflow)
-- `docs/M71_GOALS.md` (active retained-drafting-relations scope)
+- `docs/M71_GOALS.md` (completed retained-drafting-relations scope)
 - `docs/M71_IMPLEMENTATION.md` (mechanically implemented retained-relation ledger)
 - `docs/M71_HANDOVER.md` (canonical fresh-session checkpoint and remaining human-UAT sequence)
 - `docs/M71_UAT.md` (current focused M71 scorecard)
 - `docs/adr/0035-retained-drafting-relation-lifecycle.md`
+- `docs/M72_GOALS.md` (active public-workbench bulk-fix and Pages-release scope)
+- `docs/M73_GOALS.md` (inactive retained-authoring semantic-consolidation proposal)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

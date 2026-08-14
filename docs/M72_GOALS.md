@@ -1,86 +1,65 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M72 proposal — Retained authoring semantic consolidation
+# M72 — Public workbench bulk fixes
 
-Status: proposal prepared after the approved M71 close on 2026-08-14. M72 is **not activated**;
-this document authorizes no implementation, API change or constraint-catalog expansion until the
-supervising caller explicitly accepts the scope.
+Status: activated by the supervising caller on 2026-08-14. This milestone replaces the previously
+prepared semantic-consolidation proposal, which moves without implementation to
+`docs/M73_GOALS.md`.
 
-## Recommendation
+## Goal
 
-Take one foundation-first, behavior-preserving milestone before promoting more of the M37 catalog
-or adding new inference families. M71 delivered the intended user behavior and exposed two narrow
-places where equivalent semantic knowledge is still represented twice. Consolidating those seams
-first makes a later retained-catalog expansion smaller and less likely to diverge between explicit
-authoring, inferred authoring and host adapters.
+Repair three bounded authoring/workbench defects, consolidate option surfaces into the canvas, and
+publish the qualified desktop workbench at
+`https://arduano.github.io/geometric-constraint-solver/` from the public repository.
 
-## Motivation carried from M71
+## Accepted work
 
-1. `construction_point_stage` and `draft_inference_subject` classify closely related construction
-   stages through separate exhaustive `EditorTool` matches. Center-bearing capability,
-   coordinate-only stages and prospective-curve participation should come from one internal
-   semantic description rather than duplicated tool knowledge.
-2. The compatibility `available_constraints`/`constraint_edit` surface and contextual
-   `resolve_constraint` coordinator surface each contain relation applicability knowledge. M71-F002
-   fixed one concrete divergence, but the lasting law should be one shared semantic predicate or
-   an explicit, mechanically enforced parity boundary.
-3. M71-F004/F005 showed that preview identity, confirmed-reference handoff and retained commit
-   intent must describe the same semantic bundle. Consolidation must preserve that law rather than
-   merely making similar code look alike.
+### M72-F001 — stale Problems after recovery
 
-## Proposed scope
+- Clear obsolete native and computed-feature setup errors after successful Undo, Redo, repair,
+  reset or reload while retaining genuine failures under the current host inputs.
+- Rebuild a same-sketch checkpoint when the live attempt is rejected instead of preserving that
+  rejected attempt through the identity fast path.
+- Let the Problems card dismiss only the exact current rendered problem set. Diagnostics, tree
+  state and canvas markers remain authoritative; a changed problem opens automatically.
 
-- Introduce one internal construction-stage semantic descriptor consumed by explicit and inferred
-  authoring. It should state subject capability, coordinate-bearing stage, centered-construction
-  capability and prospective geometry slots without adding browser policy.
-- Derive direct and contextual relation applicability from one owning predicate where their public
-  contracts overlap. If a compatibility surface cannot share the predicate, document the
-  deliberate difference and enforce a complete parity matrix at the boundary.
-- Keep candidate identity, preview guides, confirmed semantic references and commit-plan relations
-  traceable to one semantic source description through line and polyline handoff.
-- Add a focused native parity matrix for existing retained relation families, selection orders,
-  missing/foreign operands, typed disabled reasons and stale accepted-scene input. Add thin WASM
-  coverage only for information crossing the adapter.
-- Preserve the reviewed 234-row golden unless discovery proves a missing systemic dimension.
-- Run formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
-  parity and the complete clean release gate before nomination, followed by focused human UAT.
+### M72-F002 — interactive rectangle freedom
 
-The exact internal type names are deliberately not part of this proposal. Public API growth needs
-separate justification; an internal consolidation is preferred when it can express the full law.
+- Keep the ordinary constrained rectangle macro unchanged.
+- Remove only the interactive proposal's generated anchor and two dimensions, including their
+  owned private scalars. Retain shared corners, explicit edge branches and four H/V constraints.
+- Require finite validated geometry, rank four, four local equality DOF and one-step Undo/Redo.
 
-## Proposed acceptance
+### M72-F003 — canvas-owned tool options
 
-- Existing M70/M71 authoring and inference behavior remains unchanged, including explicit operand
-  order, ambiguity, hysteresis, resource bounds, candidate identity, line/polyline handoff and
-  transactional rejection.
-- Equivalent direct and contextual selections produce equivalent applicability, definitions and
-  disabled reasons; foreign, missing or stale selections cannot be advertised by one path and
-  rejected as structurally absent by the other.
-- Centered construction, ordinary point construction and coordinate-only stages are classified by
-  one owner and retain the existing prospective-curve and point-identity precedence behavior.
-- The browser continues to render and dispatch public DTOs without equations, applicability rules
-  or inference ranking.
-- No residual, Jacobian, solver priority, branch state, canonical sketch v1-v4 byte or unsupported
-  draft-v5 meaning changes. Any discovered need for one of those changes stops this scope for a new
-  decision.
-- Direct qualification, unchanged-golden evidence, clean release qualification, immutable
-  publication and an explicitly approved focused UAT all pass.
+- Use one nonmodal bottom-left canvas overlay for Equal, Tangent, Continuity, every dimension,
+  Fillet, Conic-family construction, NURBS and Construction display.
+- Open the relevant options when an option-bearing tool is selected; show and validate only the
+  active family/subtype; remember valid values only for the current process.
+- Provide one-open-at-a-time, bounded scrolling, keyboard focus/return, Escape, explicit close and
+  light-dismiss behavior at desktop and compact-desktop sizes.
+
+### M72-F004 — public Pages release
+
+- Add an artifact-based, pinned GitHub Pages workflow that runs the complete release gate before a
+  separate repository-prefixed Trunk build and deployment.
+- Recheck the full Git history for secrets before making it public, enable workflow Pages through
+  GitHub CLI/API, push `main`, set the repository homepage and verify the public files and runtime.
+- Link the live demo from the README and expose repository source/licence links in the workbench.
+
+## Acceptance
+
+- Focused owner regressions independently validate F001 and F002 without changing residuals,
+  Jacobians, branches, persistence schemas or the reviewed 234-row golden inventory.
+- Native and WASM/web tests cover overlay state, family-local validation, Problems visibility and
+  existing adapter behavior; the complete clean release gate passes.
+- Chromium UAT at `1440x900` and approximately `1024x720` confirms the repairs, accessibility and
+  containment. The public site loads with correct prefixed assets and preserves a browser-local
+  scene across reload.
+- The supervising caller approves the focused M72 UAT before final milestone closure.
 
 ## Non-goals
 
-This proposal does not yet promote the remaining M37 relations, broaden point-reference operands,
-add generic intersections or quadrant anchors, infer nonlinear tangent/normal or equality/symmetry,
-add host axes/grids/increments, persist wake state, freeze canonical sketch v5, chain computed
-features, restore browser E2E, or add mobile behavior.
-
-## Activation decision
-
-Before implementation, the supervising caller should choose one of these directions:
-
-1. accept this recommended behavior-preserving consolidation as M72;
-2. replace it with a deliberately scoped retained M37 catalog expansion; or
-3. prioritize a different deferred product boundary such as canonical-v5 planning.
-
-If this proposal is accepted, add the final M72 acceptance section, scenario contract and any
-required ADR before changing implementation code. Until then, M71 remains the completed baseline
-and no M72 work is active.
+M72 does not implement M73 semantic consolidation, broaden constraint/inference families, add
+rectangle snapping, change sketch-operation identity reporting, make Finish/Cancel sticky, add a
+custom domain, restore browser E2E infrastructure, or add tablet/mobile support.

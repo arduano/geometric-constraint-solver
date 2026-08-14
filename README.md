@@ -1,5 +1,7 @@
 # GeoSolve
 
+**[Open the public GeoSolve Sketch workbench](https://arduano.github.io/geometric-constraint-solver/)**
+
 A GPL-3.0-or-later, pure-Rust geometric constraint solver for:
 
 - CAD-style 2D sketches;
@@ -64,8 +66,9 @@ Concentric and Collinear. M71-F003 through M71-F006 are resolved; clean product 
 `f8a45ae7b355ab9874bf268c9950e369814e8432` passes the complete release gate and its immutable
 F005/F006 replacement is byte-verified at the published endpoint. The supervising human accepted
 the scoped U1-U5 review and explicitly closed M71 on 2026-08-14.
-No M72 scope is active. `docs/M72_GOALS.md` contains a non-activated proposal for
-behavior-preserving retained-authoring semantic consolidation before broader catalog work.
+M72 is the active public-workbench bulk-fix and GitHub Pages release milestone.
+`docs/M72_GOALS.md` owns its accepted scope; the deferred behavior-preserving retained-authoring
+semantic-consolidation proposal is now `docs/M73_GOALS.md` and remains inactive.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
@@ -76,7 +79,8 @@ Physics, collision and a production rendering system remain out of scope.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
-7. `docs/M72_GOALS.md` — prepared next-milestone proposal; not yet activated.
+7. `docs/M72_GOALS.md` — active public-workbench bulk-fix and Pages-release scope.
+8. `docs/M73_GOALS.md` — deferred semantic-consolidation proposal; not activated.
 
 ## Workspace
 

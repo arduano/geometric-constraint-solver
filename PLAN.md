@@ -4349,25 +4349,37 @@ intersections, quadrant anchors, nonlinear tangent/normal inference, equality/sy
 host axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature chaining,
 browser E2E, mobile work and legacy UI.
 
-### M72 proposal — retained authoring semantic consolidation
+### M72: public workbench bulk fixes
 
-Status: proposal prepared on 2026-08-14 after the approved M71 close; **not activated**. The
-authoritative execution order currently ends at M71. `docs/M72_GOALS.md` recommends a
-behavior-preserving consolidation of construction-stage semantics and direct/contextual relation
-applicability before any broader retained M37 catalog expansion.
+Status: activated by the supervising caller on 2026-08-14, replacing the previously prepared
+semantic-consolidation proposal. `docs/M72_GOALS.md` owns the accepted scope.
 
-- [x] Preserve M71's qualified source, immutable publication and scoped close as the accepted
-  baseline.
-- [x] Record the two duplicated semantic seams and the preview/reference/commit parity law exposed
-  by M71 hardening.
-- [x] Define proposed scope, acceptance, non-goals and qualification expectations without naming a
-  premature public API.
-- [ ] Receive explicit supervising-caller acceptance or replacement of the proposed M72 scope.
+- [x] Preserve M71's qualified source and move its deferred semantic-consolidation proposal to M73.
+- [ ] M72-F001: clear stale native/computed Problems across successful recovery and add exact-set
+  presentation-only dismissal.
+- [ ] M72-F002: make interactive rectangles free-size while preserving the constrained macro.
+- [ ] M72-F003: move all option-bearing tool and Construction-display controls into one accessible
+  bottom-left canvas overlay.
+- [ ] M72-F004: qualify, publish and verify the public GitHub Pages workbench.
+- [ ] Run the complete clean release gate and receive focused supervising-human UAT approval.
+
+Gate: the three defects pass focused owner regressions; no residual, persistence or golden meaning
+changes; the desktop overlays remain contained and family-local; and the exact qualified public
+site passes Chromium UAT including browser-local reload persistence.
+
+### M73 proposal — retained authoring semantic consolidation
+
+Status: moved intact from the replaced M72 proposal on 2026-08-14; **not activated**.
+`docs/M73_GOALS.md` recommends behavior-preserving consolidation of construction-stage semantics
+and direct/contextual relation applicability before any broader retained M37 catalog expansion.
+
+- [x] Preserve the proposal's duplicated-seam, parity-law, acceptance and non-goal record.
+- [ ] Receive explicit supervising-caller acceptance or replacement of the proposed M73 scope.
 - [ ] If accepted, add final acceptance/scenario records and any required ADR before implementation.
 
 Preparation gate: no production code, public API, persistence format, residual, golden or release
-candidate may change under M72 until the scope is explicitly activated. M71 remains the completed
-baseline in the meantime.
+candidate may change under M73 until its scope is explicitly activated. M72 remains authoritative
+until it closes.
 
 ## Explicit non-goals
 

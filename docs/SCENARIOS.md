@@ -1332,8 +1332,8 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M71. Every newly scoped milestone from M70 onward ends in
-its own UAT after direct automated qualification.
+recorded at completed M40.7, M53 and M61-M71. Active M72 likewise ends in its own UAT after direct
+automated qualification.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1656,6 +1656,32 @@ It was independently classified `DEFECT` against source
 regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so the clean
 F005/F006 replacement qualification and publication recorded in `docs/M71_UAT.md` now supply
 approved M71 closing product authority.
+
+### M72-R1 - Recoverable public workbench bulk fixes
+
+In the ordinary editable workspace, create an incompatible driving dimension that publishes a
+retained rejection and computed-feature problem. Undo must restore the prior accepted geometry and
+clear both native and computed problem text without reload. Redo must publish the genuine rejection
+again; another Undo or an accepted repair clears it. Closing Problems hides only that exact rendered
+set while its canvas/tree evidence remains; a changed failure opens automatically.
+
+Draw an ordinary rectangle through the interactive tool. It retains four shared corners, four
+directed line edges and four H/V sources, but no generated anchor, dimensions or target scalars.
+Translate and resize it while independently validating finite geometry, residuals and four DOF;
+Undo/Redo treats construction as one history step. Direct uses of the constrained rectangle macro
+continue to produce A1 semantics.
+
+At `1440x900` and approximately `1024x720`, activate Equal, Tangent, Continuity, every dimension,
+Fillet, each Conic-family tool, NURBS and Construction display. One bottom-left canvas overlay opens
+with only relevant controls, remains contained, supports keyboard close/focus return and light
+dismissal, and remembers valid values until refresh. Invalid inactive-family fields cannot block an
+unrelated tool.
+
+After the clean release gate, the same qualified workbench is deployed from `main` to
+`https://arduano.github.io/geometric-constraint-solver/`. Its stylesheet, JavaScript and WASM use
+the repository prefix, every expected file returns successfully with the WASM media type, and an
+ordinary browser-local workspace survives reload. Human review and closure are recorded in the M72
+UAT record.
 
 ### M70B-R1 - Complete workspace reproduction payload
 
