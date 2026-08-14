@@ -2,9 +2,9 @@
 
 # ADR 0035: Retained drafting relation lifecycle and persistence
 
-Status: accepted and amended for M71-F003. The former candidate is withdrawn; the correction
-passes the complete dirty-tree development gate, while replacement clean qualification and
-publication are pending.
+Status: accepted and amended for M71-F004. The F003 candidate is withdrawn from continued UAT;
+simultaneous endpoint-axis inference passes the complete dirty-tree development gate, while
+replacement clean qualification and publication are pending.
 
 ## Context
 
@@ -90,8 +90,12 @@ can refer to geometry created by the same operation. Midpoint-axis inference is 
 remembered midpoints of accepted native line/polyline spans can create one durable midpoint-axis
 relation per aligned coordinate, and both axes may coexist on one constructed point.
 `FilletDiscarded` midpoint occurrences and nonlinear curve-parameter midpoints remain
-tracking-only; sampled intersections and generic nonlinear roots remain deferred. The workbench
-renders returned DTOs and labels only.
+tracking-only. A durable point/native-midpoint axis may compose with the complementary exact
+Cartesian direction of a new line/polyline span: one candidate owns the exact coordinate
+intersection and one atomic plan retains both relations. Exact axis-aligned remembered directions
+qualify from their original source provenance; oblique and same-axis directions remain alternatives
+and semantic ties remain ambiguous. Sampled intersections and generic nonlinear roots remain
+deferred. The workbench renders returned DTOs and labels only.
 
 ## Consequences
 

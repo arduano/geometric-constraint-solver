@@ -2,8 +2,8 @@
 
 # M71 goals — Retained drafting relations
 
-Status: active and amended on 2026-08-13 for M71-F003. The midpoint-axis correction passes the
-complete dirty-tree development gate; replacement clean qualification, publication and
+Status: active and amended on 2026-08-14 for M71-F004. The simultaneous endpoint-axis correction
+passes the complete dirty-tree development gate; replacement clean qualification/publication and
 supervising-human UAT are pending.
 
 M70 proved reusable auto-constraint interaction using only constraint definitions already owned by
@@ -95,6 +95,11 @@ tracking-only. This is a semantic boundary, not an implementation shortcut.
   time; an atomic construction plan may carry both axes to retain exact live centering.
   Midpoint-axis inference is native-only: `FilletDiscarded` midpoint occurrences and nonlinear
   curve-parameter midpoints remain tracking-only.
+- One remembered persistent-point/native-midpoint axis may compose with the complementary exact
+  Cartesian direction of a new line/polyline span. The candidate owns the exact coordinate
+  intersection and both retained relations atomically. Exact axis-aligned remembered directions
+  qualify; oblique and same-axis relations remain alternatives, and distinct semantic operands
+  remain ambiguous.
 
 All M70 rules remain in force: bounded candidate generation, deterministic ranking, hysteresis,
 semantic suppression, exact ambiguity, authenticated accepted-scene authority, one atomic
@@ -118,9 +123,11 @@ frozen v4 constraint DTO before adding the new in-memory variants.
 - Frozen v1-v4 readers and bytes remain unchanged and strictly reject M71 syntax. M71 does not
   declare or freeze canonical sketch v5.
 
-The previously published four-definition candidate is withdrawn because it encoded midpoint-axis
-alignment as tracking-only. The correction passes provisional development qualification, but no
-corrected clean candidate has completed release qualification or publication.
+The original four-definition candidate was withdrawn because it encoded midpoint-axis alignment as
+tracking-only. The later F003 candidate is also withdrawn from continued UAT because it could not
+compose a remembered endpoint axis with a complementary new-span direction. Both immutable
+snapshots remain historical evidence; no clean F004 replacement has completed qualification or
+publication.
 
 ## Architectural ownership
 

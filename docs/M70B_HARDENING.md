@@ -546,10 +546,11 @@ The immutable replacement snapshot is `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`; the 
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
 
 The ordered manifest aggregate is
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` serves that
-snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
-cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
-immutable local counterpart. This candidate supersedes the F003/F004 snapshot for the F005
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` served that
+snapshot at `http://100.94.63.83:8080/` and was bound only to the Tailscale address at the M70B
+checkpoint; that process has since retired. Proxy- and cache-bypassed fetches proved that `/`
+matched `index.html` and every served asset byte-matched its immutable local counterpart. This
+candidate supersedes the F003/F004 snapshot for the F005
 movement-continuity recheck in `docs/M70B_UAT.md`. The supervising human reported that movement
 behavior fixed and requested sign-off once the focused closing regressions were satisfactory.
 
@@ -579,7 +580,8 @@ library suite plus the new finite-arc integration test, all locked workspace tes
 parity, warnings-denied Clippy and rustdoc, benchmark/package/licence checks, the 149.13-second
 256-moving-body sparse crossover and Trunk 0.21.14 release assembly. The generated seven-file
 distribution byte-matches `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` at ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` remains live
-on the Tailscale-only endpoint, so no republish is required. The supervising human requested these
-regressions and sign-off once satisfactory; that scoped decision closes M70B without claiming an
-unrecorded exhaustive replay of every prepared UAT step.
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` remained live
+on the Tailscale-only endpoint at M70B close, so no republish was required then; that process has
+since retired. The supervising human requested these regressions and sign-off once satisfactory;
+that scoped decision closes M70B without claiming an unrecorded exhaustive replay of every
+prepared UAT step.

@@ -102,19 +102,21 @@ seams. The 45-test feature suite and nine-test retained-movement suite pass. Cle
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the 198-row
 clean oracle and 152.49-second 256-moving-body sparse crossover. Its immutable seven-file snapshot
-at `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at `http://100.94.63.83:8080/`; every file and
-`/` byte-match, with ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
+at `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at `http://100.94.63.83:8080/` for M70B; every
+file and `/` byte-matched, with ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. That server has since been
+retired. The targeted movement
 behavior was reported fixed. Clean closing source `48e3cc3` passes the complete release gate with
 focused multi-feature transaction and finite-arc transport regressions; the 198/198 golden and
 runtime release bytes remain unchanged. M70B is closed under the requested scoped sign-off without
 claiming an unrecorded exhaustive UAT replay. M71 is active under amended ADR 0035 for six
 ordinary retained definitions: the original point-pair H/V, Concentric and Collinear relations plus
-native line/polyline midpoint-axis H/V authorized by `M71-F003`. The pre-F003 source
-`ad01912eac28275644dcfc867a2dc70030b5406d` and its served bytes at
-`http://100.94.63.83:8080/` are withdrawn from continued UAT. The correction passes the complete
-dirty-tree development gate; replacement clean qualification/publication and human UAT remain
-pending.
+native line/polyline midpoint-axis H/V authorized by `M71-F003`. `M71-F004` additionally composes
+one remembered point/native-midpoint axis with a complementary exact Cartesian new-span direction.
+The F003 source `83bd2b575784c44b618fb3ad144f24e84702d764` and its immutable snapshot are
+preserved but withdrawn from continued UAT; the former server has exited and the shared Tailscale
+endpoint is currently offline. The F004 correction passes the complete dirty-tree development
+gate; replacement clean qualification/publication and human UAT remain pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -126,7 +128,7 @@ support and physics remain outside future acceptance.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0034-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0035-*.md`
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -369,14 +371,16 @@ new source-rotation row passes at fingerprint `input-04658a77db2dc779`; the M70B
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. The pre-F003 M71 baseline appends four complete
 9-row relation families; the current canonical fixture is 234/234 `PASS`, SHA-256
 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
-M71-F003 stays in a focused owner regression because it is a narrow defect correction rather than
-a missing systemic golden dimension. Focused owner tests and the complete dirty-tree release gate
-pass, including the unchanged canonical bytes, aggregate golden modes, warnings-denied workspace
-Clippy, locked workspace/WASM tests, performance/licensing/package checks and Trunk assembly.
+M71-F003 and M71-F004 stay in focused owner regressions because they are narrow inference defects
+rather than missing systemic golden dimensions. The complete F004 dirty-tree development gate
+passes, including unchanged aggregate golden, native/WASM parity, warnings-denied workspace
+Clippy, locked all-feature workspace tests, performance/licence/package checks and Trunk assembly;
+the clean replacement gate remains open.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
-release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
-`http://100.94.63.83:8080/`; every file and `/` byte-match the snapshot, whose ordered-manifest
-aggregate is `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
+release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
+`http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
+manifest aggregate was `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`.
+That server has since been retired. The targeted movement
 behavior was reported fixed. Clean closing source `48e3cc3` passes the complete release gate with
 the final owner regressions, and M70B is closed under the requested scoped sign-off. The temporary
 `docs/M71_GOALS.md`, amended ADR 0035, `PLAN.md` and `ACCEPTANCE.md` define the corrected M71 scope.

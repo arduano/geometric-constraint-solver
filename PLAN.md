@@ -3918,9 +3918,9 @@ Failed computed feature, and non-Edit actions do not persist unrecorded contact 
 workspace tests, native/WASM transition parity, the demo-web WASM check, warnings-denied rustdoc,
 benchmark compilation, M14/M32 performance budgets, package/licence and Git-hygiene checks, the
 152.49-second 256-moving-body sparse crossover and Trunk 0.21.14 release assembly. Exactly seven
-release files are frozen read-only under `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` and served at
-`http://100.94.63.83:8080/`. Proxy- and cache-bypassed HTTP fetches of every file and `/`
-byte-match the snapshot; the ordered manifest aggregate is
+release files were frozen read-only under `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` and served at
+`http://100.94.63.83:8080/` for that checkpoint. Proxy- and cache-bypassed HTTP fetches of every
+file and `/` byte-matched the snapshot; the ordered manifest aggregate was
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
 reported the targeted movement behavior fixed and requested final sign-off once the additional
 regressions were satisfactory.
@@ -3933,8 +3933,9 @@ library tests and the new feature integration test, all locked workspace tests, 
 warnings-denied Clippy and rustdoc, benchmark/package/licence checks, the 149.13-second sparse
 crossover and Trunk 0.21.14 release assembly. The generated seven-file distribution is byte-
 identical to `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`, retaining ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`; PID `1841268` still serves
-that immutable snapshot through Tailscale, so no republish is needed. The supervising human asked
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`; PID `1841268` served that
+immutable snapshot through Tailscale at M70B close, so no republish was needed then. That process
+has since retired as later M71 publications took over the endpoint. The supervising human asked
 for these regressions and milestone sign-off once satisfactory. That scoped decision closes M70B
 without claiming an unrecorded exhaustive replay of every prepared UAT step.
 
@@ -4116,9 +4117,10 @@ regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTA
 
 ### M71
 
-Status: active and amended for M71-F003 on 2026-08-13. Scope and architecture are accepted in
-`docs/M71_GOALS.md` and ADR 0035. The correction passes the complete dirty-tree development gate;
-replacement clean release-candidate qualification, publication and human UAT are pending.
+Status: active and amended for M71-F004 on 2026-08-14. Scope and architecture are accepted in
+`docs/M71_GOALS.md` and ADR 0035. The simultaneous endpoint-axis correction is implemented and
+passes the complete dirty-tree development gate; replacement clean release-candidate
+qualification/publication and human UAT are pending.
 
 Goal: promote the original four high-value relations plus two narrowly scoped native-span
 midpoint-axis definitions into the one ordinary retained sketch/editor lifecycle, then let the M70
@@ -4159,6 +4161,11 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
   an exact semantic center outranks incidental center-point identity only for a centered
   construction; Collinear replaces rather than bundles Parallel; unsupported or tied evidence
   fails closed.
+- [x] Close `M71-F004`: compose one durable remembered point/native-midpoint axis with the
+  complementary exact Cartesian direction of a new line/polyline span. Publish the exact
+  coordinate intersection, both constraint-backed guides and an atomic two-relation plan; preserve
+  both latches and distinct candidate identity. Keep same-axis, oblique and distinct-operand
+  evidence conservative/ambiguous, and enforce candidate limits without publishing a prefix.
 - [x] Permit construction commit plans to reference curves allocated by that same atomic
   transaction, without exposing prospective IDs as durable authority before commit.
 - [x] Publish typed scene annotations, constraint entries, glyphs and interaction metadata for all
@@ -4166,10 +4173,11 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
 - [x] Add owner-level validation/lowering/lifecycle/persistence tests, headless authoring and
   inference matrices, reviewed systemic golden rows, native/WASM transition parity and one
   ordinary editable **Retained drafting relations** playground.
-- [x] Rerun the clean golden oracle, formatting, warnings-denied workspace Clippy, locked all-feature
-  workspace tests, relevant WASM/Trunk builds and the complete clean release gate.
-- [x] Freeze and byte-verify one replacement immutable Tailscale candidate and record its source, manifest and
-  endpoint in `docs/M71_UAT.md`.
+- [ ] Rerun the clean golden oracle, formatting, warnings-denied workspace Clippy, locked
+  all-feature workspace tests, relevant WASM/Trunk builds and the complete clean release gate on
+  the post-F004 nominated source.
+- [ ] Freeze and byte-verify one post-F004 replacement immutable Tailscale candidate and record its
+  source, manifest and endpoint in `docs/M71_UAT.md`.
 - [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
 
 Implementation note (2026-08-13): all six definitions, frozen-v4 isolation, draft-v5 side
@@ -4198,6 +4206,27 @@ sketch lifecycle, persistence, annotations, ambiguity, hysteresis, suppression, 
 native-only origin and transition parity have dedicated coverage. This narrow defect correction
 does not require new systemic golden rows.
 
+M71-F004 hardening note (2026-08-14): clean base
+`603194947a642917b9e44359326708de37f1a1d2` was independently reproduced through
+`DraftInferenceEngine` and the public `EditorScene → ConstraintEditor →
+RetainedEditorCoordinator` placement path. Durable point-axis and live-span direction inference
+could only publish singleton alternatives because candidate identity had no separate point-
+tracking component. The focused `m71_f004_axis_bundle.rs` regression proves exact complementary
+line/polyline composition, one atomic plan/history step, finite accepted geometry, independently
+validated endpoint equations and later compatible edits. Owner tests cover exact Cartesian
+provenance, point/midpoint symmetry, remembered directions, same-axis alternatives, ambiguity,
+identity, shared hysteresis, conservative angular ranking and streaming candidate bounds. No
+residual, Jacobian, solver priority, branch, persistence or public-API change is involved, and the
+unchanged canonical golden remains the correct broad oracle.
+
+M71-F004 development qualification note (2026-08-14):
+`env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run
+'./scripts/release-gate.sh'` passes the complete provisional gate: formatting/diff hygiene,
+warnings-denied workspace Clippy, all locked all-feature workspace tests, unchanged 234/234 golden,
+native/WASM M70 and M71 parity, demo-web WASM, warnings-denied rustdoc, benchmark compilation,
+M14/M32 budgets, the 151.18-second 256-moving-body sparse crossover, licence/package checks and
+Trunk 0.21.14 release assembly. Because the source is dirty, this is not clean nomination evidence.
+
 Withdrawn qualification/publication note (2026-08-13): pre-F003 source
 `ad01912eac28275644dcfc867a2dc70030b5406d` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the 234/234
@@ -4211,19 +4240,22 @@ Trunk 0.21.14 release assembly. Exactly seven release files are frozen read-only
 from continued UAT. A post-F003 clean source, replacement gate and byte-verified publication remain
 open before M71-U1 through M71-U5 and explicit supervising-human approval.
 
-Replacement qualification/publication note (2026-08-14): clean nominated source
+F003 qualification/publication note (2026-08-14; withdrawn after M71-F004): clean nominated source
 `83bd2b575784c44b618fb3ad144f24e84702d764` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the unchanged
 234/234 golden oracle, all locked workspace tests, native/WASM M70 and M71 transition parity,
 warnings-denied Clippy and rustdoc, package/licence checks, M14/M32 performance budgets, the
 145.13-second sparse crossover and Trunk 0.21.14 release assembly. Its exact seven-file `dist` was
 copied without rebuilding and frozen at `/tmp/geosolve-m71-f003-uat.hybK8W` with directory mode
-`0555` and file mode `0444`. PID `1202735` serves only that snapshot at
-`http://100.94.63.83:8080/`; proxy-disabled, cache-bypassed requests for all seven files and `/`
-byte-match the snapshot, `/` equals `index.html`, and both ordered manifest aggregates equal
+`0555` and file mode `0444`. PID `1202735` served only that snapshot at
+`http://100.94.63.83:8080/` at the F003 checkpoint; proxy-disabled, cache-bypassed requests for all
+seven files and `/` byte-matched the snapshot, `/` equalled `index.html`, and both ordered manifest
+aggregates equalled
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`. Mechanical qualification
 and publication are complete; M71 remains open only for M71-U1 through M71-U5 and explicit
-supervising-human approval.
+supervising-human approval at that historical checkpoint. F004 now withdraws those bytes from
+continued UAT while preserving the immutable snapshot. PID `1202735` has since exited and the
+shared Tailscale endpoint is offline until a verified F004 replacement is ready.
 
 Gate: all six definitions behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every

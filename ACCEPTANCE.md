@@ -170,9 +170,10 @@ reviewed fixture is 198/198 `PASS`. Focused F005 owner/golden, the 45-test featu
 retained movement suite and aggregate golden qualification, formatting, warnings-denied all-
 workspace Clippy, locked all-feature workspace tests and the relevant WASM check pass. Clean F005
 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate, and its immutable
-seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
-`http://100.94.63.83:8080/` with ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
+seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served and byte-verified at
+`http://100.94.63.83:8080/` for M70B with ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`; that server has since
+retired. The supervising human later
 reported the targeted F005 movement behavior fixed and requested sign-off once the closing
 regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
 the two-previously-Current transaction and CircularArc transport/domain regressions, while the
@@ -1437,9 +1438,10 @@ golden survey/check/clean modes, formatting, warnings-denied all-workspace Clipp
 feature workspace tests and the relevant WASM check pass. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. Its immutable seven-file
-snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
-`http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted human recheck
+snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
+`http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched, with ordered-manifest
+aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. That server has since
+retired. The targeted human recheck
 was subsequently reported fixed by the supervising human, who requested sign-off once the closing
 regressions were satisfactory. Clean source `48e3cc3` passes that qualification, and the generated
 distribution remains byte-identical to F005. The scoped close decision accepts the recorded M70B
@@ -1656,9 +1658,10 @@ and golden tests, aggregate golden `--survey`/`--check`/`--require-clean`, forma
 warnings-denied all-workspace Clippy, locked all-feature workspace tests and the relevant WASM
 check pass. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`. The immutable seven-file
-snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
-`http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
+snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
+`http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched, with ordered-manifest
+aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. That server has since
+retired. The targeted movement
 recheck was subsequently reported fixed.
 
 Closing source `48e3cc3` passes the complete clean release gate with the focused two-previously-
@@ -1671,9 +1674,9 @@ unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
 
 ## M71 acceptance: retained drafting relations
 
-Status: active and amended for M71-F003; the correction passes the complete dirty-tree development
-gate, while replacement clean release qualification, immutable publication and supervising-human
-approval are pending.
+Status: active and amended for M71-F004; simultaneous endpoint-axis inference passes the complete
+dirty-tree development gate, while replacement clean release qualification, immutable publication
+and supervising-human approval are pending.
 
 - Frozen canonical sketch v1-v4 readers and bytes remain unchanged. A private frozen-v4
   constraint wire DTO prevents in-memory enum growth from expanding v4, and v4 export of M71 state
@@ -1719,6 +1722,13 @@ approval are pending.
   tracking-only. Point identity outranks H/V, Collinear replaces
   Parallel, ties/unsupported evidence fail closed and one construction-plus-relation commit is
   atomic and history-neutral until confirmed.
+- For a point-operand endpoint, one durable remembered persistent-point/native-midpoint axis may
+  compose with the complementary exact Cartesian direction of its new line/polyline span. One
+  candidate publishes the exact coordinate intersection, two terminating constraint-backed guides
+  and a deterministic endpoint-axis-first two-relation plan. Both latches retain through the exit
+  band; standalone and bundled candidate IDs cannot alias. Same-axis, oblique and distinct-operand
+  evidence remains alternative/ambiguous, and the first candidate-limit overflow publishes no
+  partial prefix.
 - Prospective curve slots permit relations against geometry created in the same transaction while
   preventing stale, foreign or partially allocated IDs from publishing. Suppression, candidate
   bounds, scene authentication and exact accepted-input checks retain the M70 contract.
@@ -1726,15 +1736,15 @@ approval are pending.
   suppression and glyph geometry. Generic editor selection, hover and problem context is combined
   with those entries and annotations at the headless interaction boundary; native/WASM parity
   passes. The workbench adds no equation, applicability or geometric inference rule.
-- Reviewed systemic rows extend the canonical golden authoring/scene matrix without rewriting
-  unrelated bytes; focused owner regressions remain at their narrowest layer. `--survey`,
-  `--check` and `--require-clean` all pass.
+- Reviewed systemic rows preserve the 234-row canonical golden authoring/scene matrix without
+  rewriting unrelated bytes; F004 remains at its focused owner layer. `--survey`, `--check` and
+  `--require-clean` must pass again on the clean post-F004 nominated source.
 - Formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests, the
-  relevant WASM and release Trunk builds and one clean `./scripts/release-gate.sh` pass before a
-  candidate is nominated.
-- One immutable distribution is byte-verified and served through Tailscale. The supervising human
-  completes and explicitly approves `docs/M71_UAT.md`; mechanical qualification alone does not
-  close M71.
+  relevant WASM and release Trunk builds and one clean `./scripts/release-gate.sh` must pass on that
+  unchanged post-F004 source before nomination.
+- One post-F004 immutable distribution must be byte-verified and served through Tailscale. The
+  supervising human must then complete and explicitly approve `docs/M71_UAT.md`; mechanical
+  qualification alone does not close M71.
 
 M71 does not accept broad `DocumentPointRef` H/V operands beyond explicit native-span midpoint
 axes, M37 catalog consolidation, generic

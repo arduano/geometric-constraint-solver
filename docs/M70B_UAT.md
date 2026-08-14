@@ -71,8 +71,9 @@ Published `M70B-F005` read-only snapshot: `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`
 Published `M70B-F005` release distribution manifest aggregate:
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`
 
-The snapshot directory is mode `0555`, every file is mode `0444`, and PID `1841268` is bound only
-to the Tailscale address. Every served asset and `/` byte-matches the immutable snapshot.
+The snapshot directory is mode `0555` and every file is mode `0444`. At the M70B checkpoint PID
+`1841268` was bound only to the Tailscale address, and every served asset plus `/` byte-matched the
+immutable snapshot; that process has since retired.
 
 Prior `M70B-F001` Tailscale endpoint: `http://100.94.63.83:8080/`
 

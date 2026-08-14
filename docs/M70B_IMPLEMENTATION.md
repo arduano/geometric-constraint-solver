@@ -97,10 +97,10 @@ aggregate `--check` and `--require-clean` reruns pass.
 
 `M70B-F005` integrated release-gate result: **PASS** (256-moving-body sparse crossover: `152.49s`)
 
-Current `M70B-F005` Tailscale distribution:
+Historical `M70B-F005` Tailscale distribution, no longer served:
 `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` at `http://100.94.63.83:8080/`
 
-Current `M70B-F005` release manifest aggregate:
+Historical `M70B-F005` release manifest aggregate:
 `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`
 
 Historical `M70B-F003/F004` Tailscale distribution:
@@ -829,10 +829,11 @@ The immutable replacement snapshot is `/tmp/geosolve-m70b-f005-uat.Q5c9Wi`; the 
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
 
 The ordered manifest aggregate is
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` serves that
-snapshot at `http://100.94.63.83:8080/` and is bound only to the Tailscale address. Proxy- and
-cache-bypassed fetches proved that `/` matches `index.html` and every served asset byte-matches its
-immutable local counterpart. The supervising human has reported the targeted movement behavior
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. PID `1841268` served that
+snapshot at `http://100.94.63.83:8080/` and was bound only to the Tailscale address at the M70B
+checkpoint; that process has since retired. Proxy- and cache-bypassed fetches proved that `/`
+matched `index.html` and every served asset byte-matched its immutable local counterpart. The
+supervising human has reported the targeted movement behavior
 fixed and requested sign-off once the closing regressions were satisfactory. Clean source
 `48e3cc3` passes that qualification; the current generated distribution remains byte-identical to
 this immutable F005 snapshot, so no republish is required.

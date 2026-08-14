@@ -1306,9 +1306,10 @@ source `0ef60ef47035e8b1fb1eece2c38d05ccdfdc4abf` passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` and is retained as
 historical release evidence. Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937`
 passes that complete gate, including its 198-row clean oracle and 152.49-second 256-moving-body
-sparse crossover. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is
-served at `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest
-aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The focused F005
+sparse crossover. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was
+served at `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched, with ordered-
+manifest aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`.
+That server has since retired. The focused F005
 movement behavior was subsequently reported fixed by the supervising human, who requested sign-off
 once the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with the two-previously-Current transaction and CircularArc transport/domain
@@ -1317,9 +1318,9 @@ approval. M71 is active under ADR 0035 and adds one ordinary editable **Retained
 relations** playground over its mechanically qualified document/editor implementation. The
 pre-F003 contribution from its original four reviewed nine-row relation families extends the
 current canonical fixture to 234/234 `PASS`, SHA-256
-`d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`. M71-F003's narrower
-midpoint-axis correction remains in its focused owner regression rather than adding a systemic
-golden dimension.
+`d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`. M71-F003's midpoint-axis
+correction and M71-F004's endpoint-axis/direction composition remain in focused owner regressions
+rather than adding systemic golden dimensions.
 Every new fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1497,9 +1498,11 @@ may persist stored-point H/V, exact semantic-center Concentric and certified nat
 Collinear, including beyond a finite endpoint. A remembered accepted native line/polyline midpoint
 may create `HorizontalPointToMidpoint` and/or `VerticalPointToMidpoint`; the point follows the live
 endpoint average as the support changes. Fillet-discarded and nonlinear midpoint occurrences
-remain tracking-only, and ambiguous, stale, unsupported or exhausted evidence fails closed. One construction may create
-its geometry and a relation to that prospective curve atomically without exposing an uncommitted
-ID.
+remain tracking-only. A point/native-midpoint axis may compose with the complementary exact
+Cartesian direction of a new line/polyline span, producing one exact-intersection preview and one
+atomic two-relation plan. Same-axis, oblique, ambiguous, stale, unsupported or exhausted evidence
+fails closed. One construction may create its geometry and a relation to that prospective curve
+atomically without exposing an uncommitted ID.
 
 Direct sketch/editor/native-WASM tests own 1/1/1/1/2/2 lowering, finite hard residuals, rank/DOF,
 commutative operands, retained parent edits, lifecycle, draft-v5 round trips, frozen-v4 rejection,
@@ -1531,6 +1534,34 @@ operands and prepared CAS. Native transition and web DTO tests prove adapter par
 equations. This is a focused defect correction, not a new systemic golden dimension. The pre-F003
 publication is withdrawn; replacement clean qualification and publication are required before
 human retest.
+
+### M71-F004 - Endpoint point-axis and span-direction inference compose
+
+On clean source `603194947a642917b9e44359326708de37f1a1d2`, start a line at `[0, 0]`, hover a
+stored point at `[-4, 4]`, then approach `[0, 4]`. The obsolete behavior generates singleton
+`Vertical` and singleton `HorizontalPoints` candidates. Their exact tie is `Ambiguous`; a biased
+sample selects only one, so one coordinate remains unsnapped and only one relation is retained.
+
+The corrected `DraftInferenceEngine` must publish one candidate at `[0, 4]` whose relations are
+ordered `HorizontalPoints` then `Vertical` and whose two constraint-backed guides terminate at the
+same endpoint. The symmetric `VerticalPoints + Horizontal` case must work for line and polyline
+authoring. One placement lowers the exact displayed bundle into one commit plan/history step; the
+accepted endpoint is independently checked against both equations and the normalized hard residual
+must be finite and `<= 1e-9`. Later compatible edits retain both relations.
+
+Only complementary exact Cartesian directions compose. World H/V and remembered
+Parallel/Perpendicular/Collinear sources whose original vector is exactly axis-aligned qualify;
+normalization cannot turn a finite non-Cartesian source into an axis. Same-axis relations and
+oblique directions remain alternatives, distinct operands remain ambiguous, stale singleton IDs
+cannot alias bundle semantics, both latches retain through the exit band, and candidate overflow
+publishes no prefix.
+
+The focused owner regression is
+`crates/geosolve-constraint-editor/tests/m71_f004_axis_bundle.rs`; inference unit tests own the
+composition/ranking/identity/resource matrix and `m71_transition_parity` owns native/WASM adapter
+parity. No equation, Jacobian, solver priority, branch or persistence format changes. The canonical
+234-row authoring/scene oracle does not exercise inference bundles and remains unchanged. The F003
+snapshot is preserved but withdrawn from UAT until a clean F004 replacement is published.
 
 ### M71-F001 - Rejected design intent remains visible over retained accepted geometry
 
@@ -1961,9 +1992,10 @@ F005 preserves all 197 records and appends the source-rotation row at fingerprin
 aggregate golden, formatting, warnings-denied all-workspace Clippy, locked all-feature workspace
 tests and the relevant WASM check pass. Clean source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate. Its immutable
-seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
-`http://100.94.63.83:8080/`, with ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The supervising human later
+seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served and byte-verified at
+`http://100.94.63.83:8080/` for M70B, with ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`; that server has since
+retired. The supervising human later
 reported the F005 movement behavior fixed and requested sign-off once the closing regressions were
 satisfactory. Clean source `48e3cc3` passes the complete release gate after adding the focused
 two-previously-Current retained-coordinator transaction and finite CircularArc/affine transport/

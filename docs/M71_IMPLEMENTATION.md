@@ -2,19 +2,23 @@
 
 # M71 implementation — Retained drafting relations
 
-Status: M71-F003 midpoint-axis correction is implemented, clean-qualified and published as an
-immutable byte-verified replacement. Supervising-human UAT is pending.
+Status: M71-F004 simultaneous endpoint-axis inference is implemented and passes the complete
+dirty-tree development gate. Clean replacement nomination/publication and supervising-human UAT
+remain pending.
 
 Architecture owner: ADR 0035
 
 Withdrawn pre-F003 candidate source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
-Replacement candidate source: `83bd2b575784c44b618fb3ad144f24e84702d764`
+Withdrawn F003 candidate source: `83bd2b575784c44b618fb3ad144f24e84702d764`
 
-F003 clean release-gate result: **PASS**
+F004 clean candidate source: **not yet nominated**
 
-Replacement Tailscale release distribution: `/tmp/geosolve-m71-f003-uat.hybK8W` at
-`http://100.94.63.83:8080/`, ordered manifest aggregate
+Historical F003 clean release-gate result: **PASS**
+
+Withdrawn F003 release distribution, preserved but no longer served:
+`/tmp/geosolve-m71-f003-uat.hybK8W`; historical endpoint `http://100.94.63.83:8080/`, ordered
+manifest aggregate
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`
 
 Withdrawn Tailscale release distribution (preserved, no longer served and not acceptable for
@@ -22,8 +26,8 @@ continued UAT): `/tmp/geosolve-m71-uat.yFBsnX`; historical endpoint
 `http://100.94.63.83:8080/`; ordered manifest aggregate
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
-The pre-F003 distribution below remains on disk as withdrawn historical evidence and is no longer
-served.
+Both earlier distributions remain historical evidence. Do not replace the preserved F003 server
+until a clean F004 distribution has been frozen and byte-verified.
 
 ## 1. Files and APIs
 
@@ -49,6 +53,11 @@ served.
   Concentric and certified affine-support Collinear candidates. Only accepted native line/polyline
   midpoints can produce the new retained axis relations; `FilletDiscarded` and nonlinear
   curve-parameter midpoints remain tracking-only.
+- M71-F004 gives durable point tracking its own `CandidateKey` component and composes it with a
+  complementary exact Cartesian new-span direction. One candidate owns the exact intersection,
+  both relations and both guides; its singleton subsets are removed without making relation count
+  a ranking discriminator. Generation remains streaming and fail-closed at the configured bound.
+  Same-axis and oblique directions remain alternatives.
 - `ConstructionCommitPlan` adds prospective curve and directed-support slots so a new circle or
   line can participate in its retained relation in the same atomic publication.
 - `SceneConstraintEntry`, `constraint_entries` and `EditorScene::constraint_entries` publish
@@ -64,6 +73,10 @@ served.
   persistence and native/WASM transition contracts. The focused M71-F003 owner regression is
   `crates/geosolve-constraint-editor/tests/m71_f003_midpoint_axis.rs`; it reproduces the public
   scene/editor-to-retained transition and checks atomic publication plus later endpoint tracking.
+  The focused M71-F004 regression is
+  `crates/geosolve-constraint-editor/tests/m71_f004_axis_bundle.rs`; it covers the complementary
+  line and polyline pairings, exact preview/plan composition, accepted residuals, one-step history
+  and later edits.
   The milestone-neutral golden authoring/scene fixture remains the broad compatibility oracle.
 
 ## 2. Mathematical behavior
@@ -96,6 +109,15 @@ requires certified native affine supporting-line evidence and replaces, rather t
 a Parallel proposal. Repeated, tautological, unsupported, degenerate, ambiguous, stale or
 resource-exhausted operands fail transactionally.
 
+M71-F004 changes only candidate composition. For a point-operand endpoint, durable
+HorizontalPoints/HorizontalPointToMidpoint may compose with an exact Vertical span direction, and
+durable VerticalPoints/VerticalPointToMidpoint may compose with an exact Horizontal span direction.
+Exact axis-aligned remembered Parallel/Perpendicular/Collinear directions are included using their
+pre-normalization source provenance. The adjusted endpoint is the exact coordinate intersection;
+relation order is endpoint axis first and span direction second. Compound angular evidence is the
+worse component error, and both latches retain through the exit band. No residual, Jacobian,
+solver priority, branch rule, persistence format or public API changes.
+
 The original four relations are commutative in operand order; the point-to-midpoint definitions
 are deliberately directional in operand type. Reversing either Collinear support direction
 does not change its solution set, but direction remains explicit retained state. Every success is
@@ -104,9 +126,9 @@ geometry, history and publication authority.
 
 ## 3. Commands and outcomes
 
-The following post-F003 qualification first completed on the development tree. The same complete
-gate then passed without `GEOSOLVE_ALLOW_DIRTY` on clean nominated source
-`83bd2b575784c44b618fb3ad144f24e84702d764`:
+The following focused qualification and complete development gate pass on the current post-F004
+tree. The final command without `GEOSOLVE_ALLOW_DIRTY` is the historical F003 clean gate only;
+clean F004 nomination has not yet occurred:
 
 ```text
 cargo fmt --all -- --check
@@ -114,6 +136,7 @@ cargo test --locked -p geosolve-sketch --test m71_relations
 cargo test --locked -p geosolve-sketch --test m71_persistence
 cargo test --locked -p geosolve-constraint-editor --all-features
 cargo test --locked -p geosolve-demo-web --all-features
+cargo test --locked -p geosolve-constraint-editor --test m71_f004_axis_bundle
 cargo test --locked -p geosolve-constraint-editor --test m71_transition_parity
 nix-shell shell.nix --run \
   'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m70_transition_parity --target wasm32-unknown-unknown'
@@ -137,21 +160,24 @@ Outcomes:
 - M71 persistence matrix: **7/7 pass**;
 - AxisMidpointResidual finite-difference test: **1/1 pass**;
 - F003 public coordinator regression: **2/2 pass**;
-- constraint editor: **302/302** unit tests plus every integration and doc-test pass;
+- F004 public coordinator regression: **2/2 pass**;
+- constraint editor: **311/311** unit tests plus every integration and doc-test pass;
 - demo web: **104/104** library tests, **1/1** decoder test and doc tests pass;
 - canonical authoring/scene oracle: **234/234 `PASS`**, with `--check` and `--require-clean`
   passing at SHA-256
   `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`;
-- native and WASM M70/M71 transition parity, demo-web WASM, formatting, warnings-denied workspace
-  Clippy, locked all-feature workspace tests, warnings-denied rustdoc, benchmark compilation,
-  M14/M32 performance budgets, licence/package validation and Trunk 0.21.14 assembly pass;
-- the 256-moving-body sparse crossover passes in **152.53 seconds** in the provisional development
-  gate and **145.13 seconds** in the clean nominated-source gate.
+- native and WASM M70/M71 transition parity pass, with the updated M71 fixture at SHA-256
+  `98df37349faab89e7ca7da763d898b84d4f04588a4923539cd790ca673a53442`;
+- demo-web WASM, formatting, warnings-denied workspace Clippy, locked all-feature workspace tests,
+  warnings-denied rustdoc, benchmark compilation, M14/M32 performance budgets, licence/package
+  validation and Trunk 0.21.14 assembly pass;
+- the 256-moving-body sparse crossover passes in **151.18 seconds** in the post-F004 provisional
+  development gate.
 
 Cargo emitted only the repository's longstanding non-failing `license` plus `license-file`
-manifest advisories. An ambient-shell attempt lacked `wasm-bindgen-test-runner`, executed no test
-and was a harness invocation error; the successful WASM checks ran inside `nix-shell shell.nix`.
-The authoritative clean gate completed successfully at the replacement source above.
+manifest advisories. The successful WASM checks ran inside `nix-shell shell.nix`. Because the F004
+gate used `GEOSOLVE_ALLOW_DIRTY=1`, it is provisional development evidence rather than clean
+candidate qualification.
 
 ## 4. Acceptance state
 
@@ -164,11 +190,13 @@ typed headless entries/annotations, workspace restore, editable sample and revie
 
 The midpoint-axis evidence includes central finite-difference Jacobian checks, structured audit
 descriptors, independent finite hard-residual validation, explicit point-plus-native-span operands,
-live endpoint-average behavior, draft-v5 side persistence and frozen-v4 rejection. The full
-development and clean candidate gates pass; immutable publication is byte-verified.
+live endpoint-average behavior, draft-v5 side persistence and frozen-v4 rejection. The historical
+F003 development and clean-candidate gates passed and its immutable publication was byte-verified;
+F004 has since withdrawn that candidate from continued UAT.
 
-`PLAN.md` items are checked only where evidence exists. The pre-F003 publication is withdrawn;
-replacement release qualification and immutable publication pass, followed by pending human UAT.
+`PLAN.md` items are checked only where evidence exists. The pre-F003 and F003 publications are
+withdrawn; the post-F004 dirty development gate passes, while clean replacement qualification,
+immutable publication and human UAT remain pending.
 
 ## 5. Known limitations and next blocker
 
@@ -201,18 +229,28 @@ replacement release qualification and immutable publication pass, followed by pe
   one-row relations atomically; both axes can coexist. Fillet-discarded and nonlinear midpoint
   occurrences remain outside durable scope. Corrected focused, development-gate and clean
   replacement-gate outcomes pass.
+- `M71-F004` — remembered point/midpoint axes and a complementary live-span direction were
+  generated only as singleton alternatives because `CandidateKey` had no independent
+  point-tracking component. Exact intersections were ambiguous and biased samples snapped only one
+  coordinate. The correction publishes one deterministic conjunction candidate and suppresses
+  only its compatible singleton subsets. The focused public regression proves line
+  `HorizontalPoints + Vertical` and polyline `VerticalPoints + Horizontal`; inference-owner tests
+  cover both point/midpoint pairings, exact remembered axes, non-Cartesian provenance, same-axis
+  alternatives, ambiguity, stable/stale identity, shared hysteresis, conservative ranking and
+  bounded failure. This is a focused inference-composition defect, not a new canonical golden
+  dimension.
 
-F001 and F002 change no residual, Jacobian, solver priority, branch rule or accepted geometry.
-F003 deliberately adds the authorized linear residual and durable retained behavior. All three
-remain focused owner regressions because they expose no missing systemic golden dimension. F001
-and F002 were independently classified `DEFECT` against source
+F001, F002 and F004 change no residual, Jacobian, solver priority, branch rule or accepted
+geometry. F003 deliberately adds the authorized linear residual and durable retained behavior. All
+four remain focused owner regressions because they expose no missing systemic golden dimension.
+F001 and F002 were independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`. Exact pre-fix reproduction failed each proposed
 owner regression; after repair the exact F001 and F002 commands pass 1/1, the complete editor
-crate passes 302/302 unit tests plus every integration/doc-test suite. The current demo-web suite
-passes 104/104 plus its decoder/doc tests. The current focused F003 sketch relation/persistence
-matrices pass 17/17 and 7/7, respectively.
+crate passed 302/302 unit tests plus every integration/doc-test suite at that checkpoint. The
+current demo-web suite passes 104/104 plus its decoder/doc tests, and the current focused F003
+sketch relation/persistence matrices pass 17/17 and 7/7, respectively.
 
-A complete development-mode release gate passed on the current post-F003 tree:
+A complete development-mode release gate passed on the historical post-F003 tree:
 
 ```text
 env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run './scripts/release-gate.sh'
@@ -224,6 +262,15 @@ rustdoc, benchmark compilation, M14/M32 performance budgets, the 152.53-second 2
 sparse crossover, licence/package validation and Trunk 0.21.14 release assembly. It remains
 provisional development evidence; the clean replacement gate recorded below supplied nomination
 evidence.
+
+The current post-F004 tree passed the same complete development-mode gate with
+`GEOSOLVE_ALLOW_DIRTY=1`. It includes the focused 2/2 F004 public regression, 311/311
+constraint-editor unit tests plus every integration/doc test, the unchanged 234/234 golden,
+native/WASM M70 and M71 parity, demo-web WASM, warnings-denied workspace Clippy and rustdoc, all
+locked all-feature workspace tests, benchmark compilation, M14/M32 budgets, the 151.18-second
+256-moving-body sparse crossover, licence/package validation and Trunk 0.21.14 release assembly.
+This remains provisional until the complete gate is repeated from an unchanged clean nominated
+F004 source.
 
 The withdrawn pre-F003 candidate `ad01912eac28275644dcfc867a2dc70030b5406d` passed:
 
@@ -241,7 +288,8 @@ the snapshot, `/` equalled `index.html`, and both served and post-fetch ordered 
 
 Those bytes predate M71-F003, are withdrawn from continued UAT and are no longer served.
 
-Clean replacement source `83bd2b575784c44b618fb3ad144f24e84702d764` passed:
+Withdrawn historical F003 clean source `83bd2b575784c44b618fb3ad144f24e84702d764`
+passed:
 
 ```text
 env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
@@ -267,11 +315,12 @@ The exact seven-file gate output was copied without rebuilding, byte-compared an
 | `index.html` | `946d66a5e03e56b22efd3ee99fc157ba9668c10ae4393695b6200274f57aace4` |
 | `styles-36c74d05d21a90c9.css` | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
 
-PID `1202735` has exact argv `python3 -m http.server 8080 --bind 100.94.63.83 --directory
-/tmp/geosolve-m71-f003-uat.hybK8W` and listens on `100.94.63.83:8080`. Proxy-disabled,
-cache-bypassed requests to `http://100.94.63.83:8080/` byte-matched all seven files; `/` matched
-`index.html`. Both local and fetched ordered manifest aggregates equal
+At the F003 checkpoint PID `1202735` had exact argv `python3 -m http.server 8080 --bind
+100.94.63.83 --directory /tmp/geosolve-m71-f003-uat.hybK8W` and listened on
+`100.94.63.83:8080`. Proxy-disabled, cache-bypassed requests byte-matched all seven files; `/`
+matched `index.html`. Both local and fetched ordered manifest aggregates equalled
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
+PID `1202735` has since exited and the endpoint is offline.
 
 M71 deliberately excludes broad derived-point H/V operands beyond explicit native line/polyline
 midpoint axes, M37 catalog consolidation, certified generic intersections, quadrant anchors,
@@ -280,5 +329,6 @@ persistent wake state, canonical sketch v5, computed-feature chaining, browser E
 behavior. `FilletDiscarded` and nonlinear curve-parameter midpoint occurrences remain
 tracking-only.
 
-The only remaining milestone blocker is explicit supervising-human review of M71-U1 through
-M71-U5. Mechanical qualification and publication do not close M71.
+The next blockers are explicit authority to commit a clean F004 candidate, an unchanged-source
+clean release gate, immutable replacement publication and then explicit supervising-human review
+of M71-U1 through M71-U5. Mechanical qualification and publication do not close M71.

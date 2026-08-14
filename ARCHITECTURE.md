@@ -109,9 +109,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   `d400c4a8201f6afc531f5b504424d6430dbf3937` passes
   `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, including the
   152.49-second 256-moving-body sparse crossover. Its immutable seven-file snapshot
-  `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is byte-verified and served at
-  `http://100.94.63.83:8080/`, with ordered-manifest aggregate
-  `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. The targeted movement
+  `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was byte-verified and served at
+  `http://100.94.63.83:8080/` for M70B, with ordered-manifest aggregate
+  `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`; that server has since
+  retired. The targeted movement
   behavior was reported fixed. Clean closing source `48e3cc3` passes the complete gate with focused
   multi-feature transaction and finite-arc transport regressions; the 198/198 golden and release
   bytes remain unchanged. M70B is closed under the requested scoped sign-off.
@@ -122,8 +123,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   axis with independent validation; the original four reuse existing runtime mathematics. Frozen
   canonical v4 is first isolated behind private wire DTOs; unsupported draft v5 owns the complete
   side-section round trip. The headless editor owns contextual authoring and bounded M70 inference
-  extensions. M71-F003 passes the complete dirty-tree development gate, but the former candidate
-  is withdrawn; replacement clean qualification/publication and focused human UAT are pending.
+  extensions. M71-F004 gives remembered point/native-midpoint axes their own candidate identity so
+  one may compose with a complementary exact Cartesian line/polyline direction at the exact
+  coordinate intersection. Same-axis and oblique evidence remains alternative. The F003 candidate
+  is withdrawn; the complete dirty-tree development gate passes, while replacement clean
+  qualification/publication and focused human UAT are pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -574,9 +578,10 @@ fixture to 198 all-`PASS` rows at SHA-256
 aggregate golden qualification, formatting, warnings-denied all-workspace Clippy, locked all-
 feature workspace tests and the relevant WASM check pass. Clean F005 source
 `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate, and its immutable
-seven-file snapshot at `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served and byte-verified at
-`http://100.94.63.83:8080/` with ordered-manifest aggregate
-`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`.
+seven-file snapshot at `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served and byte-verified at
+`http://100.94.63.83:8080/` for M70B with ordered-manifest aggregate
+`3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`; that server has since
+retired.
 
 Source movement continuity is an accepted-state protocol above that static root proof. A computed
 snapshot carries internal current-corner contact, winding, periodic-certificate and transverse-
@@ -1194,9 +1199,10 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   owner/golden and aggregate golden qualification, formatting, warnings-denied all-workspace
   Clippy, locked all-feature workspace tests and the relevant WASM check pass. Clean F005 source
   `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete release gate. Its immutable
-  seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` is served at
-  `http://100.94.63.83:8080/`; every file and `/` byte-match, with ordered-manifest aggregate
-  `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. Clean closing source
+  seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
+  `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched, with ordered-manifest
+  aggregate `3173fa529fa14fab5783cf4cb4733b17db5e6850ff5d6c63022fe712a0be4c7f`. That server has since
+  retired. Clean closing source
   `48e3cc3` passes the full gate with the focused multi-feature and finite-arc regressions and
   produces byte-identical release output. M70B is closed.
 - M71: active ADR 0035 retained-drafting-relations milestone. It promotes point-pair
@@ -1205,5 +1211,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   preserves frozen v4 through explicit wire isolation. Its original four nine-row relation
   families extend the current canonical fixture to 234/234 `PASS` at
   SHA-256 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
-  Focused `M71-F003` coverage owns the midpoint-axis correction; the complete dirty-tree
-  development gate passes and replacement clean qualification remains open.
+  Focused `M71-F003` coverage owns the midpoint-axis correction and focused `M71-F004` coverage
+  owns complementary endpoint-axis/direction composition. The F003 publication is withdrawn;
+  the complete dirty-tree development gate passes and replacement clean qualification remains
+  open.
