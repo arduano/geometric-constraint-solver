@@ -126,6 +126,8 @@ Its immutable seven-file snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, aggr
 `http://100.94.63.83:8080/` under PID `3245562`. On 2026-08-14 the supervising human confirmed the
 corrected two-constraint auto-placement, accepted the recorded M71-U1 through M71-U5 review points
 and explicitly requested closure without claiming an unrecorded exhaustive replay.
+No M72 scope is active. `docs/M72_GOALS.md` is a non-activated proposal for behavior-preserving
+retained-authoring semantic consolidation before any broader M37 catalog expansion.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -138,6 +140,7 @@ support and physics remain outside future acceptance.
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
 7. `docs/adr/0001-*.md` through `docs/adr/0035-*.md`
+8. `docs/M72_GOALS.md` — proposal only; it is not an activated implementation milestone.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -389,6 +392,9 @@ snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, with ordered-manifest aggrega
 `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`, is served only through
 Tailscale at `http://100.94.63.83:8080/`; every asset plus `/` byte-matches the snapshot. The scoped
 M71-U1 through M71-U5 review and explicit supervising-human approval pass; M71 is closed.
+The next numbered scope is not activated. The prepared M72 proposal recommends consolidating the
+duplicated construction-stage and relation-applicability semantics while preserving all accepted
+M70/M71 behavior; explicit caller acceptance is required before implementation.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

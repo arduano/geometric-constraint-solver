@@ -544,8 +544,9 @@ result makes those laws smaller and clearer.
    product authority.
 2. Treat M71 as closed. Do not add scope, reinterpret the scoped human approval or replace the
    qualified source identity through a later documentation or planning commit.
-3. Begin only an explicitly accepted next-milestone scope. The semantic-consolidation questions
-   above are planning inputs, not authorization to refactor or broaden the constraint catalog.
+3. Begin only an explicitly accepted next-milestone scope. `docs/M72_GOALS.md` packages the
+   semantic-consolidation questions above as a non-activated proposal; it is not authorization to
+   refactor or broaden the constraint catalog.
 
 ## Deliberately deferred
 

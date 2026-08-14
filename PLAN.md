@@ -4349,6 +4349,26 @@ intersections, quadrant anchors, nonlinear tangent/normal inference, equality/sy
 host axes/grids/increments, persistent wake state, canonical sketch v5, computed-feature chaining,
 browser E2E, mobile work and legacy UI.
 
+### M72 proposal — retained authoring semantic consolidation
+
+Status: proposal prepared on 2026-08-14 after the approved M71 close; **not activated**. The
+authoritative execution order currently ends at M71. `docs/M72_GOALS.md` recommends a
+behavior-preserving consolidation of construction-stage semantics and direct/contextual relation
+applicability before any broader retained M37 catalog expansion.
+
+- [x] Preserve M71's qualified source, immutable publication and scoped close as the accepted
+  baseline.
+- [x] Record the two duplicated semantic seams and the preview/reference/commit parity law exposed
+  by M71 hardening.
+- [x] Define proposed scope, acceptance, non-goals and qualification expectations without naming a
+  premature public API.
+- [ ] Receive explicit supervising-caller acceptance or replacement of the proposed M72 scope.
+- [ ] If accepted, add final acceptance/scenario records and any required ADR before implementation.
+
+Preparation gate: no production code, public API, persistence format, residual, golden or release
+candidate may change under M72 until the scope is explicitly activated. M71 remains the completed
+baseline in the meantime.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

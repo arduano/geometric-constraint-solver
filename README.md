@@ -64,6 +64,8 @@ Concentric and Collinear. M71-F003 through M71-F006 are resolved; clean product 
 `f8a45ae7b355ab9874bf268c9950e369814e8432` passes the complete release gate and its immutable
 F005/F006 replacement is byte-verified at the published endpoint. The supervising human accepted
 the scoped U1-U5 review and explicitly closed M71 on 2026-08-14.
+No M72 scope is active. `docs/M72_GOALS.md` contains a non-activated proposal for
+behavior-preserving retained-authoring semantic consolidation before broader catalog work.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
@@ -74,6 +76,7 @@ Physics, collision and a production rendering system remain out of scope.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
+7. `docs/M72_GOALS.md` — prepared next-milestone proposal; not yet activated.
 
 ## Workspace
 
