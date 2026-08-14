@@ -266,11 +266,13 @@ fn m72_interactive_rectangle_has_free_size_and_retained_history() {
     coordinator.undo().expect("undo rectangle construction");
     assert!(coordinator.session().design_document().points().is_empty());
     assert!(coordinator.session().design_document().curves().is_empty());
-    assert!(coordinator
-        .session()
-        .design_document()
-        .constraints()
-        .is_empty());
+    assert!(
+        coordinator
+            .session()
+            .design_document()
+            .constraints()
+            .is_empty()
+    );
 
     coordinator.redo().expect("redo rectangle construction");
     assert_positions_close(
