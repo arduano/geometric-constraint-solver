@@ -2,13 +2,23 @@
 
 # M72 focused UAT — Public workbench bulk fixes
 
-Status: implementation and local Chromium preflight pass. The public endpoint is reserved at
-`https://arduano.github.io/geometric-constraint-solver/`; clean qualification and deployment are
-still pending. Final milestone closure requires explicit supervising-human approval.
+Status: implementation, clean qualification, public GitHub Pages deployment, exact hosted-artifact
+byte verification and local/public Chromium preflight pass. The workbench is live at
+`https://arduano.github.io/geometric-constraint-solver/`. Explicit supervising-human approval is
+the only remaining milestone gate.
 
 Direct Rust/WASM tests are authoritative for accepted geometry, residuals, rank/DOF, branches,
 history and problem ownership. Human UAT should focus on feel, discoverability and browser
 presentation.
+
+Mechanical release authority is clean source `dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
+`38d79f5e05cb5274cc7eeb6bc6c0c2fac7d6f624`. Its complete gate log and SHA-256 are recorded in
+`docs/M72_IMPLEMENTATION.md`; the unchanged golden passes **234/234**. The full-history Gitleaks
+report is empty. Deployment source `6eb2c63f6349851e70200570c9c2db07631acd3a` passed corrected
+run `31802816639` attempt 2, including the unchanged 180-second sparse ceiling in `176.27s`.
+Artifact `9221899077`, all public HTTP responses and bytes, the WASM media type, both desktop
+Chromium sizes and browser-local reload persistence pass mechanically. Human review should now
+score presentation and interaction feel through M72-U1 through M72-U4 below.
 
 ## M72-U1 — Problems recover and stay current
 
@@ -70,6 +80,5 @@ reload.
 - M72-U1: pending supervising-human review.
 - M72-U2: pending supervising-human review.
 - M72-U3: pending supervising-human review.
-- M72-U4: pending public deployment and supervising-human review.
+- M72-U4: mechanical public deployment/browser preflight passed; pending supervising-human review.
 - Final M72 approval: pending.
-

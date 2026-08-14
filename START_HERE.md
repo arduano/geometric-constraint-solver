@@ -127,9 +127,11 @@ Its immutable seven-file snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, aggr
 corrected two-constraint auto-placement, accepted the recorded M71-U1 through M71-U5 review points
 and explicitly requested closure without claiming an unrecorded exhaustive replay.
 M72 is active as the supervising-caller-approved public-workbench bulk-fix and GitHub Pages
-release milestone. `docs/M72_GOALS.md` owns its bounded defects, UI consolidation, qualification
-and public-deployment scope. The prior semantic-consolidation proposal moved to
-`docs/M73_GOALS.md` and remains inactive.
+release milestone. Its three bounded fixes, clean qualification, public deployment, exact hosted-
+artifact byte verification and Chromium preflight pass. The workbench is live at
+`https://arduano.github.io/geometric-constraint-solver/`; only focused supervising-human UAT and
+approval remain. `docs/M72_GOALS.md` owns the scope. The prior semantic-consolidation proposal moved
+to `docs/M73_GOALS.md` and remains inactive.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -395,8 +397,16 @@ snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, with ordered-manifest aggrega
 `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`, is served only through
 Tailscale at `http://100.94.63.83:8080/`; every asset plus `/` byte-matches the snapshot. The scoped
 M71-U1 through M71-U5 review and explicit supervising-human approval pass; M71 is closed.
-M72 is activated for the accepted rectangle, stale-Problem, option-overlay and public Pages work.
-Its focused owner regressions must preserve the M71 golden and all solver/persistence semantics.
+M72's accepted rectangle, stale-Problem and option-overlay repairs are implemented. Clean source
+`dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
+`38d79f5e05cb5274cc7eeb6bc6c0c2fac7d6f624`, passes the complete gate and unchanged 234/234 golden;
+its full-history Gitleaks report is empty. The public repository and workflow Pages configuration
+pass. Run `31800607957` passed the release gate but failed before upload because `trunk` was outside
+Nix; `6eb2c63` corrects the workflow. Corrected run `31802816639` attempt 2 passed the unchanged
+complete gate, including the 256-body ceiling in `176.27s`, and deployed the seven-file artifact.
+The public root/files, hashes, repository-prefixed URLs, WASM media type and Chromium checks at both
+desktop sizes pass, including reload persistence. Human UAT remains open. M72's focused owner
+regressions preserve all solver/persistence semantics.
 The duplicated construction-stage and relation-applicability consolidation remains an inactive
 M73 proposal requiring a later caller decision.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
@@ -464,8 +474,8 @@ Durable milestone and cleanup records:
 - `docs/M71_UAT.md` (current focused M71 scorecard)
 - `docs/adr/0035-retained-drafting-relation-lifecycle.md`
 - `docs/M72_GOALS.md` (active public-workbench bulk-fix and Pages-release scope)
-- `docs/M72_IMPLEMENTATION.md` (implemented F001-F003, Pages pipeline and qualification ledger)
-- `docs/M72_UAT.md` (focused public-workbench review and approval checklist)
+- `docs/M72_IMPLEMENTATION.md` (clean-qualified F001-F004 and public Pages evidence ledger)
+- `docs/M72_UAT.md` (focused live-workbench review and pending human approval checklist)
 - `docs/M73_GOALS.md` (inactive retained-authoring semantic-consolidation proposal)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

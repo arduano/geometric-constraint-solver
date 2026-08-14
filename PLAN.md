@@ -4360,8 +4360,27 @@ semantic-consolidation proposal. `docs/M72_GOALS.md` owns the accepted scope.
 - [x] M72-F002: make interactive rectangles free-size while preserving the constrained macro.
 - [x] M72-F003: move all option-bearing tool and Construction-display controls into one accessible
   bottom-left canvas overlay.
-- [ ] M72-F004: qualify, publish and verify the public GitHub Pages workbench.
-- [ ] Run the complete clean release gate and receive focused supervising-human UAT approval.
+- [x] M72-F004: qualify, publish and verify the public GitHub Pages workbench.
+- [x] Run the complete clean release gate.
+- [ ] Receive focused supervising-human UAT approval.
+
+Qualification/publication checkpoint (2026-08-14): clean source
+`dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
+`38d79f5e05cb5274cc7eeb6bc6c0c2fac7d6f624`, passes the complete release gate. The retained log is
+`/tmp/geosolve-m72-clean-gate.upGsYJ.log`, SHA-256
+`7758b84585c28761414efaa20422d95c4e7f9717966bb173583e06244f6b6471`; the unchanged golden remains
+234/234 `PASS`. The complete-history Gitleaks report is empty. The GitHub repository is public with
+workflow-based, public, HTTPS-enforced Pages and the correct homepage. Run `31800607957` passed the
+release gate but failed before upload because its artifact build invoked `trunk` outside Nix;
+workflow-only source `6eb2c63f6349851e70200570c9c2db07631acd3a`, tree
+`fba3427e5e17023150a8252a154f097f56eb5964`, corrects that environment. Corrected run
+`31802816639` attempt 1 hit only a shared-runner wall-clock outlier: every correctness assertion
+passed, but the 256-body case took `209.05s` against the unchanged `180s` ceiling. The unchanged
+attempt 2 passed it in `176.27s`, then validated, uploaded and deployed Pages artifact
+`9221899077`. Root plus all seven public files return 200 and byte-match that artifact; WASM is
+served as `application/wasm`, repository-prefixed assets load, and public Chromium checks pass at
+`1440x900` and `1024x720` including local-storage reload persistence. Only supervising-human UAT
+approval remains open.
 
 Gate: the three defects pass focused owner regressions; no residual, persistence or golden meaning
 changes; the desktop overlays remain contained and family-local; and the exact qualified public
