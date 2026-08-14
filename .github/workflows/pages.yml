@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Qualify and assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+        with:
+          nix_path: nixpkgs=https://github.com/NixOS/nixpkgs/archive/f13ff45afd1bb73e640eaa08a7066dbed07e3238.tar.gz
+
+      - name: Fetch locked Rust dependencies
+        run: nix-shell shell.nix --run 'cargo fetch --locked'
+
+      - name: Run the complete release gate
+        run: nix-shell shell.nix --run './scripts/release-gate.sh'
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
+
+      - name: Build the repository-prefixed Pages artifact
+        env:
+          GEOSOLVE_PAGES_BASE: ${{ steps.pages.outputs.base_path }}
+          GEOSOLVE_PAGES_DIST: ${{ runner.temp }}/geosolve-pages
+        run: |
+          set -euo pipefail
+          case "$GEOSOLVE_PAGES_BASE" in
+            /*) ;;
+            *) printf '%s\n' "Pages base path must be absolute" >&2; exit 1 ;;
+          esac
+          cd crates/geosolve-demo-web
+          env -u NO_COLOR trunk build --release --locked \
+            --public-url "${GEOSOLVE_PAGES_BASE}/" \
+            --dist "$GEOSOLVE_PAGES_DIST"
+
+      - name: Validate the Pages artifact
+        env:
+          GEOSOLVE_PAGES_BASE: ${{ steps.pages.outputs.base_path }}
+          GEOSOLVE_PAGES_DIST: ${{ runner.temp }}/geosolve-pages
+        run: |
+          set -euo pipefail
+          mapfile -t entries < <(find "$GEOSOLVE_PAGES_DIST" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
+          mapfile -t files < <(find "$GEOSOLVE_PAGES_DIST" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | sort)
+          [[ "${#entries[@]}" -eq 7 ]]
+          [[ "${#files[@]}" -eq 7 ]]
+          [[ ! -L "$GEOSOLVE_PAGES_DIST" ]]
+          [[ -z "$(find "$GEOSOLVE_PAGES_DIST" -mindepth 1 -type l -print -quit)" ]]
+          for file in API_COMPATIBILITY.md LICENSE THIRD_PARTY_LICENSES.md index.html; do
+            [[ -f "$GEOSOLVE_PAGES_DIST/$file" ]]
+          done
+          shopt -s nullglob
+          scripts=("$GEOSOLVE_PAGES_DIST"/geosolve-demo-web-*.js)
+          wasm=("$GEOSOLVE_PAGES_DIST"/geosolve-demo-web-*_bg.wasm)
+          styles=("$GEOSOLVE_PAGES_DIST"/styles-*.css)
+          [[ "${#scripts[@]}" -eq 1 ]]
+          [[ "${#wasm[@]}" -eq 1 ]]
+          [[ "${#styles[@]}" -eq 1 ]]
+          grep -Fq "${GEOSOLVE_PAGES_BASE}/styles-" "$GEOSOLVE_PAGES_DIST/index.html"
+          grep -Fq "${GEOSOLVE_PAGES_BASE}/geosolve-demo-web-" "$GEOSOLVE_PAGES_DIST/index.html"
+          if grep -Eq "(href=|from |module_or_path: )['\"]/(styles-|geosolve-demo-web-)" "$GEOSOLVE_PAGES_DIST/index.html"; then
+            printf '%s\n' "Pages artifact contains an unprefixed application asset URL" >&2
+            exit 1
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: ${{ runner.temp }}/geosolve-pages
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128
