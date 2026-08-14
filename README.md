@@ -56,12 +56,14 @@ failure handoff, then validates and reconstructs a complete coordinator before r
 state. F001-F005 retain owning-layer regressions; M70B closed on its 198/198 `PASS` golden, while
 M71 extends the current canonical inventory to 234/234 `PASS`. Clean
 closing source `48e3cc3` passes the complete release gate with the final multi-feature transaction
-and finite-arc transport regressions, while its runtime release remains the byte-verified F005
-candidate. M71 is active under amended ADR 0035 for six ordinary retained drafting definitions:
+and finite-arc transport regressions; its release bytes matched the historical byte-verified
+M70B-F005 candidate. M71 is active under amended ADR 0035 for six ordinary retained drafting
+definitions:
 point-pair Horizontal/Vertical, native line/polyline midpoint-axis Horizontal/Vertical,
-Concentric and Collinear. The M71-F003 correction is provisionally development-gate qualified;
-clean nominated-source qualification, immutable replacement publication and focused human UAT
-remain pending.
+Concentric and Collinear. M71-F003 through M71-F006 are resolved; clean product source
+`f8a45ae7b355ab9874bf268c9950e369814e8432` passes the complete release gate and its immutable
+F005/F006 replacement is byte-verified at the current UAT endpoint. Focused human UAT and explicit
+approval remain pending.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here

@@ -1677,11 +1677,10 @@ unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
 
 ## M71 acceptance: retained drafting relations
 
-Status: active and amended for M71-F005/F006. The focused distinct-reference orthogonal point-axis
-composition and tighter default capture-envelope corrections are implemented in development
-source. F004 clean qualification/publication remains historical evidence but is withdrawn from
-current UAT; post-F005/F006 clean release qualification, replacement immutable publication and
-supervising-human approval are pending.
+Status: active and amended for M71-F005/F006. The distinct-reference orthogonal point-axis
+composition and tighter default capture-envelope corrections are implemented, clean-qualified and
+published as a byte-verified immutable replacement. F003/F004 evidence remains historical; only
+M71-U1 through M71-U5 and explicit supervising-human approval are pending.
 
 - Frozen canonical sketch v1-v4 readers and bytes remain unchanged. A private frozen-v4
   constraint wire DTO prevents in-memory enum growth from expanding v4, and v4 export of M71 state
@@ -1755,12 +1754,11 @@ supervising-human approval are pending.
   passes. The workbench adds no equation, applicability or geometric inference rule.
 - Reviewed systemic rows preserve the 234-row canonical golden authoring/scene matrix without
   rewriting unrelated bytes; F003-F006 remain at their focused owner layer. `--survey`, `--check`
-  and `--require-clean` must pass again on the clean post-F005/F006 nominated source.
-- Formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests, the
-  relevant WASM and release Trunk builds and one clean `./scripts/release-gate.sh` must pass on that
-  unchanged post-F005/F006 source before nomination.
-- One post-F005/F006 immutable distribution must be byte-verified and served through Tailscale;
-  the preserved F004 distribution is historical evidence, not current UAT authority. The
+  and `--require-clean` pass on clean source `f8a45ae7b355ab9874bf268c9950e369814e8432`.
+- Formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests, relevant
+  WASM and Trunk builds and the complete clean release gate pass on that unchanged source.
+- Its seven-file immutable distribution is byte-verified and served through Tailscale from
+  `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`; the preserved F004 distribution is historical. The
   supervising human must then complete and explicitly approve `docs/M71_UAT.md`; mechanical
   qualification alone does not close M71.
 

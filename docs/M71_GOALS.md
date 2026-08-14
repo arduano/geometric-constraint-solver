@@ -3,9 +3,8 @@
 # M71 goals — Retained drafting relations
 
 Status: active and amended on 2026-08-14 for M71-F005/M71-F006. Cross-axis point-pair composition
-and the tighter default capture envelope pass focused development qualification. The previously
-qualified F004 publication is withdrawn from continued UAT; clean replacement qualification,
-immutable publication and supervising-human UAT are pending.
+and the tighter default capture envelope are clean-qualified and published as a byte-verified
+immutable replacement. Earlier publications remain historical; supervising-human UAT is pending.
 
 M70 proved reusable auto-constraint interaction using only constraint definitions already owned by
 the ordinary retained document/editor workflow. M71 closes the highest-value gap exposed by that
@@ -139,8 +138,9 @@ The original four-definition candidate was withdrawn because it encoded midpoint
 tracking-only. The later F003 candidate was withdrawn because it could not compose a remembered
 endpoint axis with a complementary new-span direction. The clean, byte-verified F004 candidate is
 now also withdrawn from continued UAT because it predates the F005 cross-axis point-pair and F006
-default-capture corrections. All immutable snapshots remain historical evidence; no clean
-F005/F006 replacement has completed qualification or publication.
+default-capture corrections. All earlier immutable snapshots remain historical evidence. Clean
+source `f8a45ae7b355ab9874bf268c9950e369814e8432` and its byte-verified F005/F006 replacement are the
+current mechanical UAT authority.
 
 ## Architectural ownership
 

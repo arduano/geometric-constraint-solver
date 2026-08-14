@@ -131,9 +131,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   two redundant axes. M71-F006 changes only `DraftInferenceTolerances::default()` to inclusive
   `6/9 px` point/midpoint, `8/12 px` curve and `3/5 degree` direction enter/leave thresholds;
   explicit custom policy remains authoritative. Same-axis, same-reference, oblique, ambiguous and
-  exhausted evidence remains fail-closed. The clean F004 qualification/publication is preserved as
-  historical evidence but withdrawn from current UAT; post-F005/F006 clean qualification,
-  replacement publication and focused human UAT are pending.
+  exhausted evidence remains fail-closed. Clean source `f8a45ae7b355ab9874bf268c9950e369814e8432`
+  passes the complete release gate and its seven-file replacement is byte-verified through the
+  Tailscale-only endpoint. F003/F004 evidence remains historical; focused human UAT is pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -1225,5 +1225,5 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   Focused `M71-F003` coverage owns the midpoint-axis correction, focused `M71-F004` coverage owns
   complementary endpoint-axis/direction composition, `M71-F005` owns distinct-reference
   Horizontal-plus-Vertical point-axis intersection and `M71-F006` owns the tighter default capture
-  envelope. The F004 clean qualification/publication remains historical evidence but is withdrawn
-  from current UAT; post-F005/F006 clean qualification and replacement publication remain open.
+  envelope. Clean post-F005/F006 qualification and byte-verified replacement publication pass;
+  F003/F004 evidence remains historical and only focused human UAT remains open.

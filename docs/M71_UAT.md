@@ -2,17 +2,26 @@
 
 # M71 focused UAT — Retained drafting relations
 
-Status: no current M71-F005/F006 UAT candidate is qualified or published. Focused development
-qualification passes for the cross-axis point-pair and tighter default-capture corrections. The
-clean, byte-verified F004 publication below is historical evidence and withdrawn from continued
-UAT. A clean replacement must be qualified and byte-verified before M71-U1 through M71-U5 resume;
-all results and explicit supervising-human approval remain pending.
+Status: the clean M71-F005/F006 UAT candidate is mechanically qualified, frozen and byte-verified
+at the endpoint below. All M71-U1 through M71-U5 results and explicit supervising-human approval
+remain pending; mechanical qualification does not complete M71.
+
+Qualified F005/F006 product source: `f8a45ae7b355ab9874bf268c9950e369814e8432`
+
+Qualified F005/F006 product tree: `f7bccc58f301a715bc91f40115ce6424ec5f391d`
+
+Current F005/F006 endpoint: `http://100.94.63.83:8080/`
+
+Current F005/F006 immutable snapshot: `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`
+
+Current F005/F006 release distribution manifest aggregate:
+`657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`
 
 Historical qualified F004 product source: `a2e51efba7d79f684d264094ffd7dd0e37a4d089`
 
 Historical qualified F004 product tree: `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`
 
-Historical F004 endpoint, still serving withdrawn bytes: `http://100.94.63.83:8080/`
+Historical F004 endpoint — the shared address now serves F005/F006: `http://100.94.63.83:8080/`
 
 Historical F004 immutable snapshot: `/tmp/geosolve-m71-f004-uat.SaXMVY`
 
@@ -21,7 +30,7 @@ Historical F004 release distribution manifest aggregate:
 
 Withdrawn F003 source: `83bd2b575784c44b618fb3ad144f24e84702d764`
 
-Former F003 endpoint — the shared address now serves F004; **do not use the preserved F003
+Former F003 endpoint — the shared address now serves F005/F006; **do not use the preserved F003
 snapshot for UAT**: `http://100.94.63.83:8080/`
 
 Preserved F003 immutable snapshot: `/tmp/geosolve-m71-f003-uat.hybK8W`
@@ -31,7 +40,7 @@ Preserved F003 release distribution manifest aggregate:
 
 Withdrawn pre-F003 source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
-Shared historical endpoint — the shared address now serves F004; **do not use the withdrawn
+Shared historical endpoint — the shared address now serves F005/F006; **do not use the withdrawn
 snapshot for UAT**: `http://100.94.63.83:8080/`
 
 Withdrawn immutable snapshot: `/tmp/geosolve-m71-uat.yFBsnX`
@@ -39,14 +48,13 @@ Withdrawn immutable snapshot: `/tmp/geosolve-m71-uat.yFBsnX`
 Withdrawn release distribution manifest aggregate:
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
-Once a post-F005/F006 replacement is published, use only the ordinary GeoSolve Sketch Workbench
-and one editable **Retained drafting relations** playground. Direct Rust/native-WASM tests are
+Use only the current F005/F006 endpoint, the ordinary GeoSolve Sketch Workbench and one editable
+**Retained drafting relations** playground. Direct Rust/native-WASM tests are
 authoritative for equations, residuals, lifecycle, persistence, ranking and publication. Human
 review assesses discoverability, predictability, annotation clarity, capture feel and recovery.
 
-Do not execute or score the U1-U5 checklist against the endpoint currently listed above. PID
-`2848202` still serves the exact historical F004 bytes, but they predate both current corrections
-and are not current UAT authority.
+PID `3245562` serves the exact current snapshot. Historical PID `2848202` has exited; do not score
+U1-U5 against any preserved F003/F004 snapshot.
 
 ## M71-F005/F006 discovery and corrected contract
 
@@ -69,9 +77,66 @@ alternatives when they express different retained intent.
 F006 narrows the default inclusive enter/leave thresholds to 6/9 px for stored points, semantic
 centers and native midpoints, 8/12 px for curves, and 3/5 degrees for world, remembered and
 point-tracking directions. Valid explicit host-policy thresholds remain authoritative. Focused
-owner and public line/polyline regressions pass for both corrections at committed development
-source `4f5339fa0de6b12794647835ac9066af5520887e`, but no complete clean gate, replacement release
-build or immutable publication has yet qualified these bytes.
+owner and public line/polyline regressions pass for both corrections. Clean source
+`f8a45ae7b355ab9874bf268c9950e369814e8432` completes the full release gate and supplies the
+byte-verified immutable publication below.
+
+## Clean F005/F006 candidate qualification and publication
+
+The qualified product source is HEAD `f8a45ae7b355ab9874bf268c9950e369814e8432`, tree
+`f7bccc58f301a715bc91f40115ce6424ec5f391d`, on `main`. Before and after qualification,
+`git status --short` was empty, origin divergence was `0 6`, and exactly one worktree existed. The
+clean gate ran from `2026-08-14T15:24:45+10:00` through `2026-08-14T15:33:12+10:00` using exactly:
+
+```text
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+It passed completely; the retained log is
+`/tmp/geosolve-m71-f005-f006-clean-gate.chbsLG.log` (SHA-256
+`d99f51ce220727165760051dc95e45e9f65b3336cfc9c256a94ccdca2bfd6bb4`). The gate includes
+formatting/diff hygiene, warnings-denied workspace Clippy, every locked all-feature workspace test,
+the unchanged 234-row golden, native/WASM M70 and M71 transition parity, demo-web WASM,
+warnings-denied rustdoc, benchmark compilation, M14/M32 budgets, the 153.53-second 256-moving-body
+sparse crossover, licence/package checks and Trunk 0.21.14 release assembly. Cargo emitted only
+the longstanding non-failing `license` plus `license-file` advisories. HEAD, tree and empty status
+were unchanged after the gate.
+
+Without rebuilding, exactly seven regular, non-symlink files were copied directly from that gate's
+`crates/geosolve-demo-web/dist`, byte-compared by manifest and frozen at
+`/tmp/geosolve-m71-f005-f006-uat.QPuMdT` with directory mode `0555` and file modes `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 14165 | `bf7bb1b88a7a6ae55701d10af9b58e2dddbcfaa0f899931d9937c3272f50f239` |
+| `LICENSE` | 35148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-17fdb23fc2dfe564.js` | 33327 | `ae66dbea0ce8581e4b0ae2a63a83db2e18a4489f7bfa245627e2c16b757ef22b` |
+| `geosolve-demo-web-17fdb23fc2dfe564_bg.wasm` | 6013457 | `9cfee00d39339a7e30cc3e2754ee641eb5e245ae31d19872da7b35a543e87b0f` |
+| `index.html` | 22977 | `84549b9bb35b0353309e6fa7aead31ee0a91b60e8e14fd395578d52ac37974a1` |
+| `styles-36c74d05d21a90c9.css` | 29304 | `49a0d71647856a30e798707860ffa9da4dbdbd1ec2f4faeafa412726f0e69048` |
+
+The C-locale ordered `sha256sum *` manifest aggregate is
+`657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`.
+
+PID `3245562` serves only that immutable snapshot at `http://100.94.63.83:8080/` with argv
+`/run/current-system/sw/bin/python3 -u -m http.server 8080 --bind 100.94.63.83 --directory
+/tmp/geosolve-m71-f005-f006-uat.QPuMdT`. Its resolved executable is
+`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`; its log is
+`/tmp/geosolve-m71-f005-f006-uat.QPuMdT.server.log`. It listens only on `100.94.63.83:8080`; the
+unrelated VS Code listener on `127.0.0.1:8080` remains untouched. Historical F004 PID `2848202`
+has exited, while its immutable snapshot remains preserved.
+
+At `2026-08-14T15:36:43+10:00`, proxy-disabled and cache-bypassed requests with
+`Accept-Encoding: identity` fetched all seven assets and `/`. Every request returned HTTP 200 from
+remote IP `100.94.63.83`, each named asset had the exact recorded size and compared byte-for-byte
+equal, and `/` equalled `index.html`. The fetched aggregate, post-fetch snapshot aggregate and
+recorded aggregate all matched. Fetch evidence is retained at
+`/tmp/geosolve-m71-f005-f006-fetch.yPRcIT`.
+
+This publication documents the already-qualified product source. The later documentation commit
+that records this evidence is not part of, and must not replace, the product source identity above.
 
 ## Historical M71-F004 discovery and corrected contract
 
@@ -136,13 +201,14 @@ gate's `crates/geosolve-demo-web/dist`, byte-compared by manifest and frozen at
 The C-locale ordered `sha256sum *` manifest aggregate is
 `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`.
 
-PID `2848202` serves only that immutable snapshot at `http://100.94.63.83:8080/` with argv
+At the F004 publication checkpoint, PID `2848202` served only that immutable snapshot at
+`http://100.94.63.83:8080/` with argv
 `/run/current-system/sw/bin/python3 -u -m http.server 8080 --bind 100.94.63.83 --directory
 /tmp/geosolve-m71-f004-uat.SaXMVY`. Its resolved executable is
 `/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`; its log is
-`/tmp/geosolve-m71-f004-uat.SaXMVY.server.log`. The candidate server listens only on
-`100.94.63.83:8080`; the unrelated VS Code listener on `127.0.0.1:8080` is not part of this
-publication.
+`/tmp/geosolve-m71-f004-uat.SaXMVY.server.log`. It listened only on `100.94.63.83:8080`; the
+unrelated VS Code listener on `127.0.0.1:8080` was not part of that publication. PID `2848202`
+has since exited, while its immutable snapshot remains preserved.
 
 At `2026-08-14T13:13:48+10:00`, proxy-disabled and cache-bypassed requests with
 `Accept-Encoding: identity` fetched all seven assets and `/`. Every request returned HTTP 200 from
@@ -282,7 +348,8 @@ byte-for-byte. A separate request for `/` matched `index.html`. The fetched and 
 ordered aggregates both reproduced
 `23ab4586acd0f8a86a85e81d7b913ee2736f2524fe81c9913fa3a726496584e0`.
 These bytes are now withdrawn because they predate M71-F004. PID `1202735` has since exited and
-that F003 server is offline; the shared endpoint now serves only the F004 snapshot recorded above.
+that F003 server is offline; the shared endpoint now serves only the F005/F006 snapshot recorded
+above.
 
 ## Preconditions
 
@@ -293,12 +360,13 @@ that F003 server is offline; the shared endpoint now serves only the F004 snapsh
 - [x] Focused F006 default/boundary coverage passes at inclusive 6/9 px point, 8/12 px curve and
   3/5 degree direction thresholds, including rejection of old-only entry samples and preservation
   of valid explicit host overrides.
-- [ ] The complete focused/collateral matrix, clean golden oracle, native/WASM parity, formatting,
+- [x] The complete focused/collateral matrix, clean golden oracle, native/WASM parity, formatting,
   warnings-denied Clippy, locked workspace tests and relevant WASM/Trunk builds pass on one
-  unchanged post-F005/F006 nominated source.
-- [ ] That unchanged post-F005/F006 source passes `./scripts/release-gate.sh` without a dirty-tree
+  unchanged post-F005/F006 nominated source
+  `f8a45ae7b355ab9874bf268c9950e369814e8432`.
+- [x] That unchanged post-F005/F006 source passes `./scripts/release-gate.sh` without a dirty-tree
   override.
-- [ ] Its immutable replacement release distribution is published through Tailscale and every
+- [x] Its immutable replacement release distribution is published through Tailscale and every
   served byte is verified against the local candidate.
 
 Historical F004 evidence, preserved but insufficient for current UAT:

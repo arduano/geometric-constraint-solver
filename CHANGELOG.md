@@ -145,8 +145,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   subsequently completed its bounded reproduction-capsule work and requested scoped sign-off.
   M71 was then activated under ADR 0035 and now implements six ordinary retained drafting
   definitions: point-pair and native-span-midpoint Horizontal/Vertical, Concentric and Collinear.
-  Its M71-F003 midpoint-axis correction is awaiting replacement clean qualification/publication
-  and focused human UAT.
+  M71-F003 through M71-F006 resolve native-midpoint durability, endpoint-axis/direction bundling,
+  distinct-reference orthogonal point-axis composition and overly broad default capture. Clean
+  source `f8a45ae7b355ab9874bf268c9950e369814e8432` passes the complete gate and supplies the current
+  byte-verified replacement; focused human UAT and explicit approval remain pending.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

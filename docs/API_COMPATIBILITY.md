@@ -101,7 +101,8 @@ change no additional public library API; closing source `48e3cc3` keeps the 198/
 release bytes unchanged and closes M70B under the requested scoped sign-off. ADR 0035 subsequently
 activated M71's six ordinary retained definitions. They extend the in-memory document/editor API
 and unsupported draft-v5 side section while canonical sketch v1-v4 remain frozen; clean
-replacement qualification/publication and human UAT are still pending.
+F005/F006 replacement qualification and byte-verified publication pass on source
+`f8a45ae7b355ab9874bf268c9950e369814e8432`; human UAT and explicit approval remain pending.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

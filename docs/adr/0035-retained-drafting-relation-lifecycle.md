@@ -2,10 +2,9 @@
 
 # ADR 0035: Retained drafting relation lifecycle and persistence
 
-Status: accepted and amended for M71-F005/M71-F006. The byte-verified F004 candidate remains
-historical evidence but is withdrawn from continued UAT. Cross-axis point-pair composition and
-the tighter default capture envelope pass focused development qualification; a clean replacement
-gate, immutable publication and supervising-human UAT are still pending.
+Status: accepted and amended for M71-F005/M71-F006. Cross-axis point-pair composition and the
+tighter default capture envelope are clean-qualified and published as a byte-verified immutable
+replacement. Earlier candidates remain historical evidence; supervising-human UAT is pending.
 
 ## Context
 

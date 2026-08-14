@@ -1321,9 +1321,9 @@ current canonical fixture to 234/234 `PASS`, SHA-256
 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`. M71-F003's midpoint-axis
 correction, M71-F004's endpoint-axis/direction composition, M71-F005's distinct-reference
 orthogonal point-axis intersection and M71-F006's tighter default capture envelope remain in
-focused owner regressions rather than adding systemic golden dimensions. The qualified F004
-publication is preserved as historical evidence but withdrawn from current UAT; post-F005/F006
-clean release qualification, replacement publication and focused human review remain pending.
+focused owner regressions rather than adding systemic golden dimensions. Clean post-F005/F006
+qualification and byte-verified replacement publication pass; F003/F004 evidence remains
+historical and focused human review remains pending.
 Every new fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1518,9 +1518,9 @@ explicitly configured valid policies keep their caller-supplied values and hyste
 Direct sketch/editor/native-WASM tests own 1/1/1/1/2/2 lowering, finite hard residuals, rank/DOF,
 commutative operands, retained parent edits, lifecycle, draft-v5 round trips, frozen-v4 rejection,
 inference ranking and exact publication authority. Human review follows `docs/M71_UAT.md` for
-discoverability, annotation clarity, predictable authoring/inference and recovery. The F004 UAT
-candidate is withdrawn after F005/F006; review resumes only after clean replacement qualification
-and byte-verified publication, and remains open until explicit supervising-human approval.
+discoverability, annotation clarity, predictable authoring/inference and recovery. The clean,
+byte-verified F005/F006 replacement is current UAT authority; review remains open until explicit
+supervising-human approval.
 
 ### M71-F003 - Native midpoint axis alignment is durable
 
@@ -1544,8 +1544,8 @@ The focused owner regression is
 Jacobian, audit metadata, scales, endpoint aliases, both axes, lifecycle, deletion, invalid
 operands and prepared CAS. Native transition and web DTO tests prove adapter parity without browser
 equations. This is a focused defect correction, not a new systemic golden dimension. The pre-F003
-publication is withdrawn; replacement clean qualification and publication are required before
-human retest.
+publication is withdrawn; the later clean, byte-verified F005/F006 replacement is current
+authority for human retest.
 
 ### M71-F004 - Endpoint point-axis and span-direction inference compose
 
@@ -1574,7 +1574,7 @@ composition/ranking/identity/resource matrix and `m71_transition_parity` owns na
 parity. No equation, Jacobian, solver priority, branch or persistence format changes. The canonical
 234-row authoring/scene oracle does not exercise inference bundles and remains unchanged. Clean
 F004 qualification/publication remains exact historical evidence, but F005/F006 withdraw that
-snapshot from current UAT pending a clean replacement.
+snapshot from current UAT; the clean, byte-verified F005/F006 replacement is current authority.
 
 ### M71-F005 - Distinct remembered point axes compose at one intersection
 
@@ -1613,8 +1613,8 @@ behavior at the new boundaries.
 validation, resource limits, suppression and hysteresis transitions are unchanged. Focused default
 and boundary tests own the change; it adds no constraint, residual, branch, persistence or browser
 policy. Because F006 changes interaction capture behavior after the qualified F004 publication,
-that publication is withdrawn from current UAT until a clean post-F005/F006 replacement is
-qualified and byte-verified.
+that publication is historical. The clean, byte-verified post-F005/F006 replacement is current
+UAT authority.
 
 ### M71-F001 - Rejected design intent remains visible over retained accepted geometry
 
@@ -1634,9 +1634,9 @@ The thin-adapter regression
 ordinary composed scene to carry the design-only entry while publishing no annotation for it.
 It was independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
-regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so clean
-replacement qualification and publication remain required at the candidate eventually recorded
-in `docs/M71_UAT.md`.
+regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so the clean
+F005/F006 replacement qualification and publication recorded in `docs/M71_UAT.md` now supply
+current UAT authority.
 
 ### M71-F002 - Direct relation applicability rejects missing selections
 
@@ -1652,9 +1652,9 @@ the direct availability boundary. The focused regression
 both public authoring surfaces without expanding M71 into a broader applicability refactor.
 It was independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`; the pre-fix exact regression fails and the repaired
-regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so clean
-replacement qualification and publication remain required at the candidate eventually recorded
-in `docs/M71_UAT.md`.
+regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so the clean
+F005/F006 replacement qualification and publication recorded in `docs/M71_UAT.md` now supply
+current UAT authority.
 
 ### M70B-R1 - Complete workspace reproduction payload
 

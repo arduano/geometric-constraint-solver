@@ -4123,10 +4123,9 @@ regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTA
 
 Status: active and amended for M71-F005/F006 on 2026-08-14. Scope and architecture are accepted in
 `docs/M71_GOALS.md` and ADR 0035. F005's distinct-reference orthogonal point-axis composition and
-F006's tighter default capture envelope are implemented in development source. The qualified F004
-publication is preserved as historical evidence but withdrawn from current UAT. Post-F005/F006
-clean release qualification, replacement immutable publication, M71-U1 through M71-U5 and
-explicit supervising-human approval remain.
+F006's tighter default capture envelope are implemented, clean-qualified and published as one
+byte-verified immutable replacement. The F003/F004 publications remain historical evidence. Only
+M71-U1 through M71-U5 and explicit supervising-human approval remain.
 
 Goal: promote the original four high-value relations plus two narrowly scoped native-span
 midpoint-axis definitions into the one ordinary retained sketch/editor lifecycle, then let the M70
@@ -4194,10 +4193,10 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
   the post-F004 nominated source.
 - [x] Freeze and byte-verify one post-F004 replacement immutable Tailscale candidate and record its
   source, manifest and endpoint in `docs/M71_UAT.md`.
-- [ ] Rerun focused owner/collateral tests, the clean golden oracle, formatting, warnings-denied
+- [x] Rerun focused owner/collateral tests, the clean golden oracle, formatting, warnings-denied
   workspace Clippy, locked all-feature workspace tests, relevant WASM/Trunk builds and the complete
   clean release gate on one unchanged post-F005/F006 nominated source.
-- [ ] Freeze and byte-verify one post-F005/F006 replacement immutable Tailscale candidate; the F004
+- [x] Freeze and byte-verify one post-F005/F006 replacement immutable Tailscale candidate; the F004
   distribution remains historical evidence and is not current UAT authority.
 - [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
 
@@ -4258,6 +4257,17 @@ valid custom tolerance values, policy validation, hysteresis state and fail-clos
 unchanged. Focused boundary coverage proves the new inclusive edges and rejects samples admitted
 only by the older defaults. Historical M70 qualification remains truthful and unchanged.
 
+M71-F005/F006 replacement qualification/publication note (2026-08-14): clean product source
+`f8a45ae7b355ab9874bf268c9950e369814e8432`, tree
+`f7bccc58f301a715bc91f40115ce6424ec5f391d`, passes the complete no-override release gate recorded
+at `/tmp/geosolve-m71-f005-f006-clean-gate.chbsLG.log`, including the unchanged 234-row golden,
+native/WASM parity, all locked workspace tests and the 153.53-second sparse crossover. The gate's
+seven files were copied without rebuilding, frozen at `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`
+and byte-verified at `http://100.94.63.83:8080/` under PID `3245562`; the C-locale ordered-manifest
+aggregate is `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`. Every asset and `/`
+returned HTTP 200 from `100.94.63.83` and matched byte-for-byte. The later publication-evidence
+commit is intentionally distinct from the qualified product source.
+
 Historical M71-F004 development qualification note (2026-08-14):
 `env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run
 './scripts/release-gate.sh'` passes the complete provisional gate: formatting/diff hygiene,
@@ -4277,16 +4287,17 @@ M71-F004 replacement qualification/publication note (2026-08-14): clean product 
 divergence was `0 3`, and exactly one worktree existed. The exact seven-file release distribution
 was copied without rebuilding to `/tmp/geosolve-m71-f004-uat.SaXMVY`, verified as regular
 non-symlink files, frozen with directory mode `0555` and file mode `0444`, and has ordered-manifest
-aggregate `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`. PID `2848202`
-serves that snapshot at `http://100.94.63.83:8080/` through the Tailscale listener only; the
-unrelated VS Code listener on localhost is not part of this publication. Proxy- and cache-bypassed,
-identity-encoded requests for all seven assets and `/` returned HTTP 200 from remote
+aggregate `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`. At that checkpoint, PID
+`2848202` served the snapshot at `http://100.94.63.83:8080/` through the Tailscale listener only;
+the unrelated VS Code listener on localhost was not part of the publication. Proxy- and
+cache-bypassed, identity-encoded requests for all seven assets and `/` returned HTTP 200 from remote
 `100.94.63.83`, matched exact sizes and compared byte-for-byte; `/` equalled `index.html`, and the
 fetched, local and post-publication aggregates all equal the frozen aggregate above. The later
 publication-documentation commit is intentionally distinct from this qualified product source and
 had no identifier at that checkpoint. At the F004 checkpoint only M71-U1 through M71-U5 and
 explicit supervising-human approval remained. F005/F006 preserve this exact evidence but withdraw
-the F004 distribution from current UAT pending a clean, byte-verified replacement.
+the F004 distribution from current UAT; PID `2848202` has exited and the clean, byte-verified
+F005/F006 replacement recorded above now owns the shared endpoint.
 
 Withdrawn qualification/publication note (2026-08-13): pre-F003 source
 `ad01912eac28275644dcfc867a2dc70030b5406d` passes
@@ -4317,8 +4328,8 @@ and publication are complete; M71 remains open only for M71-U1 through M71-U5 an
 supervising-human approval at that historical checkpoint. F004 now withdraws those bytes from
 continued UAT while preserving the immutable snapshot. PID `1202735` has since exited and the
 F003 bytes are no longer served. The verified F004 replacement recorded above later occupied the
-shared endpoint, but F005/F006 now withdraw those bytes from current UAT authority pending a fresh
-replacement.
+shared endpoint, but F005/F006 now withdraw those bytes from current UAT authority. The clean,
+byte-verified F005/F006 replacement recorded above is current UAT authority.
 
 Gate: all six definitions behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every
