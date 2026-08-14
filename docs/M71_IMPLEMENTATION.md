@@ -26,8 +26,9 @@ continued UAT): `/tmp/geosolve-m71-uat.yFBsnX`; historical endpoint
 `http://100.94.63.83:8080/`; ordered manifest aggregate
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
-Both earlier distributions remain historical evidence. Do not replace the preserved F003 server
-until a clean F004 distribution has been frozen and byte-verified.
+Both earlier distributions remain historical evidence. The preserved F003 snapshot must remain
+unchanged; its former server has exited. Publish a fresh server only after a clean F004
+distribution has been frozen and byte-verified.
 
 ## 1. Files and APIs
 

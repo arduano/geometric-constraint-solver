@@ -353,9 +353,9 @@ result makes those laws smaller and clearer.
 
 ## Next-session sequence
 
-1. Commit the pre-release documentation set under the granted commit authority, then capture the
-   exact clean HEAD/tree/status before and after the clean gate. The implementation/test commit is
-   `1f542555d7fcaf98ecf92c69a10b951fbfcc3dff`.
+1. Capture the exact clean HEAD/tree/status before and after the clean gate. The implementation/test
+   commit is `1f542555d7fcaf98ecf92c69a10b951fbfcc3dff`; the pre-release documentation commit is
+   `ee27de77838a5adb1220c3316ddfcbf4b0380163`.
 2. Run `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` without a dirty
    override on that unchanged clean source.
 3. Copy that gate-produced seven-file `dist` without rebuilding, byte-compare and freeze a new
