@@ -114,6 +114,10 @@ Default entry/leave thresholds are expressed in host-normalized screen space or 
 - native curve: enter at `10 px`, retain through `14 px`; and
 - direction: enter at `4 degrees`, retain through `6 degrees`.
 
+These values remain the historical M70 decision. M71-F006 prospectively supersedes only the
+current default envelope with `6/9 px` point/midpoint, `8/12 px` curve and `3/5 degree` direction
+enter/leave thresholds. Explicitly configured valid policy values remain authoritative.
+
 Entry boundaries are inclusive. Policy values must be finite and validated. Configured policy has
 hard ceilings of 32 candidates and eight remembered references. Default scene-query bounds are
 4,096 semantic anchors and 16,384 tessellation chords, with larger values accepted only within the

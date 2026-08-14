@@ -1297,7 +1297,10 @@ M70 is accepted only when all of the following are true:
   enter/leave thresholds are `8/12 px`
   for points/midpoints, `10/14 px` for curves and `4/6 degrees` for directions. Configured policy
   has hard ceilings of 32 candidates and eight remembered references; default scene-query bounds
-  are 4,096 semantic anchors and 16,384 tessellation chords.
+  are 4,096 semantic anchors and 16,384 tessellation chords. These exact threshold values describe
+  the historical accepted M70 candidate. `M71-F006` prospectively supersedes only the current
+  default tolerance values; it does not falsify M70 behavior or alter explicitly supplied valid
+  custom policy values.
 - Candidate generation stops as soon as the first unique bundle proves the configured candidate
   bound insufficient. It reports the first proven lower bound, returns raw unadjusted coordinates
   with no candidate/guide prefix and acquires no wake state. A scene-anchor/chord bound likewise
@@ -1674,9 +1677,11 @@ unrecorded exhaustive replay of every prepared UAT step. M70B is closed.
 
 ## M71 acceptance: retained drafting relations
 
-Status: active and amended for M71-F004; simultaneous endpoint-axis inference passes the complete
-dirty-tree development gate, while replacement clean release qualification, immutable publication
-and supervising-human approval are pending.
+Status: active and amended for M71-F005/F006. The focused distinct-reference orthogonal point-axis
+composition and tighter default capture-envelope corrections are implemented in development
+source. F004 clean qualification/publication remains historical evidence but is withdrawn from
+current UAT; post-F005/F006 clean release qualification, replacement immutable publication and
+supervising-human approval are pending.
 
 - Frozen canonical sketch v1-v4 readers and bytes remain unchanged. A private frozen-v4
   constraint wire DTO prevents in-memory enum growth from expanding v4, and v4 export of M71 state
@@ -1727,8 +1732,20 @@ and supervising-human approval are pending.
   candidate publishes the exact coordinate intersection, two terminating constraint-backed guides
   and a deterministic endpoint-axis-first two-relation plan. Both latches retain through the exit
   band; standalone and bundled candidate IDs cannot alias. Same-axis, oblique and distinct-operand
-  evidence remains alternative/ambiguous, and the first candidate-limit overflow publishes no
-  partial prefix.
+  evidence remained alternative/ambiguous at the F004 checkpoint, and the first candidate-limit
+  overflow publishes no partial prefix.
+- Two orthogonal point axes from distinct remembered stored-point references may compose as one
+  F005 candidate: Horizontal supplies the exact Y coordinate and Vertical supplies the exact X
+  coordinate. The candidate owns ordered `HorizontalPoints` then `VerticalPoints` relations, two
+  terminating constraint-backed guides, both references and stable identity through line and
+  polyline stage handoff. Distinct semantic pairs with equal evidence remain Ambiguous; axes from
+  the same reference never compose into disguised point identity; both components retain through
+  their shared exit band; and candidate exhaustion publishes raw coordinates with no prefix.
+- Current default inclusive enter/leave thresholds are `6/9 px` for points/midpoints, `8/12 px`
+  for curves and `3/5 degrees` for directions. F006 changes defaults only: a valid explicitly
+  configured policy retains its exact caller-supplied thresholds, validation and inclusive
+  hysteresis behavior. Samples admitted only by the historical M70 defaults are not captured by a
+  fresh default engine.
 - Prospective curve slots permit relations against geometry created in the same transaction while
   preventing stale, foreign or partially allocated IDs from publishing. Suppression, candidate
   bounds, scene authentication and exact accepted-input checks retain the M70 contract.
@@ -1737,12 +1754,13 @@ and supervising-human approval are pending.
   with those entries and annotations at the headless interaction boundary; native/WASM parity
   passes. The workbench adds no equation, applicability or geometric inference rule.
 - Reviewed systemic rows preserve the 234-row canonical golden authoring/scene matrix without
-  rewriting unrelated bytes; F004 remains at its focused owner layer. `--survey`, `--check` and
-  `--require-clean` must pass again on the clean post-F004 nominated source.
+  rewriting unrelated bytes; F003-F006 remain at their focused owner layer. `--survey`, `--check`
+  and `--require-clean` must pass again on the clean post-F005/F006 nominated source.
 - Formatting, warnings-denied all-workspace Clippy, locked all-feature workspace tests, the
   relevant WASM and release Trunk builds and one clean `./scripts/release-gate.sh` must pass on that
-  unchanged post-F004 source before nomination.
-- One post-F004 immutable distribution must be byte-verified and served through Tailscale. The
+  unchanged post-F005/F006 source before nomination.
+- One post-F005/F006 immutable distribution must be byte-verified and served through Tailscale;
+  the preserved F004 distribution is historical evidence, not current UAT authority. The
   supervising human must then complete and explicitly approve `docs/M71_UAT.md`; mechanical
   qualification alone does not close M71.
 

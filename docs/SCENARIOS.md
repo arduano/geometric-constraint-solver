@@ -1319,8 +1319,11 @@ relations** playground over its mechanically qualified document/editor implement
 pre-F003 contribution from its original four reviewed nine-row relation families extends the
 current canonical fixture to 234/234 `PASS`, SHA-256
 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`. M71-F003's midpoint-axis
-correction and M71-F004's endpoint-axis/direction composition remain in focused owner regressions
-rather than adding systemic golden dimensions.
+correction, M71-F004's endpoint-axis/direction composition, M71-F005's distinct-reference
+orthogonal point-axis intersection and M71-F006's tighter default capture envelope remain in
+focused owner regressions rather than adding systemic golden dimensions. The qualified F004
+publication is preserved as historical evidence but withdrawn from current UAT; post-F005/F006
+clean release qualification, replacement publication and focused human review remain pending.
 Every new fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1504,11 +1507,20 @@ atomic two-relation plan. Same-axis, oblique, ambiguous, stale, unsupported or e
 fails closed. One construction may create its geometry and a relation to that prospective curve
 atomically without exposing an uncommitted ID.
 
+F005 additionally permits two distinct remembered stored-point references to contribute
+orthogonal axes to the same endpoint: Horizontal supplies Y, Vertical supplies X, and one candidate
+owns the exact Cartesian intersection, both references, two constraint-backed guides and an atomic
+two-relation plan. An exact semantic tie remains Ambiguous, one reference cannot supply both axes,
+and a resource limit publishes no prefix. F006 narrows the current default inclusive capture
+envelope to `6/9 px` for points/midpoints, `8/12 px` for curves and `3/5 degrees` for directions;
+explicitly configured valid policies keep their caller-supplied values and hysteresis semantics.
+
 Direct sketch/editor/native-WASM tests own 1/1/1/1/2/2 lowering, finite hard residuals, rank/DOF,
 commutative operands, retained parent edits, lifecycle, draft-v5 round trips, frozen-v4 rejection,
 inference ranking and exact publication authority. Human review follows `docs/M71_UAT.md` for
-discoverability, annotation clarity, predictable authoring/inference and recovery; it remains open
-until explicit supervising-human approval.
+discoverability, annotation clarity, predictable authoring/inference and recovery. The F004 UAT
+candidate is withdrawn after F005/F006; review resumes only after clean replacement qualification
+and byte-verified publication, and remains open until explicit supervising-human approval.
 
 ### M71-F003 - Native midpoint axis alignment is durable
 
@@ -1560,8 +1572,49 @@ The focused owner regression is
 `crates/geosolve-constraint-editor/tests/m71_f004_axis_bundle.rs`; inference unit tests own the
 composition/ranking/identity/resource matrix and `m71_transition_parity` owns native/WASM adapter
 parity. No equation, Jacobian, solver priority, branch or persistence format changes. The canonical
-234-row authoring/scene oracle does not exercise inference bundles and remains unchanged. The F003
-snapshot is preserved but withdrawn from UAT until a clean F004 replacement is published.
+234-row authoring/scene oracle does not exercise inference bundles and remains unchanged. Clean
+F004 qualification/publication remains exact historical evidence, but F005/F006 withdraw that
+snapshot from current UAT pending a clean replacement.
+
+### M71-F005 - Distinct remembered point axes compose at one intersection
+
+Starting from the qualified F004 behavior, wake two distinct stored-point references: one supplies
+a Horizontal endpoint axis and the other a Vertical endpoint axis. Approach their Cartesian
+intersection while authoring a line or polyline. The pre-F005 candidate key and confirmed-reference
+handoff represented only one point-tracking component, so the endpoint could not publish and retain
+both point-axis relations as one semantic candidate.
+
+The corrected headless owner publishes exactly `[vertical.x, horizontal.y]`, ordered
+`HorizontalPoints` then `VerticalPoints`, two terminating constraint-backed guides and both
+remembered references under one stable candidate identity. Placement commits the displayed line or
+polyline plus both relations in one transaction/history step; accepted coordinates are finite,
+both endpoint equations independently hold at `<= 1e-9`, and later compatible edits preserve both
+relations. Polyline stage handoff retains both references rather than only the first.
+
+Two axes from the same semantic reference do not compose because that would disguise point
+identity as redundant H/V relations. Distinct pairs with exactly tied semantic/ranking evidence
+remain Ambiguous until explicitly preferred, both tracking components retain only through their
+shared exit band, and the first candidate-limit overflow returns raw coordinates with no candidate
+or guide prefix. F004 point-axis plus complementary live-span direction remains an explicit valid
+alternative. Focused owner and public coordinator coverage lives in `inference.rs` and
+`crates/geosolve-constraint-editor/tests/m71_f005_cross_axis.rs`; no solver equation, Jacobian,
+branch or persistence format changes.
+
+### M71-F006 - Default capture tolerances are tighter
+
+The historical accepted M70 candidate used inclusive `8/12 px` point/midpoint, `10/14 px` curve
+and `4/6 degree` direction enter/leave defaults. F006 does not reinterpret that record. For the
+current default engine only, the corresponding thresholds are `6/9 px`, `8/12 px` and
+`3/5 degrees`. Thus a fresh default engine rejects old-only entry samples such as a seven-pixel
+point, nine-pixel curve or 3.5-degree direction while retaining inclusive entry and latched-exit
+behavior at the new boundaries.
+
+`DraftInferencePolicy` remains explicit and authoritative: caller-supplied valid tolerance values,
+validation, resource limits, suppression and hysteresis transitions are unchanged. Focused default
+and boundary tests own the change; it adds no constraint, residual, branch, persistence or browser
+policy. Because F006 changes interaction capture behavior after the qualified F004 publication,
+that publication is withdrawn from current UAT until a clean post-F005/F006 replacement is
+qualified and byte-verified.
 
 ### M71-F001 - Rejected design intent remains visible over retained accepted geometry
 

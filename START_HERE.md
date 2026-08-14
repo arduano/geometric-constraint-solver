@@ -113,13 +113,19 @@ claiming an unrecorded exhaustive UAT replay. M71 is active under amended ADR 00
 ordinary retained definitions: the original point-pair H/V, Concentric and Collinear relations plus
 native line/polyline midpoint-axis H/V authorized by `M71-F003`. `M71-F004` additionally composes
 one remembered point/native-midpoint axis with a complementary exact Cartesian new-span direction.
+`M71-F005` composes a remembered Horizontal point axis and remembered Vertical point axis from two
+distinct stored references into one exact Cartesian intersection candidate. `M71-F006` narrows
+only the default capture envelope to `6/9 px` for points/midpoints, `8/12 px` for curves and
+`3/5 degrees` for directions; explicitly configured policies retain their caller-supplied values.
 The F003 source `83bd2b575784c44b618fb3ad144f24e84702d764` and its immutable snapshot are
 preserved but withdrawn from continued UAT; the former server has exited and those bytes are no
 longer served. F004 product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
 `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, passes the complete unchanged-source clean release
 gate. Its immutable seven-file replacement snapshot `/tmp/geosolve-m71-f004-uat.SaXMVY` is
-byte-verified at `http://100.94.63.83:8080/` under PID `2848202`. Only M71-U1 through M71-U5 and
-explicit supervising-human approval remain.
+byte-verified at `http://100.94.63.83:8080/` under PID `2848202`; that evidence remains historical,
+but F005/F006 withdraw the F004 bytes from current UAT. The focused F005/F006 corrections are
+implemented in development source. Replacement clean release qualification, immutable
+publication, M71-U1 through M71-U5 and explicit supervising-human approval remain.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -374,16 +380,18 @@ new source-rotation row passes at fingerprint `input-04658a77db2dc779`; the M70B
 `bd2e550b94924f173da09943ba5b8451341348aa6937c9f211b3cca1534b980b`. The pre-F003 M71 baseline appends four complete
 9-row relation families; the current canonical fixture is 234/234 `PASS`, SHA-256
 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
-M71-F003 and M71-F004 stay in focused owner regressions because they are narrow inference defects
-rather than missing systemic golden dimensions. The complete F004 dirty-tree development gate
+M71-F003 through M71-F006 stay in focused owner regressions because they are narrow inference
+defects rather than missing systemic golden dimensions. The complete F004 dirty-tree development gate
 passes, including unchanged aggregate golden, native/WASM parity, warnings-denied workspace
 Clippy, locked all-feature workspace tests, performance/licence/package checks and Trunk assembly;
 clean product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089` subsequently passes the
 complete unchanged-source replacement gate. Its read-only seven-file snapshot
 `/tmp/geosolve-m71-f004-uat.SaXMVY`, with ordered-manifest aggregate
 `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`, is served only through
-Tailscale at `http://100.94.63.83:8080/` and every asset plus `/` byte-matches the snapshot. Only
-M71-U1 through M71-U5 and explicit supervising-human approval remain.
+Tailscale at `http://100.94.63.83:8080/` and every asset plus `/` byte-matches the snapshot. That
+qualification/publication remains exact F004 evidence, but F005/F006 pause and withdraw it from
+current UAT. A clean post-F005/F006 replacement gate, byte-verified publication, M71-U1 through
+M71-U5 and explicit supervising-human approval remain.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

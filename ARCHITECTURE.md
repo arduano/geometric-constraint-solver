@@ -125,9 +125,15 @@ construction/NURBS UAT and certified all-family visual profiles.
   side-section round trip. The headless editor owns contextual authoring and bounded M70 inference
   extensions. M71-F004 gives remembered point/native-midpoint axes their own candidate identity so
   one may compose with a complementary exact Cartesian line/polyline direction at the exact
-  coordinate intersection. Same-axis and oblique evidence remains alternative. The F003 candidate
-  is withdrawn; the complete dirty-tree development gate passes, while replacement clean
-  qualification/publication and focused human UAT are pending.
+  coordinate intersection. M71-F005 extends that identity with a second point-tracking component:
+  orthogonal Horizontal and Vertical axes from distinct remembered stored-point references may own
+  one exact endpoint intersection, while one reference cannot masquerade as point identity through
+  two redundant axes. M71-F006 changes only `DraftInferenceTolerances::default()` to inclusive
+  `6/9 px` point/midpoint, `8/12 px` curve and `3/5 degree` direction enter/leave thresholds;
+  explicit custom policy remains authoritative. Same-axis, same-reference, oblique, ambiguous and
+  exhausted evidence remains fail-closed. The clean F004 qualification/publication is preserved as
+  historical evidence but withdrawn from current UAT; post-F005/F006 clean qualification,
+  replacement publication and focused human UAT are pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -409,6 +415,11 @@ rim point or any arbitrary line-interior contact/tangency fallback. This paragra
 implemented and human-accepted M70 behavior. `M70-F001` passed direct regressions, replacement
 qualification/publication, served-byte verification and its targeted human recheck before the
 milestone closed.
+
+M71-F006 prospectively supersedes only M70's default capture envelope. It does not reinterpret the
+historical M70 candidate, its accepted behavior or any explicitly constructed policy: current
+defaults use inclusive `6/9 px` point/midpoint, `8/12 px` curve and `3/5 degree` direction
+enter/leave thresholds, while caller-supplied valid tolerances remain unchanged.
 
 Publication authority is not derivable from public scene fields. Only the retained coordinator can
 authenticate an `EditorScene` against its exact current accepted document, design filter and
@@ -1211,7 +1222,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   preserves frozen v4 through explicit wire isolation. Its original four nine-row relation
   families extend the current canonical fixture to 234/234 `PASS` at
   SHA-256 `d009b76bcf584e32829832ec50df59ffc51a2f260003e5eed36a286c63e5dc27`.
-  Focused `M71-F003` coverage owns the midpoint-axis correction and focused `M71-F004` coverage
-  owns complementary endpoint-axis/direction composition. The F003 publication is withdrawn;
-  the complete dirty-tree development gate passes and replacement clean qualification remains
-  open.
+  Focused `M71-F003` coverage owns the midpoint-axis correction, focused `M71-F004` coverage owns
+  complementary endpoint-axis/direction composition, `M71-F005` owns distinct-reference
+  Horizontal-plus-Vertical point-axis intersection and `M71-F006` owns the tighter default capture
+  envelope. The F004 clean qualification/publication remains historical evidence but is withdrawn
+  from current UAT; post-F005/F006 clean qualification and replacement publication remain open.

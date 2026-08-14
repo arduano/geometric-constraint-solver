@@ -2,20 +2,127 @@
 
 # M71 fresh-session handover
 
-Status: **M71-F004 is reproduced, corrected, clean-qualified and published as a byte-verified
-immutable replacement**. Product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
-`8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, is served from
-`/tmp/geosolve-m71-f004-uat.SaXMVY` at `http://100.94.63.83:8080/` by PID `2848202`; its ordered
-manifest aggregate is `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`.
-The F003 snapshot remains byte-preserved but withdrawn and no longer served. M71 remains open only
-for supervising-human M71-U1 through M71-U5 and explicit approval.
+Status: **M71-F005/F006 are corrected and focused-development-qualified, but not clean-qualified or
+published**. Implementation source `4f5339fa0de6b12794647835ac9066af5520887e` composes Horizontal
+and Vertical point axes from two distinct remembered stored points and narrows the default capture
+envelope. The clean F004 source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, and byte-verified snapshot
+`/tmp/geosolve-m71-f004-uat.SaXMVY` remain historical evidence but are withdrawn from continued
+UAT. PID `2848202` still serves those historical bytes at `http://100.94.63.83:8080/`; their
+ordered manifest aggregate remains
+`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`. Clean replacement
+qualification/publication, M71-U1 through M71-U5 and explicit approval remain pending.
 
 This document is the canonical short restart contract for the M71 correction and replacement
 qualification. Read the repository-required project documents first, then this file, ADR 0035,
 `docs/M71_GOALS.md`, `docs/M71_IMPLEMENTATION.md` and `docs/M71_UAT.md`. Do not reconstruct M71
 from chat history.
 
-## 2026-08-14 checkpoint — M71-F004 simultaneous endpoint-axis inference
+## 2026-08-14 checkpoint — M71-F005/F006 cross-axis points and tighter capture
+
+### Exact human finding and intended behavior
+
+After F004, one remembered point/native-midpoint axis could compose with a complementary exact
+direction of a new line or polyline span. The remaining nitpick was to snap a constructed endpoint
+to complementary point axes at once: one distinct remembered stored point supplies its Horizontal
+Y coordinate while another supplies its Vertical X coordinate. Both must be visible in one exact
+preview and retained atomically through either the line or polyline path.
+
+The focused F005 reproducer remembers stored points at `[-4, 4]` and `[3, -4]`, then approaches
+`[3.04, 4.05]`. Before correction, candidate identity and confirmed-reference handoff represented
+only one point-tracking component, so no one semantic candidate could own both remembered axes and
+polyline continuation could retain only one positional reference. Separately, the default capture
+thresholds were still the broader historical M70 values—8/12 px for points/midpoints, 10/14 px for
+curves and 4/6 degrees for directions—which made inference feel too eager. These are M71-F005 and
+M71-F006, presentation-independent interaction defects owned by `geosolve-constraint-editor`.
+
+### Root cause and corrected contract
+
+F005 gives `CandidateKey` an independent `secondary_point_tracking` component. Candidate
+generation pairs Horizontal and Vertical tracking work from distinct semantic anchors before
+publishing singleton alternatives. Horizontal supplies Y, Vertical supplies X, and the canonical
+H-then-V candidate owns `[vertical.x, horizontal.y]`, two terminating constraint-backed guides,
+both remembered references and one atomic two-relation plan. Confirmed positional-reference
+collection now retains each distinct reference represented by the relations, so both survive the
+ordinary polyline stage handoff.
+
+One semantic anchor cannot pair its own two axes because that would disguise point identity as two
+redundant retained relations. Equal competing pairings remain `Ambiguous`; both tracking latches
+retain only through their shared exit band; the first candidate-limit overflow returns raw
+coordinates without a candidate/guide prefix; and F004 point-axis-plus-span-direction bundles
+remain explicit alternatives where they encode different retained intent.
+
+F006 changes only `DraftInferenceTolerances::default()`. Stored points, semantic centers and native
+midpoints now use inclusive 6/9 px enter/leave thresholds; curves use 8/12 px; and world,
+remembered and point-tracking directions use 3/5 degrees. Valid caller-supplied policy values,
+validation, resource bounds, suppression and hysteresis transitions remain authoritative and
+unchanged. Neither F005 nor F006 changes a residual, Jacobian, solver priority, branch rule,
+persistence format or browser-owned policy.
+
+### Regression and focused evidence
+
+Committed implementation source is `4f5339fa0de6b12794647835ac9066af5520887e`. The public
+regression `crates/geosolve-constraint-editor/tests/m71_f005_cross_axis.rs` proves line and polyline
+preview/commit paths, exact H-then-V relation order, two guides, two retained constraints, one-step
+line history, finite accepted coordinates, independently recomputed endpoint equations, hard
+residual `<= 1e-9`, later reference edits and both positional references surviving polyline stage
+handoff.
+
+Inference-owner tests prove stable pair identity, exact competing-pair ambiguity, same-anchor
+exclusion, one-pair and overflowing candidate bounds, both-axis exit hysteresis and coexistence
+with F004 point-axis-plus-span-direction alternatives. The F006 regression
+`m71_f006_tighter_default_capture_envelope_excludes_old_only_entry_samples` rejects a seven-pixel
+point, nine-pixel curve and 3.5-degree direction in a fresh default engine; the boundary matrix
+keeps comparisons inclusive at the new thresholds.
+
+Development prequalification commands passed on committed implementation HEAD
+`4f5339fa0de6b12794647835ac9066af5520887e` while documentation-only changes remained in the
+worktree:
+
+```text
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --workspace --all-features
+cargo test --locked -p geosolve-constraint-editor --all-features
+cargo test --locked -p geosolve-constraint-editor --test m71_f005_cross_axis
+cargo test --locked -p geosolve-demo-web --all-features
+./scripts/golden-authoring-scene-oracle.sh --survey
+./scripts/golden-authoring-scene-oracle.sh --check
+./scripts/golden-authoring-scene-oracle.sh --require-clean
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m70_transition_parity --target wasm32-unknown-unknown'
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m71_transition_parity --target wasm32-unknown-unknown'
+nix-shell shell.nix --run \
+  'cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
+nix-shell shell.nix --run 'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release'
+git diff --check
+```
+
+All passed: the editor has 319/319 unit tests plus every integration/doc test, the F005 public
+regression passes 2/2, demo-web passes 104 library tests plus its decoder/doc tests, the unchanged
+canonical golden remains 234/234 `PASS`, native and WASM M70/M71 transition parity pass 1/1 each,
+demo-web WASM passes, and Trunk 0.21.14 emits seven files. This remains development evidence only.
+No unchanged-source post-F005/F006 clean release gate, immutable snapshot or served-byte
+verification has completed. Do not nominate or test the F004 publication as a current candidate.
+
+### Repository and publication state
+
+The F005/F006 implementation and focused public regression are committed as
+`4f5339fa0de6b12794647835ac9066af5520887e` (`fix(m71): compose distinct point axis snaps`). The
+milestone records are being reconciled forward from that source. Ordinary reviewable-commit
+authority is available, but this handover update itself has not nominated a release product.
+
+Historical F004 source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+`8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, clean-gate log
+`/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`, immutable snapshot
+`/tmp/geosolve-m71-f004-uat.SaXMVY` and aggregate
+`5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b` remain exact historical
+evidence. PID `2848202` still serves that snapshot, but it is withdrawn from continued UAT. Do not
+stop the server or alter the snapshot merely to express withdrawal; replace UAT authority only
+after a clean post-F005/F006 candidate is qualified, frozen and byte-verified.
+
+## Historical 2026-08-14 checkpoint — M71-F004 simultaneous endpoint-axis inference
 
 ### Exact human finding and intended behavior
 
@@ -62,7 +169,7 @@ angular ranking publishes the worse of the tracking and direction errors. Candid
 standalone tracking from the same tracking source composed with a direction, so stale preferences
 fail closed.
 
-### Regression and current evidence
+### Regression and checkpoint evidence
 
 The focused public regression is
 `crates/geosolve-constraint-editor/tests/m71_f004_axis_bundle.rs`. Its line case proves
@@ -95,14 +202,14 @@ env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 \
 It passed formatting/diff hygiene, warnings-denied workspace Clippy, all locked all-feature
 workspace tests, the unchanged golden, native/WASM M70 and M71 transition parity, demo-web WASM,
 warnings-denied rustdoc, benchmark compilation, M14/M32 budgets, licence/package validation and
-Trunk 0.21.14 release assembly. Current owner results include 311/311 constraint-editor unit tests
-plus every integration/doc test, the 2/2 public F004 regression, 104/104 demo-web unit tests plus
-decoder/doc tests, 17/17 M71 sketch relation tests and 7/7 persistence tests. The required
+Trunk 0.21.14 release assembly. Checkpoint owner results included 311/311 constraint-editor unit
+tests plus every integration/doc test, the 2/2 public F004 regression, 104/104 demo-web unit tests
+plus decoder/doc tests, 17/17 M71 sketch relation tests and 7/7 persistence tests. The required
 256-moving-body sparse crossover passed in 151.18 seconds. Cargo emitted only the existing
 non-failing `license` plus `license-file` advisories. Because the source was dirty, this is
 development evidence rather than clean nomination evidence.
 
-### Clean qualification and current F004 publication
+### Historical clean qualification and F004 publication
 
 Clean product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
 `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, passed exactly:
@@ -140,7 +247,7 @@ aggregate
 as historical evidence. PID `1202735` is absent and those bytes are no longer served; the shared
 endpoint now serves only the verified F004 snapshot above.
 
-### Qualified product and repository checkpoint
+### Historical qualified product and repository checkpoint
 
 At qualification, the sole worktree was
 `/home/arduano/programming/geometric-constraint-solver` on `main`, HEAD
@@ -260,15 +367,15 @@ through the retained coordinator and that the live relation follows later endpoi
   `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`. The historical M70B
   snapshot remains on disk but is no longer served.
 
-Those earlier publications remain historical mechanical evidence only. Continued UAT must use
-only the clean, byte-verified F004 replacement described at the top of this handover.
+Those earlier publications remain historical mechanical evidence only. Continued UAT is paused
+until a clean, byte-verified post-F005/F006 replacement is published.
 
-At resume, verify PID `2848202`, its exact argv/listener, the immutable snapshot modes and the
-ordered aggregate before continuing UAT. Use `git log -5 --oneline --decorate`, `git status
---short --branch`, `git worktree list --porcelain` and `git rev-list --left-right --count
-origin/main...main` to establish the later documentation checkpoint while preserving
-`a2e51efba7d79f684d264094ffd7dd0e37a4d089` as the qualified product source. Do not assume any
-commit has been pushed unless the divergence and `git ls-remote origin refs/heads/main` agree.
+At resume, use `git log -5 --oneline --decorate`, `git status --short --branch`, `git worktree
+list --porcelain` and `git rev-list --left-right --count origin/main...main` to establish the
+current checkpoint. Preserve `a2e51efba7d79f684d264094ffd7dd0e37a4d089` only as the historical
+qualified F004 product source. PID `2848202`, its exact argv/listener, snapshot modes and aggregate
+may be rechecked as historical evidence, but they do not authorize UAT. Do not assume any commit
+has been pushed unless the divergence and `git ls-remote origin refs/heads/main` agree.
 
 ## Implemented scope
 
@@ -296,6 +403,12 @@ The original four definitions lower to existing `add_horizontal_points`, `add_ve
 center `add_coincident` and `add_collinear` operations. F003 adds one `AxisMidpointResidual`
 family with analytic and finite-difference-checked Jacobian. Every path is followed by independent
 finite hard-residual validation; no solver priority or implicit branch rule changes.
+
+F004 composes one remembered point/native-midpoint axis with a complementary exact Cartesian new-
+span direction. F005 composes complementary axes from two distinct remembered stored points while
+retaining both positional references through line/polyline confirmation. F006 tightens only the
+default capture envelope to 6/9 px for points/midpoints, 8/12 px for curves and 3/5 degrees for
+directions. These inference corrections add no solver equation, branch or persistence format.
 
 ## Implicit-correctness law
 
@@ -384,15 +497,24 @@ result makes those laws smaller and clearer.
 
 ## Next-session sequence
 
-1. Keep the verified F004 snapshot and PID `2848202` available at the Tailscale-only endpoint;
-   recheck PID, argv, listener, modes and aggregate before resuming after any interruption.
-2. Ask the supervising human to perform M71-U1 through M71-U5 from `docs/M71_UAT.md`. U2 must cover
-   stored-point and native-midpoint axes in both complementary pairings, on both line and polyline
-   construction, plus later edits proving both retained relations survive.
-3. Record each human result without inferring unperformed coverage or approval from the mechanical
-   gate.
-4. Close M71 only after explicit supervising-human approval. Do not infer approval from mechanical
-   evidence.
+1. Re-establish HEAD/status/worktree/divergence and confirm implementation commit
+   `4f5339fa0de6b12794647835ac9066af5520887e` plus the reconciled M71 records. Preserve every F004
+   snapshot/hash/log fact as historical evidence; do not use its served bytes for UAT.
+2. Finish the reviewable documentation commit, then run the focused F005/F006 owner and public
+   regressions, relevant collateral, clean golden, formatting, warnings-denied workspace Clippy,
+   locked all-feature workspace tests and native/WASM/Trunk checks on one unchanged nominated
+   source.
+3. Run `./scripts/release-gate.sh` from that clean source without `GEOSOLVE_ALLOW_DIRTY`. Record the
+   exact source/tree, complete log and before/after clean-state evidence.
+4. Copy the gate-produced `dist` without rebuilding, freeze and manifest-compare an immutable
+   post-F005/F006 snapshot, publish it through the Tailscale-only listener and verify every served
+   byte plus `/`. Only that verified replacement becomes current UAT authority.
+5. Ask the supervising human to perform M71-U1 through M71-U5 from `docs/M71_UAT.md`. U2 must cover
+   two distinct stored points contributing Horizontal Y and Vertical X, the F004 point-axis-plus-
+   span-direction pairings, native-midpoint pairings, line/polyline paths, exact ties, same-anchor
+   exclusion, tighter capture feel and later edits proving both relations survive.
+6. Record each human result without inferring unperformed coverage or approval from the mechanical
+   gate. Close M71 only after explicit supervising-human approval.
 
 ## Deliberately deferred
 

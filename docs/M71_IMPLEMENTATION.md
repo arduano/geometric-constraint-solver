@@ -2,8 +2,11 @@
 
 # M71 implementation — Retained drafting relations
 
-Status: M71-F004 simultaneous endpoint-axis inference is implemented, clean-qualified and
-published as a byte-verified immutable replacement. Supervising-human UAT remains pending.
+Status: M71-F005 distinct-reference cross-axis point composition and M71-F006's tighter default
+capture envelope are implemented and pass focused development qualification. The clean,
+byte-verified F004 product remains historical evidence but is withdrawn from continued UAT.
+Complete post-F005/F006 clean qualification, immutable replacement publication and
+supervising-human UAT remain pending.
 
 Architecture owner: ADR 0035
 
@@ -11,15 +14,16 @@ Withdrawn pre-F003 candidate source: `ad01912eac28275644dcfc867a2dc70030b5406d`
 
 Withdrawn F003 candidate source: `83bd2b575784c44b618fb3ad144f24e84702d764`
 
-F004 clean product source: `a2e51efba7d79f684d264094ffd7dd0e37a4d089`
+Historical F004 clean product source: `a2e51efba7d79f684d264094ffd7dd0e37a4d089`
 
-F004 clean product tree: `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`
+Historical F004 clean product tree: `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`
 
-F004 clean release-gate result: **PASS**; log
+Historical F004 clean release-gate result: **PASS**; log
 `/tmp/geosolve-m71-f004-clean-gate.ZGQEKU.log`
 
-Current F004 release distribution: `/tmp/geosolve-m71-f004-uat.SaXMVY`; endpoint
-`http://100.94.63.83:8080/`; PID `2848202`; ordered manifest aggregate
+Historical F004 release distribution, still served but not current UAT authority:
+`/tmp/geosolve-m71-f004-uat.SaXMVY`; endpoint `http://100.94.63.83:8080/`; PID `2848202`; ordered
+manifest aggregate
 `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`
 
 Historical F003 clean release-gate result: **PASS**
@@ -34,9 +38,10 @@ continued UAT): `/tmp/geosolve-m71-uat.yFBsnX`; historical endpoint
 `http://100.94.63.83:8080/`; ordered manifest aggregate
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
-Both earlier distributions remain historical evidence. The preserved F003 snapshot remains
-unchanged and its former server has exited. The shared Tailscale endpoint now serves only the
-verified F004 snapshot above.
+All three earlier distributions remain historical evidence. The preserved F003 snapshot remains
+unchanged and its former server has exited. The shared Tailscale endpoint still serves only the
+verified F004 snapshot above, but those bytes are withdrawn from continued UAT and no qualified
+F005/F006 replacement is currently published.
 
 ## 1. Files and APIs
 
@@ -67,6 +72,16 @@ verified F004 snapshot above.
   both relations and both guides; its singleton subsets are removed without making relation count
   a ranking discriminator. Generation remains streaming and fail-closed at the configured bound.
   Same-axis and oblique directions remain alternatives.
+- M71-F005 adds a distinct secondary point-tracking component so remembered Horizontal and
+  Vertical axes from two stored points can compose independently. The canonical H-then-V
+  candidate owns `[vertical.x, horizontal.y]`, both constraint-backed guides and one atomic
+  two-relation plan. Same-anchor pairs are excluded, exact competing pairings remain ambiguous,
+  and F004 point-axis-plus-span-direction bundles remain explicit alternatives. Confirmed line and
+  polyline stages retain both positional references rather than truncating the pair at handoff.
+- M71-F006 narrows only `DraftInferenceTolerances::default()`: point, semantic-center and native-
+  midpoint capture uses inclusive 6/9 px enter/leave thresholds; curves use 8/12 px; and world,
+  remembered and point-tracking directions use 3/5 degrees. Public validated policy overrides,
+  resource limits and hysteresis semantics are unchanged.
 - `ConstructionCommitPlan` adds prospective curve and directed-support slots so a new circle or
   line can participate in its retained relation in the same atomic publication.
 - `SceneConstraintEntry`, `constraint_entries` and `EditorScene::constraint_entries` publish
@@ -86,6 +101,15 @@ verified F004 snapshot above.
   `crates/geosolve-constraint-editor/tests/m71_f004_axis_bundle.rs`; it covers the complementary
   line and polyline pairings, exact preview/plan composition, accepted residuals, one-step history
   and later edits.
+  The focused M71-F005 public regression is
+  `crates/geosolve-constraint-editor/tests/m71_f005_cross_axis.rs`; it covers line and polyline
+  placement, exact H-then-V plans, independent accepted endpoint equations, one-step line history
+  and both positional references surviving polyline stage handoff. Inference-owner tests cover pair
+  identity, exact ties, same-anchor exclusion, shared hysteresis, bounded failure and coexistence
+  with F004 bundles. The focused M71-F006 owner regression
+  `m71_f006_tighter_default_capture_envelope_excludes_old_only_entry_samples` rejects point, curve
+  and direction samples admitted only by the historical defaults while existing boundary tests
+  retain inclusive comparisons at the new thresholds.
   The milestone-neutral golden authoring/scene fixture remains the broad compatibility oracle.
 
 ## 2. Mathematical behavior
@@ -127,6 +151,22 @@ relation order is endpoint axis first and span direction second. Compound angula
 worse component error, and both latches retain through the exit band. No residual, Jacobian,
 solver priority, branch rule, persistence format or public API changes.
 
+M71-F005 extends composition to two distinct remembered stored-point operands. A Horizontal
+tracking component supplies Y and a Vertical component supplies X; the canonical candidate and
+commit plan order is `HorizontalPoints` then `VerticalPoints`. The preview and both guides terminate
+at the exact `[vertical.x, horizontal.y]` intersection, and both references survive confirmation and
+polyline stage handoff. One reference cannot compose its own two axes because that would disguise
+point identity as redundant relations. Equal competing semantic pairings remain `Ambiguous`, the
+two tracking latches share ordinary enter/leave hysteresis, and resource exhaustion publishes no
+candidate or guide prefix. A valid F004 point-axis-plus-span-direction bundle remains a separate
+candidate when it expresses different retained intent.
+
+M71-F006 changes interaction policy defaults rather than mathematics. Inclusive point,
+semantic-center and native-midpoint enter/leave thresholds are 6/9 screen pixels; curve contact
+thresholds are 8/12 pixels; and world, remembered and point-tracking direction thresholds are 3/5
+degrees. A valid caller-supplied `DraftInferencePolicy` remains authoritative. Neither F005 nor
+F006 changes a residual, Jacobian, solver priority, branch rule or persistence format.
+
 The original four relations are commutative in operand order; the point-to-midpoint definitions
 are deliberately directional in operand type. Reversing either Collinear support direction
 does not change its solution set, but direction remains explicit retained state. Every success is
@@ -135,9 +175,11 @@ geometry, history and publication authority.
 
 ## 3. Commands and outcomes
 
-The following focused qualification and complete development gate pass on the post-F004 product.
-The dirty command is retained as historical development evidence; the final command is the clean
-F004 qualification of the unchanged nominated source:
+### Historical F004 complete qualification
+
+The following focused qualification and complete development gate passed on the post-F004
+product. The dirty command is retained as historical development evidence; the final command is
+the clean F004 qualification of the unchanged nominated source:
 
 ```text
 cargo fmt --all -- --check
@@ -189,6 +231,46 @@ manifest advisories. The successful WASM checks ran inside `nix-shell shell.nix`
 `a2e51efba7d79f684d264094ffd7dd0e37a4d089` remained at the same tree with empty status before and
 after the clean gate; the later publication-document commit is not part of that qualified product.
 
+### Current F005/F006 development prequalification
+
+Committed development source `4f5339fa0de6b12794647835ac9066af5520887e` passes focused owner
+and broad preliminary qualification for F005/F006. These commands ran while documentation-only
+changes remained in the worktree, so they are development evidence rather than clean nomination:
+
+```text
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --workspace --all-features
+cargo test --locked -p geosolve-constraint-editor --all-features
+cargo test --locked -p geosolve-constraint-editor --test m71_f005_cross_axis
+cargo test --locked -p geosolve-demo-web --all-features
+./scripts/golden-authoring-scene-oracle.sh --survey
+./scripts/golden-authoring-scene-oracle.sh --check
+./scripts/golden-authoring-scene-oracle.sh --require-clean
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m70_transition_parity --target wasm32-unknown-unknown'
+nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --locked -p geosolve-constraint-editor --test m71_transition_parity --target wasm32-unknown-unknown'
+nix-shell shell.nix --run \
+  'cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
+nix-shell shell.nix --run 'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release'
+git diff --check
+```
+
+The public F005 line and polyline cases pass, including exact preview/plan ordering, atomic
+two-relation publication, finite accepted geometry, independently recomputed endpoint equations,
+hard residual `<= 1e-9`, one-step line history, later reference edits and both positional
+references surviving polyline stage handoff. The inference-owner matrix passes for stable pair
+identity, exact semantic ambiguity, same-anchor exclusion, fail-closed candidate limits, both-axis
+exit hysteresis and coexistence with F004 point-axis-plus-span-direction alternatives. F006's
+default/boundary coverage passes for inclusive 6/9 px point, 8/12 px curve and 3/5 degree direction
+thresholds and rejects old-only entry samples. Workspace formatting, warnings-denied Clippy and
+locked all-feature tests pass; the unchanged 234-row golden passes survey/check/require-clean;
+native and WASM M70/M71 transition parity pass 1/1 each; demo-web passes 104 library tests plus its
+decoder/doc tests and its WASM check; and Trunk 0.21.14 emits the expected seven-file release
+distribution. No current clean nominated-source release gate or immutable publication has been
+completed.
+
 ## 4. Acceptance state
 
 The implemented direct evidence covers frozen-v4 isolation, draft-v5 exact persistence and
@@ -201,12 +283,14 @@ typed headless entries/annotations, workspace restore, editable sample and revie
 The midpoint-axis evidence includes central finite-difference Jacobian checks, structured audit
 descriptors, independent finite hard-residual validation, explicit point-plus-native-span operands,
 live endpoint-average behavior, draft-v5 side persistence and frozen-v4 rejection. The historical
-F003 development and clean-candidate gates passed and its immutable publication was byte-verified;
-F004 has since withdrawn that candidate from continued UAT.
+F003 and F004 development and clean-candidate gates passed and their immutable publications were
+byte-verified. F005/F006 now withdraw the F004 candidate from continued UAT. Current focused
+evidence covers the distinct-reference Cartesian intersection, both-reference handoff and the
+tighter default capture envelope; it is not clean replacement qualification.
 
-`PLAN.md` items are checked only where evidence exists. The pre-F003 and F003 publications are
-withdrawn; the post-F004 clean replacement gate and immutable byte-verified publication pass.
-Human UAT remains pending.
+`PLAN.md` items are checked only where evidence exists. The pre-F003, F003 and F004 publications
+are withdrawn from continued UAT. A post-F005/F006 clean gate, immutable byte-verified replacement
+publication and supervising-human UAT remain pending.
 
 ## 5. Known limitations and next blocker
 
@@ -249,16 +333,29 @@ Human UAT remains pending.
   alternatives, ambiguity, stable/stale identity, shared hysteresis, conservative ranking and
   bounded failure. This is a focused inference-composition defect, not a new canonical golden
   dimension.
+- `M71-F005` — two remembered stored points could each generate one durable axis, but
+  `CandidateKey` and confirmed positional-reference handoff represented only one point-tracking
+  component. The correction adds a secondary tracking key, builds the exact H-then-V pair before
+  singleton alternatives and carries both semantic references through confirmation and polyline
+  stage handoff. Focused owner coverage proves exact intersection/guides, stable identity, exact
+  ambiguity, same-anchor exclusion, both-axis hysteresis, fail-closed bounds and coexistence with
+  F004 alternatives. The public line/polyline regression proves one atomic two-relation commit,
+  finite accepted coordinates, independently validated endpoint equations and later edits.
+- `M71-F006` — current default capture thresholds were still the broader historical M70 values:
+  8/12 px for points/midpoints, 10/14 px for curves and 4/6 degrees for directions. Defaults are
+  now 6/9 px, 8/12 px and 3/5 degrees, respectively. Inclusive comparisons, validation,
+  hysteresis and valid explicit host overrides remain unchanged; focused coverage rejects samples
+  admitted only by the former defaults.
 
-F001, F002 and F004 change no residual, Jacobian, solver priority, branch rule or accepted
+F001, F002 and F004-F006 change no residual, Jacobian, solver priority, branch rule or accepted
 geometry. F003 deliberately adds the authorized linear residual and durable retained behavior. All
-four remain focused owner regressions because they expose no missing systemic golden dimension.
+six remain focused owner regressions because they expose no missing systemic golden dimension.
 F001 and F002 were independently classified `DEFECT` against source
 `95d54581748292ecf2d1fb3687387b2a2a7805f8`. Exact pre-fix reproduction failed each proposed
 owner regression; after repair the exact F001 and F002 commands pass 1/1, the complete editor
 crate passed 302/302 unit tests plus every integration/doc-test suite at that checkpoint. The
-current demo-web suite passes 104/104 plus its decoder/doc tests, and the current focused F003
-sketch relation/persistence matrices pass 17/17 and 7/7, respectively.
+checkpoint demo-web suite passed 104/104 plus its decoder/doc tests, and the focused F003 sketch
+relation/persistence matrices passed 17/17 and 7/7, respectively.
 
 A complete development-mode release gate passed on the historical post-F003 tree:
 
@@ -281,7 +378,7 @@ locked all-feature workspace tests, benchmark compilation, M14/M32 budgets, the 
 256-moving-body sparse crossover, licence/package validation and Trunk 0.21.14 release assembly.
 That run remains provisional development evidence only.
 
-The clean F004 product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
+The historical clean F004 product source `a2e51efba7d79f684d264094ffd7dd0e37a4d089`, tree
 `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`, passed exactly:
 
 ```text
@@ -378,5 +475,8 @@ persistent wake state, canonical sketch v5, computed-feature chaining, browser E
 behavior. `FilletDiscarded` and nonlinear curve-parameter midpoint occurrences remain
 tracking-only.
 
-The sole remaining blocker is explicit supervising-human review and approval of M71-U1 through
-M71-U5. Mechanical qualification and publication do not close M71.
+The next blocker is complete post-F005/F006 qualification: finish and commit the reconciled
+milestone records, rerun the focused/collateral and clean release gates on one unchanged source,
+freeze and byte-verify an immutable replacement distribution, and only then resume M71-U1 through
+M71-U5. Explicit supervising-human approval remains required; focused development evidence and
+historical F004 publication do not close M71.

@@ -2,19 +2,21 @@
 
 # M71 focused UAT — Retained drafting relations
 
-Status: the clean M71-F004 UAT candidate is mechanically qualified, frozen and byte-verified at
-the endpoint below. All M71-U1 through M71-U5 results remain pending; M71 is not complete until
-the supervising human records an explicit approval decision.
+Status: no current M71-F005/F006 UAT candidate is qualified or published. Focused development
+qualification passes for the cross-axis point-pair and tighter default-capture corrections. The
+clean, byte-verified F004 publication below is historical evidence and withdrawn from continued
+UAT. A clean replacement must be qualified and byte-verified before M71-U1 through M71-U5 resume;
+all results and explicit supervising-human approval remain pending.
 
-Qualified F004 product source: `a2e51efba7d79f684d264094ffd7dd0e37a4d089`
+Historical qualified F004 product source: `a2e51efba7d79f684d264094ffd7dd0e37a4d089`
 
-Qualified F004 product tree: `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`
+Historical qualified F004 product tree: `8b73be00a384fe4a36ebe13fa0c06f32a6694a14`
 
-Current F004 endpoint: `http://100.94.63.83:8080/`
+Historical F004 endpoint, still serving withdrawn bytes: `http://100.94.63.83:8080/`
 
-Current F004 immutable snapshot: `/tmp/geosolve-m71-f004-uat.SaXMVY`
+Historical F004 immutable snapshot: `/tmp/geosolve-m71-f004-uat.SaXMVY`
 
-Current F004 release distribution manifest aggregate:
+Historical F004 release distribution manifest aggregate:
 `5baf5514f366da60ef9e88d7f53f2e8b0346ff5c5222d8e993529a38272b631b`
 
 Withdrawn F003 source: `83bd2b575784c44b618fb3ad144f24e84702d764`
@@ -37,12 +39,41 @@ Withdrawn immutable snapshot: `/tmp/geosolve-m71-uat.yFBsnX`
 Withdrawn release distribution manifest aggregate:
 `43cc01534dc8f91985432d365ac013f9410df80ba1b303b7bb3eeee7a980de41`
 
-Use only the ordinary GeoSolve Sketch Workbench and one editable **Retained drafting relations**
-playground. Direct Rust/native-WASM tests are authoritative for equations, residuals, lifecycle,
-persistence, ranking and publication. Human review assesses discoverability, predictability,
-annotation clarity and recovery.
+Once a post-F005/F006 replacement is published, use only the ordinary GeoSolve Sketch Workbench
+and one editable **Retained drafting relations** playground. Direct Rust/native-WASM tests are
+authoritative for equations, residuals, lifecycle, persistence, ranking and publication. Human
+review assesses discoverability, predictability, annotation clarity, capture feel and recovery.
 
-## M71-F004 discovery and corrected contract
+Do not execute or score the U1-U5 checklist against the endpoint currently listed above. PID
+`2848202` still serves the exact historical F004 bytes, but they predate both current corrections
+and are not current UAT authority.
+
+## M71-F005/F006 discovery and corrected contract
+
+F004 could compose one remembered point/native-midpoint axis with a complementary direction of the
+new span, but it still represented only one point-tracking component. Two distinct remembered
+stored points therefore could not jointly supply a Horizontal Y coordinate and a Vertical X
+coordinate as one retained endpoint candidate, and confirmed polyline handoff could retain only
+one positional reference. Separately, the current defaults remained the broader historical M70
+capture envelope: 8/12 px for points/midpoints, 10/14 px for curves and 4/6 degrees for
+directions.
+
+The F005 correction publishes one canonical H-then-V candidate at
+`[vertical-reference.x, horizontal-reference.y]`, with two terminating constraint-backed guides,
+both remembered references and one atomic two-relation plan. This works through both line and
+polyline paths. Two axes from the same semantic anchor do not compose; exact competing pairings
+remain `Ambiguous`; both point-axis latches retain through their shared exit band; bounded
+generation fails closed; and F004 point-axis-plus-span-direction candidates remain explicit
+alternatives when they express different retained intent.
+
+F006 narrows the default inclusive enter/leave thresholds to 6/9 px for stored points, semantic
+centers and native midpoints, 8/12 px for curves, and 3/5 degrees for world, remembered and
+point-tracking directions. Valid explicit host-policy thresholds remain authoritative. Focused
+owner and public line/polyline regressions pass for both corrections at committed development
+source `4f5339fa0de6b12794647835ac9066af5520887e`, but no complete clean gate, replacement release
+build or immutable publication has yet qualified these bytes.
+
+## Historical M71-F004 discovery and corrected contract
 
 While drawing a vertical line, the top endpoint could not simultaneously remain vertical to the
 line start and horizontally aligned with a remembered point to the side. At the exact intersection,
@@ -66,11 +97,11 @@ have direct owner coverage. No solver equation, Jacobian, priority, branch or pe
 changes.
 
 The F003 snapshot is preserved unchanged so release evidence is not destroyed, but its former
-server has exited. Those bytes lack F004 and are withdrawn from continued UAT. Do not perform any
-scorecard step against those historical bytes; use only the clean, byte-verified F004 candidate
-published above.
+server has exited. Those bytes lack F004 and are withdrawn from continued UAT. The later F004
+snapshot is also preserved unchanged, but F005/F006 have withdrawn it from continued UAT. Do not
+perform any scorecard step against either historical distribution.
 
-## Clean F004 candidate qualification and publication
+## Historical clean F004 candidate qualification and publication
 
 The qualified product source was HEAD `a2e51efba7d79f684d264094ffd7dd0e37a4d089` with tree
 `8b73be00a384fe4a36ebe13fa0c06f32a6694a14` on `main`. Before and after qualification, `git
@@ -139,8 +170,8 @@ workspace tests, the unchanged 234/234 golden at SHA-256
 transition parity, with the updated M71 fixture at SHA-256
 `98df37349faab89e7ca7da763d898b84d4f04588a4923539cd790ca673a53442`, demo-web WASM,
 warnings-denied rustdoc, benchmark compilation, M14/M32 budgets, the 151.18-second 256-moving-body
-sparse crossover, licence/package validation and Trunk 0.21.14 release assembly. Current focused
-and owner results include the 2/2 F004 public regression,
+sparse crossover, licence/package validation and Trunk 0.21.14 release assembly. Checkpoint-focused
+and owner results included the 2/2 F004 public regression,
 311/311 constraint-editor unit tests plus every integration/doc test, 104/104 demo-web unit tests
 plus decoder/doc tests, 17/17 M71 sketch relation tests and 7/7 persistence tests. Cargo emitted
 only the longstanding non-failing `license` plus `license-file` advisories.
@@ -255,19 +286,36 @@ that F003 server is offline; the shared endpoint now serves only the F004 snapsh
 
 ## Preconditions
 
-- [x] The focused F004 owner regression and inference composition matrix pass, including finite
+- [x] The focused F005 owner/public line and polyline regressions pass, including exact
+  H-then-V intersection and relation order, both guides/references, finite accepted geometry,
+  independently recomputed endpoint equations, exact ambiguity, same-anchor exclusion, shared
+  hysteresis, F004 alternatives and fail-closed candidate limits.
+- [x] Focused F006 default/boundary coverage passes at inclusive 6/9 px point, 8/12 px curve and
+  3/5 degree direction thresholds, including rejection of old-only entry samples and preservation
+  of valid explicit host overrides.
+- [ ] The complete focused/collateral matrix, clean golden oracle, native/WASM parity, formatting,
+  warnings-denied Clippy, locked workspace tests and relevant WASM/Trunk builds pass on one
+  unchanged post-F005/F006 nominated source.
+- [ ] That unchanged post-F005/F006 source passes `./scripts/release-gate.sh` without a dirty-tree
+  override.
+- [ ] Its immutable replacement release distribution is published through Tailscale and every
+  served byte is verified against the local candidate.
+
+Historical F004 evidence, preserved but insufficient for current UAT:
+
+- [x] The focused F004 owner regression and inference composition matrix passed, including finite
   accepted geometry, independently recomputed endpoint equations, ambiguity, identity,
   hysteresis, exact-axis provenance and resource limits.
-- [x] The complete post-F004 dirty-tree development gate passes, including the owning Rust
+- [x] The complete post-F004 dirty-tree development gate passed, including the owning Rust
   acceptance matrix, finite-difference Jacobian and audit coverage, frozen compatibility,
   persistence, clean golden, native/WASM parity, formatting, warnings-denied Clippy and locked
   workspace tests. This historical dirty-tree result remains provisional evidence only.
-- [x] The complete matrix passes on unchanged clean nominated F004 product source
+- [x] The complete matrix passed on unchanged clean nominated F004 product source
   `a2e51efba7d79f684d264094ffd7dd0e37a4d089`.
-- [x] That clean post-F004 nominated source passes `./scripts/release-gate.sh` without a dirty-tree
+- [x] That clean post-F004 nominated source passed `./scripts/release-gate.sh` without a dirty-tree
   override.
-- [x] Its immutable release distribution is published through Tailscale and every served byte is
-  verified against the local candidate.
+- [x] Its immutable release distribution was published through Tailscale and every served byte was
+  verified against the local candidate; it is now withdrawn from continued UAT.
 
 ## M71-U1 — manual authoring and canvas presentation
 
@@ -288,35 +336,56 @@ Notes:
 
 1. Wake a stored persistent point, then author another point or suitable construction near its
    horizontal and vertical guide.
-2. While drawing a vertical **line**, place its endpoint level with a remembered stored point to
+2. Wake two distinct stored points so one supplies a Horizontal guide and the other a Vertical
+   guide. While drawing a **line**, place the endpoint at their Cartesian intersection and require
+   one preview and atomic placement carrying exactly `HorizontalPoints + VerticalPoints`, ordered
+   Horizontal then Vertical. Repeat through the **polyline** path and confirm both remembered
+   references survive the intermediate stage click.
+3. For each cross-axis point-pair placement, require both constraint-backed guides to end at the
+   exact `[vertical-reference.x, horizontal-reference.y]` intersection. Edit each source point in
+   turn and require only its owned endpoint coordinate to follow while both retained relations
+   remain present and jointly satisfied.
+4. Try to compose Horizontal and Vertical from the same stored point, then create two exact
+   competing cross-axis pairings. Require the same-anchor case to remain separate point-axis
+   alternatives and the distinct exact tie to remain ambiguous until explicitly preferred.
+5. While drawing a vertical **line**, place its endpoint level with a remembered stored point to
    the side and require one preview and atomic placement carrying exactly
    `HorizontalPoints + Vertical`. Repeat the same bundle through the **polyline** path.
-3. While drawing a horizontal **line**, place its endpoint vertically aligned with a remembered
+6. While drawing a horizontal **line**, place its endpoint vertically aligned with a remembered
    stored point and require exactly `VerticalPoints + Horizontal`. Repeat the same bundle through
    the **polyline** path.
-4. For every stored-point bundle above, confirm both constraint-backed guides end at the same exact
-   intersection. After placement, edit the remembered point and then the new span start; require
-   both retained relations to remain present and jointly satisfied after each edit.
-5. Wake native midpoints from both a line and a polyline span. For each source kind, exercise both
+7. For every point-axis-plus-span-direction bundle above, confirm both constraint-backed guides end
+   at the same exact intersection. After placement, edit the remembered point and then the new span
+   start; require both retained relations to remain present and jointly satisfied after each edit.
+8. Wake native midpoints from both a line and a polyline span. For each source kind, exercise both
    the line and polyline authoring paths: a vertical new span must place
    `HorizontalPointToMidpoint + Vertical`, and a horizontal new span must place
    `VerticalPointToMidpoint + Horizontal`.
-6. For every native-midpoint bundle, confirm both guides and the exact intersection, then move and
+9. For every native-midpoint bundle, confirm both guides and the exact intersection, then move and
    resize the remembered midpoint's source span and edit the new span start. Require both retained
    relations to survive and remain jointly satisfied after every edit.
-7. Also exercise native midpoint alignment one axis at a time, then repeat with a fillet-discarded
+10. Also exercise native midpoint alignment one axis at a time, then repeat with a fillet-discarded
    midpoint occurrence and an unsupported nonlinear derived anchor.
-8. Exercise suppression, shared leave/re-enter hysteresis and an exact ambiguous tie.
+11. Exercise suppression, both-component leave/re-enter hysteresis and an exact ambiguous tie.
+12. Compare the default capture feel around stored points, semantic centers, native midpoints,
+    curves and Cartesian directions. Require the new 6/9 px point-family, 8/12 px curve and 3/5
+    degree direction enter/leave envelope to feel less eager while retaining a usable exit band.
 
-Expected: stored-point alignment may atomically create HorizontalPoints/VerticalPoints and remains
-durable during later edits. A complementary exact Cartesian line/polyline direction may be retained
-in that same atomic placement, with both guides ending at the exact intersection. This must work
-for both line and polyline authoring paths in both Cartesian orientations. A native line/polyline
+Expected: two distinct remembered stored points may jointly create the
+`HorizontalPoints + VerticalPoints` bundle: Horizontal supplies Y, Vertical supplies X, both guides
+end at one exact intersection, and both relations/references survive line and polyline placement
+plus later edits.
+One stored point never masquerades as point identity through two redundant axes, and exact
+competing pairings remain ambiguous. A complementary exact Cartesian line/polyline direction may
+also be retained with one remembered point axis in the same atomic placement. This must work for
+both line and polyline authoring paths in both Cartesian orientations. A native line/polyline
 midpoint may create HorizontalPointToMidpoint and/or VerticalPointToMidpoint: Horizontal constrains
 Y and Vertical X. Its complementary new-span direction must be retained in the same atomic
 placement for both line and polyline paths. Editing the remembered point or midpoint source, or
 editing the new span start, preserves both relations; midpoint alignment continues to use the live
-endpoint average as its source span moves or resizes.
+endpoint average as its source span moves or resizes. Default capture is visibly tighter without
+losing inclusive boundaries or exit hysteresis; an explicitly configured host policy would remain
+authoritative.
 `FilletDiscarded` and nonlinear curve-parameter midpoint occurrences remain visibly tracking-only.
 No case creates a fixed coordinate, zero dimension or hidden midpoint point. Suppression and
 ambiguity never commit a stale or arbitrary candidate.

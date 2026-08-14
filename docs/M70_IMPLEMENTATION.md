@@ -126,6 +126,11 @@ exhaustion publishes raw coordinates and no partial semantic prefix. All emitted
 reference, guide, ranking and raw/adjusted screen/model values must remain finite; a finite input
 whose derived projection overflows rejects transactionally and preserves prior engine state.
 
+These threshold values describe the historical accepted M70 candidate. M71-F006 prospectively
+supersedes only the current defaults with `6/9 px` for points/midpoints, `8/12 px` for curves and
+`3/5 degrees` for directions; it does not reinterpret M70 or alter any explicitly supplied valid
+custom policy.
+
 Wake memory is immediate, stage-local and non-persistent. It clears after stage placement, cancel,
 tool exit, scene mutation, Undo/Redo, reload, policy/viewport change or stale identity.
 Suppression acquires and applies nothing, clears the active latch and places the raw pointer sample

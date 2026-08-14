@@ -3562,6 +3562,10 @@ M70 uses no new solver residual or persistent constraint definition.
   leave hysteresis defaults, with hard ceilings of 32 candidates and eight remembered references.
   Stop generation at the first unique candidate proving overflow and fail closed without first
   allocating every possible bundle.
+
+This checkbox preserves the implemented and approved M70 candidate exactly as qualified.
+`M71-F006` prospectively supersedes only the current default tolerance values; it does not rewrite
+historical M70 behavior or change any valid caller-supplied custom policy.
 - [x] Keep reference memory immediate, bounded, stage-local and non-persistent. Clear it after the
   stage click, cancel/tool exit, mutation, Undo/Redo, reload, policy/viewport change or stale
   identity. Only reusable affine references consume its capacity, and role/scope priority remains
@@ -4117,10 +4121,12 @@ regressions and a fully requalified replacement candidate. `docs/M70B_IMPLEMENTA
 
 ### M71
 
-Status: active and amended for M71-F004 on 2026-08-14. Scope and architecture are accepted in
-`docs/M71_GOALS.md` and ADR 0035. The simultaneous endpoint-axis correction is implemented and
-its replacement clean release-candidate qualification and immutable Tailscale publication pass.
-Only M71-U1 through M71-U5 and explicit supervising-human approval remain.
+Status: active and amended for M71-F005/F006 on 2026-08-14. Scope and architecture are accepted in
+`docs/M71_GOALS.md` and ADR 0035. F005's distinct-reference orthogonal point-axis composition and
+F006's tighter default capture envelope are implemented in development source. The qualified F004
+publication is preserved as historical evidence but withdrawn from current UAT. Post-F005/F006
+clean release qualification, replacement immutable publication, M71-U1 through M71-U5 and
+explicit supervising-human approval remain.
 
 Goal: promote the original four high-value relations plus two narrowly scoped native-span
 midpoint-axis definitions into the one ordinary retained sketch/editor lifecycle, then let the M70
@@ -4166,6 +4172,16 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
   coordinate intersection, both constraint-backed guides and an atomic two-relation plan; preserve
   both latches and distinct candidate identity. Keep same-axis, oblique and distinct-operand
   evidence conservative/ambiguous, and enforce candidate limits without publishing a prefix.
+- [x] Close `M71-F005`: compose remembered Horizontal and Vertical point axes from two distinct
+  stored references into one exact Cartesian intersection candidate with ordered relations, two
+  terminating constraint-backed guides and stable identity. Preserve exact semantic ambiguity,
+  shared hysteresis, same-reference non-composition, fail-closed candidate bounds and both line and
+  polyline commit paths. This narrowly supersedes F004's distinct-operand ambiguity only for the
+  certified orthogonal point-axis pair.
+- [x] Close `M71-F006`: narrow only the default inclusive capture envelope to `6/9 px` for
+  points/midpoints, `8/12 px` for curves and `3/5 degrees` for directions. Preserve the existing
+  validation and enter/leave semantics, and leave every explicitly configured valid custom policy
+  unchanged.
 - [x] Permit construction commit plans to reference curves allocated by that same atomic
   transaction, without exposing prospective IDs as durable authority before commit.
 - [x] Publish typed scene annotations, constraint entries, glyphs and interaction metadata for all
@@ -4178,6 +4194,11 @@ drafting engine use them without fixed coordinates, hidden geometry or misleadin
   the post-F004 nominated source.
 - [x] Freeze and byte-verify one post-F004 replacement immutable Tailscale candidate and record its
   source, manifest and endpoint in `docs/M71_UAT.md`.
+- [ ] Rerun focused owner/collateral tests, the clean golden oracle, formatting, warnings-denied
+  workspace Clippy, locked all-feature workspace tests, relevant WASM/Trunk builds and the complete
+  clean release gate on one unchanged post-F005/F006 nominated source.
+- [ ] Freeze and byte-verify one post-F005/F006 replacement immutable Tailscale candidate; the F004
+  distribution remains historical evidence and is not current UAT authority.
 - [ ] Obtain explicit supervising-human approval of M71-U1 through M71-U5 before closing M71.
 
 Historical implementation checkpoint (2026-08-13): all six definitions, frozen-v4 isolation, draft-v5 side
@@ -4219,6 +4240,24 @@ identity, shared hysteresis, conservative angular ranking and streaming candidat
 residual, Jacobian, solver priority, branch, persistence or public-API change is involved, and the
 unchanged canonical golden remains the correct broad oracle.
 
+M71-F005 hardening note (2026-08-14): two sequentially remembered stored points could each support
+one durable point axis, but candidate identity and confirmed-reference handoff represented only one
+point-tracking component. The corrected inference owner carries distinct primary and secondary
+tracking keys, publishes `[vertical.x, horizontal.y]` with ordered `HorizontalPoints` then
+`VerticalPoints`, retains both references through line/polyline stage handoff and commits both
+relations atomically. Focused owner coverage keeps exact semantic ties ambiguous, excludes two axes
+from the same reference, retains both latches through the shared exit band, fails closed without a
+candidate prefix at the resource limit and preserves F004 point-axis/direction alternatives. The
+public line/polyline regression is `m71_f005_cross_axis.rs`; no residual, solver priority, branch or
+persistence-format change is involved.
+
+M71-F006 hardening note (2026-08-14): the default capture envelope is narrowed from the historical
+M70 `8/12 px` point/midpoint, `10/14 px` curve and `4/6 degree` direction thresholds to inclusive
+`6/9 px`, `8/12 px` and `3/5 degrees`, respectively. This is a default-policy change only: explicit
+valid custom tolerance values, policy validation, hysteresis state and fail-closed semantics are
+unchanged. Focused boundary coverage proves the new inclusive edges and rejects samples admitted
+only by the older defaults. Historical M70 qualification remains truthful and unchanged.
+
 Historical M71-F004 development qualification note (2026-08-14):
 `env NO_COLOR=true GEOSOLVE_ALLOW_DIRTY=1 nix-shell shell.nix --run
 './scripts/release-gate.sh'` passes the complete provisional gate: formatting/diff hygiene,
@@ -4245,8 +4284,9 @@ identity-encoded requests for all seven assets and `/` returned HTTP 200 from re
 `100.94.63.83`, matched exact sizes and compared byte-for-byte; `/` equalled `index.html`, and the
 fetched, local and post-publication aggregates all equal the frozen aggregate above. The later
 publication-documentation commit is intentionally distinct from this qualified product source and
-has no identifier at this checkpoint. Only M71-U1 through M71-U5 and explicit supervising-human
-approval remain.
+had no identifier at that checkpoint. At the F004 checkpoint only M71-U1 through M71-U5 and
+explicit supervising-human approval remained. F005/F006 preserve this exact evidence but withdraw
+the F004 distribution from current UAT pending a clean, byte-verified replacement.
 
 Withdrawn qualification/publication note (2026-08-13): pre-F003 source
 `ad01912eac28275644dcfc867a2dc70030b5406d` passes
@@ -4276,8 +4316,9 @@ aggregates equalled
 and publication are complete; M71 remains open only for M71-U1 through M71-U5 and explicit
 supervising-human approval at that historical checkpoint. F004 now withdraws those bytes from
 continued UAT while preserving the immutable snapshot. PID `1202735` has since exited and the
-F003 bytes are no longer served; the shared Tailscale endpoint now serves only the verified F004
-replacement recorded above.
+F003 bytes are no longer served. The verified F004 replacement recorded above later occupied the
+shared endpoint, but F005/F006 now withdraw those bytes from current UAT authority pending a fresh
+replacement.
 
 Gate: all six definitions behave as one ordinary retained source throughout validation, solving,
 diagnostics, persistence, history, authoring and inference; canonical v4 remains byte-frozen; every

@@ -2,9 +2,10 @@
 
 # ADR 0035: Retained drafting relation lifecycle and persistence
 
-Status: accepted and amended for M71-F004. The F003 candidate is withdrawn from continued UAT;
-simultaneous endpoint-axis inference passes the complete dirty-tree development gate, while
-replacement clean qualification and publication are pending.
+Status: accepted and amended for M71-F005/M71-F006. The byte-verified F004 candidate remains
+historical evidence but is withdrawn from continued UAT. Cross-axis point-pair composition and
+the tighter default capture envelope pass focused development qualification; a clean replacement
+gate, immutable publication and supervising-human UAT are still pending.
 
 ## Context
 
@@ -93,9 +94,23 @@ relation per aligned coordinate, and both axes may coexist on one constructed po
 tracking-only. A durable point/native-midpoint axis may compose with the complementary exact
 Cartesian direction of a new line/polyline span: one candidate owns the exact coordinate
 intersection and one atomic plan retains both relations. Exact axis-aligned remembered directions
-qualify from their original source provenance; oblique and same-axis directions remain alternatives
-and semantic ties remain ambiguous. Sampled intersections and generic nonlinear roots remain
-deferred. The workbench renders returned DTOs and labels only.
+qualify from their original source provenance; oblique and same-axis directions remain
+alternatives and semantic ties remain ambiguous.
+
+M71-F005 additionally permits two distinct remembered stored-point operands to own complementary
+Cartesian coordinates of one constructed point. Horizontal supplies the remembered Y coordinate,
+Vertical supplies the remembered X coordinate, and one H-then-V candidate publishes the exact
+intersection, both constraint-backed guides and one atomic two-relation plan. One semantic anchor
+cannot be paired with itself: persistent-point identity remains structural intent rather than two
+redundant axis relations. Competing pairings remain `Ambiguous`; the pair and an F004
+point-axis-plus-span-direction bundle remain explicit alternatives when both are exact. Line and
+polyline stage handoff retains both positional references without leaking direction-only memory.
+
+M71-F006 narrows only the default headless capture envelope: stored points, semantic centers and
+native midpoints enter/leave at 6/9 screen pixels; curve contacts enter/leave at 8/12 pixels; and
+world, remembered and point-tracking directions enter/leave at 3/5 degrees. Comparisons remain
+inclusive and explicit host policies remain authoritative. Sampled intersections and generic
+nonlinear roots remain deferred. The workbench renders returned DTOs and labels only.
 
 ## Consequences
 
@@ -104,6 +119,10 @@ deferred. The workbench renders returned DTOs and labels only.
   aligned to a certified native line/polyline span midpoint.
 - Center equality and supporting-line collinearity are explicit intent rather than aliases based on
   coordinates.
+- Two distinct remembered stored points can define one exact Cartesian endpoint intersection
+  without persistent-ID tie breaking or loss of the earlier endpoint-axis/span-direction bundle.
+- The default capture envelope is less eager while retaining an explicit hysteresis band; hosts may
+  continue to supply a validated non-default policy.
 - Canonical v4 remains byte-compatible, at the cost of maintaining an explicit frozen wire DTO and
   rejecting v4 export for M71 documents.
 - Unsupported draft v5 can round-trip the active workbench state without prematurely freezing a

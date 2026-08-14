@@ -2,9 +2,10 @@
 
 # M71 goals — Retained drafting relations
 
-Status: active and amended on 2026-08-14 for M71-F004. The simultaneous endpoint-axis correction
-passes the complete dirty-tree development gate; replacement clean qualification/publication and
-supervising-human UAT are pending.
+Status: active and amended on 2026-08-14 for M71-F005/M71-F006. Cross-axis point-pair composition
+and the tighter default capture envelope pass focused development qualification. The previously
+qualified F004 publication is withdrawn from continued UAT; clean replacement qualification,
+immutable publication and supervising-human UAT are pending.
 
 M70 proved reusable auto-constraint interaction using only constraint definitions already owned by
 the ordinary retained document/editor workflow. M71 closes the highest-value gap exposed by that
@@ -100,6 +101,17 @@ tracking-only. This is a semantic boundary, not an implementation shortcut.
   intersection and both retained relations atomically. Exact axis-aligned remembered directions
   qualify; oblique and same-axis relations remain alternatives, and distinct semantic operands
   remain ambiguous.
+- Two distinct remembered stored points may contribute complementary axes to one point-operand
+  stage. Horizontal supplies Y, Vertical supplies X, and the canonical H-then-V candidate owns the
+  exact intersection, both constraint-backed guides and one atomic two-relation plan. The same
+  semantic anchor never composes with itself. Multiple exact pairings remain `Ambiguous`, and a
+  competing F004 point-axis-plus-span-direction candidate remains available rather than collapsing
+  to a bare direction singleton. Both point-axis latches retain through the exit band, and line and
+  polyline stage handoff preserves both positional references.
+- The default capture envelope is deliberately tighter: points, semantic centers and native
+  midpoints use inclusive 6 px enter / 9 px leave thresholds; curve contacts use 8/12 px; and
+  world, remembered and point-tracking directions use 3/5 degrees. Hosts retain the public
+  validated policy override; this changes no equation, branch or persistence rule.
 
 All M70 rules remain in force: bounded candidate generation, deterministic ranking, hysteresis,
 semantic suppression, exact ambiguity, authenticated accepted-scene authority, one atomic
@@ -124,10 +136,11 @@ frozen v4 constraint DTO before adding the new in-memory variants.
   declare or freeze canonical sketch v5.
 
 The original four-definition candidate was withdrawn because it encoded midpoint-axis alignment as
-tracking-only. The later F003 candidate is also withdrawn from continued UAT because it could not
-compose a remembered endpoint axis with a complementary new-span direction. Both immutable
-snapshots remain historical evidence; no clean F004 replacement has completed qualification or
-publication.
+tracking-only. The later F003 candidate was withdrawn because it could not compose a remembered
+endpoint axis with a complementary new-span direction. The clean, byte-verified F004 candidate is
+now also withdrawn from continued UAT because it predates the F005 cross-axis point-pair and F006
+default-capture corrections. All immutable snapshots remain historical evidence; no clean
+F005/F006 replacement has completed qualification or publication.
 
 ## Architectural ownership
 
