@@ -3441,6 +3441,7 @@ struct Draft {
 
 #[derive(Clone, Debug)]
 struct ConfirmedDraftInference {
+    candidate_id: DraftInferenceCandidateId,
     stage_index: usize,
     relations: Vec<DraftInferenceRelation>,
     references: Vec<DraftReferenceAnchor>,
@@ -5308,14 +5309,14 @@ impl ConstraintEditor {
         } else {
             ConstructionPoint::New(position)
         };
+        let resolution_ref = resolution
+            .as_ref()
+            .ok_or(DraftInferenceError::InvalidFrame)?;
+        let confirmed = confirmed_draft_inference(resolution_ref, candidate, stage_index)?;
         Ok(Some(ResolvedDraftStage {
             operand,
             position,
-            confirmed: Some(ConfirmedDraftInference {
-                stage_index,
-                relations: candidate.relations,
-                references: candidate.references,
-            }),
+            confirmed: Some(confirmed),
             resolution,
         }))
     }
@@ -5580,6 +5581,35 @@ fn resolved_draft_inference_candidate(
         .find(|value| value.id == candidate)
 }
 
+fn confirmed_draft_inference(
+    resolution: &DraftInferenceResolution,
+    candidate: DraftInferenceCandidate,
+    stage_index: usize,
+) -> Result<ConfirmedDraftInference, DraftInferenceError> {
+    let candidate_guides_are_owned = candidate.guides.iter().enumerate().all(|(index, guide)| {
+        guide.id.candidate == Some(candidate.id)
+            && usize::try_from(guide.id.ordinal).is_ok_and(|ordinal| ordinal == index)
+    });
+    let published_candidate_guides = resolution
+        .guides
+        .iter()
+        .filter(|guide| guide.id.candidate.is_some())
+        .copied()
+        .collect::<Vec<_>>();
+    if candidate.id.get() == 0
+        || !candidate_guides_are_owned
+        || published_candidate_guides != candidate.guides
+    {
+        return Err(DraftInferenceError::InvalidFrame);
+    }
+    Ok(ConfirmedDraftInference {
+        candidate_id: candidate.id,
+        stage_index,
+        relations: candidate.relations,
+        references: candidate.references,
+    })
+}
+
 fn draft_inference_is_publishable(resolution: &DraftInferenceResolution) -> bool {
     !resolution.guides.is_empty()
         || matches!(
@@ -5788,6 +5818,9 @@ fn construction_commit_plan(
 ) -> Option<ConstructionCommitPlan> {
     let mut relations = Vec::new();
     for confirmed in &draft.confirmed_inference {
+        if confirmed.candidate_id.get() == 0 {
+            return None;
+        }
         let stage_semantics = construction_stage_semantics(draft.tool, confirmed.stage_index);
         for relation in confirmed.relations.iter().copied() {
             match relation {
@@ -8652,6 +8685,27 @@ mod tests {
                         )
                 })
             )));
+            let resolution = editor
+                .draft_inference_resolution()
+                .expect("centered resolution");
+            let DraftInferenceStatus::Resolved {
+                candidate: candidate_id,
+            } = resolution.status
+            else {
+                panic!("resolved centered candidate");
+            };
+            let selected_candidate = resolution
+                .candidates
+                .iter()
+                .find(|candidate| candidate.id == candidate_id)
+                .expect("selected centered candidate")
+                .clone();
+            assert!(
+                selected_candidate
+                    .guides
+                    .iter()
+                    .all(|guide| guide.id.candidate == Some(candidate_id))
+            );
             editor.pointer_down(
                 &scene,
                 pointer(
@@ -8669,6 +8723,15 @@ mod tests {
                 ),
                 "unexpected {tool:?} center operand: {:?}",
                 first.points[0]
+            );
+            assert_eq!(first.confirmed_inference[0].candidate_id, candidate_id);
+            assert_eq!(
+                first.confirmed_inference[0].relations,
+                selected_candidate.relations
+            );
+            assert_eq!(
+                first.confirmed_inference[0].references,
+                selected_candidate.references
             );
             assert!(matches!(
                 first.confirmed_inference[0].relations.as_slice(),
@@ -8835,11 +8898,14 @@ mod tests {
             ConstructionPoint::New([-2.0, 3.0]),
             ConstructionPoint::New([84.0 / 79.0, 0.0]),
         ];
-        let (_, document, span, _) = proposal_curve_fixture(
+        let (_, mut document, span, _) = proposal_curve_fixture(
             "self-intersecting cubic",
             &ConstructionProposal::CubicBezier { controls },
             0.0,
         );
+        document
+            .add_point("distinct stale-preference target", [5.0, 5.0])
+            .expect("point");
         let scene = scene(&document);
         let first_parameter = 0.089_385_032_953_265_66;
         let second_parameter = 1.0 - first_parameter;
@@ -8869,6 +8935,7 @@ mod tests {
         assert_eq!(branches[1].1.get(), 1);
 
         let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Point);
         let resolution = editor
             .resolve_draft_inference(
                 &scene,
@@ -8888,6 +8955,33 @@ mod tests {
         };
         assert_eq!(candidates.len(), 2);
         assert_eq!(resolution.candidates.len(), 2);
+        assert!(resolution.guides.iter().all(|guide| {
+            guide
+                .id
+                .candidate
+                .is_none_or(|candidate| candidates.contains(&candidate))
+        }));
+
+        let stale_preferred = candidates[0];
+        let endpoint = scene.viewport.model_to_screen([5.0, 5.0]);
+        let stale = editor.pointer_down_with_draft_inference(
+            &scene,
+            pointer(93, endpoint.x, endpoint.y, Modifiers::default()),
+            DraftInferenceInput {
+                suppressed: false,
+                preferred_candidate: Some(stale_preferred),
+            },
+        );
+        assert!(editor.draft.is_none());
+        assert!(editor.pending_construction_commit_token().is_none());
+        assert!(!has_construction_commit(&stale));
+        assert!(stale.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::DraftInferenceChanged(Some(DraftInferenceResolution {
+                status: DraftInferenceStatus::StalePreferredCandidate { preferred },
+                ..
+            })) if *preferred == stale_preferred
+        )));
 
         let mut click_editor = ConstraintEditor::default();
         click_editor.activate_tool(EditorTool::Point);
@@ -9097,6 +9191,31 @@ mod tests {
             candidate.relations.as_slice(),
             [DraftInferenceRelation::PointOnCreatedCurve { point }] if *point == points[1]
         ));
+        let candidate = candidate.clone();
+        assert!(
+            candidate
+                .guides
+                .iter()
+                .all(|guide| guide.id.candidate == Some(candidate.id))
+        );
+        let prior = editor.draft.clone();
+        let resolved = editor
+            .resolve_draft_stage(
+                &scene,
+                near_target,
+                DraftInferenceInput::default(),
+                EditorTool::Circle,
+                1,
+                prior.as_ref(),
+            )
+            .expect("circumference stage")
+            .expect("resolved circumference stage");
+        let confirmed = resolved
+            .confirmed
+            .expect("confirmed circumference candidate");
+        assert_eq!(confirmed.candidate_id, candidate.id);
+        assert_eq!(confirmed.relations, candidate.relations);
+        assert_eq!(confirmed.references, candidate.references);
 
         let effects = editor.pointer_down(
             &scene,
@@ -10348,6 +10467,119 @@ mod tests {
                     }
                 }
             ]
+        ));
+    }
+
+    #[test]
+    fn compound_candidate_guides_confirmation_and_commit_plan_keep_one_identity() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let horizontal_reference = document
+            .add_point("horizontal reference", [-4.0, 4.0])
+            .expect("point");
+        let vertical_reference = document
+            .add_point("vertical reference", [3.0, -4.0])
+            .expect("point");
+        let scene = scene(&document);
+        let pointer_id = 91;
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Polyline);
+        let first = scene.viewport.model_to_screen([0.0, 0.0]);
+        editor.pointer_down(
+            &scene,
+            pointer(pointer_id, first.x, first.y, Modifiers::default()),
+        );
+
+        for position in [[-4.0, 4.0], [3.0, -4.0]] {
+            let screen = scene.viewport.model_to_screen(position);
+            editor.pointer_move(
+                &scene,
+                pointer(pointer_id, screen.x, screen.y, Modifiers::default()),
+            );
+        }
+        let raw = scene.viewport.model_to_screen([3.04, 4.05]);
+        editor.pointer_move(
+            &scene,
+            pointer(pointer_id, raw.x, raw.y, Modifiers::default()),
+        );
+        let resolution = editor
+            .draft_inference_resolution()
+            .expect("compound resolution")
+            .clone();
+        let DraftInferenceStatus::Resolved {
+            candidate: candidate_id,
+        } = resolution.status
+        else {
+            panic!("resolved compound candidate");
+        };
+        let candidate = resolution
+            .candidates
+            .iter()
+            .find(|candidate| candidate.id == candidate_id)
+            .expect("selected candidate")
+            .clone();
+        assert_eq!(
+            candidate.relations,
+            vec![
+                DraftInferenceRelation::HorizontalPoints {
+                    reference: horizontal_reference,
+                },
+                DraftInferenceRelation::VerticalPoints {
+                    reference: vertical_reference,
+                },
+            ]
+        );
+        assert!(candidate.guides.iter().enumerate().all(|(ordinal, guide)| {
+            guide.id
+                == DraftGuideId {
+                    candidate: Some(candidate_id),
+                    ordinal: u32::try_from(ordinal).expect("bounded guide ordinal"),
+                }
+        }));
+        assert_eq!(
+            resolution
+                .guides
+                .iter()
+                .filter(|guide| guide.id.candidate.is_some())
+                .copied()
+                .collect::<Vec<_>>(),
+            candidate.guides
+        );
+        let mut malformed = candidate.clone();
+        malformed.guides[0].id.candidate = None;
+        assert!(matches!(
+            confirmed_draft_inference(&resolution, malformed, 1),
+            Err(DraftInferenceError::InvalidFrame)
+        ));
+
+        editor.pointer_down(
+            &scene,
+            pointer(pointer_id, raw.x, raw.y, Modifiers::default()),
+        );
+        let confirmed = editor
+            .draft
+            .as_ref()
+            .expect("polyline draft")
+            .confirmed_inference
+            .last()
+            .expect("confirmed compound inference");
+        assert_eq!(confirmed.candidate_id, candidate_id);
+        assert_eq!(confirmed.relations, candidate.relations);
+        assert_eq!(confirmed.references, candidate.references);
+
+        let effects = editor.complete_draft(scene.design_identity);
+        let (_, plan) = construction_plan_effect(&effects);
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [
+                InferredRelation::HorizontalPoints {
+                    first: DraftPointSlot::Created { point_index: 1 },
+                    second: DraftPointSlot::Existing(horizontal),
+                },
+                InferredRelation::VerticalPoints {
+                    first: DraftPointSlot::Created { point_index: 1 },
+                    second: DraftPointSlot::Existing(vertical),
+                },
+            ] if *horizontal == horizontal_reference && *vertical == vertical_reference
         ));
     }
 
