@@ -69,21 +69,22 @@ the scoped U1-U5 review and explicitly closed M71 on 2026-08-14.
 M72's public-workbench bulk fixes and GitHub Pages release are complete and explicitly approved.
 The final accepted workbench is live at
 `https://arduano.github.io/geometric-constraint-solver/`; its deployed seven-file artifact and
-two-size Chromium contract are exactly verified. The active behavior-preserving retained-authoring
-semantic-consolidation milestone is `docs/M73_GOALS.md`.
+two-size Chromium contract are exactly verified. M73's behavior-preserving retained-authoring
+semantic consolidation is implemented and mechanically qualified; immutable handoff and focused
+human UAT remain open under `docs/M73_GOALS.md`.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, complete through the explicitly approved M72 close.
+3. `PLAN.md` — authoritative roadmap, with M73 mechanically complete and awaiting focused UAT.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
 7. `docs/M72_GOALS.md` — completed public-workbench bulk-fix and Pages-release scope.
 8. `docs/M72_IMPLEMENTATION.md` and `docs/M72_UAT.md` — closing evidence and approved review.
-9. `docs/M73_GOALS.md` — active retained-authoring semantic-consolidation scope.
+9. `docs/M73_GOALS.md` — implemented retained-authoring consolidation awaiting focused UAT.
 
 ## Workspace
 

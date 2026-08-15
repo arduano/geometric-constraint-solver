@@ -1659,6 +1659,15 @@ regression passes 1/1. The later M71-F003 correction withdraws the former candid
 F005/F006 replacement qualification and publication recorded in `docs/M71_UAT.md` now supply
 approved M71 closing product authority.
 
+M73-F002 later retired the compatibility surface described above: `ConstraintKind`,
+`ConstraintEditor::{available_constraints, constraint_edit}` and
+`EditorError::IncompatibleConstraint`. This does not reinterpret M71-F002's historical defect or
+acceptance record. Current contextual ownership is
+`m71_f002_contextual_relation_availability_rejects_missing_objects_and_invalid_spans`, with
+empty-selection and all-family coverage owned by
+`complete_relation_and_dimension_matrix_is_headless_and_selection_scoped` and
+`every_resolved_relation_executes_through_the_authoring_adapter`.
+
 ### M73-R1 - One retained authoring meaning across stage, action and candidate handoff
 
 For every construction tool and relevant stage, derive its point/center/circumference or
@@ -1684,6 +1693,14 @@ candidate-owned guides, relations, references and lowered plan must agree. Ambig
 resource-limited and rejected commits remain mutation-free. Direct tests own these facts; focused
 human UAT checks that ordinary construction and contextual authoring feel unchanged. The 234-row
 golden remains byte-identical and no new sample, residual, branch or persistence scenario is added.
+
+Status (2026-08-15): mechanically implemented and directly qualified. The stage table is owned by
+`construction_stage_semantics_table_covers_every_editor_tool`; the 20-family path by
+`every_resolved_relation_executes_through_the_authoring_adapter`; exact terminal provenance by
+`compound_candidate_guides_confirmation_and_commit_plan_keep_one_identity`; and prospective/stale
+publication by `contextual_authoring_resolution_is_prospective_until_one_coordinator_apply`.
+Clean implementation source `b1b2162` passes the unchanged 234/234 golden and complete release
+gate. Immutable candidate handoff and focused human UAT remain pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

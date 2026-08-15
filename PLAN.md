@@ -4416,7 +4416,7 @@ reload persistence.
 
 ### M73: retained authoring semantic consolidation
 
-Status: **active and explicitly accepted by the supervising caller on 2026-08-15**.
+Status: **implemented and mechanically qualified; focused human UAT remains pending**.
 `docs/M73_GOALS.md` owns the corrected behavior-preserving scope. The earlier proposal's claim
 that `construction_point_stage` duplicated an exhaustive stage match is withdrawn: M71 already
 made it a projection of `draft_inference_subject`. No ADR is required for this internal
@@ -4429,18 +4429,28 @@ consolidation and unreleased editor-API retirement.
   `ConstraintEditor::{available_constraints, constraint_edit}` plus
   `EditorError::IncompatibleConstraint` postdate `0.2.0`; the public direct methods have no
   non-test caller and may be retired without a supported-API deprecation cycle.
-- [ ] M73-F001: derive inference subject, point-slot ownership, line/polyline directional stage,
+- [x] M73-F001: derive inference subject, point-slot ownership, line/polyline directional stage,
   created span slot and reference handoff from one private construction-stage description.
-- [ ] M73-F002: remove the unreleased direct constraint compatibility API and route simple
+- [x] M73-F002: remove the unreleased direct constraint compatibility API and route simple
   definition lowering solely through the contextual `ConstraintIntent`/`ResolvedConstraintKind`
   owner while preserving all 20 resolved families and typed disabled reasons.
-- [ ] M73-F003: retain the terminal `DraftInferenceCandidateId` through private confirmation and
+- [x] M73-F003: retain the terminal `DraftInferenceCandidateId` through private confirmation and
   verify its guides, relations, references and lowered commit plan remain one semantic bundle.
-- [ ] Add the focused stage, all-family contextual-authoring, operand/failure and candidate-trace
+- [x] Add the focused stage, all-family contextual-authoring, operand/failure and candidate-trace
   regressions recorded in `docs/M73_GOALS.md` and `docs/SCENARIOS.md`.
-- [ ] Preserve the 234-row golden byte-for-byte and pass formatting, warnings-denied workspace
+- [x] Preserve the 234-row golden byte-for-byte and pass formatting, warnings-denied workspace
   Clippy, locked all-feature tests, relevant native/WASM parity and the complete clean release gate.
-- [ ] Nominate the qualified candidate and receive explicit focused human UAT approval.
+- [ ] Nominate and byte-verify the immutable qualified candidate.
+- [ ] Receive explicit focused human UAT approval.
+
+Implementation note (2026-08-15): `fe356c2`, `a973b73`, `fcaad55`, `693ed17`, `585cf65`,
+`6fa28a4` and `b1b2162` complete F001-F003, exact candidate authentication, contextual coverage
+and warnings-denied Rustdoc. Clean implementation source
+`b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223`, tree
+`1890ab4330bd78f26c187ebed5fadea97370101e`, passes the complete release gate: editor 321/321,
+M55 17/17, unchanged golden 234/234, native/WASM parity, all workspace checks, packaging,
+performance and Trunk release assembly. The exact current-status source will be gated once more
+before immutable nomination because `docs/API_COMPATIBILITY.md` is copied into the distribution.
 
 Gate: one private stage description owns the remaining line/polyline construction facts; the
 redundant unreleased direct API is absent; contextual authoring retains all accepted behavior and

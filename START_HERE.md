@@ -134,9 +134,11 @@ complete release gate; its documentation-only approval descendant
 artifact `9241248173`. All seven public files byte-match it with the expected media types, and the
 public two-size Chromium contract passes. The workbench is live at
 `https://arduano.github.io/geometric-constraint-solver/`. `docs/M72_GOALS.md` owns the closed scope.
-M73 is now active under `docs/M73_GOALS.md`: it consolidates the remaining line/polyline
-construction-stage seam, retires an unreleased duplicate direct constraint API and retains
-terminal inference-candidate provenance without changing accepted behavior.
+M73 implementation and mechanical qualification are complete under `docs/M73_GOALS.md`: one
+private semantic description now owns the remaining line/polyline construction-stage seam, the
+unreleased duplicate direct constraint API is retired, and terminal inference-candidate provenance
+is authenticated without changing accepted behavior. Immutable candidate handoff and focused
+human UAT remain open.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -150,7 +152,7 @@ support and physics remain outside future acceptance.
 6. `REFERENCES.md`
 7. `docs/adr/0001-*.md` through `docs/adr/0035-*.md`
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
-9. `docs/M73_GOALS.md` — active retained-authoring semantic-consolidation milestone.
+9. `docs/M73_GOALS.md` — implemented retained-authoring consolidation awaiting focused UAT.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -410,13 +412,16 @@ only approval descendant `2d1513912787445ff825836705158c2b563dc7ff` passes hoste
 `31862218764` and deploys exact artifact `9241248173`. All seven public files byte-match it with
 the expected media types, and the public two-size Chromium contract passes. Focused UAT and
 explicit supervising-human approval pass on 2026-08-15; M72 is closed.
-M73 is active. M71 already made `construction_point_stage` a projection of
-`draft_inference_subject`, so the old separate-exhaustive-match premise is withdrawn. M73 instead
-consolidates the remaining line/polyline stage/span/handoff facts, retires the unreleased
-`ConstraintKind`, `ConstraintEditor::{available_constraints, constraint_edit}` and dependent
-`EditorError::IncompatibleConstraint` surface in favor of contextual authoring, and retains
-terminal candidate provenance. No ADR, new relation, persistence change or workbench behavior is
-part of the accepted scope.
+M73 is implemented and mechanically qualified. M71 already made `construction_point_stage` a
+projection of `draft_inference_subject`, so the old separate-exhaustive-match premise is withdrawn.
+One private `ConstructionStageSemantics` description now owns the remaining line/polyline
+stage/span/handoff facts. The unreleased `ConstraintKind`,
+`ConstraintEditor::{available_constraints, constraint_edit}` and dependent
+`EditorError::IncompatibleConstraint` surface is retired in favor of contextual authoring, and
+private confirmation authenticates terminal candidate provenance. Clean implementation source
+`b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223` passes editor 321/321, M55 17/17, unchanged golden
+234/234 and the complete release gate. No ADR, new relation, persistence change or workbench
+behavior is part of the accepted scope. Immutable candidate handoff and focused UAT remain open.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -484,9 +489,9 @@ Durable milestone and cleanup records:
 - `docs/M72_GOALS.md` (completed public-workbench bulk-fix and Pages-release scope)
 - `docs/M72_IMPLEMENTATION.md` (completed F001-F004 and final public Pages evidence ledger)
 - `docs/M72_UAT.md` (approved focused live-workbench scorecard)
-- `docs/M73_GOALS.md` (active retained-authoring semantic-consolidation scope)
-- `docs/M73_IMPLEMENTATION.md` (active implementation and qualification ledger)
-- `docs/M73_UAT.md` (prepared focused behavior-preservation scorecard)
+- `docs/M73_GOALS.md` (implemented retained-authoring semantic-consolidation scope)
+- `docs/M73_IMPLEMENTATION.md` (mechanical implementation and qualification ledger)
+- `docs/M73_UAT.md` (open focused behavior-preservation scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

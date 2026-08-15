@@ -527,7 +527,7 @@ and resolved its two cleanup questions:
 2. The older direct `ConstraintKind` plus `available_constraints`/`constraint_edit` surface and
    dependent `EditorError::IncompatibleConstraint` variant postdate published `0.2.0` and cover
    only part of contextual authoring. The public methods have no non-test caller; the coordinator's
-   internal `ConstraintKind` use is the simple-lowering seam. Active M73 retires them rather than
+   internal `ConstraintKind` use was the simple-lowering seam. M73 retired them rather than
    preserving a second applicability oracle; lower-level sketch builders and the contextual
    20-family route remain.
 
@@ -547,8 +547,9 @@ result makes those laws smaller and clearer.
 2. Treat M71 as closed. Do not add scope, reinterpret the scoped human approval or replace the
    qualified source identity through a later documentation or planning commit.
 3. M72 later completed its replacement public-workbench scope. M73 was explicitly activated on
-   2026-08-15 under `docs/M73_GOALS.md`; implement only that corrected semantic-consolidation scope
-   and do not broaden it into retained-catalog expansion.
+   2026-08-15 under `docs/M73_GOALS.md`; its corrected semantic-consolidation implementation and
+   mechanical qualification are complete without broadening into retained-catalog expansion.
+   Immutable candidate handoff and focused human UAT remain open.
 
 ## Deliberately deferred
 

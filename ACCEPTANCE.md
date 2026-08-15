@@ -1806,8 +1806,8 @@ that closing checkpoint and was activated separately under the scope below.
 
 ## M73 acceptance: retained authoring semantic consolidation
 
-Status: **active and explicitly accepted on 2026-08-15**. `docs/M73_GOALS.md` owns the corrected
-scope; no ADR is required.
+Status: **implemented and mechanically qualified; focused human UAT remains pending**.
+`docs/M73_GOALS.md` owns the corrected scope; no ADR is required.
 
 - M71 already made `construction_point_stage` a projection of `draft_inference_subject`; M73 does
   not claim those helpers contain separate exhaustive tool matches. One new private stage
@@ -1817,8 +1817,8 @@ scope; no ADR is required.
   now-orphaned `EditorError::IncompatibleConstraint` variant are retired as one unreleased
   compatibility surface. They postdate the published `0.2.0` baseline; the public direct methods
   have no non-test caller and therefore require no supported-API deprecation interval. The
-  contextual `ConstraintIntent`/`ResolvedConstraintKind` authoring route remains authoritative,
-  including the simple lowering currently routed through `ConstraintKind`.
+  contextual `ConstraintIntent`/`ResolvedConstraintKind` authoring route remains authoritative;
+  its exhaustive internal simple lowerer no longer routes through `ConstraintKind`.
 - All 20 contextual resolved families retain their exact applicability, operand order, simple
   definitions, explicit contact/branch choices and typed `DisabledReason` failures. Lower-level
   sketch builders, `SketchConstraintKind`, retained `DocumentConstraintDefinition` values and
@@ -1833,6 +1833,12 @@ scope; no ADR is required.
   canonical sketch v1-v4, unsupported draft-v5, browser or accepted-state meaning changes.
 - Formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
   parity, the complete clean release gate and explicitly approved focused UAT close M73.
+
+Mechanical result (2026-08-15): F001-F003 and their focused qualification pass. Clean
+implementation source `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223` passes the complete release
+gate with editor 321/321, M55 17/17, unchanged golden 234/234, native/WASM parity and the complete
+workspace/release matrix. Final immutable publication verification and explicit U1-U3 human
+approval remain open; no milestone-close claim is made yet.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -380,6 +380,16 @@ decision without claiming an unrecorded exhaustive replay.
   applies the coordinator's exact selection-existence predicate before relation-specific
   applicability. Its focused regression covers foreign point-pair M71 relations and invalid-span
   Concentric without removing either public authoring surface.
+
+  M73-F002 supersession (2026-08-15): M73 later retired `ConstraintKind`,
+  `ConstraintEditor::{available_constraints, constraint_edit}` and
+  `EditorError::IncompatibleConstraint`, without reinterpreting the historical M71-F002 defect or
+  acceptance result above. Current contextual ownership is
+  `m71_f002_contextual_relation_availability_rejects_missing_objects_and_invalid_spans`, with the
+  empty-selection and all-family matrices owned by
+  `complete_relation_and_dimension_matrix_is_headless_and_selection_scoped` and
+  `every_resolved_relation_executes_through_the_authoring_adapter`.
+
 - `M71-F003` — remembered midpoint anchors entered tracking, but durable H/V construction matched
   only `PersistentPoint`. The exact public `EditorScene → ConstraintEditor →
   RetainedEditorCoordinator` reproducer was frozen in

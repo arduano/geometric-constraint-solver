@@ -2,11 +2,10 @@
 
 # M73 focused UAT — Retained authoring semantic consolidation
 
-Status: **prepared; no candidate nominated**. Run this scorecard only after M73-F001 through
-M73-F003, focused direct qualification and the complete clean release gate pass. Direct Rust/WASM
-tests remain authoritative for semantic dispatch, candidate identity, accepted state and
-mutation-free rejection; human review checks that the behavior-preserving cleanup is genuinely
-invisible in ordinary use.
+Status: **prepared; implementation and mechanical qualification pass, immutable candidate
+nomination is in progress**. Direct Rust/WASM tests remain authoritative for semantic dispatch,
+candidate identity, accepted state and mutation-free rejection; human review checks that the
+behavior-preserving cleanup is genuinely invisible in ordinary use.
 
 ## M73-U1 — Line and polyline stage continuity
 

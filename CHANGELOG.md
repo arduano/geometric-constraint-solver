@@ -132,17 +132,20 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ### Changed
 
-- Activated M73 retained-authoring semantic consolidation. M71 already made
-  `construction_point_stage` a projection of `draft_inference_subject`, so M73 targets only the
-  remaining line/polyline stage/span/handoff duplication and terminal inference-candidate
-  provenance. M73 also designates the unreleased `ConstraintKind` and
-  `ConstraintEditor::{available_constraints, constraint_edit}` compatibility surface and its
-  `EditorError::IncompatibleConstraint` variant for removal in favor of contextual
-  `ConstraintIntent`/`ResolvedConstraintKind` authoring. That editor surface was introduced after
-  published `0.2.0`; its public direct methods have no non-test caller, so it does not receive a
-  supported-API deprecation interval. The coordinator's internal simple-lowering use is replaced
-  as part of the same retirement. Code removal and qualification remain M73 implementation work;
-  no released API, persistence language or accepted behavior changes in this activation slice.
+- Implemented and mechanically qualified M73 retained-authoring semantic consolidation. One
+  private `ConstructionStageSemantics` description now owns the remaining line/polyline
+  stage/span/reference-handoff facts. The unreleased `ConstraintKind`,
+  `ConstraintEditor::{available_constraints, constraint_edit}` and
+  `EditorError::IncompatibleConstraint` compatibility surface is removed in favor of contextual
+  `ConstraintIntent`/`ResolvedConstraintKind` authoring; all 20 contextual families remain, with
+  14 simple families sharing one exhaustive lowerer and six contact-bearing routes retaining
+  specialized branch construction. Private confirmation now carries and authenticates the exact
+  selected inference candidate through guides, relations, references and commit lowering. That
+  editor surface postdated published `0.2.0` and had no non-test direct caller, so no supported API
+  received a shortened deprecation interval. Clean implementation source `b1b2162` passes editor
+  321/321, M55 17/17, unchanged golden 234/234 and the complete release gate. No residual, solver,
+  branch, persistence, public commit DTO or browser behavior changed; focused M73 UAT remains
+  pending.
 - Completed and received supervising-human approval for M67 on 2026-08-08. The non-published
   workbench dropped its raw Production topology, Host-state evidence and Accepted redundancy
   developer cards while retaining Problems,

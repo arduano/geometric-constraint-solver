@@ -2,10 +2,10 @@
 
 # M73 — Retained authoring semantic consolidation
 
-Status: **active and explicitly accepted by the supervising caller on 2026-08-15**. This
-documentation slice activates the scope; implementation and qualification remain pending. No new
-ADR is required because M73 preserves accepted behavior, changes no solver or persistence
-architecture and retires only an editor API introduced after the published `0.2.0` baseline.
+Status: **implemented and mechanically qualified; focused human UAT remains pending**. The
+supervising caller accepted this scope on 2026-08-15. No new ADR is required because M73 preserves
+accepted behavior, changes no solver or persistence architecture and retires only an editor API
+introduced after the published `0.2.0` baseline.
 
 ## Goal
 
@@ -20,18 +20,18 @@ The earlier proposal overstated the construction-stage duplication. M71 commit `
 made `construction_point_stage` a projection of `draft_inference_subject`; those functions no
 longer contain separate exhaustive `EditorTool` matches. That stale premise is not M73 work.
 
-The remaining seams are narrower and directly observable in the current source:
+The remaining seams at activation were narrower and directly observable:
 
 1. `directional_span_stage`, `draft_span_slot` and line/polyline reference handoff independently
-   encode which construction stage owns the prospective segment.
+   encoded which construction stage owned the prospective segment.
 2. The unreleased `ConstraintKind` plus
    `ConstraintEditor::{available_constraints, constraint_edit}` and
-   `EditorError::IncompatibleConstraint` compatibility surface duplicates part of the contextual
+   `EditorError::IncompatibleConstraint` compatibility surface duplicated part of the contextual
    `ConstraintIntent`/`ResolvedConstraintKind` authoring path and advertises three contact-bearing
    families it cannot directly lower. Its public methods have no non-test caller; the coordinator's
-   remaining `ConstraintKind` use is the duplicate simple-lowering seam M73 removes.
-3. `DraftInferenceCandidate` owns a stable candidate ID, guides, relations and references, but
-   `ConfirmedDraftInference` currently drops the winning candidate ID before commit lowering.
+   remaining `ConstraintKind` use was the duplicate simple-lowering seam M73 removed.
+3. `DraftInferenceCandidate` owned a stable candidate ID, guides, relations and references, but
+   `ConfirmedDraftInference` dropped the winning candidate ID before commit lowering.
 
 ## Accepted work
 
@@ -87,6 +87,10 @@ The remaining seams are narrower and directly observable in the current source:
 - Formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
   parity and the complete clean release gate pass before candidate nomination. Focused human UAT
   then receives explicit approval.
+
+M73-F001 through M73-F003 and their focused qualification are complete. The exact implementation
+and gate evidence is recorded in `docs/M73_IMPLEMENTATION.md`; `docs/M73_UAT.md` remains the only
+open acceptance step.
 
 ## ADR decision
 
