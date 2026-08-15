@@ -9038,6 +9038,10 @@ fn is_radius_curve(document: &SketchDocument, curve: CurveId) -> bool {
 /// Lowers an already-resolved simple contextual relation without repeating
 /// applicability checks. [`resolve_constraint`] is the sole owner of operand
 /// existence, kind, arity and semantic-compatibility policy.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the closed resolved-kind-to-definition matrix is clearest as one exhaustive dispatch"
+)]
 fn simple_constraint_definition(
     document: &SketchDocument,
     selection: &[SelectionItem],
@@ -9147,15 +9151,8 @@ fn simple_constraint_definition(
             second: *second,
             line: *line,
         },
-        (
-            ResolvedConstraintKind::PointOnCurve
-            | ResolvedConstraintKind::CurveContact
-            | ResolvedConstraintKind::RadialLine
-            | ResolvedConstraintKind::EqualCurvature
-            | ResolvedConstraintKind::CurveTangency
-            | ResolvedConstraintKind::EndpointContinuity,
-            _,
-        ) => return None,
+        // Specialized contact-bearing kinds and any mismatched operand bundle
+        // remain fail-closed at this simple lowerer.
         _ => return None,
     })
 }
@@ -15641,6 +15638,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the prospective, stale and accepted-state assertions form one transaction scenario"
+    )]
     fn contextual_authoring_resolution_is_prospective_until_one_coordinator_apply() {
         let (session, points, _, _) = fixed_line_session();
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");

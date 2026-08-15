@@ -8894,6 +8894,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "both nonlinear contact branches and stale candidate selection share one fixture"
+    )]
     fn nonlinear_self_intersection_preserves_both_contact_branches() {
         let controls = [
             ConstructionPoint::New([0.0, 0.0]),
@@ -10488,6 +10492,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "candidate guides, confirmation and final lowering are one provenance trace"
+    )]
     fn compound_candidate_guides_confirmation_and_commit_plan_keep_one_identity() {
         let mut document = SketchDocument::new(1.0).expect("document");
         let horizontal_reference = document

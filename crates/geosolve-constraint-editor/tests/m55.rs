@@ -5,11 +5,12 @@
 )]
 
 use geosolve_constraint_editor::{
-    ActionChoice, ActionState, AuthoringMutation, AuthoringOperand, AuthoringOptions,
-    AuthoringOutcome, AuthoringState, AuthoringTool, BranchAction, ConstraintActionRequest,
-    ConstraintIntent, ConstraintRelationChoice, ContactActionChoice, CoordinatorActionKind,
-    DimensionActionRequest, DimensionKind, EditorScene, Modifiers, PointerInput,
-    ResolvedConstraintKind, RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
+    ActionAvailability, ActionChoice, ActionState, AuthoringMutation, AuthoringOperand,
+    AuthoringOptions, AuthoringOutcome, AuthoringState, AuthoringTool, BranchAction,
+    ConstraintActionRequest, ConstraintIntent, ConstraintRelationChoice, ContactActionChoice,
+    CoordinatorActionKind, DimensionActionRequest, DimensionKind, DisabledReason, EditorScene,
+    Modifiers, PointerInput, ResolvedConstraintKind, RetainedEditorCoordinator, ScreenPoint,
+    SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactBranchEdit, ContactDomain, ContactNeighborhood,
@@ -167,6 +168,40 @@ fn assert_enabled(coordinator: &RetainedEditorCoordinator, action: CoordinatorAc
 fn complete_relation_and_dimension_matrix_is_headless_and_selection_scoped() {
     let fixture = matrix_fixture();
     let mut coordinator = coordinator(fixture.document);
+    let empty_actions = coordinator.actions();
+    for intent in [
+        ConstraintIntent::Lock,
+        ConstraintIntent::Coincident,
+        ConstraintIntent::Horizontal,
+        ConstraintIntent::Vertical,
+        ConstraintIntent::Parallel,
+        ConstraintIntent::Perpendicular,
+        ConstraintIntent::Equal,
+        ConstraintIntent::Midpoint,
+        ConstraintIntent::Symmetric,
+        ConstraintIntent::Tangent,
+        ConstraintIntent::Continuity,
+        ConstraintIntent::Concentric,
+        ConstraintIntent::Collinear,
+    ] {
+        assert!(empty_actions.contains(&ActionAvailability {
+            action: CoordinatorActionKind::Constraint(intent),
+            state: ActionState::Disabled(DisabledReason::EmptySelection),
+        }));
+        let mut authoring = AuthoringState::default();
+        assert!(matches!(
+            authoring.activate(
+                coordinator.session().design_document(),
+                AuthoringTool::Constraint(intent),
+                &[],
+            ),
+            AuthoringOutcome::ModeEntered {
+                tool: AuthoringTool::Constraint(actual),
+                ..
+            } if actual == intent
+        ));
+        assert!(authoring.pending().is_empty());
+    }
 
     coordinator
         .editor_mut()
@@ -1001,7 +1036,10 @@ fn every_resolved_relation_executes_through_the_authoring_adapter() {
                 DocumentConstraintDefinition::FixedPoint { point, target },
             ) => {
                 assert_eq!(*point, fixture.points[0]);
-                assert_eq!(*target, [-2.0, 0.0]);
+                assert_eq!(
+                    (*target).map(f64::to_bits),
+                    [(-2.0_f64).to_bits(), 0.0_f64.to_bits()]
+                );
             }
             (
                 ResolvedConstraintKind::CoincidentPoints,
@@ -1090,6 +1128,10 @@ fn every_resolved_relation_executes_through_the_authoring_adapter() {
             (
                 ResolvedConstraintKind::PerpendicularLines,
                 DocumentConstraintDefinition::Perpendicular { first, second },
+            )
+            | (
+                ResolvedConstraintKind::EqualLength,
+                DocumentConstraintDefinition::EqualLength { first, second },
             ) => assert_eq!([*first, *second], fixture.lines),
             (
                 ResolvedConstraintKind::RadialLine,
@@ -1105,10 +1147,6 @@ fn every_resolved_relation_executes_through_the_authoring_adapter() {
                     None,
                 );
             }
-            (
-                ResolvedConstraintKind::EqualLength,
-                DocumentConstraintDefinition::EqualLength { first, second },
-            ) => assert_eq!([*first, *second], fixture.lines),
             (
                 ResolvedConstraintKind::EqualRadius,
                 DocumentConstraintDefinition::EqualRadius { first, second },
