@@ -69,8 +69,8 @@ the scoped U1-U5 review and explicitly closed M71 on 2026-08-14.
 M72's public-workbench bulk fixes and GitHub Pages release are complete and explicitly approved.
 The final accepted workbench is live at
 `https://arduano.github.io/geometric-constraint-solver/`; its deployed seven-file artifact and
-two-size Chromium contract are exactly verified. The deferred behavior-preserving retained-
-authoring semantic-consolidation proposal is `docs/M73_GOALS.md` and remains inactive.
+two-size Chromium contract are exactly verified. The active behavior-preserving retained-authoring
+semantic-consolidation milestone is `docs/M73_GOALS.md`.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
@@ -83,7 +83,7 @@ Physics, collision and a production rendering system remain out of scope.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
 7. `docs/M72_GOALS.md` — completed public-workbench bulk-fix and Pages-release scope.
 8. `docs/M72_IMPLEMENTATION.md` and `docs/M72_UAT.md` — closing evidence and approved review.
-9. `docs/M73_GOALS.md` — deferred semantic-consolidation proposal; not activated.
+9. `docs/M73_GOALS.md` — active retained-authoring semantic-consolidation scope.
 
 ## Workspace
 

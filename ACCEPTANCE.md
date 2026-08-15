@@ -1801,7 +1801,38 @@ artifact `9241248173`; all seven public files return 200, match that artifact by
 the expected JavaScript/WASM/CSS media types and pass the two-size Chromium contract including
 reload persistence. The supervising caller accepted M72-U1 through M72-U4 and explicitly requested
 closure on 2026-08-15. This is scoped approval of the presented fixes, not a claim of an unrecorded
-exhaustive manual replay. All M72 acceptance gates pass; M73 remains proposed and inactive.
+exhaustive manual replay. All M72 acceptance gates pass. M73 remained proposed and inactive at
+that closing checkpoint and was activated separately under the scope below.
+
+## M73 acceptance: retained authoring semantic consolidation
+
+Status: **active and explicitly accepted on 2026-08-15**. `docs/M73_GOALS.md` owns the corrected
+scope; no ADR is required.
+
+- M71 already made `construction_point_stage` a projection of `draft_inference_subject`; M73 does
+  not claim those helpers contain separate exhaustive tool matches. One new private stage
+  description instead owns the remaining inference role, point-slot, line/polyline directional
+  stage, created span slot and reference-handoff facts.
+- `ConstraintKind`, `ConstraintEditor::{available_constraints, constraint_edit}` and the
+  now-orphaned `EditorError::IncompatibleConstraint` variant are retired as one unreleased
+  compatibility surface. They postdate the published `0.2.0` baseline; the public direct methods
+  have no non-test caller and therefore require no supported-API deprecation interval. The
+  contextual `ConstraintIntent`/`ResolvedConstraintKind` authoring route remains authoritative,
+  including the simple lowering currently routed through `ConstraintKind`.
+- All 20 contextual resolved families retain their exact applicability, operand order, simple
+  definitions, explicit contact/branch choices and typed `DisabledReason` failures. Lower-level
+  sketch builders, `SketchConstraintKind`, retained `DocumentConstraintDefinition` values and
+  every persisted relation remain unchanged.
+- The private confirmed-inference record retains the winning `DraftInferenceCandidateId` and
+  verifies that its guides, relations, references and final commit plan describe one terminal
+  candidate. No candidate identity enters persistence or public commit-plan DTOs.
+- Focused tests cover the full construction-stage table, all contextual families and their
+  failure/ordering cases, line/polyline handoff, compound-axis inference, centered/circumference
+  cases, ambiguity and stale/rejected publication without mutation.
+- The reviewed 234-row golden remains byte-identical. No residual, Jacobian, priority, branch,
+  canonical sketch v1-v4, unsupported draft-v5, browser or accepted-state meaning changes.
+- Formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
+  parity, the complete clean release gate and explicitly approved focused UAT close M73.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

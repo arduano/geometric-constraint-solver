@@ -254,5 +254,5 @@ reload persistence, with no console or page errors. Final screenshots
 ## 5. No remaining gate
 
 M72 is complete with no blocker. The later `[skip ci]` closure record changes documentation only
-and does not replace the product or publication authority above. M73 remains a proposed, inactive
-milestone.
+and does not replace the product or publication authority above. M73 remained proposed and
+inactive at this closing checkpoint and was activated separately afterward.

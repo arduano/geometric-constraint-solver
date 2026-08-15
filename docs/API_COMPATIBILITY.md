@@ -105,6 +105,20 @@ F005/F006 replacement qualification and byte-verified publication pass on source
 `f8a45ae7b355ab9874bf268c9950e369814e8432`; scoped human UAT and explicit M71 approval pass on
 2026-08-14. These later lifecycle additions do not alter the frozen sketch v1-v4 wire contract.
 
+M73 activates a pre-release cleanup inside `geosolve-constraint-editor`. Public `ConstraintKind`
+and `ConstraintEditor::{available_constraints, constraint_edit}`, together with the dependent
+`EditorError::IncompatibleConstraint` variant, were introduced after the published `0.2.0`
+baseline and duplicate only part of the later contextual authoring path. The public direct entry
+points have no non-test caller; the retained coordinator's internal `ConstraintKind` use is only a
+duplicate simple-definition lowering seam. M73 therefore designates that complete direct
+compatibility surface for removal before the next published minor release, without a deprecation
+interval for supported APIs. Hosts use `ConstraintIntent`,
+`ResolvedConstraintKind`, `AuthoringState` and
+`RetainedEditorCoordinator::{resolved_constraint, apply_authoring}` instead. This decision does not
+remove or deprecate `SketchConstraintKind`, `DocumentConstraintDefinition`, direct sketch builders,
+any contextual authoring DTO or any persisted relation. The code removal remains pending until
+M73 implementation; this activation record itself changes no source API or wire language.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 

@@ -1333,7 +1333,9 @@ Objective geometry, residual, derivative, rank, branch, persistence, migration, 
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
 recorded at completed M40.7, M53 and M61-M72. M72's scoped UAT and exact final public-artifact
-verification complete its direct automated qualification.
+verification complete its direct automated qualification. Active M73 adds only direct
+construction-stage, contextual-authoring and candidate-trace regressions plus focused
+behavior-preservation UAT; it adds no new editable sample or browser scenario mode.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1656,6 +1658,32 @@ It was independently classified `DEFECT` against source
 regression passes 1/1. The later M71-F003 correction withdraws the former candidate, so the clean
 F005/F006 replacement qualification and publication recorded in `docs/M71_UAT.md` now supply
 approved M71 closing product authority.
+
+### M73-R1 - One retained authoring meaning across stage, action and candidate handoff
+
+For every construction tool and relevant stage, derive its point/center/circumference or
+coordinate-only role and optional created line/polyline span slot from one private description.
+Line stage one and every post-first polyline stage must retain the same segment identity through
+directional inference, created-span lowering and confirmed-reference handoff. Invalid completed
+stages produce no semantic descriptor. The existing point-identity precedence and prospective
+curve/segment indices remain exact.
+
+Exercise all 20 `ResolvedConstraintKind` families through `AuthoringState` and the retained
+coordinator. Preserve accepted operand reversals, intentionally unsupported ordering, explicit
+contact/branch choices and typed failures for empty, wrong-arity, wrong-kind, foreign/missing,
+invalid-span and stale selections. The unreleased `ConstraintKind` and
+`ConstraintEditor::{available_constraints, constraint_edit}` compatibility surface plus
+`EditorError::IncompatibleConstraint` is removed rather than kept as a second applicability
+oracle. Its public direct methods have no non-test caller; the coordinator's internal simple-
+lowering use moves to the contextual owner. This does not remove lower-level sketch builders or
+any persistent relation.
+
+Confirm ordinary line/polyline, circle-through-point, centered Concentric and M71-F004/F005
+compound-axis inference. The private confirmation retains the winning candidate ID, and its
+candidate-owned guides, relations, references and lowered plan must agree. Ambiguous, stale,
+resource-limited and rejected commits remain mutation-free. Direct tests own these facts; focused
+human UAT checks that ordinary construction and contextual authoring feel unchanged. The 234-row
+golden remains byte-identical and no new sample, residual, branch or persistence scenario is added.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

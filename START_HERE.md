@@ -134,7 +134,9 @@ complete release gate; its documentation-only approval descendant
 artifact `9241248173`. All seven public files byte-match it with the expected media types, and the
 public two-size Chromium contract passes. The workbench is live at
 `https://arduano.github.io/geometric-constraint-solver/`. `docs/M72_GOALS.md` owns the closed scope.
-The prior semantic-consolidation proposal moved to `docs/M73_GOALS.md` and remains inactive.
+M73 is now active under `docs/M73_GOALS.md`: it consolidates the remaining line/polyline
+construction-stage seam, retires an unreleased duplicate direct constraint API and retains
+terminal inference-candidate provenance without changing accepted behavior.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -148,7 +150,7 @@ support and physics remain outside future acceptance.
 6. `REFERENCES.md`
 7. `docs/adr/0001-*.md` through `docs/adr/0035-*.md`
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
-9. `docs/M73_GOALS.md` — proposal only; it is not an activated implementation milestone.
+9. `docs/M73_GOALS.md` — active retained-authoring semantic-consolidation milestone.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -400,18 +402,21 @@ snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, with ordered-manifest aggrega
 `657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`, is served only through
 Tailscale at `http://100.94.63.83:8080/`; every asset plus `/` byte-matches the snapshot. The scoped
 M71-U1 through M71-U5 review and explicit supervising-human approval pass; M71 is closed.
-M72's accepted rectangle, stale-Problem and option-overlay repairs are implemented. Clean source
-`dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
-`38d79f5e05cb5274cc7eeb6bc6c0c2fac7d6f624`, passes the complete gate and unchanged 234/234 golden;
-its full-history Gitleaks report is empty. The public repository and workflow Pages configuration
-pass. Run `31800607957` passed the release gate but failed before upload because `trunk` was outside
-Nix; `6eb2c63` corrects the workflow. Corrected run `31802816639` attempt 2 passed the unchanged
-complete gate, including the 256-body ceiling in `176.27s`, and deployed the seven-file artifact.
-The public root/files, hashes, repository-prefixed URLs, WASM media type and Chromium checks at both
-desktop sizes pass, including reload persistence. Human UAT remains open. M72's focused owner
-regressions preserve all solver/persistence semantics.
-The duplicated construction-stage and relation-applicability consolidation remains an inactive
-M73 proposal requiring a later caller decision.
+M72's accepted rectangle, stale-Problem and option-overlay repairs are complete. Historical
+initial source `dc09b019704fe4a5cd48aff1ae838dfa52f36813` passes the complete gate and unchanged
+234/234 golden, and the pre-publication full-history Gitleaks report is empty. Accepted product
+source `b7003137960afb1b9d29c990d595df44bcd7c2d4` passes the final local gate; its documentation-
+only approval descendant `2d1513912787445ff825836705158c2b563dc7ff` passes hosted run
+`31862218764` and deploys exact artifact `9241248173`. All seven public files byte-match it with
+the expected media types, and the public two-size Chromium contract passes. Focused UAT and
+explicit supervising-human approval pass on 2026-08-15; M72 is closed.
+M73 is active. M71 already made `construction_point_stage` a projection of
+`draft_inference_subject`, so the old separate-exhaustive-match premise is withdrawn. M73 instead
+consolidates the remaining line/polyline stage/span/handoff facts, retires the unreleased
+`ConstraintKind`, `ConstraintEditor::{available_constraints, constraint_edit}` and dependent
+`EditorError::IncompatibleConstraint` surface in favor of contextual authoring, and retains
+terminal candidate provenance. No ADR, new relation, persistence change or workbench behavior is
+part of the accepted scope.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -479,7 +484,9 @@ Durable milestone and cleanup records:
 - `docs/M72_GOALS.md` (completed public-workbench bulk-fix and Pages-release scope)
 - `docs/M72_IMPLEMENTATION.md` (completed F001-F004 and final public Pages evidence ledger)
 - `docs/M72_UAT.md` (approved focused live-workbench scorecard)
-- `docs/M73_GOALS.md` (inactive retained-authoring semantic-consolidation proposal)
+- `docs/M73_GOALS.md` (active retained-authoring semantic-consolidation scope)
+- `docs/M73_IMPLEMENTATION.md` (active implementation and qualification ledger)
+- `docs/M73_UAT.md` (prepared focused behavior-preservation scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -4352,8 +4352,9 @@ browser E2E, mobile work and legacy UI.
 ### M72: public workbench bulk fixes
 
 Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. The
-milestone replaced the previously prepared semantic-consolidation proposal, which remains
-preserved as the inactive M73 proposal. `docs/M72_GOALS.md` owns the accepted scope.
+milestone replaced the previously prepared semantic-consolidation proposal, which was preserved
+for M73 and subsequently activated under the corrected scope below. `docs/M72_GOALS.md` owns the
+accepted M72 scope.
 
 - [x] Preserve M71's qualified source and move its deferred semantic-consolidation proposal to M73.
 - [x] M72-F001: clear stale native/computed Problems across successful recovery and add exact-set
@@ -4413,19 +4414,38 @@ changes; the desktop overlays remain contained, family-local and persistent unde
 interaction; and the exact qualified public site passes Chromium UAT including browser-local
 reload persistence.
 
-### M73 proposal — retained authoring semantic consolidation
+### M73: retained authoring semantic consolidation
 
-Status: moved intact from the replaced M72 proposal on 2026-08-14; **not activated**.
-`docs/M73_GOALS.md` recommends behavior-preserving consolidation of construction-stage semantics
-and direct/contextual relation applicability before any broader retained M37 catalog expansion.
+Status: **active and explicitly accepted by the supervising caller on 2026-08-15**.
+`docs/M73_GOALS.md` owns the corrected behavior-preserving scope. The earlier proposal's claim
+that `construction_point_stage` duplicated an exhaustive stage match is withdrawn: M71 already
+made it a projection of `draft_inference_subject`. No ADR is required for this internal
+consolidation and unreleased editor-API retirement.
 
-- [x] Preserve the proposal's duplicated-seam, parity-law, acceptance and non-goal record.
-- [ ] Receive explicit supervising-caller acceptance or replacement of the proposed M73 scope.
-- [ ] If accepted, add final acceptance/scenario records and any required ADR before implementation.
+- [x] Receive explicit supervising-caller acceptance of the corrected M73 scope.
+- [x] Add the M73 acceptance/scenario records, compatibility disposition and implementation/UAT
+  ledgers without changing production code.
+- [x] Record that `ConstraintKind` and
+  `ConstraintEditor::{available_constraints, constraint_edit}` plus
+  `EditorError::IncompatibleConstraint` postdate `0.2.0`; the public direct methods have no
+  non-test caller and may be retired without a supported-API deprecation cycle.
+- [ ] M73-F001: derive inference subject, point-slot ownership, line/polyline directional stage,
+  created span slot and reference handoff from one private construction-stage description.
+- [ ] M73-F002: remove the unreleased direct constraint compatibility API and route simple
+  definition lowering solely through the contextual `ConstraintIntent`/`ResolvedConstraintKind`
+  owner while preserving all 20 resolved families and typed disabled reasons.
+- [ ] M73-F003: retain the terminal `DraftInferenceCandidateId` through private confirmation and
+  verify its guides, relations, references and lowered commit plan remain one semantic bundle.
+- [ ] Add the focused stage, all-family contextual-authoring, operand/failure and candidate-trace
+  regressions recorded in `docs/M73_GOALS.md` and `docs/SCENARIOS.md`.
+- [ ] Preserve the 234-row golden byte-for-byte and pass formatting, warnings-denied workspace
+  Clippy, locked all-feature tests, relevant native/WASM parity and the complete clean release gate.
+- [ ] Nominate the qualified candidate and receive explicit focused human UAT approval.
 
-Preparation gate: no production code, public API, persistence format, residual, golden or release
-candidate may change under M73 until its scope is explicitly activated. M72 closed on 2026-08-15;
-M73 remains proposed and inactive.
+Gate: one private stage description owns the remaining line/polyline construction facts; the
+redundant unreleased direct API is absent; contextual authoring retains all accepted behavior and
+typed failures; confirmed inference remains traceable to one terminal candidate; no solver,
+branch, persistence, golden or workbench meaning changes; and focused UAT is approved.
 
 ## Explicit non-goals
 

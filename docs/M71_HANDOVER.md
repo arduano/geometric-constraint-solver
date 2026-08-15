@@ -517,17 +517,19 @@ not clean candidate qualification.
 
 ## Deferred cleanup review
 
-The completed audit found no solver or mathematical blocker, but two cleanup questions remain.
-They should be resolved by semantic consolidation, not by adding more examples:
+The completed audit found no solver or mathematical blocker. A later M73 activation audit corrected
+and resolved its two cleanup questions:
 
-1. `construction_point_stage` and `draft_inference_subject` currently classify centered stages
-   from closely related exhaustive `EditorTool` matches. Consider replacing that duplicated tool
-   knowledge with one construction-stage semantic descriptor. Preserve the current centered-tool,
-   coordinate-only-stage and prospective-curve-slot tests.
-2. The older direct `available_constraints`/`constraint_edit` path and the contextual
-   `resolve_constraint` coordinator path each contain M71 applicability knowledge. Audit whether
-   both public surfaces must remain; if so, derive them from one semantic predicate or retain an
-   explicit parity law. Do not casually remove compatibility APIs.
+1. M71 already made `construction_point_stage` a projection of `draft_inference_subject`; they do
+   not contain separate exhaustive `EditorTool` matches. M73 therefore targets only the remaining
+   `directional_span_stage`/`draft_span_slot`/line-polyline-handoff duplication while preserving
+   centered, coordinate-only and prospective-slot behavior.
+2. The older direct `ConstraintKind` plus `available_constraints`/`constraint_edit` surface and
+   dependent `EditorError::IncompatibleConstraint` variant postdate published `0.2.0` and cover
+   only part of contextual authoring. The public methods have no non-test caller; the coordinator's
+   internal `ConstraintKind` use is the simple-lowering seam. Active M73 retires them rather than
+   preserving a second applicability oracle; lower-level sketch builders and the contextual
+   20-family route remain.
 
 The parallel semantic-center vector/latch/candidate pipeline was reviewed as an implementation
 shape, but its behavior is now governed by operand capability, retained curve identity, shared
@@ -544,9 +546,9 @@ result makes those laws smaller and clearer.
    product authority.
 2. Treat M71 as closed. Do not add scope, reinterpret the scoped human approval or replace the
    qualified source identity through a later documentation or planning commit.
-3. Begin only an explicitly accepted next-milestone scope. M72 later completed its replacement
-   public-workbench scope; `docs/M73_GOALS.md` now packages the semantic-consolidation questions
-   above as a non-activated proposal and does not authorize refactoring or catalog expansion.
+3. M72 later completed its replacement public-workbench scope. M73 was explicitly activated on
+   2026-08-15 under `docs/M73_GOALS.md`; implement only that corrected semantic-consolidation scope
+   and do not broaden it into retained-catalog expansion.
 
 ## Deliberately deferred
 

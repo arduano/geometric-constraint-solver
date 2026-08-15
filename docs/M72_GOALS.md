@@ -4,7 +4,7 @@
 
 Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. This
 milestone replaced the previously prepared semantic-consolidation proposal, which moved without
-implementation to the still-inactive `docs/M73_GOALS.md`.
+implementation to `docs/M73_GOALS.md` and was activated separately after M72 closed.
 
 ## Goal
 
