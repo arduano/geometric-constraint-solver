@@ -1898,6 +1898,37 @@ WASM and CSS media types. `/` equals `index.html`; the artifact's C-locale manif
 `4e562280bc0656f9bd7358057d62739ba02e74a5f76b0328c5e45bf18640031c`. Every M73 acceptance
 gate passes.
 
+## M74 acceptance: production-style sketch reference UX
+
+Status: **mechanically implemented; release nomination in progress as of 2026-08-16**. The scope in
+`docs/M74_GOALS.md` is approved and development qualification passes, but the clean committed gate,
+human acceptance and public release are not yet claimed.
+
+- Every sketch exposes immutable intrinsic Origin/X/Y datums with no persistent identity,
+  variables, history, geometry counts or Fit contribution. They are selectable and inspectable;
+  every datum-object mutation rejects atomically with `ProtectedDatum`.
+- Origin coincidence, point-on-datum-axis and affine-line collinearity solve with finite
+  independently validated residuals, checked Jacobians and structured audit descriptors. Their
+  relations follow ordinary suppress/reactivate/delete/history lifecycle while the datums remain.
+- Canonical sketch v1-v4 bytes remain frozen and reject datum relations with
+  `UnsupportedM74State`; only unsupported draft-v5 side records may represent them.
+- Native geometry outranks datums and Origin outranks axes. Origin inference uses `6/9 px`
+  Euclidean enter/exit hysteresis; axes use `4/7 px` perpendicular hysteresis. Shift, hidden
+  references and non-point Circle circumference placement exclude datum inference.
+- Live Horizontal suppresses same-coordinate X-axis inference and live Vertical suppresses
+  same-coordinate Y-axis inference. Horizontal + Y axis and Vertical + X axis remain valid atomic
+  two-relation bundles with exact Undo/Redo.
+- Reference-tree/inspector and datum rendering are consistent and protected. References and Grid
+  toggle independently; the Origin-aligned adaptive `1–2–5` SVG grid is visual only and neither
+  grid nor datums affect Fit.
+- Origin/empty-Fit camera behavior, adjusted-coordinate HUD, contextual cursors, isolated standard
+  Undo/Redo shortcuts and inert letterbox-band input pass focused presentation tests and the exact
+  desktop scorecard in `docs/M74_UAT.md`.
+- Format, warnings-denied workspace Clippy, locked all-feature tests, native/WASM parity, reviewed
+  golden disposition, Trunk and the complete clean release gate pass before immutable Tailscale
+  nomination. Explicit human approval and byte-verified accepted-source Pages publication close
+  M74.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit

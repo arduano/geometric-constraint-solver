@@ -1337,7 +1337,9 @@ verification complete its direct automated qualification. Completed M73 qualifie
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
 immutable Tailscale UAT snapshot, received focused supervising-human approval and exact-verified
-the final GitHub Pages artifact. M73 adds no new editable sample or browser scenario mode.
+the final GitHub Pages artifact. M73 adds no new editable sample or browser scenario mode. M74 is
+active but unqualified; its intrinsic-datum and desktop-polish scenarios below are requirements,
+not completion evidence.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1776,6 +1778,58 @@ The public root and all seven paths return HTTP 200 and match the artifact byte-
 equals `index.html`, application URLs use `/geometric-constraint-solver/`, and JavaScript/WASM/CSS
 media types are correct. The separate Tailscale bytes remain UAT-snapshot evidence, not the public
 publication authority.
+
+### M74-RG1 - Intrinsic datum relations remain identity-free
+
+Start from an empty sketch and assert intrinsic `Origin`, `XAxis` and `YAxis` scene operands exist
+without adding a persistent element, variable, allocator value, history entry, geometry count or
+Fit bound. Select each datum directly and in a mixed native selection. Picking and contextual
+relation authoring are legal; drag, Delete, suppress/unsuppress, role conversion, Unconstrain and
+Lock reject the whole action with `ProtectedDatum` and leave design/accepted identities and history
+unchanged.
+
+Exercise point/Origin, point/X axis, point/Y axis and affine line/each-axis in both operand orders.
+Independently validate finite accepted residuals at several document scales, central
+finite-difference Jacobians and datum-labelled audit rows. Suppress, reactivate, dependency-delete,
+Undo/Redo and delete the ordinary relation while proving the intrinsic operand remains. Parallel
+and Perpendicular with an axis must lower to existing Horizontal/Vertical. Draft-v5 side records
+round-trip exactly; canonical-v4 encoding of any datum relation rejects with
+`UnsupportedM74State` and never emits a partial payload.
+
+### M74-I1 - Datum inference has bounded priority and compatible coordinates
+
+For point-bearing Line, Polyline and centred-geometry stages, Origin enters at exactly `6 px`
+Euclidean distance and remains active through `9 px`; each axis enters at `4 px` perpendicular
+distance and remains active through `7 px`. Repeat across viewport scales. A native point/curve
+candidate wins before any datum; Origin wins the shared Origin/axis location and emits one
+`CoincidentWithOrigin` relation. Datums do not become remembered native references. Shift,
+Reference visibility off, cancellation, stage/camera/policy/document change and Circle
+circumference placement produce raw or non-datum results and clear the datum latch.
+
+For both Line and Polyline, a live Horizontal span suppresses same-coordinate X-axis inference
+before guide publication, candidate budget, latch or pairing; live Vertical symmetrically
+suppresses Y axis. Horizontal still composes with Y axis and Vertical with X axis into one terminal
+candidate containing the expected two guides and two retained relations. Candidate authentication,
+commit, Undo/Redo and rejection are atomic and independently preserve finite accepted geometry.
+
+### M74-W1 - Reference presentation is polished but equation-free
+
+At `1440x900` and approximately `1024x720`, inspect the dedicated Reference tree group, Origin/X/Y
+labels, protected inspector and normal/hover/selected/related styling. Native geometry must paint
+and pick above overlapping datums. References and Grid toggle independently. The adaptive SVG grid
+stays aligned to Origin and uses `1–2–5 × 10^n` major spacing across zoom, but has no editor-item,
+snap, relation, history or persistence semantics. Origin recentres without changing zoom; Fit uses
+only native accepted geometry and an empty Fit restores the canonical camera.
+
+The coordinate HUD normally reports raw model coordinates and uses the headless adjusted coordinate
+during inference while retaining raw coordinates in explanatory text. Select, drawing, relation,
+Fillet and active pan states expose distinct contextual cursors. `Ctrl/Cmd+Z`,
+`Ctrl/Cmd+Shift+Z` and `Ctrl+Y` perform exactly one appropriate history action outside editable or
+dialog-owned targets; Ctrl+Command, Alt-modified and editing chords do nothing to sketch history.
+Pointer start, hover, double-click and wheel input in SVG letterbox bands are inert, while input in
+the mapped sketch plane and existing captured-gesture completion remain unchanged. Direct Rust/WASM
+presentation tests own translation; `docs/M74_UAT.md` owns focused feel and approval. This scenario
+remains pending until clean qualification and immutable Tailscale UAT pass.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

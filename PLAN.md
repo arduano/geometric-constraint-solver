@@ -4558,6 +4558,50 @@ world-axis span constraints own their same-axis coordinate without suppressing o
 or remembered direction alternatives; no solver, branch, persistence, golden or workbench meaning
 changes; a clean replacement is byte-verified; and focused UAT is approved.
 
+### M74: production-style sketch reference UX
+
+Status: **mechanically implemented; release nomination in progress as of 2026-08-16**. Intrinsic
+datum, editor/inference and workbench changes pass focused and workspace-wide development
+qualification. The clean committed release gate, immutable Tailscale UAT, explicit approval and
+accepted-source GitHub Pages publication remain open. `docs/M74_GOALS.md` owns the detailed scope.
+
+- [x] Approve and record the M74 datum, inference and desktop-polish scope without activating
+  draft-v5 as a supported persistence language.
+- [x] Add immutable intrinsic `Origin`, `XAxis` and `YAxis` semantics with no IDs, variables,
+  history, persistence records, geometry counts or Fit bounds.
+- [x] Add audited retained Origin-coincident, point-on-datum-axis and line-collinear-with-datum-axis
+  relations, ordinary relation lifecycle and exact canonical-v4 rejection.
+- [x] Make datums selectable/inspectable relation operands while atomically protecting them from
+  drag, deletion, activation, role, unconstrain and lock mutations.
+- [x] Qualify native-before-datum and Origin-before-axis picking/inference, Origin `6/9 px`, axis
+  `4/7 px`, point-stage/visibility/Shift rules, same-axis live-span precedence and orthogonal
+  two-relation bundles.
+- [x] Finish the Reference tree/inspector, infinite-looking datum presentation, independent
+  References/Grid toggles, Origin-aligned adaptive `1–2–5` visual grid, Origin/empty-Fit camera
+  behavior, adjusted-coordinate HUD, contextual cursors, isolated Undo/Redo shortcuts and inert
+  SVG letterbox bands.
+- [x] Pass focused domain/editor/web regressions and review any authoring/scene golden expansion
+  row-by-row; preserve the current golden if focused tests own the new dimension.
+- [ ] Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, native/WASM
+  checks, Trunk release build, golden survey/check/clean and the complete clean release gate.
+- [ ] Freeze and byte-verify an immutable Tailscale UAT candidate, keep it live through follow-up
+  fixes and receive explicit focused human approval.
+- [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact byte-for-byte
+  and close M74.
+
+Implementation checkpoint (2026-08-16): the complete domain/editor/demo behavior and focused
+regressions are integrated. The reviewed authoring/scene oracle expands from 234 to 261 PASS rows
+for the three datum relation families. Focused sketch **6/6**, M74 editor **3/3**, complete editor
+**334/334** plus integrations and demo-web **111/111** pass. Warnings-denied workspace Clippy,
+locked all-feature tests, native/WASM M74 parity, the 261-row golden disposition, Trunk release
+assembly and two-size Chromium smoke pass; the clean committed gate and immutable UAT candidate
+are being finalized. No public M74 artifact exists yet.
+
+Gate: intrinsic datums remain permanent but identity-free; their ordinary relations solve, audit
+and follow lifecycle; headless picking/inference owns the exact priority and tolerance policy; the
+browser adds only presentation/input translation; canonical sketch v1-v4 remains frozen; the clean
+candidate passes focused UAT and the accepted source is exact-verified after Pages publication.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:
