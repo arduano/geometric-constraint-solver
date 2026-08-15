@@ -52,11 +52,17 @@ NURBS and the Construction display control.
 
 Check that:
 
+- every option-bearing palette entry is one centered button with no separate chevron, and pressing
+  that main button implicitly opens its options;
 - exactly one panel appears at the bottom-left of the canvas, never clipped by the tool palette;
 - only fields relevant to that exact family/subtype appear;
 - valid settings remain available when returning to the tool during the same page session;
-- Escape and `×` close the panel and return keyboard focus to the opener;
-- clicking another ordinary control closes the panel while still performing that action;
+- pressing the same option-bearing button again leaves its panel open;
+- blur, an outside or canvas click, zoom and ordinary non-tool controls leave the panel open while
+  still performing their normal action;
+- switching to another option-bearing tool replaces the panel, while switching to a tool without
+  options closes it;
+- Escape and `×` close the panel, activate Select and move keyboard focus to Select;
 - an invalid C2/conic/NURBS value does not block selecting or using an unrelated tool.
 
 At a compact desktop window near `1024x720`, also check that a tall panel scrolls internally and
@@ -70,7 +76,8 @@ does not escape the canvas. Mobile/tablet layout is outside M72.
    open the expected public repository pages.
 3. Create or edit ordinary geometry, reload the page, and confirm the browser-local workspace
    returns.
-4. Repeat one option-panel open/close and one rectangle resize on the public build.
+4. Repeat one option-panel persistence/close sequence and one rectangle resize on the public
+   build.
 
 Pass when the public site behaves like the qualified local build and the edited scene survives
 reload.

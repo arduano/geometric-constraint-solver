@@ -38,7 +38,7 @@
         <section class="wb-palette-section">
           <strong>Geometry</strong>
           <div class="wb-palette-grid">
-            <button type="button" data-wb-tool="select" aria-pressed="true"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Select</span></button>
+            <button id="wb-tool-select" type="button" data-wb-tool="select" aria-pressed="true"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Select</span></button>
             <button type="button" data-wb-tool="point" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Point</span></button>
             <button type="button" data-wb-tool="line" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Line</span></button>
             <button type="button" data-wb-tool="polyline" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Polyline</span></button>
@@ -49,27 +49,21 @@
             <button type="button" data-wb-tool="cubic-bezier" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Bezier³</span></button>
             <div class="wb-palette-option-tool">
               <button id="wb-tool-ellipse" type="button" data-wb-tool="ellipse" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Ellipse</span></button>
-              <button id="wb-tool-ellipse-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-ellipse" aria-label="Ellipse options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-tool-elliptical-arc" type="button" data-wb-tool="elliptical-arc" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Ellipse arc</span></button>
-              <button id="wb-tool-elliptical-arc-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-elliptical-arc" aria-label="Elliptical arc options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-tool-rational-conic" type="button" data-wb-tool="rational-conic" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Rational</span></button>
-              <button id="wb-tool-rational-conic-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-rational-conic" aria-label="Rational conic options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-tool-parabola" type="button" data-wb-tool="parabola" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Parabola</span></button>
-              <button id="wb-tool-parabola-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-parabola" aria-label="Parabola options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-tool-hyperbola" type="button" data-wb-tool="hyperbola" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Hyperbola</span></button>
-              <button id="wb-tool-hyperbola-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="conic-hyperbola" aria-label="Hyperbola options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-tool-nurbs" type="button" data-wb-tool="nurbs" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>NURBS</span></button>
-              <button id="wb-tool-nurbs-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="nurbs" aria-label="NURBS options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <button id="wb-geometry-role" type="button" data-wb-action="geometry-role" aria-pressed="false" title="With curves selected, toggle their complete persistent curve role. Otherwise choose the role for newly drawn curves."><span class="wb-role-icon" aria-hidden="true"></span><span>Construction</span></button>
           </div>
@@ -87,17 +81,14 @@
             <button type="button" data-wb-authoring="perpendicular" aria-pressed="false" title="Perpendicular / normal"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Perp / normal</span></button>
             <div class="wb-palette-option-tool">
               <button id="wb-authoring-equal-tool" type="button" data-wb-authoring="equal" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Equal</span></button>
-              <button id="wb-authoring-equal-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="equal" aria-label="Equal options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <button type="button" data-wb-authoring="midpoint" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Midpoint</span></button>
             <button type="button" data-wb-authoring="symmetric" aria-pressed="false"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Symmetric</span></button>
             <div class="wb-palette-option-tool">
               <button id="wb-authoring-tangent-tool" type="button" data-wb-authoring="tangent" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Tangent</span></button>
-              <button id="wb-authoring-tangent-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="tangent" aria-label="Tangent options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-authoring-continuity-tool" type="button" data-wb-authoring="continuity" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Continuity</span></button>
-              <button id="wb-authoring-continuity-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="continuity" aria-label="Continuity options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
           </div>
         </section>
@@ -106,23 +97,18 @@
           <div class="wb-palette-grid">
             <div class="wb-palette-option-tool">
               <button id="wb-authoring-point-distance-tool" type="button" data-wb-authoring="point-distance" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Distance</span></button>
-              <button id="wb-authoring-point-distance-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-point-distance" aria-label="Point distance options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-authoring-segment-length-tool" type="button" data-wb-authoring="segment-length" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Length</span></button>
-              <button id="wb-authoring-segment-length-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-segment-length" aria-label="Segment length options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-authoring-radius-tool" type="button" data-wb-authoring="radius" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Radius</span></button>
-              <button id="wb-authoring-radius-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-radius" aria-label="Radius options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-authoring-diameter-tool" type="button" data-wb-authoring="diameter" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Diameter</span></button>
-              <button id="wb-authoring-diameter-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-diameter" aria-label="Diameter options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
             <div class="wb-palette-option-tool">
               <button id="wb-authoring-oriented-angle-tool" type="button" data-wb-authoring="oriented-angle" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-authoring-icon" aria-hidden="true"></span><span>Angle</span></button>
-              <button id="wb-authoring-oriented-angle-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="dimension-oriented-angle" aria-label="Oriented angle options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
           </div>
         </section>
@@ -131,7 +117,6 @@
           <div class="wb-palette-grid">
             <div class="wb-palette-option-tool">
               <button id="wb-feature-fillet-trigger" type="button" data-wb-feature="fillet" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-feature-icon" aria-hidden="true"></span><span>Fillet</span></button>
-              <button id="wb-feature-fillet-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-option="fillet" aria-label="Fillet options" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span aria-hidden="true">›</span></button>
             </div>
           </div>
         </section>

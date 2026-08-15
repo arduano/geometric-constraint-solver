@@ -1782,8 +1782,11 @@ Status: active. `docs/M72_GOALS.md` owns the approved scope.
   explicit edge branches, finite validated residuals and four equality DOF. It publishes no fixed
   source, dimensions or private targets; the canonical constrained rectangle macro is unchanged.
 - One bottom-left canvas surface owns every option-bearing tool and Construction display. Only one
-  surface is open, only active controls are shown/validated, keyboard focus is deterministic, and
-  panels remain contained at desktop and compact-desktop sizes without clipping the palette.
+  surface is open, only active controls are shown/validated, and panels remain contained at
+  desktop and compact-desktop sizes without clipping the palette. Each centered main palette
+  button opens its family without a separate chevron; invoking it again is idempotent. Blur,
+  outside/canvas clicks, zoom and ordinary controls preserve the surface, switching tools closes
+  or replaces it, and `×` or Escape activates and focuses Select.
 - The clean complete release gate precedes an artifact-based GitHub Pages deployment. The public
   repository serves correctly prefixed seven-file release output at the approved project URL and
   browser-local workspace persistence survives a Chromium reload.

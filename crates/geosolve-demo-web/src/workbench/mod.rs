@@ -468,29 +468,16 @@ impl OptionOverlayKind {
 #[derive(Default)]
 struct OptionOverlayState {
     open: Option<OptionOverlayKind>,
-    focus_return: Option<String>,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
 impl OptionOverlayState {
-    fn open(&mut self, kind: OptionOverlayKind, focus_return: impl Into<String>) {
+    fn open(&mut self, kind: OptionOverlayKind) {
         self.open = Some(kind);
-        self.focus_return = Some(focus_return.into());
     }
 
-    fn toggle(&mut self, kind: OptionOverlayKind, focus_return: impl Into<String>) -> bool {
-        if self.open == Some(kind) {
-            self.close();
-            false
-        } else {
-            self.open(kind, focus_return);
-            true
-        }
-    }
-
-    fn close(&mut self) -> Option<String> {
+    fn close(&mut self) {
         self.open = None;
-        self.focus_return.take()
     }
 }
 
@@ -1113,15 +1100,6 @@ pub(crate) mod wasm {
             else {
                 return;
             };
-            let inside_option_overlay = origin
-                .closest("#wb-tool-options-overlay")
-                .is_ok_and(|surface| surface.is_some());
-            let is_option_trigger = origin
-                .closest("[data-wb-option]")
-                .is_ok_and(|trigger| trigger.is_some());
-            if !inside_option_overlay && !is_option_trigger {
-                callback_workbench.borrow_mut().option_overlay.close();
-            }
             if origin
                 .closest("[data-problem-marker]")
                 .is_ok_and(|marker| marker.is_some())
@@ -1156,7 +1134,7 @@ pub(crate) mod wasm {
             let mut focus_reproduction_text = false;
             let mut focus_reproduction_return = None;
             let mut focus_option_control = None;
-            let mut focus_option_return = None;
+            let mut focus_select = false;
             if target.has_attribute("data-sample-group-trigger") {
                 return;
             } else if let Some(tool) = target
@@ -1166,7 +1144,7 @@ pub(crate) mod wasm {
                 let mut wb = callback_workbench.borrow_mut();
                 let option_kind = super::OptionOverlayKind::for_geometry_tool(tool);
                 if let Some(kind) = option_kind {
-                    wb.option_overlay.open(kind, target.id());
+                    wb.option_overlay.open(kind);
                     focus_option_control = Some(kind.first_control_id());
                 } else {
                     wb.option_overlay.close();
@@ -1195,7 +1173,7 @@ pub(crate) mod wasm {
             {
                 let mut wb = callback_workbench.borrow_mut();
                 if let Some(kind) = super::OptionOverlayKind::for_authoring_tool(tool) {
-                    wb.option_overlay.open(kind, target.id());
+                    wb.option_overlay.open(kind);
                     focus_option_control = Some(kind.first_control_id());
                 } else {
                     wb.option_overlay.close();
@@ -1207,8 +1185,7 @@ pub(crate) mod wasm {
                 .and_then(|key| super::action_surface::feature_tool_from_key(&key))
             {
                 let mut wb = callback_workbench.borrow_mut();
-                wb.option_overlay
-                    .open(super::OptionOverlayKind::Fillet, target.id());
+                wb.option_overlay.open(super::OptionOverlayKind::Fillet);
                 focus_option_control = Some(super::OptionOverlayKind::Fillet.first_control_id());
                 activate_feature_authoring(&callback_document, &mut wb, tool);
             } else if let Some(kind) = target
@@ -1217,11 +1194,8 @@ pub(crate) mod wasm {
                 .and_then(super::OptionOverlayKind::from_key)
             {
                 let mut wb = callback_workbench.borrow_mut();
-                if wb.option_overlay.toggle(kind, target.id()) {
-                    focus_option_control = Some(kind.first_control_id());
-                } else {
-                    focus_option_return = Some(target.id());
-                }
+                wb.option_overlay.open(kind);
+                focus_option_control = Some(kind.first_control_id());
             } else if target.has_attribute("data-fillet-action") {
                 let mut wb = callback_workbench.borrow_mut();
                 let Some(scene) = editor_scene(&wb) else {
@@ -1334,7 +1308,7 @@ pub(crate) mod wasm {
                 }
                 let mut wb = callback_workbench.borrow_mut();
                 if action == "options-close" {
-                    focus_option_return = wb.option_overlay.focus_return.clone();
+                    focus_select = true;
                 }
                 perform_action(&callback_document, &mut wb, &action);
                 focus_reproduction_text =
@@ -1353,8 +1327,8 @@ pub(crate) mod wasm {
                 focus_by_id(&callback_document, id);
             } else if let Some(id) = focus_option_control {
                 focus_by_id(&callback_document, id);
-            } else if let Some(id) = focus_option_return.as_deref() {
-                focus_by_id(&callback_document, id);
+            } else if focus_select {
+                focus_by_id(&callback_document, "wb-tool-select");
             }
             if selected_sample {
                 close_sample_selector(&callback_document);
@@ -2514,11 +2488,13 @@ pub(crate) mod wasm {
             if event.key() == "Escape" && callback_workbench.borrow().option_overlay.open.is_some()
             {
                 event.prevent_default();
-                let focus_return = callback_workbench.borrow_mut().option_overlay.close();
-                let _ = render(&callback_document, &callback_workbench);
-                if let Some(id) = focus_return.as_deref() {
-                    focus_by_id(&callback_document, id);
+                {
+                    let mut wb = callback_workbench.borrow_mut();
+                    close_options_to_select(&mut wb);
+                    save(&wb);
                 }
+                let _ = render(&callback_document, &callback_workbench);
+                focus_by_id(&callback_document, "wb-tool-select");
                 return;
             }
             if let Some(target) = event
@@ -2894,11 +2870,19 @@ pub(crate) mod wasm {
                     let effects = wb.coordinator.editor_mut().cancel();
                     dispatch_effects(wb, effects);
                     let outcome = wb.feature_authoring.cancel();
+                    let exited = matches!(outcome, FeatureAuthoringOutcome::ModeExited);
                     handle_feature_outcome(wb, outcome);
+                    if exited {
+                        close_options_to_select(wb);
+                    }
                 } else if wb.authoring.active_tool().is_some() {
                     let document = wb.coordinator.session().design_document().clone();
                     let outcome = wb.authoring.cancel(&document);
+                    let exited = matches!(outcome, AuthoringOutcome::ModeExited);
                     handle_authoring_outcome(wb, outcome);
+                    if exited {
+                        close_options_to_select(wb);
+                    }
                 } else {
                     let effects = wb.coordinator.editor_mut().cancel();
                     dispatch_effects(wb, effects);
@@ -2927,14 +2911,13 @@ pub(crate) mod wasm {
             "contact-branches" => apply_contact_branches(document, wb),
             "angle-orientation" => apply_angle_orientation(document, wb),
             "options-close" => {
-                wb.option_overlay.close();
+                close_options_to_select(wb);
                 Ok(())
             }
             "reproduction-open" => {
                 close_sample_selector(document);
                 wb.reproduction_overlay_open = true;
                 wb.reproduction_focus_return = super::ReproductionFocusReturn::Load;
-                wb.option_overlay.close();
                 wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
                 wb.notice = "Paste a reproduction payload, then load it atomically".into();
                 Ok(())
@@ -3027,7 +3010,6 @@ pub(crate) mod wasm {
             let mut wb = workbench.borrow_mut();
             wb.reproduction_overlay_open = true;
             wb.reproduction_focus_return = super::ReproductionFocusReturn::Copy;
-            wb.option_overlay.close();
             wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
             wb.notice =
                 format!("Reproduction payload ready · {payload_size}; requesting clipboard access");
@@ -3400,6 +3382,18 @@ pub(crate) mod wasm {
         wb.feature_candidate = None;
         wb.feature_pending.clear();
         super::revoke_held_feature_authoring_preview(&mut wb.coordinator);
+    }
+
+    fn close_options_to_select(wb: &mut Workbench) {
+        wb.authoring.deactivate();
+        clear_feature_authoring(wb);
+        let effects = wb
+            .coordinator
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        dispatch_effects(wb, effects);
+        wb.option_overlay.close();
+        wb.notice = "Tool options closed; Select active".into();
     }
 
     fn activate_feature_authoring(
@@ -4284,12 +4278,6 @@ pub(crate) mod wasm {
         for (key, tool) in super::icons::GEOMETRY_TOOLS {
             if let Some(kind) = super::OptionOverlayKind::for_geometry_tool(tool) {
                 set_option_invoker_expanded(document, &format!("wb-tool-{key}"), kind, open)?;
-                set_option_invoker_expanded(
-                    document,
-                    &format!("wb-tool-{key}-options-trigger"),
-                    kind,
-                    open,
-                )?;
             }
         }
         for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
@@ -4301,30 +4289,18 @@ pub(crate) mod wasm {
                     kind,
                     open,
                 )?;
-                set_option_invoker_expanded(
-                    document,
-                    &format!("wb-authoring-{key}-options-trigger"),
-                    kind,
-                    open,
-                )?;
             }
         }
         for (key, _, dimension) in super::action_surface::DIMENSION_ACTIONS {
             let kind = super::OptionOverlayKind::Dimension(dimension);
             set_option_invoker_expanded(document, &format!("wb-authoring-{key}-tool"), kind, open)?;
-            set_option_invoker_expanded(
-                document,
-                &format!("wb-authoring-{key}-options-trigger"),
-                kind,
-                open,
-            )?;
         }
-        for id in [
+        set_option_invoker_expanded(
+            document,
             "wb-feature-fillet-trigger",
-            "wb-feature-fillet-options-trigger",
-        ] {
-            set_option_invoker_expanded(document, id, super::OptionOverlayKind::Fillet, open)?;
-        }
+            super::OptionOverlayKind::Fillet,
+            open,
+        )?;
         set_option_invoker_expanded(
             document,
             "wb-construction-display-trigger",
@@ -6891,17 +6867,22 @@ mod tests {
     }
 
     #[test]
-    fn option_overlay_state_is_mutually_exclusive_and_returns_focus() {
+    fn option_overlay_state_is_mutually_exclusive_and_explicitly_dismissed() {
         let mut state = OptionOverlayState::default();
-        state.open(OptionOverlayKind::Equal, "equal-main");
+        state.open(OptionOverlayKind::Equal);
         assert_eq!(state.open, Some(OptionOverlayKind::Equal));
-        state.open(OptionOverlayKind::Tangent, "tangent-main");
+        state.open(OptionOverlayKind::Tangent);
         assert_eq!(state.open, Some(OptionOverlayKind::Tangent));
-        assert_eq!(state.focus_return.as_deref(), Some("tangent-main"));
-        assert!(!state.toggle(OptionOverlayKind::Tangent, "tangent-trigger"));
+        state.open(OptionOverlayKind::Tangent);
+        assert_eq!(
+            state.open,
+            Some(OptionOverlayKind::Tangent),
+            "reinvoking the current family must not toggle it closed"
+        );
+        state.open(OptionOverlayKind::Continuity);
+        assert_eq!(state.open, Some(OptionOverlayKind::Continuity));
+        state.close();
         assert_eq!(state.open, None);
-        assert!(state.toggle(OptionOverlayKind::Continuity, "continuity-trigger"));
-        assert_eq!(state.close().as_deref(), Some("continuity-trigger"));
     }
 
     #[test]
@@ -6912,30 +6893,39 @@ mod tests {
             "role=\"dialog\" aria-modal=\"false\""
         )));
         assert!(html.contains("data-wb-action=\"options-close\""));
-        for key in [
-            "equal",
-            "tangent",
-            "continuity",
-            "dimension-point-distance",
-            "dimension-segment-length",
-            "dimension-radius",
-            "dimension-diameter",
-            "dimension-oriented-angle",
-            "fillet",
-            "conic-ellipse",
-            "conic-elliptical-arc",
-            "conic-rational-conic",
-            "conic-parabola",
-            "conic-hyperbola",
-            "nurbs",
-            "construction-display",
+        assert_eq!(html.matches("class=\"wb-palette-option-tool\"").count(), 15);
+        assert!(!html.contains("wb-palette-option-trigger"));
+        assert!(!html.contains("-options-trigger"));
+        assert!(html.contains("id=\"wb-tool-select\""));
+        for id in [
+            "wb-tool-ellipse",
+            "wb-tool-elliptical-arc",
+            "wb-tool-rational-conic",
+            "wb-tool-parabola",
+            "wb-tool-hyperbola",
+            "wb-tool-nurbs",
+            "wb-authoring-equal-tool",
+            "wb-authoring-tangent-tool",
+            "wb-authoring-continuity-tool",
+            "wb-authoring-point-distance-tool",
+            "wb-authoring-segment-length-tool",
+            "wb-authoring-radius-tool",
+            "wb-authoring-diameter-tool",
+            "wb-authoring-oriented-angle-tool",
+            "wb-feature-fillet-trigger",
+            "wb-construction-display-trigger",
         ] {
-            assert_eq!(
-                html.matches(&format!("data-wb-option=\"{key}\"")).count(),
-                1,
-                "one explicit invoker must own {key} options"
-            );
+            let button = html
+                .split(&format!("id=\"{id}\""))
+                .nth(1)
+                .and_then(|value| value.split("</button>").next())
+                .unwrap_or_else(|| panic!("missing option invoker {id}"));
+            assert!(button.contains("aria-controls=\"wb-tool-options-overlay\""));
+            assert!(button.contains("aria-expanded=\"false\""));
+            assert!(button.contains("aria-haspopup=\"dialog\""));
         }
+        assert_eq!(html.matches("data-wb-option=").count(), 1);
+        assert!(html.contains("data-wb-option=\"construction-display\""));
         for conditional in [
             "wb-authoring-first-rate-field",
             "wb-authoring-second-rate-field",
@@ -6958,7 +6948,9 @@ mod tests {
         assert!(html.contains("geometric-constraint-solver/blob/main/LICENSE"));
 
         let css = include_str!("../../styles.css");
-        assert!(css.contains("width: 2rem;"));
+        assert!(css.contains(".wb-palette-option-tool > button:first-child { width: 100%; }"));
+        assert!(!css.contains("padding-right: 2rem"));
+        assert!(!css.contains(".wb-palette-option-trigger"));
         assert!(css.contains(".wb-canvas-overlay-stack {"));
         assert!(css.contains(".wb-tool-options-overlay {"));
         assert!(css.contains("pointer-events: auto;"));

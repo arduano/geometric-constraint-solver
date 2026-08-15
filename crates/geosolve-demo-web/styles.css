@@ -259,20 +259,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke-width: 1.65;
   vector-effect: non-scaling-stroke;
 }
-.wb-palette-option-tool { position: relative; min-width: 0; }
-.wb-palette-option-tool > button:first-child { width: 100%; padding-right: 2rem; }
-.wb-palette-option-tool > .wb-palette-option-trigger {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 1;
-  width: 2rem;
-  min-height: 2.85rem;
-  padding: 0;
-  color: #d29a45;
-  background: transparent;
-}
-.wb-palette-option-tool > .wb-palette-option-trigger[aria-expanded="true"] { color: #fff2c8; }
+.wb-palette-option-tool { min-width: 0; }
+.wb-palette-option-tool > button:first-child { width: 100%; }
 .wb-palette-terminal { padding-top: 0.2rem; border-top: 1px solid #3b4142; }
 
 .wb-tree-panel,

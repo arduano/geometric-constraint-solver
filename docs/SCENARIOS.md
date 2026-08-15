@@ -1673,9 +1673,11 @@ continue to produce A1 semantics.
 
 At `1440x900` and approximately `1024x720`, activate Equal, Tangent, Continuity, every dimension,
 Fillet, each Conic-family tool, NURBS and Construction display. One bottom-left canvas overlay opens
-with only relevant controls, remains contained, supports keyboard close/focus return and light
-dismissal, and remembers valid values until refresh. Invalid inactive-family fields cannot block an
-unrelated tool.
+from each centered main palette button without a separate chevron, shows only relevant controls,
+remains contained and remembers valid values until refresh. Re-invoking the same family is
+idempotent. Blur, outside/canvas clicks, zoom and ordinary controls leave the overlay open;
+switching tools closes or replaces it. Escape and the overlay `×` close it, activate Select and
+focus Select. Invalid inactive-family fields cannot block an unrelated tool.
 
 After the clean release gate, the same qualified workbench is deployed from `main` to
 `https://arduano.github.io/geometric-constraint-solver/`. Its stylesheet, JavaScript and WASM use

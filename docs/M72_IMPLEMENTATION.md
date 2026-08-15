@@ -34,8 +34,12 @@ Implementation commits:
 - `crates/geosolve-demo-web/index.html`, `styles.css` and `src/workbench/mod.rs` replace sidebar
   flyouts with one nonmodal bottom-left canvas surface. An internal `OptionOverlayKind` owns Equal,
   Tangent, Continuity, all five dimensions, Fillet, five conic-family tools, NURBS and Construction
-  display. It provides mutual exclusion, family-local controls and parsing, bounded scrolling,
-  deterministic focus entry/return, Escape, close and light-dismiss behavior.
+  display. Option-bearing palette tools have no separate split-chevron: their centered main button
+  implicitly opens the relevant family, and invoking the same family again is idempotent. The
+  surface provides mutual exclusion, family-local controls and parsing, bounded scrolling and
+  deterministic focus entry. It persists across blur, outside/canvas clicks, zoom and ordinary
+  controls; switching tools closes or replaces it, while its `×` and Escape exit to Select and
+  focus Select.
 - The Problems card uses a presentation-only exact problem-set identity. Dismissal hides only the
   currently rendered set; a changed set opens automatically, and recovery removes the card without
   changing headless diagnostics, tree state or canvas markers.
@@ -64,7 +68,9 @@ anchor and dimensions.
 
 F003 and the Problems disclosure are browser presentation changes over existing public coordinator
 and audit data. Only the active option family is read or validated, so malformed hidden C2, conic
-or NURBS fields cannot block an unrelated tool. No browser-owned equation or accepted-state path
+or NURBS fields cannot block an unrelated tool. Overlay lifetime follows tool intent rather than
+transient DOM focus: non-tool interaction leaves the active family visible, another tool closes or
+replaces it, and explicit close returns to Select. No browser-owned equation or accepted-state path
 was introduced.
 
 ## 3. Commands run and outcomes
@@ -103,11 +109,13 @@ Outcomes:
   non-symlink files with prefixed JavaScript, WASM and stylesheet references;
 - `actionlint` passes for the Pages workflow.
 
-Local Chromium checks using the ordinary release build passed at `1440x900` and `1024x720`. They
-opened every option family, verified one active panel, subtype-specific controls, containment,
-focus entry/return, Escape, explicit close, outside dismissal without swallowed zoom, invalid
-inactive-field isolation, Problems close/reopen, Source/License links and browser-local scene
-persistence across reload. The same checks later passed against the public endpoint. Current
+Initial local Chromium checks using the ordinary release build passed at `1440x900` and
+`1024x720`. They opened every option family and verified one active panel, subtype-specific
+controls, containment, focus handling, invalid inactive-field isolation, Problems close/reopen,
+Source/License links and browser-local scene persistence across reload. The same checks later
+passed against the public endpoint. The focused 2026-08-15 UAT follow-up replaces the initial
+dismissal-on-outside-interaction contract with the implicit, persistent overlay contract recorded
+above and in `docs/M72_UAT.md`; that interaction remains part of the pending human gate. Current
 public-run screenshots are retained at `/tmp/m72-overlay-1440x900.png` and
 `/tmp/m72-overlay-1024x720.png`, SHA-256
 `96a3f2ed0fa845688d9acf7b9e24443e41d1511e2dbf448fc0e2f329533f0024` and
@@ -166,8 +174,10 @@ Trunk asset names. Publication authority is the exact artifact built after the h
 gate, uploaded by the workflow and matched above; JavaScript, stylesheet and legal/API document
 content hashes are unchanged from local preflight. Finally, the public command
 `M72_BASE_URL=https://arduano.github.io/geometric-constraint-solver/ node /tmp/m72_full_browser_check.mjs`
-passed all option families, containment, focus/dismissal, Problems disclosure and browser-local
-reload persistence at `1440x900` and `1024x720` with no console or page errors.
+passed the initial candidate's option families, containment, focus/dismissal, Problems disclosure
+and browser-local reload persistence at `1440x900` and `1024x720` with no console or page errors.
+The revised overlay lifetime and close-to-Select behavior are governed by the pending focused UAT
+follow-up rather than claimed by that historical public run.
 
 ## 4. Acceptance passed
 

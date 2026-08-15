@@ -4359,7 +4359,8 @@ semantic-consolidation proposal. `docs/M72_GOALS.md` owns the accepted scope.
   presentation-only dismissal.
 - [x] M72-F002: make interactive rectangles free-size while preserving the constrained macro.
 - [x] M72-F003: move all option-bearing tool and Construction-display controls into one accessible
-  bottom-left canvas overlay.
+  bottom-left canvas overlay with implicit centered palette buttons, persistent non-tool
+  interaction, idempotent re-invocation and explicit close-to-Select behavior.
 - [x] M72-F004: qualify, publish and verify the public GitHub Pages workbench.
 - [x] Run the complete clean release gate.
 - [ ] Receive focused supervising-human UAT approval.
@@ -4382,9 +4383,15 @@ served as `application/wasm`, repository-prefixed assets load, and public Chromi
 `1440x900` and `1024x720` including local-storage reload persistence. Only supervising-human UAT
 approval remains open.
 
+UAT follow-up (2026-08-15): remove the option tools' separate chevrons and center each main
+invoker. Its bottom-left overlay stays open through blur, outside/canvas clicks, zoom and ordinary
+controls; the same invoker is idempotent, tool switches close or replace the surface, and `×` or
+Escape activates and focuses Select. Human UAT approval remains unchecked.
+
 Gate: the three defects pass focused owner regressions; no residual, persistence or golden meaning
-changes; the desktop overlays remain contained and family-local; and the exact qualified public
-site passes Chromium UAT including browser-local reload persistence.
+changes; the desktop overlays remain contained, family-local and persistent under non-tool
+interaction; and the exact qualified public site passes Chromium UAT including browser-local
+reload persistence.
 
 ### M73 proposal — retained authoring semantic consolidation
 
