@@ -14,7 +14,13 @@ F001-F003 implementation source: `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223`
 
 F001-F003 implementation tree: `1890ab4330bd78f26c187ebed5fadea97370101e`
 
-M73-F004 implementation source: `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`
+M73-F004 initial implementation source: `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`
+
+M73-F004 early-suppression hardening: `0153fc045cac541cb0cbd2348ad1d51d5768da8c`
+
+M73-F004 final focused source: `89e409a6ebe12c640ae2f313f95de67430dfa8d0`
+
+M73-F004 regression-hardening source: `f41e398d00b7a7ca1e12a12a285408a0b7bd3566`
 
 Architecture decision: no new ADR. M73 remains within ADR 0034's drafting-authority boundary and
 ADR 0035's retained-relation lifecycle.
@@ -72,12 +78,16 @@ coordinate. That exposed redundant candidate/guide alternatives before the retai
 opportunity to reject a redundant commit.
 
 Implementation commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` gives eligible live world
-Horizontal precedence over
-`HorizontalPoints` and `HorizontalPointToMidpoint` candidates, references and guides, with the
-symmetric Vertical rule for `VerticalPoints` and `VerticalPointToMidpoint`. Orthogonal
-point/native-midpoint plus world-axis bundles remain. Remembered Parallel, Perpendicular and
-Collinear directions retain their current behavior, including Cartesian supports, and solver
-redundancy rejection is not weakened or bypassed.
+Horizontal precedence over durable `HorizontalPoints` and `HorizontalPointToMidpoint` tracking,
+with the symmetric Vertical rule for durable `VerticalPoints` and `VerticalPointToMidpoint`.
+Hardening follow-up `0153fc0` moves that suppression into tracker collection, before guide
+publication, candidate-budget accounting, latch acquisition or cross-axis pair construction.
+Final boundary follow-up `89e409a` limits suppression to trackers that can actually persist a
+durable point/midpoint relation; generic tracking-only cues retain their guide and wake behavior
+without contributing a competing relation. Orthogonal durable point/native-midpoint plus world-axis
+bundles remain. Remembered Parallel, Perpendicular and Collinear directions retain their current
+behavior, including Cartesian supports, and solver redundancy rejection is not weakened or
+bypassed.
 
 This narrowly supersedes M71-F004's same-axis-alternative rule only for eligible live world-axis
 span constraints; the M71 record remains unchanged historical evidence. Public regression target
@@ -124,17 +134,23 @@ current-status source.
 
 ## M73-F004 focused and proportional qualification
 
-Focused implementation source: `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`
+Final behavior source: `89e409a6ebe12c640ae2f313f95de67430dfa8d0`
+
+Regression-hardening source: `f41e398d00b7a7ca1e12a12a285408a0b7bd3566`
 
 Passed evidence:
 
 - public integration target `m73_f004_span_axis_precedence`: **3/3 pass**, including one atomic
   retained commit/history step, finite accepted geometry and independently bounded accepted hard
   residual;
-- inference-owner tests cover Horizontal and Vertical point/native-midpoint precedence, suppression
-  before cross-axis pair construction, retained orthogonal bundles and remembered
-  Parallel/Perpendicular/Collinear controls;
-- complete `geosolve-constraint-editor` suite: **322 unit tests plus every integration suite pass**;
+- inference-owner tests cover Horizontal and Vertical durable point/native-midpoint precedence,
+  suppression before guide publication, candidate-budget accounting, latch acquisition and
+  cross-axis pair construction, retained orthogonal bundles, preserved generic tracking-only cues
+  and remembered Parallel/Perpendicular/Collinear controls;
+- the focused `same_axis_span` owner run includes the complete four-way durable point/midpoint by
+  axis matrix and passes **5/5** with exact top-level guide and latch checks; the public midpoint
+  row proves its native reference wake before suppression;
+- complete `geosolve-constraint-editor` suite: **325 unit tests plus every integration suite pass**;
 - M71 F003, F004 and F005 public regressions plus native/WASM transition parity pass;
 - warnings-denied Clippy passes; and
 - the golden survey, check and `--require-clean` pass unchanged at **234/234**.
@@ -187,8 +203,8 @@ the implemented F004 correction. No F004 replacement has been nominated or serve
   files and verify their Tailscale publication byte-for-byte; retain that withdrawn candidate as
   historical F001-F003 evidence.
 - [x] Freeze public regression `m73_f004_span_axis_precedence` and complete the focused
-  Horizontal/Vertical point/midpoint precedence, orthogonal-bundle and remembered-direction owner
-  matrix.
+  Horizontal/Vertical durable point/midpoint precedence, early-suppression, budget/latch,
+  generic-tracking, orthogonal-bundle and remembered-direction owner matrix.
 - [x] Implement M73-F004 without changing solver redundancy authority, persistence, browser policy
   or the 234-row golden.
 - [x] Pass focused/proportional editor, M71 transition, Clippy and unchanged golden checks.

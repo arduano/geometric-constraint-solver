@@ -1828,10 +1828,12 @@ replacement release gate, publication and focused human UAT remain pending**.
   verifies that its guides, relations, references and final commit plan describe one terminal
   candidate. No candidate identity enters persistence or public commit-plan DTOs.
 - For an eligible live world Horizontal span whose policy both adjusts coordinates and persists
-  the constraint, Horizontal owns the endpoint's same-axis coordinate and suppresses
-  `HorizontalPoints` and `HorizontalPointToMidpoint` candidates and guides. Eligible live world
-  Vertical symmetrically suppresses `VerticalPoints` and `VerticalPointToMidpoint`. Orthogonal
-  point/native-midpoint plus world-axis bundles remain available; remembered
+  the constraint, Horizontal owns the endpoint's same-axis coordinate and suppresses durable
+  `HorizontalPoints` and `HorizontalPointToMidpoint` tracking before it publishes a guide, consumes
+  candidate capacity, acquires a latch or enters cross-axis pairing. Eligible live world Vertical
+  symmetrically suppresses durable `VerticalPoints` and `VerticalPointToMidpoint`. Generic
+  tracking-only cues remain visible and awake without contributing a competing relation.
+  Orthogonal point/native-midpoint plus world-axis bundles remain available; remembered
   Parallel/Perpendicular/Collinear direction behavior and solver redundancy rejection remain
   unchanged.
 - M73-F004 narrowly supersedes M71-F004's same-axis-alternative rule only for those eligible live
@@ -1841,8 +1843,8 @@ replacement release gate, publication and focused human UAT remain pending**.
   centered/circumference cases, ambiguity and stale/rejected publication without mutation.
 - Public regression `m73_f004_span_axis_precedence` passes 3/3 with finite accepted geometry,
   independently bounded accepted residual and exact retained history. Focused inference-owner
-  precedence/symmetry, pre-pair filtering, orthogonal-bundle and remembered-direction controls
-  pass.
+  precedence/symmetry, pre-guide and pre-pair filtering, candidate-budget/latch neutrality,
+  orthogonal-bundle, generic-tracking and remembered-direction controls pass.
 - The reviewed 234-row golden remains byte-identical. No residual, Jacobian, priority, branch,
   canonical sketch v1-v4, unsupported draft-v5, browser or accepted-state meaning changes.
 - Formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
@@ -1858,12 +1860,18 @@ ordered-manifest aggregate
 `371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`. M73-F004 withdraws that
 candidate from current UAT while preserving its historical evidence.
 
-F004 focused/proportional result (2026-08-15): implementation commit
-`4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` passes the public 3/3 regression, inference-owner
-matrix, complete `geosolve-constraint-editor` suite (322 unit tests plus all integrations), M71
-F003/F004/F005 and transition parity, warnings-denied Clippy, and unchanged 234/234 golden
-survey/check/clean gate. The complete clean replacement release gate, byte-verified publication and
-focused UAT remain pending; no replacement candidate or milestone-close claim exists yet.
+F004 focused/proportional result (2026-08-15): initial implementation
+`4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`, early-suppression hardening `0153fc0` and final
+durable-tracker boundary follow-up `89e409a` produce final focused source
+`89e409a6ebe12c640ae2f313f95de67430dfa8d0`. That source passes the public 3/3 regression,
+inference-owner matrix, complete `geosolve-constraint-editor` suite (325 unit tests plus all
+integrations), M71 F003/F004/F005 and transition parity, warnings-denied Clippy, and unchanged
+234/234 golden survey/check/clean gate. Regression-hardening follow-up
+`f41e398d00b7a7ca1e12a12a285408a0b7bd3566` makes the four-way point/native-midpoint by axis matrix
+part of the focused `same_axis_span` filter, asserts exact top-level guide/latch state and proves
+the public midpoint wake before suppression; focused 5/5 and public 3/3 pass. The complete clean
+replacement release gate, byte-verified publication and focused UAT remain pending; no replacement
+candidate or milestone-close claim exists yet.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

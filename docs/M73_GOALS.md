@@ -37,8 +37,8 @@ The remaining seams at activation were narrower and directly observable:
 4. The nominated F001-F003 product exposed a narrower inference conflict: a live world Horizontal
    or Vertical span and same-axis remembered point/native-midpoint tracking could both survive even
    though they adjust the same endpoint coordinate. M73-F004 gives the eligible live world-axis
-   span direction precedence without changing orthogonal bundles or remembered direction
-   semantics.
+   span direction precedence over competing durable trackers without changing generic
+   tracking-only cues, orthogonal bundles or remembered direction semantics.
 
 ## Accepted work
 
@@ -80,11 +80,14 @@ The remaining seams at activation were narrower and directly observable:
 ### M73-F004 — live world-axis span precedence
 
 - When a live world Horizontal span direction both adjusts coordinates and persists its relation,
-  suppress same-axis `HorizontalPoints` and `HorizontalPointToMidpoint` candidates, references and
-  guides. Apply the symmetric rule to live world Vertical versus `VerticalPoints` and
+  suppress durable same-axis `HorizontalPoints` and `HorizontalPointToMidpoint` tracking before it
+  can publish a guide, consume candidate capacity, acquire a latch or enter cross-axis pairing.
+  Apply the symmetric rule to live world Vertical versus durable `VerticalPoints` and
   `VerticalPointToMidpoint`.
-- Preserve point/native-midpoint tracking on the orthogonal axis so it can still compose with the
-  live world-axis direction into the existing two-relation line/polyline bundle.
+- Preserve generic tracking-only cues and wake state: they may coexist visually with the live
+  world-axis candidate but contribute no competing retained relation. Preserve durable
+  point/native-midpoint tracking on the orthogonal axis so it can still compose with the live
+  world-axis direction into the existing two-relation line/polyline bundle.
 - Do not apply this suppression to remembered Parallel, Perpendicular or Collinear directions,
   even when their source support is Cartesian. Do not weaken solver-owned redundancy rejection.
 - Treat this as a narrow supersession of M71-F004's same-axis-alternative rule only for eligible
@@ -102,9 +105,11 @@ The remaining seams at activation were narrower and directly observable:
   compound-axis cases, circle-through-point, centered Concentric, ambiguity and stale/rejected
   commits without mutation.
 - Public regression `m73_f004_span_axis_precedence` and focused inference-owner tests cover
-  Horizontal/Vertical point and native-midpoint suppression, orthogonal bundle retention,
-  remembered Parallel/Perpendicular/Collinear non-regression, exact guides/relations, atomic
-  retained commit and independent finite accepted geometry/residual checks.
+  Horizontal/Vertical durable point and native-midpoint suppression before guide publication,
+  candidate accounting, latch acquisition and cross-axis pairing; generic tracking-only cue
+  preservation; orthogonal bundle retention; remembered Parallel/Perpendicular/Collinear
+  non-regression; exact guides/relations; atomic retained commit; and independent finite accepted
+  geometry/residual checks.
 - Existing M70/M71 behavior, public contextual DTOs, browser dispatch and the reviewed 234-row
   golden remain unchanged except for F004's explicitly superseding precedence rule.
 - No residual, Jacobian, solver priority, branch state, canonical sketch v1-v4 byte, unsupported
@@ -113,12 +118,19 @@ The remaining seams at activation were narrower and directly observable:
   parity and the complete clean release gate pass before candidate nomination. Focused human UAT
   then receives explicit approval.
 
-M73-F001 through M73-F004 and their focused/proportional qualification are complete. F004
-implementation commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` passes its public 3/3
-regression, inference-owner matrix, full editor suite, M71 F003/F004/F005 and transition parity,
-warnings-denied Clippy, and the unchanged 234/234 golden survey/check/clean gate. The complete clean
-replacement release gate and byte-verified publication remain open; focused UAT begins only after
-a replacement candidate is nominated.
+M73-F001 through M73-F004 and their focused/proportional qualification are complete. F004 initial
+implementation `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`, hardening `0153fc0` and final
+durable-tracker boundary follow-up `89e409a` produce final focused source
+`89e409a6ebe12c640ae2f313f95de67430dfa8d0`. It passes the public 3/3 regression,
+inference-owner matrix, full editor suite at 325 unit tests plus every integration, M71
+F003/F004/F005 and transition parity, warnings-denied Clippy, and the unchanged 234/234 golden
+survey/check/clean gate. The complete clean replacement release gate and byte-verified publication
+remain open; focused UAT begins only after a replacement candidate is nominated.
+
+Regression-hardening follow-up `f41e398d00b7a7ca1e12a12a285408a0b7bd3566` makes the full
+point/native-midpoint by Horizontal/Vertical matrix part of the focused `same_axis_span` run,
+asserts exact top-level guide and latch state, and proves the public native-midpoint wake before
+suppression. The focused owner run passes 5/5 and the public target passes 3/3.
 
 ## ADR decision
 

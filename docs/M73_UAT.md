@@ -28,19 +28,29 @@ UAT; do not record U1-U4 results against them.
 ## Completed mechanical prerequisite — M73-F004 span-axis precedence
 
 An eligible live world Horizontal span whose inference policy both adjusts coordinates and
-persists the constraint must suppress same-axis `HorizontalPoints` and
-`HorizontalPointToMidpoint` candidates and guides. Live world Vertical must symmetrically suppress
-`VerticalPoints` and `VerticalPointToMidpoint`. Orthogonal point/native-midpoint plus world-axis
-bundles remain available; remembered Parallel/Perpendicular/Collinear behavior and solver
-redundancy rejection remain unchanged.
+persists the constraint must suppress durable same-axis `HorizontalPoints` and
+`HorizontalPointToMidpoint` tracking before guide publication, candidate accounting, latch
+acquisition or cross-axis pairing. Live world Vertical must symmetrically suppress durable
+`VerticalPoints` and `VerticalPointToMidpoint`. Generic tracking-only cues remain visible and awake
+without contributing a competing relation. Orthogonal durable point/native-midpoint plus
+world-axis bundles remain available; remembered Parallel/Perpendicular/Collinear behavior and
+solver redundancy rejection remain unchanged.
 
 This narrowly supersedes M71-F004's same-axis-alternative rule only for eligible live world-axis
-span constraints. Implementation commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` passes public
-regression `m73_f004_span_axis_precedence` 3/3, including finite accepted geometry/residual and
-exact retained history. The inference-owner precedence, pre-pair filtering, orthogonal-bundle and
-remembered-direction controls; complete editor suite; M71 F003/F004/F005 and transition parity;
-warnings-denied Clippy; and unchanged 234/234 golden survey/check/clean gate all pass. Clean
-replacement qualification/publication and this focused UAT remain pending.
+span constraints. Initial implementation `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`, hardening
+follow-up `0153fc0` and final durable-tracker boundary follow-up `89e409a` produce final focused
+source `89e409a6ebe12c640ae2f313f95de67430dfa8d0`. It passes public regression
+`m73_f004_span_axis_precedence` 3/3, including finite accepted geometry/residual and exact retained
+history. The inference-owner early-suppression, budget/latch, cross-axis, orthogonal-bundle,
+generic-tracking and remembered-direction controls; complete editor suite at 325 unit tests plus
+every integration; M71 F003/F004/F005 and transition parity; warnings-denied Clippy; and unchanged
+234/234 golden survey/check/clean gate all pass. Clean replacement qualification/publication and
+this focused UAT remain pending.
+
+Regression-hardening follow-up `f41e398d00b7a7ca1e12a12a285408a0b7bd3566` puts the complete
+point/native-midpoint by Horizontal/Vertical matrix in the focused `same_axis_span` run and checks
+the exact published guide set and empty durable tracker latch. The public midpoint case proves the
+midpoint wake before testing suppression. Those focused commands pass 5/5 and 3/3 respectively.
 
 ## M73-U1 — Line and polyline stage continuity
 
@@ -91,8 +101,10 @@ On the replacement candidate, exercise both Line and Polyline endpoints:
    world-axis span into the expected two-guide, two-relation bundle.
 4. Check remembered Parallel, Perpendicular and Collinear alternatives on Cartesian supports, then
    attempt an actually redundant retained relation and confirm ordinary solver rejection remains.
-5. Commit, Undo/Redo, cancel and retry representative cases; no suppressed guide, stale relation or
-   extra history step may survive.
+5. Where a generic tracking-only cue is presented, confirm it remains visible but creates no
+   competing retained relation.
+6. Commit, Undo/Redo, cancel and retry representative cases; no suppressed durable guide, stale
+   relation or extra history step may survive.
 
 Pass when live world H/V direction intent clearly owns its same-axis coordinate while orthogonal
 bundles, remembered-direction behavior and retained solver authority remain unchanged.

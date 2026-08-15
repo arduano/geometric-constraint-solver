@@ -1715,11 +1715,13 @@ or guides.
 
 For a live world Horizontal direction whose active inference behavior both adjusts coordinates and
 persists the constraint, commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` retains Horizontal
-and suppresses all same-axis `HorizontalPoints` and
-`HorizontalPointToMidpoint` candidates, references and guides before singleton or pair
-construction. Apply the symmetric rule to live world Vertical versus `VerticalPoints` and
-`VerticalPointToMidpoint`. A point/native-midpoint tracker on the orthogonal axis must still compose
-with the live world-axis direction into the existing two-relation bundle.
+and suppresses competing durable same-axis `HorizontalPoints` and `HorizontalPointToMidpoint`
+tracking. Apply the symmetric rule to live world Vertical versus durable `VerticalPoints` and
+`VerticalPointToMidpoint`. Follow-up `0153fc0` performs this suppression before guide publication,
+candidate accounting, latch acquisition or cross-axis pairing. Follow-up `89e409a` limits it to
+durable trackers: generic tracking-only cues remain visible and awake without contributing a
+competing retained relation. A durable point/native-midpoint tracker on the orthogonal axis must
+still compose with the live world-axis direction into the existing two-relation bundle.
 
 This precedence is deliberately limited to live world Horizontal/Vertical span directions.
 Remembered Parallel, Perpendicular and Collinear directions keep their existing alternatives even
@@ -1728,14 +1730,22 @@ actual redundancy. No residual, Jacobian, solver priority, branch, persistence, 
 policy changes. M73-F004 narrowly supersedes M71-F004's same-axis-alternative rule for this eligible
 live world-axis case; the M71-F004 wording above remains exact historical evidence.
 
-Focused/proportional status (2026-08-15): public regression `m73_f004_span_axis_precedence` passes
-3/3 with finite accepted geometry/residual and exact history. The `inference.rs` owner matrix passes
-Horizontal/Vertical point and native-midpoint precedence, filtering before point-axis pairing,
-orthogonal bundles and remembered Parallel/Perpendicular/Collinear controls. The full editor suite
-passes 322 unit tests plus every integration suite; M71 F003/F004/F005 and transition parity,
-warnings-denied Clippy, and unchanged 234/234 golden survey/check/clean gate pass. Clean replacement
-release qualification/publication and focused UAT remain pending; no replacement candidate is
-nominated.
+Focused/proportional status (2026-08-15): final focused source
+`89e409a6ebe12c640ae2f313f95de67430dfa8d0` passes public regression
+`m73_f004_span_axis_precedence` 3/3 with finite accepted geometry/residual and exact history. The
+`inference.rs` owner matrix passes Horizontal/Vertical point and native-midpoint precedence,
+suppression before guide publication/candidate budget/latch/cross-axis pairing, orthogonal bundles,
+generic tracking-only cues and remembered Parallel/Perpendicular/Collinear controls. The full
+editor suite passes 325 unit tests plus every integration suite; M71 F003/F004/F005 and transition
+parity, warnings-denied Clippy, and unchanged 234/234 golden survey/check/clean gate pass. Clean
+replacement release qualification/publication and focused UAT remain pending; no replacement
+candidate is nominated.
+
+Regression-hardening source `f41e398d00b7a7ca1e12a12a285408a0b7bd3566` makes all four durable
+point/native-midpoint by Horizontal/Vertical rows part of the focused `same_axis_span` run and
+checks the exact published world-axis guide plus empty durable tracker latch. Its retained-editor
+midpoint case first proves the native midpoint wake, then proves one final candidate and no leaked
+same-axis top-level guide. The focused owner run passes 5/5 and the public target remains 3/3.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

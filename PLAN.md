@@ -4438,20 +4438,23 @@ consolidation and unreleased editor-API retirement.
 - [x] M73-F003: retain the terminal `DraftInferenceCandidateId` through private confirmation and
   verify its guides, relations, references and lowered commit plan remain one semantic bundle.
 - [x] M73-F004: let an eligible live, coordinate-adjusting and persisted world Horizontal/Vertical
-  span suppress same-axis point/native-midpoint tracking candidates and guides while retaining
-  orthogonal bundles, remembered Parallel/Perpendicular/Collinear behavior and solver-owned
-  redundancy rejection.
+  span suppress same-axis durable point/native-midpoint tracking before guide publication,
+  candidate accounting, latch acquisition or cross-axis pairing while retaining generic
+  tracking-only cues, orthogonal bundles, remembered Parallel/Perpendicular/Collinear behavior and
+  solver-owned redundancy rejection.
 - [x] Add the focused F001-F003 stage, all-family contextual-authoring, operand/failure and
   candidate-trace regressions recorded in `docs/M73_GOALS.md` and `docs/SCENARIOS.md`.
 - [x] Freeze `m73_f004_span_axis_precedence` at the public retained-editor boundary and complete
-  the focused inference-owner precedence/symmetry/non-regression matrix.
+  the focused inference-owner precedence/symmetry, early-suppression, budget/latch,
+  generic-tracking and remembered-direction non-regression matrix.
 - [x] Preserve the 234-row golden byte-for-byte and pass formatting, warnings-denied workspace
   Clippy, locked all-feature tests, relevant native/WASM parity and the complete clean release gate
   for the F001-F003 candidate.
 - [x] Nominate and byte-verify the immutable F001-F003 candidate; retain it only as historical
   evidence after M73-F004 opened.
-- [x] Pass the focused F004 tests, complete editor suite, M71 F003/F004/F005 and transition parity,
-  warnings-denied Clippy and unchanged 234/234 golden survey/check/clean gate.
+- [x] Pass the focused F004 tests, complete editor suite at 325 unit tests plus every integration,
+  M71 F003/F004/F005 and transition parity, warnings-denied Clippy and unchanged 234/234 golden
+  survey/check/clean gate.
 - [ ] Repeat the complete clean replacement release gate on committed product/documentation source.
 - [ ] Nominate and byte-verify a replacement immutable candidate for focused UAT.
 - [ ] Receive explicit focused human UAT approval.
@@ -4477,8 +4480,8 @@ remain historical qualification evidence only.
 M73-F004 implementation/qualification note (2026-08-15): on the nominated F001-F003 product, an
 eligible live world Horizontal or Vertical span could coexist with same-axis remembered
 point/native-midpoint tracking, publishing redundant candidates and guides for the same endpoint
-coordinate. Commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` gives a live direction whose
-policy both adjusts coordinates and persists the constraint precedence over
+coordinate. Initial repair `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` gives a live direction
+whose policy both adjusts coordinates and persists the constraint precedence over
 `HorizontalPoints`/`HorizontalPointToMidpoint`, or symmetrically
 `VerticalPoints`/`VerticalPointToMidpoint`. Orthogonal point/midpoint plus world-axis bundles remain;
 remembered Parallel, Perpendicular and Collinear directions keep their prior behavior; and the
@@ -4486,13 +4489,24 @@ solver still rejects any redundancy that reaches retained authoring. This narrow
 M71-F004's same-axis-alternative rule only for eligible live world-axis span constraints; M71's
 wording remains historical evidence.
 
+Hardening follow-up `0153fc0` moves durable same-axis suppression ahead of guide publication,
+candidate-budget accounting, latch acquisition and cross-axis pair construction. Final focused
+source `89e409a6ebe12c640ae2f313f95de67430dfa8d0` limits that suppression to durable trackers, so
+generic tracking-only cues retain their M70/M71 guide and wake behavior while contributing no
+competing retained relation.
+
+Regression-hardening follow-up `f41e398d00b7a7ca1e12a12a285408a0b7bd3566` puts the complete
+point/native-midpoint by Horizontal/Vertical matrix inside the focused `same_axis_span` filter and
+asserts the exact top-level guide set and empty durable tracker latch. The public midpoint case now
+proves that the native midpoint was awake before verifying its same-axis suppression.
+
 The public `m73_f004_span_axis_precedence` regression passes 3/3, including finite accepted
 geometry/residual and one-step retained history. Focused inference-owner precedence, pre-pair
-filtering, orthogonal-bundle and remembered-direction controls pass; the complete editor suite
-passes 322 unit tests plus every integration suite; M71 F003/F004/F005 and transition parity,
-warnings-denied Clippy, and unchanged 234/234 golden survey/check/`--require-clean` pass. The clean
-replacement release gate, publication and focused UAT remain pending. No replacement candidate has
-been nominated.
+filtering, guide/budget/latch neutrality, orthogonal-bundle, generic-tracking and
+remembered-direction controls pass; the complete editor suite passes 325 unit tests plus every
+integration suite; M71 F003/F004/F005 and transition parity, warnings-denied Clippy, and unchanged
+234/234 golden survey/check/`--require-clean` pass. The clean replacement release gate, publication
+and focused UAT remain pending. No replacement candidate has been nominated.
 
 Gate: one private stage description owns the remaining line/polyline construction facts; the
 redundant unreleased direct API is absent; contextual authoring retains all accepted behavior and
