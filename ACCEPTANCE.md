@@ -1900,9 +1900,9 @@ gate passes.
 
 ## M74 acceptance: production-style sketch reference UX
 
-Status: **mechanically implemented; release nomination in progress as of 2026-08-16**. The scope in
-`docs/M74_GOALS.md` is approved and development qualification passes, but the clean committed gate,
-human acceptance and public release are not yet claimed.
+Status: **clean candidate nominated; focused human UAT pending as of 2026-08-16**. The scope in
+`docs/M74_GOALS.md`, complete clean committed gate and immutable byte-verified Tailscale nomination
+pass, but human acceptance and public release are not yet claimed.
 
 - Every sketch exposes immutable intrinsic Origin/X/Y datums with no persistent identity,
   variables, history, geometry counts or Fit contribution. They are selectable and inspectable;

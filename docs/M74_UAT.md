@@ -2,10 +2,45 @@
 
 # M74 focused UAT — Production-style sketch reference UX
 
-Status: **prepared but not started as of 2026-08-16**. No M74 candidate is yet nominated. Candidate
-source/tree, immutable snapshot, Tailscale endpoint, manifest and qualification results remain
-pending. GitHub Pages must continue serving the accepted M73 build until M74 passes this scorecard
-and receives explicit approval.
+Status: **clean candidate nominated and mechanically verified; focused human UAT pending as of
+2026-08-16**. GitHub Pages continues to serve the accepted M73 build until M74 passes this
+scorecard and receives explicit approval.
+
+Candidate source: `7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`
+
+Candidate tree: `eff049a7fc0f2df941bcb1360ffb88f60868af21`
+
+Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Server PID: `969003`
+
+Immutable snapshot: `/tmp/geosolve-m74-uat.MpvYrl` (directory `0555`, files `0444`)
+
+Ordered-manifest aggregate:
+`2ceaa9f8707a54aa9bcbf62771a5cd0c3f6dd594bd5ba2829ffc370ee7588546`
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 16,385 | `180092f5db68423f14760db12265d06b81786df5ed3d3ba6f5ecd745e36ad567` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-90bff110a4eada3.js` | 33,221 | `115760f338139851520a5978ddaad4acb7441a5ec81a83d793885f81651eff16` |
+| `geosolve-demo-web-90bff110a4eada3_bg.wasm` | 6,091,298 | `f8389efd2c34519f38b0b3195a1efffe9a822c7641c124361997ab9131936b92` |
+| `index.html` | 27,474 | `a53bd7f661e92e5ba856ebdaca686c53ab3e1566d5c1ad32cc2a90065930c56a` |
+| `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
+
+The exact clean command
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 on the candidate
+source. It includes the 261/261 golden check, native/WASM M74 3/3 parity, workspace format, Clippy,
+tests, Rustdoc, benchmark compilation, performance checks, licensing/package checks, the
+256-moving-body sparse crossover in 88.91 seconds and Trunk 0.21.14 release assembly.
+
+The gate distribution was copied without rebuilding. Proxy/cache-bypassed identity requests for
+all seven files and `/` return HTTP 200 from the Tailscale address with exact media types, lengths
+and bytes; `/` equals `index.html`, and the fetched aggregate matches. The M72 compatibility and
+M74 browser scripts both pass at `1440x900` and `1024x720`. Former server PID `3870531` has exited,
+while historical snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains unchanged. This M74 snapshot is
+the current UAT authority; no public M74 artifact exists yet.
 
 Direct Rust/WASM tests are authoritative for exact residuals, Jacobians, persistence rejection,
 pixel boundaries, action atomicity and history. Human UAT should judge visual hierarchy,

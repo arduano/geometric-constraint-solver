@@ -2,10 +2,9 @@
 
 # M74 — Production-style sketch reference UX
 
-Status: **mechanically implemented; release nomination in progress as of 2026-08-16**. The scope is
-approved and focused development qualification passes, but the clean committed release gate,
-immutable Tailscale UAT, supervising-human approval and final GitHub Pages publication are not yet
-complete.
+Status: **clean candidate nominated; focused human UAT pending as of 2026-08-16**. The scope,
+implementation, clean committed release gate and immutable byte-verified Tailscale candidate pass.
+Supervising-human approval and final GitHub Pages publication are not yet complete.
 
 ## Goal
 

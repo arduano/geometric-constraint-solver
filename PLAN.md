@@ -4560,10 +4560,10 @@ changes; a clean replacement is byte-verified; and focused UAT is approved.
 
 ### M74: production-style sketch reference UX
 
-Status: **mechanically implemented; release nomination in progress as of 2026-08-16**. Intrinsic
-datum, editor/inference and workbench changes pass focused and workspace-wide development
-qualification. The clean committed release gate, immutable Tailscale UAT, explicit approval and
-accepted-source GitHub Pages publication remain open. `docs/M74_GOALS.md` owns the detailed scope.
+Status: **clean candidate nominated; focused human UAT pending as of 2026-08-16**. Intrinsic datum,
+editor/inference and workbench changes pass the complete clean gate and immutable byte-verified
+Tailscale nomination. Explicit approval and accepted-source GitHub Pages publication remain open.
+`docs/M74_GOALS.md` owns the detailed scope.
 
 - [x] Approve and record the M74 datum, inference and desktop-polish scope without activating
   draft-v5 as a supported persistence language.
@@ -4582,7 +4582,7 @@ accepted-source GitHub Pages publication remain open. `docs/M74_GOALS.md` owns t
   SVG letterbox bands.
 - [x] Pass focused domain/editor/web regressions and review any authoring/scene golden expansion
   row-by-row; preserve the current golden if focused tests own the new dimension.
-- [ ] Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, native/WASM
+- [x] Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, native/WASM
   checks, Trunk release build, golden survey/check/clean and the complete clean release gate.
 - [ ] Freeze and byte-verify an immutable Tailscale UAT candidate, keep it live through follow-up
   fixes and receive explicit focused human approval.
@@ -4594,8 +4594,20 @@ regressions are integrated. The reviewed authoring/scene oracle expands from 234
 for the three datum relation families. Focused sketch **6/6**, M74 editor **3/3**, complete editor
 **334/334** plus integrations and demo-web **111/111** pass. Warnings-denied workspace Clippy,
 locked all-feature tests, native/WASM M74 parity, the 261-row golden disposition, Trunk release
-assembly and two-size Chromium smoke pass; the clean committed gate and immutable UAT candidate
-are being finalized. No public M74 artifact exists yet.
+assembly and two-size Chromium smoke pass. No public M74 artifact exists yet.
+
+Release nomination note (2026-08-16): exact clean product source
+`7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`, tree
+`eff049a7fc0f2df941bcb1360ffb88f60868af21`, passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` completely. Its exact
+gate-produced seven files were copied without rebuilding to read-only
+`/tmp/geosolve-m74-uat.MpvYrl`, C-locale ordered-manifest aggregate
+`2ceaa9f8707a54aa9bcbf62771a5cd0c3f6dd594bd5ba2829ffc370ee7588546`, and byte-verified at
+`http://100.94.63.83:8080/` under PID `969003`. Proxy/cache-bypassed identity fetches for all seven
+files and `/` return HTTP 200 with exact lengths, media types and bytes; `/` equals `index.html` and
+the fetched aggregate matches. M72 compatibility and M74 Chromium checks pass at `1440x900` and
+`1024x720`. Historical M73 snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains unchanged. This snapshot
+is current UAT authority; focused human approval remains pending.
 
 Gate: intrinsic datums remain permanent but identity-free; their ordinary relations solve, audit
 and follow lifecycle; headless picking/inference owns the exact priority and tolerance policy; the

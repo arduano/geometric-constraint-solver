@@ -2,10 +2,9 @@
 
 # M74 implementation — Production-style sketch reference UX
 
-Status: **mechanically implemented; release nomination in progress as of 2026-08-16**. Focused and
-workspace-wide development qualification passes on the shared working tree. The clean committed
-release gate, immutable Tailscale candidate, human approval and final GitHub Pages deployment have
-not yet been recorded.
+Status: **release candidate nominated; focused human UAT pending as of 2026-08-16**. Focused and
+workspace-wide qualification, the clean committed release gate and an immutable byte-verified
+Tailscale candidate pass. Explicit human approval and final GitHub Pages deployment remain open.
 
 Architecture decision: no new ADR is currently required. Intrinsic datums extend the ordinary
 sketch/editor model within the retained-authoring and accepted-scene boundaries. Canonical sketch
@@ -147,23 +146,80 @@ three received focused corrections before release nomination. Follow-on review t
 off-screen-Origin/visible-axis picking interaction and added exact native/WASM evidence for both
 the hidden-datum miss and the independently visible-axis hit.
 
-Still required before nomination:
+The exact clean candidate command also passed from committed product source
+`7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`, tree
+`eff049a7fc0f2df941bcb1360ffb88f60868af21`:
 
 ```text
 env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+# exit 0
 ```
 
-That command must run from a clean committed source. Its exact output distribution will then be
-copied without rebuilding and byte-verified before Tailscale publication.
+The gate repeats formatting, warnings-denied Clippy, locked all-feature workspace tests, the exact
+261/261 golden check, native/WASM transition and M74 parity, Rustdoc and benchmark compilation. Its
+M14/M32 performance examples passed, the release 256-moving-body sparse crossover passed in
+88.91 seconds, licensing and package contents passed, and Trunk 0.21.14 assembled the release
+distribution successfully.
 
-## 4. Open completion gates
+## 4. Immutable UAT candidate
 
-- Pass the warnings-denied clean release gate and freeze its exact output without rebuilding.
-- Serve and byte-verify the immutable candidate over Tailscale, then complete `docs/M74_UAT.md`.
-- Receive explicit supervising-human approval.
+The seven files produced by that successful gate were copied without rebuilding to
+`/tmp/geosolve-m74-uat.MpvYrl`. The directory is mode `0555`; every file is mode `0444`; all entries
+are regular, non-symlink files.
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 16,385 | `180092f5db68423f14760db12265d06b81786df5ed3d3ba6f5ecd745e36ad567` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-90bff110a4eada3.js` | 33,221 | `115760f338139851520a5978ddaad4acb7441a5ec81a83d793885f81651eff16` |
+| `geosolve-demo-web-90bff110a4eada3_bg.wasm` | 6,091,298 | `f8389efd2c34519f38b0b3195a1efffe9a822c7641c124361997ab9131936b92` |
+| `index.html` | 27,474 | `a53bd7f661e92e5ba856ebdaca686c53ab3e1566d5c1ad32cc2a90065930c56a` |
+| `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
+
+The C-locale `sha256sum * | sha256sum` aggregate is
+`2ceaa9f8707a54aa9bcbf62771a5cd0c3f6dd594bd5ba2829ffc370ee7588546`.
+
+PID `969003` serves only this snapshot at `http://100.94.63.83:8080/` with exact argv:
+
+```text
+python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m74-uat.MpvYrl
+```
+
+Its executable is
+`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`.
+The former M73 server PID `3870531` exited only after the M74 snapshot was complete. Historical
+snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains read-only with its unchanged aggregate
+`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`.
+
+Proxy- and cache-bypassed, identity-encoded Tailscale requests for `/` and all seven named files
+returned HTTP 200 directly from `100.94.63.83`. Every response had the exact expected length and
+media type (`text/html`, `text/markdown`, `application/octet-stream`, `text/javascript`,
+`application/wasm` or `text/css`), matched the frozen file byte-for-byte, and had no redirect or
+compressed encoding. `/` equals `index.html`; the fetched seven-file aggregate equals the frozen
+aggregate. The retained HTTP evidence directory is `/tmp/geosolve-m74-http-verify.EiuhSE`.
+
+The candidate also passed both browser scripts directly over Tailscale:
+
+```text
+M72_BASE_URL=http://100.94.63.83:8080/ node /tmp/m72_full_browser_check.mjs
+M74_BASE_URL=http://100.94.63.83:8080/ node /tmp/m74_browser_check.mjs
+# both passed at 1440x900 and 1024x720 with no console or page errors
+```
+
+The reviewed script SHA-256 values are respectively
+`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
+`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`.
+
+## 5. Open completion gates
+
+- Complete `docs/M74_UAT.md` over the live immutable candidate and receive explicit
+  supervising-human approval.
+- Keep the Tailscale candidate live through any follow-up fixes; nominate a new clean immutable
+  snapshot if product bytes change.
 - Deploy the exact accepted source through GitHub Pages and verify every hosted byte/media type.
 
-## 5. Compatibility result so far
+## 6. Compatibility result so far
 
 The in-progress APIs are additive pre-1.0 sketch/editor surface. They do not modify a released
 persistence language: canonical sketch v1-v4 remains the only supported sketch wire contract and

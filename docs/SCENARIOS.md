@@ -1828,8 +1828,9 @@ Fillet and active pan states expose distinct contextual cursors. `Ctrl/Cmd+Z`,
 dialog-owned targets; Ctrl+Command, Alt-modified and editing chords do nothing to sketch history.
 Pointer start, hover, double-click and wheel input in SVG letterbox bands are inert, while input in
 the mapped sketch plane and existing captured-gesture completion remain unchanged. Direct Rust/WASM
-presentation tests own translation; `docs/M74_UAT.md` owns focused feel and approval. This scenario
-remains pending until clean qualification and immutable Tailscale UAT pass.
+presentation tests own translation; `docs/M74_UAT.md` owns focused feel and approval. Clean
+qualification and immutable Tailscale nomination now pass; focused human feel and approval remain
+pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
