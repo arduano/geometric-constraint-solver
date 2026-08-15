@@ -10,16 +10,16 @@ Activation baseline source: `daea43de51c9a1a720da1a245747e67735448f7d`
 
 Activation baseline tree: `b2eb479d396b3c9a0075be9117787f2c75ecd15f`
 
-Implementation source: `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223`
+F001-F003 implementation source: `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223`
 
-Implementation tree: `1890ab4330bd78f26c187ebed5fadea97370101e`
+F001-F003 implementation tree: `1890ab4330bd78f26c187ebed5fadea97370101e`
 
 M73-F004 implementation source: `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`
 
 Architecture decision: no new ADR. M73 remains within ADR 0034's drafting-authority boundary and
 ADR 0035's retained-relation lifecycle.
 
-## Implemented behavior and open finding
+## Implemented behavior and finding history
 
 ### M73-F001 — one construction-stage semantic owner
 
@@ -66,9 +66,9 @@ Rustdoc qualification follow-up: `b1b2162` fixes the final construction-edit int
 
 Finding reproduced against the nominated F001-F003 product source
 `efde645345577f44e0d6b691f7ca27eb587c4b53`. A live world Horizontal or Vertical span direction
-whose inference behavior both adjusts coordinates and persists the constraint can coexist with
+whose inference behavior both adjusts coordinates and persists the constraint could coexist with
 same-axis remembered point/native-midpoint tracking even though both own the same endpoint
-coordinate. That exposes redundant candidate/guide alternatives before the retained solver has an
+coordinate. That exposed redundant candidate/guide alternatives before the retained solver had an
 opportunity to reject a redundant commit.
 
 Implementation commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` gives eligible live world
@@ -94,7 +94,7 @@ candidate is recorded here.
   authoring route.
 - `SketchConstraintKind`, `DocumentConstraintDefinition`, direct sketch builders, persistent
   relations and canonical sketch v1-v4 bytes are unchanged.
-- The F001-F003 production implementation diff changes only `geosolve-constraint-editor`; no
+- The F001-F004 production implementation diff changes only `geosolve-constraint-editor`; no
   browser, solver, residual, Jacobian, priority, branch, persistence or golden-oracle
   implementation changed.
 
@@ -173,7 +173,7 @@ byte-for-byte; `/` equals `index.html`, and the fetched aggregate equals the fro
 
 M73-F004 withdraws this snapshot and endpoint from current UAT authority. The bytes, hashes and
 clean-gate result remain historical F001-F003 evidence; they are not a replacement candidate for
-the open finding. No F004 replacement has been nominated or served.
+the implemented F004 correction. No F004 replacement has been nominated or served.
 
 ## Qualification ledger
 
