@@ -4888,7 +4888,7 @@ mod tests {
     }
 
     #[test]
-    fn same_axis_point_and_midpoint_guides_yield_to_live_world_span_direction() {
+    fn same_axis_span_point_and_midpoint_guides_yield_to_live_world_direction() {
         let view = viewport(50.0);
         for (reference, raw, expected_relation, expected_family) in [
             (
@@ -4933,10 +4933,15 @@ mod tests {
             let candidate = resolved_candidate(&resolution);
             assert_eq!(candidate.relations, vec![expected_relation]);
             assert_eq!(candidate.references, Vec::new());
-            assert!(candidate.guides.iter().all(|guide| {
+            assert_eq!(candidate.guides.len(), 1);
+            assert_eq!(resolution.guides.len(), 1);
+            assert_eq!(resolution.guides, candidate.guides);
+            assert!(resolution.guides.iter().all(|guide| {
                 guide.family == expected_family
                     && guide.classification == DraftGuideClassification::ConstraintBacked
+                    && guide.reference.is_none()
             }));
+            assert!(engine.active_point_tracking.is_empty());
         }
     }
 

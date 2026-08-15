@@ -253,12 +253,31 @@ fn m73_f004_horizontal_span_suppresses_same_axis_native_midpoint_guide() {
         .coordinator
         .editor_mut()
         .pointer_move(&fixture.scene, pointer(pointer_id, midpoint));
+    let wake = resolution(&fixture.coordinator);
+    assert!(
+        resolved_candidate(&fixture.coordinator)
+            .relations
+            .iter()
+            .any(|relation| matches!(
+                relation,
+                DraftInferenceRelation::Midpoint { span }
+                    if *span == fixture.horizontal_midpoint
+            )),
+        "midpoint wake resolution: {wake:#?}"
+    );
 
     let raw = fixture.scene.viewport.model_to_screen([4.0, 0.04]);
     fixture
         .coordinator
         .editor_mut()
         .pointer_move(&fixture.scene, pointer(pointer_id, raw));
+    assert_eq!(resolution(&fixture.coordinator).candidates.len(), 1);
+    assert!(matches!(
+        resolution(&fixture.coordinator).guides.as_slice(),
+        [guide]
+            if guide.family == DraftInferenceFamily::Horizontal
+                && guide.reference.is_none()
+    ));
     let candidate = resolved_candidate(&fixture.coordinator);
     assert_eq!(
         candidate.relations,
