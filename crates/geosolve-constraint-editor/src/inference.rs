@@ -2172,28 +2172,6 @@ impl DraftInferenceEngine {
                 };
                 let angular_error = undirected_angle_error(delta, direction);
                 if angular_error <= threshold {
-                    // A constraint-backed live world axis owns this endpoint
-                    // coordinate. Suppress the same-axis tracker before it
-                    // can publish a guide, consume candidate capacity, or
-                    // acquire an invisible exit-band latch. Orthogonal
-                    // trackers remain available for a two-relation bundle.
-                    if world_span_direction_supersedes_point_tracking(axis, &directions) {
-                        continue;
-                    }
-                    next_active.insert(key);
-                    let guide = DraftGuide {
-                        id: DraftGuideId {
-                            candidate: None,
-                            ordinal: 0,
-                        },
-                        family: DraftInferenceFamily::PointTracking,
-                        classification: DraftGuideClassification::TrackingOnly,
-                        geometry: DraftGuideGeometry::Segment {
-                            start: origin,
-                            end: raw_model,
-                        },
-                        reference: Some(reference),
-                    };
                     let durable = match axis {
                         PointTrackingAxis::Horizontal => match reference {
                             DraftReferenceAnchor::PersistentPoint { point, .. } => Some((
@@ -2237,6 +2215,33 @@ impl DraftInferenceEngine {
                             | DraftReferenceAnchor::CurvePoint { .. }
                             | DraftReferenceAnchor::AffineSupport { .. } => None,
                         },
+                    };
+                    // A constraint-backed live world axis owns this endpoint
+                    // coordinate. Suppress only a competing durable same-axis
+                    // tracker before it can publish a guide, consume candidate
+                    // capacity, or acquire an invisible exit-band latch.
+                    // Generic tracking-only cues retain their M70/M71 behavior,
+                    // and orthogonal durable trackers remain available for a
+                    // two-relation bundle.
+                    if self.policy.point_tracking.persist_constraint
+                        && durable.is_some()
+                        && world_span_direction_supersedes_point_tracking(axis, &directions)
+                    {
+                        continue;
+                    }
+                    next_active.insert(key);
+                    let guide = DraftGuide {
+                        id: DraftGuideId {
+                            candidate: None,
+                            ordinal: 0,
+                        },
+                        family: DraftInferenceFamily::PointTracking,
+                        classification: DraftGuideClassification::TrackingOnly,
+                        geometry: DraftGuideGeometry::Segment {
+                            start: origin,
+                            end: raw_model,
+                        },
+                        reference: Some(reference),
                     };
                     if self.policy.point_tracking.persist_constraint
                         && let Some((relation, family)) = durable
@@ -4744,14 +4749,10 @@ mod tests {
     }
 
     #[test]
-    fn same_axis_span_suppresses_tracking_only_guide_without_a_hidden_latch() {
+    fn same_axis_span_does_not_leave_a_hidden_durable_tracker_latch() {
         let view = viewport(50.0);
-        let policy = DraftInferencePolicy {
-            point_tracking: DraftInferenceBehavior::tracking_only(),
-            ..DraftInferencePolicy::default()
-        };
         let reference = point_anchor(637, [-4.0, 0.0]);
-        let mut engine = DraftInferenceEngine::new(policy).expect("tracking-only point policy");
+        let mut engine = DraftInferenceEngine::default();
         engine
             .remember_reference(reference)
             .expect("same-axis reference");
@@ -4772,7 +4773,7 @@ mod tests {
             vec![DraftInferenceRelation::Horizontal]
         );
         assert!(entered.guides.iter().all(|guide| {
-            guide.family != DraftInferenceFamily::PointTracking
+            guide.family != DraftInferenceFamily::HorizontalPoints
                 && guide.reference != Some(reference)
         }));
         assert!(engine.active_point_tracking.is_empty());
@@ -4796,10 +4797,46 @@ mod tests {
             .expect("released world axis without hidden point latch");
         assert_eq!(released.status, DraftInferenceStatus::None);
         assert!(released.guides.iter().all(|guide| {
-            guide.family != DraftInferenceFamily::PointTracking
+            guide.family != DraftInferenceFamily::HorizontalPoints
                 && guide.reference != Some(reference)
         }));
         assert!(engine.active_point_tracking.is_empty());
+    }
+
+    #[test]
+    fn same_axis_span_preserves_generic_tracking_only_cues() {
+        let view = viewport(50.0);
+        let policy = DraftInferencePolicy {
+            point_tracking: DraftInferenceBehavior::tracking_only(),
+            ..DraftInferencePolicy::default()
+        };
+        let reference = point_anchor(638, [-4.0, 0.0]);
+        let mut engine = DraftInferenceEngine::new(policy).expect("tracking-only point policy");
+        engine
+            .remember_reference(reference)
+            .expect("same-axis reference");
+
+        let resolution = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen([4.0, 0.05]),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("world axis with generic tracking cue");
+        assert_eq!(
+            resolved_candidate(&resolution).relations,
+            vec![DraftInferenceRelation::Horizontal]
+        );
+        assert!(resolution.guides.iter().any(|guide| {
+            guide.family == DraftInferenceFamily::PointTracking
+                && guide.classification == DraftGuideClassification::TrackingOnly
+                && guide.reference == Some(reference)
+        }));
+        assert_eq!(engine.active_point_tracking.len(), 1);
     }
 
     #[test]
