@@ -4416,8 +4416,9 @@ reload persistence.
 
 ### M73: retained authoring semantic consolidation
 
-Status: **implemented and mechanically qualified; focused human UAT remains pending**.
-`docs/M73_GOALS.md` owns the corrected behavior-preserving scope. The earlier proposal's claim
+Status: **M73-F001 through M73-F004 are implemented and focused/proportionally qualified; the clean
+replacement release gate, publication and focused human UAT remain pending**.
+`docs/M73_GOALS.md` owns the corrected scope. The earlier proposal's claim
 that `construction_point_stage` duplicated an exhaustive stage match is withdrawn: M71 already
 made it a projection of `draft_inference_subject`. No ADR is required for this internal
 consolidation and unreleased editor-API retirement.
@@ -4436,11 +4437,23 @@ consolidation and unreleased editor-API retirement.
   owner while preserving all 20 resolved families and typed disabled reasons.
 - [x] M73-F003: retain the terminal `DraftInferenceCandidateId` through private confirmation and
   verify its guides, relations, references and lowered commit plan remain one semantic bundle.
-- [x] Add the focused stage, all-family contextual-authoring, operand/failure and candidate-trace
-  regressions recorded in `docs/M73_GOALS.md` and `docs/SCENARIOS.md`.
+- [x] M73-F004: let an eligible live, coordinate-adjusting and persisted world Horizontal/Vertical
+  span suppress same-axis point/native-midpoint tracking candidates and guides while retaining
+  orthogonal bundles, remembered Parallel/Perpendicular/Collinear behavior and solver-owned
+  redundancy rejection.
+- [x] Add the focused F001-F003 stage, all-family contextual-authoring, operand/failure and
+  candidate-trace regressions recorded in `docs/M73_GOALS.md` and `docs/SCENARIOS.md`.
+- [x] Freeze `m73_f004_span_axis_precedence` at the public retained-editor boundary and complete
+  the focused inference-owner precedence/symmetry/non-regression matrix.
 - [x] Preserve the 234-row golden byte-for-byte and pass formatting, warnings-denied workspace
-  Clippy, locked all-feature tests, relevant native/WASM parity and the complete clean release gate.
-- [x] Nominate and byte-verify the immutable qualified candidate.
+  Clippy, locked all-feature tests, relevant native/WASM parity and the complete clean release gate
+  for the F001-F003 candidate.
+- [x] Nominate and byte-verify the immutable F001-F003 candidate; retain it only as historical
+  evidence after M73-F004 opened.
+- [x] Pass the focused F004 tests, complete editor suite, M71 F003/F004/F005 and transition parity,
+  warnings-denied Clippy and unchanged 234/234 golden survey/check/clean gate.
+- [ ] Repeat the complete clean replacement release gate on committed product/documentation source.
+- [ ] Nominate and byte-verify a replacement immutable candidate for focused UAT.
 - [ ] Receive explicit focused human UAT approval.
 
 Implementation note (2026-08-15): `fe356c2`, `a973b73`, `fcaad55`, `693ed17`, `585cf65`,
@@ -4458,12 +4471,35 @@ Nomination note (2026-08-15): final qualified product source
 256-moving-body sparse crossover in 124.36 seconds. Its gate-produced seven files were copied
 without rebuilding to read-only `/tmp/geosolve-m73-uat.5EhWNL`, ordered-manifest aggregate
 `371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`, and byte-verified at
-`http://100.94.63.83:8080/`. Only focused UAT and explicit approval remain open.
+`http://100.94.63.83:8080/`. M73-F004 subsequently withdrew those bytes from current UAT; they
+remain historical qualification evidence only.
+
+M73-F004 implementation/qualification note (2026-08-15): on the nominated F001-F003 product, an
+eligible live world Horizontal or Vertical span could coexist with same-axis remembered
+point/native-midpoint tracking, publishing redundant candidates and guides for the same endpoint
+coordinate. Commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` gives a live direction whose
+policy both adjusts coordinates and persists the constraint precedence over
+`HorizontalPoints`/`HorizontalPointToMidpoint`, or symmetrically
+`VerticalPoints`/`VerticalPointToMidpoint`. Orthogonal point/midpoint plus world-axis bundles remain;
+remembered Parallel, Perpendicular and Collinear directions keep their prior behavior; and the
+solver still rejects any redundancy that reaches retained authoring. This narrowly supersedes
+M71-F004's same-axis-alternative rule only for eligible live world-axis span constraints; M71's
+wording remains historical evidence.
+
+The public `m73_f004_span_axis_precedence` regression passes 3/3, including finite accepted
+geometry/residual and one-step retained history. Focused inference-owner precedence, pre-pair
+filtering, orthogonal-bundle and remembered-direction controls pass; the complete editor suite
+passes 322 unit tests plus every integration suite; M71 F003/F004/F005 and transition parity,
+warnings-denied Clippy, and unchanged 234/234 golden survey/check/`--require-clean` pass. The clean
+replacement release gate, publication and focused UAT remain pending. No replacement candidate has
+been nominated.
 
 Gate: one private stage description owns the remaining line/polyline construction facts; the
 redundant unreleased direct API is absent; contextual authoring retains all accepted behavior and
-typed failures; confirmed inference remains traceable to one terminal candidate; no solver,
-branch, persistence, golden or workbench meaning changes; and focused UAT is approved.
+typed failures; confirmed inference remains traceable to one terminal candidate; eligible live
+world-axis span constraints own their same-axis coordinate without suppressing orthogonal bundles
+or remembered direction alternatives; no solver, branch, persistence, golden or workbench meaning
+changes; a clean replacement is byte-verified; and focused UAT is approved.
 
 ## Explicit non-goals
 

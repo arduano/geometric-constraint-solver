@@ -2,17 +2,19 @@
 
 # M73 — Retained authoring semantic consolidation
 
-Status: **implemented and mechanically qualified; focused human UAT remains pending**. The
-supervising caller accepted this scope on 2026-08-15. No new ADR is required because M73 preserves
-accepted behavior, changes no solver or persistence architecture and retires only an editor API
+Status: **M73-F001 through M73-F004 are implemented and focused/proportionally qualified; the clean
+replacement release gate, publication and focused human UAT remain pending**. The supervising
+caller accepted the original scope and the focused F004 correction on 2026-08-15. No new ADR is
+required because M73 changes no solver or persistence architecture and retires only an editor API
 introduced after the published `0.2.0` baseline.
 
 ## Goal
 
 Consolidate the remaining construction-stage and retained-relation dispatch seams before any
-broader M37 catalog expansion. M73 keeps the M70/M71 user behavior and contextual authoring API,
-removes one unreleased redundant direct API and makes inference-candidate provenance explicit
-through confirmation and commit lowering.
+broader M37 catalog expansion. M73 keeps the contextual authoring API and all M70/M71 behavior
+outside F004's narrow live world-axis precedence correction, removes one unreleased redundant
+direct API and makes inference-candidate provenance explicit through confirmation and commit
+lowering.
 
 ## Corrected baseline
 
@@ -32,6 +34,11 @@ The remaining seams at activation were narrower and directly observable:
    remaining `ConstraintKind` use was the duplicate simple-lowering seam M73 removed.
 3. `DraftInferenceCandidate` owned a stable candidate ID, guides, relations and references, but
    `ConfirmedDraftInference` dropped the winning candidate ID before commit lowering.
+4. The nominated F001-F003 product exposed a narrower inference conflict: a live world Horizontal
+   or Vertical span and same-axis remembered point/native-midpoint tracking could both survive even
+   though they adjust the same endpoint coordinate. M73-F004 gives the eligible live world-axis
+   span direction precedence without changing orthogonal bundles or remembered direction
+   semantics.
 
 ## Accepted work
 
@@ -70,6 +77,20 @@ The remaining seams at activation were narrower and directly observable:
   rejection. Candidate identity remains runtime-only and is not added to persistence or public
   commit-plan DTOs.
 
+### M73-F004 — live world-axis span precedence
+
+- When a live world Horizontal span direction both adjusts coordinates and persists its relation,
+  suppress same-axis `HorizontalPoints` and `HorizontalPointToMidpoint` candidates, references and
+  guides. Apply the symmetric rule to live world Vertical versus `VerticalPoints` and
+  `VerticalPointToMidpoint`.
+- Preserve point/native-midpoint tracking on the orthogonal axis so it can still compose with the
+  live world-axis direction into the existing two-relation line/polyline bundle.
+- Do not apply this suppression to remembered Parallel, Perpendicular or Collinear directions,
+  even when their source support is Cartesian. Do not weaken solver-owned redundancy rejection.
+- Treat this as a narrow supersession of M71-F004's same-axis-alternative rule only for eligible
+  live world-axis span constraints. Preserve the M71 wording and qualification as historical
+  evidence.
+
 ## Acceptance
 
 - Focused stage-table tests cover every tool/stage role, coordinate-only and invalid stages,
@@ -77,26 +98,34 @@ The remaining seams at activation were narrower and directly observable:
 - Focused contextual-authoring tests cover all 20 resolved families, accepted reversals,
   intentionally ordered operands, empty/wrong/foreign/missing operands, invalid spans and stale
   design/application resolution.
-- Candidate-trace tests cover ordinary line/polyline handoff, the M71-F004/F005 compound-axis
-  cases, circle-through-point, centered Concentric, ambiguity and stale/rejected commits without
-  mutation.
+- F001-F003 candidate-trace tests cover ordinary line/polyline handoff, the M71-F004/F005
+  compound-axis cases, circle-through-point, centered Concentric, ambiguity and stale/rejected
+  commits without mutation.
+- Public regression `m73_f004_span_axis_precedence` and focused inference-owner tests cover
+  Horizontal/Vertical point and native-midpoint suppression, orthogonal bundle retention,
+  remembered Parallel/Perpendicular/Collinear non-regression, exact guides/relations, atomic
+  retained commit and independent finite accepted geometry/residual checks.
 - Existing M70/M71 behavior, public contextual DTOs, browser dispatch and the reviewed 234-row
-  golden remain unchanged.
+  golden remain unchanged except for F004's explicitly superseding precedence rule.
 - No residual, Jacobian, solver priority, branch state, canonical sketch v1-v4 byte, unsupported
   draft-v5 meaning or browser-owned geometric policy changes.
 - Formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
   parity and the complete clean release gate pass before candidate nomination. Focused human UAT
   then receives explicit approval.
 
-M73-F001 through M73-F003 and their focused qualification are complete. The exact implementation
-and gate evidence is recorded in `docs/M73_IMPLEMENTATION.md`; `docs/M73_UAT.md` remains the only
-open acceptance step.
+M73-F001 through M73-F004 and their focused/proportional qualification are complete. F004
+implementation commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` passes its public 3/3
+regression, inference-owner matrix, full editor suite, M71 F003/F004/F005 and transition parity,
+warnings-denied Clippy, and the unchanged 234/234 golden survey/check/clean gate. The complete clean
+replacement release gate and byte-verified publication remain open; focused UAT begins only after
+a replacement candidate is nominated.
 
 ## ADR decision
 
 No ADR is required. M73 follows ADR 0034's drafting-authority boundary and ADR 0035's retained
-relation lifecycle, changes no released architecture and introduces no new public semantic or wire
-contract. Discovery that requires one of those changes stops M73 for a separate decision.
+relation lifecycle, changes no released architecture and introduces no new public or wire contract.
+F004 adjusts private inference precedence while leaving solver redundancy authority intact.
+Discovery that requires one of those architectural changes stops M73 for a separate decision.
 
 ## Non-goals
 

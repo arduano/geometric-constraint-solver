@@ -2,9 +2,9 @@
 
 # M73 implementation — Retained authoring semantic consolidation
 
-Status: **implemented, mechanically qualified and byte-verified as an immutable candidate;
-focused human UAT remains pending**. The supervising caller accepted the corrected scope on
-2026-08-15.
+Status: **M73-F001 through M73-F004 are implemented and focused/proportionally qualified; the prior
+immutable candidate remains withdrawn, and the clean replacement release gate, publication and
+focused human UAT are pending**. The supervising caller accepted the corrected scope on 2026-08-15.
 
 Activation baseline source: `daea43de51c9a1a720da1a245747e67735448f7d`
 
@@ -14,10 +14,12 @@ Implementation source: `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223`
 
 Implementation tree: `1890ab4330bd78f26c187ebed5fadea97370101e`
 
+M73-F004 implementation source: `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`
+
 Architecture decision: no new ADR. M73 remains within ADR 0034's drafting-authority boundary and
 ADR 0035's retained-relation lifecycle.
 
-## Implemented behavior
+## Implemented behavior and open finding
 
 ### M73-F001 — one construction-stage semantic owner
 
@@ -60,6 +62,29 @@ Implementation commits: `fcaad55` and follow-up authentication repair `693ed17`.
 
 Rustdoc qualification follow-up: `b1b2162` fixes the final construction-edit intra-doc link.
 
+### M73-F004 — live world-axis span precedence correction
+
+Finding reproduced against the nominated F001-F003 product source
+`efde645345577f44e0d6b691f7ca27eb587c4b53`. A live world Horizontal or Vertical span direction
+whose inference behavior both adjusts coordinates and persists the constraint can coexist with
+same-axis remembered point/native-midpoint tracking even though both own the same endpoint
+coordinate. That exposes redundant candidate/guide alternatives before the retained solver has an
+opportunity to reject a redundant commit.
+
+Implementation commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` gives eligible live world
+Horizontal precedence over
+`HorizontalPoints` and `HorizontalPointToMidpoint` candidates, references and guides, with the
+symmetric Vertical rule for `VerticalPoints` and `VerticalPointToMidpoint`. Orthogonal
+point/native-midpoint plus world-axis bundles remain. Remembered Parallel, Perpendicular and
+Collinear directions retain their current behavior, including Cartesian supports, and solver
+redundancy rejection is not weakened or bypassed.
+
+This narrowly supersedes M71-F004's same-axis-alternative rule only for eligible live world-axis
+span constraints; the M71 record remains unchanged historical evidence. Public regression target
+`m73_f004_span_axis_precedence` and the focused/proportional editor qualification pass. Clean
+replacement release qualification/publication and focused UAT remain pending; no replacement
+candidate is recorded here.
+
 ## Compatibility result
 
 - No released `0.2.0` API was removed. The retired editor compatibility surface was introduced
@@ -69,11 +94,11 @@ Rustdoc qualification follow-up: `b1b2162` fixes the final construction-edit int
   authoring route.
 - `SketchConstraintKind`, `DocumentConstraintDefinition`, direct sketch builders, persistent
   relations and canonical sketch v1-v4 bytes are unchanged.
-- The production implementation diff changes only `geosolve-constraint-editor`; no browser,
-  solver, residual, Jacobian, priority, branch, persistence or golden-oracle implementation
-  changed.
+- The F001-F003 production implementation diff changes only `geosolve-constraint-editor`; no
+  browser, solver, residual, Jacobian, priority, branch, persistence or golden-oracle
+  implementation changed.
 
-## Mechanical qualification
+## Pre-F004 mechanical qualification
 
 The exact clean command passed on implementation source `b1b2162`:
 
@@ -93,10 +118,31 @@ That run passed:
 - the 256-moving-body sparse crossover in 141.76 seconds; and
 - the Trunk 0.21.14 release build.
 
-Because `docs/API_COMPATIBILITY.md` is copied into the seven-file web distribution, candidate
-nomination deliberately waited for one more clean gate on committed current-status source.
+Because `docs/API_COMPATIBILITY.md` is copied into the seven-file web distribution, the historical
+F001-F003 candidate nomination deliberately waited for one more clean gate on committed
+current-status source.
 
-## Immutable candidate nomination
+## M73-F004 focused and proportional qualification
+
+Focused implementation source: `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88`
+
+Passed evidence:
+
+- public integration target `m73_f004_span_axis_precedence`: **3/3 pass**, including one atomic
+  retained commit/history step, finite accepted geometry and independently bounded accepted hard
+  residual;
+- inference-owner tests cover Horizontal and Vertical point/native-midpoint precedence, suppression
+  before cross-axis pair construction, retained orthogonal bundles and remembered
+  Parallel/Perpendicular/Collinear controls;
+- complete `geosolve-constraint-editor` suite: **322 unit tests plus every integration suite pass**;
+- M71 F003, F004 and F005 public regressions plus native/WASM transition parity pass;
+- warnings-denied Clippy passes; and
+- the golden survey, check and `--require-clean` pass unchanged at **234/234**.
+
+This is focused interaction-owner hardening, not a new systemic golden dimension. No clean
+replacement release gate or publication is claimed from these development checks.
+
+## Historical F001-F003 candidate nomination
 
 Final qualified product source: `efde645345577f44e0d6b691f7ca27eb587c4b53`
 
@@ -125,18 +171,32 @@ PID `3403533` serves only that snapshot on Tailscale at `http://100.94.63.83:808
 cache-bypassed, identity-encoded requests for all seven files and `/` return HTTP 200 and compare
 byte-for-byte; `/` equals `index.html`, and the fetched aggregate equals the frozen aggregate.
 
+M73-F004 withdraws this snapshot and endpoint from current UAT authority. The bytes, hashes and
+clean-gate result remain historical F001-F003 evidence; they are not a replacement candidate for
+the open finding. No F004 replacement has been nominated or served.
+
 ## Qualification ledger
 
 - [x] Correct and activate the scope; record the no-ADR decision and unreleased API disposition.
 - [x] Implement M73-F001 through M73-F003 in reviewable commits.
-- [x] Pass focused owner tests and all relevant collateral suites.
+- [x] Pass F001-F003 focused owner tests and all relevant collateral suites.
 - [x] Preserve the canonical authoring/scene oracle at 234/234 byte-for-byte.
 - [x] Pass formatting, diff hygiene, warnings-denied workspace Clippy, locked all-feature tests,
   native/WASM parity and the complete clean release gate.
 - [x] Rerun the clean gate on the committed current-status source, freeze the exact seven release
-  files and verify their Tailscale publication byte-for-byte.
+  files and verify their Tailscale publication byte-for-byte; retain that withdrawn candidate as
+  historical F001-F003 evidence.
+- [x] Freeze public regression `m73_f004_span_axis_precedence` and complete the focused
+  Horizontal/Vertical point/midpoint precedence, orthogonal-bundle and remembered-direction owner
+  matrix.
+- [x] Implement M73-F004 without changing solver redundancy authority, persistence, browser policy
+  or the 234-row golden.
+- [x] Pass focused/proportional editor, M71 transition, Clippy and unchanged golden checks.
+- [ ] Repeat the complete clean replacement release gate on committed product/documentation source.
+- [ ] Freeze, serve and byte-verify a replacement immutable UAT candidate.
 - [ ] Complete `docs/M73_UAT.md` with explicit human approval.
 
 ## Current blocker
 
-None. Focused human UAT is the only remaining ordered work.
+No external blocker. The complete clean replacement release gate, immutable byte-verified
+publication and focused UAT are the remaining ordered work; no replacement candidate is nominated.

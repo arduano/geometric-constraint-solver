@@ -1806,7 +1806,8 @@ that closing checkpoint and was activated separately under the scope below.
 
 ## M73 acceptance: retained authoring semantic consolidation
 
-Status: **implemented and mechanically qualified; focused human UAT remains pending**.
+Status: **M73-F001 through M73-F004 are implemented and focused/proportionally qualified; the clean
+replacement release gate, publication and focused human UAT remain pending**.
 `docs/M73_GOALS.md` owns the corrected scope; no ADR is required.
 
 - M71 already made `construction_point_stage` a projection of `draft_inference_subject`; M73 does
@@ -1826,22 +1827,43 @@ Status: **implemented and mechanically qualified; focused human UAT remains pend
 - The private confirmed-inference record retains the winning `DraftInferenceCandidateId` and
   verifies that its guides, relations, references and final commit plan describe one terminal
   candidate. No candidate identity enters persistence or public commit-plan DTOs.
-- Focused tests cover the full construction-stage table, all contextual families and their
-  failure/ordering cases, line/polyline handoff, compound-axis inference, centered/circumference
-  cases, ambiguity and stale/rejected publication without mutation.
+- For an eligible live world Horizontal span whose policy both adjusts coordinates and persists
+  the constraint, Horizontal owns the endpoint's same-axis coordinate and suppresses
+  `HorizontalPoints` and `HorizontalPointToMidpoint` candidates and guides. Eligible live world
+  Vertical symmetrically suppresses `VerticalPoints` and `VerticalPointToMidpoint`. Orthogonal
+  point/native-midpoint plus world-axis bundles remain available; remembered
+  Parallel/Perpendicular/Collinear direction behavior and solver redundancy rejection remain
+  unchanged.
+- M73-F004 narrowly supersedes M71-F004's same-axis-alternative rule only for those eligible live
+  world-axis span constraints. The M71 record remains unchanged as historical evidence.
+- Focused F001-F003 tests cover the full construction-stage table, all contextual families and
+  their failure/ordering cases, line/polyline handoff, compound-axis inference,
+  centered/circumference cases, ambiguity and stale/rejected publication without mutation.
+- Public regression `m73_f004_span_axis_precedence` passes 3/3 with finite accepted geometry,
+  independently bounded accepted residual and exact retained history. Focused inference-owner
+  precedence/symmetry, pre-pair filtering, orthogonal-bundle and remembered-direction controls
+  pass.
 - The reviewed 234-row golden remains byte-identical. No residual, Jacobian, priority, branch,
   canonical sketch v1-v4, unsupported draft-v5, browser or accepted-state meaning changes.
 - Formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
-  parity, the complete clean release gate and explicitly approved focused UAT close M73.
+  parity, the complete clean release gate on the F004 repair, byte-verified replacement
+  publication and explicitly approved focused UAT close M73.
 
-Mechanical result (2026-08-15): F001-F003 and their focused qualification pass. Clean
+Pre-F004 mechanical result (2026-08-15): F001-F003 and their focused qualification pass. Clean
 implementation source `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223` passes the complete release
 gate with editor 321/321, M55 17/17, unchanged golden 234/234, native/WASM parity and the complete
 workspace/release matrix. Final status source `efde645345577f44e0d6b691f7ca27eb587c4b53`
 passes the exact clean rerun and supplies a byte-verified seven-file Tailscale candidate with
 ordered-manifest aggregate
-`371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`. Explicit U1-U3 human
-approval remains open; no milestone-close claim is made yet.
+`371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`. M73-F004 withdraws that
+candidate from current UAT while preserving its historical evidence.
+
+F004 focused/proportional result (2026-08-15): implementation commit
+`4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` passes the public 3/3 regression, inference-owner
+matrix, complete `geosolve-constraint-editor` suite (322 unit tests plus all integrations), M71
+F003/F004/F005 and transition parity, warnings-denied Clippy, and unchanged 234/234 golden
+survey/check/clean gate. The complete clean replacement release gate, byte-verified publication and
+focused UAT remain pending; no replacement candidate or milestone-close claim exists yet.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

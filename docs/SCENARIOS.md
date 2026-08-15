@@ -1333,9 +1333,10 @@ Objective geometry, residual, derivative, rank, branch, persistence, migration, 
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
 recorded at completed M40.7, M53 and M61-M72. M72's scoped UAT and exact final public-artifact
-verification complete its direct automated qualification. Active M73 adds only direct
-construction-stage, contextual-authoring and candidate-trace regressions plus focused
-behavior-preservation UAT; it adds no new editable sample or browser scenario mode.
+verification complete its direct automated qualification. Active M73 has qualified its F001-F003
+construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
+world-axis span precedence. A clean replacement release gate, candidate publication and focused
+UAT are pending; M73 adds no new editable sample or browser scenario mode.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1694,13 +1695,47 @@ resource-limited and rejected commits remain mutation-free. Direct tests own the
 human UAT checks that ordinary construction and contextual authoring feel unchanged. The 234-row
 golden remains byte-identical and no new sample, residual, branch or persistence scenario is added.
 
-Status (2026-08-15): mechanically implemented and directly qualified. The stage table is owned by
-`construction_stage_semantics_table_covers_every_editor_tool`; the 20-family path by
+F001-F003 status (2026-08-15): mechanically implemented and directly qualified. The stage table is
+owned by `construction_stage_semantics_table_covers_every_editor_tool`; the 20-family path by
 `every_resolved_relation_executes_through_the_authoring_adapter`; exact terminal provenance by
 `compound_candidate_guides_confirmation_and_commit_plan_keep_one_identity`; and prospective/stale
 publication by `contextual_authoring_resolution_is_prospective_until_one_coordinator_apply`.
 Clean implementation source `b1b2162` passes the unchanged 234/234 golden and complete release
-gate. Immutable candidate handoff and focused human UAT remain pending.
+gate. The later byte-verified F001-F003 candidate is historical after M73-F004 and is withdrawn
+from current UAT.
+
+### M73-F004 - Live world-axis span direction owns same-axis tracking
+
+Against the nominated F001-F003 product source
+`efde645345577f44e0d6b691f7ca27eb587c4b53`, start or extend a line/polyline while same-axis
+remembered point or native-midpoint tracking is awake and the live span also qualifies for a world
+Horizontal or Vertical relation. On that withdrawn candidate both meanings could survive candidate
+enumeration even though they adjust the same endpoint coordinate, producing redundant alternatives
+or guides.
+
+For a live world Horizontal direction whose active inference behavior both adjusts coordinates and
+persists the constraint, commit `4fb9a7dd67ea86cd268028b5fa5c7842c56f2a88` retains Horizontal
+and suppresses all same-axis `HorizontalPoints` and
+`HorizontalPointToMidpoint` candidates, references and guides before singleton or pair
+construction. Apply the symmetric rule to live world Vertical versus `VerticalPoints` and
+`VerticalPointToMidpoint`. A point/native-midpoint tracker on the orthogonal axis must still compose
+with the live world-axis direction into the existing two-relation bundle.
+
+This precedence is deliberately limited to live world Horizontal/Vertical span directions.
+Remembered Parallel, Perpendicular and Collinear directions keep their existing alternatives even
+when their stored support is Cartesian, and retained authoring still relies on the solver to reject
+actual redundancy. No residual, Jacobian, solver priority, branch, persistence, golden or browser
+policy changes. M73-F004 narrowly supersedes M71-F004's same-axis-alternative rule for this eligible
+live world-axis case; the M71-F004 wording above remains exact historical evidence.
+
+Focused/proportional status (2026-08-15): public regression `m73_f004_span_axis_precedence` passes
+3/3 with finite accepted geometry/residual and exact history. The `inference.rs` owner matrix passes
+Horizontal/Vertical point and native-midpoint precedence, filtering before point-axis pairing,
+orthogonal bundles and remembered Parallel/Perpendicular/Collinear controls. The full editor suite
+passes 322 unit tests plus every integration suite; M71 F003/F004/F005 and transition parity,
+warnings-denied Clippy, and unchanged 234/234 golden survey/check/clean gate pass. Clean replacement
+release qualification/publication and focused UAT remain pending; no replacement candidate is
+nominated.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
