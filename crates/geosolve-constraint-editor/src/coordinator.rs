@@ -15644,6 +15644,14 @@ mod tests {
     fn contextual_authoring_resolution_is_prospective_until_one_coordinator_apply() {
         let (session, points, _, _) = fixed_line_session();
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        assert!(coordinator.actions().contains(&ActionAvailability {
+            action: CoordinatorActionKind::Constraint(ConstraintIntent::Lock),
+            state: ActionState::Disabled(DisabledReason::EmptySelection),
+        }));
+        assert_eq!(
+            coordinator.resolved_constraint(ConstraintIntent::Lock),
+            None
+        );
         coordinator
             .editor_mut()
             .set_selection([SelectionItem::Point(points[0])]);
