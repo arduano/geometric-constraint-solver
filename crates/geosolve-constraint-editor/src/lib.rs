@@ -5329,13 +5329,17 @@ impl ConstraintEditor {
         stage_index: usize,
         draft: Option<&Draft>,
     ) -> Result<Option<DraftInferenceResolution>, DraftInferenceError> {
-        let Some(subject) = draft_inference_subject(tool, stage_index) else {
+        let Some(semantics) = construction_stage_semantics(tool, stage_index) else {
+            return Ok(None);
+        };
+        let Some(subject) = semantics.coordinate_role.inference_subject() else {
             return Ok(None);
         };
         if !pointer.is_finite() {
             return Ok(None);
         }
-        let span_start = directional_span_stage(tool, stage_index)
+        let span_start = semantics
+            .directional_span
             .then(|| draft.and_then(|draft| draft.positions.last().copied()))
             .flatten();
         let scene_inputs = if input.suppressed {
@@ -5396,7 +5400,14 @@ impl ConstraintEditor {
         let references = self
             .draft
             .as_ref()
-            .filter(|draft| matches!(draft.tool, EditorTool::Line | EditorTool::Polyline))
+            .filter(|draft| {
+                draft
+                    .points
+                    .len()
+                    .checked_sub(1)
+                    .and_then(|stage_index| construction_stage_semantics(draft.tool, stage_index))
+                    .is_some_and(|semantics| semantics.reference_handoff)
+            })
             .and_then(|draft| draft.confirmed_inference.last())
             .map(confirmed_positional_references)
             .unwrap_or_default();
@@ -5611,92 +5622,181 @@ fn draft_inference_blocks_confirmation(resolution: &DraftInferenceResolution) ->
     )
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConstructionCoordinateRole {
+    PointOperand,
+    CenteredPointOperand { prospective_curve_index: usize },
+    CircleCircumference,
+    CoordinateOnly,
+}
+
+impl ConstructionCoordinateRole {
+    const fn inference_subject(self) -> Option<DraftInferenceSubject> {
+        match self {
+            Self::PointOperand => Some(DraftInferenceSubject::PointOperand),
+            Self::CenteredPointOperand {
+                prospective_curve_index,
+            } => Some(DraftInferenceSubject::CenteredPointOperand {
+                prospective_curve_index,
+            }),
+            Self::CircleCircumference => Some(DraftInferenceSubject::CircleCircumference),
+            Self::CoordinateOnly => None,
+        }
+    }
+}
+
+/// Unified semantics for one coordinate in a tool's construction sequence.
+///
+/// A present descriptor denotes a valid stage. Coordinate-only stages remain
+/// distinct from an absent (invalid) stage even though neither publishes draft
+/// inference. Point ordinals describe proposal allocation order independently
+/// of coordinate order, which matters for interleaved conic coordinates.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ConstructionStageSemantics {
+    coordinate_role: ConstructionCoordinateRole,
+    point_operand_ordinal: Option<usize>,
+    directional_span: bool,
+    completed_span: Option<DraftSpanSlot>,
+    reference_handoff: bool,
+}
+
+impl ConstructionStageSemantics {
+    const fn point_operand(point_operand_ordinal: usize) -> Self {
+        Self {
+            coordinate_role: ConstructionCoordinateRole::PointOperand,
+            point_operand_ordinal: Some(point_operand_ordinal),
+            directional_span: false,
+            completed_span: None,
+            reference_handoff: false,
+        }
+    }
+
+    const fn centered_point_operand(
+        point_operand_ordinal: usize,
+        prospective_curve_index: usize,
+    ) -> Self {
+        Self {
+            coordinate_role: ConstructionCoordinateRole::CenteredPointOperand {
+                prospective_curve_index,
+            },
+            point_operand_ordinal: Some(point_operand_ordinal),
+            directional_span: false,
+            completed_span: None,
+            reference_handoff: false,
+        }
+    }
+
+    const fn coordinate_only(coordinate_role: ConstructionCoordinateRole) -> Self {
+        Self {
+            coordinate_role,
+            point_operand_ordinal: None,
+            directional_span: false,
+            completed_span: None,
+            reference_handoff: false,
+        }
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive table keeps construction-coordinate semantics auditable"
+)]
+fn construction_stage_semantics(
+    tool: EditorTool,
+    stage_index: usize,
+) -> Option<ConstructionStageSemantics> {
+    match tool {
+        EditorTool::Select => None,
+        EditorTool::Point => {
+            (stage_index == 0).then(|| ConstructionStageSemantics::point_operand(0))
+        }
+        EditorTool::Line => match stage_index {
+            0 => Some(ConstructionStageSemantics {
+                reference_handoff: true,
+                ..ConstructionStageSemantics::point_operand(0)
+            }),
+            1 => Some(ConstructionStageSemantics {
+                directional_span: true,
+                completed_span: Some(DraftSpanSlot::Created {
+                    curve_index: 0,
+                    segment: 0,
+                }),
+                ..ConstructionStageSemantics::point_operand(1)
+            }),
+            _ => None,
+        },
+        EditorTool::Polyline => {
+            let mut semantics = ConstructionStageSemantics {
+                reference_handoff: true,
+                ..ConstructionStageSemantics::point_operand(stage_index)
+            };
+            if stage_index > 0 {
+                semantics.directional_span = true;
+                semantics.completed_span =
+                    u32::try_from(stage_index - 1)
+                        .ok()
+                        .map(|segment| DraftSpanSlot::Created {
+                            curve_index: 0,
+                            segment,
+                        });
+            }
+            Some(semantics)
+        }
+        EditorTool::Rectangle => (stage_index < 2).then(|| {
+            ConstructionStageSemantics::coordinate_only(ConstructionCoordinateRole::CoordinateOnly)
+        }),
+        EditorTool::Circle => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CircleCircumference,
+            )),
+            _ => None,
+        },
+        EditorTool::CounterClockwiseArc => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 | 2 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            _ => None,
+        },
+        EditorTool::QuadraticBezier => {
+            (stage_index < 3).then(|| ConstructionStageSemantics::point_operand(stage_index))
+        }
+        EditorTool::CubicBezier => {
+            (stage_index < 4).then(|| ConstructionStageSemantics::point_operand(stage_index))
+        }
+        EditorTool::Ellipse | EditorTool::EllipticalArc | EditorTool::Hyperbola => {
+            match stage_index {
+                0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+                1 => Some(ConstructionStageSemantics::point_operand(1)),
+                _ => None,
+            }
+        }
+        EditorTool::RationalQuadraticConic => match stage_index {
+            0 => Some(ConstructionStageSemantics::point_operand(0)),
+            1 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            2 => Some(ConstructionStageSemantics::point_operand(1)),
+            _ => None,
+        },
+        EditorTool::Parabola => {
+            (stage_index < 2).then(|| ConstructionStageSemantics::point_operand(stage_index))
+        }
+        EditorTool::Nurbs => Some(ConstructionStageSemantics::point_operand(stage_index)),
+    }
+}
+
 /// Classifies construction coordinates that participate in draft inference.
 ///
 /// Most inferred coordinates are persistent point operands. The circle radius
 /// stage is deliberately different: its coordinate only chooses a radius, so a
 /// point anchor means that the existing point lies on the prospective circle.
 /// No rim point is allocated or silently reused.
-const fn draft_inference_subject(
-    tool: EditorTool,
-    stage_index: usize,
-) -> Option<DraftInferenceSubject> {
-    let centered = DraftInferenceSubject::CenteredPointOperand {
-        prospective_curve_index: 0,
-    };
-    match tool {
-        EditorTool::Select | EditorTool::Rectangle => None,
-        EditorTool::Point => {
-            if stage_index == 0 {
-                Some(DraftInferenceSubject::PointOperand)
-            } else {
-                None
-            }
-        }
-        EditorTool::Line | EditorTool::Parabola => {
-            if stage_index < 2 {
-                Some(DraftInferenceSubject::PointOperand)
-            } else {
-                None
-            }
-        }
-        EditorTool::Polyline | EditorTool::Nurbs => Some(DraftInferenceSubject::PointOperand),
-        EditorTool::Circle => match stage_index {
-            0 => Some(centered),
-            1 => Some(DraftInferenceSubject::CircleCircumference),
-            _ => None,
-        },
-        EditorTool::CounterClockwiseArc => {
-            if stage_index == 0 {
-                Some(centered)
-            } else {
-                None
-            }
-        }
-        EditorTool::Ellipse | EditorTool::EllipticalArc | EditorTool::Hyperbola => {
-            match stage_index {
-                0 => Some(centered),
-                1 => Some(DraftInferenceSubject::PointOperand),
-                _ => None,
-            }
-        }
-        EditorTool::QuadraticBezier => {
-            if stage_index < 3 {
-                Some(DraftInferenceSubject::PointOperand)
-            } else {
-                None
-            }
-        }
-        EditorTool::CubicBezier => {
-            if stage_index < 4 {
-                Some(DraftInferenceSubject::PointOperand)
-            } else {
-                None
-            }
-        }
-        EditorTool::RationalQuadraticConic => {
-            if stage_index == 0 || stage_index == 2 {
-                Some(DraftInferenceSubject::PointOperand)
-            } else {
-                None
-            }
-        }
-    }
-}
-
-const fn construction_point_stage(tool: EditorTool, stage_index: usize) -> bool {
-    matches!(
-        draft_inference_subject(tool, stage_index),
-        Some(
-            DraftInferenceSubject::PointOperand
-                | DraftInferenceSubject::CenteredPointOperand { .. }
-        )
-    )
-}
-
-const fn directional_span_stage(tool: EditorTool, stage_index: usize) -> bool {
-    matches!(tool, EditorTool::Line) && stage_index == 1
-        || matches!(tool, EditorTool::Polyline) && stage_index >= 1
+fn draft_inference_subject(tool: EditorTool, stage_index: usize) -> Option<DraftInferenceSubject> {
+    construction_stage_semantics(tool, stage_index)?
+        .coordinate_role
+        .inference_subject()
 }
 
 #[allow(
@@ -5709,6 +5809,7 @@ fn construction_commit_plan(
 ) -> Option<ConstructionCommitPlan> {
     let mut relations = Vec::new();
     for confirmed in &draft.confirmed_inference {
+        let stage_semantics = construction_stage_semantics(draft.tool, confirmed.stage_index);
         for relation in confirmed.relations.iter().copied() {
             match relation {
                 DraftInferenceRelation::PointIdentity { point: expected } => {
@@ -5745,23 +5846,23 @@ fn construction_commit_plan(
                 }
                 DraftInferenceRelation::Horizontal => {
                     relations.push(InferredRelation::Horizontal {
-                        line: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                        line: stage_semantics.and_then(|semantics| semantics.completed_span)?,
                     });
                 }
                 DraftInferenceRelation::Vertical => {
                     relations.push(InferredRelation::Vertical {
-                        line: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                        line: stage_semantics.and_then(|semantics| semantics.completed_span)?,
                     });
                 }
                 DraftInferenceRelation::Parallel { reference } => {
                     relations.push(InferredRelation::Parallel {
-                        first: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                        first: stage_semantics.and_then(|semantics| semantics.completed_span)?,
                         second: DraftSpanSlot::Existing(reference),
                     });
                 }
                 DraftInferenceRelation::Perpendicular { reference } => {
                     relations.push(InferredRelation::Perpendicular {
-                        first: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                        first: stage_semantics.and_then(|semantics| semantics.completed_span)?,
                         second: DraftSpanSlot::Existing(reference),
                     });
                 }
@@ -5803,7 +5904,7 @@ fn construction_commit_plan(
                 DraftInferenceRelation::Collinear { reference } => {
                     relations.push(InferredRelation::Collinear {
                         first: DraftLineSupportSlot {
-                            span: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                            span: stage_semantics.and_then(|semantics| semantics.completed_span)?,
                             direction: DocumentDirectionSense::Forward,
                         },
                         second: DraftLineSupportSlot {
@@ -5920,46 +6021,20 @@ fn confirmed_positional_references(
 }
 
 fn draft_point_slot(draft: &Draft, stage_index: usize) -> Option<DraftPointSlot> {
-    if !construction_point_stage(draft.tool, stage_index) {
-        return None;
-    }
+    construction_stage_semantics(draft.tool, stage_index)?.point_operand_ordinal?;
     match *draft.points.get(stage_index)? {
         ConstructionPoint::Existing { id, .. } => Some(DraftPointSlot::Existing(id)),
         ConstructionPoint::New(_) => {
             let point_index = (0..stage_index)
-                .filter(|index| construction_point_stage(draft.tool, *index))
+                .filter(|index| {
+                    construction_stage_semantics(draft.tool, *index)
+                        .and_then(|semantics| semantics.point_operand_ordinal)
+                        .is_some()
+                })
                 .filter(|index| matches!(draft.points.get(*index), Some(ConstructionPoint::New(_))))
                 .count();
             Some(DraftPointSlot::Created { point_index })
         }
-    }
-}
-
-fn draft_span_slot(tool: EditorTool, stage_index: usize) -> Option<DraftSpanSlot> {
-    match tool {
-        EditorTool::Line if stage_index == 1 => Some(DraftSpanSlot::Created {
-            curve_index: 0,
-            segment: 0,
-        }),
-        EditorTool::Polyline if stage_index >= 1 => Some(DraftSpanSlot::Created {
-            curve_index: 0,
-            segment: u32::try_from(stage_index.checked_sub(1)?).ok()?,
-        }),
-        EditorTool::Select
-        | EditorTool::Point
-        | EditorTool::Line
-        | EditorTool::Polyline
-        | EditorTool::Rectangle
-        | EditorTool::Circle
-        | EditorTool::CounterClockwiseArc
-        | EditorTool::QuadraticBezier
-        | EditorTool::CubicBezier
-        | EditorTool::Ellipse
-        | EditorTool::EllipticalArc
-        | EditorTool::RationalQuadraticConic
-        | EditorTool::Parabola
-        | EditorTool::Hyperbola
-        | EditorTool::Nurbs => None,
     }
 }
 
@@ -8182,61 +8257,250 @@ mod tests {
     }
 
     #[test]
-    fn draft_inference_subject_table_excludes_coordinate_only_clicks() {
-        let cases: &[(EditorTool, &[bool])] = &[
-            (EditorTool::Point, &[true, false]),
-            (EditorTool::Line, &[true, true, false]),
-            (EditorTool::Polyline, &[true, true, true]),
-            (EditorTool::Rectangle, &[false, false]),
-            (EditorTool::Circle, &[true, false]),
-            (EditorTool::CounterClockwiseArc, &[true, false, false]),
-            (EditorTool::QuadraticBezier, &[true, true, true, false]),
-            (EditorTool::CubicBezier, &[true, true, true, true, false]),
-            (EditorTool::Ellipse, &[true, true, false]),
-            (EditorTool::EllipticalArc, &[true, true, false]),
+    fn construction_stage_semantics_table_covers_every_editor_tool() {
+        let point = |point_operand_ordinal| ConstructionStageSemantics {
+            coordinate_role: ConstructionCoordinateRole::PointOperand,
+            point_operand_ordinal: Some(point_operand_ordinal),
+            directional_span: false,
+            completed_span: None,
+            reference_handoff: false,
+        };
+        let centered = |point_operand_ordinal| ConstructionStageSemantics {
+            coordinate_role: ConstructionCoordinateRole::CenteredPointOperand {
+                prospective_curve_index: 0,
+            },
+            point_operand_ordinal: Some(point_operand_ordinal),
+            directional_span: false,
+            completed_span: None,
+            reference_handoff: false,
+        };
+        let coordinate_only = |coordinate_role| ConstructionStageSemantics {
+            coordinate_role,
+            point_operand_ordinal: None,
+            directional_span: false,
+            completed_span: None,
+            reference_handoff: false,
+        };
+        let line_start = ConstructionStageSemantics {
+            reference_handoff: true,
+            ..point(0)
+        };
+        let line_end = ConstructionStageSemantics {
+            directional_span: true,
+            completed_span: Some(DraftSpanSlot::Created {
+                curve_index: 0,
+                segment: 0,
+            }),
+            ..point(1)
+        };
+        let polyline_stage =
+            |stage_index: usize, segment: Option<u32>| ConstructionStageSemantics {
+                directional_span: segment.is_some(),
+                completed_span: segment.map(|segment| DraftSpanSlot::Created {
+                    curve_index: 0,
+                    segment,
+                }),
+                reference_handoff: true,
+                ..point(stage_index)
+            };
+        let cases = vec![
+            (EditorTool::Select, 0, None),
+            (EditorTool::Point, 0, Some(point(0))),
+            (EditorTool::Point, 1, None),
+            (EditorTool::Line, 0, Some(line_start)),
+            (EditorTool::Line, 1, Some(line_end)),
+            (EditorTool::Line, 2, None),
+            (EditorTool::Polyline, 0, Some(polyline_stage(0, None))),
+            (EditorTool::Polyline, 1, Some(polyline_stage(1, Some(0)))),
+            (EditorTool::Polyline, 2, Some(polyline_stage(2, Some(1)))),
+            (EditorTool::Polyline, 3, Some(polyline_stage(3, Some(2)))),
+            (
+                EditorTool::Rectangle,
+                0,
+                Some(coordinate_only(ConstructionCoordinateRole::CoordinateOnly)),
+            ),
+            (
+                EditorTool::Rectangle,
+                1,
+                Some(coordinate_only(ConstructionCoordinateRole::CoordinateOnly)),
+            ),
+            (EditorTool::Rectangle, 2, None),
+            (EditorTool::Circle, 0, Some(centered(0))),
+            (
+                EditorTool::Circle,
+                1,
+                Some(coordinate_only(
+                    ConstructionCoordinateRole::CircleCircumference,
+                )),
+            ),
+            (EditorTool::Circle, 2, None),
+            (EditorTool::CounterClockwiseArc, 0, Some(centered(0))),
+            (
+                EditorTool::CounterClockwiseArc,
+                1,
+                Some(coordinate_only(ConstructionCoordinateRole::CoordinateOnly)),
+            ),
+            (
+                EditorTool::CounterClockwiseArc,
+                2,
+                Some(coordinate_only(ConstructionCoordinateRole::CoordinateOnly)),
+            ),
+            (EditorTool::CounterClockwiseArc, 3, None),
+            (EditorTool::QuadraticBezier, 0, Some(point(0))),
+            (EditorTool::QuadraticBezier, 1, Some(point(1))),
+            (EditorTool::QuadraticBezier, 2, Some(point(2))),
+            (EditorTool::QuadraticBezier, 3, None),
+            (EditorTool::CubicBezier, 0, Some(point(0))),
+            (EditorTool::CubicBezier, 1, Some(point(1))),
+            (EditorTool::CubicBezier, 2, Some(point(2))),
+            (EditorTool::CubicBezier, 3, Some(point(3))),
+            (EditorTool::CubicBezier, 4, None),
+            (EditorTool::Ellipse, 0, Some(centered(0))),
+            (EditorTool::Ellipse, 1, Some(point(1))),
+            (EditorTool::Ellipse, 2, None),
+            (EditorTool::EllipticalArc, 0, Some(centered(0))),
+            (EditorTool::EllipticalArc, 1, Some(point(1))),
+            (EditorTool::EllipticalArc, 2, None),
+            (EditorTool::RationalQuadraticConic, 0, Some(point(0))),
             (
                 EditorTool::RationalQuadraticConic,
-                &[true, false, true, false],
+                1,
+                Some(coordinate_only(ConstructionCoordinateRole::CoordinateOnly)),
             ),
-            (EditorTool::Parabola, &[true, true, false]),
-            (EditorTool::Hyperbola, &[true, true, false]),
-            (EditorTool::Nurbs, &[true, true, true]),
+            (EditorTool::RationalQuadraticConic, 2, Some(point(1))),
+            (EditorTool::RationalQuadraticConic, 3, None),
+            (EditorTool::Parabola, 0, Some(point(0))),
+            (EditorTool::Parabola, 1, Some(point(1))),
+            (EditorTool::Parabola, 2, None),
+            (EditorTool::Hyperbola, 0, Some(centered(0))),
+            (EditorTool::Hyperbola, 1, Some(point(1))),
+            (EditorTool::Hyperbola, 2, None),
+            (EditorTool::Nurbs, 0, Some(point(0))),
+            (EditorTool::Nurbs, 1, Some(point(1))),
+            (EditorTool::Nurbs, 2, Some(point(2))),
+            (EditorTool::Nurbs, 3, Some(point(3))),
         ];
-        for (tool, expected) in cases {
-            for (stage, expected) in expected.iter().copied().enumerate() {
-                let expected_subject = if expected {
-                    if stage == 0
-                        && matches!(
-                            tool,
-                            EditorTool::Circle
-                                | EditorTool::CounterClockwiseArc
-                                | EditorTool::Ellipse
-                                | EditorTool::EllipticalArc
-                                | EditorTool::Hyperbola
-                        )
-                    {
-                        Some(DraftInferenceSubject::CenteredPointOperand {
-                            prospective_curve_index: 0,
-                        })
-                    } else {
-                        Some(DraftInferenceSubject::PointOperand)
-                    }
-                } else if *tool == EditorTool::Circle && stage == 1 {
+        let every_tool = [
+            EditorTool::Select,
+            EditorTool::Point,
+            EditorTool::Line,
+            EditorTool::Polyline,
+            EditorTool::Rectangle,
+            EditorTool::Circle,
+            EditorTool::CounterClockwiseArc,
+            EditorTool::QuadraticBezier,
+            EditorTool::CubicBezier,
+            EditorTool::Ellipse,
+            EditorTool::EllipticalArc,
+            EditorTool::RationalQuadraticConic,
+            EditorTool::Parabola,
+            EditorTool::Hyperbola,
+            EditorTool::Nurbs,
+        ];
+        for tool in every_tool {
+            assert!(
+                cases.iter().any(|(candidate, _, _)| *candidate == tool),
+                "missing stage-semantics coverage for {tool:?}"
+            );
+        }
+
+        for (tool, stage_index, expected) in cases {
+            let actual = construction_stage_semantics(tool, stage_index);
+            assert_eq!(
+                actual, expected,
+                "unexpected complete semantics for {tool:?} stage {stage_index}"
+            );
+            assert_eq!(
+                actual.map(|semantics| semantics.coordinate_role),
+                expected.map(|semantics| semantics.coordinate_role),
+                "unexpected coordinate role for {tool:?} stage {stage_index}"
+            );
+            let expected_subject = expected.and_then(|semantics| match semantics.coordinate_role {
+                ConstructionCoordinateRole::PointOperand => {
+                    Some(DraftInferenceSubject::PointOperand)
+                }
+                ConstructionCoordinateRole::CenteredPointOperand {
+                    prospective_curve_index,
+                } => Some(DraftInferenceSubject::CenteredPointOperand {
+                    prospective_curve_index,
+                }),
+                ConstructionCoordinateRole::CircleCircumference => {
                     Some(DraftInferenceSubject::CircleCircumference)
+                }
+                ConstructionCoordinateRole::CoordinateOnly => None,
+            });
+            let actual_subject =
+                actual.and_then(|semantics| semantics.coordinate_role.inference_subject());
+            assert_eq!(
+                actual_subject, expected_subject,
+                "unexpected derived inference subject for {tool:?} stage {stage_index}"
+            );
+            assert_eq!(
+                draft_inference_subject(tool, stage_index),
+                expected_subject,
+                "unexpected inference lookup for {tool:?} stage {stage_index}"
+            );
+            let expected_centered_curve = expected.and_then(|semantics| {
+                if let ConstructionCoordinateRole::CenteredPointOperand {
+                    prospective_curve_index,
+                } = semantics.coordinate_role
+                {
+                    Some(prospective_curve_index)
                 } else {
                     None
-                };
+                }
+            });
+            assert_eq!(
+                actual_subject.and_then(DraftInferenceSubject::prospective_centered_curve_index),
+                expected_centered_curve,
+                "unexpected prospective centered curve for {tool:?} stage {stage_index}"
+            );
+            assert_eq!(
+                actual.and_then(|semantics| semantics.point_operand_ordinal),
+                expected.and_then(|semantics| semantics.point_operand_ordinal),
+                "unexpected point ordinal for {tool:?} stage {stage_index}"
+            );
+            assert_eq!(
+                actual.map(|semantics| semantics.directional_span),
+                expected.map(|semantics| semantics.directional_span),
+                "unexpected directional ownership for {tool:?} stage {stage_index}"
+            );
+            assert_eq!(
+                actual.and_then(|semantics| semantics.completed_span),
+                expected.and_then(|semantics| semantics.completed_span),
+                "unexpected completed span for {tool:?} stage {stage_index}"
+            );
+            assert_eq!(
+                actual.map(|semantics| semantics.reference_handoff),
+                expected.map(|semantics| semantics.reference_handoff),
+                "unexpected reference handoff for {tool:?} stage {stage_index}"
+            );
+        }
+
+        if let Ok(last_representable_stage) = usize::try_from(u64::from(u32::MAX) + 1) {
+            assert_eq!(
+                construction_stage_semantics(EditorTool::Polyline, last_representable_stage)
+                    .and_then(|semantics| semantics.completed_span),
+                Some(DraftSpanSlot::Created {
+                    curve_index: 0,
+                    segment: u32::MAX,
+                })
+            );
+            if let Some(first_unrepresentable_stage) = last_representable_stage.checked_add(1) {
+                let semantics =
+                    construction_stage_semantics(EditorTool::Polyline, first_unrepresentable_stage)
+                        .expect("an arbitrarily long polyline still has stage semantics");
                 assert_eq!(
-                    draft_inference_subject(*tool, stage),
-                    expected_subject,
-                    "unexpected inference subject for {tool:?} stage {stage}"
+                    semantics.coordinate_role,
+                    ConstructionCoordinateRole::PointOperand
                 );
                 assert_eq!(
-                    directional_span_stage(*tool, stage),
-                    (*tool == EditorTool::Line && stage == 1)
-                        || (*tool == EditorTool::Polyline && stage >= 1),
-                    "unexpected directional ownership for {tool:?} stage {stage}"
+                    semantics.point_operand_ordinal,
+                    Some(first_unrepresentable_stage)
                 );
+                assert!(semantics.directional_span);
+                assert_eq!(semantics.completed_span, None);
+                assert!(semantics.reference_handoff);
             }
         }
     }
