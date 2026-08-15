@@ -2640,7 +2640,7 @@ pub enum ConstructionPoint {
 /// A typed, equation-free construction request.
 ///
 /// Applying a proposal uses only public [`SketchDocument`] allocation APIs.  It is
-/// deliberately separate from [`DocumentEdit`], whose single-edit shape cannot
+/// deliberately separate from [`geosolve_sketch::DocumentEdit`], whose single-edit shape cannot
 /// refer to identities allocated by preceding point/scalar creations.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConstructionProposal {
