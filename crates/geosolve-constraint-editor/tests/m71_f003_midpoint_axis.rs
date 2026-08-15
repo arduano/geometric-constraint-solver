@@ -3,7 +3,8 @@
 use geosolve_constraint_editor::{
     DraftGuideClassification, DraftInferenceCandidate, DraftInferenceFamily,
     DraftInferenceRelation, DraftInferenceStatus, EditorEffect, EditorMutation, EditorScene,
-    EditorTool, Modifiers, PointerInput, RetainedEditorCoordinator, ScreenPoint, Viewport,
+    EditorTool, GeometryVisibility, Modifiers, PointerInput, RetainedEditorCoordinator,
+    ScreenPoint, Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition, DocumentEdit,
@@ -71,6 +72,12 @@ fn fixture() -> (
     .with_retained_session(&session)
     .expect("authenticated scene");
     let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let _ = coordinator
+        .editor_mut()
+        .set_geometry_visibility(GeometryVisibility {
+            reference_geometry: false,
+            ..GeometryVisibility::default()
+        });
     coordinator.editor_mut().activate_tool(EditorTool::Point);
     (coordinator, scene, support, [start, end])
 }
@@ -132,11 +139,14 @@ fn publish_midpoint_axis(
                 && guide.family == DraftInferenceFamily::HorizontalPointToMidpoint
         }));
     } else {
-        assert!(matches!(
-            candidate.relations.as_slice(),
-            [DraftInferenceRelation::VerticalPointToMidpoint { reference }]
-                if *reference == support
-        ));
+        assert!(
+            matches!(
+                candidate.relations.as_slice(),
+                [DraftInferenceRelation::VerticalPointToMidpoint { reference }]
+                    if *reference == support
+            ),
+            "unexpected vertical midpoint candidate: {candidate:#?}"
+        );
         assert_eq!(
             candidate.adjusted_model_position.map(f64::to_bits),
             [0.0, raw[1]].map(f64::to_bits)

@@ -3,8 +3,8 @@
 use geosolve_constraint_editor::{
     ConstructionPoint, ConstructionProposal, DraftInferenceCandidate, DraftInferenceFamily,
     DraftInferenceRelation, DraftInferenceStatus, DraftPointSlot, DraftSpanSlot, EditorEffect,
-    EditorMutation, EditorScene, EditorTool, InferredRelation, Modifiers, PointerInput,
-    RetainedEditorCoordinator, ScreenPoint, Viewport,
+    EditorMutation, EditorScene, EditorTool, GeometryVisibility, InferredRelation, Modifiers,
+    PointerInput, RetainedEditorCoordinator, ScreenPoint, Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentEdit, DocumentId,
@@ -65,6 +65,12 @@ fn fixture() -> (
     .with_retained_session(&session)
     .expect("authenticated scene");
     let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let _ = coordinator
+        .editor_mut()
+        .set_geometry_visibility(GeometryVisibility {
+            reference_geometry: false,
+            ..GeometryVisibility::default()
+        });
     coordinator.editor_mut().activate_tool(EditorTool::Line);
     (coordinator, scene, reference)
 }

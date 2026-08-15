@@ -14,8 +14,8 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
-    DocumentConstraintDefinition, DocumentId, DocumentSolveRequest, GeometryRole, PersistentId,
-    RetainedSketchDocumentSession, SketchDocument, SolverConfig,
+    DocumentConstraintDefinition, DocumentCoordinateAxis, DocumentId, DocumentSolveRequest,
+    GeometryRole, PersistentId, RetainedSketchDocumentSession, SketchDocument, SolverConfig,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -187,9 +187,18 @@ fn inference_frame_for_subject(
     span_start: Option<[f64; 2]>,
     anchors: Vec<DraftReferenceAnchor>,
 ) -> DraftInferenceFrame {
+    // Keep the byte-frozen M70 transcript scoped to the M70 candidate language.
+    // M74 owns intrinsic-datum parity separately.
+    let policy = GeometryInteractionPolicy {
+        visibility: geosolve_constraint_editor::GeometryVisibility {
+            reference_geometry: false,
+            ..geosolve_constraint_editor::GeometryVisibility::default()
+        },
+        ..GeometryInteractionPolicy::default()
+    };
     DraftInferenceFrame::from_scene(
         scene,
-        GeometryInteractionPolicy::default(),
+        policy,
         DraftInferenceSample {
             raw_screen_position: scene.viewport.model_to_screen(sample),
             subject,
@@ -256,6 +265,11 @@ fn push_contact(transcript: &mut String, contact: DraftCurveContact) {
 
 fn push_relation(transcript: &mut String, relation: DraftInferenceRelation) {
     match relation {
+        DraftInferenceRelation::CoincidentWithOrigin => transcript.push_str("datum-origin"),
+        DraftInferenceRelation::PointOnDatumAxis { axis } => match axis {
+            DocumentCoordinateAxis::X => transcript.push_str("datum-x-axis"),
+            DocumentCoordinateAxis::Y => transcript.push_str("datum-y-axis"),
+        },
         DraftInferenceRelation::PointIdentity { point } => {
             write!(transcript, "point:{point}").expect("string write");
         }

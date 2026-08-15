@@ -62,6 +62,9 @@ families=(
   constraint.vertical-points
   constraint.concentric-curves
   constraint.collinear-supports
+  constraint.coincident-with-origin
+  constraint.point-on-datum-axis
+  constraint.collinear-with-datum-axis
 )
 
 authoring_cases=(

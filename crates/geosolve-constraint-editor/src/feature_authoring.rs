@@ -309,6 +309,7 @@ impl FeatureAuthoringState {
                 SelectionItem::Curve(_)
                 | SelectionItem::Constraint(_)
                 | SelectionItem::Dimension(_)
+                | SelectionItem::Datum(_)
                 | SelectionItem::Feature(_)
                 | SelectionItem::FeatureCorner(_) => None,
             })
@@ -984,6 +985,7 @@ fn resolve_feature_item_target(
         SelectionItem::Curve(_)
         | SelectionItem::Constraint(_)
         | SelectionItem::Dimension(_)
+        | SelectionItem::Datum(_)
         | SelectionItem::Feature(_)
         | SelectionItem::FeatureCorner(_) => std::collections::BTreeSet::new(),
     };
@@ -1011,6 +1013,7 @@ fn resolve_feature_item_target_with_incidence(
         }
         SelectionItem::Constraint(_)
         | SelectionItem::Dimension(_)
+        | SelectionItem::Datum(_)
         | SelectionItem::Feature(_)
         | SelectionItem::FeatureCorner(_) => Err(FeatureAuthoringWarningKind::WrongOperandKind),
     }
@@ -1205,6 +1208,7 @@ fn feature_hit_incidence_index(
             SelectionItem::Curve(_)
             | SelectionItem::Constraint(_)
             | SelectionItem::Dimension(_)
+            | SelectionItem::Datum(_)
             | SelectionItem::Feature(_)
             | SelectionItem::FeatureCorner(_) => None,
         })

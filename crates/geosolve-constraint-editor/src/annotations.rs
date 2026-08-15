@@ -5,7 +5,7 @@
 use geosolve_sketch::{
     ContactId, CurveDefinition, CurveId, CurveSpan, DocumentCenterRef,
     DocumentConstraintDefinition as Constraint, DocumentConstraintId,
-    DocumentDimensionDefinition as Dimension, DocumentDimensionMode, DocumentSourceId,
+    DocumentDimensionDefinition as Dimension, DocumentDimensionMode, DocumentSourceId, SketchDatum,
     SketchDocument,
 };
 
@@ -416,6 +416,23 @@ fn constraint_entry_presentation(
             SceneConstraintGlyph::Fixed,
             vec![SelectionItem::Point(*point)],
         ),
+        Constraint::CoincidentWithOrigin { point } => (
+            SceneConstraintGlyph::Coincident,
+            vec![
+                SelectionItem::Point(*point),
+                SelectionItem::Datum(SketchDatum::Origin),
+            ],
+        ),
+        Constraint::PointOnDatumAxis { point, axis } => (
+            SceneConstraintGlyph::Coincident,
+            vec![
+                SelectionItem::Point(*point),
+                SelectionItem::Datum(match axis {
+                    geosolve_sketch::DocumentCoordinateAxis::X => SketchDatum::XAxis,
+                    geosolve_sketch::DocumentCoordinateAxis::Y => SketchDatum::YAxis,
+                }),
+            ],
+        ),
         Constraint::Coincident { first, second } => (
             SceneConstraintGlyph::Coincident,
             vec![SelectionItem::Point(*first), SelectionItem::Point(*second)],
@@ -465,6 +482,16 @@ fn constraint_entry_presentation(
         Constraint::ExternalLineCollinear { line, .. } => (
             SceneConstraintGlyph::Collinear,
             vec![SelectionItem::Curve(line.span)],
+        ),
+        Constraint::CollinearWithDatumAxis { line, axis } => (
+            SceneConstraintGlyph::Collinear,
+            vec![
+                SelectionItem::Curve(line.span),
+                SelectionItem::Datum(match axis {
+                    geosolve_sketch::DocumentCoordinateAxis::X => SketchDatum::XAxis,
+                    geosolve_sketch::DocumentCoordinateAxis::Y => SketchDatum::YAxis,
+                }),
+            ],
         ),
         Constraint::Concentric { first, second } => (
             SceneConstraintGlyph::Concentric,
@@ -614,6 +641,21 @@ fn constraint_presentation(
         Constraint::FixedPoint { point, .. } | Constraint::FixedCoordinate { point, .. } => {
             point_relation(SceneConstraintGlyph::Fixed, points, *point)
         }
+        Constraint::CoincidentWithOrigin { point } => {
+            let (glyph, mut operands, anchors) =
+                point_relation(SceneConstraintGlyph::Coincident, points, *point);
+            operands.push(SelectionItem::Datum(SketchDatum::Origin));
+            (glyph, operands, anchors)
+        }
+        Constraint::PointOnDatumAxis { point, axis } => {
+            let (glyph, mut operands, anchors) =
+                point_relation(SceneConstraintGlyph::Coincident, points, *point);
+            operands.push(SelectionItem::Datum(match axis {
+                geosolve_sketch::DocumentCoordinateAxis::X => SketchDatum::XAxis,
+                geosolve_sketch::DocumentCoordinateAxis::Y => SketchDatum::YAxis,
+            }));
+            (glyph, operands, anchors)
+        }
         Constraint::Coincident { first, second } => {
             let operands = vec![SelectionItem::Point(*first), SelectionItem::Point(*second)];
             let anchors = paired_point_anchor(points, *first, *second)
@@ -668,6 +710,15 @@ fn constraint_presentation(
         ),
         Constraint::ExternalLineCollinear { line, .. } => {
             curve_relation(SceneConstraintGlyph::Collinear, curves, [line.span])
+        }
+        Constraint::CollinearWithDatumAxis { line, axis } => {
+            let (glyph, mut operands, anchors) =
+                curve_relation(SceneConstraintGlyph::Collinear, curves, [line.span]);
+            operands.push(SelectionItem::Datum(match axis {
+                geosolve_sketch::DocumentCoordinateAxis::X => SketchDatum::XAxis,
+                geosolve_sketch::DocumentCoordinateAxis::Y => SketchDatum::YAxis,
+            }));
+            (glyph, operands, anchors)
         }
         Constraint::Concentric { first, second } => {
             concentric_relation(document, points, curves, *first, *second)

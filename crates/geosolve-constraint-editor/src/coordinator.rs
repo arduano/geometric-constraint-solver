@@ -18,9 +18,10 @@ use geosolve_sketch::{
     OperationReport, OperationWork, ParameterBatch, PreparedSketchInput,
     RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
-    SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
-    SketchDocument, SketchLifecycleRevisionHighWater, SketchPersistentIdentityHighWater,
-    SketchSolveResult, SketchSource, SolveRejection, TangentOrientation,
+    SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDatum,
+    SketchDesignIdentity, SketchDocument, SketchLifecycleRevisionHighWater,
+    SketchPersistentIdentityHighWater, SketchSolveResult, SketchSource, SolveRejection,
+    TangentOrientation,
 };
 use geosolve_sketch_features::{
     ComputedCornerRef, ComputedEdgeId, ComputedEdgeProvenance, ComputedEvaluationAllocator,
@@ -1256,6 +1257,9 @@ pub enum DisabledReason {
     EmptySelection,
     WrongArity,
     WrongOperandKind,
+    /// Intrinsic Cartesian datums may participate as relation operands but are
+    /// immutable reference geometry rather than editable document objects.
+    ProtectedDatum,
     MissingObject,
     InvalidSpan,
     /// The selected semantic operands already resolve to one underlying object,
@@ -2429,6 +2433,7 @@ impl RetainedEditorCoordinator {
                     SelectionItem::Point(_)
                     | SelectionItem::Constraint(_)
                     | SelectionItem::Dimension(_)
+                    | SelectionItem::Datum(_)
                     | SelectionItem::Feature(_)
                     | SelectionItem::FeatureCorner(_) => None,
                 };
@@ -5354,6 +5359,7 @@ impl RetainedEditorCoordinator {
                 SelectionItem::Point(_)
                 | SelectionItem::Constraint(_)
                 | SelectionItem::Dimension(_)
+                | SelectionItem::Datum(_)
                 | SelectionItem::Feature(_)
                 | SelectionItem::FeatureCorner(_) => None,
             })
@@ -5384,6 +5390,12 @@ impl RetainedEditorCoordinator {
         &mut self,
         expected: SketchDesignIdentity,
     ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        if selection_contains_datum(self.editor.selection()) {
+            return Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum,
+            ));
+        }
         let target = match self.selected_geometry_role_state() {
             Some(GeometryRoleSelectionState::Construction) => GeometryRole::Profile,
             Some(GeometryRoleSelectionState::Profile | GeometryRoleSelectionState::Mixed) => {
@@ -5404,6 +5416,7 @@ impl RetainedEditorCoordinator {
                 SelectionItem::Point(_)
                 | SelectionItem::Constraint(_)
                 | SelectionItem::Dimension(_)
+                | SelectionItem::Datum(_)
                 | SelectionItem::Feature(_)
                 | SelectionItem::FeatureCorner(_) => None,
             })
@@ -6221,11 +6234,14 @@ impl RetainedEditorCoordinator {
                     SelectionItem::Point(_)
                     | SelectionItem::Constraint(_)
                     | SelectionItem::Dimension(_)
+                    | SelectionItem::Datum(_)
                     | SelectionItem::Feature(_)
                     | SelectionItem::FeatureCorner(_) => None,
                 })
                 .collect(),
             ResolvedConstraintKind::FixedPoint
+            | ResolvedConstraintKind::CoincidentWithOrigin
+            | ResolvedConstraintKind::PointOnDatumAxis
             | ResolvedConstraintKind::CoincidentPoints
             | ResolvedConstraintKind::HorizontalLine
             | ResolvedConstraintKind::VerticalLine
@@ -6233,6 +6249,7 @@ impl RetainedEditorCoordinator {
             | ResolvedConstraintKind::VerticalPoints
             | ResolvedConstraintKind::ConcentricCurves
             | ResolvedConstraintKind::CollinearSupports
+            | ResolvedConstraintKind::CollinearWithDatumAxis
             | ResolvedConstraintKind::ParallelLines
             | ResolvedConstraintKind::PerpendicularLines
             | ResolvedConstraintKind::EqualLength
@@ -6665,6 +6682,11 @@ impl RetainedEditorCoordinator {
     ) -> Result<MutationOutcome<Vec<DocumentObjectId>>, CoordinatorError> {
         self.ensure_expected(expected)?;
         let selection = self.editor.selection().to_vec();
+        if selection_contains_datum(&selection) {
+            return Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum,
+            ));
+        }
         if let Some(targets) =
             selected_computed_targets(self.session.design_document(), &self.features, &selection)
                 .map_err(CoordinatorError::ActionUnavailable)?
@@ -6738,6 +6760,11 @@ impl RetainedEditorCoordinator {
     ) -> Result<MutationOutcome<Vec<DocumentSourceId>>, CoordinatorError> {
         self.ensure_expected(expected)?;
         let selection = self.editor.selection().to_vec();
+        if selection_contains_datum(&selection) {
+            return Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum,
+            ));
+        }
         if let Some(targets) =
             selected_computed_targets(self.session.design_document(), &self.features, &selection)
                 .map_err(CoordinatorError::ActionUnavailable)?
@@ -8410,8 +8437,33 @@ pub(crate) fn resolve_constraint(
     {
         return Err(DisabledReason::MissingObject);
     }
+    if intent == ConstraintIntent::Lock && selection_contains_datum(selection) {
+        return Err(DisabledReason::ProtectedDatum);
+    }
     let resolved = match (intent, selection) {
         (ConstraintIntent::Lock, [SelectionItem::Point(_)]) => ResolvedConstraintKind::FixedPoint,
+        (
+            ConstraintIntent::Coincident,
+            [
+                SelectionItem::Point(_),
+                SelectionItem::Datum(SketchDatum::Origin),
+            ]
+            | [
+                SelectionItem::Datum(SketchDatum::Origin),
+                SelectionItem::Point(_),
+            ],
+        ) => ResolvedConstraintKind::CoincidentWithOrigin,
+        (
+            ConstraintIntent::Coincident,
+            [
+                SelectionItem::Point(_),
+                SelectionItem::Datum(SketchDatum::XAxis | SketchDatum::YAxis),
+            ]
+            | [
+                SelectionItem::Datum(SketchDatum::XAxis | SketchDatum::YAxis),
+                SelectionItem::Point(_),
+            ],
+        ) => ResolvedConstraintKind::PointOnDatumAxis,
         (ConstraintIntent::Coincident, [SelectionItem::Point(_), SelectionItem::Point(_)]) => {
             ResolvedConstraintKind::CoincidentPoints
         }
@@ -8488,6 +8540,63 @@ pub(crate) fn resolve_constraint(
             ConstraintIntent::Collinear,
             [SelectionItem::Curve(first), SelectionItem::Curve(second)],
         ) if first == second => return Err(DisabledReason::SameSemanticOperand),
+        (
+            ConstraintIntent::Collinear,
+            [
+                SelectionItem::Curve(line),
+                SelectionItem::Datum(SketchDatum::XAxis | SketchDatum::YAxis),
+            ]
+            | [
+                SelectionItem::Datum(SketchDatum::XAxis | SketchDatum::YAxis),
+                SelectionItem::Curve(line),
+            ],
+        ) if line_endpoints(document, *line).is_ok() => {
+            ResolvedConstraintKind::CollinearWithDatumAxis
+        }
+        (
+            ConstraintIntent::Parallel,
+            [
+                SelectionItem::Curve(line),
+                SelectionItem::Datum(SketchDatum::XAxis),
+            ]
+            | [
+                SelectionItem::Datum(SketchDatum::XAxis),
+                SelectionItem::Curve(line),
+            ],
+        ) if line_endpoints(document, *line).is_ok() => ResolvedConstraintKind::HorizontalLine,
+        (
+            ConstraintIntent::Parallel,
+            [
+                SelectionItem::Curve(line),
+                SelectionItem::Datum(SketchDatum::YAxis),
+            ]
+            | [
+                SelectionItem::Datum(SketchDatum::YAxis),
+                SelectionItem::Curve(line),
+            ],
+        ) if line_endpoints(document, *line).is_ok() => ResolvedConstraintKind::VerticalLine,
+        (
+            ConstraintIntent::Perpendicular,
+            [
+                SelectionItem::Curve(line),
+                SelectionItem::Datum(SketchDatum::XAxis),
+            ]
+            | [
+                SelectionItem::Datum(SketchDatum::XAxis),
+                SelectionItem::Curve(line),
+            ],
+        ) if line_endpoints(document, *line).is_ok() => ResolvedConstraintKind::VerticalLine,
+        (
+            ConstraintIntent::Perpendicular,
+            [
+                SelectionItem::Curve(line),
+                SelectionItem::Datum(SketchDatum::YAxis),
+            ]
+            | [
+                SelectionItem::Datum(SketchDatum::YAxis),
+                SelectionItem::Curve(line),
+            ],
+        ) if line_endpoints(document, *line).is_ok() => ResolvedConstraintKind::HorizontalLine,
         (
             ConstraintIntent::Parallel,
             [SelectionItem::Curve(first), SelectionItem::Curve(second)],
@@ -8591,6 +8700,7 @@ pub(crate) fn selection_exists(document: &SketchDocument, item: SelectionItem) -
             .is_ok_and(|spans| spans.contains(&span)),
         SelectionItem::Constraint(id) => document.constraints().iter().any(|value| value.id == id),
         SelectionItem::Dimension(id) => document.dimensions().iter().any(|value| value.id == id),
+        SelectionItem::Datum(_) => true,
         SelectionItem::Feature(_) | SelectionItem::FeatureCorner(_) => false,
     }
 }
@@ -9055,18 +9165,43 @@ fn simple_constraint_definition(
             }
         }
         (
+            ResolvedConstraintKind::CoincidentWithOrigin,
+            [
+                SelectionItem::Point(point),
+                SelectionItem::Datum(SketchDatum::Origin),
+            ]
+            | [
+                SelectionItem::Datum(SketchDatum::Origin),
+                SelectionItem::Point(point),
+            ],
+        ) => DocumentConstraintDefinition::CoincidentWithOrigin { point: *point },
+        (
+            ResolvedConstraintKind::PointOnDatumAxis,
+            [SelectionItem::Point(point), SelectionItem::Datum(datum)]
+            | [SelectionItem::Datum(datum), SelectionItem::Point(point)],
+        ) => DocumentConstraintDefinition::PointOnDatumAxis {
+            point: *point,
+            axis: datum.coordinate_axis()?,
+        },
+        (
             ResolvedConstraintKind::CoincidentPoints,
             [SelectionItem::Point(first), SelectionItem::Point(second)],
         ) => DocumentConstraintDefinition::Coincident {
             first: *first,
             second: *second,
         },
-        (ResolvedConstraintKind::HorizontalLine, [SelectionItem::Curve(line)]) => {
-            DocumentConstraintDefinition::Horizontal { line: *line }
-        }
-        (ResolvedConstraintKind::VerticalLine, [SelectionItem::Curve(line)]) => {
-            DocumentConstraintDefinition::Vertical { line: *line }
-        }
+        (
+            ResolvedConstraintKind::HorizontalLine,
+            [SelectionItem::Curve(line)]
+            | [SelectionItem::Curve(line), SelectionItem::Datum(_)]
+            | [SelectionItem::Datum(_), SelectionItem::Curve(line)],
+        ) => DocumentConstraintDefinition::Horizontal { line: *line },
+        (
+            ResolvedConstraintKind::VerticalLine,
+            [SelectionItem::Curve(line)]
+            | [SelectionItem::Curve(line), SelectionItem::Datum(_)]
+            | [SelectionItem::Datum(_), SelectionItem::Curve(line)],
+        ) => DocumentConstraintDefinition::Vertical { line: *line },
         (
             ResolvedConstraintKind::HorizontalPoints,
             [SelectionItem::Point(first), SelectionItem::Point(second)],
@@ -9102,6 +9237,17 @@ fn simple_constraint_definition(
                 span: *second,
                 direction: geosolve_sketch::DocumentDirectionSense::Forward,
             },
+        },
+        (
+            ResolvedConstraintKind::CollinearWithDatumAxis,
+            [SelectionItem::Curve(line), SelectionItem::Datum(datum)]
+            | [SelectionItem::Datum(datum), SelectionItem::Curve(line)],
+        ) => DocumentConstraintDefinition::CollinearWithDatumAxis {
+            line: geosolve_sketch::DocumentLineSupportRef {
+                span: *line,
+                direction: geosolve_sketch::DocumentDirectionSense::Forward,
+            },
+            axis: datum.coordinate_axis()?,
         },
         (
             ResolvedConstraintKind::ParallelLines,
@@ -9561,6 +9707,9 @@ fn selected_objects(
     if selection.is_empty() {
         return Err(DisabledReason::EmptySelection);
     }
+    if selection_contains_datum(selection) {
+        return Err(DisabledReason::ProtectedDatum);
+    }
     let mut seen = HashSet::new();
     let mut objects = Vec::new();
     for item in selection {
@@ -9628,6 +9777,9 @@ fn composite_delete_availability(
     features: &ComputedFeatureDocument,
     selection: &[SelectionItem],
 ) -> ActionState {
+    if selection_contains_datum(selection) {
+        return ActionState::Disabled(DisabledReason::ProtectedDatum);
+    }
     match selected_computed_targets(document, features, selection) {
         Ok(Some(_)) => ActionState::Enabled,
         Ok(None) => availability(selected_objects(document, selection)),
@@ -9641,6 +9793,9 @@ fn composite_suppression_availability(
     selection: &[SelectionItem],
     suppressed: bool,
 ) -> ActionState {
+    if selection_contains_datum(selection) {
+        return ActionState::Disabled(DisabledReason::ProtectedDatum);
+    }
     match selected_computed_targets(document, features, selection) {
         Ok(Some(targets)) => {
             let feature_ids = targets
@@ -9687,10 +9842,22 @@ fn selected_sources(
                 .map(|value| value.source_id),
             SelectionItem::Point(_)
             | SelectionItem::Curve(_)
+            | SelectionItem::Datum(_)
             | SelectionItem::Feature(_)
             | SelectionItem::FeatureCorner(_) => None,
         })
         .collect()
+}
+
+const fn selection_contains_datum(selection: &[SelectionItem]) -> bool {
+    let mut index = 0;
+    while index < selection.len() {
+        if matches!(selection[index], SelectionItem::Datum(_)) {
+            return true;
+        }
+        index += 1;
+    }
+    false
 }
 
 fn dimension_mode_availability(
@@ -9896,6 +10063,7 @@ mod tests {
                 visibility: crate::GeometryVisibility {
                     explicit_construction: false,
                     implicit_construction: true,
+                    reference_geometry: true,
                 },
                 ..GeometryInteractionPolicy::default()
             },
@@ -13326,6 +13494,178 @@ mod tests {
                 .iter()
                 .all(|value| value.id != constraint)
         );
+    }
+
+    #[test]
+    fn intrinsic_datums_are_selectable_but_protected_from_every_object_mutation() {
+        let (session, points, span, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let original_design = coordinator.session().design_identity();
+        let original_history = coordinator.history_len();
+
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Datum(SketchDatum::Origin)]);
+        for action in [
+            CoordinatorActionKind::Delete,
+            CoordinatorActionKind::Suppress,
+            CoordinatorActionKind::Unsuppress,
+            CoordinatorActionKind::Constraint(ConstraintIntent::Lock),
+        ] {
+            assert!(coordinator.actions().contains(&ActionAvailability {
+                action,
+                state: ActionState::Disabled(DisabledReason::ProtectedDatum),
+            }));
+        }
+        assert!(matches!(
+            coordinator.delete_selected(original_design),
+            Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum
+            ))
+        ));
+        assert!(matches!(
+            coordinator.set_selected_suppressed(original_design, true),
+            Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum
+            ))
+        ));
+        assert!(matches!(
+            coordinator.set_selected_suppressed(original_design, false),
+            Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum
+            ))
+        ));
+        assert!(matches!(
+            coordinator.toggle_selected_geometry_role(original_design),
+            Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum
+            ))
+        ));
+
+        coordinator.editor_mut().set_selection([
+            SelectionItem::Curve(span),
+            SelectionItem::Datum(SketchDatum::XAxis),
+        ]);
+        assert!(matches!(
+            coordinator.toggle_selected_geometry_role(original_design),
+            Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum
+            ))
+        ));
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .geometry_role(span.curve),
+            Some(GeometryRole::Profile)
+        );
+
+        coordinator.editor_mut().set_selection([
+            SelectionItem::Point(points[0]),
+            SelectionItem::Datum(SketchDatum::YAxis),
+        ]);
+        assert!(matches!(
+            coordinator.delete_selected(original_design),
+            Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::ProtectedDatum
+            ))
+        ));
+        assert_eq!(coordinator.session().design_identity(), original_design);
+        assert_eq!(coordinator.history_len(), original_history);
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .point(points[0])
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn datum_pointer_drag_selects_without_starting_a_gesture_or_history() {
+        let (session, points, _, _) = fixed_line_session();
+        let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+        let accepted = session.accepted_state().expect("accepted line");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.5,
+        )
+        .expect("scene");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let design = coordinator.session().design_identity();
+        let history = coordinator.history_len();
+        let press = viewport.model_to_screen([8.0, 0.0]);
+
+        assert!(matches!(
+            coordinator.pointer_down(
+                &scene,
+                PointerInput {
+                    pointer_id: 740,
+                    position: press,
+                    modifiers: Modifiers::default(),
+                },
+            )
+            .as_slice(),
+            [EditorEffect::SelectionChanged(selection)]
+                if selection == &[SelectionItem::Datum(SketchDatum::XAxis)]
+        ));
+        assert!(coordinator.editor().point_gesture_snapshot().is_none());
+        assert!(coordinator.drag_continuation.is_none());
+        assert!(
+            coordinator
+                .editor_mut()
+                .pointer_move(
+                    &scene,
+                    PointerInput {
+                        pointer_id: 740,
+                        position: ScreenPoint {
+                            x: press.x + 40.0,
+                            y: press.y + 40.0,
+                        },
+                        modifiers: Modifiers::default(),
+                    },
+                )
+                .iter()
+                .all(|effect| !matches!(
+                    effect,
+                    EditorEffect::PreviewPointMove { .. }
+                        | EditorEffect::RequestProjectedPointMove { .. }
+                ))
+        );
+        assert_eq!(coordinator.session().design_identity(), design);
+        assert_eq!(coordinator.history_len(), history);
+
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Datum(SketchDatum::YAxis)]);
+        let point_press = viewport.model_to_screen([2.0, 0.0]);
+        assert!(matches!(
+            coordinator.pointer_down(
+                &scene,
+                PointerInput {
+                    pointer_id: 741,
+                    position: point_press,
+                    modifiers: Modifiers {
+                        shift: true,
+                        ..Modifiers::default()
+                    },
+                },
+            )
+            .as_slice(),
+            [EditorEffect::SelectionChanged(selection)]
+                if selection == &[
+                    SelectionItem::Datum(SketchDatum::YAxis),
+                    SelectionItem::Point(points[1]),
+                ]
+        ));
+        assert!(coordinator.editor().point_gesture_snapshot().is_none());
+        assert!(coordinator.drag_continuation.is_none());
+        assert_eq!(coordinator.session().design_identity(), design);
+        assert_eq!(coordinator.history_len(), history);
     }
 
     #[test]

@@ -88,6 +88,8 @@ pub enum AuthoringOperandKind {
     Curve,
     Line,
     CircleOrArc,
+    Datum,
+    DatumAxis,
 }
 
 impl AuthoringOperandKind {
@@ -98,6 +100,8 @@ impl AuthoringOperandKind {
             Self::Curve => "curve",
             Self::Line => "line",
             Self::CircleOrArc => "circle or arc",
+            Self::Datum => "reference datum",
+            Self::DatumAxis => "reference axis",
         }
     }
 }
@@ -506,6 +510,7 @@ fn normalize_operands(tool: AuthoringTool, operands: &[AuthoringOperand]) -> Vec
                 SelectionItem::Curve(_) => 1,
                 SelectionItem::Constraint(_)
                 | SelectionItem::Dimension(_)
+                | SelectionItem::Datum(_)
                 | SelectionItem::Feature(_)
                 | SelectionItem::FeatureCorner(_) => 2,
             });
@@ -580,7 +585,11 @@ fn operand_matches(
 ) -> bool {
     match (item, kind) {
         (SelectionItem::Point(_), AuthoringOperandKind::Point)
-        | (SelectionItem::Curve(_), AuthoringOperandKind::Curve) => true,
+        | (SelectionItem::Curve(_), AuthoringOperandKind::Curve)
+        | (SelectionItem::Datum(_), AuthoringOperandKind::Datum) => true,
+        (SelectionItem::Datum(datum), AuthoringOperandKind::DatumAxis) => {
+            datum.coordinate_axis().is_some()
+        }
         (SelectionItem::Curve(span), AuthoringOperandKind::Line) => {
             line_endpoints(document, span).is_ok()
         }
@@ -601,7 +610,7 @@ fn expected_operands(
     tool: AuthoringTool,
     operands: &[AuthoringOperand],
 ) -> Vec<AuthoringOperandKind> {
-    use AuthoringOperandKind::{CircleOrArc, Curve, Line, Point};
+    use AuthoringOperandKind::{CircleOrArc, Curve, Datum, DatumAxis, Line, Point};
     match tool {
         AuthoringTool::Constraint(ConstraintIntent::Lock)
         | AuthoringTool::Dimension(DimensionKind::PointDistance) => vec![Point],
@@ -618,12 +627,50 @@ fn expected_operands(
                 vec![Point, Line]
             }
         }
-        AuthoringTool::Constraint(ConstraintIntent::Coincident) => vec![Point, Curve],
-        AuthoringTool::Dimension(DimensionKind::SegmentLength | DimensionKind::OrientedAngle)
-        | AuthoringTool::Constraint(ConstraintIntent::Parallel | ConstraintIntent::Collinear) => {
+        AuthoringTool::Constraint(ConstraintIntent::Coincident) => match operands {
+            [
+                AuthoringOperand {
+                    item: SelectionItem::Datum(_),
+                    ..
+                },
+            ] => vec![Point],
+            [
+                AuthoringOperand {
+                    item: SelectionItem::Curve(_),
+                    ..
+                },
+            ] => vec![Point, Curve],
+            _ => vec![Point, Curve, Datum],
+        },
+        AuthoringTool::Dimension(DimensionKind::SegmentLength | DimensionKind::OrientedAngle) => {
             vec![Line]
         }
-        AuthoringTool::Constraint(ConstraintIntent::Perpendicular) => vec![Line, CircleOrArc],
+        AuthoringTool::Constraint(ConstraintIntent::Parallel | ConstraintIntent::Collinear) => {
+            if matches!(
+                operands,
+                [AuthoringOperand {
+                    item: SelectionItem::Datum(_),
+                    ..
+                }]
+            ) {
+                vec![Line]
+            } else {
+                vec![Line, DatumAxis]
+            }
+        }
+        AuthoringTool::Constraint(ConstraintIntent::Perpendicular) => {
+            if matches!(
+                operands,
+                [AuthoringOperand {
+                    item: SelectionItem::Datum(_),
+                    ..
+                }]
+            ) {
+                vec![Line]
+            } else {
+                vec![Line, CircleOrArc, DatumAxis]
+            }
+        }
         AuthoringTool::Constraint(
             ConstraintIntent::Concentric
             | ConstraintIntent::Continuity
@@ -678,6 +725,9 @@ fn warning(
         }
         DisabledReason::WrongArity => "the tool needs a different number of operands",
         DisabledReason::WrongOperandKind => "that item is not compatible with the active tool",
+        DisabledReason::ProtectedDatum => {
+            "reference datums are immutable and cannot be edited by this action"
+        }
         DisabledReason::MissingObject => "that operand no longer exists in the current design",
         DisabledReason::InvalidSpan => "that curve span is not valid for the active tool",
         DisabledReason::SameSemanticOperand => {
@@ -702,7 +752,7 @@ fn warning(
 mod tests {
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DocumentConstraintDefinition, ScalarDomain, ScalarUnit,
-        SketchDocument,
+        SketchDatum, SketchDocument,
     };
 
     use super::*;
@@ -983,6 +1033,55 @@ mod tests {
             })
         ));
         assert_eq!(state.pending().len(), 1);
+    }
+
+    #[test]
+    fn axis_relation_authoring_rejects_origin_as_a_prefix_but_accepts_axis_datums() {
+        let (document, items) = document();
+        for (intent, resolved) in [
+            (
+                ConstraintIntent::Collinear,
+                ResolvedConstraintKind::CollinearWithDatumAxis,
+            ),
+            (
+                ConstraintIntent::Parallel,
+                ResolvedConstraintKind::HorizontalLine,
+            ),
+            (
+                ConstraintIntent::Perpendicular,
+                ResolvedConstraintKind::VerticalLine,
+            ),
+        ] {
+            let tool = AuthoringTool::Constraint(intent);
+            let mut state = AuthoringState::default();
+            let _ = state.activate(&document, tool, &[]);
+            assert!(matches!(
+                state.pick(
+                    &document,
+                    AuthoringOperand::selected(SelectionItem::Datum(SketchDatum::Origin)),
+                ),
+                AuthoringOutcome::Warning(AuthoringWarning {
+                    reason: DisabledReason::WrongOperandKind,
+                    ..
+                })
+            ));
+            assert!(state.pending().is_empty());
+
+            assert!(matches!(
+                state.pick(
+                    &document,
+                    AuthoringOperand::selected(SelectionItem::Datum(SketchDatum::XAxis)),
+                ),
+                AuthoringOutcome::Collecting { .. }
+            ));
+            assert!(matches!(
+                state.pick(&document, AuthoringOperand::selected(items[2])),
+                AuthoringOutcome::Apply(AuthoringApplication {
+                    resolved_constraint: Some(actual),
+                    ..
+                }) if actual == resolved
+            ));
+        }
     }
 
     #[test]

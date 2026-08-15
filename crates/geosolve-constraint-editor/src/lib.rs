@@ -71,8 +71,8 @@ use geosolve_sketch::{
     DocumentCurveCurvatureRelation, DocumentCurveNormalSide, DocumentCurveSpanRef,
     DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense, DocumentHyperbolaBranch,
     DocumentObjectId, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
-    TangentOrientation,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDatum, SketchDesignIdentity,
+    SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -168,13 +168,15 @@ impl Viewport {
     }
 }
 
-/// Persistent selectable identity understood by the headless editor.
+/// Selectable identity understood by the headless editor.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum SelectionItem {
     Point(DesignPointId),
     Curve(CurveSpan),
     Constraint(DocumentConstraintId),
     Dimension(DocumentDimensionId),
+    /// One intrinsic immutable Cartesian sketch datum.
+    Datum(SketchDatum),
     /// One persistent computed feature outside the sketch constraint graph.
     Feature(geosolve_sketch_features::ComputedFeatureId),
     /// One persistent corner within a computed Fillet set.
@@ -190,7 +192,7 @@ impl SelectionItem {
             Self::Curve(span) => Some(DocumentObjectId::Curve(span.curve)),
             Self::Constraint(id) => Some(DocumentObjectId::Constraint(id)),
             Self::Dimension(id) => Some(DocumentObjectId::Dimension(id)),
-            Self::Feature(_) | Self::FeatureCorner(_) => None,
+            Self::Datum(_) | Self::Feature(_) | Self::FeatureCorner(_) => None,
         }
     }
 }
@@ -213,6 +215,7 @@ pub enum GeometryPickScope {
 pub struct GeometryVisibility {
     pub explicit_construction: bool,
     pub implicit_construction: bool,
+    pub reference_geometry: bool,
 }
 
 impl Default for GeometryVisibility {
@@ -220,8 +223,90 @@ impl Default for GeometryVisibility {
         Self {
             explicit_construction: true,
             implicit_construction: true,
+            reference_geometry: true,
         }
     }
+}
+
+/// One intrinsic Cartesian datum projected into the current finite viewport.
+///
+/// Axis endpoints are screen-space clipping representatives only. The semantic
+/// datum remains an infinite line through `model_origin` in `model_direction`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneDatum {
+    pub datum: SketchDatum,
+    pub model_origin: [f64; 2],
+    pub model_direction: Option<[f64; 2]>,
+    pub screen_start: ScreenPoint,
+    pub screen_end: ScreenPoint,
+}
+
+impl SceneDatum {
+    /// Returns whether this datum has a painted representative in the supplied viewport.
+    ///
+    /// Picking and presentation adapters share this boundary so a datum just outside the
+    /// mapped sketch plane cannot expose an invisible hit surface.
+    #[must_use]
+    pub fn is_visible_in_viewport(self, viewport: Viewport) -> bool {
+        if !viewport.is_valid() {
+            return false;
+        }
+        match self.datum {
+            SketchDatum::Origin => {
+                self.screen_start.x.is_finite()
+                    && self.screen_start.y.is_finite()
+                    && (0.0..=viewport.screen_size[0]).contains(&self.screen_start.x)
+                    && (0.0..=viewport.screen_size[1]).contains(&self.screen_start.y)
+            }
+            SketchDatum::XAxis => {
+                self.screen_start.y.is_finite()
+                    && (0.0..=viewport.screen_size[1]).contains(&self.screen_start.y)
+            }
+            SketchDatum::YAxis => {
+                self.screen_start.x.is_finite()
+                    && (0.0..=viewport.screen_size[0]).contains(&self.screen_start.x)
+            }
+        }
+    }
+}
+
+fn scene_datums(viewport: Viewport) -> Vec<SceneDatum> {
+    let origin = viewport.model_to_screen([0.0, 0.0]);
+    vec![
+        SceneDatum {
+            datum: SketchDatum::Origin,
+            model_origin: [0.0, 0.0],
+            model_direction: None,
+            screen_start: origin,
+            screen_end: origin,
+        },
+        SceneDatum {
+            datum: SketchDatum::XAxis,
+            model_origin: [0.0, 0.0],
+            model_direction: Some([1.0, 0.0]),
+            screen_start: ScreenPoint {
+                x: 0.0,
+                y: origin.y,
+            },
+            screen_end: ScreenPoint {
+                x: viewport.screen_size[0],
+                y: origin.y,
+            },
+        },
+        SceneDatum {
+            datum: SketchDatum::YAxis,
+            model_origin: [0.0, 0.0],
+            model_direction: Some([0.0, 1.0]),
+            screen_start: ScreenPoint {
+                x: origin.x,
+                y: viewport.screen_size[1],
+            },
+            screen_end: ScreenPoint {
+                x: origin.x,
+                y: 0.0,
+            },
+        },
+    ]
 }
 
 /// Complete headless geometry filtering policy used consistently by hover,
@@ -766,6 +851,7 @@ struct DraftInferenceSceneSeal {
     design_identity: SketchDesignIdentity,
     viewport: Viewport,
     curves: Vec<SceneCurve>,
+    datums: Vec<SceneDatum>,
     constraint_entries: Vec<SceneConstraintEntry>,
     construction_snap_points: Vec<ScenePoint>,
 }
@@ -777,6 +863,7 @@ impl DraftInferenceSceneSeal {
             design_identity: scene.design_identity,
             viewport: scene.viewport,
             curves: scene.curves.clone(),
+            datums: scene.datums.clone(),
             constraint_entries: scene.constraint_entries.clone(),
             construction_snap_points: scene.construction_snap_points.clone(),
         }
@@ -787,6 +874,7 @@ impl DraftInferenceSceneSeal {
             && self.design_identity == scene.design_identity
             && self.viewport == scene.viewport
             && self.curves == scene.curves
+            && self.datums == scene.datums
             && self.constraint_entries == scene.constraint_entries
             && self.construction_snap_points == scene.construction_snap_points
     }
@@ -810,6 +898,8 @@ pub struct EditorScene {
     pub viewport: Viewport,
     pub points: Vec<ScenePoint>,
     pub curves: Vec<SceneCurve>,
+    /// Intrinsic immutable reference geometry for the Cartesian sketch plane.
+    pub datums: Vec<SceneDatum>,
     /// Generated Fillet arcs. Source replacement fragments remain native
     /// [`SceneCurve`] values so native span selection and dragging stay intact.
     pub computed_curves: Vec<SceneComputedCurve>,
@@ -940,6 +1030,7 @@ impl EditorScene {
             viewport,
             points,
             curves,
+            datums: scene_datums(viewport),
             computed_curves: Vec::new(),
             feature_identity: None,
             computed_input: None,
@@ -2003,6 +2094,50 @@ impl EditorScene {
                 ),
             policy.scope,
         )
+        .or_else(|| self.datum_hit_test(position, policy))
+    }
+
+    fn datum_hit_test(
+        &self,
+        position: ScreenPoint,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<Hit> {
+        if !policy.visibility.reference_geometry {
+            return None;
+        }
+        if let Some(origin) = self.datums.iter().find(|datum| {
+            datum.datum == SketchDatum::Origin && datum.is_visible_in_viewport(self.viewport)
+        }) {
+            let origin_distance = position.distance(origin.screen_start);
+            if origin_distance <= 6.0 {
+                return Some(Hit {
+                    item: SelectionItem::Datum(SketchDatum::Origin),
+                    distance_pixels: origin_distance,
+                    curve_parameter: None,
+                    geometry: None,
+                });
+            }
+        }
+        self.datums
+            .iter()
+            .filter(|datum| datum.datum != SketchDatum::Origin)
+            .filter(|datum| datum.is_visible_in_viewport(self.viewport))
+            .filter_map(|datum| {
+                let distance =
+                    point_segment_projection(position, datum.screen_start, datum.screen_end).0;
+                (distance <= 4.0).then_some(Hit {
+                    item: SelectionItem::Datum(datum.datum),
+                    distance_pixels: distance,
+                    curve_parameter: None,
+                    geometry: None,
+                })
+            })
+            .min_by(|first, second| {
+                first
+                    .distance_pixels
+                    .total_cmp(&second.distance_pixels)
+                    .then_with(|| first.item.cmp(&second.item))
+            })
     }
 
     /// Native-only geometry hit for constraint and computed-feature authoring.
@@ -2047,7 +2182,8 @@ impl EditorScene {
         )
     }
 
-    /// Returns bounded native authoring hits in deterministic interaction order.
+    /// Returns bounded native and intrinsic-datum authoring hits in deterministic
+    /// interaction order.
     ///
     /// Point candidates retain their semantic priority over curves, while the
     /// complete ordered list lets a domain-specific headless authoring state
@@ -2086,7 +2222,7 @@ impl EditorScene {
         if !position.is_finite() || !tolerance.is_valid() {
             return Ok(Vec::new());
         }
-        let candidates = self
+        let native_candidates = self
             .points
             .iter()
             .filter(|point| point.is_pickable(policy))
@@ -2098,7 +2234,7 @@ impl EditorScene {
                     .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels)),
             );
         let mut unique = std::collections::BTreeMap::<SelectionItem, PolicyHitAccumulator>::new();
-        for hit in candidates {
+        for hit in native_candidates {
             if let Some(existing) = unique.get_mut(&hit.item) {
                 existing.consider(hit, policy.scope);
                 continue;
@@ -2121,6 +2257,12 @@ impl EditorScene {
                 .position(|candidate| *candidate == best)
                 .expect("the selected authoring hit came from the remaining set");
             ordered.push(remaining.remove(index));
+        }
+        if let Some(hit) = self.datum_hit_test(position, policy) {
+            if ordered.len() >= maximum_candidates {
+                return Err(NativeAuthoringHitError::CandidateLimitExceeded { maximum_candidates });
+            }
+            ordered.push(hit);
         }
         Ok(ordered)
     }
@@ -2183,6 +2325,7 @@ impl EditorScene {
                 }),
             SelectionItem::Constraint(_)
             | SelectionItem::Dimension(_)
+            | SelectionItem::Datum(_)
             | SelectionItem::Feature(_)
             | SelectionItem::FeatureCorner(_) => true,
         };
@@ -2199,6 +2342,7 @@ impl EditorScene {
                 .and_then(|curve| curve.drag_handle_point),
             SelectionItem::Constraint(_)
             | SelectionItem::Dimension(_)
+            | SelectionItem::Datum(_)
             | SelectionItem::Feature(_)
             | SelectionItem::FeatureCorner(_) => None,
         }
@@ -4254,6 +4398,10 @@ impl ConstraintEditor {
             }
             if let Some((owner, radius, rail)) = scene.feature_radius_handle(hit.item)
                 && self.selection.contains(&hit.item)
+                && !self
+                    .selection
+                    .iter()
+                    .any(|item| matches!(item, SelectionItem::Datum(_)))
                 && let Some(expected) = scene.computed_input
             {
                 let pointer = scene.viewport.screen_to_model(input.position);
@@ -4278,6 +4426,10 @@ impl ConstraintEditor {
             }
             if let Some(point) = scene.drag_handle_point(hit.item)
                 && self.selection.contains(&hit.item)
+                && !self
+                    .selection
+                    .iter()
+                    .any(|item| matches!(item, SelectionItem::Datum(_)))
                 && let Some(point_position) = scene
                     .points
                     .iter()
@@ -5269,7 +5421,9 @@ impl ConstraintEditor {
             .iter()
             .find_map(|relation| match relation {
                 DraftInferenceRelation::PointIdentity { point } => Some(*point),
-                DraftInferenceRelation::PointOnCurve { .. }
+                DraftInferenceRelation::CoincidentWithOrigin
+                | DraftInferenceRelation::PointOnDatumAxis { .. }
+                | DraftInferenceRelation::PointOnCurve { .. }
                 | DraftInferenceRelation::PointOnCreatedCurve { .. }
                 | DraftInferenceRelation::Midpoint { .. }
                 | DraftInferenceRelation::Horizontal
@@ -5833,6 +5987,17 @@ fn construction_commit_plan(
                         return None;
                     }
                 }
+                DraftInferenceRelation::CoincidentWithOrigin => {
+                    relations.push(InferredRelation::CoincidentWithOrigin {
+                        point: draft_point_slot(draft, confirmed.stage_index)?,
+                    });
+                }
+                DraftInferenceRelation::PointOnDatumAxis { axis } => {
+                    relations.push(InferredRelation::PointOnDatumAxis {
+                        point: draft_point_slot(draft, confirmed.stage_index)?,
+                        axis,
+                    });
+                }
                 DraftInferenceRelation::PointOnCurve { contact } => {
                     let point = draft_point_slot(draft, confirmed.stage_index)?;
                     relations.push(InferredRelation::PointOnCurve {
@@ -6078,6 +6243,8 @@ pub enum ConstraintIntent {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResolvedConstraintKind {
     FixedPoint,
+    CoincidentWithOrigin,
+    PointOnDatumAxis,
     CoincidentPoints,
     PointOnCurve,
     CurveContact,
@@ -6087,6 +6254,7 @@ pub enum ResolvedConstraintKind {
     VerticalPoints,
     ConcentricCurves,
     CollinearSupports,
+    CollinearWithDatumAxis,
     ParallelLines,
     PerpendicularLines,
     RadialLine,
@@ -6105,6 +6273,8 @@ impl ResolvedConstraintKind {
     pub const fn label(self) -> &'static str {
         match self {
             Self::FixedPoint => "Lock point",
+            Self::CoincidentWithOrigin => "Coincident with Origin",
+            Self::PointOnDatumAxis => "Point on datum axis",
             Self::CoincidentPoints => "Coincident",
             Self::PointOnCurve => "Point on curve",
             Self::CurveContact => "Curve contact",
@@ -6114,6 +6284,7 @@ impl ResolvedConstraintKind {
             Self::VerticalPoints => "Vertical points",
             Self::ConcentricCurves => "Concentric",
             Self::CollinearSupports => "Collinear",
+            Self::CollinearWithDatumAxis => "Collinear with datum axis",
             Self::ParallelLines => "Parallel",
             Self::PerpendicularLines => "Perpendicular",
             Self::RadialLine => "Normal to circle / arc",
@@ -6899,6 +7070,7 @@ fn document_contains_item(document: &SketchDocument, item: SelectionItem) -> boo
             .is_ok_and(|spans| spans.contains(&span)),
         SelectionItem::Constraint(_)
         | SelectionItem::Dimension(_)
+        | SelectionItem::Datum(_)
         | SelectionItem::Feature(_)
         | SelectionItem::FeatureCorner(_) => false,
     }
@@ -6991,6 +7163,7 @@ const fn native_hit_priority(item: SelectionItem) -> u8 {
         SelectionItem::Curve(_) => 1,
         SelectionItem::Constraint(_)
         | SelectionItem::Dimension(_)
+        | SelectionItem::Datum(_)
         | SelectionItem::Feature(_)
         | SelectionItem::FeatureCorner(_) => 2,
     }
@@ -7006,7 +7179,8 @@ fn item_belongs_to_computed_feature(
         SelectionItem::Point(_)
         | SelectionItem::Curve(_)
         | SelectionItem::Constraint(_)
-        | SelectionItem::Dimension(_) => false,
+        | SelectionItem::Dimension(_)
+        | SelectionItem::Datum(_) => false,
     }
 }
 
@@ -7691,6 +7865,61 @@ fn is_linear_span(document: &SketchDocument, span: CurveSpan) -> bool {
 mod tests {
     use super::*;
     use geosolve_sketch::{DocumentConstraintDefinition, SketchDocument};
+    use std::ops::{Deref, DerefMut};
+
+    /// Historical editor fixtures predate intrinsic reference geometry. Keep
+    /// their native drafting assertions isolated; focused M74 integration
+    /// tests exercise the production-default datum policy end to end.
+    struct ConstraintEditor(super::ConstraintEditor);
+
+    impl ConstraintEditor {
+        fn new(
+            pick_tolerance: PickTolerance,
+            drag_threshold_pixels: f64,
+        ) -> Result<Self, EditorError> {
+            super::ConstraintEditor::new(pick_tolerance, drag_threshold_pixels).map(Self::from)
+        }
+    }
+
+    impl Default for ConstraintEditor {
+        fn default() -> Self {
+            Self::from(super::ConstraintEditor::default())
+        }
+    }
+
+    impl From<super::ConstraintEditor> for ConstraintEditor {
+        fn from(mut editor: super::ConstraintEditor) -> Self {
+            let _ = editor.set_geometry_visibility(GeometryVisibility {
+                reference_geometry: false,
+                ..GeometryVisibility::default()
+            });
+            Self(editor)
+        }
+    }
+
+    impl Deref for ConstraintEditor {
+        type Target = super::ConstraintEditor;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl DerefMut for ConstraintEditor {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
+
+    fn native_geometry_policy() -> GeometryInteractionPolicy {
+        GeometryInteractionPolicy {
+            visibility: GeometryVisibility {
+                reference_geometry: false,
+                ..GeometryVisibility::default()
+            },
+            ..GeometryInteractionPolicy::default()
+        }
+    }
 
     fn line_document() -> (SketchDocument, [CurveSpan; 2], [DesignPointId; 4]) {
         let mut document = SketchDocument::new(10.0).expect("document");
@@ -7807,6 +8036,9 @@ mod tests {
         .expect("bound scene");
         let mut coordinator =
             RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        let _ = coordinator
+            .editor_mut()
+            .set_geometry_visibility(native_geometry_policy().visibility);
         coordinator.editor_mut().activate_tool(EditorTool::Line);
         (coordinator, scene, existing)
     }
@@ -9074,7 +9306,9 @@ mod tests {
                                 contact.neighborhood,
                             )),
                         ),
-                        DraftInferenceRelation::PointIdentity { .. }
+                        DraftInferenceRelation::CoincidentWithOrigin
+                        | DraftInferenceRelation::PointOnDatumAxis { .. }
+                        | DraftInferenceRelation::PointIdentity { .. }
                         | DraftInferenceRelation::PointOnCreatedCurve { .. }
                         | DraftInferenceRelation::Horizontal
                         | DraftInferenceRelation::Vertical
@@ -10060,6 +10294,9 @@ mod tests {
         .expect("bound scene");
         let mut coordinator =
             RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        let _ = coordinator
+            .editor_mut()
+            .set_geometry_visibility(native_geometry_policy().visibility);
         coordinator.editor_mut().activate_tool(EditorTool::Line);
         let history = coordinator.history_len();
 
@@ -10157,22 +10394,26 @@ mod tests {
             } if model_points_close(start, [0.0, 1.0])
                 && model_points_close(end, [0.0, 4.0])
         ));
-        assert!(matches!(
-            plan.relations.as_slice(),
-            [
-                InferredRelation::Midpoint {
-                    point: DraftPointSlot::Created { point_index: 0 },
-                    line: DraftSpanSlot::Existing(midpoint_line),
-                },
-                InferredRelation::Perpendicular {
-                    first: DraftSpanSlot::Created {
-                        curve_index: 0,
-                        segment: 0,
+        assert!(
+            matches!(
+                plan.relations.as_slice(),
+                [
+                    InferredRelation::Midpoint {
+                        point: DraftPointSlot::Created { point_index: 0 },
+                        line: DraftSpanSlot::Existing(midpoint_line),
                     },
-                    second: DraftSpanSlot::Existing(normal_line),
-                },
-            ] if *midpoint_line == lines[0] && *normal_line == lines[0]
-        ));
+                    InferredRelation::Perpendicular {
+                        first: DraftSpanSlot::Created {
+                            curve_index: 0,
+                            segment: 0,
+                        },
+                        second: DraftSpanSlot::Existing(normal_line),
+                    },
+                ] if *midpoint_line == lines[0] && *normal_line == lines[0]
+            ),
+            "unexpected midpoint-normal plan: {:?}",
+            plan.relations
+        );
 
         let commit = effects
             .iter()
@@ -11372,6 +11613,7 @@ mod tests {
             editor.set_geometry_visibility(GeometryVisibility {
                 explicit_construction: false,
                 implicit_construction: true,
+                reference_geometry: true,
             }),
             vec![EditorEffect::RestoreComputedFeatureRadius {
                 expected: fixture.input,
@@ -11424,6 +11666,7 @@ mod tests {
                 .set_geometry_visibility(GeometryVisibility {
                     explicit_construction: false,
                     implicit_construction: true,
+                    reference_geometry: true,
                 })
                 .is_empty(),
             "a visibility transition must still cancel before the drag threshold"
@@ -12599,7 +12842,11 @@ mod tests {
             })
             .find(|position| {
                 scene
-                    .hit_test(*position, PickTolerance::default())
+                    .hit_test_with_policy(
+                        *position,
+                        PickTolerance::default(),
+                        native_geometry_policy(),
+                    )
                     .is_none()
                     && scene
                         .annotation_occurrence_hit_test(
@@ -12649,7 +12896,9 @@ mod tests {
             "corridor transit must not count as icon proximity"
         );
         assert!(
-            scene.hit_test(bridge, PickTolerance::default()).is_none(),
+            scene
+                .hit_test_with_policy(bridge, PickTolerance::default(), native_geometry_policy(),)
+                .is_none(),
             "off-leader bridge point must be outside geometry"
         );
         assert_eq!(
@@ -13039,12 +13288,13 @@ mod tests {
         let scene = scene(&document);
         for offset in [11.999, 12.0] {
             let hit = scene
-                .hit_test(
+                .hit_test_with_policy(
                     ScreenPoint {
                         x: 500.0,
                         y: 300.0 + offset,
                     },
                     PickTolerance::default(),
+                    native_geometry_policy(),
                 )
                 .expect("line hit within the inclusive twelve-pixel radius");
             assert_eq!(hit.item, SelectionItem::Curve(spans[0]));
@@ -13053,12 +13303,13 @@ mod tests {
         }
         assert!(
             scene
-                .hit_test(
+                .hit_test_with_policy(
                     ScreenPoint {
                         x: 500.0,
                         y: 312.001,
                     },
                     PickTolerance::default(),
+                    native_geometry_policy(),
                 )
                 .is_none()
         );
@@ -13201,7 +13452,7 @@ mod tests {
                     .hit_test_with_policy(
                         position,
                         PickTolerance::default(),
-                        GeometryInteractionPolicy::default(),
+                        native_geometry_policy(),
                     )
                     .map(|hit| hit.item),
                 Some(expected[0])
@@ -13212,7 +13463,7 @@ mod tests {
                         position,
                         PickTolerance::default(),
                         3,
-                        GeometryInteractionPolicy::default(),
+                        native_geometry_policy(),
                     )
                     .expect("bounded candidates")
                     .into_iter()

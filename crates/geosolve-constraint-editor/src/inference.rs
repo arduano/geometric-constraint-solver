@@ -12,8 +12,8 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch::{
-    ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId, GeometryRole,
-    PreparedSketchInput, SketchDesignIdentity,
+    ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId, DocumentCoordinateAxis,
+    GeometryRole, PreparedSketchInput, SketchDesignIdentity,
 };
 use thiserror::Error;
 
@@ -92,6 +92,14 @@ pub struct DraftInferenceTolerances {
     pub point_exit_pixels: f64,
     pub curve_enter_pixels: f64,
     pub curve_exit_pixels: f64,
+    /// Euclidean screen distance for entering the intrinsic origin datum.
+    pub datum_origin_enter_pixels: f64,
+    /// Euclidean screen distance for retaining the active origin datum.
+    pub datum_origin_exit_pixels: f64,
+    /// Perpendicular screen distance for entering an intrinsic axis datum.
+    pub datum_axis_enter_pixels: f64,
+    /// Perpendicular screen distance for retaining the active axis datum.
+    pub datum_axis_exit_pixels: f64,
     pub direction_enter_radians: f64,
     pub direction_exit_radians: f64,
 }
@@ -103,6 +111,10 @@ impl Default for DraftInferenceTolerances {
             point_exit_pixels: 9.0,
             curve_enter_pixels: 8.0,
             curve_exit_pixels: 12.0,
+            datum_origin_enter_pixels: 6.0,
+            datum_origin_exit_pixels: 9.0,
+            datum_axis_enter_pixels: 4.0,
+            datum_axis_exit_pixels: 7.0,
             direction_enter_radians: 3.0_f64.to_radians(),
             direction_exit_radians: 5.0_f64.to_radians(),
         }
@@ -115,12 +127,20 @@ impl DraftInferenceTolerances {
             && self.point_exit_pixels.is_finite()
             && self.curve_enter_pixels.is_finite()
             && self.curve_exit_pixels.is_finite()
+            && self.datum_origin_enter_pixels.is_finite()
+            && self.datum_origin_exit_pixels.is_finite()
+            && self.datum_axis_enter_pixels.is_finite()
+            && self.datum_axis_exit_pixels.is_finite()
             && self.direction_enter_radians.is_finite()
             && self.direction_exit_radians.is_finite()
             && self.point_enter_pixels >= 0.0
             && self.point_exit_pixels >= self.point_enter_pixels
             && self.curve_enter_pixels >= 0.0
             && self.curve_exit_pixels >= self.curve_enter_pixels
+            && self.datum_origin_enter_pixels >= 0.0
+            && self.datum_origin_exit_pixels >= self.datum_origin_enter_pixels
+            && self.datum_axis_enter_pixels >= 0.0
+            && self.datum_axis_exit_pixels >= self.datum_axis_enter_pixels
             && self.direction_enter_radians >= 0.0
             && self.direction_exit_radians >= self.direction_enter_radians
             && self.direction_exit_radians <= std::f64::consts::FRAC_PI_2
@@ -164,6 +184,10 @@ pub struct DraftInferencePolicy {
     pub point_identity: DraftInferenceBehavior,
     pub point_on_curve: DraftInferenceBehavior,
     pub midpoint: DraftInferenceBehavior,
+    /// Intrinsic sketch-origin inference for persistent point stages.
+    pub datum_origin: DraftInferenceBehavior,
+    /// Intrinsic Cartesian axis inference for persistent point stages.
+    pub datum_axis: DraftInferenceBehavior,
     pub horizontal: DraftInferenceBehavior,
     pub vertical: DraftInferenceBehavior,
     pub parallel: DraftInferenceBehavior,
@@ -187,6 +211,8 @@ impl Default for DraftInferencePolicy {
             point_identity: backed,
             point_on_curve: backed,
             midpoint: backed,
+            datum_origin: backed,
+            datum_axis: backed,
             horizontal: backed,
             vertical: backed,
             parallel: backed,
@@ -802,6 +828,13 @@ pub enum DraftInferenceRelation {
     PointIdentity {
         point: DesignPointId,
     },
+    /// The prospective persistent point is coincident with the intrinsic
+    /// sketch origin. No retained reference object is allocated.
+    CoincidentWithOrigin,
+    /// The prospective persistent point lies on one intrinsic Cartesian axis.
+    PointOnDatumAxis {
+        axis: DocumentCoordinateAxis,
+    },
     PointOnCurve {
         contact: DraftCurveContact,
     },
@@ -848,6 +881,8 @@ pub enum DraftInferenceRelation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DraftInferenceFamily {
     PointIdentity,
+    DatumOrigin,
+    DatumAxis,
     PointOnCurve,
     PointOnCreatedCurve,
     Midpoint,
@@ -915,6 +950,8 @@ pub enum DraftAnchorPriority {
     PointIdentity,
     Midpoint,
     PointOnCurve,
+    DatumOrigin,
+    DatumAxis,
     None,
 }
 
@@ -925,7 +962,9 @@ impl DraftAnchorPriority {
             Self::SemanticCenter => 1,
             Self::Midpoint => 2,
             Self::PointOnCurve => 3,
-            Self::None => 4,
+            Self::DatumOrigin => 4,
+            Self::DatumAxis => 5,
+            Self::None => 6,
         }
     }
 }
@@ -1055,6 +1094,8 @@ impl DraftInferenceCandidate {
                 .all(|relation| match relation {
                     DraftInferenceRelation::PointOnCurve { contact } => contact.is_valid(),
                     DraftInferenceRelation::PointIdentity { .. }
+                    | DraftInferenceRelation::CoincidentWithOrigin
+                    | DraftInferenceRelation::PointOnDatumAxis { .. }
                     | DraftInferenceRelation::PointOnCreatedCurve { .. }
                     | DraftInferenceRelation::Midpoint { .. }
                     | DraftInferenceRelation::Horizontal
@@ -1153,6 +1194,31 @@ enum PointTrackingAxis {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum DatumKey {
+    Origin,
+    XAxis,
+    YAxis,
+}
+
+impl DatumKey {
+    const fn coordinate_axis(self) -> Option<DocumentCoordinateAxis> {
+        match self {
+            Self::Origin => None,
+            Self::XAxis => Some(DocumentCoordinateAxis::X),
+            Self::YAxis => Some(DocumentCoordinateAxis::Y),
+        }
+    }
+
+    const fn tracking_axis(self) -> Option<PointTrackingAxis> {
+        match self {
+            Self::Origin => None,
+            Self::XAxis => Some(PointTrackingAxis::Horizontal),
+            Self::YAxis => Some(PointTrackingAxis::Vertical),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct PointTrackingKey {
     anchor: AnchorKey,
     axis: PointTrackingAxis,
@@ -1161,6 +1227,7 @@ struct PointTrackingKey {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct CandidateKey {
     anchor: Option<AnchorKey>,
+    datum: Option<DatumKey>,
     point_tracking: Option<PointTrackingKey>,
     secondary_point_tracking: Option<PointTrackingKey>,
     direction: Option<DirectionKey>,
@@ -1209,6 +1276,14 @@ struct PointTrackingWork {
     angular_error: f64,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct DatumWork {
+    key: DatumKey,
+    behavior: DraftInferenceBehavior,
+    adjusted_position: [f64; 2],
+    distance_pixels: f64,
+}
+
 #[derive(Clone, Debug)]
 struct CandidateWork {
     key: CandidateKey,
@@ -1222,6 +1297,7 @@ pub struct DraftInferenceEngine {
     frame_stamp: Option<FrameStamp>,
     remembered_references: Vec<DraftReferenceAnchor>,
     active_anchor: Option<AnchorKey>,
+    active_datum: Option<DatumKey>,
     active_direction: Option<DirectionKey>,
     active_concentric: Option<CurveId>,
     active_point_tracking: BTreeSet<PointTrackingKey>,
@@ -1236,6 +1312,7 @@ impl Default for DraftInferenceEngine {
             frame_stamp: None,
             remembered_references: Vec::new(),
             active_anchor: None,
+            active_datum: None,
             active_direction: None,
             active_concentric: None,
             active_point_tracking: BTreeSet::new(),
@@ -1311,6 +1388,7 @@ impl DraftInferenceEngine {
     pub fn clear_stage(&mut self) {
         self.remembered_references.clear();
         self.active_anchor = None;
+        self.active_datum = None;
         self.active_direction = None;
         self.active_concentric = None;
         self.active_point_tracking.clear();
@@ -1501,6 +1579,20 @@ impl DraftInferenceEngine {
         }
 
         if generation_complete
+            && !self.generate_datum_candidates(
+                frame,
+                raw_model,
+                raw_screen,
+                retained_direction,
+                &mut standalone_guides,
+                &mut works,
+                self.policy.limits.max_candidates,
+            )
+        {
+            generation_complete = false;
+        }
+
+        if generation_complete
             && frame.sample.subject.is_point_operand()
             && !self.generate_point_tracking_candidates(
                 frame,
@@ -1516,6 +1608,7 @@ impl DraftInferenceEngine {
         }
         if !generation_complete {
             self.active_anchor = None;
+            self.active_datum = None;
             self.active_direction = None;
             self.active_concentric = None;
             self.active_point_tracking.clear();
@@ -1607,6 +1700,7 @@ impl DraftInferenceEngine {
                 .collect();
             if tied.len() > 1 {
                 self.active_anchor = None;
+                self.active_datum = None;
                 self.active_direction = None;
                 self.active_concentric = None;
                 let mut guides = standalone_guides;
@@ -1630,6 +1724,7 @@ impl DraftInferenceEngine {
         let selected_key = works[selected_index].key;
         let selected = &works[selected_index].candidate;
         self.active_anchor = selected_key.anchor;
+        self.active_datum = selected_key.datum;
         self.active_direction = selected_key.direction;
         self.active_concentric = match selected_key.anchor {
             Some(AnchorKey::SemanticCenter(center)) => Some(center),
@@ -1783,6 +1878,7 @@ impl DraftInferenceEngine {
                 CandidateWork {
                     key: CandidateKey {
                         anchor: Some(AnchorKey::SemanticCenter(center.curve)),
+                        datum: None,
                         point_tracking: None,
                         secondary_point_tracking: None,
                         direction: None,
@@ -1902,6 +1998,7 @@ impl DraftInferenceEngine {
     ) -> CandidateWork {
         let key = CandidateKey {
             anchor: anchor.map(|work| work.key),
+            datum: None,
             point_tracking: None,
             secondary_point_tracking: None,
             direction: direction.map(|work| work.key),
@@ -2123,6 +2220,315 @@ impl DraftInferenceEngine {
 
     #[allow(
         clippy::too_many_arguments,
+        reason = "bounded intrinsic-datum generation keeps policy, latch, and candidate publication explicit"
+    )]
+    fn generate_datum_candidates(
+        &mut self,
+        frame: &DraftInferenceFrame,
+        raw_model: [f64; 2],
+        raw_screen: ScreenPoint,
+        retained_direction: Option<DirectionKey>,
+        standalone_guides: &mut Vec<DraftGuide>,
+        works: &mut Vec<CandidateWork>,
+        candidate_limit: usize,
+    ) -> bool {
+        if !frame.sample.subject.is_point_operand()
+            || !frame.geometry_policy.visibility.reference_geometry
+        {
+            self.active_datum = None;
+            return true;
+        }
+
+        if let Some(complete) = self.generate_origin_datum_candidate(
+            frame,
+            raw_model,
+            raw_screen,
+            standalone_guides,
+            works,
+            candidate_limit,
+        ) {
+            return complete;
+        }
+
+        let origin_screen = frame.viewport.model_to_screen([0.0, 0.0]);
+        let axis_behavior = self.policy.datum_axis;
+        if !axis_behavior.show_guides && !axis_behavior.has_effect() {
+            self.active_datum = None;
+            return true;
+        }
+        let directions = self.direction_works(frame, raw_model, retained_direction);
+        let mut datums = [
+            DatumWork {
+                key: DatumKey::XAxis,
+                behavior: axis_behavior,
+                adjusted_position: [raw_model[0], 0.0],
+                distance_pixels: (raw_screen.y - origin_screen.y).abs(),
+            },
+            DatumWork {
+                key: DatumKey::YAxis,
+                behavior: axis_behavior,
+                adjusted_position: [0.0, raw_model[1]],
+                distance_pixels: (raw_screen.x - origin_screen.x).abs(),
+            },
+        ]
+        .into_iter()
+        .filter(|datum| {
+            let threshold = if self.active_datum == Some(datum.key) {
+                self.policy.tolerances.datum_axis_exit_pixels
+            } else {
+                self.policy.tolerances.datum_axis_enter_pixels
+            };
+            datum.distance_pixels <= threshold
+                && !(datum.behavior.adjust_coordinates
+                    && datum.behavior.persist_constraint
+                    && datum.key.tracking_axis().is_some_and(|axis| {
+                        world_span_direction_supersedes_point_tracking(axis, &directions)
+                    }))
+        })
+        .collect::<Vec<_>>();
+
+        // An already published axis remains the sole datum owner through its
+        // wider exit band. A same-coordinate live span can supersede it above;
+        // in that case another axis may enter normally in this sample.
+        if self
+            .active_datum
+            .is_some_and(|active| datums.iter().any(|datum| datum.key == active))
+        {
+            let active = self.active_datum;
+            datums.retain(|datum| Some(datum.key) == active);
+        }
+        self.active_datum = (datums.len() == 1).then(|| datums[0].key);
+
+        if !axis_behavior.has_effect() {
+            if axis_behavior.show_guides {
+                standalone_guides.extend(
+                    datums
+                        .into_iter()
+                        .map(|datum| datum_guide(None, 0, datum, datum.adjusted_position)),
+                );
+            }
+            return true;
+        }
+
+        Self::publish_datum_axis_candidates(
+            frame,
+            raw_model,
+            raw_screen,
+            datums,
+            &directions,
+            works,
+            candidate_limit,
+        )
+    }
+
+    fn generate_origin_datum_candidate(
+        &mut self,
+        frame: &DraftInferenceFrame,
+        raw_model: [f64; 2],
+        raw_screen: ScreenPoint,
+        standalone_guides: &mut Vec<DraftGuide>,
+        works: &mut Vec<CandidateWork>,
+        candidate_limit: usize,
+    ) -> Option<bool> {
+        let origin_screen = frame.viewport.model_to_screen([0.0, 0.0]);
+        let behavior = self.policy.datum_origin;
+        let distance_pixels = screen_distance(raw_screen, origin_screen);
+        let threshold = if self.active_datum == Some(DatumKey::Origin) {
+            self.policy.tolerances.datum_origin_exit_pixels
+        } else {
+            self.policy.tolerances.datum_origin_enter_pixels
+        };
+        if (!behavior.show_guides && !behavior.has_effect()) || distance_pixels > threshold {
+            return None;
+        }
+
+        let datum = DatumWork {
+            key: DatumKey::Origin,
+            behavior,
+            adjusted_position: [0.0, 0.0],
+            distance_pixels,
+        };
+        self.active_datum = Some(DatumKey::Origin);
+        if behavior.has_effect() {
+            return Some(push_candidate_bounded(
+                works,
+                Self::build_datum_candidate(
+                    frame,
+                    raw_model,
+                    raw_screen,
+                    datum,
+                    None,
+                    datum.adjusted_position,
+                ),
+                candidate_limit,
+                frame.sample.subject,
+            ));
+        }
+        standalone_guides.push(datum_guide(None, 0, datum, datum.adjusted_position));
+        Some(true)
+    }
+
+    fn publish_datum_axis_candidates(
+        frame: &DraftInferenceFrame,
+        raw_model: [f64; 2],
+        raw_screen: ScreenPoint,
+        datums: Vec<DatumWork>,
+        directions: &[DirectionWork],
+        works: &mut Vec<CandidateWork>,
+        candidate_limit: usize,
+    ) -> bool {
+        let composed_directions = directions
+            .iter()
+            .copied()
+            .filter(|direction| {
+                datums
+                    .iter()
+                    .any(|datum| datum_direction_adjustment(frame, *datum, *direction).is_some())
+            })
+            .map(|direction| direction.key)
+            .collect::<BTreeSet<_>>();
+        works.retain(|work| {
+            work.key.anchor.is_some()
+                || work.key.datum.is_some()
+                || work.key.point_tracking.is_some()
+                || work
+                    .key
+                    .direction
+                    .is_none_or(|direction| !composed_directions.contains(&direction))
+        });
+
+        for datum in datums {
+            let mut composed = false;
+            for direction in directions.iter().copied() {
+                let Some(adjusted) = datum_direction_adjustment(frame, datum, direction) else {
+                    continue;
+                };
+                composed = true;
+                if !push_candidate_bounded(
+                    works,
+                    Self::build_datum_candidate(
+                        frame,
+                        raw_model,
+                        raw_screen,
+                        datum,
+                        Some(direction),
+                        adjusted,
+                    ),
+                    candidate_limit,
+                    frame.sample.subject,
+                ) {
+                    return false;
+                }
+            }
+            if !composed
+                && !push_candidate_bounded(
+                    works,
+                    Self::build_datum_candidate(
+                        frame,
+                        raw_model,
+                        raw_screen,
+                        datum,
+                        None,
+                        if datum.behavior.adjust_coordinates {
+                            datum.adjusted_position
+                        } else {
+                            raw_model
+                        },
+                    ),
+                    candidate_limit,
+                    frame.sample.subject,
+                )
+            {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn build_datum_candidate(
+        frame: &DraftInferenceFrame,
+        raw_model: [f64; 2],
+        raw_screen: ScreenPoint,
+        datum: DatumWork,
+        direction: Option<DirectionWork>,
+        adjusted: [f64; 2],
+    ) -> CandidateWork {
+        let mut relations = Vec::new();
+        let mut references = Vec::new();
+        let mut guides = Vec::new();
+        if datum.behavior.persist_constraint {
+            relations.push(match datum.key.coordinate_axis() {
+                None => DraftInferenceRelation::CoincidentWithOrigin,
+                Some(axis) => DraftInferenceRelation::PointOnDatumAxis { axis },
+            });
+        }
+        if datum.behavior.show_guides {
+            guides.push(datum_guide(None, 0, datum, adjusted));
+        }
+        if let Some(direction) = direction {
+            if direction.behavior.persist_constraint {
+                relations.push(direction_relation(direction.key));
+            }
+            if let Some(reference) = direction.reference {
+                references.push(reference);
+            }
+            if direction.behavior.show_guides {
+                let mut guide = direction_guide(
+                    None,
+                    u32::try_from(guides.len())
+                        .expect("datum bundle guide count is structurally bounded"),
+                    frame.sample.span_start,
+                    direction,
+                );
+                guide.geometry = DraftGuideGeometry::Segment {
+                    start: frame
+                        .sample
+                        .span_start
+                        .expect("composed datum direction requires a live span start"),
+                    end: adjusted,
+                };
+                guides.push(guide);
+            }
+        }
+        let persistent_relation_count = u8::try_from(relations.len()).unwrap_or(u8::MAX);
+        CandidateWork {
+            key: CandidateKey {
+                anchor: None,
+                datum: Some(datum.key),
+                point_tracking: None,
+                secondary_point_tracking: None,
+                direction: direction.map(|work| work.key),
+            },
+            candidate: DraftInferenceCandidate {
+                id: DraftInferenceCandidateId(0),
+                raw_model_position: raw_model,
+                adjusted_model_position: adjusted,
+                raw_screen_position: raw_screen,
+                adjusted_screen_position: frame.viewport.model_to_screen(adjusted),
+                relations,
+                references,
+                guides,
+                ranking: DraftInferenceRankingEvidence {
+                    constraint_backed: persistent_relation_count > 0,
+                    persistent_relation_count,
+                    anchor_priority: match datum.key {
+                        DatumKey::Origin => DraftAnchorPriority::DatumOrigin,
+                        DatumKey::XAxis | DatumKey::YAxis => DraftAnchorPriority::DatumAxis,
+                    },
+                    direction_priority: direction
+                        .map_or(DraftDirectionPriority::None, |work| work.priority),
+                    positional_geometry_role_priority: 2,
+                    directional_geometry_role_priority: direction
+                        .map_or(2, |work| work.role_priority),
+                    distance_pixels: datum.distance_pixels,
+                    angular_error_radians: direction.map_or(0.0, |work| work.angular_error),
+                },
+            },
+        }
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
         clippy::too_many_lines,
         reason = "one bounded stored-point/native-midpoint traversal keeps latch, guide, and candidate state explicit"
     )]
@@ -2322,6 +2728,7 @@ impl DraftInferenceEngine {
             .collect::<BTreeSet<_>>();
         works.retain(|work| {
             work.key.anchor.is_some()
+                || work.key.datum.is_some()
                 || work.key.point_tracking.is_some()
                 || work
                     .key
@@ -2478,6 +2885,7 @@ impl DraftInferenceEngine {
         CandidateWork {
             key: CandidateKey {
                 anchor: None,
+                datum: None,
                 point_tracking: Some(tracking.key),
                 secondary_point_tracking: secondary_tracking.map(|work| work.key),
                 direction: direction.map(|work| work.key),
@@ -2635,6 +3043,8 @@ impl DraftInferenceEngine {
     const fn behavior(&self, family: DraftInferenceFamily) -> DraftInferenceBehavior {
         match family {
             DraftInferenceFamily::PointIdentity => self.policy.point_identity,
+            DraftInferenceFamily::DatumOrigin => self.policy.datum_origin,
+            DraftInferenceFamily::DatumAxis => self.policy.datum_axis,
             DraftInferenceFamily::PointOnCurve | DraftInferenceFamily::PointOnCreatedCurve => {
                 self.policy.point_on_curve
             }
@@ -2661,6 +3071,8 @@ impl DraftInferenceEngine {
             DraftInferenceFamily::PointOnCurve => self.policy.tolerances.curve_enter_pixels,
             DraftInferenceFamily::Horizontal
             | DraftInferenceFamily::Vertical
+            | DraftInferenceFamily::DatumOrigin
+            | DraftInferenceFamily::DatumAxis
             | DraftInferenceFamily::Parallel
             | DraftInferenceFamily::Perpendicular
             | DraftInferenceFamily::HorizontalPoints
@@ -2681,6 +3093,8 @@ impl DraftInferenceEngine {
             DraftInferenceFamily::PointOnCurve => self.policy.tolerances.curve_exit_pixels,
             DraftInferenceFamily::Horizontal
             | DraftInferenceFamily::Vertical
+            | DraftInferenceFamily::DatumOrigin
+            | DraftInferenceFamily::DatumAxis
             | DraftInferenceFamily::Parallel
             | DraftInferenceFamily::Perpendicular
             | DraftInferenceFamily::HorizontalPoints
@@ -2864,6 +3278,27 @@ fn world_span_direction_supersedes_point_tracking(
     })
 }
 
+fn datum_direction_adjustment(
+    frame: &DraftInferenceFrame,
+    datum: DatumWork,
+    direction: DirectionWork,
+) -> Option<[f64; 2]> {
+    if !datum.behavior.adjust_coordinates
+        || !datum.behavior.persist_constraint
+        || !direction.behavior.adjust_coordinates
+        || !direction.behavior.persist_constraint
+    {
+        return None;
+    }
+    let start = frame.sample.span_start?;
+    match (datum.key.tracking_axis()?, direction.cartesian_axis?) {
+        (PointTrackingAxis::Horizontal, PointTrackingAxis::Vertical) => Some([start[0], 0.0]),
+        (PointTrackingAxis::Vertical, PointTrackingAxis::Horizontal) => Some([0.0, start[1]]),
+        (PointTrackingAxis::Horizontal, PointTrackingAxis::Horizontal)
+        | (PointTrackingAxis::Vertical, PointTrackingAxis::Vertical) => None,
+    }
+}
+
 fn point_tracking_direction_adjustment(
     frame: &DraftInferenceFrame,
     tracking: &PointTrackingWork,
@@ -2905,6 +3340,32 @@ fn anchor_guide(
             position: work.anchor.model_position(),
         },
         reference: Some(work.anchor),
+    }
+}
+
+fn datum_guide(
+    candidate: Option<DraftInferenceCandidateId>,
+    ordinal: u32,
+    work: DatumWork,
+    adjusted: [f64; 2],
+) -> DraftGuide {
+    DraftGuide {
+        id: DraftGuideId { candidate, ordinal },
+        family: match work.key {
+            DatumKey::Origin => DraftInferenceFamily::DatumOrigin,
+            DatumKey::XAxis | DatumKey::YAxis => DraftInferenceFamily::DatumAxis,
+        },
+        classification: work.behavior.guide_classification(),
+        geometry: match work.key {
+            DatumKey::Origin => DraftGuideGeometry::Point {
+                position: [0.0, 0.0],
+            },
+            DatumKey::XAxis | DatumKey::YAxis => DraftGuideGeometry::Segment {
+                start: [0.0, 0.0],
+                end: adjusted,
+            },
+        },
+        reference: None,
     }
 }
 
@@ -3260,12 +3721,16 @@ mod tests {
         span_start: Option<[f64; 2]>,
         anchors: Vec<DraftReferenceAnchor>,
     ) -> DraftInferenceFrame {
+        let mut geometry_policy = GeometryInteractionPolicy::default();
+        // Legacy inference tests isolate native geometry semantics. M74 datum
+        // tests opt reference geometry in explicitly through `datum_frame`.
+        geometry_policy.visibility.reference_geometry = false;
         DraftInferenceFrame {
             design_identity: identity(),
             accepted_revision: 1,
             prepared_input: None,
             viewport,
-            geometry_policy: GeometryInteractionPolicy::default(),
+            geometry_policy,
             sample: DraftInferenceSample {
                 raw_screen_position: screen,
                 subject,
@@ -3274,6 +3739,33 @@ mod tests {
             anchors,
             semantic_centers: Vec::new(),
         }
+    }
+
+    fn datum_frame(
+        viewport: Viewport,
+        screen: ScreenPoint,
+        span_start: Option<[f64; 2]>,
+        anchors: Vec<DraftReferenceAnchor>,
+    ) -> DraftInferenceFrame {
+        datum_frame_for_subject(
+            viewport,
+            screen,
+            DraftInferenceSubject::PointOperand,
+            span_start,
+            anchors,
+        )
+    }
+
+    fn datum_frame_for_subject(
+        viewport: Viewport,
+        screen: ScreenPoint,
+        subject: DraftInferenceSubject,
+        span_start: Option<[f64; 2]>,
+        anchors: Vec<DraftReferenceAnchor>,
+    ) -> DraftInferenceFrame {
+        let mut frame = frame_for_subject(viewport, screen, subject, span_start, anchors);
+        frame.geometry_policy.visibility.reference_geometry = true;
+        frame
     }
 
     fn point_anchor(value: u128, position: [f64; 2]) -> DraftReferenceAnchor {
@@ -3386,6 +3878,10 @@ mod tests {
         assert_eq!(policy.tolerances.point_exit_pixels, 9.0);
         assert_eq!(policy.tolerances.curve_enter_pixels, 8.0);
         assert_eq!(policy.tolerances.curve_exit_pixels, 12.0);
+        assert_eq!(policy.tolerances.datum_origin_enter_pixels, 6.0);
+        assert_eq!(policy.tolerances.datum_origin_exit_pixels, 9.0);
+        assert_eq!(policy.tolerances.datum_axis_enter_pixels, 4.0);
+        assert_eq!(policy.tolerances.datum_axis_exit_pixels, 7.0);
         assert_eq!(
             policy.tolerances.direction_enter_radians.to_bits(),
             3.0_f64.to_radians().to_bits()
@@ -3448,6 +3944,331 @@ mod tests {
                     .expect_err("configured resource limits must remain in bounds"),
                 DraftInferenceError::InvalidPolicy
             );
+        }
+    }
+
+    #[test]
+    fn datum_origin_uses_point_hysteresis_and_suppresses_both_axis_candidates() {
+        let view = viewport(50.0);
+        let resolve = |engine: &mut DraftInferenceEngine, offset: [f64; 2]| {
+            let origin = view.model_to_screen([0.0, 0.0]);
+            engine
+                .resolve(
+                    &datum_frame(
+                        view,
+                        ScreenPoint {
+                            x: origin.x + offset[0],
+                            y: origin.y + offset[1],
+                        },
+                        None,
+                        Vec::new(),
+                    ),
+                    DraftInferenceInput::default(),
+                )
+                .expect("datum-origin resolution")
+        };
+
+        let mut engine = DraftInferenceEngine::default();
+        let entered = resolve(&mut engine, [3.0, 3.0]);
+        assert_eq!(entered.candidates.len(), 1);
+        let candidate = resolved_candidate(&entered);
+        assert_eq!(
+            candidate.relations,
+            vec![DraftInferenceRelation::CoincidentWithOrigin]
+        );
+        assert_eq!(candidate.adjusted_model_position, [0.0, 0.0]);
+        assert_eq!(
+            candidate.ranking.anchor_priority,
+            DraftAnchorPriority::DatumOrigin
+        );
+        assert!(candidate.references.is_empty());
+        assert!(candidate.guides.iter().all(|guide| {
+            guide.family == DraftInferenceFamily::DatumOrigin
+                && guide.geometry
+                    == DraftGuideGeometry::Point {
+                        position: [0.0, 0.0],
+                    }
+        }));
+        assert_eq!(engine.active_datum, Some(DatumKey::Origin));
+
+        let retained = resolve(&mut engine, [9.0, 0.0]);
+        assert_eq!(
+            resolved_candidate(&retained).relations,
+            vec![DraftInferenceRelation::CoincidentWithOrigin]
+        );
+        let mut fresh = DraftInferenceEngine::default();
+        assert_eq!(
+            resolved_candidate(&resolve(&mut fresh, [9.0, 0.0])).relations,
+            vec![DraftInferenceRelation::PointOnDatumAxis {
+                axis: DocumentCoordinateAxis::X,
+            }]
+        );
+    }
+
+    #[test]
+    fn datum_axes_use_perpendicular_screen_hysteresis_and_project_symmetrically() {
+        let view = viewport(50.0);
+        for (raw, expected, axis, key) in [
+            (
+                [4.0, 4.0 / 50.0],
+                [4.0, 0.0],
+                DocumentCoordinateAxis::X,
+                DatumKey::XAxis,
+            ),
+            (
+                [4.0 / 50.0, 4.0],
+                [0.0, 4.0],
+                DocumentCoordinateAxis::Y,
+                DatumKey::YAxis,
+            ),
+        ] {
+            let mut engine = DraftInferenceEngine::default();
+            let entered = engine
+                .resolve(
+                    &datum_frame(view, view.model_to_screen(raw), None, Vec::new()),
+                    DraftInferenceInput::default(),
+                )
+                .expect("datum-axis entry");
+            let candidate = resolved_candidate(&entered);
+            assert_eq!(
+                candidate.relations,
+                vec![DraftInferenceRelation::PointOnDatumAxis { axis }]
+            );
+            assert_eq!(candidate.adjusted_model_position, expected);
+            assert_eq!(
+                candidate.ranking.anchor_priority,
+                DraftAnchorPriority::DatumAxis
+            );
+            assert!(candidate.guides.iter().any(|guide| {
+                guide.family == DraftInferenceFamily::DatumAxis
+                    && guide.geometry
+                        == DraftGuideGeometry::Segment {
+                            start: [0.0, 0.0],
+                            end: expected,
+                        }
+            }));
+            assert_eq!(engine.active_datum, Some(key));
+
+            let retained_raw = match key {
+                DatumKey::XAxis => [4.0, 7.0 / 50.0],
+                DatumKey::YAxis => [7.0 / 50.0, 4.0],
+                DatumKey::Origin => unreachable!(),
+            };
+            assert!(matches!(
+                engine
+                    .resolve(
+                        &datum_frame(view, view.model_to_screen(retained_raw), None, Vec::new()),
+                        DraftInferenceInput::default(),
+                    )
+                    .expect("datum-axis exit boundary")
+                    .status,
+                DraftInferenceStatus::Resolved { .. }
+            ));
+            let mut fresh = DraftInferenceEngine::default();
+            assert_eq!(
+                fresh
+                    .resolve(
+                        &datum_frame(view, view.model_to_screen(retained_raw), None, Vec::new()),
+                        DraftInferenceInput::default(),
+                    )
+                    .expect("unlatched datum-axis exit boundary")
+                    .status,
+                DraftInferenceStatus::None
+            );
+        }
+    }
+
+    #[test]
+    fn native_point_anchor_outranks_datum_and_datum_acquires_no_wake_memory() {
+        let view = viewport(50.0);
+        let target = [4.0, 0.0];
+        let anchor = point_anchor(700, target);
+        let mut engine = DraftInferenceEngine::default();
+        let resolution = engine
+            .resolve(
+                &datum_frame(view, view.model_to_screen(target), None, vec![anchor]),
+                DraftInferenceInput::default(),
+            )
+            .expect("native point over datum axis");
+        assert_eq!(
+            resolved_candidate(&resolution).relations,
+            vec![DraftInferenceRelation::PointIdentity {
+                point: point_id(700),
+            }]
+        );
+        assert!(resolution.candidates.iter().any(|candidate| {
+            candidate.relations
+                == vec![DraftInferenceRelation::PointOnDatumAxis {
+                    axis: DocumentCoordinateAxis::X,
+                }]
+        }));
+        assert_eq!(engine.active_datum, None);
+
+        let mut datum_only = DraftInferenceEngine::default();
+        datum_only
+            .resolve(
+                &datum_frame(view, view.model_to_screen(target), None, Vec::new()),
+                DraftInferenceInput::default(),
+            )
+            .expect("datum-only axis");
+        assert!(datum_only.remembered_references().is_empty());
+    }
+
+    #[test]
+    fn datum_inference_is_point_stage_only_and_shift_suppression_clears_its_latch() {
+        let view = viewport(50.0);
+        let raw = [4.0, 0.0];
+        let mut circle = DraftInferenceEngine::default();
+        assert_eq!(
+            circle
+                .resolve(
+                    &datum_frame_for_subject(
+                        view,
+                        view.model_to_screen(raw),
+                        DraftInferenceSubject::CircleCircumference,
+                        None,
+                        Vec::new(),
+                    ),
+                    DraftInferenceInput::default(),
+                )
+                .expect("circle circumference excludes datums")
+                .status,
+            DraftInferenceStatus::None
+        );
+        assert_eq!(circle.active_datum, None);
+
+        let mut hidden_frame = datum_frame(view, view.model_to_screen(raw), None, Vec::new());
+        hidden_frame.geometry_policy.visibility.reference_geometry = false;
+        let mut hidden = DraftInferenceEngine::default();
+        assert_eq!(
+            hidden
+                .resolve(&hidden_frame, DraftInferenceInput::default())
+                .expect("hidden reference geometry excludes datums")
+                .status,
+            DraftInferenceStatus::None
+        );
+        assert_eq!(hidden.active_datum, None);
+
+        let mut centered = DraftInferenceEngine::default();
+        assert!(matches!(
+            centered
+                .resolve(
+                    &datum_frame_for_subject(
+                        view,
+                        view.model_to_screen(raw),
+                        DraftInferenceSubject::CenteredPointOperand {
+                            prospective_curve_index: 0,
+                        },
+                        None,
+                        Vec::new(),
+                    ),
+                    DraftInferenceInput::default(),
+                )
+                .expect("center point admits datum")
+                .status,
+            DraftInferenceStatus::Resolved { .. }
+        ));
+        assert_eq!(centered.active_datum, Some(DatumKey::XAxis));
+
+        let suppressed = centered
+            .resolve(
+                &datum_frame_for_subject(
+                    view,
+                    view.model_to_screen(raw),
+                    DraftInferenceSubject::CenteredPointOperand {
+                        prospective_curve_index: 0,
+                    },
+                    None,
+                    Vec::new(),
+                ),
+                DraftInferenceInput {
+                    suppressed: true,
+                    preferred_candidate: None,
+                },
+            )
+            .expect("shift suppression");
+        assert_eq!(suppressed.status, DraftInferenceStatus::Suppressed);
+        assert!(suppressed.candidates.is_empty());
+        assert!(suppressed.guides.is_empty());
+        assert_eq!(centered.active_datum, None);
+        assert!(centered.remembered_references().is_empty());
+    }
+
+    #[test]
+    fn live_world_direction_supersedes_same_coordinate_datum_axis() {
+        let view = viewport(50.0);
+        for (start, raw, relation, suppressed_axis) in [
+            (
+                [-4.0, 0.0],
+                [4.0, 0.04],
+                DraftInferenceRelation::Horizontal,
+                DocumentCoordinateAxis::X,
+            ),
+            (
+                [0.0, -4.0],
+                [0.04, 4.0],
+                DraftInferenceRelation::Vertical,
+                DocumentCoordinateAxis::Y,
+            ),
+        ] {
+            let mut engine = DraftInferenceEngine::default();
+            let resolution = engine
+                .resolve(
+                    &datum_frame(view, view.model_to_screen(raw), Some(start), Vec::new()),
+                    DraftInferenceInput::default(),
+                )
+                .expect("same-coordinate datum precedence");
+            assert_eq!(resolution.candidates.len(), 1);
+            assert_eq!(resolved_candidate(&resolution).relations, vec![relation]);
+            assert!(resolution.candidates.iter().all(|candidate| {
+                !candidate
+                    .relations
+                    .contains(&DraftInferenceRelation::PointOnDatumAxis {
+                        axis: suppressed_axis,
+                    })
+            }));
+            assert_eq!(engine.active_datum, None);
+        }
+    }
+
+    #[test]
+    fn datum_axis_composes_with_orthogonal_live_world_direction() {
+        let view = viewport(50.0);
+        for (start, raw, adjusted, axis, direction) in [
+            (
+                [2.0, -4.0],
+                [2.04, 0.04],
+                [2.0, 0.0],
+                DocumentCoordinateAxis::X,
+                DraftInferenceRelation::Vertical,
+            ),
+            (
+                [-4.0, 2.0],
+                [0.04, 2.04],
+                [0.0, 2.0],
+                DocumentCoordinateAxis::Y,
+                DraftInferenceRelation::Horizontal,
+            ),
+        ] {
+            let mut engine = DraftInferenceEngine::default();
+            let resolution = engine
+                .resolve(
+                    &datum_frame(view, view.model_to_screen(raw), Some(start), Vec::new()),
+                    DraftInferenceInput::default(),
+                )
+                .expect("orthogonal datum-direction bundle");
+            assert_eq!(resolution.candidates.len(), 1);
+            let candidate = resolved_candidate(&resolution);
+            assert_eq!(
+                candidate.relations,
+                vec![DraftInferenceRelation::PointOnDatumAxis { axis }, direction,]
+            );
+            assert_eq!(candidate.adjusted_model_position, adjusted);
+            assert_eq!(candidate.ranking.persistent_relation_count, 2);
+            assert_eq!(candidate.guides.len(), 2);
+            assert!(candidate.guides.iter().all(|guide| {
+                guide.classification == DraftGuideClassification::ConstraintBacked
+            }));
         }
     }
 
@@ -6425,6 +7246,7 @@ mod tests {
         policy.limits.max_scene_anchors = 3;
         let mut engine = DraftInferenceEngine::new(policy).expect("bounded engine");
         input.geometry_policy = GeometryInteractionPolicy::default();
+        input.geometry_policy.visibility.reference_geometry = false;
         let limited = engine
             .resolve(&input, DraftInferenceInput::default())
             .expect("distinct-center overflow");
@@ -6834,6 +7656,7 @@ mod tests {
         let target = [0.0, 0.0];
         let retained_key = CandidateKey {
             anchor: Some(AnchorKey::Point(point_id(105))),
+            datum: None,
             point_tracking: None,
             secondary_point_tracking: None,
             direction: None,

@@ -10,9 +10,9 @@
 
 use geosolve_sketch::{
     ContactDomain, ContactId, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
-    DocumentCenterRef, DocumentConstraintDefinition, DocumentConstraintId, DocumentDirectionSense,
-    DocumentError, DocumentLineSupportRef, DocumentSourceId, GeometryRole, OperationCheckpoint,
-    OperationController, OperationWorkCounter, SketchDocument,
+    DocumentCenterRef, DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
+    DocumentDirectionSense, DocumentError, DocumentLineSupportRef, DocumentSourceId, GeometryRole,
+    OperationCheckpoint, OperationController, OperationWorkCounter, SketchDocument,
 };
 
 use crate::{ConstructionProposal, ConstructionResult};
@@ -78,6 +78,13 @@ pub struct DraftContactDescriptor {
 /// therefore a history-neutral no-op and emits no construction plan.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum InferredRelation {
+    CoincidentWithOrigin {
+        point: DraftPointSlot,
+    },
+    PointOnDatumAxis {
+        point: DraftPointSlot,
+        axis: DocumentCoordinateAxis,
+    },
     PointOnCurve {
         point: DraftPointSlot,
         contact: DraftContactDescriptor,
@@ -281,22 +288,21 @@ impl InferredRelation {
     ) -> Result<(DocumentConstraintDefinition, Option<ContactId>), DocumentError> {
         let label = || format!("auto point-on-curve contact {}", relation_index + 1);
         Ok(match self {
+            Self::CoincidentWithOrigin { point } => (
+                DocumentConstraintDefinition::CoincidentWithOrigin {
+                    point: point.resolve(document, construction)?,
+                },
+                None,
+            ),
+            Self::PointOnDatumAxis { point, axis } => (
+                DocumentConstraintDefinition::PointOnDatumAxis {
+                    point: point.resolve(document, construction)?,
+                    axis,
+                },
+                None,
+            ),
             Self::PointOnCurve { point, contact } => {
-                let point = point.resolve(document, construction)?;
-                let span = contact.span.resolve(document, construction)?;
-                let contact = document.add_curve_contact_with_domain(
-                    label(),
-                    span,
-                    contact.domain,
-                    contact.parameter,
-                    contact.winding,
-                    contact.neighborhood,
-                    None,
-                )?;
-                (
-                    DocumentConstraintDefinition::PointOnCurve { point, contact },
-                    Some(contact),
-                )
+                resolve_point_on_curve(document, construction, point, contact, label())?
             }
             Self::Midpoint { point, line } => (
                 DocumentConstraintDefinition::Midpoint {
@@ -382,6 +388,8 @@ impl InferredRelation {
 
     const fn label(self) -> &'static str {
         match self {
+            Self::CoincidentWithOrigin { .. } => "auto coincident with origin",
+            Self::PointOnDatumAxis { .. } => "auto point on datum axis",
             Self::PointOnCurve { .. } => "auto point on curve",
             Self::Midpoint { .. } => "auto midpoint",
             Self::Horizontal { .. } => "auto horizontal",
@@ -396,6 +404,30 @@ impl InferredRelation {
             Self::Perpendicular { .. } => "auto perpendicular",
         }
     }
+}
+
+fn resolve_point_on_curve(
+    document: &mut SketchDocument,
+    construction: &ConstructionResult,
+    point: DraftPointSlot,
+    contact: DraftContactDescriptor,
+    label: String,
+) -> Result<(DocumentConstraintDefinition, Option<ContactId>), DocumentError> {
+    let point = point.resolve(document, construction)?;
+    let span = contact.span.resolve(document, construction)?;
+    let contact = document.add_curve_contact_with_domain(
+        label,
+        span,
+        contact.domain,
+        contact.parameter,
+        contact.winding,
+        contact.neighborhood,
+        None,
+    )?;
+    Ok((
+        DocumentConstraintDefinition::PointOnCurve { point, contact },
+        Some(contact),
+    ))
 }
 
 impl DraftPointSlot {

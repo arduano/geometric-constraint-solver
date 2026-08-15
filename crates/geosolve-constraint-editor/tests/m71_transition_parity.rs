@@ -258,11 +258,15 @@ fn resolve_relations(
     } else {
         anchors
     };
+    // Keep the frozen M71 transcript scoped to the inference families it
+    // originally certified; intrinsic M74 datums have their own parity suite.
+    let mut geometry_policy = GeometryInteractionPolicy::default();
+    geometry_policy.visibility.reference_geometry = false;
     let resolution = engine
         .resolve(
             &DraftInferenceFrame::from_scene_with_semantic_centers(
                 scene,
-                GeometryInteractionPolicy::default(),
+                geometry_policy,
                 DraftInferenceSample {
                     raw_screen_position: scene.viewport.model_to_screen(sample),
                     subject,

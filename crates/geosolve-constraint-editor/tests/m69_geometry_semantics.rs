@@ -72,7 +72,10 @@ fn line(
 fn policy(scope: GeometryPickScope) -> GeometryInteractionPolicy {
     GeometryInteractionPolicy {
         scope,
-        visibility: GeometryVisibility::default(),
+        visibility: GeometryVisibility {
+            reference_geometry: false,
+            ..GeometryVisibility::default()
+        },
     }
 }
 
@@ -86,6 +89,7 @@ fn policy_with_visibility(
         visibility: GeometryVisibility {
             explicit_construction,
             implicit_construction,
+            reference_geometry: false,
         },
     }
 }
@@ -488,13 +492,7 @@ fn assert_display_visibility_is_scope_independent(
     assert!(profile.is_visible(policy(GeometryPickScope::Construction)));
     assert!(!construction.is_interactive(policy(GeometryPickScope::Profile)));
     assert!(!profile.is_interactive(policy(GeometryPickScope::Construction)));
-    let hidden = GeometryInteractionPolicy {
-        scope: GeometryPickScope::All,
-        visibility: GeometryVisibility {
-            explicit_construction: false,
-            implicit_construction: true,
-        },
-    };
+    let hidden = policy_with_visibility(GeometryPickScope::All, false, true);
     assert!(!construction.is_visible(hidden));
     assert!(profile.is_visible(hidden));
 }
@@ -592,13 +590,7 @@ fn scene_roles_and_shared_point_incidence_drive_all_three_pick_scopes() {
             .map(|hit| hit.item),
         Some(SelectionItem::Point(construction_end))
     );
-    let hidden = GeometryInteractionPolicy {
-        scope: GeometryPickScope::All,
-        visibility: GeometryVisibility {
-            explicit_construction: false,
-            implicit_construction: true,
-        },
-    };
+    let hidden = policy_with_visibility(GeometryPickScope::All, false, true);
     assert!(
         scene
             .hit_test_with_policy(guide_screen, PickTolerance::default(), hidden)

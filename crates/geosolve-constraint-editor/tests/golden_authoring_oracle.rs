@@ -20,10 +20,11 @@ use geosolve_constraint_editor::{
 use geosolve_sketch::{
     ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveSpan, DesignPointId,
     DesignScalarId, DocumentAngleOrientation, DocumentCenterRef, DocumentConstraintDefinition,
-    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentDirectionSense, DocumentId, DocumentLineSupportRef,
-    DocumentSolveRequest, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-    SketchDocument, SketchHardValidity, SolverConfig, TangentOrientation,
+    DocumentCoordinateAxis, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentId,
+    DocumentLineSupportRef, DocumentSolveRequest, PersistentId, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchDatum, SketchDocument, SketchHardValidity, SolverConfig,
+    TangentOrientation,
 };
 use proptest::prelude::{Strategy, any};
 use proptest::test_runner::{Config, RngAlgorithm, TestCaseError, TestRng, TestRunner};
@@ -37,7 +38,7 @@ const SEEDED_VARIANTS: u32 = 8;
 const MAX_SHRINK_ITERS: u32 = 512;
 const TSV_HEADER: &str = "case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint";
 
-const CONSTRAINT_KINDS: [ResolvedConstraintKind; 20] = [
+const CONSTRAINT_KINDS: [ResolvedConstraintKind; 23] = [
     ResolvedConstraintKind::FixedPoint,
     ResolvedConstraintKind::CoincidentPoints,
     ResolvedConstraintKind::PointOnCurve,
@@ -58,6 +59,9 @@ const CONSTRAINT_KINDS: [ResolvedConstraintKind; 20] = [
     ResolvedConstraintKind::SymmetricAboutLine,
     ResolvedConstraintKind::CurveTangency,
     ResolvedConstraintKind::EndpointContinuity,
+    ResolvedConstraintKind::CoincidentWithOrigin,
+    ResolvedConstraintKind::PointOnDatumAxis,
+    ResolvedConstraintKind::CollinearWithDatumAxis,
 ];
 
 const DIMENSION_KINDS: [DimensionKind; 5] = [
@@ -83,7 +87,7 @@ struct OracleFamily {
     subject: FamilySubject,
 }
 
-const FAMILIES: [OracleFamily; 25] = [
+const FAMILIES: [OracleFamily; 28] = [
     constraint_family(ResolvedConstraintKind::FixedPoint, ConstraintIntent::Lock),
     constraint_family(
         ResolvedConstraintKind::CoincidentPoints,
@@ -159,6 +163,20 @@ const FAMILIES: [OracleFamily; 25] = [
         ResolvedConstraintKind::CollinearSupports,
         ConstraintIntent::Collinear,
     ),
+    // Append-only M74 inventory: intrinsic datums add operand families without
+    // changing any historical family ordinal or input fingerprint.
+    constraint_family(
+        ResolvedConstraintKind::CoincidentWithOrigin,
+        ConstraintIntent::Coincident,
+    ),
+    constraint_family(
+        ResolvedConstraintKind::PointOnDatumAxis,
+        ConstraintIntent::Coincident,
+    ),
+    constraint_family(
+        ResolvedConstraintKind::CollinearWithDatumAxis,
+        ConstraintIntent::Collinear,
+    ),
 ];
 
 const fn constraint_family(kind: ResolvedConstraintKind, intent: ConstraintIntent) -> OracleFamily {
@@ -178,6 +196,8 @@ const fn dimension_family(kind: DimensionKind) -> OracleFamily {
 const fn constraint_family_id(kind: ResolvedConstraintKind) -> &'static str {
     match kind {
         ResolvedConstraintKind::FixedPoint => "constraint.fixed-point",
+        ResolvedConstraintKind::CoincidentWithOrigin => "constraint.coincident-with-origin",
+        ResolvedConstraintKind::PointOnDatumAxis => "constraint.point-on-datum-axis",
         ResolvedConstraintKind::CoincidentPoints => "constraint.coincident-points",
         ResolvedConstraintKind::PointOnCurve => "constraint.point-on-curve",
         ResolvedConstraintKind::CurveContact => "constraint.curve-contact",
@@ -187,6 +207,7 @@ const fn constraint_family_id(kind: ResolvedConstraintKind) -> &'static str {
         ResolvedConstraintKind::VerticalPoints => "constraint.vertical-points",
         ResolvedConstraintKind::ConcentricCurves => "constraint.concentric-curves",
         ResolvedConstraintKind::CollinearSupports => "constraint.collinear-supports",
+        ResolvedConstraintKind::CollinearWithDatumAxis => "constraint.collinear-with-datum-axis",
         ResolvedConstraintKind::ParallelLines => "constraint.parallel-lines",
         ResolvedConstraintKind::PerpendicularLines => "constraint.perpendicular-lines",
         ResolvedConstraintKind::RadialLine => "constraint.radial-line",
@@ -430,7 +451,7 @@ const fn fnv1a64(bytes: &[u8]) -> u64 {
 
 #[test]
 fn golden_oracle_inventory_and_tsv_schema_are_exhaustive() {
-    assert_eq!(CONSTRAINT_KINDS.len(), 20);
+    assert_eq!(CONSTRAINT_KINDS.len(), 23);
     assert_eq!(DIMENSION_KINDS.len(), 5);
     assert_eq!(
         FAMILIES.len(),
@@ -1090,6 +1111,15 @@ impl MatrixFixture {
             .iter()
             .map(|scalar| (scalar.id, scalar.value))
             .collect();
+        let datum_subject = matches!(
+            subject,
+            FamilySubject::Constraint {
+                kind: ResolvedConstraintKind::CoincidentWithOrigin
+                    | ResolvedConstraintKind::PointOnDatumAxis
+                    | ResolvedConstraintKind::CollinearWithDatumAxis,
+                ..
+            }
+        );
         Self {
             document,
             transform,
@@ -1108,8 +1138,9 @@ impl MatrixFixture {
             radial_parameter,
             original_points,
             original_scalars,
-            pre_satisfied: displaced_kind.is_none()
-                || displaced_kind == Some(ResolvedConstraintKind::FixedPoint),
+            pre_satisfied: !datum_subject
+                && (displaced_kind.is_none()
+                    || displaced_kind == Some(ResolvedConstraintKind::FixedPoint)),
         }
     }
 }
@@ -1180,6 +1211,14 @@ fn constraint_operands(
         ResolvedConstraintKind::FixedPoint => {
             vec![selected(SelectionItem::Point(fixture.points[0]))]
         }
+        ResolvedConstraintKind::CoincidentWithOrigin => vec![
+            selected(SelectionItem::Point(fixture.contact_point)),
+            selected(SelectionItem::Datum(SketchDatum::Origin)),
+        ],
+        ResolvedConstraintKind::PointOnDatumAxis => vec![
+            selected(SelectionItem::Point(fixture.contact_point)),
+            selected(SelectionItem::Datum(oracle_axis_datum(variant).0)),
+        ],
         ResolvedConstraintKind::CoincidentPoints => fixture
             .coincident
             .map(SelectionItem::Point)
@@ -1221,6 +1260,10 @@ fn constraint_operands(
         | ResolvedConstraintKind::EqualLength => vec![
             selected(SelectionItem::Curve(fixture.lines[0])),
             selected(SelectionItem::Curve(fixture.overlapping_line)),
+        ],
+        ResolvedConstraintKind::CollinearWithDatumAxis => vec![
+            selected(SelectionItem::Curve(fixture.lines[0])),
+            selected(SelectionItem::Datum(oracle_axis_datum(variant).0)),
         ],
         ResolvedConstraintKind::PerpendicularLines => fixture
             .lines
@@ -1265,12 +1308,15 @@ fn constraint_operands(
     if variant.swap_operands {
         match kind {
             ResolvedConstraintKind::CoincidentPoints
+            | ResolvedConstraintKind::CoincidentWithOrigin
+            | ResolvedConstraintKind::PointOnDatumAxis
             | ResolvedConstraintKind::PointOnCurve
             | ResolvedConstraintKind::CurveContact
             | ResolvedConstraintKind::HorizontalPoints
             | ResolvedConstraintKind::VerticalPoints
             | ResolvedConstraintKind::ConcentricCurves
             | ResolvedConstraintKind::CollinearSupports
+            | ResolvedConstraintKind::CollinearWithDatumAxis
             | ResolvedConstraintKind::ParallelLines
             | ResolvedConstraintKind::PerpendicularLines
             | ResolvedConstraintKind::RadialLine
@@ -1287,6 +1333,14 @@ fn constraint_operands(
         }
     }
     operands
+}
+
+const fn oracle_axis_datum(variant: Variant) -> (SketchDatum, DocumentCoordinateAxis) {
+    if variant.option_index.is_multiple_of(2) {
+        (SketchDatum::XAxis, DocumentCoordinateAxis::X)
+    } else {
+        (SketchDatum::YAxis, DocumentCoordinateAxis::Y)
+    }
 }
 
 fn dimension_operands(
@@ -1864,6 +1918,18 @@ fn validate_constraint_definition(
         SelectionItem::Curve(span) => Some(span),
         _ => None,
     };
+    let selected_point = items.iter().find_map(|item| match item {
+        SelectionItem::Point(point) => Some(*point),
+        _ => None,
+    });
+    let selected_span = items.iter().find_map(|item| match item {
+        SelectionItem::Curve(span) => Some(*span),
+        _ => None,
+    });
+    let selected_datum = items.iter().find_map(|item| match item {
+        SelectionItem::Datum(datum) => Some(*datum),
+        _ => None,
+    });
     let exact = match (kind, definition) {
         (
             ResolvedConstraintKind::FixedPoint,
@@ -1879,6 +1945,17 @@ fn validate_constraint_definition(
                         .expect("fixed point")
                         .position
                         .map(f64::to_bits)
+        }
+        (
+            ResolvedConstraintKind::CoincidentWithOrigin,
+            DocumentConstraintDefinition::CoincidentWithOrigin { point },
+        ) => Some(*point) == selected_point && selected_datum == Some(SketchDatum::Origin),
+        (
+            ResolvedConstraintKind::PointOnDatumAxis,
+            DocumentConstraintDefinition::PointOnDatumAxis { point, axis },
+        ) => {
+            Some(*point) == selected_point
+                && selected_datum.and_then(SketchDatum::coordinate_axis) == Some(*axis)
         }
         (
             ResolvedConstraintKind::CoincidentPoints,
@@ -1951,6 +2028,13 @@ fn validate_constraint_definition(
         ) => {
             span(0).map(forward_line_support) == Some(*first)
                 && span(1).map(forward_line_support) == Some(*second)
+        }
+        (
+            ResolvedConstraintKind::CollinearWithDatumAxis,
+            DocumentConstraintDefinition::CollinearWithDatumAxis { line, axis },
+        ) => {
+            selected_span.map(forward_line_support) == Some(*line)
+                && selected_datum.and_then(SketchDatum::coordinate_axis) == Some(*axis)
         }
         (
             ResolvedConstraintKind::ParallelLines,
@@ -2476,6 +2560,19 @@ fn validate_constraint_geometry(
                 *target,
             ) <= tolerance
         }
+        DocumentConstraintDefinition::CoincidentWithOrigin { point } => {
+            distance(
+                document.point(*point).expect("origin point").position,
+                [0.0, 0.0],
+            ) <= tolerance
+        }
+        DocumentConstraintDefinition::PointOnDatumAxis { point, axis } => {
+            let position = document.point(*point).expect("datum-axis point").position;
+            match axis {
+                DocumentCoordinateAxis::X => position[1].abs() <= tolerance,
+                DocumentCoordinateAxis::Y => position[0].abs() <= tolerance,
+            }
+        }
         DocumentConstraintDefinition::Coincident { first, second } => {
             distance(
                 document.point(*first).expect("first point").position,
@@ -2531,6 +2628,17 @@ fn validate_constraint_geometry(
         }
         DocumentConstraintDefinition::Collinear { first, second } => {
             supporting_lines_are_collinear(document, *first, *second, tolerance)?
+        }
+        DocumentConstraintDefinition::CollinearWithDatumAxis { line, axis } => {
+            let [start, end] = directed_line_points(document, *line)?;
+            match axis {
+                DocumentCoordinateAxis::X => {
+                    start[1].abs() <= tolerance && end[1].abs() <= tolerance
+                }
+                DocumentCoordinateAxis::Y => {
+                    start[0].abs() <= tolerance && end[0].abs() <= tolerance
+                }
+            }
         }
         DocumentConstraintDefinition::Parallel { first, second } => {
             normalized_dot_or_cross(document, *first, *second, true)?.abs() <= 2.0e-8
