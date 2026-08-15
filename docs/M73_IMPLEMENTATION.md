@@ -2,8 +2,9 @@
 
 # M73 implementation — Retained authoring semantic consolidation
 
-Status: **implemented and mechanically qualified; final immutable candidate handoff and focused
-human UAT remain pending**. The supervising caller accepted the corrected scope on 2026-08-15.
+Status: **implemented, mechanically qualified and byte-verified as an immutable candidate;
+focused human UAT remains pending**. The supervising caller accepted the corrected scope on
+2026-08-15.
 
 Activation baseline source: `daea43de51c9a1a720da1a245747e67735448f7d`
 
@@ -93,9 +94,36 @@ That run passed:
 - the Trunk 0.21.14 release build.
 
 Because `docs/API_COMPATIBILITY.md` is copied into the seven-file web distribution, candidate
-nomination deliberately waits for one more clean gate on the committed current-status
-documentation. That rerun, immutable snapshot hashes and served-byte verification will be added
-below without changing the nominated distribution.
+nomination deliberately waited for one more clean gate on committed current-status source.
+
+## Immutable candidate nomination
+
+Final qualified product source: `efde645345577f44e0d6b691f7ca27eb587c4b53`
+
+Final qualified product tree: `ae1ddaebd75e740c48eafc0b9ef2ad07cd99378b`
+
+The same exact clean command passed again on that source. The 256-moving-body sparse crossover
+completed in 124.36 seconds; the unchanged 234/234 golden, complete workspace matrix, native/WASM
+parity, licensing, packaging and Trunk 0.21.14 release assembly all passed.
+
+The gate-produced distribution was copied without rebuilding to read-only snapshot
+`/tmp/geosolve-m73-uat.5EhWNL` (directory mode `0555`, files `0444`):
+
+| File | SHA-256 |
+| --- | --- |
+| `API_COMPATIBILITY.md` | `c3ef0cedd4de5968e36d2917daaf463c450fbe2266a06bc45b0cfae2dc20b935` |
+| `LICENSE` | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-e4b791bbd99777b2.js` | `5647aeac2f7852f1bf4015722528386b67c7c31208f9f5ce2cccbbb7171f2988` |
+| `geosolve-demo-web-e4b791bbd99777b2_bg.wasm` | `77f232d4b41c5bbe6a5e4db0982d987e20d1ca88c89335f4155565b496e2a34c` |
+| `index.html` | `067d186896a12889f35b11f99331088eb04d8f4ce05149e2663b223cfd40d5c7` |
+| `styles-437727272832bc26.css` | `9e4b1c6985f119cff35366119fbeef8abb2096b386a8db78a4cd730915316344` |
+
+The C-locale ordered-manifest aggregate is
+`371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`.
+PID `3403533` serves only that snapshot on Tailscale at `http://100.94.63.83:8080/`. Proxy- and
+cache-bypassed, identity-encoded requests for all seven files and `/` return HTTP 200 and compare
+byte-for-byte; `/` equals `index.html`, and the fetched aggregate equals the frozen aggregate.
 
 ## Qualification ledger
 
@@ -105,10 +133,10 @@ below without changing the nominated distribution.
 - [x] Preserve the canonical authoring/scene oracle at 234/234 byte-for-byte.
 - [x] Pass formatting, diff hygiene, warnings-denied workspace Clippy, locked all-feature tests,
   native/WASM parity and the complete clean release gate.
-- [ ] Rerun the clean gate on the committed current-status source, freeze the exact seven release
+- [x] Rerun the clean gate on the committed current-status source, freeze the exact seven release
   files and verify their Tailscale publication byte-for-byte.
 - [ ] Complete `docs/M73_UAT.md` with explicit human approval.
 
 ## Current blocker
 
-None. Immutable candidate nomination and focused human UAT are the only remaining ordered work.
+None. Focused human UAT is the only remaining ordered work.

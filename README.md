@@ -70,8 +70,8 @@ M72's public-workbench bulk fixes and GitHub Pages release are complete and expl
 The final accepted workbench is live at
 `https://arduano.github.io/geometric-constraint-solver/`; its deployed seven-file artifact and
 two-size Chromium contract are exactly verified. M73's behavior-preserving retained-authoring
-semantic consolidation is implemented and mechanically qualified; immutable handoff and focused
-human UAT remain open under `docs/M73_GOALS.md`.
+semantic consolidation is implemented, mechanically qualified and byte-verified as an immutable
+candidate; focused human UAT remains open under `docs/M73_GOALS.md`.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here

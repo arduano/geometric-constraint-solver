@@ -137,8 +137,8 @@ public two-size Chromium contract passes. The workbench is live at
 M73 implementation and mechanical qualification are complete under `docs/M73_GOALS.md`: one
 private semantic description now owns the remaining line/polyline construction-stage seam, the
 unreleased duplicate direct constraint API is retired, and terminal inference-candidate provenance
-is authenticated without changing accepted behavior. Immutable candidate handoff and focused
-human UAT remain open.
+is authenticated without changing accepted behavior. The immutable candidate is byte-verified;
+focused human UAT remains open.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -421,7 +421,9 @@ stage/span/handoff facts. The unreleased `ConstraintKind`,
 private confirmation authenticates terminal candidate provenance. Clean implementation source
 `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223` passes editor 321/321, M55 17/17, unchanged golden
 234/234 and the complete release gate. No ADR, new relation, persistence change or workbench
-behavior is part of the accepted scope. Immutable candidate handoff and focused UAT remain open.
+behavior is part of the accepted scope. Final status source `efde645` passes the exact clean rerun;
+its seven-file immutable Tailscale candidate has aggregate
+`371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`. Focused UAT remains open.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

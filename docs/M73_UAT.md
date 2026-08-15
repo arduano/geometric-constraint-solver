@@ -2,10 +2,24 @@
 
 # M73 focused UAT — Retained authoring semantic consolidation
 
-Status: **prepared; implementation and mechanical qualification pass, immutable candidate
-nomination is in progress**. Direct Rust/WASM tests remain authoritative for semantic dispatch,
-candidate identity, accepted state and mutation-free rejection; human review checks that the
-behavior-preserving cleanup is genuinely invisible in ordinary use.
+Status: **qualified immutable candidate nominated; focused human UAT pending**. Direct Rust/WASM
+tests remain authoritative for semantic dispatch, candidate identity, accepted state and
+mutation-free rejection; human review checks that the behavior-preserving cleanup is genuinely
+invisible in ordinary use.
+
+Candidate source: `efde645345577f44e0d6b691f7ca27eb587c4b53`
+
+Candidate tree: `ae1ddaebd75e740c48eafc0b9ef2ad07cd99378b`
+
+Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Immutable snapshot: `/tmp/geosolve-m73-uat.5EhWNL`
+
+Ordered-manifest aggregate:
+`371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`
+
+The complete clean release gate passes. All seven files and `/` were fetched with proxy/cache
+bypass and identity encoding, returned HTTP 200 and matched the frozen snapshot byte-for-byte.
 
 ## M73-U1 — Line and polyline stage continuity
 
@@ -46,7 +60,7 @@ accepted scene intact.
 
 ## Approval record
 
-- M73-U1: pending qualified candidate.
-- M73-U2: pending qualified candidate.
-- M73-U3: pending qualified candidate.
+- M73-U1: pending human review on the qualified candidate above.
+- M73-U2: pending human review on the qualified candidate above.
+- M73-U3: pending human review on the qualified candidate above.
 - Final M73 approval: pending.

@@ -4440,7 +4440,7 @@ consolidation and unreleased editor-API retirement.
   regressions recorded in `docs/M73_GOALS.md` and `docs/SCENARIOS.md`.
 - [x] Preserve the 234-row golden byte-for-byte and pass formatting, warnings-denied workspace
   Clippy, locked all-feature tests, relevant native/WASM parity and the complete clean release gate.
-- [ ] Nominate and byte-verify the immutable qualified candidate.
+- [x] Nominate and byte-verify the immutable qualified candidate.
 - [ ] Receive explicit focused human UAT approval.
 
 Implementation note (2026-08-15): `fe356c2`, `a973b73`, `fcaad55`, `693ed17`, `585cf65`,
@@ -4449,8 +4449,16 @@ and warnings-denied Rustdoc. Clean implementation source
 `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223`, tree
 `1890ab4330bd78f26c187ebed5fadea97370101e`, passes the complete release gate: editor 321/321,
 M55 17/17, unchanged golden 234/234, native/WASM parity, all workspace checks, packaging,
-performance and Trunk release assembly. The exact current-status source will be gated once more
-before immutable nomination because `docs/API_COMPATIBILITY.md` is copied into the distribution.
+performance and Trunk release assembly. The exact current-status source was gated once more before
+immutable nomination because `docs/API_COMPATIBILITY.md` is copied into the distribution.
+
+Nomination note (2026-08-15): final qualified product source
+`efde645345577f44e0d6b691f7ca27eb587c4b53`, tree
+`ae1ddaebd75e740c48eafc0b9ef2ad07cd99378b`, passes that exact clean rerun, including the
+256-moving-body sparse crossover in 124.36 seconds. Its gate-produced seven files were copied
+without rebuilding to read-only `/tmp/geosolve-m73-uat.5EhWNL`, ordered-manifest aggregate
+`371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`, and byte-verified at
+`http://100.94.63.83:8080/`. Only focused UAT and explicit approval remain open.
 
 Gate: one private stage description owns the remaining line/polyline construction facts; the
 redundant unreleased direct API is absent; contextual authoring retains all accepted behavior and

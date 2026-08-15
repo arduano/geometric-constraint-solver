@@ -1837,8 +1837,11 @@ Status: **implemented and mechanically qualified; focused human UAT remains pend
 Mechanical result (2026-08-15): F001-F003 and their focused qualification pass. Clean
 implementation source `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223` passes the complete release
 gate with editor 321/321, M55 17/17, unchanged golden 234/234, native/WASM parity and the complete
-workspace/release matrix. Final immutable publication verification and explicit U1-U3 human
-approval remain open; no milestone-close claim is made yet.
+workspace/release matrix. Final status source `efde645345577f44e0d6b691f7ca27eb587c4b53`
+passes the exact clean rerun and supplies a byte-verified seven-file Tailscale candidate with
+ordered-manifest aggregate
+`371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`. Explicit U1-U3 human
+approval remains open; no milestone-close claim is made yet.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 
