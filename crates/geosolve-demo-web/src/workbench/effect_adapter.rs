@@ -20,11 +20,34 @@ pub(super) fn normalize_client_point(
     screen_size: [f64; 2],
     client: [f64; 2],
 ) -> Option<ScreenPoint> {
+    normalize_client_point_inner(rect, screen_size, client, true)
+}
+
+/// Preserves the pre-M74 coordinate translation for an already captured
+/// pointer. Capture owns move and terminal samples even when the pointer
+/// crosses an SVG letterbox band or leaves the mapped sketch plane.
+pub(super) fn normalize_captured_client_point(
+    rect: ClientRect,
+    screen_size: [f64; 2],
+    client: [f64; 2],
+) -> Option<ScreenPoint> {
+    normalize_client_point_inner(rect, screen_size, client, false)
+}
+
+fn normalize_client_point_inner(
+    rect: ClientRect,
+    screen_size: [f64; 2],
+    client: [f64; 2],
+    reject_letterbox: bool,
+) -> Option<ScreenPoint> {
     let [screen_width, screen_height] = screen_size;
-    if !rect.width.is_finite()
+    if !rect.left.is_finite()
+        || !rect.top.is_finite()
+        || !rect.width.is_finite()
         || !rect.height.is_finite()
         || !screen_width.is_finite()
         || !screen_height.is_finite()
+        || !client.into_iter().all(f64::is_finite)
         || rect.width <= 0.0
         || rect.height <= 0.0
         || screen_width <= 0.0
@@ -38,6 +61,13 @@ pub(super) fn normalize_client_point(
     }
     let left = rect.left + (rect.width - screen_width * scale) * 0.5;
     let top = rect.top + (rect.height - screen_height * scale) * 0.5;
+    let right = left + screen_width * scale;
+    let bottom = top + screen_height * scale;
+    if reject_letterbox
+        && (client[0] < left || client[0] > right || client[1] < top || client[1] > bottom)
+    {
+        return None;
+    }
     Some(ScreenPoint {
         x: (client[0] - left) / scale,
         y: (client[1] - top) / scale,
@@ -149,7 +179,8 @@ mod tests {
     use super::{
         ClientRect, ConstructionDispatch, PlannedConstructionDispatch,
         dispatch_construction_effect, dispatch_planned_construction_effect, draft_inference_input,
-        draft_inference_input_for_suppression, normalize_client_point,
+        draft_inference_input_for_suppression, normalize_captured_client_point,
+        normalize_client_point,
     };
 
     fn input(pointer_id: u64, position: [f64; 2]) -> PointerInput {
@@ -250,6 +281,17 @@ mod tests {
                 y: 700.0
             })
         );
+        for point in [[509.999, 350.0], [1510.001, 350.0]] {
+            assert_eq!(
+                normalize_client_point(widescreen, [1000.0, 700.0], point),
+                None,
+                "horizontal letterbox band at {point:?} must not become canvas input"
+            );
+            assert!(
+                normalize_captured_client_point(widescreen, [1000.0, 700.0], point).is_some(),
+                "captured interaction must retain its historical translated sample at {point:?}"
+            );
+        }
         let alternate_css = ClientRect {
             left: 100.0,
             top: 50.0,
@@ -259,6 +301,29 @@ mod tests {
         assert_eq!(
             normalize_client_point(alternate_css, [1000.0, 700.0], [350.0, 225.0]),
             Some(geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 })
+        );
+
+        let portrait = ClientRect {
+            left: 40.0,
+            top: 10.0,
+            width: 500.0,
+            height: 700.0,
+        };
+        // The fitted viewBox is 500x350 CSS pixels, vertically centred at y=185.
+        for point in [[290.0, 184.999], [290.0, 535.001]] {
+            assert_eq!(
+                normalize_client_point(portrait, [1000.0, 700.0], point),
+                None,
+                "vertical letterbox band at {point:?} must not become canvas input"
+            );
+            assert!(
+                normalize_captured_client_point(portrait, [1000.0, 700.0], point).is_some(),
+                "captured interaction must retain its historical translated sample at {point:?}"
+            );
+        }
+        assert_eq!(
+            normalize_client_point(portrait, [1000.0, 700.0], [40.0, 185.0]),
+            Some(geosolve_constraint_editor::ScreenPoint { x: 0.0, y: 0.0 })
         );
     }
 

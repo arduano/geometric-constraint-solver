@@ -332,6 +332,17 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-tree-row.authoring-pending .wb-tree-icon { color: currentcolor; }
 .wb-empty { padding: 1rem 0.6rem; color: #707977; font-size: 0.75rem; }
 .wb-tree-row[data-role="construction"] { color: #91a6a7; font-style: italic; }
+.wb-tree-datum { color: #9eb7b5; }
+.wb-tree-datum .wb-tree-icon { color: #b6955a; }
+.wb-tree-datum[data-datum="x-axis"] .wb-tree-icon { color: #aa7069; }
+.wb-tree-datum[data-datum="y-axis"] .wb-tree-icon { color: #68a18f; }
+.wb-tree-protected {
+  margin-left: auto;
+  color: #6f7a78;
+  font-size: 0.52rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .wb-tree-row[data-has-implicit-construction="true"]::after {
   content: "hidden";
   margin-left: auto;
@@ -358,8 +369,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   min-height: 0;
   overflow: hidden;
   background-color: #121617;
-  background-image: linear-gradient(#202627 1px, transparent 1px), linear-gradient(90deg, #202627 1px, transparent 1px);
-  background-size: 25px 25px;
 }
 #wb-viewport,
 #wb-viewport * {
@@ -367,7 +376,15 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   user-select: none;
   -webkit-user-drag: none;
 }
-#wb-viewport { width: 100%; height: 100%; touch-action: none; }
+#wb-viewport { width: 100%; height: 100%; cursor: default; touch-action: none; }
+.workbench[data-canvas-cursor="draw"] #wb-viewport,
+.workbench[data-canvas-cursor="draw"] #wb-viewport * { cursor: crosshair !important; }
+.workbench[data-canvas-cursor="constraint"] #wb-viewport,
+.workbench[data-canvas-cursor="constraint"] #wb-viewport * { cursor: cell !important; }
+.workbench[data-canvas-cursor="fillet"] #wb-viewport,
+.workbench[data-canvas-cursor="fillet"] #wb-viewport * { cursor: crosshair !important; }
+.workbench[data-canvas-cursor="pan"] #wb-viewport,
+.workbench[data-canvas-cursor="pan"] #wb-viewport * { cursor: grabbing !important; }
 .wb-reproduction-overlay {
   position: absolute;
   z-index: 10;
@@ -533,7 +550,69 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   font-size: 0.62rem;
   line-height: 1.35;
 }
-.wb-grid path { fill: none; stroke: #3b4445; stroke-width: 1; }
+.wb-grid { pointer-events: none; }
+.wb-grid path { fill: none; vector-effect: non-scaling-stroke; }
+.wb-grid-minor { stroke: #1b2223; stroke-width: 0.75; }
+.wb-grid-major { stroke: #263031; stroke-width: 1; }
+.wb-reference-geometry { isolation: isolate; }
+.wb-datum { outline: none; cursor: pointer; }
+.wb-datum-hit {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: all;
+}
+.wb-datum-origin .wb-datum-hit { stroke-width: 0; }
+.wb-datum-axis .wb-datum-hit { stroke-width: 8; }
+.wb-datum-line,
+.wb-datum-origin-ring,
+.wb-datum-origin-cross {
+  fill: none;
+  stroke: #6f7b7b;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+.wb-datum-x-axis .wb-datum-line { stroke: #8c5b55; }
+.wb-datum-y-axis .wb-datum-line { stroke: #4f8273; }
+.wb-datum-origin-ring,
+.wb-datum-origin-cross { stroke: #d2a65d; stroke-width: 1.5; }
+.wb-datum-label {
+  fill: #879390;
+  font: 700 11px ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: #121617;
+  stroke-width: 3px;
+}
+.wb-datum-x-axis .wb-datum-label { fill: #ba7770; }
+.wb-datum-y-axis .wb-datum-label { fill: #72ad9c; }
+.wb-datum-origin-label { fill: #c5a66a; font-size: 10px; font-weight: 600; }
+.wb-datum:hover .wb-datum-line,
+.wb-datum:hover .wb-datum-origin-ring,
+.wb-datum:hover .wb-datum-origin-cross,
+.wb-datum.geometry-hovered .wb-datum-line,
+.wb-datum.geometry-hovered .wb-datum-origin-ring,
+.wb-datum.geometry-hovered .wb-datum-origin-cross,
+.wb-datum:focus .wb-datum-line,
+.wb-datum:focus .wb-datum-origin-ring,
+.wb-datum:focus .wb-datum-origin-cross,
+.wb-datum.selected .wb-datum-line,
+.wb-datum.selected .wb-datum-origin-ring,
+.wb-datum.selected .wb-datum-origin-cross {
+  stroke: #efb856;
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 3px rgb(239 184 86 / 50%));
+}
+.wb-datum.related .wb-datum-line,
+.wb-datum.related .wb-datum-origin-ring,
+.wb-datum.related .wb-datum-origin-cross {
+  stroke: #79bfc4;
+  filter: drop-shadow(0 0 3px rgb(121 191 196 / 42%));
+}
+.wb-datum:hover .wb-datum-label,
+.wb-datum.geometry-hovered .wb-datum-label,
+.wb-datum:focus .wb-datum-label,
+.wb-datum.selected .wb-datum-label { fill: #f2ca82; }
 .wb-curve {
   fill: none;
   stroke: #e5e8df;
@@ -890,6 +969,23 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   color: #7c8886;
   font: 0.65rem ui-monospace, monospace;
 }
+.wb-pointer-coordinate {
+  min-width: 11rem;
+  color: #aebbb8;
+  text-align: right;
+}
+.wb-pointer-coordinate[data-inference-adjusted="true"] { color: #8ed5ca; }
+.wb-pointer-coordinate[data-inference-adjusted="true"]::after {
+  margin-left: 0.35rem;
+  padding: 0.08rem 0.28rem;
+  border: 1px solid #47756d;
+  border-radius: 999px;
+  content: "snap";
+  color: #a9e9df;
+  font-size: 0.55rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .wb-camera-controls { display: flex; gap: 0.2rem; }
 .wb-camera-controls button {
   min-width: 1.75rem;
@@ -954,6 +1050,20 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-construction-display-trigger[aria-expanded="true"] { color: #e6c785; border-color: #806b3f !important; }
 .wb-geometry-role-editor p { margin: 0; color: #899492; font-size: 0.67rem; line-height: 1.4; }
+.wb-datum-inspector strong { color: #e0c586; }
+.wb-datum-inspector p { margin: 0; color: #96a19f; font-size: 0.67rem; line-height: 1.45; }
+.wb-protected-badge {
+  width: max-content;
+  padding: 0.18rem 0.42rem;
+  border: 1px solid #655b43;
+  border-radius: 999px;
+  color: #d9bf83;
+  background: #302b21;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
 .wb-status-bar {
   display: flex;
   grid-column: 1 / -1;
@@ -975,6 +1085,9 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   }
   .wb-command-bar { gap: 0.65rem; }
   .wb-sample-selector > summary strong { max-width: 10rem; }
+  .wb-canvas-hud { gap: 0.35rem; }
+  #wb-camera-scale { display: none; }
+  .wb-pointer-coordinate { min-width: 9rem; }
   .wb-canvas-hud > span:first-child,
   .wb-canvas-hud > span:last-child { display: none; }
 }

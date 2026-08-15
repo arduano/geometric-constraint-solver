@@ -10,15 +10,15 @@ use geosolve_constraint_editor::{
     DraftInferenceResolution, DraftInferenceStatus, EditorHoverState, EditorHoverTarget,
     EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
     EditorScene, GeometryInteractionPolicy, SceneAnnotationGeometry, SceneAnnotationKind,
-    SceneConstraintGlyph, SceneCurveOrigin, SceneFilletAction, SceneFilletActionAvailability,
-    SceneFilletActionId, SceneFilletActionTarget, SceneFilletCornerAffordances, ScreenPoint,
-    SelectionItem, Viewport, display_dimension_target,
+    SceneConstraintGlyph, SceneCurveOrigin, SceneDatum, SceneFilletAction,
+    SceneFilletActionAvailability, SceneFilletActionId, SceneFilletActionTarget,
+    SceneFilletCornerAffordances, ScreenPoint, SelectionItem, Viewport, display_dimension_target,
 };
 #[cfg(test)]
 use geosolve_sketch::DocumentConstraintDefinition;
 use geosolve_sketch::{
     DesignScalarId, DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionMode,
-    GeometryRole, ScalarUnit, SketchAcceptedDocumentState,
+    GeometryRole, ScalarUnit, SketchAcceptedDocumentState, SketchDatum,
 };
 use geosolve_sketch_features::NativeCurveSpanSource;
 
@@ -27,6 +27,27 @@ const DEFAULT_PIXELS_PER_MODEL_UNIT: f64 = 50.0;
 const MIN_PIXELS_PER_MODEL_UNIT: f64 = 2.0;
 const MAX_PIXELS_PER_MODEL_UNIT: f64 = 2_000.0;
 const FIT_MARGIN_PIXELS: f64 = 64.0;
+const GRID_TARGET_MAJOR_PIXELS: f64 = 96.0;
+
+/// Transient, visual-only canvas presentation owned by the demo adapter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CanvasDisplayOptions {
+    pub(crate) grid_visible: bool,
+}
+
+impl Default for CanvasDisplayOptions {
+    fn default() -> Self {
+        Self { grid_visible: true }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct AdaptiveGridSpec {
+    model_major_step: f64,
+    major_pixels: f64,
+    minor_pixels: f64,
+    screen_origin: ScreenPoint,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CanvasCamera {
@@ -51,6 +72,14 @@ impl CanvasCamera {
 
     pub(crate) fn reset(&mut self) {
         *self = Self::default();
+    }
+
+    pub(crate) fn center_origin(&mut self) -> bool {
+        if self.model_center == [0.0, 0.0] {
+            return false;
+        }
+        self.model_center = [0.0, 0.0];
+        true
     }
 
     pub(crate) fn zoom_about(&mut self, anchor: ScreenPoint, factor: f64) -> bool {
@@ -111,6 +140,15 @@ impl CanvasCamera {
             .min(available[1] / height)
             .clamp(MIN_PIXELS_PER_MODEL_UNIT, MAX_PIXELS_PER_MODEL_UNIT);
         true
+    }
+
+    /// Fits finite native geometry, or returns an empty workplane to the canonical Origin view.
+    pub(crate) fn fit_scene_or_reset(&mut self, scene: Option<&EditorScene>) -> bool {
+        if scene.is_some_and(|scene| self.fit_scene(scene)) {
+            return true;
+        }
+        self.reset();
+        false
     }
 }
 
@@ -228,6 +266,7 @@ pub(crate) fn svg_markup_with_computed_context(
 /// DOM event unless both still match, so an old element cannot manufacture a
 /// target for a newer scene from persistent owner/action IDs alone.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[cfg(test)]
 pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
     scene: Option<&EditorScene>,
     accepted: Option<&SketchAcceptedDocumentState>,
@@ -241,6 +280,42 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
     active_fillet_preview: Option<&SceneFilletActionTarget>,
     fillet_action_stamp: Option<u64>,
     geometry_policy: GeometryInteractionPolicy,
+    viewport: Viewport,
+) -> String {
+    svg_markup_with_computed_context_action_stamp_and_display(
+        scene,
+        accepted,
+        computed_problems,
+        selection,
+        pending,
+        hover,
+        construction_preview,
+        inference,
+        problem,
+        active_fillet_preview,
+        fillet_action_stamp,
+        geometry_policy,
+        CanvasDisplayOptions::default(),
+        viewport,
+    )
+}
+
+/// Renders the exact accepted/intrinsic scene with transient visual-only display options.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
+    scene: Option<&EditorScene>,
+    accepted: Option<&SketchAcceptedDocumentState>,
+    computed_problems: &[ComputedFeatureProblemMetadata],
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
+    hover: EditorHoverState,
+    construction_preview: Option<&ConstructionPreview>,
+    inference: Option<&DraftInferenceResolution>,
+    problem: Option<&EditorProblemMetadata>,
+    active_fillet_preview: Option<&SceneFilletActionTarget>,
+    fillet_action_stamp: Option<u64>,
+    geometry_policy: GeometryInteractionPolicy,
+    display: CanvasDisplayOptions,
     viewport: Viewport,
 ) -> String {
     let mut output = String::new();
@@ -299,12 +374,15 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
         "refX=\"5\" refY=\"3\" orient=\"auto\"><path fill=\"context-stroke\" ",
         "d=\"M0 0L6 3L0 6Z\"/></marker></defs>"
     ));
-    let origin = viewport.model_to_screen([0.0, 0.0]);
-    let _ = write!(
-        output,
-        "<g class=\"wb-grid\"><path d=\"M0 {:.3}H1000M{:.3} 0V700\"/></g><g class=\"wb-geometry\">",
-        origin.y, origin.x,
-    );
+    if display.grid_visible {
+        render_adaptive_grid(&mut output, viewport);
+    }
+    if let Some(scene) = scene
+        && geometry_policy.visibility.reference_geometry
+    {
+        render_datums(&mut output, scene, selection, hover, &related, viewport);
+    }
+    output.push_str("<g class=\"wb-geometry\">");
     if let Some(scene) = scene {
         for curve in scene
             .curves
@@ -489,6 +567,205 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
     }
     output.push_str("</g>");
     output
+}
+
+fn adaptive_grid_spec(viewport: Viewport) -> Option<AdaptiveGridSpec> {
+    let raw_step = GRID_TARGET_MAJOR_PIXELS / viewport.pixels_per_model_unit;
+    if !raw_step.is_finite() || raw_step <= 0.0 {
+        return None;
+    }
+    let decade = 10.0_f64.powf(raw_step.log10().floor());
+    let normalized = raw_step / decade;
+    let multiplier = if normalized <= 1.0 {
+        1.0
+    } else if normalized <= 2.0 {
+        2.0
+    } else if normalized <= 5.0 {
+        5.0
+    } else {
+        10.0
+    };
+    let model_major_step = multiplier * decade;
+    let major_pixels = model_major_step * viewport.pixels_per_model_unit;
+    let minor_pixels = major_pixels / 5.0;
+    (model_major_step.is_finite()
+        && model_major_step > 0.0
+        && major_pixels.is_finite()
+        && minor_pixels.is_finite()
+        && minor_pixels > 0.0)
+        .then(|| AdaptiveGridSpec {
+            model_major_step,
+            major_pixels,
+            minor_pixels,
+            screen_origin: viewport.model_to_screen([0.0, 0.0]),
+        })
+}
+
+fn render_adaptive_grid(output: &mut String, viewport: Viewport) {
+    let Some(spec) = adaptive_grid_spec(viewport) else {
+        return;
+    };
+    let minor = grid_path(spec.screen_origin, spec.minor_pixels, viewport.screen_size);
+    let major = grid_path(spec.screen_origin, spec.major_pixels, viewport.screen_size);
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-grid\" aria-hidden=\"true\" data-grid-kind=\"adaptive-1-2-5\" ",
+            "data-grid-major-model=\"{:.12}\" data-grid-major-pixels=\"{:.3}\">",
+            "<path class=\"wb-grid-minor\" d=\"{}\"/>",
+            "<path class=\"wb-grid-major\" d=\"{}\"/></g>"
+        ),
+        spec.model_major_step, spec.major_pixels, minor, major,
+    );
+}
+
+fn grid_path(origin: ScreenPoint, spacing: f64, screen_size: [f64; 2]) -> String {
+    let mut path = String::new();
+    let first_x = origin.x.rem_euclid(spacing);
+    let first_y = origin.y.rem_euclid(spacing);
+    let mut x = first_x;
+    while x <= screen_size[0] {
+        let _ = write!(path, "M{x:.3} 0V{:.3}", screen_size[1]);
+        x += spacing;
+    }
+    let mut y = first_y;
+    while y <= screen_size[1] {
+        let _ = write!(path, "M0 {y:.3}H{:.3}", screen_size[0]);
+        y += spacing;
+    }
+    path
+}
+
+fn render_datums(
+    output: &mut String,
+    scene: &EditorScene,
+    selection: &[SelectionItem],
+    hover: EditorHoverState,
+    related: &BTreeSet<SelectionItem>,
+    viewport: Viewport,
+) {
+    output.push_str("<g class=\"wb-reference-geometry\" data-reference-provenance=\"intrinsic\">");
+    for datum in &scene.datums {
+        let item = SelectionItem::Datum(datum.datum);
+        let selected = selection.contains(&item);
+        let hovered =
+            matches!(hover.target, Some(EditorHoverTarget::Geometry(target)) if target == item);
+        let related = related.contains(&item);
+        let state_classes = format!(
+            "{}{}{}",
+            if selected { " selected" } else { "" },
+            if hovered { " geometry-hovered" } else { "" },
+            if related { " related" } else { "" },
+        );
+        match datum.datum {
+            SketchDatum::Origin => {
+                render_origin_datum(output, datum, &state_classes, viewport);
+            }
+            SketchDatum::XAxis | SketchDatum::YAxis => {
+                render_axis_datum(output, datum, &state_classes, viewport);
+            }
+        }
+    }
+    output.push_str("</g>");
+}
+
+fn render_origin_datum(
+    output: &mut String,
+    datum: &SceneDatum,
+    state_classes: &str,
+    viewport: Viewport,
+) {
+    if !datum.is_visible_in_viewport(viewport) {
+        return;
+    }
+    let point = datum.screen_start;
+    let label_x = (point.x + 11.0).min(viewport.screen_size[0] - 42.0);
+    let label_y = (point.y - 9.0).max(13.0).min(viewport.screen_size[1] - 5.0);
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-datum wb-datum-origin{}\" role=\"button\" tabindex=\"0\" ",
+            "aria-label=\"Origin · protected intrinsic reference\" data-editor-item=\"datum\" ",
+            "data-datum=\"origin\" data-protected=\"true\">",
+            "<circle class=\"wb-datum-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"6\"/>",
+            "<circle class=\"wb-datum-origin-ring\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"4.5\"/>",
+            "<path class=\"wb-datum-origin-cross\" d=\"M{:.3} {:.3}H{:.3}M{:.3} {:.3}V{:.3}\"/>",
+            "<text class=\"wb-datum-label wb-datum-origin-label\" x=\"{:.3}\" y=\"{:.3}\">Origin</text></g>"
+        ),
+        state_classes,
+        point.x,
+        point.y,
+        point.x,
+        point.y,
+        point.x - 7.0,
+        point.y,
+        point.x + 7.0,
+        point.x,
+        point.y - 7.0,
+        point.y + 7.0,
+        label_x,
+        label_y,
+    );
+}
+
+fn render_axis_datum(
+    output: &mut String,
+    datum: &SceneDatum,
+    state_classes: &str,
+    viewport: Viewport,
+) {
+    if !datum.is_visible_in_viewport(viewport) {
+        return;
+    }
+    let is_x = datum.datum == SketchDatum::XAxis;
+    let coordinate = if is_x {
+        datum.screen_start.y
+    } else {
+        datum.screen_start.x
+    };
+    let (key, label, axis_class, label_x, label_y) = if is_x {
+        (
+            "x-axis",
+            "X",
+            "wb-datum-x-axis",
+            viewport.screen_size[0] - 20.0,
+            (coordinate - 8.0).max(14.0),
+        )
+    } else {
+        (
+            "y-axis",
+            "Y",
+            "wb-datum-y-axis",
+            (coordinate + 9.0).min(viewport.screen_size[0] - 18.0),
+            18.0,
+        )
+    };
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-datum wb-datum-axis {}{}\" role=\"button\" tabindex=\"0\" ",
+            "aria-label=\"{} axis · protected infinite intrinsic reference\" ",
+            "data-editor-item=\"datum\" data-datum=\"{}\" data-protected=\"true\">",
+            "<path class=\"wb-datum-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+            "<path class=\"wb-datum-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+            "<text class=\"wb-datum-label\" x=\"{:.3}\" y=\"{:.3}\">{}</text></g>"
+        ),
+        axis_class,
+        state_classes,
+        label,
+        key,
+        datum.screen_start.x,
+        datum.screen_start.y,
+        datum.screen_end.x,
+        datum.screen_end.y,
+        datum.screen_start.x,
+        datum.screen_start.y,
+        datum.screen_end.x,
+        datum.screen_end.y,
+        label_x,
+        label_y,
+        label,
+    );
 }
 
 fn failed_computed_sources(
@@ -1154,6 +1431,7 @@ fn render_annotations(
             }
             SelectionItem::Point(_)
             | SelectionItem::Curve(_)
+            | SelectionItem::Datum(_)
             | SelectionItem::Feature(_)
             | SelectionItem::FeatureCorner(_) => continue,
         };
@@ -1187,6 +1465,7 @@ fn render_annotations(
                 SelectionItem::Dimension(id) => EditorProblemTarget::Dimension(id),
                 SelectionItem::Point(_)
                 | SelectionItem::Curve(_)
+                | SelectionItem::Datum(_)
                 | SelectionItem::Feature(_)
                 | SelectionItem::FeatureCorner(_) => unreachable!(),
             };
@@ -1479,6 +1758,7 @@ const fn constraint_glyph(
         DocumentConstraintDefinition::FixedPoint { .. }
         | DocumentConstraintDefinition::FixedCoordinate { .. } => ("fixed", "Fix"),
         DocumentConstraintDefinition::Coincident { .. }
+        | DocumentConstraintDefinition::CoincidentWithOrigin { .. }
         | DocumentConstraintDefinition::ExternalPointCoincident { .. } => ("coincident", "Coin"),
         DocumentConstraintDefinition::Horizontal { .. }
         | DocumentConstraintDefinition::HorizontalPoints { .. }
@@ -1486,11 +1766,13 @@ const fn constraint_glyph(
         DocumentConstraintDefinition::Vertical { .. }
         | DocumentConstraintDefinition::VerticalPoints { .. }
         | DocumentConstraintDefinition::VerticalPointToMidpoint { .. } => ("vertical", "V"),
-        DocumentConstraintDefinition::PointOnCurve { .. } => ("point-on-curve", "On"),
+        DocumentConstraintDefinition::PointOnCurve { .. }
+        | DocumentConstraintDefinition::PointOnDatumAxis { .. } => ("point-on-curve", "On"),
         DocumentConstraintDefinition::Parallel { .. } => ("parallel", "∥"),
         DocumentConstraintDefinition::Perpendicular { .. } => ("perpendicular", "⊥"),
         DocumentConstraintDefinition::ExternalLineCollinear { .. }
-        | DocumentConstraintDefinition::Collinear { .. } => ("collinear", "Col"),
+        | DocumentConstraintDefinition::Collinear { .. }
+        | DocumentConstraintDefinition::CollinearWithDatumAxis { .. } => ("collinear", "Col"),
         DocumentConstraintDefinition::Concentric { .. } => ("concentric", "Con"),
         DocumentConstraintDefinition::EqualLength { .. } => ("equal-length", "L="),
         DocumentConstraintDefinition::EqualRadius { .. } => ("equal-radius", "R="),
@@ -1768,6 +2050,8 @@ fn render_inference_candidates(output: &mut String, resolution: &DraftInferenceR
 const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
     match family {
         DraftInferenceFamily::PointIdentity => "point-identity",
+        DraftInferenceFamily::DatumOrigin => "datum-origin",
+        DraftInferenceFamily::DatumAxis => "datum-axis",
         DraftInferenceFamily::PointOnCurve => "point-on-curve",
         DraftInferenceFamily::PointOnCreatedCurve => "point-on-created-curve",
         DraftInferenceFamily::Midpoint => "midpoint",
@@ -1788,6 +2072,8 @@ const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
 const fn inference_family_label(family: DraftInferenceFamily) -> &'static str {
     match family {
         DraftInferenceFamily::PointIdentity => "Reuse existing point",
+        DraftInferenceFamily::DatumOrigin => "Coincident with Origin",
+        DraftInferenceFamily::DatumAxis => "Point on datum axis",
         DraftInferenceFamily::PointOnCurve => "Point on curve",
         DraftInferenceFamily::PointOnCreatedCurve => "Circle through point",
         DraftInferenceFamily::Midpoint => "Midpoint",
@@ -1814,6 +2100,23 @@ const fn inference_relation_presentation(
             "Reuse existing point",
             SceneConstraintGlyph::Coincident,
         ),
+        DraftInferenceRelation::CoincidentWithOrigin => (
+            "coincident-with-origin",
+            "Coincident with Origin",
+            SceneConstraintGlyph::Coincident,
+        ),
+        DraftInferenceRelation::PointOnDatumAxis { axis } => match axis {
+            geosolve_sketch::DocumentCoordinateAxis::X => (
+                "point-on-x-axis",
+                "Point on X axis",
+                SceneConstraintGlyph::Horizontal,
+            ),
+            geosolve_sketch::DocumentCoordinateAxis::Y => (
+                "point-on-y-axis",
+                "Point on Y axis",
+                SceneConstraintGlyph::Vertical,
+            ),
+        },
         DraftInferenceRelation::PointOnCurve { .. } => (
             "point-on-curve",
             "Point on curve",
@@ -2083,9 +2386,11 @@ mod tests {
     };
 
     use super::{
-        CanvasCamera, constraint_glyph, construction_geometry_markup, dimension_kind, svg_markup,
-        svg_markup_with_computed_context, svg_markup_with_computed_context_and_action_stamp,
-        svg_markup_with_context, viewport,
+        CanvasCamera, CanvasDisplayOptions, adaptive_grid_spec, constraint_glyph,
+        construction_geometry_markup, dimension_kind, grid_path, svg_markup,
+        svg_markup_with_computed_context,
+        svg_markup_with_computed_context_action_stamp_and_display,
+        svg_markup_with_computed_context_and_action_stamp, svg_markup_with_context, viewport,
     };
     use crate::workbench::panels::{lifecycle_presentation, problem_markup};
 
@@ -2117,6 +2422,44 @@ mod tests {
                 expected[axis]
             );
         }
+    }
+
+    fn assert_offscreen_datum_clipping(session: &RetainedSketchDocumentSession) {
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted empty scene");
+        let viewport =
+            Viewport::new([1000.0, 700.0], [0.0, -7.02], 50.0).expect("offscreen viewport");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .expect("offscreen scene");
+        let markup = svg_markup_with_computed_context_action_stamp_and_display(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions {
+                grid_visible: false,
+            },
+            viewport,
+        );
+        assert!(!markup.contains("data-datum=\"origin\""));
+        assert!(!markup.contains("data-datum=\"x-axis\""));
+        assert!(markup.contains("data-datum=\"y-axis\""));
     }
 
     fn inference_fixture() -> (SketchDesignIdentity, u64, Viewport, [DesignPointId; 2]) {
@@ -2213,6 +2556,158 @@ mod tests {
                 origin_center[1] + 50.0 / camera.pixels_per_model_unit,
             ],
         );
+
+        assert!(camera.center_origin());
+        assert_point_close(camera.model_center, [0.0, 0.0]);
+        assert!(!camera.center_origin());
+    }
+
+    #[test]
+    fn adaptive_grid_uses_origin_aligned_one_two_five_steps_and_is_visual_only() {
+        for scale in [2.0, 7.5, 50.0, 175.0, 2_000.0] {
+            let viewport =
+                Viewport::new([1000.0, 700.0], [0.37, -1.25], scale).expect("grid viewport");
+            let spec = adaptive_grid_spec(viewport).expect("adaptive grid");
+            let decade = 10.0_f64.powf(spec.model_major_step.log10().floor());
+            let mantissa = spec.model_major_step / decade;
+            assert!(
+                [1.0, 2.0, 5.0]
+                    .into_iter()
+                    .any(|expected| (mantissa - expected).abs() <= 1.0e-12),
+                "{spec:?} must use a 1-2-5 model step"
+            );
+            assert!(spec.major_pixels >= 96.0 - 1.0e-9);
+            assert!(spec.major_pixels <= 240.0 + 1.0e-9);
+            let path = grid_path(spec.screen_origin, spec.minor_pixels, viewport.screen_size);
+            assert!(path.starts_with(&format!(
+                "M{:.3} 0V700.000",
+                spec.screen_origin.x.rem_euclid(spec.minor_pixels)
+            )));
+        }
+
+        let viewport = viewport();
+        let markup = svg_markup_with_computed_context_action_stamp_and_display(
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions { grid_visible: true },
+            viewport,
+        );
+        assert!(markup.contains("data-grid-kind=\"adaptive-1-2-5\""));
+        assert!(markup.contains("class=\"wb-grid-minor\""));
+        let grid = markup
+            .split_once("<g class=\"wb-grid\"")
+            .and_then(|(_, rest)| rest.split_once("</g>"))
+            .map(|(grid, _)| grid)
+            .expect("grid group");
+        assert!(grid.contains("aria-hidden=\"true\""));
+        assert!(!grid.contains("data-editor-item"));
+
+        let hidden = svg_markup_with_computed_context_action_stamp_and_display(
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions {
+                grid_visible: false,
+            },
+            viewport,
+        );
+        assert!(!hidden.contains("data-grid-kind"));
+    }
+
+    #[test]
+    fn intrinsic_datums_render_as_selectable_protected_references_behind_native_geometry() {
+        let document = SketchDocument::new(10.0).expect("document");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted empty scene");
+        let viewport = viewport();
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .expect("scene");
+        let markup = svg_markup_with_computed_context_action_stamp_and_display(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[SelectionItem::Datum(geosolve_sketch::SketchDatum::Origin)],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions { grid_visible: true },
+            viewport,
+        );
+        for (key, label) in [("origin", "Origin"), ("x-axis", "X"), ("y-axis", "Y")] {
+            assert!(markup.contains(&format!("data-datum=\"{key}\"")));
+            assert!(markup.contains(label));
+        }
+        assert_eq!(markup.matches("data-protected=\"true\"").count(), 3);
+        assert!(markup.contains("wb-datum-origin selected"));
+        assert!(markup.contains("M0.000 350.000L1000.000 350.000"));
+        assert!(markup.contains("M500.000 700.000L500.000 0.000"));
+        let references = markup.find("class=\"wb-reference-geometry\"").unwrap();
+        let native = markup.find("class=\"wb-geometry\"").unwrap();
+        assert!(
+            references < native,
+            "native geometry must paint over datums"
+        );
+
+        let mut hidden_policy = GeometryInteractionPolicy::default();
+        hidden_policy.visibility.reference_geometry = false;
+        let hidden = svg_markup_with_computed_context_action_stamp_and_display(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            hidden_policy,
+            CanvasDisplayOptions { grid_visible: true },
+            viewport,
+        );
+        assert!(!hidden.contains("data-datum="));
+        assert!(hidden.contains("data-grid-kind=\"adaptive-1-2-5\""));
+
+        assert_offscreen_datum_clipping(&session);
     }
 
     #[test]
@@ -2244,8 +2739,9 @@ mod tests {
         tracking_engine
             .remember_reference(anchor)
             .expect("remember point reference");
-        let tracking_frame =
+        let mut tracking_frame =
             inference_frame(design, accepted_revision, viewport, [2.0, 0.0], Vec::new());
+        tracking_frame.geometry_policy.visibility.reference_geometry = false;
         let tracking = tracking_engine
             .resolve(&tracking_frame, DraftInferenceInput::default())
             .expect("tracking-only inference");
@@ -2383,6 +2879,38 @@ mod tests {
             assert!((63.0..=937.0).contains(&point.x));
             assert!((63.0..=637.0).contains(&point.y));
         }
+    }
+
+    #[test]
+    fn empty_fit_resets_to_the_canonical_origin_camera() {
+        let document = SketchDocument::new(10.0).expect("document");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted empty document");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport(),
+            0.8,
+        )
+        .expect("empty scene");
+        let mut camera = CanvasCamera {
+            model_center: [15.0, -4.0],
+            pixels_per_model_unit: 137.0,
+        };
+        assert!(!camera.fit_scene_or_reset(Some(&scene)));
+        assert_eq!(camera, CanvasCamera::default());
+        camera.model_center = [1.0, 2.0];
+        assert!(!camera.fit_scene_or_reset(None));
+        assert_eq!(camera, CanvasCamera::default());
     }
 
     #[test]

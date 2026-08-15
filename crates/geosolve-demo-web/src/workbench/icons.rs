@@ -202,6 +202,8 @@ pub(crate) fn construction_role_icon_markup() -> String {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TreeIconKind {
+    DatumOrigin,
+    DatumAxis,
     Point,
     Curve,
     Constraint,
@@ -213,6 +215,14 @@ pub(crate) enum TreeIconKind {
 
 pub(crate) fn tree_icon_markup(kind: TreeIconKind) -> String {
     let (key, fragment) = match kind {
+        TreeIconKind::DatumOrigin => (
+            "datum-origin",
+            "<circle r=\"3.5\"/><path d=\"M-8 0h16M0-8v16\"/>",
+        ),
+        TreeIconKind::DatumAxis => (
+            "datum-axis",
+            "<path d=\"M-8 0H8M5-3l3 3-3 3\"/><circle r=\"1.5\"/>",
+        ),
         TreeIconKind::Point => ("point", POINT),
         TreeIconKind::Curve => (
             "curve",
@@ -387,6 +397,8 @@ mod tests {
     #[test]
     fn tree_object_categories_have_distinct_text_free_vector_symbols() {
         let markup = [
+            TreeIconKind::DatumOrigin,
+            TreeIconKind::DatumAxis,
             TreeIconKind::Point,
             TreeIconKind::Curve,
             TreeIconKind::Constraint,

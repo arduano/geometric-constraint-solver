@@ -269,10 +269,11 @@ impl PointerMoveQueue {
         self.stationary_suppression(false, owns_queued_sample)
     }
 
-    fn clear_stationary_sample(&mut self) {
-        self.last_input = None;
+    fn clear_stationary_sample(&mut self) -> bool {
+        let cleared = self.last_input.take().is_some();
         self.suppressed = false;
         self.invalidate_before_immediate_action();
+        cleared
     }
 
     fn take_for_frame(&mut self, generation: u64) -> Option<DraftingPointerSample> {
@@ -329,6 +330,111 @@ fn change_owns_option_control_click(
     in_branch_editor: bool,
 ) -> bool {
     matches!(tag_name, "INPUT" | "SELECT" | "OPTION") && (in_tool_options || in_branch_editor)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HistoryShortcut {
+    Undo,
+    Redo,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn history_shortcut(
+    key: &str,
+    modifiers: geosolve_constraint_editor::Modifiers,
+    alt: bool,
+) -> Option<HistoryShortcut> {
+    if alt || modifiers.control == modifiers.command {
+        return None;
+    }
+    if key.eq_ignore_ascii_case("z") {
+        return Some(if modifiers.shift {
+            HistoryShortcut::Redo
+        } else {
+            HistoryShortcut::Undo
+        });
+    }
+    (modifiers.control && !modifiers.shift && key.eq_ignore_ascii_case("y"))
+        .then_some(HistoryShortcut::Redo)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn canvas_cursor_key(
+    tool: geosolve_constraint_editor::EditorTool,
+    authoring_active: bool,
+    feature_authoring_active: bool,
+    panning: bool,
+) -> &'static str {
+    if panning {
+        "pan"
+    } else if feature_authoring_active {
+        "fillet"
+    } else if authoring_active {
+        "constraint"
+    } else if matches!(tool, geosolve_constraint_editor::EditorTool::Select) {
+        "select"
+    } else {
+        "draw"
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CoordinateHud {
+    text: String,
+    title: String,
+    adjusted: bool,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn coordinate_hud(
+    viewport: geosolve_constraint_editor::Viewport,
+    pointer: Option<geosolve_constraint_editor::PointerInput>,
+    inference: Option<&geosolve_constraint_editor::DraftInferenceResolution>,
+) -> CoordinateHud {
+    let Some(pointer) = pointer else {
+        return CoordinateHud {
+            text: "X — · Y —".into(),
+            title: "Move the pointer over the sketch plane to inspect coordinates".into(),
+            adjusted: false,
+        };
+    };
+    let raw = viewport.screen_to_model(pointer.position);
+    let matching_inference = inference.filter(|resolution| {
+        screen_distance(resolution.raw_screen_position, pointer.position) <= 1.0e-6
+    });
+    let displayed = matching_inference.map_or(raw, |resolution| resolution.adjusted_model_position);
+    let adjusted = matching_inference.is_some_and(|resolution| {
+        screen_distance(
+            resolution.adjusted_screen_position,
+            resolution.raw_screen_position,
+        ) > 1.0e-6
+    });
+    let displayed = displayed.map(normalize_display_zero);
+    let raw = raw.map(normalize_display_zero);
+    CoordinateHud {
+        text: format!("X {:.3} · Y {:.3}", displayed[0], displayed[1]),
+        title: if adjusted {
+            format!("Inferred position · raw X {:.3}, Y {:.3}", raw[0], raw[1])
+        } else {
+            "Canvas pointer coordinates".into()
+        },
+        adjusted,
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn normalize_display_zero(value: f64) -> f64 {
+    if value.abs() < 0.0005 { 0.0 } else { value }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn screen_distance(
+    first: geosolve_constraint_editor::ScreenPoint,
+    second: geosolve_constraint_editor::ScreenPoint,
+) -> f64 {
+    (first.x - second.x).hypot(first.y - second.y)
 }
 
 /// Exactly one nonmodal tool-option family may occupy the canvas overlay stack.
@@ -440,7 +546,7 @@ impl OptionOverlayKind {
             Self::Conic(EditorTool::Parabola) => "Parabola options",
             Self::Conic(EditorTool::Hyperbola) => "Hyperbola options",
             Self::Nurbs => "NURBS options",
-            Self::ConstructionDisplay => "Construction display",
+            Self::ConstructionDisplay => "Canvas display",
             Self::Conic(_) => "Conic options",
         }
     }
@@ -553,6 +659,10 @@ fn geometry_hover_selector(item: geosolve_constraint_editor::SelectionItem) -> O
             "#wb-viewport [data-editor-item=\"curve\"][data-persistent-id=\"{}\"][data-editor-segment=\"{}\"]",
             span.curve, span.segment
         )),
+        geosolve_constraint_editor::SelectionItem::Datum(datum) => Some(format!(
+            "#wb-viewport [data-editor-item=\"datum\"][data-datum=\"{}\"]",
+            datum_key(datum),
+        )),
         geosolve_constraint_editor::SelectionItem::Feature(feature) => Some(format!(
             "#wb-viewport [data-editor-item=\"feature-corner\"][data-feature-id=\"{feature}\"]"
         )),
@@ -562,6 +672,15 @@ fn geometry_hover_selector(item: geosolve_constraint_editor::SelectionItem) -> O
         )),
         geosolve_constraint_editor::SelectionItem::Constraint(_)
         | geosolve_constraint_editor::SelectionItem::Dimension(_) => None,
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn datum_key(datum: geosolve_sketch::SketchDatum) -> &'static str {
+    match datum {
+        geosolve_sketch::SketchDatum::Origin => "origin",
+        geosolve_sketch::SketchDatum::XAxis => "x-axis",
+        geosolve_sketch::SketchDatum::YAxis => "y-axis",
     }
 }
 
@@ -854,7 +973,8 @@ pub(crate) mod wasm {
         DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentConstraintId,
         DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentDimensionId,
         DocumentDimensionMode, DocumentHyperbolaBranch, DocumentSolveRequest, GeometryRole,
-        PersistentId, RetainedSketchDocumentSession, SketchDocument, TangentOrientation,
+        PersistentId, RetainedSketchDocumentSession, SketchDatum, SketchDocument,
+        TangentOrientation,
     };
     use geosolve_sketch_features::{ComputedCornerRef, ComputedFeatureCornerId, ComputedFeatureId};
     use wasm_bindgen::JsCast;
@@ -880,6 +1000,7 @@ pub(crate) mod wasm {
         feature_pending: Vec<FeatureAuthoringPick>,
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
+        grid_visible: bool,
         pan_gesture: Option<PanGesture>,
         pointer_captures: super::CanvasPointerCaptures,
         pointer_moves: Rc<RefCell<super::PointerMoveQueue>>,
@@ -949,6 +1070,7 @@ pub(crate) mod wasm {
             feature_pending: Vec::new(),
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
+            grid_visible: true,
             pan_gesture: None,
             pointer_captures: super::CanvasPointerCaptures::default(),
             pointer_moves: Rc::new(RefCell::new(super::PointerMoveQueue::default())),
@@ -1604,12 +1726,14 @@ pub(crate) mod wasm {
         let leave_workbench = Rc::clone(workbench);
         let leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             let mut wb = leave_workbench.borrow_mut();
-            wb.pointer_moves.borrow_mut().clear_stationary_sample();
+            let cleared_hud_sample = wb.pointer_moves.borrow_mut().clear_stationary_sample();
             let effects = wb.coordinator.editor_mut().pointer_leave();
-            if effects.is_empty() {
+            if effects.is_empty() && !cleared_hud_sample {
                 return;
             }
-            dispatch_effects(&mut wb, effects);
+            if !effects.is_empty() {
+                dispatch_effects(&mut wb, effects);
+            }
             drop(wb);
             let _ = render(&leave_document, &leave_workbench);
         });
@@ -1619,6 +1743,7 @@ pub(crate) mod wasm {
 
         let double_document = document.clone();
         let double_workbench = Rc::clone(workbench);
+        let double_viewport = viewport.clone();
         let double = Closure::<dyn FnMut(MouseEvent)>::new(move |event: MouseEvent| {
             if event
                 .target()
@@ -1626,6 +1751,19 @@ pub(crate) mod wasm {
                 .and_then(|target| target.closest("[data-problem-marker]").ok().flatten())
                 .is_some()
             {
+                return;
+            }
+            let inside_view_box = {
+                let wb = double_workbench.borrow();
+                client_screen_point(
+                    &double_viewport,
+                    wb.camera.viewport(),
+                    f64::from(event.client_x()),
+                    f64::from(event.client_y()),
+                )
+                .is_some()
+            };
+            if !inside_view_box {
                 return;
             }
             event.prevent_default();
@@ -1858,7 +1996,13 @@ pub(crate) mod wasm {
                 let Some(scene) = editor_scene(&wb) else {
                     return;
                 };
-                let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
+                let captured = wb.pointer_captures.contains(event.pointer_id());
+                let input = if captured {
+                    captured_pointer_input(&callback_viewport, scene.viewport, &event)
+                } else {
+                    pointer_input(&callback_viewport, scene.viewport, &event)
+                };
+                let Some(input) = input else {
                     return;
                 };
                 input
@@ -1923,7 +2067,12 @@ pub(crate) mod wasm {
                 }
                 return;
             };
-            let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
+            let input = if owns_pointer {
+                captured_pointer_input(&callback_viewport, scene.viewport, &event)
+            } else {
+                pointer_input(&callback_viewport, scene.viewport, &event)
+            };
+            let Some(input) = input else {
                 if wb.pointer_captures.contains(event.pointer_id()) {
                     cancel_captured_canvas_interactions(
                         &callback_viewport,
@@ -2038,15 +2187,14 @@ pub(crate) mod wasm {
             let callback_viewport = viewport.clone();
             let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
                 let mut wb = callback_workbench.borrow_mut();
-                let screen = client_screen_point(
-                    &callback_viewport,
-                    wb.camera.viewport(),
-                    f64::from(event.client_x()),
-                    f64::from(event.client_y()),
-                );
                 match name {
                     "pointerdown" if event.button() == 1 => {
-                        let Some(origin) = screen else {
+                        let Some(origin) = client_screen_point(
+                            &callback_viewport,
+                            wb.camera.viewport(),
+                            f64::from(event.client_x()),
+                            f64::from(event.client_y()),
+                        ) else {
                             return;
                         };
                         event.prevent_default();
@@ -2076,6 +2224,8 @@ pub(crate) mod wasm {
                             origin_center: wb.camera.model_center,
                         });
                         wb.notice = "Panning canvas".into();
+                        drop(wb);
+                        let _ = render(&callback_document, &callback_workbench);
                     }
                     "pointermove" => {
                         let Some(gesture) = wb
@@ -2084,7 +2234,12 @@ pub(crate) mod wasm {
                         else {
                             return;
                         };
-                        let Some(current) = screen else {
+                        let Some(current) = captured_client_screen_point(
+                            &callback_viewport,
+                            wb.camera.viewport(),
+                            f64::from(event.client_x()),
+                            f64::from(event.client_y()),
+                        ) else {
                             return;
                         };
                         event.prevent_default();
@@ -2128,6 +2283,14 @@ pub(crate) mod wasm {
         let callback_viewport = viewport.clone();
         let callback = Closure::<dyn FnMut(WheelEvent)>::new(move |event: WheelEvent| {
             let mut wb = callback_workbench.borrow_mut();
+            let Some(anchor) = client_screen_point(
+                &callback_viewport,
+                wb.camera.viewport(),
+                f64::from(event.client_x()),
+                f64::from(event.client_y()),
+            ) else {
+                return;
+            };
             if wb.pointer_captures.is_empty() {
                 let effects = wb.coordinator.editor_mut().clear_fillet_branch_preview();
                 dispatch_effects(&mut wb, effects);
@@ -2140,14 +2303,6 @@ pub(crate) mod wasm {
                 );
             }
             invalidate_draft_inference_for_camera_change(&mut wb);
-            let Some(anchor) = client_screen_point(
-                &callback_viewport,
-                wb.camera.viewport(),
-                f64::from(event.client_x()),
-                f64::from(event.client_y()),
-            ) else {
-                return;
-            };
             event.prevent_default();
             let factor = (-event.delta_y() * 0.0015).exp();
             if wb.camera.zoom_about(anchor, factor) {
@@ -2196,15 +2351,15 @@ pub(crate) mod wasm {
             if event.button() != 0 {
                 return;
             }
-            if wb.pointer_captures.is_empty() {
-                wb.pointer_moves.borrow_mut().drain_before_terminal();
-            }
             let Some(scene) = editor_scene(&wb) else {
                 return;
             };
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
+            if wb.pointer_captures.is_empty() {
+                wb.pointer_moves.borrow_mut().drain_before_terminal();
+            }
             let drafting_sample = wb.pointer_moves.borrow_mut().observe(input);
             if wb.pointer_captures.is_empty() && painted_action.is_some() {
                 let painted = resolve_canvas_fillet_action_at_point(
@@ -2415,6 +2570,21 @@ pub(crate) mod wasm {
         let _ = render(document, workbench);
     }
 
+    fn keyboard_target_is_editable_or_dialog(event: &KeyboardEvent) -> bool {
+        event
+            .target()
+            .and_then(|target| target.dyn_into::<Element>().ok())
+            .is_some_and(|target| {
+                matches!(target.tag_name().as_str(), "INPUT" | "SELECT" | "TEXTAREA")
+                    || target
+                        .closest(concat!(
+                            "[role=\"dialog\"], [contenteditable=\"\"], ",
+                            "[contenteditable=\"true\"], [contenteditable=\"plaintext-only\"]"
+                        ))
+                        .is_ok_and(|owner| owner.is_some())
+            })
+    }
+
     #[allow(
         clippy::too_many_lines,
         reason = "keyboard precedence is intentionally visible in one delegated event route"
@@ -2455,6 +2625,51 @@ pub(crate) mod wasm {
             {
                 // Text editing and native button activation inside this dialog
                 // must never fall through to any sketch keyboard behavior.
+                return;
+            }
+            if !keyboard_target_is_editable_or_dialog(&event)
+                && let Some(shortcut) = super::history_shortcut(
+                    &event.key(),
+                    Modifiers {
+                        shift: event.shift_key(),
+                        control: event.ctrl_key(),
+                        command: event.meta_key(),
+                    },
+                    event.alt_key(),
+                )
+            {
+                event.prevent_default();
+                let mut wb = callback_workbench.borrow_mut();
+                wb.pointer_moves
+                    .borrow_mut()
+                    .invalidate_before_immediate_action();
+                if !wb.pointer_captures.is_empty() {
+                    if let Ok(viewport) = required(&callback_document, "wb-viewport") {
+                        cancel_captured_canvas_interactions(
+                            &viewport,
+                            &mut wb,
+                            super::CanvasPointerTerminal::InteractionCancel,
+                            "Active interaction canceled before history navigation",
+                        );
+                    } else {
+                        let _ = cancel_captured_canvas_state(
+                            &mut wb,
+                            super::CanvasPointerTerminal::InteractionCancel,
+                            "Active interaction canceled before history navigation",
+                        );
+                    }
+                }
+                perform_action(
+                    &callback_document,
+                    &mut wb,
+                    match shortcut {
+                        super::HistoryShortcut::Undo => "undo",
+                        super::HistoryShortcut::Redo => "redo",
+                    },
+                );
+                save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
                 return;
             }
             if event.key() == "Escape" && !callback_workbench.borrow().pointer_captures.is_empty() {
@@ -2959,7 +3174,15 @@ pub(crate) mod wasm {
                 );
             }),
             "zoom-fit" => cancel_before_camera_change(document, wb).map(|()| {
-                fit_camera(wb);
+                wb.notice = if fit_camera(wb) {
+                    "View fitted to sketch geometry".into()
+                } else {
+                    "Empty sketch reset to the Origin view".into()
+                };
+            }),
+            "zoom-origin" => cancel_before_camera_change(document, wb).map(|()| {
+                wb.camera.center_origin();
+                wb.notice = "View centred on Origin".into();
             }),
             _ => Ok(()),
         };
@@ -2987,7 +3210,9 @@ pub(crate) mod wasm {
                 | "reproduction-open"
                 | "reproduction-select"
                 | "reproduction-close"
-                | "reproduction-load" => wb.notice.clone(),
+                | "reproduction-load"
+                | "zoom-fit"
+                | "zoom-origin" => wb.notice.clone(),
                 _ => "Action retained".into(),
             },
         );
@@ -3115,7 +3340,7 @@ pub(crate) mod wasm {
         if let Ok(textarea) = reproduction_payload_textarea(document) {
             textarea.set_value("");
         }
-        fit_camera(wb);
+        let _ = fit_camera(wb);
         wb.notice = "Reproduction payload loaded as a fresh editable workspace".into();
         Ok(())
     }
@@ -3137,6 +3362,17 @@ pub(crate) mod wasm {
     }
 
     fn toggle_geometry_role(wb: &mut Workbench) -> Result<(), String> {
+        if wb
+            .coordinator
+            .editor()
+            .selection()
+            .iter()
+            .any(|item| matches!(item, SelectionItem::Datum(_)))
+        {
+            return Err(
+                "intrinsic reference geometry has a protected role and cannot be converted".into(),
+            );
+        }
         if wb.coordinator.selected_geometry_role_state().is_some() {
             let expected = wb.coordinator.session().design_identity();
             wb.coordinator
@@ -3186,6 +3422,7 @@ pub(crate) mod wasm {
                 SelectionItem::Point(_)
                 | SelectionItem::Constraint(_)
                 | SelectionItem::Dimension(_)
+                | SelectionItem::Datum(_)
                 | SelectionItem::Feature(_)
                 | SelectionItem::FeatureCorner(_) => None,
             })
@@ -3260,6 +3497,12 @@ pub(crate) mod wasm {
 
     fn delete_selection(wb: &mut Workbench) -> Result<(), String> {
         let selected = wb.coordinator.editor().selection().to_vec();
+        if selected
+            .iter()
+            .any(|item| matches!(item, SelectionItem::Datum(_)))
+        {
+            return Err("intrinsic reference geometry is protected and cannot be deleted".into());
+        }
         let expected_features = wb.coordinator.feature_document().identity();
         match selected.as_slice() {
             [SelectionItem::Feature(feature)] => wb
@@ -3327,7 +3570,7 @@ pub(crate) mod wasm {
                 wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
                 wb.construction_preview = None;
                 wb.problems = super::DismissibleDisclosure::default();
-                fit_camera(wb);
+                let _ = fit_camera(wb);
                 wb.notice = format!(
                     "{} opened as an editable workspace",
                     wb.samples.selected_title().unwrap_or("Sample")
@@ -3360,6 +3603,7 @@ pub(crate) mod wasm {
                     SelectionItem::Point(_)
                     | SelectionItem::Constraint(_)
                     | SelectionItem::Dimension(_)
+                    | SelectionItem::Datum(_)
                     | SelectionItem::Feature(_)
                     | SelectionItem::FeatureCorner(_) => None,
                 };
@@ -3445,6 +3689,7 @@ pub(crate) mod wasm {
                     SelectionItem::Point(_)
                     | SelectionItem::Constraint(_)
                     | SelectionItem::Dimension(_)
+                    | SelectionItem::Datum(_)
                     | SelectionItem::Feature(_)
                     | SelectionItem::FeatureCorner(_) => None,
                 };
@@ -3937,10 +4182,9 @@ pub(crate) mod wasm {
         )
     }
 
-    fn fit_camera(wb: &mut Workbench) {
-        if let Some(scene) = editor_scene(wb) {
-            wb.camera.fit_scene(&scene);
-        }
+    fn fit_camera(wb: &mut Workbench) -> bool {
+        let scene = editor_scene(wb);
+        wb.camera.fit_scene_or_reset(scene.as_ref())
     }
 
     #[allow(
@@ -4010,7 +4254,7 @@ pub(crate) mod wasm {
         let computed_problems = coordinator.computed_feature_problems();
         let active_fillet_preview = coordinator.editor().fillet_branch_preview();
         required(document, "wb-viewport")?.set_inner_html(
-            &super::scene::svg_markup_with_computed_context_and_action_stamp(
+            &super::scene::svg_markup_with_computed_context_action_stamp_and_display(
                 scene.as_ref(),
                 accepted,
                 &computed_problems,
@@ -4023,6 +4267,9 @@ pub(crate) mod wasm {
                 active_fillet_preview.as_ref(),
                 fillet_action_stamp,
                 coordinator.editor().geometry_interaction_policy(),
+                super::scene::CanvasDisplayOptions {
+                    grid_visible: wb.grid_visible,
+                },
                 wb.camera.viewport(),
             ),
         );
@@ -4054,6 +4301,18 @@ pub(crate) mod wasm {
             "{:.1} px / unit",
             wb.camera.pixels_per_model_unit
         )));
+        let coordinate = super::coordinate_hud(
+            wb.camera.viewport(),
+            wb.pointer_moves.borrow().last_input,
+            coordinator.editor().draft_inference_resolution(),
+        );
+        let coordinate_element = required(document, "wb-pointer-coordinate")?;
+        coordinate_element.set_text_content(Some(&coordinate.text));
+        coordinate_element.set_attribute("title", &coordinate.title)?;
+        coordinate_element.set_attribute(
+            "data-inference-adjusted",
+            if coordinate.adjusted { "true" } else { "false" },
+        )?;
         required(document, "wb-status-count")?.set_text_content(Some(&format!(
             "{} points / {} curves",
             design.points().len(),
@@ -4123,12 +4382,13 @@ pub(crate) mod wasm {
                 )?;
             }
         }
-        render_geometry_controls(document, coordinator)?;
+        render_geometry_controls(document, coordinator, wb.grid_visible)?;
         render_action_availability(document, coordinator, &wb.authoring, &wb.feature_authoring)?;
         render_feature_options(document, &wb.feature_authoring)?;
         render_reproduction_overlay(document, wb.reproduction_overlay_open, &wb.notice)?;
         render_tool_options_overlay(document, &wb)?;
         render_dimension_target_editor(document, coordinator)?;
+        render_datum_inspector(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
         render_feature_editor(document, coordinator)?;
         render_fillet_action_panel(
@@ -4139,12 +4399,22 @@ pub(crate) mod wasm {
         )?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
+        required(document, "workbench-root")?.set_attribute(
+            "data-canvas-cursor",
+            super::canvas_cursor_key(
+                coordinator.editor().tool(),
+                wb.authoring.active_tool().is_some(),
+                wb.feature_authoring.active_tool().is_some(),
+                wb.pan_gesture.is_some(),
+            ),
+        )?;
         Ok(())
     }
 
     fn render_geometry_controls(
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
+        grid_visible: bool,
     ) -> Result<(), JsValue> {
         let policy = coordinator.editor().geometry_interaction_policy();
         let scope_key = match policy.scope {
@@ -4166,6 +4436,11 @@ pub(crate) mod wasm {
                 "wb-show-implicit-construction",
                 policy.visibility.implicit_construction,
             ),
+            (
+                "wb-show-reference-geometry",
+                policy.visibility.reference_geometry,
+            ),
+            ("wb-show-grid", grid_visible),
         ] {
             if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
                 input.set_checked(visible);
@@ -4173,6 +4448,11 @@ pub(crate) mod wasm {
         }
 
         let selected_state = coordinator.selected_geometry_role_state();
+        let datum_selected = coordinator
+            .editor()
+            .selection()
+            .iter()
+            .any(|item| matches!(item, SelectionItem::Datum(_)));
         let authoring_role = coordinator.editor().authoring_geometry_role();
         let pressed = match selected_state {
             Some(GeometryRoleSelectionState::Construction) => "true",
@@ -4181,10 +4461,13 @@ pub(crate) mod wasm {
             Some(GeometryRoleSelectionState::Profile) | None => "false",
         };
         let button = required(document, "wb-geometry-role")?;
+        set_disabled(&button, datum_selected)?;
         button.set_attribute("aria-pressed", pressed)?;
         button.set_attribute(
             "aria-label",
-            if selected_state.is_some() {
+            if datum_selected {
+                "Intrinsic reference geometry has a protected role"
+            } else if selected_state.is_some() {
                 "Toggle selected complete curves between Profile and Construction"
             } else {
                 "Toggle the role assigned to newly authored curves"
@@ -4192,7 +4475,7 @@ pub(crate) mod wasm {
         )?;
 
         let inspector = required(document, "wb-geometry-role-editor")?;
-        if let Some(state) = selected_state {
+        if let Some(state) = selected_state.filter(|_| !datum_selected) {
             inspector.remove_attribute("hidden")?;
             let label = match state {
                 GeometryRoleSelectionState::Profile => "Profile",
@@ -4221,6 +4504,15 @@ pub(crate) mod wasm {
                 GeometryRole::Construction => "construction",
             },
         )?;
+        root.set_attribute(
+            "data-reference-geometry",
+            if policy.visibility.reference_geometry {
+                "visible"
+            } else {
+                "hidden"
+            },
+        )?;
+        root.set_attribute("data-grid", if grid_visible { "visible" } else { "hidden" })?;
         Ok(())
     }
 
@@ -4245,6 +4537,35 @@ pub(crate) mod wasm {
                 provenance.owner.corner,
             ))
         })
+    }
+
+    fn render_datum_inspector(
+        document: &Document,
+        coordinator: &RetainedEditorCoordinator,
+    ) -> Result<(), JsValue> {
+        let inspector = required(document, "wb-datum-inspector")?;
+        let [SelectionItem::Datum(datum)] = coordinator.editor().selection() else {
+            inspector.set_attribute("hidden", "")?;
+            return Ok(());
+        };
+        let (name, detail) = match datum {
+            SketchDatum::Origin => (
+                "Origin",
+                "Fixed at model X 0, Y 0. It is selectable as a semantic Coincident operand but cannot be moved, deleted, suppressed, unlocked, or role-converted.",
+            ),
+            SketchDatum::XAxis => (
+                "X axis",
+                "Infinite horizontal datum through Origin. It can constrain points and line supports while remaining immutable intrinsic reference geometry.",
+            ),
+            SketchDatum::YAxis => (
+                "Y axis",
+                "Infinite vertical datum through Origin. It can constrain points and line supports while remaining immutable intrinsic reference geometry.",
+            ),
+        };
+        required(document, "wb-datum-name")?.set_text_content(Some(name));
+        required(document, "wb-datum-detail")?.set_text_content(Some(detail));
+        inspector.remove_attribute("hidden")?;
+        Ok(())
     }
 
     fn mark_geometry_hover(
@@ -4877,6 +5198,7 @@ pub(crate) mod wasm {
             DisabledReason::AlreadyInRequestedState => "already-in-requested-state",
             DisabledReason::NothingToUndo => "nothing-to-undo",
             DisabledReason::NothingToRedo => "nothing-to-redo",
+            DisabledReason::ProtectedDatum => "protected-datum",
         }
     }
 
@@ -4921,15 +5243,41 @@ pub(crate) mod wasm {
         model_viewport: geosolve_constraint_editor::Viewport,
         event: &PointerEvent,
     ) -> Option<PointerInput> {
+        pointer_input_with_capture(viewport, model_viewport, event, false)
+    }
+
+    fn captured_pointer_input(
+        viewport: &Element,
+        model_viewport: geosolve_constraint_editor::Viewport,
+        event: &PointerEvent,
+    ) -> Option<PointerInput> {
+        pointer_input_with_capture(viewport, model_viewport, event, true)
+    }
+
+    fn pointer_input_with_capture(
+        viewport: &Element,
+        model_viewport: geosolve_constraint_editor::Viewport,
+        event: &PointerEvent,
+        captured: bool,
+    ) -> Option<PointerInput> {
         let pointer_id = u64::try_from(event.pointer_id()).ok()?;
         Some(PointerInput {
             pointer_id,
-            position: client_screen_point(
-                viewport,
-                model_viewport,
-                f64::from(event.client_x()),
-                f64::from(event.client_y()),
-            )?,
+            position: if captured {
+                captured_client_screen_point(
+                    viewport,
+                    model_viewport,
+                    f64::from(event.client_x()),
+                    f64::from(event.client_y()),
+                )
+            } else {
+                client_screen_point(
+                    viewport,
+                    model_viewport,
+                    f64::from(event.client_x()),
+                    f64::from(event.client_y()),
+                )
+            }?,
             modifiers: Modifiers {
                 shift: event.shift_key(),
                 control: event.ctrl_key(),
@@ -4946,6 +5294,25 @@ pub(crate) mod wasm {
     ) -> Option<geosolve_constraint_editor::ScreenPoint> {
         let rect = viewport.get_bounding_client_rect();
         super::effect_adapter::normalize_client_point(
+            super::effect_adapter::ClientRect {
+                left: rect.left(),
+                top: rect.top(),
+                width: rect.width(),
+                height: rect.height(),
+            },
+            model_viewport.screen_size,
+            [client_x, client_y],
+        )
+    }
+
+    fn captured_client_screen_point(
+        viewport: &Element,
+        model_viewport: geosolve_constraint_editor::Viewport,
+        client_x: f64,
+        client_y: f64,
+    ) -> Option<geosolve_constraint_editor::ScreenPoint> {
+        let rect = viewport.get_bounding_client_rect();
+        super::effect_adapter::normalize_captured_client_point(
             super::effect_adapter::ClientRect {
                 left: rect.left(),
                 top: rect.top(),
@@ -4974,6 +5341,14 @@ pub(crate) mod wasm {
             "dimension" => Some(SelectionItem::Dimension(DocumentDimensionId(
                 PersistentId::from_str(&target.get_attribute("data-persistent-id")?).ok()?,
             ))),
+            "datum" => Some(SelectionItem::Datum(
+                match target.get_attribute("data-datum")?.as_str() {
+                    "origin" => SketchDatum::Origin,
+                    "x-axis" => SketchDatum::XAxis,
+                    "y-axis" => SketchDatum::YAxis,
+                    _ => return None,
+                },
+            )),
             "feature" => Some(SelectionItem::Feature(
                 ComputedFeatureId::from_str(&target.get_attribute("data-feature-id")?).ok()?,
             )),
@@ -5057,7 +5432,11 @@ pub(crate) mod wasm {
                 .ok_or_else(|| "explicit Construction visibility is unavailable".to_owned())?,
             implicit_construction: checkbox_checked(document, "wb-show-implicit-construction")
                 .ok_or_else(|| "Fillet-hidden visibility is unavailable".to_owned())?,
+            reference_geometry: checkbox_checked(document, "wb-show-reference-geometry")
+                .ok_or_else(|| "reference geometry visibility is unavailable".to_owned())?,
         };
+        let grid_visible = checkbox_checked(document, "wb-show-grid")
+            .ok_or_else(|| "grid visibility is unavailable".to_owned())?;
         let policy = GeometryInteractionPolicy { scope, visibility };
         let changed = wb.coordinator.editor().geometry_interaction_policy() != policy;
         let captured_viewport = if changed && !wb.pointer_captures.is_empty() {
@@ -5070,6 +5449,7 @@ pub(crate) mod wasm {
         };
         let effects = wb.coordinator.set_geometry_interaction_policy(policy);
         dispatch_effects(wb, effects);
+        wb.grid_visible = grid_visible;
         if let Some(viewport) = captured_viewport {
             let canceled = cancel_captured_canvas_interactions(
                 &viewport,
@@ -5293,7 +5673,8 @@ pub(crate) mod wasm {
 mod tests {
     use geosolve_constraint_editor::{
         AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ComputedSceneState,
-        ConstraintIntent, EditorHoverState, EditorProblemScope, EditorScene,
+        ConstraintIntent, DraftInferenceCompleteness, DraftInferenceResolution,
+        DraftInferenceStatus, EditorHoverState, EditorProblemScope, EditorScene, EditorTool,
         FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
         GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility, Modifiers, PickTolerance,
@@ -5304,7 +5685,7 @@ mod tests {
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition,
         DocumentCurveNormalSide, DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession,
-        SketchAcceptedStateIdentity, SketchDocument,
+        SketchAcceptedStateIdentity, SketchDatum, SketchDocument,
     };
 
     use super::{
@@ -5313,10 +5694,11 @@ mod tests {
         CanvasPointerCaptures, CanvasPointerOwnership, CanvasPointerTerminal,
         CanvasPointerTerminalDisposition, CapturedCanvasPointer, DismissibleDisclosure,
         DraftingPointerSample, FilletActionRenderAuthority, ForegroundOverlayEscapeOwner,
-        OptionOverlayKind, OptionOverlayState, PointerMoveQueue, ReproductionFocusReturn,
-        apply_validated_reproduction, canvas_pointer_capture_kind,
-        change_owns_option_control_click, compose_editor_scene, foreground_overlay_escape_owner,
-        geometry_hover_selector, observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
+        HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
+        ReproductionFocusReturn, apply_validated_reproduction, canvas_cursor_key,
+        canvas_pointer_capture_kind, change_owns_option_control_click, compose_editor_scene,
+        coordinate_hud, foreground_overlay_escape_owner, geometry_hover_selector, history_shortcut,
+        observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         reproduction_focus_target_after_action, reproduction_overlay_presentation,
         reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
         revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
@@ -6476,6 +6858,143 @@ mod tests {
     }
 
     #[test]
+    fn production_canvas_controls_expose_history_display_origin_and_protected_datum_surfaces() {
+        let html = include_str!("../../index.html");
+        let css = include_str!("../../styles.css");
+        for needle in [
+            "id=\"wb-show-reference-geometry\"",
+            "id=\"wb-show-grid\"",
+            "id=\"wb-pointer-coordinate\"",
+            "data-wb-action=\"zoom-origin\"",
+            "id=\"wb-datum-inspector\"",
+            "class=\"wb-protected-badge\"",
+            "aria-keyshortcuts=\"Control+Z Meta+Z\"",
+            "aria-keyshortcuts=\"Control+Shift+Z Meta+Shift+Z Control+Y\"",
+        ] {
+            assert!(html.contains(needle), "missing production control {needle}");
+        }
+        assert!(html.contains("The grid is visual only"));
+        assert!(css.contains(".wb-grid-minor"));
+        assert!(css.contains(".wb-grid-major"));
+        assert!(css.contains("[data-canvas-cursor=\"draw\"]"));
+        assert!(css.contains(".wb-datum-origin-ring"));
+        assert!(!css.contains("background-size: 25px 25px"));
+    }
+
+    #[test]
+    fn history_shortcuts_are_platform_complete_without_claiming_editable_ownership() {
+        for (key, control, command, shift, expected) in [
+            ("z", true, false, false, Some(HistoryShortcut::Undo)),
+            ("Z", false, true, false, Some(HistoryShortcut::Undo)),
+            ("z", true, false, true, Some(HistoryShortcut::Redo)),
+            ("Z", false, true, true, Some(HistoryShortcut::Redo)),
+            ("y", true, false, false, Some(HistoryShortcut::Redo)),
+            ("y", false, true, false, None),
+            ("y", true, false, true, None),
+            ("z", false, false, false, None),
+            ("z", true, true, false, None),
+        ] {
+            assert_eq!(
+                history_shortcut(
+                    key,
+                    Modifiers {
+                        shift,
+                        control,
+                        command,
+                    },
+                    false,
+                ),
+                expected,
+                "shortcut route for {key} ctrl={control} cmd={command} shift={shift}"
+            );
+        }
+        assert_eq!(
+            history_shortcut(
+                "z",
+                Modifiers {
+                    control: true,
+                    ..Modifiers::default()
+                },
+                true,
+            ),
+            None
+        );
+
+        let source = include_str!("mod.rs");
+        let isolated = source
+            .find("fn keyboard_target_is_editable_or_dialog")
+            .expect("keyboard isolation helper");
+        let shortcut = source
+            .find("super::history_shortcut")
+            .expect("history shortcut dispatch");
+        assert!(isolated < shortcut);
+        for owner in ["INPUT", "SELECT", "TEXTAREA", "[role=\\\"dialog\\\"]"] {
+            assert!(
+                source.contains(owner),
+                "missing keyboard isolation for {owner}"
+            );
+        }
+    }
+
+    #[test]
+    fn coordinate_hud_prefers_the_authenticated_adjusted_inference_sample() {
+        let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).unwrap();
+        let pointer = PointerInput {
+            pointer_id: 7,
+            position: ScreenPoint { x: 510.0, y: 340.0 },
+            modifiers: Modifiers::default(),
+        };
+        let inference = DraftInferenceResolution {
+            status: DraftInferenceStatus::None,
+            completeness: DraftInferenceCompleteness::Complete,
+            raw_model_position: [0.2, 0.2],
+            adjusted_model_position: [0.0, 0.0],
+            raw_screen_position: pointer.position,
+            adjusted_screen_position: ScreenPoint { x: 500.0, y: 350.0 },
+            candidates: Vec::new(),
+            guides: Vec::new(),
+        };
+        let hud = coordinate_hud(viewport, Some(pointer), Some(&inference));
+        assert_eq!(hud.text, "X 0.000 · Y 0.000");
+        assert!(hud.adjusted);
+        assert!(hud.title.contains("raw X 0.200, Y 0.200"));
+
+        let stale = PointerInput {
+            position: ScreenPoint { x: 550.0, y: 300.0 },
+            ..pointer
+        };
+        let raw = coordinate_hud(viewport, Some(stale), Some(&inference));
+        assert_eq!(raw.text, "X 1.000 · Y 1.000");
+        assert!(!raw.adjusted);
+        assert_eq!(coordinate_hud(viewport, None, None).text, "X — · Y —");
+    }
+
+    #[test]
+    fn canvas_cursor_context_and_datum_hover_identity_are_explicit() {
+        assert_eq!(
+            canvas_cursor_key(EditorTool::Select, false, false, false),
+            "select"
+        );
+        assert_eq!(
+            canvas_cursor_key(EditorTool::Line, false, false, false),
+            "draw"
+        );
+        assert_eq!(
+            canvas_cursor_key(EditorTool::Select, true, false, false),
+            "constraint"
+        );
+        assert_eq!(
+            canvas_cursor_key(EditorTool::Select, false, true, false),
+            "fillet"
+        );
+        assert_eq!(canvas_cursor_key(EditorTool::Line, true, true, true), "pan");
+        assert_eq!(
+            geometry_hover_selector(SelectionItem::Datum(SketchDatum::YAxis)).as_deref(),
+            Some("#wb-viewport [data-editor-item=\"datum\"][data-datum=\"y-axis\"]")
+        );
+    }
+
+    #[test]
     fn canvas_pan_pointer_down_preserves_every_existing_capture() {
         let empty = CanvasPointerCaptures::default();
         assert_eq!(
@@ -6732,7 +7251,8 @@ mod tests {
         assert!(!blurred.inference.suppressed);
         assert_eq!(queue.window_blur(true), None);
 
-        queue.clear_stationary_sample();
+        assert!(queue.clear_stationary_sample());
+        assert!(!queue.clear_stationary_sample());
         assert_eq!(queue.stationary_suppression(true, true), None);
     }
 
@@ -7391,6 +7911,7 @@ mod tests {
                     visibility: GeometryVisibility {
                         explicit_construction: true,
                         implicit_construction: false,
+                        reference_geometry: true,
                     },
                 },
                 viewport,

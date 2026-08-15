@@ -6,7 +6,7 @@ use std::{collections::BTreeSet, fmt::Write as _};
 use geosolve_constraint_editor::{
     ComputedFeatureProblemMetadata, LifecycleStatus, SceneConstraintEntry, SelectionItem,
 };
-use geosolve_sketch::{GeometryRole, SketchDocument};
+use geosolve_sketch::{GeometryRole, SketchDatum, SketchDocument};
 use geosolve_sketch_features::{
     ComputedCornerRef, ComputedFeatureDefinition, ComputedFeatureDocument,
     ComputedFeatureEvaluationState, ComputedFeatureSnapshot,
@@ -66,6 +66,37 @@ fn tree_markup_with_pending_and_implicit(
     implicit_spans: &BTreeSet<geosolve_sketch::CurveSpan>,
 ) -> String {
     let mut output = String::new();
+    group_label(&mut output, "References", 3);
+    for (datum, label, detail, icon) in [
+        (
+            SketchDatum::Origin,
+            "Origin",
+            "Fixed model zero · protected",
+            TreeIconKind::DatumOrigin,
+        ),
+        (
+            SketchDatum::XAxis,
+            "X axis",
+            "Infinite horizontal datum · protected",
+            TreeIconKind::DatumAxis,
+        ),
+        (
+            SketchDatum::YAxis,
+            "Y axis",
+            "Infinite vertical datum · protected",
+            TreeIconKind::DatumAxis,
+        ),
+    ] {
+        datum_row(
+            &mut output,
+            datum,
+            label,
+            detail,
+            icon,
+            selection.contains(&SelectionItem::Datum(datum)),
+            pending.contains(&SelectionItem::Datum(datum)),
+        );
+    }
     if !document.points().is_empty() {
         group_label(&mut output, "Points", document.points().len());
     }
@@ -301,6 +332,40 @@ fn group_label(output: &mut String, label: &str, count: usize) {
     );
 }
 
+fn datum_row(
+    output: &mut String,
+    datum: SketchDatum,
+    label: &str,
+    detail: &str,
+    icon: TreeIconKind,
+    selected: bool,
+    pending: bool,
+) {
+    let key = match datum {
+        SketchDatum::Origin => "origin",
+        SketchDatum::XAxis => "x-axis",
+        SketchDatum::YAxis => "y-axis",
+    };
+    let _ = write!(
+        output,
+        concat!(
+            "<button class=\"wb-tree-row wb-tree-datum{}{}\" role=\"treeitem\" ",
+            "aria-selected=\"{}\" aria-label=\"{} · {}\" data-editor-item=\"datum\" ",
+            "data-datum=\"{}\" data-protected=\"true\" title=\"{}\">",
+            "<span class=\"wb-tree-icon\">{}</span>{}<span class=\"wb-tree-protected\">fixed</span></button>"
+        ),
+        if selected { " selected" } else { "" },
+        if pending { " authoring-pending" } else { "" },
+        selected,
+        escape(label),
+        escape(detail),
+        key,
+        escape(detail),
+        super::icons::tree_icon_markup(icon),
+        escape(label),
+    );
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "tree rows keep typed selection and authoring-pending presentation explicit"
@@ -350,7 +415,7 @@ pub(crate) fn escape(value: &str) -> String {
 mod tests {
     use super::{lifecycle_presentation, problem_markup, tree_markup, tree_markup_with_pending};
     use geosolve_constraint_editor::{LifecycleStatus, SelectionItem};
-    use geosolve_sketch::SketchDocument;
+    use geosolve_sketch::{SketchDatum, SketchDocument};
 
     #[test]
     fn tree_problem_and_lifecycle_markup_preserve_typed_semantics() {
@@ -363,6 +428,18 @@ mod tests {
         assert!(markup.contains("A &lt; origin"));
         assert!(markup.contains("class=\"wb-tree-symbol\""));
         assert!(markup.contains("data-tree-icon=\"point\""));
+        assert!(markup.contains("<span>References</span><span>3</span>"));
+        for key in ["origin", "x-axis", "y-axis"] {
+            assert!(markup.contains(&format!("data-datum=\"{key}\"")));
+        }
+        assert_eq!(markup.matches("data-protected=\"true\"").count(), 3);
+        let datum_selection = tree_markup(&document, &[SelectionItem::Datum(SketchDatum::XAxis)]);
+        let selected_axis = datum_selection
+            .split_once("data-datum=\"x-axis\"")
+            .map(|(prefix, _)| &prefix[prefix.rfind("<button").expect("datum row")..])
+            .expect("x axis row");
+        assert!(selected_axis.contains("selected"));
+        assert!(selected_axis.contains("aria-selected=\"true\""));
         assert!(!markup.contains("<span class=\"wb-tree-icon\"></span>"));
         let pending = tree_markup_with_pending(&document, &[], &[], &[SelectionItem::Point(point)]);
         assert!(pending.contains("wb-tree-row authoring-pending"));

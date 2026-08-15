@@ -17,8 +17,8 @@
         <div class="wb-brand">GeoSolve <span>Sketch</span></div>
         <div class="wb-command-group" aria-label="File commands">
           <button type="button" data-wb-action="new">New</button>
-          <button type="button" data-wb-action="undo">Undo</button>
-          <button type="button" data-wb-action="redo">Redo</button>
+          <button type="button" data-wb-action="undo" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+          <button type="button" data-wb-action="redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y" title="Redo (Ctrl/Cmd+Shift+Z or Ctrl+Y)">Redo</button>
         </div>
         <div class="wb-command-group wb-reproduction-commands" aria-label="Reproduction payload commands">
           <button id="wb-reproduction-copy-trigger" type="button" data-wb-action="reproduction-copy" aria-controls="wb-reproduction-overlay" aria-expanded="false">Copy repro</button>
@@ -198,9 +198,11 @@
             </div>
             <div id="wb-option-panel-construction-display" class="wb-option-panel" data-wb-option-panel="construction-display" hidden>
               <label>Canvas picks<select id="wb-geometry-pick-scope"><option value="all">All geometry</option><option value="profile">Profile only</option><option value="construction">Construction only</option></select></label>
+              <label class="wb-option-check"><input id="wb-show-reference-geometry" type="checkbox" checked />Reference geometry</label>
+              <label class="wb-option-check"><input id="wb-show-grid" type="checkbox" checked />Adaptive grid</label>
               <label class="wb-option-check"><input id="wb-show-explicit-construction" type="checkbox" checked />Explicit guides</label>
               <label class="wb-option-check"><input id="wb-show-implicit-construction" type="checkbox" checked />Fillet-hidden portions</label>
-              <p class="wb-option-help">Profile wins near-identical overlaps. A hidden Fillet portion still selects its complete native source.</p>
+              <p class="wb-option-help">The grid is visual only. Native geometry wins overlapping datum picks; a hidden Fillet portion still selects its complete native source.</p>
             </div>
           </section>
           <section class="wb-problems" id="wb-problems" aria-label="Problems" aria-live="assertive" hidden>
@@ -211,10 +213,12 @@
         <div class="wb-canvas-hud">
           <span>XY plane</span>
           <span id="wb-camera-scale">50.0 px / unit</span>
-          <button id="wb-construction-display-trigger" class="wb-construction-display-trigger" type="button" data-wb-option="construction-display" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog">◇ Construction</button>
+          <span id="wb-pointer-coordinate" class="wb-pointer-coordinate" data-inference-adjusted="false" title="Canvas pointer coordinates">X — · Y —</span>
+          <button id="wb-construction-display-trigger" class="wb-construction-display-trigger" type="button" data-wb-option="construction-display" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog">Display</button>
           <div class="wb-camera-controls" aria-label="Canvas view controls">
             <button type="button" data-wb-action="zoom-out" aria-label="Zoom out">−</button>
             <button type="button" data-wb-action="zoom-fit">Fit</button>
+            <button type="button" data-wb-action="zoom-origin" title="Centre the view on the protected Origin">Origin</button>
             <button type="button" data-wb-action="zoom-in" aria-label="Zoom in">+</button>
           </div>
           <span>Wheel zoom · middle-drag pan</span>
@@ -233,6 +237,12 @@
           <strong id="wb-geometry-role-state">Profile</strong>
           <p id="wb-geometry-role-detail">Role changes target complete persistent curves, including every span and any Fillet-hidden portion.</p>
           <button type="button" data-wb-action="geometry-role">Toggle Profile / Construction</button>
+        </section>
+        <section id="wb-datum-inspector" class="wb-inspector-section wb-datum-inspector" hidden>
+          <span class="wb-field-label">Intrinsic reference</span>
+          <strong id="wb-datum-name">Origin</strong>
+          <span class="wb-protected-badge">Protected</span>
+          <p id="wb-datum-detail">Fixed at model zero and available as a semantic constraint operand.</p>
         </section>
         <section id="wb-dimension-target-editor" class="wb-inspector-section" hidden>
           <label class="wb-field-label" for="wb-dimension-target">Dimension target</label>
