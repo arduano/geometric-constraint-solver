@@ -36,8 +36,11 @@ publish the qualified desktop workbench at
   Fillet, Conic-family construction, NURBS and Construction display.
 - Open the relevant options when an option-bearing tool is selected; show and validate only the
   active family/subtype; remember valid values only for the current process.
-- Provide one-open-at-a-time, bounded scrolling, keyboard focus/return, Escape, explicit close and
-  light-dismiss behavior at desktop and compact-desktop sizes.
+- Use one centered main palette button per option-bearing tool without a split chevron. Reinvoking
+  the same family is idempotent; blur, outside/canvas clicks, zoom and ordinary controls preserve
+  the overlay, while tool switches close or replace it.
+- Provide one-open-at-a-time, bounded scrolling and deterministic keyboard focus at desktop and
+  compact-desktop sizes. Escape and explicit close activate and focus Select.
 
 ### M72-F004 — public Pages release
 

@@ -2,10 +2,11 @@
 
 # M72 focused UAT — Public workbench bulk fixes
 
-Status: implementation, clean qualification, public GitHub Pages deployment, exact hosted-artifact
-byte verification and local/public Chromium preflight pass. The workbench is live at
-`https://arduano.github.io/geometric-constraint-solver/`. Explicit supervising-human approval is
-the only remaining milestone gate.
+Status: implementation, clean qualification, initial public GitHub Pages deployment, exact
+hosted-artifact byte verification and local/public Chromium preflight pass. The supervising caller
+approved the recorded focused UAT scope on 2026-08-15 against accepted follow-up commit `b700313`.
+Publishing and verifying that exact follow-up at the public workbench is the remaining mechanical
+closure step.
 
 Direct Rust/WASM tests are authoritative for accepted geometry, residuals, rank/DOF, branches,
 history and problem ownership. Human UAT should focus on feel, discoverability and browser
@@ -16,9 +17,10 @@ Mechanical release authority is clean source `dc09b019704fe4a5cd48aff1ae838dfa52
 `docs/M72_IMPLEMENTATION.md`; the unchanged golden passes **234/234**. The full-history Gitleaks
 report is empty. Deployment source `6eb2c63f6349851e70200570c9c2db07631acd3a` passed corrected
 run `31802816639` attempt 2, including the unchanged 180-second sparse ceiling in `176.27s`.
-Artifact `9221899077`, all public HTTP responses and bytes, the WASM media type, both desktop
-Chromium sizes and browser-local reload persistence pass mechanically. Human review should now
-score presentation and interaction feel through M72-U1 through M72-U4 below.
+Artifact `9221899077`, all initial public HTTP responses and bytes, the WASM media type, both
+desktop Chromium sizes and browser-local reload persistence pass mechanically. The accepted
+follow-up passed the same two-size Chromium automation from its immutable Tailscale release
+snapshot before human approval.
 
 ## M72-U1 — Problems recover and stay current
 
@@ -84,8 +86,14 @@ reload.
 
 ## Approval record
 
-- M72-U1: pending supervising-human review.
-- M72-U2: pending supervising-human review.
-- M72-U3: pending supervising-human review.
-- M72-U4: mechanical public deployment/browser preflight passed; pending supervising-human review.
-- Final M72 approval: pending.
+- M72-U1: **Accepted** under the 2026-08-15 scoped close decision.
+- M72-U2: **Accepted** under the 2026-08-15 scoped close decision.
+- M72-U3: **Accepted** under the 2026-08-15 scoped close decision.
+- M72-U4: candidate behavior **Accepted** under the 2026-08-15 scoped close decision; updated
+  public artifact verification is the remaining mechanical closure step.
+- Final M72 approval: **Pass** — explicitly approved by the supervising caller on 2026-08-15.
+
+The supervising caller confirmed that the presented fixes resolve the reported behavior and
+explicitly requested M72 closure. This accepts M72-U1 through M72-U4 for the recorded scope without
+claiming a separate exhaustive replay of every scripted permutation; direct automated
+qualification remains authoritative.

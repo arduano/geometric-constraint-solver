@@ -1683,7 +1683,8 @@ After the clean release gate, the same qualified workbench is deployed from `mai
 `https://arduano.github.io/geometric-constraint-solver/`. Its stylesheet, JavaScript and WASM use
 the repository prefix, every expected file returns successfully with the WASM media type, and an
 ordinary browser-local workspace survives reload. Human review and closure are recorded in the M72
-UAT record.
+UAT record. The accepted `b700313` follow-up has scoped human approval; final closure awaits its
+replacement Pages deployment and exact public verification.
 
 ### M70B-R1 - Complete workspace reproduction payload
 

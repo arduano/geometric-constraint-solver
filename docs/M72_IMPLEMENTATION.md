@@ -3,9 +3,10 @@
 # M72 implementation — Public workbench bulk fixes
 
 Status: M72-F001 through M72-F004 are implemented and mechanically qualified. Clean release
-qualification, the complete-history secret scan, public GitHub Pages deployment, exact hosted-
-artifact byte verification and public Chromium preflight pass. Only focused supervising-human UAT
-approval remains before milestone closure.
+qualification, the complete-history secret scan, initial public GitHub Pages deployment, exact
+hosted-artifact byte verification and public Chromium preflight pass. The supervising caller
+approved the focused UAT on 2026-08-15; publication and verification of the accepted overlay
+follow-up remain before milestone closure.
 
 Implementation commits:
 
@@ -15,7 +16,9 @@ Implementation commits:
 - `a0758db` — unify canvas tool options and exact-set Problems dismissal;
 - `a1663d0` — add the pinned repository-prefixed Pages pipeline;
 - `dc09b01` — make the rectangle regression warnings-denied and nominate the clean source;
-- `6eb2c63` — build the Pages artifact inside the pinned Nix environment.
+- `6eb2c63` — build the Pages artifact inside the pinned Nix environment;
+- `b700313` — remove split chevrons and make the unified options overlay persistent until a tool
+  switch or explicit close-to-Select action.
 
 ## 1. Files and APIs
 
@@ -115,8 +118,9 @@ controls, containment, focus handling, invalid inactive-field isolation, Problem
 Source/License links and browser-local scene persistence across reload. The same checks later
 passed against the public endpoint. The focused 2026-08-15 UAT follow-up replaces the initial
 dismissal-on-outside-interaction contract with the implicit, persistent overlay contract recorded
-above and in `docs/M72_UAT.md`; that interaction remains part of the pending human gate. Current
-public-run screenshots are retained at `/tmp/m72-overlay-1440x900.png` and
+above and in `docs/M72_UAT.md`; that interaction passed local automated qualification and the
+scoped human close decision. Final replacement publication remains pending. Historical public-run
+screenshots were recorded at `/tmp/m72-overlay-1440x900.png` and
 `/tmp/m72-overlay-1024x720.png`, SHA-256
 `96a3f2ed0fa845688d9acf7b9e24443e41d1511e2dbf448fc0e2f329533f0024` and
 `77b7043953654cf2efab36f0e02928afcd571b7489a9cc2ad3aa3456ba2c3bd2` respectively.
@@ -176,8 +180,9 @@ content hashes are unchanged from local preflight. Finally, the public command
 `M72_BASE_URL=https://arduano.github.io/geometric-constraint-solver/ node /tmp/m72_full_browser_check.mjs`
 passed the initial candidate's option families, containment, focus/dismissal, Problems disclosure
 and browser-local reload persistence at `1440x900` and `1024x720` with no console or page errors.
-The revised overlay lifetime and close-to-Select behavior are governed by the pending focused UAT
-follow-up rather than claimed by that historical public run.
+The revised overlay lifetime and close-to-Select behavior are governed by the accepted focused UAT
+follow-up and its pending replacement publication rather than claimed by that historical public
+run.
 
 ## 4. Acceptance passed
 
@@ -196,4 +201,6 @@ follow-up rather than claimed by that historical public run.
 
 ## 5. Remaining gate
 
-- Receive explicit supervising-human approval of the focused checks in `docs/M72_UAT.md`.
+- Publish commit `b700313` through the qualified Pages workflow and verify the resulting hosted
+  artifact, media types and Chromium behavior. Focused supervising-human approval passed on
+  2026-08-15.

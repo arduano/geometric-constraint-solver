@@ -4363,7 +4363,8 @@ semantic-consolidation proposal. `docs/M72_GOALS.md` owns the accepted scope.
   interaction, idempotent re-invocation and explicit close-to-Select behavior.
 - [x] M72-F004: qualify, publish and verify the public GitHub Pages workbench.
 - [x] Run the complete clean release gate.
-- [ ] Receive focused supervising-human UAT approval.
+- [x] Receive focused supervising-human UAT approval.
+- [ ] Publish and exact-verify the accepted `b700313` overlay follow-up on GitHub Pages.
 
 Qualification/publication checkpoint (2026-08-14): clean source
 `dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
@@ -4381,12 +4382,15 @@ attempt 2 passed it in `176.27s`, then validated, uploaded and deployed Pages ar
 `9221899077`. Root plus all seven public files return 200 and byte-match that artifact; WASM is
 served as `application/wasm`, repository-prefixed assets load, and public Chromium checks pass at
 `1440x900` and `1024x720` including local-storage reload persistence. Only supervising-human UAT
-approval remains open.
+approval remained open at that checkpoint; it passed on 2026-08-15 for the accepted follow-up
+described below.
 
 UAT follow-up (2026-08-15): remove the option tools' separate chevrons and center each main
 invoker. Its bottom-left overlay stays open through blur, outside/canvas clicks, zoom and ordinary
 controls; the same invoker is idempotent, tool switches close or replace the surface, and `×` or
-Escape activates and focuses Select. Human UAT approval remains unchecked.
+Escape activates and focuses Select. The supervising caller approved the recorded focused UAT
+scope on 2026-08-15; publishing and verifying this accepted follow-up is the final mechanical
+closure step.
 
 Gate: the three defects pass focused owner regressions; no residual, persistence or golden meaning
 changes; the desktop overlays remain contained, family-local and persistent under non-tool
