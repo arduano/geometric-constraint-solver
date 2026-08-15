@@ -5586,6 +5586,9 @@ fn confirmed_draft_inference(
     candidate: DraftInferenceCandidate,
     stage_index: usize,
 ) -> Result<ConfirmedDraftInference, DraftInferenceError> {
+    let selected_candidate = resolved_draft_inference_candidate(resolution)
+        .filter(|selected| *selected == &candidate)
+        .ok_or(DraftInferenceError::InvalidFrame)?;
     let candidate_guides_are_owned = candidate.guides.iter().enumerate().all(|(index, guide)| {
         guide.id.candidate == Some(candidate.id)
             && usize::try_from(guide.id.ordinal).is_ok_and(|ordinal| ordinal == index)
@@ -5598,7 +5601,7 @@ fn confirmed_draft_inference(
         .collect::<Vec<_>>();
     if candidate.id.get() == 0
         || !candidate_guides_are_owned
-        || published_candidate_guides != candidate.guides
+        || published_candidate_guides != selected_candidate.guides
     {
         return Err(DraftInferenceError::InvalidFrame);
     }
@@ -8961,6 +8964,20 @@ mod tests {
                 .candidate
                 .is_none_or(|candidate| candidates.contains(&candidate))
         }));
+        let mut forged_resolution = resolution.clone();
+        forged_resolution.status = DraftInferenceStatus::Resolved {
+            candidate: candidates[0],
+        };
+        let wrong_candidate = forged_resolution
+            .candidates
+            .iter()
+            .find(|candidate| candidate.id == candidates[1])
+            .expect("other ambiguous candidate")
+            .clone();
+        assert!(matches!(
+            confirmed_draft_inference(&forged_resolution, wrong_candidate, 0),
+            Err(DraftInferenceError::InvalidFrame)
+        ));
 
         let stale_preferred = candidates[0];
         let endpoint = scene.viewport.model_to_screen([5.0, 5.0]);
@@ -10548,6 +10565,19 @@ mod tests {
         malformed.guides[0].id.candidate = None;
         assert!(matches!(
             confirmed_draft_inference(&resolution, malformed, 1),
+            Err(DraftInferenceError::InvalidFrame)
+        ));
+        let mut changed_relations = candidate.clone();
+        changed_relations.relations.remove(0);
+        assert!(matches!(
+            confirmed_draft_inference(&resolution, changed_relations, 1),
+            Err(DraftInferenceError::InvalidFrame)
+        ));
+        assert!(!candidate.references.is_empty());
+        let mut changed_references = candidate.clone();
+        changed_references.references.pop();
+        assert!(matches!(
+            confirmed_draft_inference(&resolution, changed_references, 1),
             Err(DraftInferenceError::InvalidFrame)
         ));
 
