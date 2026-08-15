@@ -2140,6 +2140,7 @@ impl DraftInferenceEngine {
             self.active_point_tracking.clear();
             return true;
         }
+        let directions = self.direction_works(frame, raw_model, retained_direction);
         let mut tracking_works = Vec::new();
         let mut next_active = BTreeSet::new();
         for reference in self.remembered_references.iter().rev().copied() {
@@ -2171,6 +2172,14 @@ impl DraftInferenceEngine {
                 };
                 let angular_error = undirected_angle_error(delta, direction);
                 if angular_error <= threshold {
+                    // A constraint-backed live world axis owns this endpoint
+                    // coordinate. Suppress the same-axis tracker before it
+                    // can publish a guide, consume candidate capacity, or
+                    // acquire an invisible exit-band latch. Orthogonal
+                    // trackers remain available for a two-relation bundle.
+                    if world_span_direction_supersedes_point_tracking(axis, &directions) {
+                        continue;
+                    }
                     next_active.insert(key);
                     let guide = DraftGuide {
                         id: DraftGuideId {
@@ -2253,16 +2262,6 @@ impl DraftInferenceEngine {
         }
         self.active_point_tracking = next_active;
 
-        let directions = self.direction_works(frame, raw_model, retained_direction);
-        // A live world-axis span owns the same endpoint coordinate as a
-        // same-axis point or midpoint guide. Keep the user's line-direction
-        // intent and remove the redundant tracker before it can participate
-        // in either a two-tracker intersection or a singleton alternative.
-        // Remembered Parallel/Perpendicular/Collinear keys deliberately keep
-        // their existing behavior even when their support is Cartesian.
-        tracking_works
-            .retain(|tracking| !world_span_direction_supersedes_tracking(tracking, &directions));
-
         // Two distinct remembered operands may jointly own the endpoint's
         // Cartesian coordinates: Horizontal supplies Y and Vertical supplies
         // X. Build those exact intersections before singleton tracking
@@ -2327,10 +2326,10 @@ impl DraftInferenceEngine {
 
         for tracking in &tracking_works {
             // Pair membership suppresses only the tracking singleton. A
-            // complementary live-span direction still forms its F004 bundle,
-            // so same-axis point-source versus span-source intent remains an
-            // explicit alternative rather than collapsing to a bare
-            // direction candidate.
+            // complementary live-span direction still forms its conjunction
+            // bundle. Eligible same-axis world directions were filtered
+            // before guide/latch creation; remembered directions retain their
+            // existing compatibility behavior.
             let mut composed = false;
             for direction in directions.iter().copied() {
                 let Some(adjusted) =
@@ -2845,15 +2844,15 @@ fn point_tracking_pair_adjustment(
     }
 }
 
-fn world_span_direction_supersedes_tracking(
-    tracking: &PointTrackingWork,
+fn world_span_direction_supersedes_point_tracking(
+    tracking_axis: PointTrackingAxis,
     directions: &[DirectionWork],
 ) -> bool {
     directions.iter().any(|direction| {
         direction.behavior.adjust_coordinates
             && direction.behavior.persist_constraint
             && matches!(
-                (tracking.key.axis, direction.key),
+                (tracking_axis, direction.key),
                 (PointTrackingAxis::Horizontal, DirectionKey::Horizontal)
                     | (PointTrackingAxis::Vertical, DirectionKey::Vertical)
             )
@@ -2877,11 +2876,12 @@ fn point_tracking_direction_adjustment(
         (PointTrackingAxis::Vertical, PointTrackingAxis::Horizontal) => {
             Some([tracking.origin[0], start[1]])
         }
-        // Same-axis relations constrain the same endpoint coordinate through
-        // different operands and leave the complementary coordinate free.
-        // Their targets may conflict now; even when they currently agree,
-        // later edits can separate them and overconstrain the point. Only
-        // complementary coordinate ownership is composed here.
+        // Eligible live world Horizontal/Vertical work was suppressed before
+        // candidate construction. Same-axis work reaching this branch is a
+        // remembered Parallel/Perpendicular/Collinear direction (or a policy
+        // that does not both adjust and persist); it remains an explicit
+        // alternative because only complementary coordinate ownership is
+        // composed here.
         (PointTrackingAxis::Horizontal, PointTrackingAxis::Horizontal)
         | (PointTrackingAxis::Vertical, PointTrackingAxis::Vertical) => None,
     }
@@ -4701,6 +4701,105 @@ mod tests {
                     reference: point_id(633),
                 })
         }));
+    }
+
+    #[test]
+    fn same_axis_span_precedence_happens_before_candidate_limit_accounting() {
+        let view = viewport(50.0);
+        let mut policy = DraftInferencePolicy::default();
+        policy.limits.max_candidates = 1;
+        let mut engine = DraftInferenceEngine::new(policy).expect("one-candidate engine");
+        engine
+            .remember_reference(point_anchor(636, [-4.0, 0.0]))
+            .expect("same-axis reference");
+
+        let resolution = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen([4.0, 0.05]),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("same-axis precedence within one candidate");
+
+        assert_eq!(
+            resolution.completeness,
+            DraftInferenceCompleteness::Complete
+        );
+        assert_eq!(resolution.candidates.len(), 1);
+        let candidate = resolved_candidate(&resolution);
+        assert_eq!(
+            candidate.relations,
+            vec![DraftInferenceRelation::Horizontal]
+        );
+        assert!(candidate.references.is_empty());
+        assert!(resolution.guides.iter().all(|guide| {
+            guide.family == DraftInferenceFamily::Horizontal
+                && guide.classification == DraftGuideClassification::ConstraintBacked
+        }));
+        assert!(engine.active_point_tracking.is_empty());
+    }
+
+    #[test]
+    fn same_axis_span_suppresses_tracking_only_guide_without_a_hidden_latch() {
+        let view = viewport(50.0);
+        let policy = DraftInferencePolicy {
+            point_tracking: DraftInferenceBehavior::tracking_only(),
+            ..DraftInferencePolicy::default()
+        };
+        let reference = point_anchor(637, [-4.0, 0.0]);
+        let mut engine = DraftInferenceEngine::new(policy).expect("tracking-only point policy");
+        engine
+            .remember_reference(reference)
+            .expect("same-axis reference");
+
+        let entered = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen([4.0, 0.05]),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("world-axis precedence");
+        assert_eq!(
+            resolved_candidate(&entered).relations,
+            vec![DraftInferenceRelation::Horizontal]
+        );
+        assert!(entered.guides.iter().all(|guide| {
+            guide.family != DraftInferenceFamily::PointTracking
+                && guide.reference != Some(reference)
+        }));
+        assert!(engine.active_point_tracking.is_empty());
+
+        // The world-axis latch has now left its five-degree exit band. From
+        // this remembered point the same sample is just outside the tighter
+        // three-degree tracking enter band, so a suppressed tracker must not
+        // reappear through an unpublished latch.
+        let outside_world_axis = 6.0_f64.to_radians();
+        let raw = [4.0, 4.0 * outside_world_axis.tan()];
+        let released = engine
+            .resolve(
+                &frame(
+                    view,
+                    view.model_to_screen(raw),
+                    Some([0.0, 0.0]),
+                    Vec::new(),
+                ),
+                DraftInferenceInput::default(),
+            )
+            .expect("released world axis without hidden point latch");
+        assert_eq!(released.status, DraftInferenceStatus::None);
+        assert!(released.guides.iter().all(|guide| {
+            guide.family != DraftInferenceFamily::PointTracking
+                && guide.reference != Some(reference)
+        }));
+        assert!(engine.active_point_tracking.is_empty());
     }
 
     #[test]
