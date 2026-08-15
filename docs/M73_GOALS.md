@@ -2,11 +2,11 @@
 
 # M73 — Retained authoring semantic consolidation
 
-Status: **M73-F001 through M73-F004, the clean replacement release gate and byte-verified
-publication are complete; M73 remains open only for focused human UAT and explicit approval**. The
-supervising caller accepted the original scope and the focused F004 correction on 2026-08-15. No
-new ADR is required because M73 changes no solver or persistence architecture and retires only an
-editor API introduced after the published `0.2.0` baseline.
+Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
+through M73-F004, the clean replacement release gate, byte-verified immutable publication and
+focused human UAT all pass. The supervising caller accepted the original scope, focused F004
+correction and final candidate. No new ADR is required because M73 changes no solver or persistence
+architecture and retires only an editor API introduced after the published `0.2.0` baseline.
 
 ## Goal
 
@@ -137,8 +137,9 @@ Exact clean replacement source `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
 workspace, documentation, benchmark, performance, licence, packaging and Trunk matrix. Its exact
 gate distribution is frozen read-only at `/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, and byte-verified at
-`http://100.94.63.83:8080/`. This replacement is current UAT authority. Only focused human review
-and explicit approval remain before M73 closes.
+`http://100.94.63.83:8080/`. This replacement is the accepted closing candidate. The supervising
+caller confirmed that the focused behavior works and explicitly requested closure on 2026-08-15;
+M73-U1 through M73-U4 pass under that scoped decision. Every M73 goal is complete.
 
 ## ADR decision
 

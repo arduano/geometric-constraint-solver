@@ -4416,8 +4416,9 @@ reload persistence.
 
 ### M73: retained authoring semantic consolidation
 
-Status: **M73-F001 through M73-F004, the clean replacement release gate and byte-verified
-publication are complete; M73 remains open only for focused human UAT and explicit approval**.
+Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
+through M73-F004, the clean replacement release gate, byte-verified immutable publication and
+focused human UAT all pass.
 `docs/M73_GOALS.md` owns the corrected scope. The earlier proposal's claim
 that `construction_point_stage` duplicated an exhaustive stage match is withdrawn: M71 already
 made it a projection of `draft_inference_subject`. No ADR is required for this internal
@@ -4457,7 +4458,7 @@ consolidation and unreleased editor-API retirement.
   survey/check/clean gate.
 - [x] Repeat the complete clean replacement release gate on committed product/documentation source.
 - [x] Nominate and byte-verify a replacement immutable candidate for focused UAT.
-- [ ] Receive explicit focused human UAT approval.
+- [x] Receive explicit focused human UAT approval.
 
 Implementation note (2026-08-15): `fe356c2`, `a973b73`, `fcaad55`, `693ed17`, `585cf65`,
 `6fa28a4` and `b1b2162` complete F001-F003, exact candidate authentication, contextual coverage
@@ -4465,8 +4466,9 @@ and warnings-denied Rustdoc. Clean implementation source
 `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223`, tree
 `1890ab4330bd78f26c187ebed5fadea97370101e`, passes the complete release gate: editor 321/321,
 M55 17/17, unchanged golden 234/234, native/WASM parity, all workspace checks, packaging,
-performance and Trunk release assembly. The exact current-status source was gated once more before
-immutable nomination because `docs/API_COMPATIBILITY.md` is copied into the distribution.
+performance and Trunk release assembly. The exact historical F001-F003 nomination/status source
+was gated once more before immutable nomination because `docs/API_COMPATIBILITY.md` is copied into
+the distribution.
 
 Historical F001-F003 nomination note (2026-08-15): qualified product source
 `efde645345577f44e0d6b691f7ca27eb587c4b53`, tree
@@ -4525,7 +4527,13 @@ Tailscale at `http://100.94.63.83:8080/` by PID `3870531`. Proxy/cache-bypassed 
 all seven files and `/` return HTTP 200 with expected media types and exact bytes; `/` equals
 `index.html`, and the fetched aggregate matches. Old PID `3403533` has exited; historical snapshot
 `/tmp/geosolve-m73-uat.5EhWNL` remains. The replacement is current UAT authority. Only focused human
-UAT and explicit approval remain open.
+UAT and explicit approval remained open at that nomination checkpoint.
+
+Final closure note (2026-08-15): the supervising caller reported that the focused behavior works
+and explicitly requested M73 closure. M73-U1 through M73-U4 are accepted under that scoped close
+decision. This records approval of the qualified candidate and presented interaction paths rather
+than claiming an unrecorded exhaustive manual replay; the direct Rust/WASM regressions remain the
+semantic authority. Every M73 gate is complete.
 
 Gate: one private stage description owns the remaining line/polyline construction facts; the
 redundant unreleased direct API is absent; contextual authoring retains all accepted behavior and

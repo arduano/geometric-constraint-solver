@@ -2,9 +2,10 @@
 
 # M73 implementation — Retained authoring semantic consolidation
 
-Status: **M73-F001 through M73-F004, the clean replacement release gate and byte-verified immutable
-publication are complete; M73 remains open only for focused human UAT and explicit approval**. The
-supervising caller accepted the corrected scope on 2026-08-15.
+Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
+through M73-F004, the clean replacement release gate, byte-verified immutable publication and
+focused human UAT all pass. The supervising caller accepted the corrected scope and closing
+candidate.
 
 Activation baseline source: `daea43de51c9a1a720da1a245747e67735448f7d`
 
@@ -132,8 +133,8 @@ That run passed:
 - the Trunk 0.21.14 release build.
 
 Because `docs/API_COMPATIBILITY.md` is copied into the seven-file web distribution, the historical
-F001-F003 candidate nomination deliberately waited for one more clean gate on committed
-current-status source.
+F001-F003 candidate nomination deliberately waited for one more clean gate on its committed
+nomination/status source.
 
 ## M73-F004 focused and proportional qualification
 
@@ -252,9 +253,9 @@ aggregate equals the frozen aggregate. This replacement is current UAT authority
 - [x] Preserve the canonical authoring/scene oracle at 234/234 byte-for-byte.
 - [x] Pass formatting, diff hygiene, warnings-denied workspace Clippy, locked all-feature tests,
   native/WASM parity and the complete clean release gate.
-- [x] Rerun the clean gate on the committed current-status source, freeze the exact seven release
-  files and verify their Tailscale publication byte-for-byte; retain that withdrawn candidate as
-  historical F001-F003 evidence.
+- [x] Rerun the clean gate on the committed historical F001-F003 nomination/status source, freeze
+  the exact seven release files and verify their Tailscale publication byte-for-byte; retain that
+  withdrawn candidate as historical F001-F003 evidence.
 - [x] Freeze public regression `m73_f004_span_axis_precedence` and complete the focused
   Horizontal/Vertical durable point/midpoint precedence, early-suppression, budget/latch,
   generic-tracking, orthogonal-bundle and remembered-direction owner matrix.
@@ -263,9 +264,12 @@ aggregate equals the frozen aggregate. This replacement is current UAT authority
 - [x] Pass focused/proportional editor, M71 transition, Clippy and unchanged golden checks.
 - [x] Repeat the complete clean replacement release gate on committed product/documentation source.
 - [x] Freeze, serve and byte-verify a replacement immutable UAT candidate.
-- [ ] Complete `docs/M73_UAT.md` with explicit human approval.
+- [x] Complete `docs/M73_UAT.md` with explicit human approval.
 
-## Current blocker
+## Closure record
 
-No external blocker. Focused human UAT and explicit approval are the only remaining ordered work;
-M73 remains open and the replacement candidate above is current authority.
+On 2026-08-15 the supervising caller confirmed that the focused behavior works and explicitly
+requested milestone closure. M73-U1 through M73-U4 are accepted under that scoped close decision.
+This is approval of the qualified candidate and recorded interaction scope, not a claim that every
+scripted permutation received a separate manual replay; direct Rust/WASM qualification remains
+authoritative. No M73 blocker or acceptance item remains.

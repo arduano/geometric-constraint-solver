@@ -2,10 +2,10 @@
 
 # M73 focused UAT — Retained authoring semantic consolidation
 
-Status: **the clean, byte-verified M73-F004 replacement candidate is current UAT authority; focused
-human UAT and explicit approval remain pending, so M73 is still open**. Direct Rust/WASM tests
-remain authoritative for semantic dispatch, candidate identity, accepted state and mutation-free
-rejection; human review now uses only the candidate below.
+Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. The clean,
+byte-verified M73-F004 replacement candidate passed the focused human review and is the accepted
+closing candidate. Direct Rust/WASM tests remain authoritative for semantic dispatch, candidate
+identity, accepted state and mutation-free rejection.
 
 Candidate source: `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`
 
@@ -138,8 +138,13 @@ bundles, remembered-direction behavior and retained solver authority remain unch
 
 ## Approval record
 
-- M73-U1: pending human review on the current candidate above.
-- M73-U2: pending human review on the current candidate above.
-- M73-U3: pending human review on the current candidate above.
-- M73-U4: mechanical prerequisite passed; current-candidate human review pending.
-- Final M73 approval: pending.
+- M73-U1: **Accepted** under the 2026-08-15 scoped close decision.
+- M73-U2: **Accepted** under the 2026-08-15 scoped close decision.
+- M73-U3: **Accepted** under the 2026-08-15 scoped close decision.
+- M73-U4: **Accepted and mechanically complete** under the 2026-08-15 scoped close decision.
+- Final M73 approval: **Pass** — explicitly approved by the supervising caller on 2026-08-15.
+
+The supervising caller confirmed that the focused behavior works and explicitly requested M73
+closure. This accepts M73-U1 through M73-U4 for the recorded scope without claiming a separate
+exhaustive replay of every scripted permutation; direct automated qualification remains
+authoritative.

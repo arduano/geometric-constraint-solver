@@ -1806,8 +1806,9 @@ that closing checkpoint and was activated separately under the scope below.
 
 ## M73 acceptance: retained authoring semantic consolidation
 
-Status: **M73-F001 through M73-F004, the clean replacement release gate and byte-verified
-publication are complete; M73 remains open only for focused human UAT and explicit approval**.
+Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
+through M73-F004, the clean replacement release gate, byte-verified immutable publication and
+focused human UAT all pass.
 `docs/M73_GOALS.md` owns the corrected scope; no ADR is required.
 
 - M71 already made `construction_point_stage` a projection of `draft_inference_subject`; M73 does
@@ -1881,8 +1882,13 @@ formatting/Clippy/tests/Rustdoc, benchmark compilation, M14/M32 performance, lic
 the 256-moving-body sparse crossover in 135.18 seconds and Trunk 0.21.14 all pass. The exact
 gate-produced read-only snapshot `/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, is byte-verified at
-`http://100.94.63.83:8080/` and is current UAT authority. Focused human UAT and explicit approval
-remain pending; no milestone-close claim is made.
+`http://100.94.63.83:8080/` and is current UAT authority.
+
+Human result (2026-08-15): the supervising caller confirmed that the focused behavior works and
+explicitly requested milestone closure. M73-U1 through M73-U4 pass under that scoped close
+decision. This accepts the qualified candidate and recorded UAT scope without claiming a separate
+exhaustive manual replay of every scripted permutation; direct automated qualification remains
+authoritative. Every M73 acceptance gate passes.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

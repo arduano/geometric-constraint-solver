@@ -1332,12 +1332,12 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M72. M72's scoped UAT and exact final public-artifact
-verification complete its direct automated qualification. Active M73 has qualified its F001-F003
+recorded at completed M40.7, M53 and M61-M73. M72's scoped UAT and exact final public-artifact
+verification complete its direct automated qualification. Completed M73 qualified its F001-F003
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
-world-axis span precedence, passed the clean replacement release gate and published a byte-verified
-immutable UAT candidate. Only focused human review and explicit approval remain; M73 adds no new
-editable sample or browser scenario mode.
+world-axis span precedence, passed the clean replacement release gate, published a byte-verified
+immutable candidate and received focused supervising-human approval. M73 adds no new editable
+sample or browser scenario mode.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1757,8 +1757,13 @@ Trunk 0.21.14 success. Its exact seven-file read-only snapshot
 `/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, is served only on
 Tailscale at `http://100.94.63.83:8080/` and byte-verifies file-by-file plus `/`. It is current UAT
-authority. The old server exited while its historical snapshot remains. M73 stays open only for
-focused human UAT and explicit approval.
+authority. The old server exited while its historical snapshot remains. M73 remained open only for
+focused human UAT and explicit approval at that nomination checkpoint.
+
+Scoped closure (2026-08-15): the supervising caller confirmed that the focused behavior works and
+requested milestone closure. M73-U1 through M73-U4 are accepted for the recorded scope; direct
+owner regressions remain authoritative for semantic permutations not manually replayed. M73 is
+complete.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
