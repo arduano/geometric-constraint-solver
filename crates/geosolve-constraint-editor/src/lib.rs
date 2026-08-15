@@ -67,12 +67,12 @@ use std::cmp::Ordering;
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm,
-    DocumentCenterRef, DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveContinuity,
+    DocumentCenterRef, DocumentConstraintId, DocumentCurveContinuity,
     DocumentCurveCurvatureRelation, DocumentCurveNormalSide, DocumentCurveSpanRef,
-    DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
-    DocumentHyperbolaBranch, DocumentLineSupportRef, DocumentObjectId, GeometryRole,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument, TangentOrientation,
+    DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense, DocumentHyperbolaBranch,
+    DocumentObjectId, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
+    TangentOrientation,
 };
 use thiserror::Error;
 
@@ -5551,27 +5551,6 @@ impl ConstraintEditor {
             self.draft_inference_resolution = None;
         }
     }
-
-    /// Returns compatible core relation actions for the current ordered selection.
-    #[must_use]
-    pub fn available_constraints(&self, document: &SketchDocument) -> Vec<ConstraintKind> {
-        available_constraints(document, &self.selection)
-    }
-
-    /// Produces one ordinary public sketch edit for a compatible relation action.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EditorError::IncompatibleConstraint`] if the selected operands do
-    /// not exactly match the requested relation.
-    pub fn constraint_edit(
-        &self,
-        document: &SketchDocument,
-        kind: ConstraintKind,
-        label: impl Into<String>,
-    ) -> Result<DocumentEdit, EditorError> {
-        constraint_edit(document, &self.selection, kind, label.into())
-    }
 }
 
 fn commit_construction(
@@ -6038,28 +6017,6 @@ fn draft_point_slot(draft: &Draft, stage_index: usize) -> Option<DraftPointSlot>
     }
 }
 
-/// Complete M55 alpha relation action vocabulary.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ConstraintKind {
-    Fixed,
-    Coincident,
-    Horizontal,
-    Vertical,
-    PointOnCurve,
-    Parallel,
-    Perpendicular,
-    EqualLength,
-    EqualRadius,
-    Midpoint,
-    Symmetry,
-    GenericContact,
-    GenericTangency,
-    HorizontalPoints,
-    VerticalPoints,
-    Concentric,
-    Collinear,
-}
-
 /// Compact selection-sensitive authoring vocabulary.
 ///
 /// An intent is not an equation identity. The headless coordinator resolves it
@@ -6213,8 +6170,6 @@ pub enum EditorError {
     InvalidTolerance,
     #[error("invalid construction options: {0}")]
     InvalidConstructionOptions(&'static str),
-    #[error("selected operands are incompatible with {0:?}")]
-    IncompatibleConstraint(ConstraintKind),
     #[error("computed-feature snapshot does not match the supplied accepted sketch")]
     StaleComputedFeatureSnapshot,
     #[error("prepared sketch input does not match the supplied accepted scene")]
@@ -7683,224 +7638,6 @@ fn construction_document_error(
     }
 }
 
-fn available_constraints(
-    document: &SketchDocument,
-    selection: &[SelectionItem],
-) -> Vec<ConstraintKind> {
-    if selection
-        .iter()
-        .any(|item| !coordinator::selection_exists(document, *item))
-    {
-        return Vec::new();
-    }
-    match selection {
-        [SelectionItem::Point(_)] => vec![ConstraintKind::Fixed],
-        [SelectionItem::Point(first), SelectionItem::Point(second)] => {
-            let mut kinds = vec![ConstraintKind::Coincident];
-            if first != second {
-                kinds.extend([
-                    ConstraintKind::HorizontalPoints,
-                    ConstraintKind::VerticalPoints,
-                ]);
-            }
-            kinds
-        }
-        [SelectionItem::Point(_), SelectionItem::Curve(span)]
-        | [SelectionItem::Curve(span), SelectionItem::Point(_)]
-            if supports_contact(document, *span) =>
-        {
-            let mut kinds = vec![ConstraintKind::PointOnCurve];
-            if is_linear_span(document, *span) {
-                kinds.push(ConstraintKind::Midpoint);
-            }
-            kinds
-        }
-        [SelectionItem::Curve(span)] if is_linear_span(document, *span) => {
-            vec![ConstraintKind::Horizontal, ConstraintKind::Vertical]
-        }
-        [SelectionItem::Curve(first), SelectionItem::Curve(second)] => {
-            let mut kinds = Vec::new();
-            if is_linear_span(document, *first) && is_linear_span(document, *second) {
-                kinds.extend([
-                    ConstraintKind::Parallel,
-                    ConstraintKind::Perpendicular,
-                    ConstraintKind::EqualLength,
-                ]);
-                if first != second {
-                    kinds.push(ConstraintKind::Collinear);
-                }
-            }
-            if semantic_center(document, first.curve).is_some_and(|first_center| {
-                semantic_center(document, second.curve)
-                    .is_some_and(|second_center| first_center != second_center)
-            }) {
-                kinds.push(ConstraintKind::Concentric);
-            }
-            if is_radius_curve(document, first.curve) && is_radius_curve(document, second.curve) {
-                kinds.push(ConstraintKind::EqualRadius);
-            }
-            if supports_contact(document, *first) && supports_contact(document, *second) {
-                kinds.extend([
-                    ConstraintKind::GenericContact,
-                    ConstraintKind::GenericTangency,
-                ]);
-            }
-            kinds
-        }
-        [
-            SelectionItem::Point(_),
-            SelectionItem::Point(_),
-            SelectionItem::Curve(line),
-        ] if is_linear_span(document, *line) => vec![ConstraintKind::Symmetry],
-        _ => Vec::new(),
-    }
-}
-
-#[allow(
-    clippy::too_many_lines,
-    reason = "the exhaustive public relation-to-document mapping is clearer beside its applicability guard"
-)]
-pub(crate) fn constraint_edit(
-    document: &SketchDocument,
-    selection: &[SelectionItem],
-    kind: ConstraintKind,
-    label: String,
-) -> Result<DocumentEdit, EditorError> {
-    if !available_constraints(document, selection).contains(&kind) {
-        return Err(EditorError::IncompatibleConstraint(kind));
-    }
-    let definition = match (kind, selection) {
-        (ConstraintKind::Fixed, [SelectionItem::Point(point)]) => {
-            let target = document
-                .point(*point)
-                .ok_or(EditorError::IncompatibleConstraint(kind))?
-                .position;
-            DocumentConstraintDefinition::FixedPoint {
-                point: *point,
-                target,
-            }
-        }
-        (
-            ConstraintKind::Coincident,
-            [SelectionItem::Point(first), SelectionItem::Point(second)],
-        ) => DocumentConstraintDefinition::Coincident {
-            first: *first,
-            second: *second,
-        },
-        (
-            ConstraintKind::HorizontalPoints,
-            [SelectionItem::Point(first), SelectionItem::Point(second)],
-        ) => DocumentConstraintDefinition::HorizontalPoints {
-            first: *first,
-            second: *second,
-        },
-        (
-            ConstraintKind::VerticalPoints,
-            [SelectionItem::Point(first), SelectionItem::Point(second)],
-        ) => DocumentConstraintDefinition::VerticalPoints {
-            first: *first,
-            second: *second,
-        },
-        (ConstraintKind::Horizontal, [SelectionItem::Curve(line)]) => {
-            DocumentConstraintDefinition::Horizontal { line: *line }
-        }
-        (ConstraintKind::Vertical, [SelectionItem::Curve(line)]) => {
-            DocumentConstraintDefinition::Vertical { line: *line }
-        }
-        (ConstraintKind::Parallel, [SelectionItem::Curve(first), SelectionItem::Curve(second)]) => {
-            DocumentConstraintDefinition::Parallel {
-                first: *first,
-                second: *second,
-            }
-        }
-        (
-            ConstraintKind::Perpendicular,
-            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
-        ) => DocumentConstraintDefinition::Perpendicular {
-            first: *first,
-            second: *second,
-        },
-        (
-            ConstraintKind::Collinear,
-            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
-        ) => DocumentConstraintDefinition::Collinear {
-            first: line_support(*first),
-            second: line_support(*second),
-        },
-        (
-            ConstraintKind::Concentric,
-            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
-        ) => DocumentConstraintDefinition::Concentric {
-            first: DocumentCenterRef { curve: first.curve },
-            second: DocumentCenterRef {
-                curve: second.curve,
-            },
-        },
-        (
-            ConstraintKind::EqualLength,
-            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
-        ) => DocumentConstraintDefinition::EqualLength {
-            first: *first,
-            second: *second,
-        },
-        (
-            ConstraintKind::EqualRadius,
-            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
-        ) => DocumentConstraintDefinition::EqualRadius {
-            first: first.curve,
-            second: second.curve,
-        },
-        (
-            ConstraintKind::Midpoint,
-            [SelectionItem::Point(point), SelectionItem::Curve(line)]
-            | [SelectionItem::Curve(line), SelectionItem::Point(point)],
-        ) => DocumentConstraintDefinition::Midpoint {
-            point: *point,
-            line: *line,
-        },
-        (
-            ConstraintKind::Symmetry,
-            [
-                SelectionItem::Point(first),
-                SelectionItem::Point(second),
-                SelectionItem::Curve(line),
-            ],
-        ) => DocumentConstraintDefinition::SymmetricAboutLine {
-            first: *first,
-            second: *second,
-            line: *line,
-        },
-        _ => return Err(EditorError::IncompatibleConstraint(kind)),
-    };
-    Ok(DocumentEdit::CreateConstraint { label, definition })
-}
-
-fn supports_contact(document: &SketchDocument, span: CurveSpan) -> bool {
-    document.curve_contact_domains(span).is_ok()
-}
-
-fn is_radius_curve(document: &SketchDocument, curve: CurveId) -> bool {
-    document.curve(curve).is_some_and(|curve| {
-        matches!(
-            curve.definition,
-            CurveDefinition::Circle { .. } | CurveDefinition::CircularArc { .. }
-        )
-    })
-}
-
-fn semantic_center(document: &SketchDocument, curve: CurveId) -> Option<DesignPointId> {
-    document
-        .resolve_center_ref(DocumentCenterRef { curve })
-        .ok()
-}
-
-const fn line_support(span: CurveSpan) -> DocumentLineSupportRef {
-    DocumentLineSupportRef {
-        span,
-        direction: DocumentDirectionSense::Forward,
-    }
-}
-
 fn is_linear_span(document: &SketchDocument, span: CurveSpan) -> bool {
     document
         .curve(span.curve)
@@ -7917,7 +7654,7 @@ fn is_linear_span(document: &SketchDocument, span: CurveSpan) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use geosolve_sketch::SketchDocument;
+    use geosolve_sketch::{DocumentConstraintDefinition, SketchDocument};
 
     fn line_document() -> (SketchDocument, [CurveSpan; 2], [DesignPointId; 4]) {
         let mut document = SketchDocument::new(10.0).expect("document");
@@ -8257,6 +7994,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive table covers every valid and terminal construction stage"
+    )]
     fn construction_stage_semantics_table_covers_every_editor_tool() {
         let point = |point_operand_ordinal| ConstructionStageSemantics {
             coordinate_role: ConstructionCoordinateRole::PointOperand,
@@ -13022,44 +12763,6 @@ mod tests {
         ));
     }
 
-    fn assert_relation_edit_is_available(
-        document: &SketchDocument,
-        kind: ConstraintKind,
-        selection: Vec<SelectionItem>,
-    ) {
-        let mut editor = ConstraintEditor::default();
-        editor.set_selection(selection);
-        assert!(editor.available_constraints(document).contains(&kind));
-        assert!(editor.constraint_edit(document, kind, "relation").is_ok());
-    }
-
-    fn assert_relation_edit_is_rejected_without_mutation(
-        document: &SketchDocument,
-        before: &str,
-        selection: Vec<SelectionItem>,
-    ) {
-        let mut editor = ConstraintEditor::default();
-        editor.set_selection(selection);
-        for kind in [
-            ConstraintKind::Fixed,
-            ConstraintKind::Coincident,
-            ConstraintKind::Horizontal,
-            ConstraintKind::Vertical,
-            ConstraintKind::Parallel,
-            ConstraintKind::Perpendicular,
-            ConstraintKind::EqualLength,
-        ] {
-            assert!(matches!(
-                editor.constraint_edit(document, kind, "invalid"),
-                Err(EditorError::IncompatibleConstraint(actual)) if actual == kind
-            ));
-            assert_eq!(
-                document.to_canonical_json().expect("canonical bytes"),
-                before
-            );
-        }
-    }
-
     #[test]
     fn line_is_selected_from_screen_space_without_dom_hit_targets() {
         let (document, spans, _) = line_document();
@@ -13439,7 +13142,7 @@ mod tests {
     }
 
     #[test]
-    fn extended_line_selection_exposes_and_builds_parallel_relation() {
+    fn extended_line_selection_resolves_and_applies_contextual_parallel_relation() {
         let (document, spans, _) = line_document();
         let scene = scene(&document);
         let mut editor = ConstraintEditor::default();
@@ -13463,40 +13166,72 @@ mod tests {
                 SelectionItem::Curve(spans[1])
             ]
         );
+
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("coordinator session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator
+            .editor_mut()
+            .set_selection(editor.selection().iter().copied());
         assert_eq!(
-            editor.available_constraints(&document),
-            vec![
-                ConstraintKind::Parallel,
-                ConstraintKind::Perpendicular,
-                ConstraintKind::EqualLength,
-                ConstraintKind::Collinear,
-                ConstraintKind::GenericContact,
-                ConstraintKind::GenericTangency,
-            ]
+            coordinator.resolved_constraint(ConstraintIntent::Parallel),
+            Some(ResolvedConstraintKind::ParallelLines)
         );
-        let edit = editor
-            .constraint_edit(&document, ConstraintKind::Parallel, "parallel")
-            .expect("compatible edit");
+        let application = AuthoringState::default().activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Parallel),
+            &editor
+                .selection()
+                .iter()
+                .copied()
+                .map(AuthoringOperand::selected)
+                .collect::<Vec<_>>(),
+        );
+        let AuthoringOutcome::Apply(application) = application else {
+            panic!("contextual parallel application");
+        };
+        let AuthoringMutation::Constraint(outcome) = coordinator
+            .apply_authoring(coordinator.session().design_identity(), &application)
+            .expect("contextual parallel apply")
+        else {
+            panic!("constraint mutation");
+        };
         assert!(matches!(
-            edit,
-            DocumentEdit::CreateConstraint {
-                definition: DocumentConstraintDefinition::Parallel { first, second },
-                ..
-            } if first == spans[0] && second == spans[1]
+            coordinator
+                .session()
+                .design_document()
+                .constraint(outcome.value)
+                .expect("parallel definition")
+                .definition,
+            DocumentConstraintDefinition::Parallel { first, second }
+                if first == spans[0] && second == spans[1]
         ));
     }
 
     #[test]
-    fn m71_direct_relation_availability_rejects_semantic_tautologies() {
+    fn m71_contextual_relation_availability_rejects_semantic_tautologies() {
         let (mut document, spans, points) = line_document();
         let assert_rejected =
-            |document: &SketchDocument, selection: &[SelectionItem], kind: ConstraintKind| {
-                let mut editor = ConstraintEditor::default();
-                editor.set_selection(selection.iter().copied());
-                assert!(!editor.available_constraints(document).contains(&kind));
+            |document: &SketchDocument, selection: &[SelectionItem], intent: ConstraintIntent| {
+                let operands = selection
+                    .iter()
+                    .copied()
+                    .map(AuthoringOperand::selected)
+                    .collect::<Vec<_>>();
                 assert!(matches!(
-                    editor.constraint_edit(document, kind, "tautology"),
-                    Err(EditorError::IncompatibleConstraint(actual)) if actual == kind
+                    AuthoringState::default().activate(
+                        document,
+                        AuthoringTool::Constraint(intent),
+                        &operands,
+                    ),
+                    AuthoringOutcome::Warning(AuthoringWarning {
+                        reason: DisabledReason::SameSemanticOperand,
+                        ..
+                    })
                 ));
             };
 
@@ -13504,11 +13239,8 @@ mod tests {
             SelectionItem::Point(points[0]),
             SelectionItem::Point(points[0]),
         ];
-        for kind in [
-            ConstraintKind::HorizontalPoints,
-            ConstraintKind::VerticalPoints,
-        ] {
-            assert_rejected(&document, &repeated_point, kind);
+        for intent in [ConstraintIntent::Horizontal, ConstraintIntent::Vertical] {
+            assert_rejected(&document, &repeated_point, intent);
         }
 
         let first_radius = document
@@ -13553,36 +13285,23 @@ mod tests {
             SelectionItem::Curve(first_circle),
             SelectionItem::Curve(second_circle),
         ];
-        assert_rejected(&document, &shared_center, ConstraintKind::Concentric);
+        assert_rejected(&document, &shared_center, ConstraintIntent::Concentric);
 
         let repeated_support = [
             SelectionItem::Curve(spans[0]),
             SelectionItem::Curve(spans[0]),
         ];
-        assert_rejected(&document, &repeated_support, ConstraintKind::Collinear);
+        assert_rejected(&document, &repeated_support, ConstraintIntent::Collinear);
     }
 
     #[test]
-    fn m71_f002_direct_relation_availability_rejects_missing_objects_and_invalid_spans() {
+    fn m71_f002_contextual_relation_availability_rejects_missing_objects_and_invalid_spans() {
         let (mut document, _spans, points) = line_document();
         let foreign_point = DesignPointId(geosolve_sketch::PersistentId::from_u128(u128::MAX));
         let foreign_points = [
             SelectionItem::Point(points[0]),
             SelectionItem::Point(foreign_point),
         ];
-        let mut editor = ConstraintEditor::default();
-        editor.set_selection(foreign_points);
-        assert!(editor.available_constraints(&document).is_empty());
-        for kind in [
-            ConstraintKind::Coincident,
-            ConstraintKind::HorizontalPoints,
-            ConstraintKind::VerticalPoints,
-        ] {
-            assert!(matches!(
-                editor.constraint_edit(&document, kind, "missing point"),
-                Err(EditorError::IncompatibleConstraint(actual)) if actual == kind
-            ));
-        }
         let session = RetainedSketchDocumentSession::new(
             document.clone(),
             geosolve_sketch::DocumentSolveRequest::default(),
@@ -13628,17 +13347,6 @@ mod tests {
             curve: curves[0],
             segment: 71,
         };
-        editor.set_selection([
-            SelectionItem::Curve(invalid_span),
-            SelectionItem::Curve(CurveSpan::line(curves[1])),
-        ]);
-        assert!(editor.available_constraints(&document).is_empty());
-        assert!(matches!(
-            editor.constraint_edit(&document, ConstraintKind::Concentric, "invalid span"),
-            Err(EditorError::IncompatibleConstraint(
-                ConstraintKind::Concentric
-            ))
-        ));
         let session = RetainedSketchDocumentSession::new(
             document,
             geosolve_sketch::DocumentSolveRequest::default(),
@@ -13738,90 +13446,6 @@ mod tests {
         editor.select_item(SelectionItem::Curve(spans[0]), Modifiers::default());
         assert_eq!(editor.selection(), &[SelectionItem::Curve(spans[0])]);
         assert!(document.curve(spans[0].curve).is_some());
-    }
-
-    #[test]
-    fn relation_applicability_matrix_builds_only_valid_public_edits() {
-        let (mut document, spans, points) = line_document();
-        let center = document.add_point("center", [0.0, 3.0]).expect("center");
-        let radius = document
-            .add_scalar("radius", 1.0, ScalarUnit::Length, ScalarDomain::Positive)
-            .expect("radius");
-        let circle = document
-            .add_curve("circle", CurveDefinition::Circle { center, radius })
-            .expect("circle");
-        let circle_span = CurveSpan {
-            curve: circle,
-            segment: 0,
-        };
-        let cases = [
-            (ConstraintKind::Fixed, vec![SelectionItem::Point(points[0])]),
-            (
-                ConstraintKind::Coincident,
-                vec![
-                    SelectionItem::Point(points[0]),
-                    SelectionItem::Point(points[1]),
-                ],
-            ),
-            (
-                ConstraintKind::Horizontal,
-                vec![SelectionItem::Curve(spans[0])],
-            ),
-            (
-                ConstraintKind::Vertical,
-                vec![SelectionItem::Curve(spans[0])],
-            ),
-            (
-                ConstraintKind::Parallel,
-                vec![
-                    SelectionItem::Curve(spans[0]),
-                    SelectionItem::Curve(spans[1]),
-                ],
-            ),
-            (
-                ConstraintKind::Perpendicular,
-                vec![
-                    SelectionItem::Curve(spans[0]),
-                    SelectionItem::Curve(spans[1]),
-                ],
-            ),
-            (
-                ConstraintKind::EqualLength,
-                vec![
-                    SelectionItem::Curve(spans[0]),
-                    SelectionItem::Curve(spans[1]),
-                ],
-            ),
-        ];
-        for (kind, selection) in cases {
-            assert_relation_edit_is_available(&document, kind, selection);
-        }
-
-        let before = document.to_canonical_json().expect("canonical bytes");
-        let invalid_selections = [
-            vec![],
-            vec![
-                SelectionItem::Curve(spans[0]),
-                SelectionItem::Point(points[0]),
-            ],
-            vec![
-                SelectionItem::Point(points[0]),
-                SelectionItem::Curve(spans[0]),
-            ],
-            vec![
-                SelectionItem::Point(points[0]),
-                SelectionItem::Point(points[1]),
-                SelectionItem::Point(points[2]),
-            ],
-            vec![SelectionItem::Curve(circle_span)],
-            vec![
-                SelectionItem::Curve(spans[0]),
-                SelectionItem::Curve(circle_span),
-            ],
-        ];
-        for selection in invalid_selections {
-            assert_relation_edit_is_rejected_without_mutation(&document, &before, selection);
-        }
     }
 
     #[test]

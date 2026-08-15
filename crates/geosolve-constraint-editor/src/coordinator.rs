@@ -42,15 +42,15 @@ use crate::{
     ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
     ComputedFilletContinuationLimit, ComputedFilletContinuationLimitKind,
     ComputedFilletContinuationStatus, ComputedFilletInteractionSample, ConstraintActionRequest,
-    ConstraintEditor, ConstraintIntent, ConstraintKind, ConstraintRelationChoice,
-    ConstructionCommitPlan, ConstructionCommitResult, ConstructionCommitToken,
-    ConstructionProposal, ConstructionResult, DimensionActionRequest, DimensionKind,
-    DraftInferenceInput, EditorEffect, EditorScene, FeatureAuthoringCandidate,
-    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringState,
-    FeatureAuthoringTool, FeatureAuthoringWarningKind, GeometryInteractionPolicy, PickTolerance,
-    PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind,
-    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionControlGeometry,
-    SceneFilletActionId, ScreenPoint, SelectionItem,
+    ConstraintEditor, ConstraintIntent, ConstraintRelationChoice, ConstructionCommitPlan,
+    ConstructionCommitResult, ConstructionCommitToken, ConstructionProposal, ConstructionResult,
+    DimensionActionRequest, DimensionKind, DraftInferenceInput, EditorEffect, EditorScene,
+    FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+    FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
+    GeometryInteractionPolicy, PickTolerance, PointGestureSnapshot, PointerInput,
+    ProjectedDragRequestDisposition, ResolvedConstraintKind, SceneFilletAction,
+    SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
+    ScreenPoint, SelectionItem,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -5879,20 +5879,15 @@ impl RetainedEditorCoordinator {
                         "this relation action accepts no explicit branch choices",
                     ));
                 }
-                let kind = simple_constraint_kind(resolved).ok_or(
-                    CoordinatorError::InvalidActionInput(
-                        "contextual relation did not resolve to a simple constraint",
-                    ),
-                )?;
-                let edit = crate::constraint_edit(
+                let definition = simple_constraint_definition(
                     self.session.design_document(),
                     &selection,
-                    kind,
-                    request.label,
-                )?;
-                let DocumentEdit::CreateConstraint { label, definition } = edit else {
-                    unreachable!("simple relation policy emits one constraint creation");
-                };
+                    resolved,
+                )
+                .ok_or(CoordinatorError::InvalidActionInput(
+                    "contextual relation did not resolve to a simple constraint",
+                ))?;
+                let label = request.label;
                 self.session.transact(expected, move |document| {
                     document.add_constraint(label, definition)
                 })?
@@ -9040,29 +9035,129 @@ fn is_radius_curve(document: &SketchDocument, curve: CurveId) -> bool {
     })
 }
 
-const fn simple_constraint_kind(resolved: ResolvedConstraintKind) -> Option<ConstraintKind> {
-    match resolved {
-        ResolvedConstraintKind::FixedPoint => Some(ConstraintKind::Fixed),
-        ResolvedConstraintKind::CoincidentPoints => Some(ConstraintKind::Coincident),
-        ResolvedConstraintKind::HorizontalLine => Some(ConstraintKind::Horizontal),
-        ResolvedConstraintKind::VerticalLine => Some(ConstraintKind::Vertical),
-        ResolvedConstraintKind::HorizontalPoints => Some(ConstraintKind::HorizontalPoints),
-        ResolvedConstraintKind::VerticalPoints => Some(ConstraintKind::VerticalPoints),
-        ResolvedConstraintKind::ConcentricCurves => Some(ConstraintKind::Concentric),
-        ResolvedConstraintKind::CollinearSupports => Some(ConstraintKind::Collinear),
-        ResolvedConstraintKind::ParallelLines => Some(ConstraintKind::Parallel),
-        ResolvedConstraintKind::PerpendicularLines => Some(ConstraintKind::Perpendicular),
-        ResolvedConstraintKind::EqualLength => Some(ConstraintKind::EqualLength),
-        ResolvedConstraintKind::EqualRadius => Some(ConstraintKind::EqualRadius),
-        ResolvedConstraintKind::Midpoint => Some(ConstraintKind::Midpoint),
-        ResolvedConstraintKind::SymmetricAboutLine => Some(ConstraintKind::Symmetry),
-        ResolvedConstraintKind::PointOnCurve
-        | ResolvedConstraintKind::CurveContact
-        | ResolvedConstraintKind::RadialLine
-        | ResolvedConstraintKind::EqualCurvature
-        | ResolvedConstraintKind::CurveTangency
-        | ResolvedConstraintKind::EndpointContinuity => None,
-    }
+/// Lowers an already-resolved simple contextual relation without repeating
+/// applicability checks. [`resolve_constraint`] is the sole owner of operand
+/// existence, kind, arity and semantic-compatibility policy.
+fn simple_constraint_definition(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    resolved: ResolvedConstraintKind,
+) -> Option<DocumentConstraintDefinition> {
+    Some(match (resolved, selection) {
+        (ResolvedConstraintKind::FixedPoint, [SelectionItem::Point(point)]) => {
+            DocumentConstraintDefinition::FixedPoint {
+                point: *point,
+                target: document.point(*point)?.position,
+            }
+        }
+        (
+            ResolvedConstraintKind::CoincidentPoints,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) => DocumentConstraintDefinition::Coincident {
+            first: *first,
+            second: *second,
+        },
+        (ResolvedConstraintKind::HorizontalLine, [SelectionItem::Curve(line)]) => {
+            DocumentConstraintDefinition::Horizontal { line: *line }
+        }
+        (ResolvedConstraintKind::VerticalLine, [SelectionItem::Curve(line)]) => {
+            DocumentConstraintDefinition::Vertical { line: *line }
+        }
+        (
+            ResolvedConstraintKind::HorizontalPoints,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) => DocumentConstraintDefinition::HorizontalPoints {
+            first: *first,
+            second: *second,
+        },
+        (
+            ResolvedConstraintKind::VerticalPoints,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) => DocumentConstraintDefinition::VerticalPoints {
+            first: *first,
+            second: *second,
+        },
+        (
+            ResolvedConstraintKind::ConcentricCurves,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::Concentric {
+            first: geosolve_sketch::DocumentCenterRef { curve: first.curve },
+            second: geosolve_sketch::DocumentCenterRef {
+                curve: second.curve,
+            },
+        },
+        (
+            ResolvedConstraintKind::CollinearSupports,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::Collinear {
+            first: geosolve_sketch::DocumentLineSupportRef {
+                span: *first,
+                direction: geosolve_sketch::DocumentDirectionSense::Forward,
+            },
+            second: geosolve_sketch::DocumentLineSupportRef {
+                span: *second,
+                direction: geosolve_sketch::DocumentDirectionSense::Forward,
+            },
+        },
+        (
+            ResolvedConstraintKind::ParallelLines,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::Parallel {
+            first: *first,
+            second: *second,
+        },
+        (
+            ResolvedConstraintKind::PerpendicularLines,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::Perpendicular {
+            first: *first,
+            second: *second,
+        },
+        (
+            ResolvedConstraintKind::EqualLength,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::EqualLength {
+            first: *first,
+            second: *second,
+        },
+        (
+            ResolvedConstraintKind::EqualRadius,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::EqualRadius {
+            first: first.curve,
+            second: second.curve,
+        },
+        (
+            ResolvedConstraintKind::Midpoint,
+            [SelectionItem::Point(point), SelectionItem::Curve(line)]
+            | [SelectionItem::Curve(line), SelectionItem::Point(point)],
+        ) => DocumentConstraintDefinition::Midpoint {
+            point: *point,
+            line: *line,
+        },
+        (
+            ResolvedConstraintKind::SymmetricAboutLine,
+            [
+                SelectionItem::Point(first),
+                SelectionItem::Point(second),
+                SelectionItem::Curve(line),
+            ],
+        ) => DocumentConstraintDefinition::SymmetricAboutLine {
+            first: *first,
+            second: *second,
+            line: *line,
+        },
+        (
+            ResolvedConstraintKind::PointOnCurve
+            | ResolvedConstraintKind::CurveContact
+            | ResolvedConstraintKind::RadialLine
+            | ResolvedConstraintKind::EqualCurvature
+            | ResolvedConstraintKind::CurveTangency
+            | ResolvedConstraintKind::EndpointContinuity,
+            _,
+        ) => return None,
+        _ => return None,
+    })
 }
 
 fn contact_action_choice(
@@ -15546,7 +15641,7 @@ mod tests {
     }
 
     #[test]
-    fn relation_availability_and_edit_building_are_prospective_until_one_coordinator_apply() {
+    fn contextual_authoring_resolution_is_prospective_until_one_coordinator_apply() {
         let (session, points, _, _) = fixed_line_session();
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         coordinator
@@ -15573,21 +15668,22 @@ mod tests {
             action: CoordinatorActionKind::Constraint(ConstraintIntent::Lock),
             state: ActionState::Enabled,
         }));
-        let edit = coordinator
-            .editor()
-            .constraint_edit(
-                coordinator.session().design_document(),
-                ConstraintKind::Fixed,
-                "prospective fixed",
-            )
-            .expect("prospective edit");
-        assert!(matches!(
-            edit,
-            DocumentEdit::CreateConstraint {
-                definition: DocumentConstraintDefinition::FixedPoint { point, target },
-                ..
-            } if point == points[0] && target == [0.0, 0.0]
-        ));
+        assert_eq!(
+            coordinator.resolved_constraint(ConstraintIntent::Lock),
+            Some(ResolvedConstraintKind::FixedPoint)
+        );
+        let application = AuthoringState::default().activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Lock),
+            &[AuthoringOperand::selected(SelectionItem::Point(points[0]))],
+        );
+        let AuthoringOutcome::Apply(application) = application else {
+            panic!("prospective contextual application");
+        };
+        assert_eq!(
+            application.resolved_constraint,
+            Some(ResolvedConstraintKind::FixedPoint)
+        );
         assert_eq!(coordinator.session().design_identity(), design);
         assert_eq!(
             coordinator
@@ -15614,9 +15710,23 @@ mod tests {
         assert_eq!(coordinator.history_len(), history);
         assert_eq!(coordinator.transcript(), transcript);
 
-        let outcome = coordinator
-            .apply_edit(design, edit)
-            .expect("explicit apply");
+        let prospective = retained_state_snapshot(&coordinator);
+        let mut stale_application = application.clone();
+        stale_application.resolved_constraint = Some(ResolvedConstraintKind::CoincidentPoints);
+        assert!(matches!(
+            coordinator.apply_authoring(design, &stale_application),
+            Err(CoordinatorError::InvalidActionInput(
+                "authoring resolution is stale"
+            ))
+        ));
+        assert_retained_state_snapshot(&coordinator, &prospective);
+
+        let AuthoringMutation::Constraint(outcome) = coordinator
+            .apply_authoring(design, &application)
+            .expect("contextual apply")
+        else {
+            panic!("constraint mutation");
+        };
         assert!(outcome.published_accepted.is_none());
         assert_ne!(coordinator.session().design_identity(), design);
         assert_eq!(
@@ -15637,6 +15747,15 @@ mod tests {
                     if point == points[0] && target == [0.0, 0.0]
             )
         ));
+
+        let applied = retained_state_snapshot(&coordinator);
+        assert!(matches!(
+            coordinator.apply_authoring(design, &application),
+            Err(CoordinatorError::Session(
+                DocumentSessionError::StaleDesign { .. }
+            ))
+        ));
+        assert_retained_state_snapshot(&coordinator, &applied);
     }
 
     #[test]

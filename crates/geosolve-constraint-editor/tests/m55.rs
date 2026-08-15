@@ -777,6 +777,44 @@ fn every_resolved_relation_executes_through_the_authoring_adapter() {
             vec![selected(SelectionItem::Curve(fixture.lines[1]))],
         ),
         (
+            ConstraintIntent::Horizontal,
+            ResolvedConstraintKind::HorizontalPoints,
+            fixture.points[0..2]
+                .iter()
+                .copied()
+                .map(SelectionItem::Point)
+                .map(selected)
+                .collect(),
+        ),
+        (
+            ConstraintIntent::Vertical,
+            ResolvedConstraintKind::VerticalPoints,
+            fixture.points[2..4]
+                .iter()
+                .copied()
+                .map(SelectionItem::Point)
+                .map(selected)
+                .collect(),
+        ),
+        (
+            ConstraintIntent::Concentric,
+            ResolvedConstraintKind::ConcentricCurves,
+            fixture
+                .circles
+                .map(SelectionItem::Curve)
+                .map(selected)
+                .to_vec(),
+        ),
+        (
+            ConstraintIntent::Collinear,
+            ResolvedConstraintKind::CollinearSupports,
+            fixture
+                .lines
+                .map(SelectionItem::Curve)
+                .map(selected)
+                .to_vec(),
+        ),
+        (
             ConstraintIntent::Parallel,
             ResolvedConstraintKind::ParallelLines,
             vec![
@@ -855,7 +893,7 @@ fn every_resolved_relation_executes_through_the_authoring_adapter() {
             ],
         ),
     ];
-    assert_eq!(cases.len(), 16);
+    assert_eq!(cases.len(), 20);
     for (intent, expected_resolution, operands) in cases {
         let mut coordinator = coordinator(fixture.document.clone());
         let options = AuthoringOptions {
@@ -917,14 +955,268 @@ fn every_resolved_relation_executes_through_the_authoring_adapter() {
             outcome.published_accepted.is_some(),
             "{expected_resolution:?} retained a rejected attempt"
         );
-        assert!(
-            coordinator
-                .session()
-                .design_document()
-                .constraint(outcome.value)
-                .is_some(),
-            "{expected_resolution:?} did not persist its constraint"
-        );
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted authoring result")
+            .document();
+        let constraint = accepted
+            .constraint(outcome.value)
+            .unwrap_or_else(|| panic!("{expected_resolution:?} did not persist its constraint"));
+        let assert_contact = |contact,
+                              expected_curve,
+                              expected_domain,
+                              expected_parameter: f64,
+                              expected_neighborhood,
+                              expected_orientation| {
+            let contact = accepted.contact(contact).expect("persistent contact");
+            assert_eq!(contact.curve, expected_curve, "{expected_resolution:?}");
+            assert_eq!(contact.domain, expected_domain, "{expected_resolution:?}");
+            assert_eq!(contact.winding, 0, "{expected_resolution:?}");
+            assert_eq!(
+                contact.neighborhood, expected_neighborhood,
+                "{expected_resolution:?}"
+            );
+            assert_eq!(
+                contact.tangent_orientation, expected_orientation,
+                "{expected_resolution:?}"
+            );
+            assert_eq!(
+                accepted
+                    .scalar(contact.parameter)
+                    .expect("contact parameter")
+                    .value
+                    .to_bits(),
+                expected_parameter.to_bits(),
+                "{expected_resolution:?} parameter"
+            );
+        };
+        let bounded = ContactDomain::Bounded {
+            lower: 0.0,
+            upper: 1.0,
+        };
+        match (expected_resolution, &constraint.definition) {
+            (
+                ResolvedConstraintKind::FixedPoint,
+                DocumentConstraintDefinition::FixedPoint { point, target },
+            ) => {
+                assert_eq!(*point, fixture.points[0]);
+                assert_eq!(*target, [-2.0, 0.0]);
+            }
+            (
+                ResolvedConstraintKind::CoincidentPoints,
+                DocumentConstraintDefinition::Coincident { first, second },
+            ) => {
+                assert_eq!([*first, *second], fixture.points[0..2]);
+            }
+            (
+                ResolvedConstraintKind::PointOnCurve,
+                DocumentConstraintDefinition::PointOnCurve { point, contact },
+            ) => {
+                assert_eq!(*point, fixture.midpoint);
+                assert_contact(
+                    *contact,
+                    fixture.lines[0],
+                    bounded,
+                    0.5,
+                    ContactNeighborhood::Interior,
+                    None,
+                );
+            }
+            (
+                ResolvedConstraintKind::CurveContact,
+                DocumentConstraintDefinition::CurveCurveContact {
+                    first_contact,
+                    second_contact,
+                },
+            ) => {
+                assert_contact(
+                    *first_contact,
+                    fixture.lines[0],
+                    bounded,
+                    0.5,
+                    ContactNeighborhood::Interior,
+                    None,
+                );
+                assert_contact(
+                    *second_contact,
+                    fixture.lines[1],
+                    bounded,
+                    0.5,
+                    ContactNeighborhood::Interior,
+                    None,
+                );
+            }
+            (
+                ResolvedConstraintKind::HorizontalLine,
+                DocumentConstraintDefinition::Horizontal { line },
+            ) => assert_eq!(*line, fixture.lines[0]),
+            (
+                ResolvedConstraintKind::VerticalLine,
+                DocumentConstraintDefinition::Vertical { line },
+            ) => assert_eq!(*line, fixture.lines[1]),
+            (
+                ResolvedConstraintKind::HorizontalPoints,
+                DocumentConstraintDefinition::HorizontalPoints { first, second },
+            ) => assert_eq!([*first, *second], fixture.points[0..2]),
+            (
+                ResolvedConstraintKind::VerticalPoints,
+                DocumentConstraintDefinition::VerticalPoints { first, second },
+            ) => assert_eq!([*first, *second], fixture.points[2..4]),
+            (
+                ResolvedConstraintKind::ConcentricCurves,
+                DocumentConstraintDefinition::Concentric { first, second },
+            ) => assert_eq!(
+                [first.curve, second.curve],
+                [fixture.circles[0].curve, fixture.circles[1].curve]
+            ),
+            (
+                ResolvedConstraintKind::CollinearSupports,
+                DocumentConstraintDefinition::Collinear { first, second },
+            ) => {
+                assert_eq!([first.span, second.span], fixture.lines);
+                assert_eq!(
+                    [first.direction, second.direction],
+                    [geosolve_sketch::DocumentDirectionSense::Forward; 2]
+                );
+            }
+            (
+                ResolvedConstraintKind::ParallelLines,
+                DocumentConstraintDefinition::Parallel { first, second },
+            ) => assert_eq!(
+                [*first, *second],
+                [fixture.lines[0], fixture.overlapping_line]
+            ),
+            (
+                ResolvedConstraintKind::PerpendicularLines,
+                DocumentConstraintDefinition::Perpendicular { first, second },
+            ) => assert_eq!([*first, *second], fixture.lines),
+            (
+                ResolvedConstraintKind::RadialLine,
+                DocumentConstraintDefinition::PointOnCurve { point, contact },
+            ) => {
+                assert_eq!(*point, fixture.points[4]);
+                assert_contact(
+                    *contact,
+                    radial_line,
+                    ContactDomain::SupportingLine,
+                    0.5,
+                    ContactNeighborhood::Interior,
+                    None,
+                );
+            }
+            (
+                ResolvedConstraintKind::EqualLength,
+                DocumentConstraintDefinition::EqualLength { first, second },
+            ) => assert_eq!([*first, *second], fixture.lines),
+            (
+                ResolvedConstraintKind::EqualRadius,
+                DocumentConstraintDefinition::EqualRadius { first, second },
+            ) => assert_eq!(
+                [*first, *second],
+                [fixture.circles[0].curve, fixture.circles[1].curve]
+            ),
+            (
+                ResolvedConstraintKind::EqualCurvature,
+                DocumentConstraintDefinition::EqualCurvature {
+                    first_contact,
+                    second_contact,
+                    relation,
+                },
+            ) => {
+                assert_eq!(
+                    *relation,
+                    DocumentCurveCurvatureRelation::MagnitudeOppositeSign
+                );
+                assert_contact(
+                    *first_contact,
+                    fixture.beziers[0],
+                    bounded,
+                    0.5,
+                    ContactNeighborhood::Interior,
+                    None,
+                );
+                assert_contact(
+                    *second_contact,
+                    fixture.beziers[1],
+                    bounded,
+                    0.5,
+                    ContactNeighborhood::Interior,
+                    None,
+                );
+            }
+            (
+                ResolvedConstraintKind::Midpoint,
+                DocumentConstraintDefinition::Midpoint { point, line },
+            ) => {
+                assert_eq!(*point, fixture.midpoint);
+                assert_eq!(*line, fixture.lines[0]);
+            }
+            (
+                ResolvedConstraintKind::SymmetricAboutLine,
+                DocumentConstraintDefinition::SymmetricAboutLine {
+                    first,
+                    second,
+                    line,
+                },
+            ) => {
+                assert_eq!([*first, *second], fixture.points[4..6]);
+                assert_eq!(*line, fixture.lines[1]);
+            }
+            (
+                ResolvedConstraintKind::CurveTangency,
+                DocumentConstraintDefinition::CurveCurveTangency {
+                    first_contact,
+                    second_contact,
+                },
+            ) => {
+                assert_contact(
+                    *first_contact,
+                    fixture.lines[0],
+                    bounded,
+                    0.5,
+                    ContactNeighborhood::Interior,
+                    Some(TangentOrientation::Aligned),
+                );
+                assert_contact(
+                    *second_contact,
+                    fixture.overlapping_line,
+                    bounded,
+                    0.5,
+                    ContactNeighborhood::Interior,
+                    Some(TangentOrientation::Aligned),
+                );
+            }
+            (
+                ResolvedConstraintKind::EndpointContinuity,
+                DocumentConstraintDefinition::EndpointContinuity {
+                    first_contact,
+                    second_contact,
+                    continuity,
+                },
+            ) => {
+                assert_eq!(*continuity, DocumentCurveContinuity::G1);
+                assert_contact(
+                    *first_contact,
+                    fixture.beziers[0],
+                    bounded,
+                    1.0,
+                    ContactNeighborhood::End,
+                    None,
+                );
+                assert_contact(
+                    *second_contact,
+                    fixture.beziers[1],
+                    bounded,
+                    0.0,
+                    ContactNeighborhood::Start,
+                    None,
+                );
+            }
+            (_, definition) => {
+                panic!("{expected_resolution:?} persisted unexpected definition {definition:?}")
+            }
+        }
         repeated.transaction_finished();
         assert!(repeated.pending().is_empty());
         assert_eq!(
