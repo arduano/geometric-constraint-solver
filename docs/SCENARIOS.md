@@ -1336,8 +1336,8 @@ recorded at completed M40.7, M53 and M61-M73. M72's scoped UAT and exact final p
 verification complete its direct automated qualification. Completed M73 qualified its F001-F003
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
-immutable candidate and received focused supervising-human approval. M73 adds no new editable
-sample or browser scenario mode.
+immutable Tailscale UAT snapshot, received focused supervising-human approval and exact-verified
+the final GitHub Pages artifact. M73 adds no new editable sample or browser scenario mode.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1764,6 +1764,18 @@ Scoped closure (2026-08-15): the supervising caller confirmed that the focused b
 requested milestone closure. M73-U1 through M73-U4 are accepted for the recorded scope; direct
 owner regressions remain authoritative for semantic permutations not manually replayed. M73 is
 complete.
+
+Final public publication (2026-08-15): accepted product source
+`4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
+`fe9897153baa974b3c5c06e7a3bf5eee76e920f2`, is deployed from documentation-only approval
+descendant `ef7b90feb17bfba62c45f9463ceb934fc34e6f4d` by successful Pages run `31878139709` as
+artifact `9245585021`. Its downloaded inner tar SHA-256 is
+`d6c210b50aa9bb7e257555f931016551402fb7a8faa5d4ccfe267c68c44ceb56` and C-locale seven-file
+manifest aggregate is `4e562280bc0656f9bd7358057d62739ba02e74a5f76b0328c5e45bf18640031c`.
+The public root and all seven paths return HTTP 200 and match the artifact byte-for-byte; `/`
+equals `index.html`, application URLs use `/geometric-constraint-solver/`, and JavaScript/WASM/CSS
+media types are correct. The separate Tailscale bytes remain UAT-snapshot evidence, not the public
+publication authority.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

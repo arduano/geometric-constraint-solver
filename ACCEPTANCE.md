@@ -1807,8 +1807,8 @@ that closing checkpoint and was activated separately under the scope below.
 ## M73 acceptance: retained authoring semantic consolidation
 
 Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
-through M73-F004, the clean replacement release gate, byte-verified immutable publication and
-focused human UAT all pass.
+through M73-F004, the clean replacement release gate, byte-verified immutable UAT snapshot,
+focused human UAT and exact final GitHub Pages publication all pass.
 `docs/M73_GOALS.md` owns the corrected scope; no ADR is required.
 
 - M71 already made `construction_point_stage` a projection of `draft_inference_subject`; M73 does
@@ -1888,7 +1888,15 @@ Human result (2026-08-15): the supervising caller confirmed that the focused beh
 explicitly requested milestone closure. M73-U1 through M73-U4 pass under that scoped close
 decision. This accepts the qualified candidate and recorded UAT scope without claiming a separate
 exhaustive manual replay of every scripted permutation; direct automated qualification remains
-authoritative. Every M73 acceptance gate passes.
+authoritative.
+
+Final public result (2026-08-15): documentation-only approval descendant
+`ef7b90feb17bfba62c45f9463ceb934fc34e6f4d` passes GitHub Pages run `31878139709` and deploys
+artifact `9245585021`. The public root and all seven files return HTTP 200, match the downloaded
+artifact byte-for-byte, use repository-prefixed application URLs and the expected JavaScript,
+WASM and CSS media types. `/` equals `index.html`; the artifact's C-locale manifest aggregate is
+`4e562280bc0656f9bd7358057d62739ba02e74a5f76b0328c5e45bf18640031c`. Every M73 acceptance
+gate passes.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

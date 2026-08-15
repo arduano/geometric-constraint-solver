@@ -3,10 +3,11 @@
 # M73 — Retained authoring semantic consolidation
 
 Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
-through M73-F004, the clean replacement release gate, byte-verified immutable publication and
-focused human UAT all pass. The supervising caller accepted the original scope, focused F004
-correction and final candidate. No new ADR is required because M73 changes no solver or persistence
-architecture and retires only an editor API introduced after the published `0.2.0` baseline.
+through M73-F004, the clean replacement release gate, byte-verified immutable UAT snapshot,
+focused human UAT and exact final GitHub Pages publication all pass. The supervising caller
+accepted the original scope, focused F004 correction and final candidate. No new ADR is required
+because M73 changes no solver or persistence architecture and retires only an editor API introduced
+after the published `0.2.0` baseline.
 
 ## Goal
 
@@ -139,7 +140,17 @@ gate distribution is frozen read-only at `/tmp/geosolve-m73-uat.JKAWtJ`, aggrega
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, and byte-verified at
 `http://100.94.63.83:8080/`. This replacement is the accepted closing candidate. The supervising
 caller confirmed that the focused behavior works and explicitly requested closure on 2026-08-15;
-M73-U1 through M73-U4 pass under that scoped decision. Every M73 goal is complete.
+M73-U1 through M73-U4 pass under that scoped decision.
+
+Documentation-only approval descendant `ef7b90feb17bfba62c45f9463ceb934fc34e6f4d`, tree
+`f9debcdf268d52a8959166fadf5505b67c7fbaa7`, passes final GitHub Pages run `31878139709` and
+deploys artifact `9245585021`. Its downloaded ZIP and inner tar SHA-256 values are
+`fcfdb7f573bbfde86f70bc56126fe5c800428bc58991eb445eba33f122bf2222` and
+`d6c210b50aa9bb7e257555f931016551402fb7a8faa5d4ccfe267c68c44ceb56`; the C-locale seven-file
+manifest aggregate is `4e562280bc0656f9bd7358057d62739ba02e74a5f76b0328c5e45bf18640031c`.
+The public root and all seven files return HTTP 200 and match the artifact byte-for-byte, `/`
+equals `index.html`, asset URLs are repository-prefixed and JavaScript/WASM/CSS media types are
+correct. Every M73 goal is complete.
 
 ## ADR decision
 

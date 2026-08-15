@@ -3,9 +3,9 @@
 # M73 implementation — Retained authoring semantic consolidation
 
 Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
-through M73-F004, the clean replacement release gate, byte-verified immutable publication and
-focused human UAT all pass. The supervising caller accepted the corrected scope and closing
-candidate.
+through M73-F004, the clean replacement release gate, byte-verified immutable UAT snapshot,
+focused human UAT and exact final GitHub Pages publication all pass. The supervising caller
+accepted the corrected scope and closing candidate.
 
 Activation baseline source: `daea43de51c9a1a720da1a245747e67735448f7d`
 
@@ -26,6 +26,10 @@ M73-F004 regression-hardening source: `f41e398d00b7a7ca1e12a12a285408a0b7bd3566`
 Clean replacement product source: `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`
 
 Clean replacement product tree: `fe9897153baa974b3c5c06e7a3bf5eee76e920f2`
+
+Documentation-only approval source: `ef7b90feb17bfba62c45f9463ceb934fc34e6f4d`
+
+Documentation-only approval tree: `f9debcdf268d52a8959166fadf5505b67c7fbaa7`
 
 Architecture decision: no new ADR. M73 remains within ADR 0034's drafting-authority boundary and
 ADR 0035's retained-relation lifecycle.
@@ -97,7 +101,8 @@ bypassed.
 This narrowly supersedes M71-F004's same-axis-alternative rule only for eligible live world-axis
 span constraints; the M71 record remains unchanged historical evidence. Public regression target
 `m73_f004_span_axis_precedence`, focused/proportional editor qualification and the clean replacement
-release/publication gates pass. Focused human UAT and explicit approval remain pending.
+release/publication gates pass. At that implementation checkpoint focused human UAT and explicit
+approval remained pending; both now pass under the closure record below.
 
 ## Compatibility result
 
@@ -245,6 +250,54 @@ Proxy/cache-bypassed, identity-encoded requests for all seven files and `/` retu
 the expected media types and compare byte-for-byte. `/` equals `index.html`, and the fetched
 aggregate equals the frozen aggregate. This replacement is current UAT authority.
 
+## Final GitHub Pages publication
+
+Accepted product source `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
+`fe9897153baa974b3c5c06e7a3bf5eee76e920f2`, is deployed from documentation-only approval
+descendant `ef7b90feb17bfba62c45f9463ceb934fc34e6f4d`, tree
+`f9debcdf268d52a8959166fadf5505b67c7fbaa7`. The descendant changes no product code or
+mathematical semantic.
+
+GitHub Pages workflow run
+`https://github.com/arduano/geometric-constraint-solver/actions/runs/31878139709` passed at that
+head. The complete run took **27m17s**. Qualify-and-assemble job `94996767540` passed in **27m03s**,
+including the complete hosted release gate in **25m47s**, the 256-moving-body sparse crossover in
+**77.36s**, and repository-prefixed artifact assembly in **27s**. Deploy job `94999456487` passed
+in **8s**; deployment `5919487026` reports success at
+`https://arduano.github.io/geometric-constraint-solver/`.
+
+GitHub Pages artifact `9245585021`, name `github-pages`, was downloaded to
+`/tmp/geosolve-m73-pages-verify.8i4JgR/github-pages.zip`. The ZIP is **2,076,014 bytes**, contains
+only `artifact.tar`, and has SHA-256
+`fcfdb7f573bbfde86f70bc56126fe5c800428bc58991eb445eba33f122bf2222`, matching GitHub's digest.
+The inner tar at `/tmp/geosolve-m73-pages-verify.8i4JgR/outer/artifact.tar` is **6,174,720 bytes**
+with SHA-256 `d6c210b50aa9bb7e257555f931016551402fb7a8faa5d4ccfe267c68c44ceb56`.
+It extracts to exactly seven regular files under `/tmp/geosolve-m73-pages-verify.8i4JgR/site`, with
+no extra entries or links:
+
+| Final hosted artifact file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 15,490 | `c3ef0cedd4de5968e36d2917daaf463c450fbe2266a06bc45b0cfae2dc20b935` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-5dc85dbacc56d1df.js` | 33,093 | `5647aeac2f7852f1bf4015722528386b67c7c31208f9f5ce2cccbbb7171f2988` |
+| `geosolve-demo-web-5dc85dbacc56d1df_bg.wasm` | 6,021,303 | `90a81cf66bb9a556b8f60305f87437609c46c8a834f43f2522b12c83650df4bb` |
+| `index.html` | 26,485 | `4e613ba459d579edd781a17e628832aa572545884917fc31c4d68c83741018e1` |
+| `styles-437727272832bc26.css` | 27,010 | `9e4b1c6985f119cff35366119fbeef8abb2096b386a8db78a4cd730915316344` |
+
+The C-locale `sha256sum * | sha256sum` aggregate is
+`4e562280bc0656f9bd7358057d62739ba02e74a5f76b0328c5e45bf18640031c`.
+
+The public root and all seven artifact paths returned HTTP 200 immediately after deployment.
+Every named response compares byte-for-byte with artifact `9245585021`, and `/` equals
+`index.html`. `index.html` references the application JavaScript, WASM and CSS only through the
+`/geometric-constraint-solver/` repository prefix. JavaScript is served as
+`application/javascript`, WASM as `application/wasm` and CSS as `text/css`; HTML, Markdown and
+license responses also have matching lengths and expected media types. GitHub Pages reports public
+workflow publication with HTTPS enforcement. The still-live Tailscale distribution remains the
+accepted immutable UAT snapshot; the downloaded hosted artifact above is public-byte authority,
+and no local/public byte identity is claimed.
+
 ## Qualification ledger
 
 - [x] Correct and activate the scope; record the no-ADR decision and unreleased API disposition.
@@ -265,6 +318,8 @@ aggregate equals the frozen aggregate. This replacement is current UAT authority
 - [x] Repeat the complete clean replacement release gate on committed product/documentation source.
 - [x] Freeze, serve and byte-verify a replacement immutable UAT candidate.
 - [x] Complete `docs/M73_UAT.md` with explicit human approval.
+- [x] Publish the accepted product through GitHub Pages and exact-verify its downloaded seven-file
+  artifact against the public root and named paths.
 
 ## Closure record
 

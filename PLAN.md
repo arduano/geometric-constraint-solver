@@ -4417,8 +4417,8 @@ reload persistence.
 ### M73: retained authoring semantic consolidation
 
 Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. M73-F001
-through M73-F004, the clean replacement release gate, byte-verified immutable publication and
-focused human UAT all pass.
+through M73-F004, the clean replacement release gate, byte-verified immutable UAT snapshot,
+focused human UAT and exact final GitHub Pages publication all pass.
 `docs/M73_GOALS.md` owns the corrected scope. The earlier proposal's claim
 that `construction_point_stage` duplicated an exhaustive stage match is withdrawn: M71 already
 made it a projection of `draft_inference_subject`. No ADR is required for this internal
@@ -4459,6 +4459,7 @@ consolidation and unreleased editor-API retirement.
 - [x] Repeat the complete clean replacement release gate on committed product/documentation source.
 - [x] Nominate and byte-verify a replacement immutable candidate for focused UAT.
 - [x] Receive explicit focused human UAT approval.
+- [x] Publish and exact-verify the accepted M73 product on GitHub Pages.
 
 Implementation note (2026-08-15): `fe356c2`, `a973b73`, `fcaad55`, `693ed17`, `585cf65`,
 `6fa28a4` and `b1b2162` complete F001-F003, exact candidate authentication, contextual coverage
@@ -4533,7 +4534,22 @@ Final closure note (2026-08-15): the supervising caller reported that the focuse
 and explicitly requested M73 closure. M73-U1 through M73-U4 are accepted under that scoped close
 decision. This records approval of the qualified candidate and presented interaction paths rather
 than claiming an unrecorded exhaustive manual replay; the direct Rust/WASM regressions remain the
-semantic authority. Every M73 gate is complete.
+semantic authority. Every semantic and human-UAT gate is complete.
+
+Final public publication checkpoint (2026-08-15): accepted product source
+`4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
+`fe9897153baa974b3c5c06e7a3bf5eee76e920f2`, is deployed from documentation-only approval
+descendant `ef7b90feb17bfba62c45f9463ceb934fc34e6f4d`, tree
+`f9debcdf268d52a8959166fadf5505b67c7fbaa7`, by successful GitHub Pages run `31878139709`.
+The 27m03s qualify-and-assemble job includes the complete 25m47s hosted release gate and
+77.36-second sparse crossover; the deploy job passes in 8s. Artifact `9245585021` has downloaded
+ZIP SHA-256 `fcfdb7f573bbfde86f70bc56126fe5c800428bc58991eb445eba33f122bf2222`, inner tar
+SHA-256 `d6c210b50aa9bb7e257555f931016551402fb7a8faa5d4ccfe267c68c44ceb56` and C-locale
+seven-file manifest aggregate `4e562280bc0656f9bd7358057d62739ba02e74a5f76b0328c5e45bf18640031c`.
+The public root and all seven files return HTTP 200 and match that artifact byte-for-byte; `/`
+equals `index.html`, application assets use `/geometric-constraint-solver/`, and JavaScript, WASM
+and CSS use the expected media types. The separate Tailscale snapshot remains the accepted UAT
+snapshot, not public-byte authority. With this publication verified, every M73 gate is complete.
 
 Gate: one private stage description owns the remaining line/polyline construction facts; the
 redundant unreleased direct API is absent; contextual authoring retains all accepted behavior and

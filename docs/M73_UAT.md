@@ -4,7 +4,8 @@
 
 Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. The clean,
 byte-verified M73-F004 replacement candidate passed the focused human review and is the accepted
-closing candidate. Direct Rust/WASM tests remain authoritative for semantic dispatch, candidate
+closing UAT candidate; the final GitHub Pages deployment also passes exact hosted-artifact
+verification. Direct Rust/WASM tests remain authoritative for semantic dispatch, candidate
 identity, accepted state and mutation-free rejection.
 
 Candidate source: `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`
@@ -52,6 +53,16 @@ Historical F001-F003 source `efde645345577f44e0d6b691f7ca27eb587c4b53` and snaps
 `/tmp/geosolve-m73-uat.5EhWNL` remain preserved, but PID `3403533` has exited and those bytes are not
 current UAT authority.
 
+The accepted Tailscale snapshot remains live for convenient follow-up UAT. Final public release
+authority is documentation-only approval descendant
+`ef7b90feb17bfba62c45f9463ceb934fc34e6f4d`, successful Pages run `31878139709` and artifact
+`9245585021` at `https://arduano.github.io/geometric-constraint-solver/`. The public root and all
+seven paths return HTTP 200 and byte-match that downloaded artifact; `/` equals `index.html`, asset
+URLs are repository-prefixed and JavaScript/WASM/CSS media types are correct. The hosted artifact's
+C-locale manifest aggregate is
+`4e562280bc0656f9bd7358057d62739ba02e74a5f76b0328c5e45bf18640031c`; the full manifest and
+archive hashes are recorded in `docs/M73_IMPLEMENTATION.md`.
+
 ## Completed mechanical prerequisite — M73-F004 span-axis precedence
 
 An eligible live world Horizontal span whose inference policy both adjusts coordinates and
@@ -71,8 +82,9 @@ source `89e409a6ebe12c640ae2f313f95de67430dfa8d0`. It passes public regression
 history. The inference-owner early-suppression, budget/latch, cross-axis, orthogonal-bundle,
 generic-tracking and remembered-direction controls; complete editor suite at 325 unit tests plus
 every integration; M71 F003/F004/F005 and transition parity; warnings-denied Clippy; and unchanged
-234/234 golden survey/check/clean gate all pass. The complete clean replacement qualification and
-byte-verified publication recorded above also pass; only this focused human UAT remains pending.
+234/234 golden survey/check/clean gate all pass. At the mechanical prerequisite checkpoint the
+complete clean replacement qualification and immutable UAT snapshot passed while focused human UAT
+remained pending; that UAT and the final Pages verification now pass as recorded above.
 
 Regression-hardening follow-up `f41e398d00b7a7ca1e12a12a285408a0b7bd3566` puts the complete
 point/native-midpoint by Horizontal/Vertical matrix in the focused `same_axis_span` run and checks
