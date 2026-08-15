@@ -170,6 +170,8 @@ pub enum DocumentError {
     UnsupportedM58State,
     #[error("supported sketch-v4 encoding cannot represent M71 retained planar relations")]
     UnsupportedM71State,
+    #[error("supported sketch-v4 encoding cannot represent M74 datum relations")]
+    UnsupportedM74State,
     #[error("activation revision {actual} is not newer than retained revision {retained}")]
     StaleActivationRevision { actual: u64, retained: u64 },
     #[error("activation input contains duplicate element {0:?}")]
@@ -924,6 +926,30 @@ pub struct ContactBranchEdit {
     pub tangent_orientation: Option<TangentOrientation>,
 }
 
+/// Intrinsic immutable reference geometry present in every Cartesian sketch.
+///
+/// Datums have no persistent object identity, solver variables, or history of
+/// their own. Persistent constraints may refer to their fixed semantics.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SketchDatum {
+    Origin,
+    XAxis,
+    YAxis,
+}
+
+impl SketchDatum {
+    /// Returns the Cartesian axis represented by an axis datum.
+    #[must_use]
+    pub const fn coordinate_axis(self) -> Option<DocumentCoordinateAxis> {
+        match self {
+            Self::Origin => None,
+            Self::XAxis => Some(DocumentCoordinateAxis::X),
+            Self::YAxis => Some(DocumentCoordinateAxis::Y),
+        }
+    }
+}
+
 /// Cartesian coordinate selected by a persistent fixed-coordinate source.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -1003,6 +1029,15 @@ pub enum DocumentConstraintDefinition {
         axis: DocumentCoordinateAxis,
         target: f64,
     },
+    /// Constrains one stored point to the intrinsic sketch origin.
+    CoincidentWithOrigin {
+        point: DesignPointId,
+    },
+    /// Constrains one stored point to the intrinsic Cartesian datum axis.
+    PointOnDatumAxis {
+        point: DesignPointId,
+        axis: DocumentCoordinateAxis,
+    },
     Coincident {
         first: DesignPointId,
         second: DesignPointId,
@@ -1048,6 +1083,11 @@ pub enum DocumentConstraintDefinition {
     ExternalLineCollinear {
         line: DocumentLineSupportRef,
         external: DocumentExternalLineSupportRef,
+    },
+    /// Constrains one affine support to the intrinsic Cartesian datum axis.
+    CollinearWithDatumAxis {
+        line: DocumentLineSupportRef,
+        axis: DocumentCoordinateAxis,
     },
     Concentric {
         first: DocumentCenterRef,
@@ -2761,6 +2801,11 @@ impl TryFrom<&DocumentConstraintDefinition> for DocumentConstraintDefinitionV4 {
             | C::VerticalPointToMidpoint { .. }
             | C::Concentric { .. }
             | C::Collinear { .. } => return Err(DocumentError::UnsupportedM71State),
+            C::CoincidentWithOrigin { .. }
+            | C::PointOnDatumAxis { .. }
+            | C::CollinearWithDatumAxis { .. } => {
+                return Err(DocumentError::UnsupportedM74State);
+            }
         })
     }
 }
@@ -3176,6 +3221,13 @@ struct DraftRetainedPlanarConstraint {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum DraftRetainedPlanarConstraintDefinition {
+    CoincidentWithOrigin {
+        point: DesignPointId,
+    },
+    PointOnDatumAxis {
+        point: DesignPointId,
+        axis: DocumentCoordinateAxis,
+    },
     HorizontalPoints {
         first: DesignPointId,
         second: DesignPointId,
@@ -3200,11 +3252,21 @@ enum DraftRetainedPlanarConstraintDefinition {
         first: DocumentLineSupportRef,
         second: DocumentLineSupportRef,
     },
+    CollinearWithDatumAxis {
+        line: DocumentLineSupportRef,
+        axis: DocumentCoordinateAxis,
+    },
 }
 
 impl DraftRetainedPlanarConstraint {
     fn from_constraint(value: &DocumentConstraint) -> Option<Self> {
         let definition = match value.definition {
+            DocumentConstraintDefinition::CoincidentWithOrigin { point } => {
+                DraftRetainedPlanarConstraintDefinition::CoincidentWithOrigin { point }
+            }
+            DocumentConstraintDefinition::PointOnDatumAxis { point, axis } => {
+                DraftRetainedPlanarConstraintDefinition::PointOnDatumAxis { point, axis }
+            }
             DocumentConstraintDefinition::HorizontalPoints { first, second } => {
                 DraftRetainedPlanarConstraintDefinition::HorizontalPoints { first, second }
             }
@@ -3223,6 +3285,9 @@ impl DraftRetainedPlanarConstraint {
             DocumentConstraintDefinition::Collinear { first, second } => {
                 DraftRetainedPlanarConstraintDefinition::Collinear { first, second }
             }
+            DocumentConstraintDefinition::CollinearWithDatumAxis { line, axis } => {
+                DraftRetainedPlanarConstraintDefinition::CollinearWithDatumAxis { line, axis }
+            }
             _ => return None,
         };
         Some(Self {
@@ -3238,6 +3303,12 @@ impl DraftRetainedPlanarConstraint {
 impl From<DraftRetainedPlanarConstraint> for DocumentConstraint {
     fn from(value: DraftRetainedPlanarConstraint) -> Self {
         let definition = match value.definition {
+            DraftRetainedPlanarConstraintDefinition::CoincidentWithOrigin { point } => {
+                DocumentConstraintDefinition::CoincidentWithOrigin { point }
+            }
+            DraftRetainedPlanarConstraintDefinition::PointOnDatumAxis { point, axis } => {
+                DocumentConstraintDefinition::PointOnDatumAxis { point, axis }
+            }
             DraftRetainedPlanarConstraintDefinition::HorizontalPoints { first, second } => {
                 DocumentConstraintDefinition::HorizontalPoints { first, second }
             }
@@ -3255,6 +3326,9 @@ impl From<DraftRetainedPlanarConstraint> for DocumentConstraint {
             }
             DraftRetainedPlanarConstraintDefinition::Collinear { first, second } => {
                 DocumentConstraintDefinition::Collinear { first, second }
+            }
+            DraftRetainedPlanarConstraintDefinition::CollinearWithDatumAxis { line, axis } => {
+                DocumentConstraintDefinition::CollinearWithDatumAxis { line, axis }
             }
         };
         Self {
@@ -9173,6 +9247,13 @@ impl SketchDocument {
         if self
             .constraints
             .iter()
+            .any(|constraint| is_datum_constraint(&constraint.definition))
+        {
+            return Err(DocumentError::UnsupportedM74State);
+        }
+        if self
+            .constraints
+            .iter()
             .any(|constraint| is_retained_planar_constraint(&constraint.definition))
         {
             return Err(DocumentError::UnsupportedM71State);
@@ -10454,6 +10535,9 @@ impl SketchDocument {
                 self.require_point(*point)?;
                 finite(*target, "fixed-coordinate target")?;
             }
+            C::CoincidentWithOrigin { point } | C::PointOnDatumAxis { point, .. } => {
+                self.require_point(*point)?;
+            }
             C::Coincident { first, second } => self.require_distinct_points(*first, *second)?,
             C::ExternalPointCoincident { point, external } => {
                 self.require_point(*point)?;
@@ -10512,6 +10596,9 @@ impl SketchDocument {
                         "binding must expect a line-segment feature",
                     );
                 }
+            }
+            C::CollinearWithDatumAxis { line, .. } => {
+                self.validate_line_span(line.span)?;
             }
             C::Concentric { first, second } => {
                 self.validate_center_ref(*first)?;
@@ -12077,12 +12164,24 @@ fn constraint_contacts(definition: &DocumentConstraintDefinition) -> Vec<Contact
 const fn is_retained_planar_constraint(definition: &DocumentConstraintDefinition) -> bool {
     matches!(
         definition,
-        DocumentConstraintDefinition::HorizontalPoints { .. }
+        DocumentConstraintDefinition::CoincidentWithOrigin { .. }
+            | DocumentConstraintDefinition::PointOnDatumAxis { .. }
+            | DocumentConstraintDefinition::HorizontalPoints { .. }
             | DocumentConstraintDefinition::VerticalPoints { .. }
             | DocumentConstraintDefinition::HorizontalPointToMidpoint { .. }
             | DocumentConstraintDefinition::VerticalPointToMidpoint { .. }
             | DocumentConstraintDefinition::Concentric { .. }
             | DocumentConstraintDefinition::Collinear { .. }
+            | DocumentConstraintDefinition::CollinearWithDatumAxis { .. }
+    )
+}
+
+const fn is_datum_constraint(definition: &DocumentConstraintDefinition) -> bool {
+    matches!(
+        definition,
+        DocumentConstraintDefinition::CoincidentWithOrigin { .. }
+            | DocumentConstraintDefinition::PointOnDatumAxis { .. }
+            | DocumentConstraintDefinition::CollinearWithDatumAxis { .. }
     )
 }
 
@@ -12292,6 +12391,8 @@ fn constraint_references_object(
         (
             DocumentConstraintDefinition::FixedPoint { point, .. }
             | DocumentConstraintDefinition::FixedCoordinate { point, .. }
+            | DocumentConstraintDefinition::CoincidentWithOrigin { point }
+            | DocumentConstraintDefinition::PointOnDatumAxis { point, .. }
             | DocumentConstraintDefinition::PointOnCurve { point, .. }
             | DocumentConstraintDefinition::Midpoint { point, .. }
             | DocumentConstraintDefinition::HorizontalPointToMidpoint { point, .. }
@@ -12322,7 +12423,8 @@ fn constraint_references_object(
             DocumentObjectId::Curve(selected),
         ) => line.curve == selected,
         (
-            DocumentConstraintDefinition::ExternalLineCollinear { line, .. },
+            DocumentConstraintDefinition::ExternalLineCollinear { line, .. }
+            | DocumentConstraintDefinition::CollinearWithDatumAxis { line, .. },
             DocumentObjectId::Curve(selected),
         ) => line.span.curve == selected,
         (

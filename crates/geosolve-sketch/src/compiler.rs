@@ -25,15 +25,16 @@ use crate::residuals::{
     AxisDifferenceResidual, AxisDimensionResidual, AxisMidpointResidual, BezierIncidence,
     CircleArcTangencyResidual, CircleTangencyResidual, CircularArcLengthResidual,
     CircularSweepResidual, CoincidentResidual, CollinearResidual, ConicPropertyResidual,
-    ConicPropertyResidualKind, CurveParameterIncidence, DistanceResidual, EqualAngleResidual,
-    EqualDistanceResidual, ExternalLineCollinearResidual, FixedCoordinateResidual,
-    GenericCurveDirectionResidual, GenericCurveFilletResidual, GenericCurveIncidence,
-    GenericCurvePairResidual, GenericEndpointContinuityResidual, GenericEqualCurvatureResidual,
-    GenericPathLengthResidual, GenericPointOnCurveResidual, LineBezierTangencyResidual,
-    LineCircleTangencyResidual, LineOffsetResidual, LineOffsetResidualMode, M38DimensionResidual,
-    MidpointResidual, NurbsWeightIncidence, OrientedAngleResidual, PointOnBezierResidual,
-    PointOnCircleResidual, PointOnLineResidual, PointTargetResidual, ScalarEqualityResidual,
-    ScalarTargetResidual, SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
+    ConicPropertyResidualKind, CurveParameterIncidence, DatumLineCollinearResidual,
+    DistanceResidual, EqualAngleResidual, EqualDistanceResidual, ExternalLineCollinearResidual,
+    FixedCoordinateResidual, GenericCurveDirectionResidual, GenericCurveFilletResidual,
+    GenericCurveIncidence, GenericCurvePairResidual, GenericEndpointContinuityResidual,
+    GenericEqualCurvatureResidual, GenericPathLengthResidual, GenericPointOnCurveResidual,
+    LineBezierTangencyResidual, LineCircleTangencyResidual, LineOffsetResidual,
+    LineOffsetResidualMode, M38DimensionResidual, MidpointResidual, NurbsWeightIncidence,
+    OrientedAngleResidual, PointOnBezierResidual, PointOnCircleResidual, PointOnLineResidual,
+    PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual, SegmentPairEquation,
+    SegmentPairResidual, SymmetryResidual,
 };
 
 /// Temporary point target supplied for one solve only.
@@ -4210,6 +4211,84 @@ fn compile_constraint(
             )?;
             (label, residual)
         }
+        SketchConstraintKind::CoincidentWithOrigin { point } => {
+            let point_name = sketch.point_name(point)?;
+            let target = Point2::new(0.0, 0.0);
+            let label = format!(
+                "constraint {}: {point_name} coincident with Origin",
+                constraint.ordinal()
+            );
+            let source_id = problem.add_source(SourceConstraint::new(&label)?);
+            let variable = point_variable(point_variables, point)?;
+            let bindings = vec![
+                AuditBinding::new("point", point_name),
+                AuditBinding::new("datum", "Origin"),
+                AuditBinding::new("target", "(0, 0)"),
+            ];
+            let residual = ResidualBlock::fixed_variable(
+                source_id,
+                variable,
+                VariableValue::Vec2([0.0, 0.0]),
+                vec![scale, scale],
+                vec![
+                    audit_row(
+                        format!("({point_name}.x - Origin.x) / model_scale"),
+                        bindings.clone(),
+                    ),
+                    audit_row(
+                        format!("({point_name}.y - Origin.y) / model_scale"),
+                        bindings,
+                    ),
+                ],
+            )?;
+            let residual_id = problem.add_residual(residual)?;
+            problem.declare_fixed_variable(
+                variable,
+                VariableValue::Vec2([target.x, target.y]),
+                residual_id,
+            )?;
+            return Ok(equation_mapping(
+                SketchSource::Constraint(constraint_id),
+                label,
+                source_id,
+                residual_id,
+            ));
+        }
+        SketchConstraintKind::PointOnDatumAxis { point, axis } => {
+            let point_name = sketch.point_name(point)?;
+            let (datum_name, coordinate, coordinate_name) = match axis {
+                crate::DocumentCoordinateAxis::X => ("X axis", 1, "y"),
+                crate::DocumentCoordinateAxis::Y => ("Y axis", 0, "x"),
+            };
+            let label = format!(
+                "constraint {}: {point_name} on {datum_name}",
+                constraint.ordinal()
+            );
+            let source_id = problem.add_source(SourceConstraint::new(&label)?);
+            let residual = ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                vec![point_variable(point_variables, point)?],
+                1,
+                vec![scale],
+                vec![audit_row(
+                    format!(
+                        "({point_name}.{coordinate_name} - {datum_name}.{coordinate_name}) / model_scale"
+                    ),
+                    vec![
+                        AuditBinding::new("point", point_name),
+                        AuditBinding::new("datum axis", datum_name),
+                        AuditBinding::new("normal coordinate", coordinate_name),
+                        AuditBinding::new("target", "0"),
+                    ],
+                )],
+                FixedCoordinateResidual {
+                    coordinate,
+                    target: 0.0,
+                },
+            )?;
+            (label, residual)
+        }
         SketchConstraintKind::Coincident { first, second } => {
             let first_name = sketch.point_name(first)?;
             let second_name = sketch.point_name(second)?;
@@ -4817,6 +4896,101 @@ fn compile_curve_constraint(
                     external_end: [external_end.x, external_end.y],
                 }),
             )
+        }
+        SketchConstraintKind::DatumLineCollinear { segment, axis } => {
+            let (start, end, native) = segment_points(sketch, segment)?;
+            let native_indices =
+                segment_incidence(sketch, point_variables, &mut incidence, segment)?;
+            let (axis_name, axis_direction, normal_coordinate) = match axis {
+                crate::DocumentCoordinateAxis::X => ("X axis", [1.0, 0.0], 1),
+                crate::DocumentCoordinateAxis::Y => ("Y axis", [0.0, 1.0], 0),
+            };
+            let branch_direction = sketch
+                .segment(segment)
+                .ok_or(SketchError::UnknownSegment(segment))?
+                .branch()
+                .reference_direction();
+            let projection = branch_direction[0]
+                .mul_add(axis_direction[0], branch_direction[1] * axis_direction[1]);
+            let cross = branch_direction[0]
+                .mul_add(axis_direction[1], -branch_direction[1] * axis_direction[0]);
+            let datum_sign = if projection > 0.0 || (projection == 0.0 && cross >= 0.0) {
+                1.0
+            } else {
+                -1.0
+            };
+            let datum_direction = [
+                datum_sign * axis_direction[0],
+                datum_sign * axis_direction[1],
+            ];
+            let directed_axis_name = if datum_sign > 0.0 {
+                format!("+{axis_name}")
+            } else {
+                format!("-{axis_name}")
+            };
+            let bindings = vec![
+                AuditBinding::new("native", native.label()),
+                AuditBinding::new("datum axis", axis_name),
+                AuditBinding::new("selected datum direction", directed_axis_name),
+            ];
+            let label = format!(
+                "constraint {}: {} collinear with {axis_name}",
+                constraint.ordinal(),
+                native.label()
+            );
+            let source_id = problem.add_source(SourceConstraint::new(&label)?);
+            let hard_residual = problem.add_residual(ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                incidence.variables.clone(),
+                2,
+                vec![1.0, scale],
+                vec![
+                    audit_row_unit(
+                        "signed_angle(selected_datum_axis_direction, unit_direction(native))"
+                            .into(),
+                        bindings.clone(),
+                        "radian",
+                    ),
+                    audit_row(
+                        "dot(datum_axis.normal, native.start - datum_axis.origin) / model_scale"
+                            .into(),
+                        bindings,
+                    ),
+                ],
+                DatumLineCollinearResidual {
+                    native: native_indices,
+                    datum_direction,
+                    normal_coordinate,
+                },
+            )?)?;
+            let start_position = sketch.point_position(start)?;
+            let end_position = sketch.point_position(end)?;
+            let retained_length = (end_position - start_position).norm();
+            let preference_residual = problem.add_residual(ResidualBlock::new(
+                source_id,
+                ResidualCategory::Preference,
+                incidence.variables,
+                1,
+                vec![scale],
+                vec![audit_row(
+                    "(distance(native.start, native.end) - retained_length) / model_scale".into(),
+                    vec![
+                        AuditBinding::new("native", native.label()),
+                        AuditBinding::new("preference", "retain non-degenerate line length"),
+                        AuditBinding::new("retained length", retained_length.to_string()),
+                    ],
+                )],
+                DistanceResidual {
+                    target: retained_length,
+                },
+            )?)?;
+            return Ok(SketchSourceMapping {
+                source: SketchSource::Constraint(constraint_id),
+                source_label: label,
+                core_source_id: Some(source_id),
+                residual_ids: vec![hard_residual, preference_residual],
+            });
         }
         SketchConstraintKind::EqualCircleRadius { first, second } => {
             let first_value = sketch.circle_value(first)?;

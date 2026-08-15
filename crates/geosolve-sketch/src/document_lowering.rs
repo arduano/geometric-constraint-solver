@@ -1206,6 +1206,12 @@ fn lower_constraint(
             },
             *target,
         )?,
+        C::CoincidentWithOrigin { point } => {
+            sketch.add_coincident_with_origin(runtime_point(mappings, *point)?)?
+        }
+        C::PointOnDatumAxis { point, axis } => {
+            sketch.add_point_on_datum_axis(runtime_point(mappings, *point)?, *axis)?
+        }
         C::Coincident { first, second } => sketch.add_coincident(
             runtime_point(mappings, *first)?,
             runtime_point(mappings, *second)?,
@@ -1250,6 +1256,10 @@ fn lower_constraint(
             let first = directed_runtime_segment(mappings, sketch, *first)?;
             let second = directed_runtime_segment(mappings, sketch, *second)?;
             sketch.add_collinear(first, second)?
+        }
+        C::CollinearWithDatumAxis { line, axis } => {
+            let line = directed_runtime_segment(mappings, sketch, *line)?;
+            sketch.add_datum_line_collinear(line, *axis)?
         }
         C::Horizontal { line } => sketch.add_horizontal(runtime_segment(mappings, *line)?)?,
         C::Vertical { line } => sketch.add_vertical(runtime_segment(mappings, *line)?)?,

@@ -2033,6 +2033,75 @@ pub(crate) struct ExternalLineCollinearResidual {
     pub(crate) external_end: [f64; 2],
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct DatumLineCollinearResidual {
+    pub(crate) native: [usize; 2],
+    pub(crate) datum_direction: [f64; 2],
+    pub(crate) normal_coordinate: usize,
+}
+
+impl ResidualEvaluator for DatumLineCollinearResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let start = point_at(variables, self.native[0], "datum-collinear support")?;
+        let end = point_at(variables, self.native[1], "datum-collinear support")?;
+        if self.normal_coordinate > 1 {
+            return Err(EvaluationError::invalid_geometry(
+                "datum-collinear normal coordinate is invalid",
+            ));
+        }
+        let native = subtract(end, start);
+        let length_squared = dot(native, native);
+        if !length_squared.is_finite() || length_squared <= 0.0 {
+            return Err(EvaluationError::degenerate(
+                "datum-collinear support is degenerate",
+            ));
+        }
+        let cross =
+            self.datum_direction[0].mul_add(native[1], -self.datum_direction[1] * native[0]);
+        let direction_dot =
+            self.datum_direction[0].mul_add(native[0], self.datum_direction[1] * native[1]);
+        Ok(vec![
+            cross.atan2(direction_dot),
+            start[self.normal_coordinate],
+        ])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let start = point_at(variables, self.native[0], "datum-collinear support")?;
+        let end = point_at(variables, self.native[1], "datum-collinear support")?;
+        if self.normal_coordinate > 1 {
+            return Err(EvaluationError::invalid_geometry(
+                "datum-collinear normal coordinate is invalid",
+            ));
+        }
+        let native = subtract(end, start);
+        let length_squared = dot(native, native);
+        if !length_squared.is_finite() || length_squared <= 0.0 {
+            return Err(EvaluationError::degenerate(
+                "datum-collinear support is degenerate",
+            ));
+        }
+        let direction_gradient = [-native[1] / length_squared, native[0] / length_squared];
+        let normal_gradient = if self.normal_coordinate == 0 {
+            [1.0, 0.0]
+        } else {
+            [0.0, 1.0]
+        };
+        let mut blocks = zero_blocks(variables, 2)?;
+        add_point_rows(
+            &mut blocks,
+            self.native[0],
+            [negate(direction_gradient), normal_gradient],
+        )?;
+        add_point_rows(
+            &mut blocks,
+            self.native[1],
+            [direction_gradient, [0.0, 0.0]],
+        )?;
+        Ok(finish_blocks(blocks, 2))
+    }
+}
+
 impl SketchAdFormula for ExternalLineCollinearResidual {
     fn evaluate_dual(
         &self,

@@ -459,6 +459,15 @@ pub enum SketchConstraintKind {
         axis: CoordinateAxis,
         target: f64,
     },
+    /// Native point coincident with the intrinsic Cartesian Origin.
+    CoincidentWithOrigin {
+        point: PointId,
+    },
+    /// Native point incident to one intrinsic Cartesian datum axis.
+    PointOnDatumAxis {
+        point: PointId,
+        axis: crate::DocumentCoordinateAxis,
+    },
     Coincident {
         first: PointId,
         second: PointId,
@@ -524,6 +533,11 @@ pub enum SketchConstraintKind {
         external_start: Point2<f64>,
         external_end: Point2<f64>,
         provenance: ExternalConstraintProvenance,
+    },
+    /// Native line support against one intrinsic Cartesian datum axis.
+    DatumLineCollinear {
+        segment: SegmentId,
+        axis: crate::DocumentCoordinateAxis,
     },
     Perpendicular {
         first: SegmentId,
@@ -1194,6 +1208,33 @@ impl Sketch {
         )
     }
 
+    /// Constrains a point to the intrinsic Cartesian Origin.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale point ID.
+    pub fn add_coincident_with_origin(
+        &mut self,
+        point: PointId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.point_position(point)?;
+        Ok(self.insert_constraint(SketchConstraintKind::CoincidentWithOrigin { point }))
+    }
+
+    /// Constrains a point to one intrinsic Cartesian datum axis.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale point ID.
+    pub fn add_point_on_datum_axis(
+        &mut self,
+        point: PointId,
+        axis: crate::DocumentCoordinateAxis,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.point_position(point)?;
+        Ok(self.insert_constraint(SketchConstraintKind::PointOnDatumAxis { point, axis }))
+    }
+
     /// Adds a two-row point coincidence constraint.
     ///
     /// # Errors
@@ -1362,6 +1403,19 @@ impl Sketch {
                 provenance,
             }),
         )
+    }
+
+    /// Constrains a native line to one intrinsic Cartesian datum axis.
+    ///
+    /// # Errors
+    /// Returns an error for a missing or degenerate native support.
+    pub fn add_datum_line_collinear(
+        &mut self,
+        segment: SegmentId,
+        axis: crate::DocumentCoordinateAxis,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_segment_geometry(segment)?;
+        Ok(self.insert_constraint(SketchConstraintKind::DatumLineCollinear { segment, axis }))
     }
 
     /// Constrains the midpoint of two points to an explicit center point.
@@ -2132,7 +2186,9 @@ fn constraint_references_point(
     match kind {
         SketchConstraintKind::FixedPoint { point: id, .. }
         | SketchConstraintKind::ExternalPoint { point: id, .. }
-        | SketchConstraintKind::FixedCoordinate { point: id, .. } => id == point,
+        | SketchConstraintKind::FixedCoordinate { point: id, .. }
+        | SketchConstraintKind::CoincidentWithOrigin { point: id }
+        | SketchConstraintKind::PointOnDatumAxis { point: id, .. } => id == point,
         SketchConstraintKind::Coincident { first, second }
         | SketchConstraintKind::HorizontalPoints { first, second }
         | SketchConstraintKind::VerticalPoints { first, second } => {
@@ -2208,7 +2264,8 @@ fn constraint_references_point(
             .into_iter()
             .filter_map(|segment| sketch.segment_endpoints(segment).ok())
             .any(|(start, end)| start == point || end == point),
-        SketchConstraintKind::ExternalLineCollinear { segment, .. } => sketch
+        SketchConstraintKind::ExternalLineCollinear { segment, .. }
+        | SketchConstraintKind::DatumLineCollinear { segment, .. } => sketch
             .segment_endpoints(segment)
             .is_ok_and(|(start, end)| start == point || end == point),
         SketchConstraintKind::EqualCircleRadius { first, second }

@@ -121,7 +121,7 @@ pub use document::{
     LineLineFilletIds, LineLineFilletRequest, MAX_BSPLINE_CONTROLS, MAX_DOCUMENT_JSON_BYTES,
     MAX_DOCUMENT_OBJECTS, MAX_DOCUMENT_PARAMETERS, MAX_EXTERNAL_BINDINGS, MAX_LABEL_BYTES,
     MAX_PERSISTENT_SPLINE_SPAN_CURSORS, MAX_POLYLINE_POINTS, MirroredCurveIds, PersistentId,
-    RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDocument,
+    RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDatum, SketchDocument,
     SketchPersistentIdentityHighWater, TangentOrientation,
 };
 pub use document_lowering::{

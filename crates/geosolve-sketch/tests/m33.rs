@@ -515,6 +515,8 @@ fn relation_kind(definition: &DocumentConstraintDefinition) -> &'static str {
     match definition {
         DocumentConstraintDefinition::FixedPoint { .. } => "fixed_point",
         DocumentConstraintDefinition::FixedCoordinate { .. } => "fixed_coordinate",
+        DocumentConstraintDefinition::CoincidentWithOrigin { .. } => "coincident_with_origin",
+        DocumentConstraintDefinition::PointOnDatumAxis { .. } => "point_on_datum_axis",
         DocumentConstraintDefinition::Coincident { .. } => "coincident",
         DocumentConstraintDefinition::Horizontal { .. } => "horizontal_line",
         DocumentConstraintDefinition::Vertical { .. } => "vertical_line",
@@ -548,6 +550,7 @@ fn relation_kind(definition: &DocumentConstraintDefinition) -> &'static str {
         DocumentConstraintDefinition::ExternalLineCollinear { .. } => "external_line_collinear",
         DocumentConstraintDefinition::Concentric { .. } => "concentric",
         DocumentConstraintDefinition::Collinear { .. } => "collinear",
+        DocumentConstraintDefinition::CollinearWithDatumAxis { .. } => "collinear_with_datum_axis",
     }
 }
 
