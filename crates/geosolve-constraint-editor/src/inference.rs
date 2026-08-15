@@ -2253,6 +2253,16 @@ impl DraftInferenceEngine {
         }
         self.active_point_tracking = next_active;
 
+        let directions = self.direction_works(frame, raw_model, retained_direction);
+        // A live world-axis span owns the same endpoint coordinate as a
+        // same-axis point or midpoint guide. Keep the user's line-direction
+        // intent and remove the redundant tracker before it can participate
+        // in either a two-tracker intersection or a singleton alternative.
+        // Remembered Parallel/Perpendicular/Collinear keys deliberately keep
+        // their existing behavior even when their support is Cartesian.
+        tracking_works
+            .retain(|tracking| !world_span_direction_supersedes_tracking(tracking, &directions));
+
         // Two distinct remembered operands may jointly own the endpoint's
         // Cartesian coordinates: Horizontal supplies Y and Vertical supplies
         // X. Build those exact intersections before singleton tracking
@@ -2292,7 +2302,6 @@ impl DraftInferenceEngine {
             }
         }
 
-        let directions = self.direction_works(frame, raw_model, retained_direction);
         // Identify the direction singletons replaced by conjunction bundles
         // without first allocating every possible point-axis x direction
         // candidate. Candidate construction below remains streaming and stops
@@ -2834,6 +2843,21 @@ fn point_tracking_pair_adjustment(
         (PointTrackingAxis::Horizontal, PointTrackingAxis::Horizontal)
         | (PointTrackingAxis::Vertical, PointTrackingAxis::Vertical) => None,
     }
+}
+
+fn world_span_direction_supersedes_tracking(
+    tracking: &PointTrackingWork,
+    directions: &[DirectionWork],
+) -> bool {
+    directions.iter().any(|direction| {
+        direction.behavior.adjust_coordinates
+            && direction.behavior.persist_constraint
+            && matches!(
+                (tracking.key.axis, direction.key),
+                (PointTrackingAxis::Horizontal, DirectionKey::Horizontal)
+                    | (PointTrackingAxis::Vertical, DirectionKey::Vertical)
+            )
+    })
 }
 
 fn point_tracking_direction_adjustment(
@@ -4639,7 +4663,7 @@ mod tests {
     }
 
     #[test]
-    fn cross_axis_pair_and_same_axis_span_direction_remain_explicit_alternatives() {
+    fn same_axis_span_direction_wins_before_cross_axis_pairing() {
         let view = viewport(50.0);
         let mut engine = DraftInferenceEngine::default();
         engine
@@ -4660,37 +4684,23 @@ mod tests {
                 DraftInferenceInput::default(),
             )
             .expect("coexisting point and span evidence");
-        assert!(matches!(
-            resolution.status,
-            DraftInferenceStatus::Ambiguous { ref candidates } if candidates.len() == 2
-        ));
-        assert_eq!(resolution.candidates.len(), 2);
-        assert!(resolution.candidates.iter().any(|candidate| {
-            candidate.relations
-                == vec![
-                    DraftInferenceRelation::HorizontalPoints {
-                        reference: point_id(632),
-                    },
-                    DraftInferenceRelation::VerticalPoints {
-                        reference: point_id(633),
-                    },
-                ]
-        }));
-        assert!(resolution.candidates.iter().any(|candidate| {
-            candidate.relations
-                == vec![
-                    DraftInferenceRelation::HorizontalPoints {
-                        reference: point_id(632),
-                    },
-                    DraftInferenceRelation::Vertical,
-                ]
-        }));
-        assert!(
-            resolution
-                .candidates
-                .iter()
-                .all(|candidate| { candidate.relations != vec![DraftInferenceRelation::Vertical] })
+        assert_eq!(resolution.candidates.len(), 1);
+        assert_eq!(
+            resolved_candidate(&resolution).relations,
+            vec![
+                DraftInferenceRelation::HorizontalPoints {
+                    reference: point_id(632),
+                },
+                DraftInferenceRelation::Vertical,
+            ]
         );
+        assert!(resolution.candidates.iter().all(|candidate| {
+            !candidate
+                .relations
+                .contains(&DraftInferenceRelation::VerticalPoints {
+                    reference: point_id(633),
+                })
+        }));
     }
 
     #[test]
@@ -4742,11 +4752,34 @@ mod tests {
     }
 
     #[test]
-    fn same_axis_relations_remain_alternatives_because_they_can_conflict_after_edits() {
+    fn same_axis_point_and_midpoint_guides_yield_to_live_world_span_direction() {
         let view = viewport(50.0);
-        let raw = [4.0, 0.05];
-        for (id, reference_y) in [(612, 0.0), (613, 0.1)] {
-            let reference = point_anchor(id, [-4.0, reference_y]);
+        for (reference, raw, expected_relation, expected_family) in [
+            (
+                point_anchor(612, [-4.0, 0.0]),
+                [4.0, 0.05],
+                DraftInferenceRelation::Horizontal,
+                DraftInferenceFamily::Horizontal,
+            ),
+            (
+                midpoint_anchor(613, [-4.0, 0.0], [1.0, 1.0]),
+                [4.0, 0.05],
+                DraftInferenceRelation::Horizontal,
+                DraftInferenceFamily::Horizontal,
+            ),
+            (
+                point_anchor(614, [0.0, -4.0]),
+                [0.05, 4.0],
+                DraftInferenceRelation::Vertical,
+                DraftInferenceFamily::Vertical,
+            ),
+            (
+                midpoint_anchor(615, [0.0, -4.0], [1.0, 1.0]),
+                [0.05, 4.0],
+                DraftInferenceRelation::Vertical,
+                DraftInferenceFamily::Vertical,
+            ),
+        ] {
             let mut engine = DraftInferenceEngine::default();
             engine.remember_reference(reference).expect("reference");
             let resolution = engine
@@ -4759,26 +4792,82 @@ mod tests {
                     ),
                     DraftInferenceInput::default(),
                 )
-                .expect("same-axis alternatives");
-            assert!(resolution.candidates.iter().all(|candidate| {
-                !(candidate
-                    .relations
-                    .contains(&DraftInferenceRelation::Horizontal)
-                    && candidate
-                        .relations
-                        .contains(&DraftInferenceRelation::HorizontalPoints {
-                            reference: point_id(id),
-                        }))
+                .expect("same-axis span precedence");
+            assert_eq!(resolution.candidates.len(), 1);
+            let candidate = resolved_candidate(&resolution);
+            assert_eq!(candidate.relations, vec![expected_relation]);
+            assert_eq!(candidate.references, Vec::new());
+            assert!(candidate.guides.iter().all(|guide| {
+                guide.family == expected_family
+                    && guide.classification == DraftGuideClassification::ConstraintBacked
             }));
-            assert!(resolution.candidates.iter().any(|candidate| {
-                candidate.relations == vec![DraftInferenceRelation::Horizontal]
-            }));
+        }
+    }
+
+    #[test]
+    fn remembered_cartesian_direction_keys_do_not_suppress_same_axis_tracking() {
+        let view = viewport(50.0);
+        let policy = DraftInferencePolicy {
+            horizontal: DraftInferenceBehavior {
+                show_guides: false,
+                adjust_coordinates: false,
+                persist_constraint: false,
+            },
+            ..DraftInferencePolicy::default()
+        };
+        for (point_value, support, expected_direction) in [
+            (
+                616,
+                affine_anchor(617, [0.0, 2.0], [1.0, 0.0]),
+                DraftInferenceRelation::Parallel {
+                    reference: curve_span(617),
+                },
+            ),
+            (
+                618,
+                affine_anchor(619, [2.0, 0.0], [0.0, 1.0]),
+                DraftInferenceRelation::Perpendicular {
+                    reference: curve_span(619),
+                },
+            ),
+            (
+                620,
+                affine_anchor(621, [0.0, 0.0], [1.0, 0.0]),
+                DraftInferenceRelation::Collinear {
+                    reference: curve_span(621),
+                },
+            ),
+        ] {
+            let mut engine = DraftInferenceEngine::new(policy).expect("policy");
+            engine
+                .remember_reference(point_anchor(point_value, [-4.0, 0.0]))
+                .expect("point reference");
+            engine
+                .remember_reference(support)
+                .expect("support reference");
+            let resolution = engine
+                .resolve(
+                    &frame(
+                        view,
+                        view.model_to_screen([4.0, 0.04]),
+                        Some([0.0, 0.0]),
+                        Vec::new(),
+                    ),
+                    DraftInferenceInput::default(),
+                )
+                .expect("remembered direction resolution");
             assert!(resolution.candidates.iter().any(|candidate| {
                 candidate.relations
                     == vec![DraftInferenceRelation::HorizontalPoints {
-                        reference: point_id(id),
+                        reference: point_id(point_value),
                     }]
             }));
+            assert!(
+                resolution
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.relations == vec![expected_direction])
+            );
         }
     }
 
