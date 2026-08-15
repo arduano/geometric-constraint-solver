@@ -2,11 +2,11 @@
 
 # M73 — Retained authoring semantic consolidation
 
-Status: **M73-F001 through M73-F004 are implemented and focused/proportionally qualified; the clean
-replacement release gate, publication and focused human UAT remain pending**. The supervising
-caller accepted the original scope and the focused F004 correction on 2026-08-15. No new ADR is
-required because M73 changes no solver or persistence architecture and retires only an editor API
-introduced after the published `0.2.0` baseline.
+Status: **M73-F001 through M73-F004, the clean replacement release gate and byte-verified
+publication are complete; M73 remains open only for focused human UAT and explicit approval**. The
+supervising caller accepted the original scope and the focused F004 correction on 2026-08-15. No
+new ADR is required because M73 changes no solver or persistence architecture and retires only an
+editor API introduced after the published `0.2.0` baseline.
 
 ## Goal
 
@@ -124,13 +124,21 @@ durable-tracker boundary follow-up `89e409a` produce final focused source
 `89e409a6ebe12c640ae2f313f95de67430dfa8d0`. It passes the public 3/3 regression,
 inference-owner matrix, full editor suite at 325 unit tests plus every integration, M71
 F003/F004/F005 and transition parity, warnings-denied Clippy, and the unchanged 234/234 golden
-survey/check/clean gate. The complete clean replacement release gate and byte-verified publication
-remain open; focused UAT begins only after a replacement candidate is nominated.
+survey/check/clean gate.
 
 Regression-hardening follow-up `f41e398d00b7a7ca1e12a12a285408a0b7bd3566` makes the full
 point/native-midpoint by Horizontal/Vertical matrix part of the focused `same_axis_span` run,
 asserts exact top-level guide and latch state, and proves the public native-midpoint wake before
 suppression. The focused owner run passes 5/5 and the public target passes 3/3.
+
+Exact clean replacement source `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
+`fe9897153baa974b3c5c06e7a3bf5eee76e920f2`, passes the complete release gate, including editor
+325/325 plus every integration, unchanged golden 234/234, native/WASM parity and the complete
+workspace, documentation, benchmark, performance, licence, packaging and Trunk matrix. Its exact
+gate distribution is frozen read-only at `/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
+`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, and byte-verified at
+`http://100.94.63.83:8080/`. This replacement is current UAT authority. Only focused human review
+and explicit approval remain before M73 closes.
 
 ## ADR decision
 

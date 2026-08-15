@@ -4416,8 +4416,8 @@ reload persistence.
 
 ### M73: retained authoring semantic consolidation
 
-Status: **M73-F001 through M73-F004 are implemented and focused/proportionally qualified; the clean
-replacement release gate, publication and focused human UAT remain pending**.
+Status: **M73-F001 through M73-F004, the clean replacement release gate and byte-verified
+publication are complete; M73 remains open only for focused human UAT and explicit approval**.
 `docs/M73_GOALS.md` owns the corrected scope. The earlier proposal's claim
 that `construction_point_stage` duplicated an exhaustive stage match is withdrawn: M71 already
 made it a projection of `draft_inference_subject`. No ADR is required for this internal
@@ -4455,8 +4455,8 @@ consolidation and unreleased editor-API retirement.
 - [x] Pass the focused F004 tests, complete editor suite at 325 unit tests plus every integration,
   M71 F003/F004/F005 and transition parity, warnings-denied Clippy and unchanged 234/234 golden
   survey/check/clean gate.
-- [ ] Repeat the complete clean replacement release gate on committed product/documentation source.
-- [ ] Nominate and byte-verify a replacement immutable candidate for focused UAT.
+- [x] Repeat the complete clean replacement release gate on committed product/documentation source.
+- [x] Nominate and byte-verify a replacement immutable candidate for focused UAT.
 - [ ] Receive explicit focused human UAT approval.
 
 Implementation note (2026-08-15): `fe356c2`, `a973b73`, `fcaad55`, `693ed17`, `585cf65`,
@@ -4468,7 +4468,7 @@ M55 17/17, unchanged golden 234/234, native/WASM parity, all workspace checks, p
 performance and Trunk release assembly. The exact current-status source was gated once more before
 immutable nomination because `docs/API_COMPATIBILITY.md` is copied into the distribution.
 
-Nomination note (2026-08-15): final qualified product source
+Historical F001-F003 nomination note (2026-08-15): qualified product source
 `efde645345577f44e0d6b691f7ca27eb587c4b53`, tree
 `ae1ddaebd75e740c48eafc0b9ef2ad07cd99378b`, passes that exact clean rerun, including the
 256-moving-body sparse crossover in 124.36 seconds. Its gate-produced seven files were copied
@@ -4505,8 +4505,27 @@ geometry/residual and one-step retained history. Focused inference-owner precede
 filtering, guide/budget/latch neutrality, orthogonal-bundle, generic-tracking and
 remembered-direction controls pass; the complete editor suite passes 325 unit tests plus every
 integration suite; M71 F003/F004/F005 and transition parity, warnings-denied Clippy, and unchanged
-234/234 golden survey/check/`--require-clean` pass. The clean replacement release gate, publication
-and focused UAT remain pending. No replacement candidate has been nominated.
+234/234 golden survey/check/`--require-clean` pass. At that focused checkpoint the clean replacement
+release gate, publication and UAT remained pending; the replacement record below supersedes that
+qualification/publication status.
+
+M73-F004 replacement qualification/nomination note (2026-08-15): exact clean product source
+`4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
+`fe9897153baa974b3c5c06e7a3bf5eee76e920f2`, passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` completely. The gate
+includes editor 325/325 plus every integration and public M73 3/3, unchanged golden 234/234,
+native/WASM parity, workspace formatting/Clippy/tests/Rustdoc, benchmark compilation, M14/M32
+performance, licensing/packaging, the 256-moving-body sparse crossover in 135.18 seconds and the
+Trunk 0.21.14 release build.
+
+The exact seven gate-produced files were copied without rebuilding to read-only
+`/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
+`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, and served only on
+Tailscale at `http://100.94.63.83:8080/` by PID `3870531`. Proxy/cache-bypassed identity fetches of
+all seven files and `/` return HTTP 200 with expected media types and exact bytes; `/` equals
+`index.html`, and the fetched aggregate matches. Old PID `3403533` has exited; historical snapshot
+`/tmp/geosolve-m73-uat.5EhWNL` remains. The replacement is current UAT authority. Only focused human
+UAT and explicit approval remain open.
 
 Gate: one private stage description owns the remaining line/polyline construction facts; the
 redundant unreleased direct API is absent; contextual authoring retains all accepted behavior and

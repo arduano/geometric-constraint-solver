@@ -1806,8 +1806,8 @@ that closing checkpoint and was activated separately under the scope below.
 
 ## M73 acceptance: retained authoring semantic consolidation
 
-Status: **M73-F001 through M73-F004 are implemented and focused/proportionally qualified; the clean
-replacement release gate, publication and focused human UAT remain pending**.
+Status: **M73-F001 through M73-F004, the clean replacement release gate and byte-verified
+publication are complete; M73 remains open only for focused human UAT and explicit approval**.
 `docs/M73_GOALS.md` owns the corrected scope; no ADR is required.
 
 - M71 already made `construction_point_stage` a projection of `draft_inference_subject`; M73 does
@@ -1854,7 +1854,7 @@ replacement release gate, publication and focused human UAT remain pending**.
 Pre-F004 mechanical result (2026-08-15): F001-F003 and their focused qualification pass. Clean
 implementation source `b1b2162eb20fa5bd088c5ddf80c3bfb97fd11223` passes the complete release
 gate with editor 321/321, M55 17/17, unchanged golden 234/234, native/WASM parity and the complete
-workspace/release matrix. Final status source `efde645345577f44e0d6b691f7ca27eb587c4b53`
+workspace/release matrix. Historical status source `efde645345577f44e0d6b691f7ca27eb587c4b53`
 passes the exact clean rerun and supplies a byte-verified seven-file Tailscale candidate with
 ordered-manifest aggregate
 `371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`. M73-F004 withdraws that
@@ -1870,8 +1870,19 @@ integrations), M71 F003/F004/F005 and transition parity, warnings-denied Clippy,
 `f41e398d00b7a7ca1e12a12a285408a0b7bd3566` makes the four-way point/native-midpoint by axis matrix
 part of the focused `same_axis_span` filter, asserts exact top-level guide/latch state and proves
 the public midpoint wake before suppression; focused 5/5 and public 3/3 pass. The complete clean
-replacement release gate, byte-verified publication and focused UAT remain pending; no replacement
-candidate or milestone-close claim exists yet.
+replacement release gate and byte-verified publication remained pending at that checkpoint.
+
+Clean replacement result (2026-08-15): exact product source
+`4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
+`fe9897153baa974b3c5c06e7a3bf5eee76e920f2`, passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` completely: editor 325/325
+plus all integrations, public M73 3/3, unchanged golden 234/234, native/WASM parity, workspace
+formatting/Clippy/tests/Rustdoc, benchmark compilation, M14/M32 performance, licensing/packaging,
+the 256-moving-body sparse crossover in 135.18 seconds and Trunk 0.21.14 all pass. The exact
+gate-produced read-only snapshot `/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
+`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, is byte-verified at
+`http://100.94.63.83:8080/` and is current UAT authority. Focused human UAT and explicit approval
+remain pending; no milestone-close claim is made.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

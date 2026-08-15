@@ -2,9 +2,9 @@
 
 # M73 implementation — Retained authoring semantic consolidation
 
-Status: **M73-F001 through M73-F004 are implemented and focused/proportionally qualified; the prior
-immutable candidate remains withdrawn, and the clean replacement release gate, publication and
-focused human UAT are pending**. The supervising caller accepted the corrected scope on 2026-08-15.
+Status: **M73-F001 through M73-F004, the clean replacement release gate and byte-verified immutable
+publication are complete; M73 remains open only for focused human UAT and explicit approval**. The
+supervising caller accepted the corrected scope on 2026-08-15.
 
 Activation baseline source: `daea43de51c9a1a720da1a245747e67735448f7d`
 
@@ -21,6 +21,10 @@ M73-F004 early-suppression hardening: `0153fc045cac541cb0cbd2348ad1d51d5768da8c`
 M73-F004 final focused source: `89e409a6ebe12c640ae2f313f95de67430dfa8d0`
 
 M73-F004 regression-hardening source: `f41e398d00b7a7ca1e12a12a285408a0b7bd3566`
+
+Clean replacement product source: `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`
+
+Clean replacement product tree: `fe9897153baa974b3c5c06e7a3bf5eee76e920f2`
 
 Architecture decision: no new ADR. M73 remains within ADR 0034's drafting-authority boundary and
 ADR 0035's retained-relation lifecycle.
@@ -91,9 +95,8 @@ bypassed.
 
 This narrowly supersedes M71-F004's same-axis-alternative rule only for eligible live world-axis
 span constraints; the M71 record remains unchanged historical evidence. Public regression target
-`m73_f004_span_axis_precedence` and the focused/proportional editor qualification pass. Clean
-replacement release qualification/publication and focused UAT remain pending; no replacement
-candidate is recorded here.
+`m73_f004_span_axis_precedence`, focused/proportional editor qualification and the clean replacement
+release/publication gates pass. Focused human UAT and explicit approval remain pending.
 
 ## Compatibility result
 
@@ -156,7 +159,8 @@ Passed evidence:
 - the golden survey, check and `--require-clean` pass unchanged at **234/234**.
 
 This is focused interaction-owner hardening, not a new systemic golden dimension. No clean
-replacement release gate or publication is claimed from these development checks.
+replacement release gate or publication is claimed from these development checks; the separate
+clean candidate gate below owns that evidence.
 
 ## Historical F001-F003 candidate nomination
 
@@ -183,13 +187,62 @@ The gate-produced distribution was copied without rebuilding to read-only snapsh
 
 The C-locale ordered-manifest aggregate is
 `371596d68a75ce4415970d3237f0511426958918b55b1376fc44700735ba2095`.
-PID `3403533` serves only that snapshot on Tailscale at `http://100.94.63.83:8080/`. Proxy- and
-cache-bypassed, identity-encoded requests for all seven files and `/` return HTTP 200 and compare
-byte-for-byte; `/` equals `index.html`, and the fetched aggregate equals the frozen aggregate.
+PID `3403533` served only that snapshot on Tailscale and has since exited. The immutable snapshot
+remains as historical evidence.
 
 M73-F004 withdraws this snapshot and endpoint from current UAT authority. The bytes, hashes and
 clean-gate result remain historical F001-F003 evidence; they are not a replacement candidate for
-the implemented F004 correction. No F004 replacement has been nominated or served.
+the implemented F004 correction. The qualified replacement below now owns current UAT authority.
+
+## Current F004 replacement qualification and nomination
+
+Final qualified product source: `4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`
+
+Final qualified product tree: `fe9897153baa974b3c5c06e7a3bf5eee76e920f2`
+
+The exact clean command passed completely:
+
+```bash
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+That run passed:
+
+- editor **325/325** plus every integration suite and public M73 regression **3/3**;
+- the unchanged **234/234** authoring/scene golden inventory, survey, check and clean gate;
+- native/WASM transition parity, workspace formatting, warnings-denied Clippy, locked all-feature
+  tests and warnings-denied Rustdoc;
+- all-target benchmark compilation, M14/M32 performance, licensing and packaging;
+- the 256-moving-body sparse crossover in **135.18 seconds**; and
+- the Trunk **0.21.14** release build.
+
+The exact gate-produced distribution was copied without rebuilding to
+`/tmp/geosolve-m73-uat.JKAWtJ` (directory mode `0555`, files `0444`):
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 15,490 | `c3ef0cedd4de5968e36d2917daaf463c450fbe2266a06bc45b0cfae2dc20b935` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-92f14bb278c26c6b.js` | 33,093 | `5647aeac2f7852f1bf4015722528386b67c7c31208f9f5ce2cccbbb7171f2988` |
+| `geosolve-demo-web-92f14bb278c26c6b_bg.wasm` | 6,021,403 | `bc1a23dd0f7917152c69a1f94e9858ceaf0d912a955db4bd68d77bca5a268342` |
+| `index.html` | 26,345 | `a2cf744c5daea9cea42c5dbd7dd58c6a27d9e508841f54e5589a4256ef7b3f40` |
+| `styles-437727272832bc26.css` | 27,010 | `9e4b1c6985f119cff35366119fbeef8abb2096b386a8db78a4cd730915316344` |
+
+The C-locale `sha256sum *` aggregate is
+`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`.
+
+PID `3870531` serves only this snapshot at `http://100.94.63.83:8080/` with exact argv:
+
+```text
+python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m73-uat.JKAWtJ
+```
+
+Its executable is
+`/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`.
+Proxy/cache-bypassed, identity-encoded requests for all seven files and `/` return HTTP 200 with
+the expected media types and compare byte-for-byte. `/` equals `index.html`, and the fetched
+aggregate equals the frozen aggregate. This replacement is current UAT authority.
 
 ## Qualification ledger
 
@@ -208,11 +261,11 @@ the implemented F004 correction. No F004 replacement has been nominated or serve
 - [x] Implement M73-F004 without changing solver redundancy authority, persistence, browser policy
   or the 234-row golden.
 - [x] Pass focused/proportional editor, M71 transition, Clippy and unchanged golden checks.
-- [ ] Repeat the complete clean replacement release gate on committed product/documentation source.
-- [ ] Freeze, serve and byte-verify a replacement immutable UAT candidate.
+- [x] Repeat the complete clean replacement release gate on committed product/documentation source.
+- [x] Freeze, serve and byte-verify a replacement immutable UAT candidate.
 - [ ] Complete `docs/M73_UAT.md` with explicit human approval.
 
 ## Current blocker
 
-No external blocker. The complete clean replacement release gate, immutable byte-verified
-publication and focused UAT are the remaining ordered work; no replacement candidate is nominated.
+No external blocker. Focused human UAT and explicit approval are the only remaining ordered work;
+M73 remains open and the replacement candidate above is current authority.

@@ -1335,8 +1335,9 @@ owning Rust/WASM layer. Old browser E2E is not a qualification path. Human revie
 recorded at completed M40.7, M53 and M61-M72. M72's scoped UAT and exact final public-artifact
 verification complete its direct automated qualification. Active M73 has qualified its F001-F003
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
-world-axis span precedence. A clean replacement release gate, candidate publication and focused
-UAT are pending; M73 adds no new editable sample or browser scenario mode.
+world-axis span precedence, passed the clean replacement release gate and published a byte-verified
+immutable UAT candidate. Only focused human review and explicit approval remain; M73 adds no new
+editable sample or browser scenario mode.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1738,14 +1739,26 @@ suppression before guide publication/candidate budget/latch/cross-axis pairing, 
 generic tracking-only cues and remembered Parallel/Perpendicular/Collinear controls. The full
 editor suite passes 325 unit tests plus every integration suite; M71 F003/F004/F005 and transition
 parity, warnings-denied Clippy, and unchanged 234/234 golden survey/check/clean gate pass. Clean
-replacement release qualification/publication and focused UAT remain pending; no replacement
-candidate is nominated.
+replacement release qualification/publication and focused UAT remained pending at that focused
+checkpoint.
 
 Regression-hardening source `f41e398d00b7a7ca1e12a12a285408a0b7bd3566` makes all four durable
 point/native-midpoint by Horizontal/Vertical rows part of the focused `same_axis_span` run and
 checks the exact published world-axis guide plus empty durable tracker latch. Its retained-editor
 midpoint case first proves the native midpoint wake, then proves one final candidate and no leaked
 same-axis top-level guide. The focused owner run passes 5/5 and the public target remains 3/3.
+
+Clean replacement qualification/publication (2026-08-15): exact product source
+`4c93ac5dd102fd52c78665a75997bcaf3d1d6f99`, tree
+`fe9897153baa974b3c5c06e7a3bf5eee76e920f2`, passes the complete clean release gate with editor
+325/325 plus integrations, public M73 3/3, unchanged golden 234/234, native/WASM parity, the full
+workspace/documentation/package/performance matrix, 135.18-second 256-body sparse crossover and
+Trunk 0.21.14 success. Its exact seven-file read-only snapshot
+`/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
+`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, is served only on
+Tailscale at `http://100.94.63.83:8080/` and byte-verifies file-by-file plus `/`. It is current UAT
+authority. The old server exited while its historical snapshot remains. M73 stays open only for
+focused human UAT and explicit approval.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
