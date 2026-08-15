@@ -82,5 +82,5 @@ Before implementation, the supervising caller should choose one of these directi
 3. prioritize a different deferred product boundary such as canonical-v5 planning.
 
 If this proposal is accepted, add the final M73 acceptance section, scenario contract and any
-required ADR before changing implementation code. Until then, M72 remains the active milestone
-and no M73 work is active.
+required ADR before changing implementation code. M72 closed on 2026-08-15; until M73 is explicitly
+accepted, no next-milestone implementation is active.

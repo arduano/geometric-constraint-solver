@@ -1332,8 +1332,8 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M71. Active M72 likewise ends in its own UAT after direct
-automated qualification.
+recorded at completed M40.7, M53 and M61-M72. M72's scoped UAT and exact final public-artifact
+verification complete its direct automated qualification.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1683,8 +1683,10 @@ After the clean release gate, the same qualified workbench is deployed from `mai
 `https://arduano.github.io/geometric-constraint-solver/`. Its stylesheet, JavaScript and WASM use
 the repository prefix, every expected file returns successfully with the WASM media type, and an
 ordinary browser-local workspace survives reload. Human review and closure are recorded in the M72
-UAT record. The accepted `b700313` follow-up has scoped human approval; final closure awaits its
-replacement Pages deployment and exact public verification.
+UAT record. The accepted `b700313` follow-up is deployed by run `31862218764` as artifact
+`9241248173`; all seven public files byte-match that artifact with the expected media types, and
+the two-size public Chromium contract passes. M72-R1 is complete under the scoped 2026-08-15 human
+approval.
 
 ### M70B-R1 - Complete workspace reproduction payload
 

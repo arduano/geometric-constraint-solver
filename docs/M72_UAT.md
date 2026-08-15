@@ -2,25 +2,31 @@
 
 # M72 focused UAT — Public workbench bulk fixes
 
-Status: implementation, clean qualification, initial public GitHub Pages deployment, exact
-hosted-artifact byte verification and local/public Chromium preflight pass. The supervising caller
-approved the recorded focused UAT scope on 2026-08-15 against accepted follow-up commit `b700313`.
-Publishing and verifying that exact follow-up at the public workbench is the remaining mechanical
-closure step.
+Status: **complete and explicitly approved on 2026-08-15**. Implementation, clean qualification,
+final public GitHub Pages deployment, exact hosted-artifact byte verification and local/public
+Chromium qualification pass. The supervising caller approved the recorded focused UAT scope
+against accepted follow-up commit `b700313` and requested milestone closure.
 
 Direct Rust/WASM tests are authoritative for accepted geometry, residuals, rank/DOF, branches,
 history and problem ownership. Human UAT should focus on feel, discoverability and browser
 presentation.
 
-Mechanical release authority is clean source `dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
+Historical initial mechanical release authority was clean source
+`dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
 `38d79f5e05cb5274cc7eeb6bc6c0c2fac7d6f624`. Its complete gate log and SHA-256 are recorded in
 `docs/M72_IMPLEMENTATION.md`; the unchanged golden passes **234/234**. The full-history Gitleaks
-report is empty. Deployment source `6eb2c63f6349851e70200570c9c2db07631acd3a` passed corrected
-run `31802816639` attempt 2, including the unchanged 180-second sparse ceiling in `176.27s`.
-Artifact `9221899077`, all initial public HTTP responses and bytes, the WASM media type, both
-desktop Chromium sizes and browser-local reload persistence pass mechanically. The accepted
-follow-up passed the same two-size Chromium automation from its immutable Tailscale release
-snapshot before human approval.
+report is empty. Initial deployment source `6eb2c63f6349851e70200570c9c2db07631acd3a`
+passed corrected run `31802816639` attempt 2, including the unchanged 180-second sparse ceiling in
+`176.27s`. Artifact `9221899077`, all initial public HTTP responses and bytes, the WASM media type,
+both desktop Chromium sizes and browser-local reload persistence passed mechanically.
+
+The accepted follow-up passed the same two-size Chromium automation from its immutable Tailscale
+release snapshot before human approval. Final product source
+`b7003137960afb1b9d29c990d595df44bcd7c2d4` then passed the complete local release gate. Its
+documentation-only approval descendant `2d1513912787445ff825836705158c2b563dc7ff` passed Pages run
+`31862218764`, which deployed artifact `9241248173`. All seven final public files return 200,
+byte-match that artifact and use the expected JavaScript, WASM and CSS media types. The full public
+Chromium contract passes at `1440x900` and `1024x720`, including reload persistence.
 
 ## M72-U1 — Problems recover and stay current
 
@@ -89,8 +95,8 @@ reload.
 - M72-U1: **Accepted** under the 2026-08-15 scoped close decision.
 - M72-U2: **Accepted** under the 2026-08-15 scoped close decision.
 - M72-U3: **Accepted** under the 2026-08-15 scoped close decision.
-- M72-U4: candidate behavior **Accepted** under the 2026-08-15 scoped close decision; updated
-  public artifact verification is the remaining mechanical closure step.
+- M72-U4: **Accepted and mechanically complete** — final Pages artifact `9241248173` passes exact
+  public byte/media verification and the two-size Chromium contract.
 - Final M72 approval: **Pass** — explicitly approved by the supervising caller on 2026-08-15.
 
 The supervising caller confirmed that the presented fixes resolve the reported behavior and

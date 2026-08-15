@@ -2,9 +2,9 @@
 
 # M72 — Public workbench bulk fixes
 
-Status: activated by the supervising caller on 2026-08-14. This milestone replaces the previously
-prepared semantic-consolidation proposal, which moves without implementation to
-`docs/M73_GOALS.md`.
+Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. This
+milestone replaced the previously prepared semantic-consolidation proposal, which moved without
+implementation to the still-inactive `docs/M73_GOALS.md`.
 
 ## Goal
 

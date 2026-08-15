@@ -178,9 +178,9 @@ reported the targeted F005 movement behavior fixed and requested sign-off once t
 regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
 the two-previously-Current transaction and CircularArc transport/domain regressions, while the
 198/198 golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B
-without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72 is the
-active public-workbench bulk-fix and GitHub Pages release milestone; its target statements below
-are not completion claims.
+without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72's
+public-workbench bulk fixes and GitHub Pages release are complete under the scoped 2026-08-15
+approval and exact final public-artifact verification recorded below.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1773,7 +1773,8 @@ browser E2E, mobile behavior or legacy UI.
 
 ## M72 acceptance: public workbench bulk fixes
 
-Status: active. `docs/M72_GOALS.md` owns the approved scope.
+Status: **complete and explicitly approved on 2026-08-15**. `docs/M72_GOALS.md` owns the approved
+scope; `docs/M72_IMPLEMENTATION.md` and `docs/M72_UAT.md` record the closing evidence.
 
 - A successful recovery operation cannot retain a problem from a prior computed refresh or a
   rejected same-sketch attempt. Genuine failures under current parameters/external inputs remain
@@ -1792,6 +1793,15 @@ Status: active. `docs/M72_GOALS.md` owns the approved scope.
   browser-local workspace persistence survives a Chromium reload.
 - Focused Chromium UAT and explicit supervising-human approval close the milestone. M73 semantic
   consolidation, mobile work and broader authoring behavior remain outside M72.
+
+Accepted product source `b7003137960afb1b9d29c990d595df44bcd7c2d4` passes the complete local
+release gate. Its documentation-only approval descendant
+`2d1513912787445ff825836705158c2b563dc7ff` passes GitHub Pages run `31862218764` and deploys
+artifact `9241248173`; all seven public files return 200, match that artifact byte-for-byte, use
+the expected JavaScript/WASM/CSS media types and pass the two-size Chromium contract including
+reload persistence. The supervising caller accepted M72-U1 through M72-U4 and explicitly requested
+closure on 2026-08-15. This is scoped approval of the presented fixes, not a claim of an unrecorded
+exhaustive manual replay. All M72 acceptance gates pass; M73 remains proposed and inactive.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -66,21 +66,23 @@ Concentric and Collinear. M71-F003 through M71-F006 are resolved; clean product 
 `f8a45ae7b355ab9874bf268c9950e369814e8432` passes the complete release gate and its immutable
 F005/F006 replacement is byte-verified at the published endpoint. The supervising human accepted
 the scoped U1-U5 review and explicitly closed M71 on 2026-08-14.
-M72 is the active public-workbench bulk-fix and GitHub Pages release milestone.
-`docs/M72_GOALS.md` owns its accepted scope; the deferred behavior-preserving retained-authoring
-semantic-consolidation proposal is now `docs/M73_GOALS.md` and remains inactive.
+M72's public-workbench bulk fixes and GitHub Pages release are complete and explicitly approved.
+The final accepted workbench is live at
+`https://arduano.github.io/geometric-constraint-solver/`; its deployed seven-file artifact and
+two-size Chromium contract are exactly verified. The deferred behavior-preserving retained-
+authoring semantic-consolidation proposal is `docs/M73_GOALS.md` and remains inactive.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, complete through the explicitly approved M71 close.
+3. `PLAN.md` — authoritative roadmap, complete through the explicitly approved M72 close.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
-7. `docs/M72_GOALS.md` — active public-workbench bulk-fix and Pages-release scope.
-8. `docs/M72_IMPLEMENTATION.md` and `docs/M72_UAT.md` — implementation evidence and focused review.
+7. `docs/M72_GOALS.md` — completed public-workbench bulk-fix and Pages-release scope.
+8. `docs/M72_IMPLEMENTATION.md` and `docs/M72_UAT.md` — closing evidence and approved review.
 9. `docs/M73_GOALS.md` — deferred semantic-consolidation proposal; not activated.
 
 ## Workspace

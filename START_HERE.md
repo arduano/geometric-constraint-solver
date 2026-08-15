@@ -122,16 +122,19 @@ servers have exited and those bytes are no longer served. Current clean product 
 `f8a45ae7b355ab9874bf268c9950e369814e8432`, tree
 `f7bccc58f301a715bc91f40115ce6424ec5f391d`, passes the complete unchanged-source release gate.
 Its immutable seven-file snapshot `/tmp/geosolve-m71-f005-f006-uat.QPuMdT`, aggregate
-`657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`, is byte-verified at
-`http://100.94.63.83:8080/` under PID `3245562`. On 2026-08-14 the supervising human confirmed the
-corrected two-constraint auto-placement, accepted the recorded M71-U1 through M71-U5 review points
-and explicitly requested closure without claiming an unrecorded exhaustive replay.
-M72 is active as the supervising-caller-approved public-workbench bulk-fix and GitHub Pages
-release milestone. Its three bounded fixes, clean qualification, public deployment, exact hosted-
-artifact byte verification and Chromium preflight pass. The workbench is live at
-`https://arduano.github.io/geometric-constraint-solver/`; only focused supervising-human UAT and
-approval remain. `docs/M72_GOALS.md` owns the scope. The prior semantic-consolidation proposal moved
-to `docs/M73_GOALS.md` and remains inactive.
+`657a279238d356a2c4f2ac1ab529b2c26f53b81c01a75d74ef0e0a49488ac5ab`, was byte-verified during
+its historical publication; its temporary server has retired. On 2026-08-14 the supervising human
+confirmed the corrected two-constraint auto-placement, accepted the recorded M71-U1 through
+M71-U5 review points and explicitly requested closure without claiming an unrecorded exhaustive
+replay.
+M72's public-workbench bulk fixes and GitHub Pages release are complete and explicitly approved on
+2026-08-15. Accepted product source `b7003137960afb1b9d29c990d595df44bcd7c2d4` passes the local
+complete release gate; its documentation-only approval descendant
+`2d1513912787445ff825836705158c2b563dc7ff` passes hosted run `31862218764` and deploys exact
+artifact `9241248173`. All seven public files byte-match it with the expected media types, and the
+public two-size Chromium contract passes. The workbench is live at
+`https://arduano.github.io/geometric-constraint-solver/`. `docs/M72_GOALS.md` owns the closed scope.
+The prior semantic-consolidation proposal moved to `docs/M73_GOALS.md` and remains inactive.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -144,7 +147,7 @@ support and physics remain outside future acceptance.
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
 7. `docs/adr/0001-*.md` through `docs/adr/0035-*.md`
-8. `docs/M72_GOALS.md` — active M72 bulk-fix and public-release milestone.
+8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — proposal only; it is not an activated implementation milestone.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
@@ -469,13 +472,13 @@ Durable milestone and cleanup records:
 - `docs/M70B_UAT.md` (scoped reproduction handoff/restore close scorecard)
 - `.agents/skills/geosolve-harden-defect/` (canonical solver/headless defect regression workflow)
 - `docs/M71_GOALS.md` (completed retained-drafting-relations scope)
-- `docs/M71_IMPLEMENTATION.md` (mechanically implemented retained-relation ledger)
-- `docs/M71_HANDOVER.md` (canonical fresh-session checkpoint and remaining human-UAT sequence)
-- `docs/M71_UAT.md` (current focused M71 scorecard)
+- `docs/M71_IMPLEMENTATION.md` (completed retained-relation ledger)
+- `docs/M71_HANDOVER.md` (canonical M71 closing checkpoint)
+- `docs/M71_UAT.md` (approved focused M71 scorecard)
 - `docs/adr/0035-retained-drafting-relation-lifecycle.md`
-- `docs/M72_GOALS.md` (active public-workbench bulk-fix and Pages-release scope)
-- `docs/M72_IMPLEMENTATION.md` (clean-qualified F001-F004 and public Pages evidence ledger)
-- `docs/M72_UAT.md` (focused live-workbench review and pending human approval checklist)
+- `docs/M72_GOALS.md` (completed public-workbench bulk-fix and Pages-release scope)
+- `docs/M72_IMPLEMENTATION.md` (completed F001-F004 and final public Pages evidence ledger)
+- `docs/M72_UAT.md` (approved focused live-workbench scorecard)
 - `docs/M73_GOALS.md` (inactive retained-authoring semantic-consolidation proposal)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

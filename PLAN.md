@@ -4351,8 +4351,9 @@ browser E2E, mobile work and legacy UI.
 
 ### M72: public workbench bulk fixes
 
-Status: activated by the supervising caller on 2026-08-14, replacing the previously prepared
-semantic-consolidation proposal. `docs/M72_GOALS.md` owns the accepted scope.
+Status: **complete and explicitly approved by the supervising caller on 2026-08-15**. The
+milestone replaced the previously prepared semantic-consolidation proposal, which remains
+preserved as the inactive M73 proposal. `docs/M72_GOALS.md` owns the accepted scope.
 
 - [x] Preserve M71's qualified source and move its deferred semantic-consolidation proposal to M73.
 - [x] M72-F001: clear stale native/computed Problems across successful recovery and add exact-set
@@ -4364,9 +4365,9 @@ semantic-consolidation proposal. `docs/M72_GOALS.md` owns the accepted scope.
 - [x] M72-F004: qualify, publish and verify the public GitHub Pages workbench.
 - [x] Run the complete clean release gate.
 - [x] Receive focused supervising-human UAT approval.
-- [ ] Publish and exact-verify the accepted `b700313` overlay follow-up on GitHub Pages.
+- [x] Publish and exact-verify the accepted `b700313` overlay follow-up on GitHub Pages.
 
-Qualification/publication checkpoint (2026-08-14): clean source
+Historical initial qualification/publication checkpoint (2026-08-14): clean source
 `dc09b019704fe4a5cd48aff1ae838dfa52f36813`, tree
 `38d79f5e05cb5274cc7eeb6bc6c0c2fac7d6f624`, passes the complete release gate. The retained log is
 `/tmp/geosolve-m72-clean-gate.upGsYJ.log`, SHA-256
@@ -4389,8 +4390,23 @@ UAT follow-up (2026-08-15): remove the option tools' separate chevrons and cente
 invoker. Its bottom-left overlay stays open through blur, outside/canvas clicks, zoom and ordinary
 controls; the same invoker is idempotent, tool switches close or replace the surface, and `×` or
 Escape activates and focuses Select. The supervising caller approved the recorded focused UAT
-scope on 2026-08-15; publishing and verifying this accepted follow-up is the final mechanical
-closure step.
+scope on 2026-08-15.
+
+Final closure checkpoint (2026-08-15): accepted product source
+`b7003137960afb1b9d29c990d595df44bcd7c2d4`, tree
+`80a0cb1c65ca3dd723968b5bf3a518f7dcbdca35`, passes the complete local release gate with the
+256-moving-body sparse crossover in **128.40s**. Its documentation-only approval descendant
+`2d1513912787445ff825836705158c2b563dc7ff`, tree
+`01d58d1e926508692fdf6d8422f62f904bd0e388`, passes GitHub Pages run `31862218764`, including the
+crossover in **160.40s**, then builds, validates and deploys artifact `9241248173`. The downloaded
+artifact has tar SHA-256
+`e9b874809a2f93deae19b6d7ca435e45bda92bf861adcf2ca54786f4ee2b2702` and ordered-manifest
+aggregate `4a48f3cbc0269fdad2c4be91da015a6751eddbe4bdfe9bf97b5814674b9c7ff6`. Root plus every expected
+file return 200, match that artifact byte-for-byte and use the expected JavaScript, WASM and CSS
+media types. Public Chromium qualification passes all 16 option families, persistent overlay
+lifetime, close-to-Select, containment, scrolling, hidden-field isolation, links and reload
+persistence at `1440x900` and `1024x720`. With the recorded scoped human approval, every M72 gate
+is complete.
 
 Gate: the three defects pass focused owner regressions; no residual, persistence or golden meaning
 changes; the desktop overlays remain contained, family-local and persistent under non-tool
@@ -4408,8 +4424,8 @@ and direct/contextual relation applicability before any broader retained M37 cat
 - [ ] If accepted, add final acceptance/scenario records and any required ADR before implementation.
 
 Preparation gate: no production code, public API, persistence format, residual, golden or release
-candidate may change under M73 until its scope is explicitly activated. M72 remains authoritative
-until it closes.
+candidate may change under M73 until its scope is explicitly activated. M72 closed on 2026-08-15;
+M73 remains proposed and inactive.
 
 ## Explicit non-goals
 
