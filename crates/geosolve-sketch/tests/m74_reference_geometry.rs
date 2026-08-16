@@ -547,6 +547,282 @@ fn datum_line_collinearity_escapes_an_exact_perpendicular_reversed_seed() {
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one scale/axis/order matrix keeps lowering, Jacobian, audit, rank and independent residual checks together"
+)]
+fn datum_axis_symmetry_has_two_checked_rows_at_all_scales_and_operand_orders() {
+    for scale in [1.0e-6, 1.0, 1.0e6] {
+        for axis in [DocumentCoordinateAxis::X, DocumentCoordinateAxis::Y] {
+            for swap in [false, true] {
+                let mut document = SketchDocument::new(scale).unwrap();
+                let first = document
+                    .add_point("symmetry first", [2.25 * scale, 3.5 * scale])
+                    .unwrap();
+                let second = document
+                    .add_point("symmetry second", [5.75 * scale, -1.25 * scale])
+                    .unwrap();
+                let (stored_first, stored_second) = if swap {
+                    (second, first)
+                } else {
+                    (first, second)
+                };
+                let constraint = document
+                    .add_constraint(
+                        "symmetric about datum axis",
+                        DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                            first: stored_first,
+                            second: stored_second,
+                            axis,
+                        },
+                    )
+                    .unwrap();
+                assert_eq!(runtime_row_count(&document, constraint), Some(2));
+
+                let lowered = document.lower().unwrap();
+                let RuntimeSource::Constraint(runtime) = lowered
+                    .mappings()
+                    .runtime_source(source_id(&document, constraint))
+                    .unwrap()
+                else {
+                    panic!("datum-axis symmetry must lower to one runtime constraint")
+                };
+                let SketchConstraintKind::SymmetricAboutDatumAxis {
+                    first: runtime_first,
+                    second: runtime_second,
+                    axis: runtime_axis,
+                } = lowered.sketch().constraint(runtime).unwrap().kind()
+                else {
+                    panic!("datum-axis symmetry must retain its runtime subtype")
+                };
+                assert_eq!(runtime_axis, axis);
+                assert_eq!(
+                    runtime_first,
+                    lowered.mappings().runtime_point(stored_first).unwrap()
+                );
+                assert_eq!(
+                    runtime_second,
+                    lowered.mappings().runtime_point(stored_second).unwrap()
+                );
+                let compiled = lowered
+                    .sketch()
+                    .compile(SketchSolveRequest::default().without_previous_state_preferences())
+                    .unwrap();
+                let jacobians = compiled.problem().check_jacobians(1.0e-6).unwrap();
+                assert!(
+                    jacobians.all_within(1.0e-6),
+                    "axis={axis:?}, scale={scale:e}, swap={swap}: {jacobians:#?}"
+                );
+
+                let session = accepted_session(document);
+                let accepted = session.accepted_state().unwrap();
+                let solved_first = accepted
+                    .solve_result()
+                    .geometry
+                    .point(accepted.mappings().runtime_point(stored_first).unwrap())
+                    .unwrap();
+                let solved_second = accepted
+                    .solve_result()
+                    .geometry
+                    .point(accepted.mappings().runtime_point(stored_second).unwrap())
+                    .unwrap();
+                assert!(solved_first.x.is_finite() && solved_first.y.is_finite());
+                assert!(solved_second.x.is_finite() && solved_second.y.is_finite());
+                let (midpoint_normal, tangent_difference) = match axis {
+                    DocumentCoordinateAxis::X => (
+                        0.5 * (solved_first.y + solved_second.y) / scale,
+                        (solved_second.x - solved_first.x) / scale,
+                    ),
+                    DocumentCoordinateAxis::Y => (
+                        0.5 * (solved_first.x + solved_second.x) / scale,
+                        (solved_second.y - solved_first.y) / scale,
+                    ),
+                };
+                assert!(midpoint_normal.abs() <= HARD_TOLERANCE);
+                assert!(tangent_difference.abs() <= HARD_TOLERANCE);
+
+                let audit = accepted_audit(accepted, constraint);
+                assert_finite_hard_audit(audit, 2);
+                let axis_name = match axis {
+                    DocumentCoordinateAxis::X => "X axis",
+                    DocumentCoordinateAxis::Y => "Y axis",
+                };
+                assert!(audit.rows.iter().all(|row| {
+                    row.bindings.iter().any(|binding| {
+                        binding.name == "first"
+                            && binding.value
+                                == if swap {
+                                    "symmetry second"
+                                } else {
+                                    "symmetry first"
+                                }
+                    }) && row.bindings.iter().any(|binding| {
+                        binding.name == "second"
+                            && binding.value
+                                == if swap {
+                                    "symmetry first"
+                                } else {
+                                    "symmetry second"
+                                }
+                    }) && row
+                        .bindings
+                        .iter()
+                        .any(|binding| binding.name == "datum axis" && binding.value == axis_name)
+                }));
+                let rank = accepted.diagnostics().rank.unwrap();
+                assert_eq!(rank.numerical_rank, Some(2));
+                assert_eq!(rank.numerical_right_nullity, Some(2));
+            }
+        }
+    }
+}
+
+#[test]
+fn datum_axis_symmetry_follows_suppression_delete_dependency_and_history_lifecycle() {
+    let mut document = SketchDocument::new(1.0).unwrap();
+    let first = document.add_point("first", [2.0, 3.0]).unwrap();
+    let second = document.add_point("second", [4.0, -1.0]).unwrap();
+    let mut session = SketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default().without_previous_state_preferences(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let created = session
+        .apply(DocumentCommand::new(
+            session.revision(),
+            DocumentEdit::CreateConstraint {
+                label: "symmetric about X axis".into(),
+                definition: DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                    first,
+                    second,
+                    axis: DocumentCoordinateAxis::X,
+                },
+            },
+        ))
+        .unwrap();
+    let Some(DocumentCommandEffect::CreatedConstraint(constraint)) = created.effect else {
+        panic!("created datum-axis symmetry effect expected")
+    };
+    let source = source_id(session.document(), constraint);
+    assert_eq!(runtime_row_count(session.document(), constraint), Some(2));
+
+    session
+        .apply(DocumentCommand::new(
+            session.revision(),
+            DocumentEdit::SetSourceSuppressed {
+                source,
+                suppressed: true,
+            },
+        ))
+        .unwrap();
+    assert_eq!(runtime_row_count(session.document(), constraint), None);
+    session.undo(session.revision()).unwrap();
+    assert_eq!(runtime_row_count(session.document(), constraint), Some(2));
+    session.redo(session.revision()).unwrap();
+    assert_eq!(runtime_row_count(session.document(), constraint), None);
+    session.undo(session.revision()).unwrap();
+
+    session
+        .apply(DocumentCommand::new(
+            session.revision(),
+            DocumentEdit::Delete {
+                object: DocumentObjectId::Constraint(constraint),
+            },
+        ))
+        .unwrap();
+    assert!(session.document().constraint(constraint).is_none());
+    session.undo(session.revision()).unwrap();
+    assert_eq!(source_id(session.document(), constraint), source);
+    session.redo(session.revision()).unwrap();
+    assert!(session.document().constraint(constraint).is_none());
+    session.undo(session.revision()).unwrap();
+
+    let mut conservative = session.document().clone();
+    assert!(matches!(
+        conservative.remove(DocumentObjectId::Point(first)),
+        Err(DocumentError::ObjectInUse(_))
+    ));
+    let mut cascade = session.document().clone();
+    cascade
+        .remove_many_with_dependents(&[DocumentObjectId::Point(first)])
+        .unwrap();
+    assert!(cascade.point(first).is_none());
+    assert!(cascade.point(second).is_some());
+    assert!(cascade.constraint(constraint).is_none());
+}
+
+#[test]
+fn datum_axis_symmetry_round_trips_only_in_draft_v5() {
+    let mut document = SketchDocument::new(1.0).unwrap();
+    let x_first = document.add_point("x first", [1.0, 2.0]).unwrap();
+    let x_second = document.add_point("x second", [3.0, -4.0]).unwrap();
+    let y_first = document.add_point("y first", [-5.0, 6.0]).unwrap();
+    let y_second = document.add_point("y second", [7.0, 8.0]).unwrap();
+    let x_constraint = document
+        .add_constraint(
+            "X-axis symmetry",
+            DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                first: x_first,
+                second: x_second,
+                axis: DocumentCoordinateAxis::X,
+            },
+        )
+        .unwrap();
+    document
+        .add_constraint(
+            "Y-axis symmetry",
+            DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                first: y_first,
+                second: y_second,
+                axis: DocumentCoordinateAxis::Y,
+            },
+        )
+        .unwrap();
+    document
+        .set_element_user_suppressed(DocumentElementId::Constraint(x_constraint), true)
+        .unwrap();
+
+    assert!(matches!(
+        document.to_canonical_json(),
+        Err(DocumentError::UnsupportedM74State)
+    ));
+    let draft = document.to_draft_v5_json().unwrap();
+    let wire: serde_json::Value = serde_json::from_str(&draft).unwrap();
+    let retained = wire["retained_planar_constraints"].as_array().unwrap();
+    assert_eq!(retained.len(), 2);
+    for axis in ["x", "y"] {
+        assert!(retained.iter().any(|record| {
+            record["definition"]["kind"] == "symmetric_about_datum_axis"
+                && record["definition"]["axis"] == axis
+                && record["definition"]["first"].is_string()
+                && record["definition"]["second"].is_string()
+        }));
+    }
+    assert!(
+        wire["document"]["constraints"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+
+    let restored = SketchDocument::from_draft_v5_json(&draft).unwrap();
+    assert_eq!(restored.constraints(), document.constraints());
+    assert_eq!(restored.source_order(), document.source_order());
+    assert_eq!(restored.to_draft_v5_json().unwrap(), draft);
+    assert!(
+        restored
+            .source(source_id(&restored, x_constraint))
+            .unwrap()
+            .suppressed
+    );
+    assert!(matches!(
+        restored.to_canonical_json(),
+        Err(DocumentError::UnsupportedM74State)
+    ));
+}
+
+#[test]
 fn datum_relations_follow_suppression_dependency_delete_and_history_lifecycle() {
     let mut document = SketchDocument::new(1.0).unwrap();
     let point = document.add_point("axis point", [2.0, 3.0]).unwrap();

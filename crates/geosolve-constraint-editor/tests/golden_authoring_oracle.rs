@@ -38,7 +38,7 @@ const SEEDED_VARIANTS: u32 = 8;
 const MAX_SHRINK_ITERS: u32 = 512;
 const TSV_HEADER: &str = "case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint";
 
-const CONSTRAINT_KINDS: [ResolvedConstraintKind; 23] = [
+const CONSTRAINT_KINDS: [ResolvedConstraintKind; 24] = [
     ResolvedConstraintKind::FixedPoint,
     ResolvedConstraintKind::CoincidentPoints,
     ResolvedConstraintKind::PointOnCurve,
@@ -62,6 +62,7 @@ const CONSTRAINT_KINDS: [ResolvedConstraintKind; 23] = [
     ResolvedConstraintKind::CoincidentWithOrigin,
     ResolvedConstraintKind::PointOnDatumAxis,
     ResolvedConstraintKind::CollinearWithDatumAxis,
+    ResolvedConstraintKind::SymmetricAboutDatumAxis,
 ];
 
 const DIMENSION_KINDS: [DimensionKind; 5] = [
@@ -87,7 +88,7 @@ struct OracleFamily {
     subject: FamilySubject,
 }
 
-const FAMILIES: [OracleFamily; 28] = [
+const FAMILIES: [OracleFamily; 29] = [
     constraint_family(ResolvedConstraintKind::FixedPoint, ConstraintIntent::Lock),
     constraint_family(
         ResolvedConstraintKind::CoincidentPoints,
@@ -177,6 +178,10 @@ const FAMILIES: [OracleFamily; 28] = [
         ResolvedConstraintKind::CollinearWithDatumAxis,
         ConstraintIntent::Collinear,
     ),
+    constraint_family(
+        ResolvedConstraintKind::SymmetricAboutDatumAxis,
+        ConstraintIntent::Symmetric,
+    ),
 ];
 
 const fn constraint_family(kind: ResolvedConstraintKind, intent: ConstraintIntent) -> OracleFamily {
@@ -216,6 +221,7 @@ const fn constraint_family_id(kind: ResolvedConstraintKind) -> &'static str {
         ResolvedConstraintKind::EqualCurvature => "constraint.equal-curvature",
         ResolvedConstraintKind::Midpoint => "constraint.midpoint",
         ResolvedConstraintKind::SymmetricAboutLine => "constraint.symmetric-about-line",
+        ResolvedConstraintKind::SymmetricAboutDatumAxis => "constraint.symmetric-about-datum-axis",
         ResolvedConstraintKind::CurveTangency => "constraint.curve-tangency",
         ResolvedConstraintKind::EndpointContinuity => "constraint.endpoint-continuity",
     }
@@ -451,7 +457,7 @@ const fn fnv1a64(bytes: &[u8]) -> u64 {
 
 #[test]
 fn golden_oracle_inventory_and_tsv_schema_are_exhaustive() {
-    assert_eq!(CONSTRAINT_KINDS.len(), 23);
+    assert_eq!(CONSTRAINT_KINDS.len(), 24);
     assert_eq!(DIMENSION_KINDS.len(), 5);
     assert_eq!(
         FAMILIES.len(),
@@ -798,7 +804,9 @@ impl MatrixFixture {
         } else {
             0.0
         };
-        let symmetric_y_offset = if displaced(ResolvedConstraintKind::SymmetricAboutLine) {
+        let symmetric_y_offset = if displaced(ResolvedConstraintKind::SymmetricAboutLine)
+            || displaced(ResolvedConstraintKind::SymmetricAboutDatumAxis)
+        {
             0.3
         } else {
             0.0
@@ -1116,7 +1124,8 @@ impl MatrixFixture {
             FamilySubject::Constraint {
                 kind: ResolvedConstraintKind::CoincidentWithOrigin
                     | ResolvedConstraintKind::PointOnDatumAxis
-                    | ResolvedConstraintKind::CollinearWithDatumAxis,
+                    | ResolvedConstraintKind::CollinearWithDatumAxis
+                    | ResolvedConstraintKind::SymmetricAboutDatumAxis,
                 ..
             }
         );
@@ -1290,6 +1299,11 @@ fn constraint_operands(
             selected(SelectionItem::Point(fixture.points[5])),
             selected(SelectionItem::Curve(fixture.lines[1])),
         ],
+        ResolvedConstraintKind::SymmetricAboutDatumAxis => vec![
+            selected(SelectionItem::Point(fixture.points[4])),
+            selected(SelectionItem::Point(fixture.points[5])),
+            selected(SelectionItem::Datum(oracle_axis_datum(variant).0)),
+        ],
         ResolvedConstraintKind::CurveTangency => vec![
             picked(SelectionItem::Curve(fixture.lines[0]), p),
             picked(
@@ -1325,7 +1339,8 @@ fn constraint_operands(
             | ResolvedConstraintKind::EqualCurvature
             | ResolvedConstraintKind::Midpoint
             | ResolvedConstraintKind::CurveTangency
-            | ResolvedConstraintKind::EndpointContinuity => operands.reverse(),
+            | ResolvedConstraintKind::EndpointContinuity
+            | ResolvedConstraintKind::SymmetricAboutDatumAxis => operands.reverse(),
             ResolvedConstraintKind::SymmetricAboutLine => operands.swap(0, 1),
             ResolvedConstraintKind::FixedPoint
             | ResolvedConstraintKind::HorizontalLine
@@ -1389,6 +1404,26 @@ fn authoring_application(
     options: AuthoringOptions,
     compare_preselection: bool,
 ) -> OracleResult<AuthoringApplication> {
+    // Active Symmetric authoring intentionally remains point -> point -> reference.
+    // A datum-first permutation is nevertheless a complete valid preselection,
+    // so exercise that path directly instead of pretending it is an active prefix.
+    if matches!(
+        (tool, operands.first().map(|operand| operand.item)),
+        (
+            AuthoringTool::Constraint(ConstraintIntent::Symmetric),
+            Some(SelectionItem::Datum(_))
+        )
+    ) {
+        let mut authoring = AuthoringState::default();
+        authoring.set_options(options);
+        return match authoring.activate(document, tool, operands) {
+            AuthoringOutcome::Apply(application) => Ok(application),
+            other => Err(defect(
+                "authoring.preselection",
+                format!("complete compatible datum-first preselection returned {other:?}"),
+            )),
+        };
+    }
     let preselected = if compare_preselection {
         let mut authoring = AuthoringState::default();
         authoring.set_options(options);
@@ -1930,6 +1965,13 @@ fn validate_constraint_definition(
         SelectionItem::Datum(datum) => Some(*datum),
         _ => None,
     });
+    let selected_points = items
+        .iter()
+        .filter_map(|item| match item {
+            SelectionItem::Point(point) => Some(*point),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
     let exact = match (kind, definition) {
         (
             ResolvedConstraintKind::FixedPoint,
@@ -2113,6 +2155,17 @@ fn validate_constraint_definition(
                 line,
             },
         ) => Some(*first) == point(0) && Some(*second) == point(1) && Some(*line) == span(2),
+        (
+            ResolvedConstraintKind::SymmetricAboutDatumAxis,
+            DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                first,
+                second,
+                axis,
+            },
+        ) => {
+            selected_points.as_slice() == [*first, *second]
+                && selected_datum.and_then(SketchDatum::coordinate_axis) == Some(*axis)
+        }
         (
             ResolvedConstraintKind::CurveTangency,
             DocumentConstraintDefinition::CurveCurveTangency {
@@ -2678,6 +2731,30 @@ fn validate_constraint_geometry(
             let across = [second[0] - first[0], second[1] - first[1]];
             cross(direction, offset).abs() <= tolerance * vector_length(direction)
                 && dot(direction, across).abs() <= tolerance * vector_length(direction)
+        }
+        DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+            first,
+            second,
+            axis,
+        } => {
+            let first = document
+                .point(*first)
+                .expect("datum symmetric first")
+                .position;
+            let second = document
+                .point(*second)
+                .expect("datum symmetric second")
+                .position;
+            match axis {
+                DocumentCoordinateAxis::X => {
+                    (0.5 * (first[1] + second[1])).abs() <= tolerance
+                        && (second[0] - first[0]).abs() <= tolerance
+                }
+                DocumentCoordinateAxis::Y => {
+                    (0.5 * (first[0] + second[0])).abs() <= tolerance
+                        && (second[1] - first[1]).abs() <= tolerance
+                }
+            }
         }
         DocumentConstraintDefinition::PointOnCurve { point, contact } => {
             let contact_position = document

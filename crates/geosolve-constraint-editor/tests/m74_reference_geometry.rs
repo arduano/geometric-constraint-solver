@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    AuthoringOutcome, AuthoringState, AuthoringTool, ConstraintIntent, ConstructionCommitPlan,
-    ConstructionPoint, ConstructionProposal, DraftInferenceEngine, DraftInferenceFrame,
+    AuthoringMutation, AuthoringOperand, AuthoringOperandKind, AuthoringOutcome, AuthoringState,
+    AuthoringTool, AuthoringWarning, ConstraintIntent, ConstructionCommitPlan, ConstructionPoint,
+    ConstructionProposal, DisabledReason, DraftInferenceEngine, DraftInferenceFrame,
     DraftInferenceInput, DraftInferenceLimits, DraftInferenceRelation, DraftInferenceSample,
     DraftInferenceSceneInputCollection, DraftInferenceStatus, DraftInferenceSubject,
     DraftPointSlot, DraftSpanSlot, EditorScene, GeometryInteractionPolicy, GeometryVisibility,
     InferredRelation, PickTolerance, ResolvedConstraintKind, RetainedEditorCoordinator,
-    ScreenPoint, SelectionItem, Viewport,
+    SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph, ScreenPoint, SelectionItem,
+    Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentCoordinateAxis,
@@ -286,6 +288,326 @@ fn datum_contextual_relations_are_order_symmetric_and_axis_parallelism_is_ordina
         coordinator.resolved_constraint(ConstraintIntent::Collinear),
         None
     );
+}
+
+fn datum_axis_symmetry_fixture() -> (
+    SketchDocument,
+    geosolve_sketch::DesignPointId,
+    geosolve_sketch::DesignPointId,
+) {
+    let mut document = SketchDocument::new(1.0).expect("document");
+    let first = document.add_point("first", [2.0, 3.0]).expect("point");
+    let second = document.add_point("second", [4.0, -1.0]).expect("point");
+    (document, first, second)
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn datum_axis_symmetry_preselection_accepts_every_operand_permutation() {
+    let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+    for datum in [SketchDatum::XAxis, SketchDatum::YAxis] {
+        for permutation in [
+            [0_u8, 1, 2],
+            [1, 0, 2],
+            [0, 2, 1],
+            [1, 2, 0],
+            [2, 0, 1],
+            [2, 1, 0],
+        ] {
+            let (document, first, second) = datum_axis_symmetry_fixture();
+            let (mut coordinator, _) = retained_scene(document, viewport);
+            let values = [
+                SelectionItem::Point(first),
+                SelectionItem::Point(second),
+                SelectionItem::Datum(datum),
+            ];
+            let operands =
+                permutation.map(|index| AuthoringOperand::selected(values[usize::from(index)]));
+            let mut authoring = AuthoringState::default();
+            let AuthoringOutcome::Apply(application) = authoring.activate(
+                coordinator.session().design_document(),
+                AuthoringTool::Constraint(ConstraintIntent::Symmetric),
+                &operands,
+            ) else {
+                panic!("{datum:?} permutation {permutation:?} must apply")
+            };
+            assert_eq!(
+                application.resolved_constraint,
+                Some(ResolvedConstraintKind::SymmetricAboutDatumAxis)
+            );
+            assert!(matches!(
+                application.operands.as_slice(),
+                [
+                    AuthoringOperand {
+                        item: SelectionItem::Point(_),
+                        ..
+                    },
+                    AuthoringOperand {
+                        item: SelectionItem::Point(_),
+                        ..
+                    },
+                    AuthoringOperand {
+                        item: SelectionItem::Datum(actual),
+                        ..
+                    }
+                ] if *actual == datum
+            ));
+            let history = (coordinator.history_len(), coordinator.history_cursor());
+            let AuthoringMutation::Constraint(outcome) = coordinator
+                .apply_authoring(coordinator.session().design_identity(), &application)
+                .expect("datum-axis symmetry application")
+            else {
+                panic!("symmetric authoring must create a constraint")
+            };
+            assert!(outcome.published_accepted.is_some());
+            assert_eq!(
+                (coordinator.history_len(), coordinator.history_cursor()),
+                (history.0 + 1, history.1 + 1)
+            );
+            let definition = &coordinator
+                .session()
+                .design_document()
+                .constraint(outcome.value)
+                .expect("stored symmetry")
+                .definition;
+            let DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                first: stored_first,
+                second: stored_second,
+                axis,
+            } = definition
+            else {
+                panic!("axis symmetry must retain its exact definition")
+            };
+            assert_ne!(stored_first, stored_second);
+            assert!([first, second].contains(stored_first));
+            assert!([first, second].contains(stored_second));
+            assert_eq!(*axis, datum.coordinate_axis().unwrap());
+        }
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one datum-axis symmetry checkpoint covers active authoring, scene ownership, lifecycle and reload"
+)]
+fn datum_axis_symmetry_active_authoring_scene_lifecycle_and_reload_are_exact() {
+    let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+    let (document, first, second) = datum_axis_symmetry_fixture();
+    let (mut coordinator, _) = retained_scene(document, viewport);
+    let tool = AuthoringTool::Constraint(ConstraintIntent::Symmetric);
+    let selected = AuthoringOperand::selected;
+    let mut authoring = AuthoringState::default();
+    assert!(matches!(
+        authoring.activate(coordinator.session().design_document(), tool, &[]),
+        AuthoringOutcome::ModeEntered {
+            expected,
+            ..
+        } if expected == [AuthoringOperandKind::Point]
+    ));
+    assert!(matches!(
+        authoring.pick(
+            coordinator.session().design_document(),
+            selected(SelectionItem::Point(first)),
+        ),
+        AuthoringOutcome::Collecting {
+            expected,
+            ..
+        } if expected == [AuthoringOperandKind::Point]
+    ));
+    assert!(matches!(
+        authoring.pick(
+            coordinator.session().design_document(),
+            selected(SelectionItem::Point(first)),
+        ),
+        AuthoringOutcome::Warning(AuthoringWarning {
+            reason: DisabledReason::SameSemanticOperand,
+            ..
+        })
+    ));
+    assert_eq!(authoring.pending().len(), 1);
+    assert!(matches!(
+        authoring.pick(
+            coordinator.session().design_document(),
+            selected(SelectionItem::Point(second)),
+        ),
+        AuthoringOutcome::Collecting {
+            expected,
+            ..
+        } if expected == [AuthoringOperandKind::Line, AuthoringOperandKind::DatumAxis]
+    ));
+    let history_before_rejections = (coordinator.history_len(), coordinator.history_cursor());
+    let payload_before_rejections = coordinator.checkpoint().design_json().to_owned();
+    assert!(matches!(
+        authoring.pick(
+            coordinator.session().design_document(),
+            selected(SelectionItem::Datum(SketchDatum::Origin)),
+        ),
+        AuthoringOutcome::Warning(AuthoringWarning {
+            reason: DisabledReason::WrongOperandKind,
+            expected,
+            ..
+        }) if expected == [AuthoringOperandKind::Line, AuthoringOperandKind::DatumAxis]
+    ));
+    assert_eq!(authoring.pending().len(), 2);
+    assert_eq!(
+        (coordinator.history_len(), coordinator.history_cursor()),
+        history_before_rejections
+    );
+    assert_eq!(
+        coordinator.checkpoint().design_json(),
+        payload_before_rejections
+    );
+
+    let AuthoringOutcome::Apply(application) = authoring.pick(
+        coordinator.session().design_document(),
+        selected(SelectionItem::Datum(SketchDatum::XAxis)),
+    ) else {
+        panic!("X axis must complete active symmetry authoring")
+    };
+    assert_eq!(
+        application.resolved_constraint,
+        Some(ResolvedConstraintKind::SymmetricAboutDatumAxis)
+    );
+    let AuthoringMutation::Constraint(outcome) = coordinator
+        .apply_authoring(coordinator.session().design_identity(), &application)
+        .expect("axis symmetry")
+    else {
+        panic!("axis symmetry must create a constraint")
+    };
+    assert!(outcome.published_accepted.is_some());
+    let constraint = outcome.value;
+    authoring.transaction_finished();
+    assert!(authoring.pending().is_empty());
+    assert_eq!(authoring.active_tool(), Some(tool));
+
+    let saved = coordinator
+        .persistence_checkpoint()
+        .expect("draft-v5 checkpoint");
+    assert!(saved.design_uses_draft_v5());
+    assert!(saved.accepted_uses_draft_v5());
+    assert!(saved.accepted_belongs_to_current_design());
+    let accepted = coordinator
+        .session()
+        .accepted_state()
+        .expect("accepted symmetry");
+    let scene = EditorScene::from_accepted_for_design(
+        accepted.identity().revision().get(),
+        coordinator.session().design_identity(),
+        accepted.document(),
+        coordinator.session().design_document(),
+        viewport,
+        0.5,
+    )
+    .expect("symmetry scene");
+    let expected_operands = vec![
+        SelectionItem::Point(first),
+        SelectionItem::Point(second),
+        SelectionItem::Datum(SketchDatum::XAxis),
+    ];
+    let entry = scene
+        .constraint_entries
+        .iter()
+        .find(|entry| entry.id == constraint)
+        .expect("constraint entry");
+    assert_eq!(entry.glyph, SceneConstraintGlyph::Symmetry);
+    assert_eq!(entry.operands, expected_operands);
+    let annotation = scene
+        .annotations
+        .iter()
+        .find(|annotation| annotation.item == SelectionItem::Constraint(constraint))
+        .expect("constraint annotation");
+    assert_eq!(
+        annotation.kind,
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Symmetry)
+    );
+    assert_eq!(annotation.operands, expected_operands);
+    assert!(annotation.is_visible(&[SelectionItem::Datum(SketchDatum::XAxis)], None, &[]));
+    let SceneAnnotationGeometry::Glyph { markers } = &annotation.geometry else {
+        panic!("symmetry must publish glyph geometry")
+    };
+    assert_eq!(markers.len(), 1);
+    let first_screen = scene
+        .points
+        .iter()
+        .find(|point| point.id == first)
+        .unwrap()
+        .screen_position;
+    let second_screen = scene
+        .points
+        .iter()
+        .find(|point| point.id == second)
+        .unwrap()
+        .screen_position;
+    assert_eq!(
+        markers[0].anchor,
+        ScreenPoint {
+            x: 0.5 * (first_screen.x + second_screen.x),
+            y: 0.5 * (first_screen.y + second_screen.y),
+        }
+    );
+
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Constraint(constraint)]);
+    coordinator
+        .set_selected_suppressed(coordinator.session().design_identity(), true)
+        .expect("suppress symmetry");
+    assert!(
+        coordinator
+            .session()
+            .design_document()
+            .constraint(constraint)
+            .unwrap()
+            .suppressed
+    );
+    coordinator.undo().expect("undo suppression");
+    assert!(
+        !coordinator
+            .session()
+            .design_document()
+            .constraint(constraint)
+            .unwrap()
+            .suppressed
+    );
+    coordinator.redo().expect("redo suppression");
+    coordinator.undo().expect("restore active symmetry");
+
+    coordinator
+        .delete_selected(coordinator.session().design_identity())
+        .expect("delete symmetry");
+    assert!(
+        coordinator
+            .session()
+            .design_document()
+            .constraint(constraint)
+            .is_none()
+    );
+    coordinator.undo().expect("undo delete");
+    assert!(
+        coordinator
+            .session()
+            .design_document()
+            .constraint(constraint)
+            .is_some()
+    );
+    coordinator.redo().expect("redo delete");
+    coordinator
+        .reload(&saved)
+        .expect("reload draft-v5 symmetry");
+    assert!(matches!(
+        coordinator
+            .session()
+            .design_document()
+            .constraint(constraint)
+            .unwrap()
+            .definition,
+        DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+            axis: DocumentCoordinateAxis::X,
+            ..
+        }
+    ));
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]

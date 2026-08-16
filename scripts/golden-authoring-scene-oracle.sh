@@ -65,6 +65,7 @@ families=(
   constraint.coincident-with-origin
   constraint.point-on-datum-axis
   constraint.collinear-with-datum-axis
+  constraint.symmetric-about-datum-axis
 )
 
 authoring_cases=(
