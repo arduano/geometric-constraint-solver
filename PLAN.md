@@ -69,7 +69,8 @@ release gate with those focused regressions, the unchanged 198/198 golden and by
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
 of every prepared UAT step. M71-M74 are complete; M74 closes under explicit scoped approval of its
 clean-qualified frozen candidate and exact final Pages publication, while hands-on UAT remains
-deferred to an unstarted follow-up milestone. M66's
+deferred to the now-active M75 follow-up milestone. M75 implementation, clean qualification and
+immutable Tailscale nomination pass; combined human UAT and M75 Pages publication remain open. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4529,8 +4530,8 @@ The exact seven gate-produced files were copied without rebuilding to read-only
 Tailscale at `http://100.94.63.83:8080/` by PID `3870531`. Proxy/cache-bypassed identity fetches of
 all seven files and `/` return HTTP 200 with expected media types and exact bytes; `/` equals
 `index.html`, and the fetched aggregate matches. Old PID `3403533` has exited; historical snapshot
-`/tmp/geosolve-m73-uat.5EhWNL` remains. The replacement is current UAT authority. Only focused human
-UAT and explicit approval remained open at that nomination checkpoint.
+`/tmp/geosolve-m73-uat.5EhWNL` remains. The replacement was current UAT authority at that
+nomination checkpoint. Only focused human UAT and explicit approval remained open then.
 
 Final closure note (2026-08-15): the supervising caller reported that the focused behavior works
 and explicitly requested M73 closure. M73-U1 through M73-U4 are accepted under that scoped close
@@ -4638,7 +4639,7 @@ includes formatting, warnings-denied workspace Clippy, locked all-feature worksp
 compilation, M14/M32 performance, the release 256-moving-body sparse crossover in 86.79 seconds,
 licensing/package checks and Trunk 0.21.14 release assembly. Its exact seven-file output was copied
 without rebuilding to read-only `/tmp/geosolve-m74-uat.jFfAm4`, ordered-manifest aggregate
-`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, and is served by PID
+`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, and was served by PID
 `2599593` at `http://100.94.63.83:8080/`. Proxy/cache-bypassed identity fetches of `/` and every
 asset return HTTP 200 with exact lengths, media types and bytes; `/` equals `index.html` and the
 fetched aggregate matches. M72 compatibility and M74 Chromium checks pass at `1440x900` and
@@ -4729,7 +4730,7 @@ Mechanical nomination checkpoint (2026-08-16): exact clean product source
 gate-produced seven-file distribution was copied without rebuilding to read-only
 `/tmp/geosolve-m75-uat.hUSaG7`, C-locale ordered-manifest aggregate
 `69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`, and is served by PID
-`3757674` at `http://100.94.63.83:8080/`. Proxy/cache-bypassed identity requests verify every file
+`3801058` at `http://100.94.63.83:8080/`. Proxy/cache-bypassed identity requests verify every file
 and `/` byte-for-byte with exact lengths and media types; `/` equals `index.html`, and both the M72
 compatibility and M74 Chromium checks pass at `1440x900` and `1024x720`. This is mechanical M75
 nomination only: M74-U1 through M74-U8 and M75-U9 through M75-U12 remain pending, GitHub Pages

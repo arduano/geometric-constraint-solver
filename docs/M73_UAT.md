@@ -53,8 +53,8 @@ Historical F001-F003 source `efde645345577f44e0d6b691f7ca27eb587c4b53` and snaps
 `/tmp/geosolve-m73-uat.5EhWNL` remain preserved, but PID `3403533` has exited and those bytes are not
 current UAT authority.
 
-The accepted Tailscale snapshot remains live for convenient follow-up UAT. Final public release
-authority is documentation-only approval descendant
+The accepted Tailscale snapshot remains read-only historical evidence, but its server has retired.
+Final public release authority is documentation-only approval descendant
 `ef7b90feb17bfba62c45f9463ceb934fc34e6f4d`, successful Pages run `31878139709` and artifact
 `9245585021` at `https://arduano.github.io/geometric-constraint-solver/`. The public root and all
 seven paths return HTTP 200 and byte-match that downloaded artifact; `/` equals `index.html`, asset

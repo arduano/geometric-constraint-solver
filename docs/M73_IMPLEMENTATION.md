@@ -198,7 +198,7 @@ remains as historical evidence.
 
 M73-F004 withdraws this snapshot and endpoint from current UAT authority. The bytes, hashes and
 clean-gate result remain historical F001-F003 evidence; they are not a replacement candidate for
-the implemented F004 correction. The qualified replacement below now owns current UAT authority.
+the implemented F004 correction. The qualified replacement below then became UAT authority.
 
 ## Current F004 replacement qualification and nomination
 
@@ -238,7 +238,8 @@ The exact gate-produced distribution was copied without rebuilding to
 The C-locale `sha256sum *` aggregate is
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`.
 
-PID `3870531` serves only this snapshot at `http://100.94.63.83:8080/` with exact argv:
+At nomination, PID `3870531` served only this snapshot at `http://100.94.63.83:8080/` with exact
+argv:
 
 ```text
 python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m73-uat.JKAWtJ
@@ -248,7 +249,8 @@ Its executable is
 `/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`.
 Proxy/cache-bypassed, identity-encoded requests for all seven files and `/` return HTTP 200 with
 the expected media types and compare byte-for-byte. `/` equals `index.html`, and the fetched
-aggregate equals the frozen aggregate. This replacement is current UAT authority.
+aggregate equals the frozen aggregate. This replacement was current UAT authority at nomination;
+the PID has since retired and the read-only snapshot remains historical evidence.
 
 ## Final GitHub Pages publication
 

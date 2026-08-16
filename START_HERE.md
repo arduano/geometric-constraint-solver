@@ -143,7 +143,10 @@ desktop polish. Its exact clean product source `55693372bea4759c9a67eee14f1af3d6
 and read-only snapshot `/tmp/geosolve-m74-uat.jFfAm4` are qualified and byte-verified. The
 supervising caller approved scoped M74 closure from that evidence, and exact final GitHub Pages
 publication passes. Hands-on UAT remains deferred, not passed, and transfers with any findings to
-the next bug-fixing/UAT batch, which remains unstarted.
+active M75. M75 unifies Select hover and primary pointer-down ownership in the headless editor;
+exact clean product source `f3affff1b62b1cb484a59647c4072c94c3b12ada` is qualified and its
+immutable seven-file snapshot is byte-verified at `http://100.94.63.83:8080/`. Every carried M74
+and new M75 human item remains pending, and GitHub Pages intentionally remains on accepted M74.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -160,6 +163,8 @@ support and physics remain outside future acceptance.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
+11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — active hover/click
+    ownership milestone, clean candidate evidence and pending combined human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -434,11 +439,19 @@ independent review, two-size Chromium checks and immutable seven-file snapshot
 `/tmp/geosolve-m74-uat.jFfAm4` with aggregate
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`. The supervising caller
 explicitly approved scoped closure on 2026-08-16. U1-U8 remain deferred and transfer with any
-future findings to the next bug-fixing/UAT batch; that milestone is not started. Documentation-only
+future findings to active M75. Documentation-only
 approval descendant `b6b1d62b49466ea06522dbdd3f5444a324d36584` passes GitHub Pages run
 `31923806117` and deploys artifact `9257602997`; the public seven-file manifest aggregate is
 `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`, every public path
 byte-matches the artifact, and the public M72/M74 two-size Chromium checks pass.
+M75 is implemented, clean-qualified and nominated for human UAT. One headless Select resolver owns
+hover and primary pointer-down order, problem-forced annotations share the ordinary hit path,
+context corridors remain targetless, and lifecycle changes revoke stale hover. Product source
+`f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
+`7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete clean gate; immutable snapshot
+`/tmp/geosolve-m75-uat.hUSaG7`, aggregate
+`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`, is served and
+byte-verified at `http://100.94.63.83:8080/`. Human UAT and M75 Pages publication remain pending.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -512,6 +525,9 @@ Durable milestone and cleanup records:
 - `docs/M74_GOALS.md` (completed scoped-close and public-release scope)
 - `docs/M74_IMPLEMENTATION.md` (clean qualification, frozen artifact and final-publication ledger)
 - `docs/M74_UAT.md` (explicitly deferred hands-on scorecard and scoped approval record)
+- `docs/M75_GOALS.md` (active hover/click ownership and carried-UAT scope)
+- `docs/M75_IMPLEMENTATION.md` (implemented behavior and clean frozen-candidate ledger)
+- `docs/M75_UAT.md` (current combined M74/M75 human scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

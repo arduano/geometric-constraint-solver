@@ -103,7 +103,7 @@ Mechanical nomination record (2026-08-16): exact clean product source
 unchanged 270-row golden oracle and native/WASM M75 parity. The gate-produced distribution was
 copied without rebuilding to seven-file read-only snapshot `/tmp/geosolve-m75-uat.hUSaG7`, whose
 C-locale ordered-manifest aggregate is
-`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`. PID `3757674` serves it at
+`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`. PID `3801058` serves it at
 `http://100.94.63.83:8080/`; direct byte/media verification and both retained two-size Chromium
 checks pass. This record satisfies only the mechanical portion of M75-Q001. M74-U1 through M74-U8,
 M75-U9 through M75-U12, final human approval and GitHub Pages publication remain open.

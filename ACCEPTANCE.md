@@ -181,7 +181,8 @@ the two-previously-Current transaction and CircularArc transport/domain regressi
 without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72-M74 are
 complete under their scoped approvals and exact final public-artifact verification. M74's separate
 hands-on UAT is deferred without being marked passed and transfers to the next bug-fixing/UAT
-follow-up milestone, which remains unstarted.
+follow-up milestone, now active as M75. M75's implementation, clean qualification and immutable
+Tailscale nomination pass; its combined human scorecard and final public publication remain open.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1882,8 +1883,8 @@ plus all integrations, public M73 3/3, unchanged golden 234/234, native/WASM par
 formatting/Clippy/tests/Rustdoc, benchmark compilation, M14/M32 performance, licensing/packaging,
 the 256-moving-body sparse crossover in 135.18 seconds and Trunk 0.21.14 all pass. The exact
 gate-produced read-only snapshot `/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
-`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, is byte-verified at
-`http://100.94.63.83:8080/` and is current UAT authority.
+`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, was byte-verified at
+`http://100.94.63.83:8080/` and was current UAT authority at nomination.
 
 Human result (2026-08-15): the supervising caller confirmed that the focused behavior works and
 explicitly requested milestone closure. M73-U1 through M73-U4 pass under that scoped close
@@ -2020,7 +2021,7 @@ Mechanical nomination result (2026-08-16): exact product source
 `7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete clean release gate. Its exact
 read-only seven-file snapshot `/tmp/geosolve-m75-uat.hUSaG7`, C-locale ordered-manifest aggregate
 `69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`, is served and byte-verified
-at `http://100.94.63.83:8080/` by PID `3757674`; the unchanged M72 compatibility and M74 Chromium
+at `http://100.94.63.83:8080/` by PID `3801058`; the unchanged M72 compatibility and M74 Chromium
 checks pass at both desktop sizes. This satisfies mechanical nomination only. Every M74-U1 through
 M74-U8 carryover and M75-U9 through M75-U12 item remains pending, no supervising-human M75
 disposition exists, and GitHub Pages remains on accepted M74.

@@ -12,7 +12,7 @@ Candidate tree: `7662abc8b7c71130f54fbf2745afa60f0d286431`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Server PID: `3757674` (retained command-runner session `23697`)
+Server PID: `3801058` (retained command-runner session `47845`)
 
 Immutable snapshot: `/tmp/geosolve-m75-uat.hUSaG7` (directory `0555`, files `0444`)
 
@@ -39,7 +39,7 @@ rebuilding and contains exactly seven regular non-symlink files.
 
 Proxy/cache-bypassed identity requests for all seven files and `/` return HTTP 200 with exact media
 types, lengths and bytes, no redirect or content encoding; `/` equals `index.html`, and the fetched
-aggregate matches. Evidence is retained at `/tmp/geosolve-m75-http-verify.iY4VKV`. The unchanged
+aggregate matches. Evidence is retained at `/tmp/geosolve-m75-http-verify.sQGN1B`. The unchanged
 M72 compatibility and M74 Chromium scripts pass at `1440x900` and `1024x720`; their SHA-256 values
 are `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`. These mechanical checks do

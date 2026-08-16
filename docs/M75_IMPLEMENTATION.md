@@ -216,7 +216,7 @@ The C-locale `sha256sum * | sha256sum` aggregate is
 before and after the copy, every source/snapshot pair compared equal, and the read-only snapshot
 aggregate was rechecked after its modes changed.
 
-PID `3757674`, retained in command-runner session `23697`, serves only this snapshot at
+PID `3801058`, retained in command-runner session `47845`, serves only this snapshot at
 `http://100.94.63.83:8080/` with exact argv:
 
 ```text
@@ -227,12 +227,14 @@ The exact old M74 PID `2599593` was retired only after the M75 snapshot was comp
 snapshot `/tmp/geosolve-m74-uat.jFfAm4` remains read-only and unserved. An initial detached M75
 server launch was reaped with its launcher, so its first verifier failed closed with `curl` status
 7 before transferring a file. The retained foreground server above was then started and every
-verification was rerun in a fresh evidence directory; candidate bytes were unchanged.
+verification was rerun in a fresh evidence directory; candidate bytes were unchanged. The first
+retained process was subsequently reaped when its delegated command session ended before human
+handoff; PID `3801058` now serves the same revalidated read-only snapshot from the root session.
 
 Proxy/cache-bypassed, identity-encoded requests for `/` and all seven files return HTTP 200 with
 exact media types, content lengths and bytes, zero redirects and no content encoding. `/` equals
 `index.html`, and the fetched ordered aggregate matches the frozen aggregate. Successful HTTP
-evidence is retained at `/tmp/geosolve-m75-http-verify.iY4VKV`.
+evidence is retained at `/tmp/geosolve-m75-http-verify.sQGN1B`.
 
 The unchanged compatibility scripts pass directly over Tailscale at `1440x900` and `1024x720`:
 

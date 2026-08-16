@@ -1341,7 +1341,8 @@ the final GitHub Pages artifact. M73 adds no new editable sample or browser scen
 explicit scoped closure approval on its clean-qualified, byte-verified F001 replacement. Its
 hands-on intrinsic-datum and desktop-polish scorecard is intentionally deferred into the next
 bug-fixing/UAT follow-up milestone rather than claimed as completed human evidence. Exact final
-M74 Pages publication passes, and the next milestone remains unstarted.
+M74 Pages publication passes. That follow-up is active as M75: its implementation, clean gate and
+immutable Tailscale nomination pass, while every carried and new human disposition remains pending.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1759,10 +1760,10 @@ Clean replacement qualification/publication (2026-08-15): exact product source
 workspace/documentation/package/performance matrix, 135.18-second 256-body sparse crossover and
 Trunk 0.21.14 success. Its exact seven-file read-only snapshot
 `/tmp/geosolve-m73-uat.JKAWtJ`, aggregate
-`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, is served only on
-Tailscale at `http://100.94.63.83:8080/` and byte-verifies file-by-file plus `/`. It is current UAT
-authority. The old server exited while its historical snapshot remains. M73 remained open only for
-focused human UAT and explicit approval at that nomination checkpoint.
+`3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`, was served only on
+Tailscale at `http://100.94.63.83:8080/` and byte-verified file-by-file plus `/`. It was current UAT
+authority at that nomination checkpoint. The old server exited while its historical snapshot
+remains. M73 remained open only for focused human UAT and explicit approval then.
 
 Scoped closure (2026-08-15): the supervising caller confirmed that the focused behavior works and
 requested milestone closure. M73-U1 through M73-U4 are accepted for the recorded scope; direct
@@ -1855,7 +1856,7 @@ the mapped sketch plane and existing captured-gesture completion remain unchange
 presentation tests own translation; `docs/M74_UAT.md` preserves the hands-on feel scorecard. Clean
 qualification and immutable Tailscale nomination pass. The supervising caller approved scoped M74
 closure on 2026-08-16 without a separate hands-on pass; that scorecard and any findings are
-deferred to the next bug-fixing/UAT follow-up milestone, which remains unstarted.
+deferred to the now-active M75 bug-fixing/UAT follow-up milestone.
 
 Final public publication (2026-08-16): accepted product source
 `55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
@@ -1867,11 +1868,12 @@ aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`.
 and all seven paths return HTTP 200 and match the artifact byte-for-byte; `/` equals `index.html`,
 application URLs are repository-prefixed, media types are correct, and both public two-size
 Chromium checks pass. The separate Tailscale bytes remain frozen-candidate evidence, not public
-publication authority. U1-U8 and future findings remain deferred to the unstarted follow-up.
+publication authority. U1-U8 and future findings are carried by active M75.
 
 ### M75-H1 - Select hover predicts the primary pointer-down owner
 
-Status: implemented and prequalified natively and under WASM; clean candidate evidence is pending.
+Status: implemented and clean-qualified natively and under WASM; immutable Tailscale nomination
+passes and hands-on evidence remains pending.
 
 Construct finite accepted scenes whose projected hit envelopes overlap at every adjacent priority
 edge. For the same Select tool, scene, camera, problem set, policy and pointer coordinate, resolve
@@ -1894,7 +1896,8 @@ hover sample mutates accepted geometry, selection, history, Fillet state or scen
 
 ### M75-H2 - Problem annotations, deterministic occurrences and targetless context
 
-Status: implemented and prequalified natively and under WASM; clean candidate evidence is pending.
+Status: implemented and clean-qualified natively and under WASM; immutable Tailscale nomination
+passes and hands-on evidence remains pending.
 
 Create one constraint and one dimension occurrence that are normally hidden but forced visible by
 the current problem set. Each visible occurrence participates in the same annotation hit path used
@@ -1912,7 +1915,8 @@ placement, visibility, fan-out and hit tolerances remain unchanged.
 
 ### M75-H3 - Hover authority is revoked with its interaction context
 
-Status: implemented and prequalified; clean candidate and hands-on evidence are pending.
+Status: implemented and clean-qualified; immutable Tailscale nomination passes and hands-on
+evidence remains pending.
 
 Acquire each owner class, then change the active tool or selection, pan/zoom/Fit/Origin camera,
 replace the accepted scene through edit/Undo/Redo/reload, hide the relevant visibility class, or
