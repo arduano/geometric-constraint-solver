@@ -34,6 +34,7 @@ const CANVAS_PAN_POINTER_EVENTS: [&str; 3] = ["pointerdown", "pointermove", "poi
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CanvasPointerCaptureKind {
     Point,
+    Annotation,
     Fillet,
     Pan,
 }
@@ -177,6 +178,9 @@ const fn canvas_pointer_capture_kind(
     match kind {
         geosolve_constraint_editor::ActivePointerGestureKind::Point => {
             CanvasPointerCaptureKind::Point
+        }
+        geosolve_constraint_editor::ActivePointerGestureKind::Annotation => {
+            CanvasPointerCaptureKind::Annotation
         }
         geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
         | geosolve_constraint_editor::ActivePointerGestureKind::FilletContact => {
@@ -563,6 +567,116 @@ fn screen_distance(
     second: geosolve_constraint_editor::ScreenPoint,
 ) -> f64 {
     (first.x - second.x).hypot(first.y - second.y)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AnnotationInspectorPresentation {
+    family: &'static str,
+    detail: String,
+    meta: String,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn annotation_inspector_presentation(
+    scene: Option<&geosolve_constraint_editor::EditorScene>,
+    selection: &[geosolve_constraint_editor::SelectionItem],
+) -> Option<AnnotationInspectorPresentation> {
+    let [item] = selection else {
+        return None;
+    };
+    let annotation = scene?
+        .annotations
+        .iter()
+        .find(|entry| entry.item == *item)?;
+    let meta = match annotation.kind {
+        geosolve_constraint_editor::SceneAnnotationKind::Constraint(_) => format!(
+            "Constraint · {} direct operand{}",
+            annotation.operands.len(),
+            if annotation.operands.len() == 1 {
+                ""
+            } else {
+                "s"
+            },
+        ),
+        _ => format!(
+            "{} dimension · Canvas value {}",
+            if annotation.reference {
+                "Reference"
+            } else {
+                "Driving"
+            },
+            annotation.visible_text.as_deref().unwrap_or("—"),
+        ),
+    };
+    Some(AnnotationInspectorPresentation {
+        family: annotation_family_name(annotation.kind),
+        detail: annotation.accessible_label.clone(),
+        meta,
+    })
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn annotation_family_name(
+    kind: geosolve_constraint_editor::SceneAnnotationKind,
+) -> &'static str {
+    use geosolve_constraint_editor::{SceneAnnotationKind, SceneConstraintGlyph};
+
+    match kind {
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Fixed) => "Fixed constraint",
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Coincident) => {
+            "Coincident constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Horizontal) => {
+            "Horizontal constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Vertical) => "Vertical constraint",
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::PointOnCurve) => {
+            "Point-on-curve constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Parallel) => "Parallel constraint",
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Perpendicular) => {
+            "Perpendicular constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Concentric) => {
+            "Concentric constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Collinear) => "Collinear constraint",
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::EqualLength) => {
+            "Equal-length constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::EqualRadius) => {
+            "Equal-radius constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Midpoint) => "Midpoint constraint",
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Symmetry) => "Symmetry constraint",
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Contact) => {
+            "Curve-contact constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Tangency) => "Tangency constraint",
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Direction) => {
+            "Tangent-direction constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Normal) => {
+            "Normal-direction constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::EqualCurvature) => {
+            "Equal-curvature constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Continuity) => {
+            "Endpoint-continuity constraint"
+        }
+        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Fillet) => "Fillet constraint",
+        SceneAnnotationKind::PointDistance => "Point-distance dimension",
+        SceneAnnotationKind::CurveLength => "Curve-length dimension",
+        SceneAnnotationKind::Radius => "Radius dimension",
+        SceneAnnotationKind::Diameter => "Diameter dimension",
+        SceneAnnotationKind::OrientedAngle => "Oriented-angle dimension",
+        SceneAnnotationKind::SupportingLineOffset => "Supporting-line offset dimension",
+        SceneAnnotationKind::ExactTranslatedSegmentOffset => {
+            "Exact translated-segment offset dimension"
+        }
+    }
 }
 
 /// Exactly one nonmodal tool-option family may occupy the canvas overlay stack.
@@ -1070,6 +1184,11 @@ fn compose_editor_scene(
         }
         ComputedSceneState::Withheld | ComputedSceneState::Absent => native_scene()?,
     };
+    let mut scene = scene;
+    if !scene.update_annotation_values(accepted) {
+        return None;
+    }
+    scene.apply_annotation_layout(&coordinator.editor().annotation_layout_for_scene());
     scene.with_retained_session(source).ok()
 }
 
@@ -1112,9 +1231,10 @@ pub(crate) mod wasm {
     };
 
     use super::persistence::{
-        LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, OLDER_V2_STORAGE_KEY, PREVIOUS_STORAGE_KEY,
-        STORAGE_KEY, WorkspaceSnapshot, coordinator_from_reproduction_payload,
-        coordinator_from_snapshot, reproduction_payload_from_coordinator,
+        LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, OLDER_V2_STORAGE_KEY, OLDER_V3_STORAGE_KEY,
+        PREVIOUS_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot,
+        coordinator_from_reproduction_payload, coordinator_from_snapshot,
+        reproduction_payload_from_coordinator,
     };
 
     struct Workbench {
@@ -1126,6 +1246,7 @@ pub(crate) mod wasm {
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         grid_visible: bool,
+        show_all_constraints: bool,
         pan_gesture: Option<PanGesture>,
         pointer_captures: super::CanvasPointerCaptures,
         pointer_moves: Rc<RefCell<super::PointerMoveQueue>>,
@@ -1172,6 +1293,7 @@ pub(crate) mod wasm {
                 .flatten()
                 .or_else(|| storage.get_item(PREVIOUS_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(OLDER_STORAGE_KEY).ok().flatten())
+                .or_else(|| storage.get_item(OLDER_V3_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(OLDER_V2_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(LEGACY_STORAGE_KEY).ok().flatten())
         });
@@ -1196,6 +1318,7 @@ pub(crate) mod wasm {
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             grid_visible: true,
+            show_all_constraints: false,
             pan_gesture: None,
             pointer_captures: super::CanvasPointerCaptures::default(),
             pointer_moves: Rc::new(RefCell::new(super::PointerMoveQueue::default())),
@@ -3410,6 +3533,27 @@ pub(crate) mod wasm {
                 wb.coordinator.editor_mut().set_selection([]);
                 Ok(())
             }
+            "annotation-reset-selected" => {
+                let changed = wb
+                    .coordinator
+                    .editor_mut()
+                    .reset_selected_annotation_layout();
+                wb.notice = if changed {
+                    "Selected annotations returned to automatic placement".into()
+                } else {
+                    "Selected annotations already use automatic placement".into()
+                };
+                Ok(())
+            }
+            "annotation-reset-all" => {
+                let changed = wb.coordinator.editor_mut().reset_all_annotation_layout();
+                wb.notice = if changed {
+                    "All annotations returned to automatic placement".into()
+                } else {
+                    "Annotations already use automatic placement".into()
+                };
+                Ok(())
+            }
             "delete" => delete_selection(wb),
             "geometry-role" => toggle_geometry_role(wb),
             "feature-radius" => apply_selected_feature_radius(document, wb),
@@ -3499,6 +3643,8 @@ pub(crate) mod wasm {
                 | "feature-apply"
                 | "options-close"
                 | "geometry-role"
+                | "annotation-reset-selected"
+                | "annotation-reset-all"
                 | "reproduction-open"
                 | "reproduction-select"
                 | "reproduction-close"
@@ -4466,11 +4612,13 @@ pub(crate) mod wasm {
     }
 
     fn editor_scene(wb: &Workbench) -> Option<EditorScene> {
-        super::compose_editor_scene(
+        let mut scene = super::compose_editor_scene(
             &wb.coordinator,
             wb.camera.viewport(),
             super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
-        )
+        )?;
+        scene.set_show_all_constraint_annotations(wb.show_all_constraints);
+        Some(scene)
     }
 
     fn current_problem_items(
@@ -4641,6 +4789,7 @@ pub(crate) mod wasm {
         )));
         required(document, "wb-selection")?
             .set_text_content(Some(&format!("{} selected", selection.len())));
+        render_annotation_inspector(document, scene.as_ref(), selection)?;
         let problem = problem_text(coordinator, &computed_problems);
         required(document, "wb-problem-text")?
             .set_inner_html(&super::panels::problem_markup(&problem));
@@ -4703,7 +4852,12 @@ pub(crate) mod wasm {
                 )?;
             }
         }
-        render_geometry_controls(document, coordinator, wb.grid_visible)?;
+        render_geometry_controls(
+            document,
+            coordinator,
+            wb.grid_visible,
+            wb.show_all_constraints,
+        )?;
         render_action_availability(document, coordinator, &wb.authoring, &wb.feature_authoring)?;
         render_feature_options(document, &wb.feature_authoring)?;
         render_reproduction_overlay(document, wb.reproduction_overlay_open, &wb.notice)?;
@@ -4736,6 +4890,7 @@ pub(crate) mod wasm {
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
         grid_visible: bool,
+        show_all_constraints: bool,
     ) -> Result<(), JsValue> {
         let policy = coordinator.editor().geometry_interaction_policy();
         let scope_key = match policy.scope {
@@ -4762,6 +4917,7 @@ pub(crate) mod wasm {
                 policy.visibility.reference_geometry,
             ),
             ("wb-show-grid", grid_visible),
+            ("wb-show-all-constraints", show_all_constraints),
         ] {
             if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
                 input.set_checked(visible);
@@ -4885,6 +5041,23 @@ pub(crate) mod wasm {
         };
         required(document, "wb-datum-name")?.set_text_content(Some(name));
         required(document, "wb-datum-detail")?.set_text_content(Some(detail));
+        inspector.remove_attribute("hidden")?;
+        Ok(())
+    }
+
+    fn render_annotation_inspector(
+        document: &Document,
+        scene: Option<&EditorScene>,
+        selection: &[SelectionItem],
+    ) -> Result<(), JsValue> {
+        let inspector = required(document, "wb-annotation-inspector")?;
+        let Some(presentation) = super::annotation_inspector_presentation(scene, selection) else {
+            inspector.set_attribute("hidden", "")?;
+            return Ok(());
+        };
+        required(document, "wb-annotation-family")?.set_text_content(Some(presentation.family));
+        required(document, "wb-annotation-detail")?.set_text_content(Some(&presentation.detail));
+        required(document, "wb-annotation-meta")?.set_text_content(Some(&presentation.meta));
         inspector.remove_attribute("hidden")?;
         Ok(())
     }
@@ -5155,27 +5328,32 @@ pub(crate) mod wasm {
         };
         section.remove_attribute("hidden")?;
         let input = required(document, "wb-dimension-target")?;
+        let semantic_name = coordinator
+            .session()
+            .design_document()
+            .dimension(metadata.dimension)
+            .map_or("Dimension", |dimension| dimension.label.as_str());
         let (label, meta) = match metadata.display_unit {
             DimensionTargetDisplayUnit::ModelUnits => {
                 input.remove_attribute("max")?;
                 (
-                    "Dimension target",
-                    format!("{:?} · model units", metadata.mode),
+                    format!("{semantic_name} target"),
+                    format!("{semantic_name} · {:?} · model units", metadata.mode),
                 )
             }
             DimensionTargetDisplayUnit::AcuteDegrees => {
                 input.set_attribute("max", "90")?;
                 (
-                    "Acute angle target (degrees)",
+                    format!("{semantic_name} acute angle target (degrees)"),
                     format!(
-                        "{:?} · acute supporting-line angle · directed branch retained",
-                        metadata.mode
+                        "{semantic_name} · {:?} · acute supporting-line angle · directed branch retained",
+                        metadata.mode,
                     ),
                 )
             }
         };
         if let Some(element) = document.query_selector("label[for=\"wb-dimension-target\"]")? {
-            element.set_text_content(Some(label));
+            element.set_text_content(Some(&label));
         }
         if let Ok(input) = input.dyn_into::<HtmlInputElement>() {
             let editing = document
@@ -5742,6 +5920,8 @@ pub(crate) mod wasm {
         };
         let grid_visible = checkbox_checked(document, "wb-show-grid")
             .ok_or_else(|| "grid visibility is unavailable".to_owned())?;
+        let show_all_constraints = checkbox_checked(document, "wb-show-all-constraints")
+            .ok_or_else(|| "constraint annotation visibility is unavailable".to_owned())?;
         let policy = GeometryInteractionPolicy { scope, visibility };
         let changed = wb.coordinator.editor().geometry_interaction_policy() != policy;
         let captured_viewport = if changed && !wb.pointer_captures.is_empty() {
@@ -5755,6 +5935,7 @@ pub(crate) mod wasm {
         let effects = wb.coordinator.set_geometry_interaction_policy(policy);
         dispatch_effects(wb, effects);
         wb.grid_visible = grid_visible;
+        wb.show_all_constraints = show_all_constraints;
         if let Some(viewport) = captured_viewport {
             let canceled = cancel_captured_canvas_interactions(
                 &viewport,
@@ -5983,9 +6164,9 @@ mod tests {
         EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
         GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility, Modifiers, PickTolerance,
-        PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry,
-        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneCurveOrigin, ScreenPoint,
-        SelectionItem, Viewport,
+        PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
+        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneConstraintGlyph,
+        SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -6003,9 +6184,10 @@ mod tests {
         CapturedCanvasPointer, DismissibleDisclosure, DraftingPointerSample,
         FilletActionRenderAuthority, ForegroundOverlayEscapeOwner, HistoryShortcut,
         OptionOverlayKind, OptionOverlayState, PointerMoveQueue, ReproductionFocusReturn,
-        apply_validated_reproduction, canvas_cursor_key, canvas_pointer_capture_kind,
-        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
-        coordinate_hud, current_problem_items, foreground_overlay_escape_owner, history_shortcut,
+        annotation_family_name, annotation_inspector_presentation, apply_validated_reproduction,
+        canvas_cursor_key, canvas_pointer_capture_kind, canvas_pointer_move_owner,
+        change_owns_option_control_click, compose_editor_scene, coordinate_hud,
+        current_problem_items, foreground_overlay_escape_owner, history_shortcut,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
         reproduction_overlay_presentation, reproduction_payload_size_label,
@@ -6262,7 +6444,10 @@ mod tests {
         let probe = ScreenPoint { x: 40.0, y: 40.0 };
         annotation.item = item;
         annotation.visibility = SceneAnnotationVisibility::Contextual;
-        annotation.geometry = SceneAnnotationGeometry::Label { anchor: probe };
+        annotation.geometry = SceneAnnotationGeometry::Label {
+            anchor: probe,
+            leader_from: None,
+        };
         scene
             .annotations
             .retain(|annotation| annotation.item == item);
@@ -7148,6 +7333,10 @@ mod tests {
             canvas_pointer_capture_kind(ActivePointerGestureKind::Point),
             CanvasPointerCaptureKind::Point
         );
+        assert_eq!(
+            canvas_pointer_capture_kind(ActivePointerGestureKind::Annotation),
+            CanvasPointerCaptureKind::Annotation
+        );
         for fillet_kind in [
             ActivePointerGestureKind::FilletRadius,
             ActivePointerGestureKind::FilletContact,
@@ -7193,6 +7382,7 @@ mod tests {
         ];
         for kind in [
             CanvasPointerCaptureKind::Point,
+            CanvasPointerCaptureKind::Annotation,
             CanvasPointerCaptureKind::Fillet,
             CanvasPointerCaptureKind::Pan,
         ] {
@@ -7307,12 +7497,217 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one inspector regression keeps the closed twenty-constraint/seven-dimension semantic name catalog exhaustive"
+    )]
+    fn annotation_inspector_uses_scene_semantics_and_names_every_family() {
+        let cases = [
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Fixed),
+                "Fixed constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Coincident),
+                "Coincident constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Horizontal),
+                "Horizontal constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Vertical),
+                "Vertical constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::PointOnCurve),
+                "Point-on-curve constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Parallel),
+                "Parallel constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Perpendicular),
+                "Perpendicular constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Concentric),
+                "Concentric constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Collinear),
+                "Collinear constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::EqualLength),
+                "Equal-length constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::EqualRadius),
+                "Equal-radius constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Midpoint),
+                "Midpoint constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Symmetry),
+                "Symmetry constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Contact),
+                "Curve-contact constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Tangency),
+                "Tangency constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Direction),
+                "Tangent-direction constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Normal),
+                "Normal-direction constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::EqualCurvature),
+                "Equal-curvature constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Continuity),
+                "Endpoint-continuity constraint",
+            ),
+            (
+                SceneAnnotationKind::Constraint(SceneConstraintGlyph::Fillet),
+                "Fillet constraint",
+            ),
+            (
+                SceneAnnotationKind::PointDistance,
+                "Point-distance dimension",
+            ),
+            (SceneAnnotationKind::CurveLength, "Curve-length dimension"),
+            (SceneAnnotationKind::Radius, "Radius dimension"),
+            (SceneAnnotationKind::Diameter, "Diameter dimension"),
+            (
+                SceneAnnotationKind::OrientedAngle,
+                "Oriented-angle dimension",
+            ),
+            (
+                SceneAnnotationKind::SupportingLineOffset,
+                "Supporting-line offset dimension",
+            ),
+            (
+                SceneAnnotationKind::ExactTranslatedSegmentOffset,
+                "Exact translated-segment offset dimension",
+            ),
+        ];
+        assert_eq!(cases.len(), 27);
+        for (kind, expected) in cases {
+            assert_eq!(annotation_family_name(kind), expected);
+        }
+
+        let mut document = SketchDocument::new(8.0).expect("inspector document");
+        let start = document
+            .add_point("inspector start", [0.0, 0.0])
+            .expect("start");
+        let end = document
+            .add_point("inspector end", [4.0, 0.0])
+            .expect("end");
+        let line = document
+            .add_curve(
+                "inspector line",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        let constraint = document
+            .add_constraint(
+                "Workbench horizontal",
+                DocumentConstraintDefinition::Horizontal {
+                    line: CurveSpan::line(line),
+                },
+            )
+            .expect("horizontal constraint");
+        let target = document
+            .add_scalar(
+                "Workbench distance target",
+                4.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("distance target");
+        let dimension = document
+            .add_dimension(
+                "Workbench endpoint distance",
+                DocumentDimensionDefinition::PointDistance {
+                    first: start,
+                    second: end,
+                    target,
+                },
+                DocumentDimensionMode::Reference,
+            )
+            .expect("point-distance dimension");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("inspector session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("inspector coordinator");
+        let scene = compose_editor_scene(
+            &coordinator,
+            Viewport::new([800.0, 600.0], [2.0, 0.0], 50.0).expect("inspector viewport"),
+            0.25,
+        )
+        .expect("inspector scene");
+
+        let constraint_item = SelectionItem::Constraint(constraint);
+        let constraint = annotation_inspector_presentation(Some(&scene), &[constraint_item])
+            .expect("constraint inspector presentation");
+        assert_eq!(constraint.family, "Horizontal constraint");
+        assert!(constraint.detail.contains("Workbench horizontal"));
+        assert!(constraint.detail.contains("horizontal constraint"));
+        assert_eq!(constraint.meta, "Constraint · 1 direct operand");
+
+        let dimension_item = SelectionItem::Dimension(dimension);
+        let dimension = annotation_inspector_presentation(Some(&scene), &[dimension_item])
+            .expect("dimension inspector presentation");
+        assert_eq!(dimension.family, "Point-distance dimension");
+        assert!(dimension.detail.contains("Workbench endpoint distance"));
+        assert!(dimension.detail.contains("point-distance dimension"));
+        assert_eq!(dimension.meta, "Reference dimension · Canvas value (4)");
+        assert!(
+            annotation_inspector_presentation(Some(&scene), &[constraint_item, dimension_item],)
+                .is_none(),
+            "multi-selection has no single semantic annotation owner",
+        );
+
+        let html = include_str!("../../index.html");
+        for id in [
+            "wb-annotation-inspector",
+            "wb-annotation-family",
+            "wb-annotation-detail",
+            "wb-annotation-meta",
+        ] {
+            assert!(html.contains(&format!("id=\"{id}\"")));
+        }
+    }
+
+    #[test]
     fn production_canvas_controls_expose_history_display_origin_and_protected_datum_surfaces() {
         let html = include_str!("../../index.html");
         let css = include_str!("../../styles.css");
         for needle in [
             "id=\"wb-show-reference-geometry\"",
             "id=\"wb-show-grid\"",
+            "id=\"wb-show-all-constraints\"",
+            "data-wb-action=\"annotation-reset-selected\"",
+            "data-wb-action=\"annotation-reset-all\"",
             "id=\"wb-pointer-coordinate\"",
             "data-wb-action=\"zoom-origin\"",
             "id=\"wb-datum-inspector\"",
@@ -7327,6 +7722,13 @@ mod tests {
         assert!(css.contains(".wb-grid-major"));
         assert!(css.contains("[data-canvas-cursor=\"draw\"]"));
         assert!(css.contains(".wb-datum-origin-ring"));
+        assert!(css.contains(".wb-dimension.reference .wb-dimension-line"));
+        assert!(css.contains(".wb-annotation-path-hit"));
+        assert!(css.contains(".wb-annotation-move-hit"));
+        assert!(css.contains(".wb-annotation-leader"));
+        assert!(css.contains("fill: #121617;"));
+        assert!(!css.contains(".wb-dimension.reference { opacity:"));
+        assert!(css.contains(".wb-option-actions"));
         assert!(!css.contains("background-size: 25px 25px"));
     }
 

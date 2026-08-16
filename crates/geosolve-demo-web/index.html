@@ -200,8 +200,10 @@
               <label>Canvas picks<select id="wb-geometry-pick-scope"><option value="all">All geometry</option><option value="profile">Profile only</option><option value="construction">Construction only</option></select></label>
               <label class="wb-option-check"><input id="wb-show-reference-geometry" type="checkbox" checked />Reference geometry</label>
               <label class="wb-option-check"><input id="wb-show-grid" type="checkbox" checked />Adaptive grid</label>
+              <label class="wb-option-check"><input id="wb-show-all-constraints" type="checkbox" />Show all constraint marks</label>
               <label class="wb-option-check"><input id="wb-show-explicit-construction" type="checkbox" checked />Explicit guides</label>
               <label class="wb-option-check"><input id="wb-show-implicit-construction" type="checkbox" checked />Fillet-hidden portions</label>
+              <div class="wb-option-actions"><button type="button" data-wb-action="annotation-reset-selected">Reset selected annotations</button><button type="button" data-wb-action="annotation-reset-all">Reset all annotations</button></div>
               <p class="wb-option-help">The grid is visual only. Native geometry wins overlapping datum picks; a hidden Fillet portion still selects its complete native source.</p>
             </div>
           </section>
@@ -231,6 +233,12 @@
           <span class="wb-field-label">Selection</span>
           <strong id="wb-selection">0 selected</strong>
           <button type="button" class="wb-danger" data-wb-action="delete">Delete selected</button>
+        </section>
+        <section id="wb-annotation-inspector" class="wb-inspector-section" hidden>
+          <span class="wb-field-label">Semantic annotation</span>
+          <strong id="wb-annotation-family">Horizontal constraint</strong>
+          <p id="wb-annotation-detail">Full source and accepted-value detail.</p>
+          <span id="wb-annotation-meta"></span>
         </section>
         <section id="wb-geometry-role-editor" class="wb-inspector-section wb-geometry-role-editor" hidden>
           <span class="wb-field-label">Complete curve role</span>

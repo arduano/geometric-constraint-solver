@@ -67,7 +67,7 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M75 are complete. M74 closes under explicit scoped approval of its
+of every prepared UAT step. M71-M75 are complete. M76 is active. M74 closes under explicit scoped approval of its
 clean-qualified frozen candidate and exact final Pages publication, while its deferred scorecard
 transferred into M75. M75's initial immutable nomination was
 withdrawn after finding M75-F001. Its authoring-hover correction then passed a clean replacement
@@ -4843,6 +4843,38 @@ resolution and computed-preview authentication; the browser paints only authenti
 tolerances, role ordering, schemas, equations, solver behavior and golden bytes remain unchanged;
 the carried and new human scorecards pass on a clean, byte-verified candidate; and exact Pages
 publication passes.
+
+### M76: production-quality constraint annotations
+
+Status: **active (2026-08-16); implementation and qualification in progress**. M76 replaces the
+demo's provisional constraint and dimension marks with compact CAD notation, deterministic
+geometry-derived layout, and presentation-only manual placement. `docs/M76_GOALS.md` owns the
+approved contract.
+
+- [x] Record the seven dimension families, twenty compact constraint categories, placement,
+  compatibility, persistence and UAT contract.
+- [x] Publish exact headless baselines, witnesses, leaders, arcs, arrowheads, label bounds and
+  glyph bounds, with deterministic automatic layout and shared rendering/picking geometry.
+- [x] Format compact CAD values (`25`, `R12`, `⌀24`, `45°`) while retaining full semantic names in
+  inspector, tooltip and accessibility text; distinguish reference values without colour alone.
+- [x] Retain presentation-only manual placement for every dimension and movable compact glyph;
+  keep geometry-locked right-angle squares fixed; support cancel, selected reset and global reset.
+- [x] Keep annotation movement solve-, sketch-revision- and sketch-history-neutral, while retaining
+  layout through ordinary same-document edits, Delete and Undo/Redo.
+- [x] Add optional self-versioned annotation-layout data to workspace v6; migrate v1-v5 empty and
+  recover valid sketch geometry from stale, malformed or incompatible layout data.
+- [x] Add native/WASM scene, placement, drag, cancellation, history-neutrality, migration and
+  corruption regressions plus thin demo rendering/input tests.
+- [ ] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
+  golden-oracle cleanliness, Rustdoc and Trunk release assembly.
+- [ ] Freeze and byte-verify an immutable Tailscale candidate, then complete `docs/M76_UAT.md` at
+  both supported desktop sizes and receive explicit supervising-human approval.
+- [ ] Publish the exact accepted candidate to GitHub Pages, verify hosted bytes and close M76.
+
+Gate: annotation layout is deterministic and headless; rendering and picking consume the same exact
+primitives; manual movement is presentation-only; optional workspace data can never reject valid
+sketch geometry; all seven dimension families and twenty constraint glyph categories are legible;
+the frozen Tailscale candidate passes human review before public publication.
 
 ## Explicit non-goals
 

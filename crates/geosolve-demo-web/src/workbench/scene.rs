@@ -368,9 +368,7 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
         output.push_str("<g class=\"wb-accepted-scene\" data-scene-provenance=\"none\">");
     }
     output.push_str(concat!(
-        "<defs><marker id=\"wb-dimension-arrow\" markerWidth=\"6\" markerHeight=\"6\" ",
-        "refX=\"3\" refY=\"3\" orient=\"auto-start-reverse\"><path d=\"M0 0L6 3L0 6Z\"/>",
-        "</marker><marker id=\"wb-fillet-direction-arrow\" markerWidth=\"6\" markerHeight=\"6\" ",
+        "<defs><marker id=\"wb-fillet-direction-arrow\" markerWidth=\"6\" markerHeight=\"6\" ",
         "refX=\"5\" refY=\"3\" orient=\"auto\"><path fill=\"context-stroke\" ",
         "d=\"M0 0L6 3L0 6Z\"/></marker></defs>"
     ));
@@ -1370,7 +1368,10 @@ fn render_annotations(
         .context_owner
         .or_else(|| hover.target.map(EditorHoverTarget::item));
     for annotation in &scene.annotations {
-        if !annotation.is_visible(selection, visibility_context, problem_items) {
+        if !(annotation.is_visible(selection, visibility_context, problem_items)
+            || scene.show_all_constraint_annotations
+                && matches!(annotation.kind, SceneAnnotationKind::Constraint(_)))
+        {
             continue;
         }
         let selected = selection.contains(&annotation.item);
@@ -1386,7 +1387,7 @@ fn render_annotations(
             hovered_occurrence.is_some_and(|occurrence| occurrence.marker_index.is_none());
         let has_problem = problem_items.contains(&annotation.item);
         let class = format!(
-            "{}{}{}{}",
+            "{}{}{}{}{}{}",
             if selected { " selected" } else { "" },
             if is_hovered { " hovered" } else { "" },
             if has_problem { " has-problem" } else { "" },
@@ -1395,8 +1396,18 @@ fn render_annotations(
             } else {
                 ""
             },
+            if annotation.reference {
+                " reference"
+            } else {
+                ""
+            },
+            if annotation.is_movable() {
+                " movable"
+            } else {
+                ""
+            },
         );
-        let (editor_kind, id, kind, label, value, mode) = match annotation.item {
+        let (editor_kind, id, kind, _label, value, mode) = match annotation.item {
             SelectionItem::Constraint(id) => {
                 let constraint = scene
                     .constraint_entries
@@ -1447,7 +1458,8 @@ fn render_annotations(
             | SelectionItem::Feature(_)
             | SelectionItem::FeatureCorner(_) => continue,
         };
-        let escaped_label = escape(&label);
+        let escaped_label = escape(&annotation.accessible_label);
+        let visible_text = annotation.visible_text.as_deref().map(escape);
         let _ = write!(
             output,
             "<g class=\"wb-annotation wb-{editor_kind}{class}\" tabindex=\"0\" role=\"button\" aria-label=\"{escaped_label}\" data-editor-item=\"{editor_kind}\" data-persistent-id=\"{id}\" data-{editor_kind}-kind=\"{kind}\"{}{} data-annotation-kind=\"{kind}\">",
@@ -1462,11 +1474,13 @@ fn render_annotations(
                 format!(" data-dimension-value=\"{value}\"")
             },
         );
+        let _ = write!(output, "<title>{escaped_label}</title>");
         annotation_geometry(
             output,
             annotation.kind,
             &annotation.geometry,
-            &escaped_label,
+            visible_text.as_deref().unwrap_or(""),
+            annotation.label_bounds,
             hovered_occurrence.and_then(|occurrence| occurrence.marker_index),
         );
         output.push_str("</g>");
@@ -1534,9 +1548,11 @@ fn annotation_geometry(
     output: &mut String,
     kind: SceneAnnotationKind,
     geometry: &SceneAnnotationGeometry,
-    label: &str,
+    visible_text: &str,
+    label_bounds: Option<geosolve_constraint_editor::SceneAnnotationLabelBounds>,
     hovered_marker: Option<usize>,
 ) {
+    let arrowheads = annotation_arrowheads(geometry);
     match geometry {
         SceneAnnotationGeometry::Glyph { markers } => {
             let SceneAnnotationKind::Constraint(glyph) = kind else {
@@ -1546,13 +1562,23 @@ fn annotation_geometry(
                 if let Some(origin) = marker.leader_from {
                     let _ = write!(
                         output,
-                        "<path class=\"wb-annotation-leader\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
-                        origin.x, origin.y, marker.anchor.x, marker.anchor.y,
+                        concat!(
+                            "<path class=\"wb-annotation-leader\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                            "<path class=\"wb-annotation-path-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>"
+                        ),
+                        origin.x,
+                        origin.y,
+                        marker.anchor.x,
+                        marker.anchor.y,
+                        origin.x,
+                        origin.y,
+                        marker.anchor.x,
+                        marker.anchor.y,
                     );
                 }
                 let _ = write!(
                     output,
-                    "<g class=\"wb-constraint-symbol{}\" transform=\"translate({:.3} {:.3})\" data-annotation-marker=\"{index}\"><circle class=\"wb-annotation-hit\" r=\"12\"/>{}</g>",
+                    "<g class=\"wb-constraint-symbol{}\" transform=\"translate({:.3} {:.3}) rotate({:.3})\" data-annotation-marker=\"{index}\" data-marker-rotation-radians=\"{:.6}\"><circle class=\"wb-annotation-hit\" r=\"{:.3}\"/>{}</g>",
                     if hovered_marker == Some(index) {
                         " hovered"
                     } else {
@@ -1560,6 +1586,9 @@ fn annotation_geometry(
                     },
                     marker.anchor.x,
                     marker.anchor.y,
+                    marker.rotation_radians.to_degrees(),
+                    marker.rotation_radians,
+                    marker.bounds().radius,
                     super::icons::constraint_icon_fragment(glyph),
                 );
             }
@@ -1575,7 +1604,7 @@ fn annotation_geometry(
                 concat!(
                     "<g class=\"wb-constraint-symbol\">",
                     "<path class=\"wb-right-angle\" d=\"M{:.3} {:.3}L{:.3} {:.3}L{:.3} {:.3}\"/>",
-                    "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/>",
+                    "<path class=\"wb-annotation-path-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}L{:.3} {:.3}\"/>",
                     "</g>"
                 ),
                 first_arm.x,
@@ -1584,11 +1613,17 @@ fn annotation_geometry(
                 corner.y,
                 second_arm.x,
                 second_arm.y,
+                first_arm.x,
+                first_arm.y,
                 corner.x,
                 corner.y,
+                second_arm.x,
+                second_arm.y,
             );
         }
         SceneAnnotationGeometry::LinearDimension {
+            measured_first,
+            measured_second,
             first,
             second,
             label_anchor,
@@ -1596,28 +1631,43 @@ fn annotation_geometry(
             let _ = write!(
                 output,
                 concat!(
-                    "<path class=\"wb-dimension-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
+                    "<path class=\"wb-dimension-witness\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
+                    "M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                    "<path class=\"wb-dimension-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                    "<path class=\"wb-annotation-path-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
                     "M{:.3} {:.3}L{:.3} {:.3}M{:.3} {:.3}L{:.3} {:.3}\"/>",
-                    "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/>",
-                    "<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
+                    "{}{}{}<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
                 ),
+                measured_first.x,
+                measured_first.y,
                 first.x,
                 first.y,
+                measured_second.x,
+                measured_second.y,
                 second.x,
                 second.y,
                 first.x,
                 first.y,
-                label_anchor.x,
-                label_anchor.y,
                 second.x,
                 second.y,
+                measured_first.x,
+                measured_first.y,
+                first.x,
+                first.y,
+                measured_second.x,
+                measured_second.y,
+                second.x,
+                second.y,
+                first.x,
+                first.y,
+                second.x,
+                second.y,
+                label_hit_regions(*label_anchor, label_bounds),
+                arrowheads,
+                label_mask(label_bounds),
                 label_anchor.x,
-                label_anchor.y,
-                label_anchor.x,
-                label_anchor.y,
-                label_anchor.x,
-                label_anchor.y - 5.0,
-                label,
+                label_anchor.y + 4.0,
+                visible_text,
             );
         }
         SceneAnnotationGeometry::RadialDimension {
@@ -1625,8 +1675,9 @@ fn annotation_geometry(
             edge,
             label_anchor,
             diameter,
+            full_circle,
         } => {
-            let opposite = if *diameter {
+            let measurement_start = if *diameter && *full_circle {
                 ScreenPoint {
                     x: center.x.mul_add(2.0, -edge.x),
                     y: center.y.mul_add(2.0, -edge.y),
@@ -1637,19 +1688,30 @@ fn annotation_geometry(
             let _ = write!(
                 output,
                 concat!(
-                    "<path class=\"wb-dimension-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
-                    "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/>",
-                    "<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
+                    "<path class=\"wb-dimension-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
+                    "L{:.3} {:.3}\"/>",
+                    "<path class=\"wb-annotation-path-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
+                    "L{:.3} {:.3}\"/>",
+                    "{}{}{}<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
                 ),
-                opposite.x,
-                opposite.y,
+                measurement_start.x,
+                measurement_start.y,
                 edge.x,
                 edge.y,
                 label_anchor.x,
                 label_anchor.y,
+                measurement_start.x,
+                measurement_start.y,
+                edge.x,
+                edge.y,
                 label_anchor.x,
-                label_anchor.y - 5.0,
-                label,
+                label_anchor.y,
+                label_hit_regions(*label_anchor, label_bounds),
+                arrowheads,
+                label_mask(label_bounds),
+                label_anchor.x,
+                label_anchor.y + 4.0,
+                visible_text,
             );
         }
         SceneAnnotationGeometry::AngularDimension {
@@ -1667,10 +1729,11 @@ fn annotation_geometry(
                 concat!(
                     "<path class=\"wb-dimension-witness\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
                     "M{:.3} {:.3}L{:.3} {:.3}\"/>",
-                    "<path class=\"wb-angle-arc\" marker-start=\"url(#wb-dimension-arrow)\" ",
-                    "marker-end=\"url(#wb-dimension-arrow)\" d=\"M{:.3} {:.3}A{:.3} {:.3} 0 0 {} {:.3} {:.3}\"/>",
-                    "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/>",
-                    "<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
+                    "<path class=\"wb-angle-arc\" d=\"M{:.3} {:.3}A{:.3} {:.3} 0 0 {} {:.3} {:.3}\"/>",
+                    "<path class=\"wb-annotation-path-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
+                    "M{:.3} {:.3}L{:.3} {:.3}M{:.3} {:.3}",
+                    "A{:.3} {:.3} 0 0 {} {:.3} {:.3}\"/>",
+                    "{}{}{}<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
                 ),
                 vertex.x,
                 vertex.y,
@@ -1687,25 +1750,136 @@ fn annotation_geometry(
                 u8::from(*clockwise),
                 second_arc.x,
                 second_arc.y,
+                vertex.x,
+                vertex.y,
+                first_ray.x,
+                first_ray.y,
+                vertex.x,
+                vertex.y,
+                second_ray.x,
+                second_ray.y,
+                first_arc.x,
+                first_arc.y,
+                radius,
+                radius,
+                u8::from(*clockwise),
+                second_arc.x,
+                second_arc.y,
+                label_hit_regions(*label_anchor, label_bounds),
+                arrowheads,
+                label_mask(label_bounds),
                 label_anchor.x,
-                label_anchor.y,
-                label_anchor.x,
-                label_anchor.y - 5.0,
-                label,
+                label_anchor.y + 4.0,
+                visible_text,
             );
         }
-        SceneAnnotationGeometry::Label { anchor } => {
+        SceneAnnotationGeometry::Label {
+            anchor,
+            leader_from,
+        } => {
+            if let Some(origin) = leader_from {
+                let _ = write!(
+                    output,
+                    concat!(
+                        "<path class=\"wb-dimension-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                        "<path class=\"wb-annotation-path-hit\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>"
+                    ),
+                    origin.x, origin.y, anchor.x, anchor.y, origin.x, origin.y, anchor.x, anchor.y,
+                );
+            }
             let _ = write!(
                 output,
-                "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/><text x=\"{:.3}\" y=\"{:.3}\">{}</text>",
+                "{}{}{}<text x=\"{:.3}\" y=\"{:.3}\">{}</text>",
+                label_hit_regions(*anchor, label_bounds),
+                arrowheads,
+                label_mask(label_bounds),
                 anchor.x,
-                anchor.y,
-                anchor.x,
-                anchor.y - 5.0,
-                label,
+                anchor.y + 4.0,
+                visible_text,
             );
         }
     }
+}
+
+fn annotation_arrowheads(geometry: &SceneAnnotationGeometry) -> String {
+    let mut output = String::new();
+    for arrow in geometry.arrowheads() {
+        let _ = write!(
+            output,
+            "<path class=\"wb-dimension-arrow\" d=\"M{:.3} {:.3}L{:.3} {:.3}L{:.3} {:.3}Z\"/>",
+            arrow.tip.x,
+            arrow.tip.y,
+            arrow.base_first.x,
+            arrow.base_first.y,
+            arrow.base_second.x,
+            arrow.base_second.y,
+        );
+    }
+    output
+}
+
+fn label_mask(bounds: Option<geosolve_constraint_editor::SceneAnnotationLabelBounds>) -> String {
+    bounds.map_or_else(String::new, |bounds| {
+        format!(
+            "<rect class=\"wb-dimension-label-mask\" x=\"{:.3}\" y=\"{:.3}\" width=\"{:.3}\" height=\"{:.3}\" rx=\"3\"/>",
+            bounds.min.x,
+            bounds.min.y,
+            bounds.max.x - bounds.min.x,
+            bounds.max.y - bounds.min.y,
+        )
+    })
+}
+
+fn label_hit_regions(
+    anchor: ScreenPoint,
+    bounds: Option<geosolve_constraint_editor::SceneAnnotationLabelBounds>,
+) -> String {
+    const PICK_TOLERANCE_PIXELS: f64 = 10.0;
+    const MOVE_TOLERANCE_PIXELS: f64 = 2.0;
+    bounds.map_or_else(
+        || {
+            format!(
+                concat!(
+                    "<circle class=\"wb-annotation-hit wb-annotation-label-hit\" ",
+                    "cx=\"{:.3}\" cy=\"{:.3}\" r=\"{:.3}\"/>",
+                    "<circle class=\"wb-annotation-hit wb-annotation-move-hit\" ",
+                    "cx=\"{:.3}\" cy=\"{:.3}\" r=\"{:.3}\"/>"
+                ),
+                anchor.x,
+                anchor.y,
+                PICK_TOLERANCE_PIXELS,
+                anchor.x,
+                anchor.y,
+                MOVE_TOLERANCE_PIXELS,
+            )
+        },
+        |bounds| {
+            let outer_min_x = bounds.min.x - PICK_TOLERANCE_PIXELS;
+            let outer_min_y = bounds.min.y - PICK_TOLERANCE_PIXELS;
+            let outer_width = bounds.max.x - bounds.min.x + 2.0 * PICK_TOLERANCE_PIXELS;
+            let outer_height = bounds.max.y - bounds.min.y + 2.0 * PICK_TOLERANCE_PIXELS;
+            let inner_min_x = bounds.min.x - MOVE_TOLERANCE_PIXELS;
+            let inner_min_y = bounds.min.y - MOVE_TOLERANCE_PIXELS;
+            let inner_width = bounds.max.x - bounds.min.x + 2.0 * MOVE_TOLERANCE_PIXELS;
+            let inner_height = bounds.max.y - bounds.min.y + 2.0 * MOVE_TOLERANCE_PIXELS;
+            format!(
+                concat!(
+                    "<rect class=\"wb-annotation-hit wb-annotation-label-hit\" ",
+                    "x=\"{:.3}\" y=\"{:.3}\" width=\"{:.3}\" height=\"{:.3}\" rx=\"3\"/>",
+                    "<rect class=\"wb-annotation-hit wb-annotation-move-hit\" ",
+                    "x=\"{:.3}\" y=\"{:.3}\" width=\"{:.3}\" height=\"{:.3}\" rx=\"3\"/>"
+                ),
+                outer_min_x,
+                outer_min_y,
+                outer_width,
+                outer_height,
+                inner_min_x,
+                inner_min_y,
+                inner_width,
+                inner_height,
+            )
+        },
+    )
 }
 
 const fn annotation_kind(kind: SceneAnnotationKind) -> &'static str {
@@ -1728,7 +1902,7 @@ fn annotation_anchor(geometry: &SceneAnnotationGeometry) -> Option<ScreenPoint> 
         SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
         | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
         | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => *label_anchor,
-        SceneAnnotationGeometry::Label { anchor } => *anchor,
+        SceneAnnotationGeometry::Label { anchor, .. } => *anchor,
     })
 }
 
@@ -2381,8 +2555,8 @@ mod tests {
         DraftInferenceResolution, DraftInferenceSample, DraftInferenceSubject,
         DraftReferenceAnchor, DraftReferenceOrigin, EditorHoverState, EditorHoverTarget,
         EditorProblemScope, EditorScene, GeometryInteractionPolicy, RetainedEditorCoordinator,
-        SceneAnnotationGeometry, SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint,
-        SelectionItem, Viewport,
+        SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationLabelBounds,
+        SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -2400,8 +2574,8 @@ mod tests {
     };
 
     use super::{
-        CanvasCamera, CanvasDisplayOptions, adaptive_grid_spec, constraint_glyph,
-        construction_geometry_markup, dimension_kind, grid_path, svg_markup,
+        CanvasCamera, CanvasDisplayOptions, adaptive_grid_spec, annotation_geometry,
+        constraint_glyph, construction_geometry_markup, dimension_kind, grid_path, svg_markup,
         svg_markup_with_computed_context,
         svg_markup_with_computed_context_action_stamp_and_display,
         svg_markup_with_computed_context_and_action_stamp, svg_markup_with_context, viewport,
@@ -2550,6 +2724,37 @@ mod tests {
     }
 
     #[test]
+    fn m76_dimension_markup_exposes_the_same_path_and_label_hit_envelopes() {
+        let geometry = SceneAnnotationGeometry::LinearDimension {
+            measured_first: ScreenPoint { x: 10.0, y: 20.0 },
+            measured_second: ScreenPoint { x: 90.0, y: 20.0 },
+            first: ScreenPoint { x: 10.0, y: 40.0 },
+            second: ScreenPoint { x: 90.0, y: 40.0 },
+            label_anchor: ScreenPoint { x: 50.0, y: 40.0 },
+        };
+        let mut markup = String::new();
+        annotation_geometry(
+            &mut markup,
+            SceneAnnotationKind::PointDistance,
+            &geometry,
+            "80",
+            Some(SceneAnnotationLabelBounds {
+                min: ScreenPoint { x: 35.0, y: 30.0 },
+                max: ScreenPoint { x: 65.0, y: 50.0 },
+            }),
+            None,
+        );
+        assert!(markup.contains("class=\"wb-annotation-path-hit\""));
+        assert!(markup.contains(
+            "class=\"wb-annotation-hit wb-annotation-label-hit\" x=\"25.000\" y=\"20.000\" width=\"50.000\" height=\"40.000\""
+        ));
+        assert!(markup.contains(
+            "class=\"wb-annotation-hit wb-annotation-move-hit\" x=\"33.000\" y=\"28.000\" width=\"34.000\" height=\"24.000\""
+        ));
+        assert!(markup.contains("class=\"wb-dimension-label-mask\""));
+    }
+
+    #[test]
     fn camera_zoom_preserves_anchor_and_pan_uses_screen_space_direction() {
         let mut camera = CanvasCamera::default();
         let anchor = ScreenPoint { x: 750.0, y: 175.0 };
@@ -2613,7 +2818,7 @@ mod tests {
             None,
             None,
             GeometryInteractionPolicy::default(),
-            CanvasDisplayOptions { grid_visible: true },
+            CanvasDisplayOptions::default(),
             viewport,
         );
         assert!(markup.contains("data-grid-kind=\"adaptive-1-2-5\""));
@@ -2682,7 +2887,7 @@ mod tests {
             None,
             None,
             GeometryInteractionPolicy::default(),
-            CanvasDisplayOptions { grid_visible: true },
+            CanvasDisplayOptions::default(),
             viewport,
         );
         for (key, label) in [("origin", "Origin"), ("x-axis", "X"), ("y-axis", "Y")] {
@@ -2715,7 +2920,7 @@ mod tests {
             None,
             None,
             hidden_policy,
-            CanvasDisplayOptions { grid_visible: true },
+            CanvasDisplayOptions::default(),
             viewport,
         );
         assert!(!hidden.contains("data-datum="));
@@ -3256,6 +3461,17 @@ mod tests {
             "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"reference\" data-dimension-value=\"3\"",
             rectangle.dimensions[1]
         )));
+        let reference_label = &accepted
+            .document()
+            .dimension(rectangle.dimensions[1])
+            .expect("reference dimension")
+            .label;
+        assert!(reference_markup.contains("wb-dimension selected reference"));
+        assert!(reference_markup.contains(">(3)</text>"));
+        assert!(reference_markup.contains(&format!(
+            "<title>{reference_label}; Reference curve-length dimension; 3 model units</title>"
+        )));
+        assert!(markup.contains("class=\"wb-dimension-arrow\""));
     }
 
     #[test]
@@ -3346,7 +3562,7 @@ mod tests {
         let identity = format!("data-persistent-id=\"{historical}\"");
         assert_eq!(markup.matches(&identity).count(), 1);
         assert!(markup.contains(&format!(
-            "aria-label=\"accepted horizontal\" data-editor-item=\"constraint\" {identity}"
+            "aria-label=\"accepted horizontal; horizontal constraint\" data-editor-item=\"constraint\" {identity}"
         )));
         assert!(!markup.contains("aria-label=\"Accepted constraint\""));
         assert!(!markup.contains("aria-label=\"newer rejected fixed point\""));
@@ -3520,6 +3736,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the reversed-line fixture verifies accepted acute-angle semantics and complete SVG metadata together"
+    )]
     fn oriented_angle_annotation_uses_acute_degrees_for_reversed_line_direction() {
         let mut document = SketchDocument::new(1.0).unwrap();
         let intersection = document.add_point("intersection", [0.0, 0.0]).unwrap();
@@ -3618,7 +3838,10 @@ mod tests {
         assert!(markup.contains(&format!(
             "data-persistent-id=\"{dimension}\" data-dimension-kind=\"oriented-angle\" data-dimension-mode=\"driving\" data-dimension-value=\"45\""
         )));
-        assert!(markup.contains("angle = 45.000°"));
+        assert!(
+            markup.contains("aria-label=\"angle; Driving oriented-angle dimension; 45 degrees\"")
+        );
+        assert!(markup.contains(">45°</text>"));
     }
 
     #[test]

@@ -363,7 +363,10 @@ fn first_sample_uses_prospective_geometry_context_for_hover_and_click() {
         .retain(|annotation| annotation.item == annotation_item);
     let position = scene.viewport.model_to_screen([1.0, 0.0]);
     scene.annotations[0].visibility = SceneAnnotationVisibility::Contextual;
-    scene.annotations[0].geometry = SceneAnnotationGeometry::Label { anchor: position };
+    scene.annotations[0].geometry = SceneAnnotationGeometry::Label {
+        anchor: position,
+        leader_from: None,
+    };
     assert_eq!(
         scene
             .hit_test(position, PickTolerance::default())
@@ -403,7 +406,10 @@ fn problem_forced_annotation_uses_the_same_move_and_down_wrapper_input() {
         .retain(|annotation| annotation.item == annotation_item);
     let position = ScreenPoint { x: 40.0, y: 40.0 };
     scene.annotations[0].visibility = SceneAnnotationVisibility::Contextual;
-    scene.annotations[0].geometry = SceneAnnotationGeometry::Label { anchor: position };
+    scene.annotations[0].geometry = SceneAnnotationGeometry::Label {
+        anchor: position,
+        leader_from: None,
+    };
     assert!(
         scene.hit_test(position, PickTolerance::default()).is_none(),
         "the forced annotation sample must not inherit geometry or datum context",
@@ -460,6 +466,7 @@ fn stored_point_and_semantic_center_precede_an_overlapping_annotation() {
     scene.annotations[0].visibility = SceneAnnotationVisibility::Always;
     scene.annotations[0].geometry = SceneAnnotationGeometry::Label {
         anchor: fixture.overlap,
+        leader_from: None,
     };
 
     let point_item = SelectionItem::Point(fixture.overlap_point);
@@ -658,6 +665,7 @@ fn annotation_precedes_passive_geometry_and_pointer_move_is_state_neutral() {
     passive_scene.annotations[0].visibility = SceneAnnotationVisibility::Always;
     passive_scene.annotations[0].geometry = SceneAnnotationGeometry::Label {
         anchor: fixture.overlap,
+        leader_from: None,
     };
     assert_eq!(
         passive_scene
@@ -695,6 +703,16 @@ fn annotation_precedes_passive_geometry_and_pointer_move_is_state_neutral() {
         vec![EditorEffect::SelectionChanged(vec![annotation_item])],
     );
     assert_eq!(annotation_editor.selection(), &[annotation_item]);
+    assert!(
+        annotation_editor
+            .pointer_up(
+                &passive_scene,
+                passive_scene.design_identity,
+                pointer(4, fixture.overlap, all_modifiers),
+            )
+            .is_empty(),
+        "a sub-threshold annotation click only releases its presentation capture",
+    );
     assert!(annotation_editor.active_pointer_gesture().is_none());
 
     let retained_selection = vec![SelectionItem::Curve(fixture.first_span)];
@@ -1429,6 +1447,7 @@ fn exact_annotation_ties_ignore_scene_order_and_choose_the_first_occurrence() {
                         y: probe.y,
                     },
                     leader_from: None,
+                    rotation_radians: 0.0,
                 },
                 SceneGlyphMarker {
                     anchor: ScreenPoint {
@@ -1436,6 +1455,7 @@ fn exact_annotation_ties_ignore_scene_order_and_choose_the_first_occurrence() {
                         y: probe.y,
                     },
                     leader_from: None,
+                    rotation_radians: 0.0,
                 },
             ],
         };

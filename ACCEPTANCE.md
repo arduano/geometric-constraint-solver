@@ -2101,6 +2101,41 @@ aggregate is `4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`.
 matches the artifact with HTTP 200, correct media/length, zero redirects and root equality; public
 M72/M74 two-size and M75 6/6 Chromium checks pass. Every M75 acceptance gate is complete.
 
+## M76 acceptance: production-quality constraint annotations
+
+Status: **active; implementation and focused native/WASM qualification pass. The clean release
+gate, frozen Tailscale candidate, hands-on UAT and publication criteria remain open**.
+
+- Every accepted dimension family has truthful geometry: point distance, affine line/polyline-span
+  length, radius, diameter, oriented angle, supporting-line offset and exact translated-segment
+  offset. The scene publishes the baseline, witnesses, leaders, sector arc,
+  arrowheads and finite label bounds used by both rendering and picking.
+- Compact values use four significant digits, remove trailing and negative zero, use scientific
+  notation below `1e-3` or at/above `1e5`, and use CAD prefixes/suffixes such as `R`, `⌀` and `°`.
+  Reference values wrap the whole compact notation in parentheses and also use muted/dashed
+  non-colour styling. Inspector, tooltip and ARIA text retain full semantic names.
+- All twenty `SceneConstraintGlyph` categories have a deliberate geometry-derived mark. Constraint
+  marks are contextual by default and the Display control can show all. Right-angle squares stay
+  locked to their geometric corner; every other glyph and every dimension can be moved.
+- Select-mode label/glyph movement begins only after 3 px. Escape, pointer-capture loss, camera or
+  tool change, and cancellation restore the original placement. Other annotation primitives
+  select without starting a move.
+- Manual placement and reset-to-auto are presentation-only: they perform no solve, accepted/design
+  revision change, sketch Undo/Redo entry, equation change or branch change. Selected and global
+  resets are available. Normal same-document edits, Delete and Undo/Redo retain surviving layout;
+  a new document or sample clears it.
+- Workspace v6 carries an optional self-versioned annotation-layout cache outside canonical sketch
+  data and reproduction geometry authority. v1-v5 restore with empty layout. Invalid, stale,
+  malformed or incompatible cache data is ignored and deterministic automatic placement is
+  regenerated without rejecting otherwise valid sketch geometry.
+- Native and WASM regressions cover all seven dimension and twenty constraint families, exact
+  geometry/hit parity, deterministic collision avoidance, move/cancel/reset/history neutrality,
+  migration, corruption and regeneration. Existing canonical sketch v1-v4, unsupported draft-v5,
+  `GEOSOLVE_REPRO_V1`, equations, solver history and explicit branch semantics remain unchanged.
+- The clean release gate and immutable byte-verified Tailscale candidate pass before hands-on review.
+  `docs/M76_UAT.md` passes at `1440x900` and approximately `1024x720`, then explicit supervising
+  approval and exact GitHub Pages publication are required before M76 closes.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit

@@ -2049,6 +2049,43 @@ reference for any future focused regression. For M75 closure, M74-U1/M75-U1 thro
 accepted under the scoped approval above; that disposition comes from the supervising caller
 rather than automation and does not invent individual observations.
 
+### M76-A1 - Seven-family dimension annotation sampler
+
+Build one accepted scene containing point distance, affine line/polyline-span length, radius,
+diameter, oriented angle, supporting-line offset and exact translated-segment offset occurrences.
+Verify compact four-significant-digit values and truthful family-specific baselines, witnesses,
+leaders, arrows, arcs and label bounds. Exercise driving and reference presentation, extreme values,
+negative-zero cleanup, coarse/fine zoom and deterministic recomposition. Rendering and hit tests
+must consume the same finite primitives; an arc diameter must not invent an opposite arc point.
+
+### M76-A2 - Contextual twenty-category constraint sampler
+
+Cover every `SceneConstraintGlyph` category in one reviewed native/WASM catalog. Fixed,
+coincident, contact, tangent, continuity and Fillet marks remain near their actual operands with
+leaders; H/V marks describe actual alignment; paired relationships use consistent ticks/slashes;
+symmetry, direction and normal rotate with local frames. Marks are contextual by default and the
+Display “show all” option reveals them all. Only a genuine perpendicular corner owns a fixed
+right-angle square.
+
+### M76-A3 - Presentation-only move, cancel and reset
+
+In Select mode press a dimension label or movable glyph, cross the 3 px threshold and move it.
+Other dimension primitives select without moving. Verify geometry-appropriate placement state,
+then cancel independently through Escape, pointer-capture loss, camera change and tool change; each
+restores the exact original placement. Commit a move and exercise selected reset and reset-all.
+Every operation leaves solve count, design/attempt/accepted revisions, branch state, reproduction
+geometry and sketch Undo/Redo length unchanged. Delete and ordinary same-document Undo/Redo retain
+surviving cached placements; new document/sample clears them.
+
+### M76-A4 - Workspace-v6 cache recovery
+
+Round-trip a v6 workspace with a self-versioned optional annotation-layout cache and reproduce the
+same resolved placement. Restore v1-v5 as empty layout. Independently corrupt the cache version,
+item identity, placement form and finite values while preserving valid sketch payloads; restoration
+must accept the sketch, discard only unusable layout and regenerate deterministic auto placement.
+Canonical sketch v1-v4 bytes, unsupported draft-v5 policy and `GEOSOLVE_REPRO_V1` authority remain
+unchanged.
+
 ### M72-R1 - Recoverable public workbench bulk fixes
 
 In the ordinary editable workspace, create an incompatible driving dimension that publishes a

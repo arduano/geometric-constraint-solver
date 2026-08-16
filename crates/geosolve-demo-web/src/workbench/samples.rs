@@ -644,7 +644,12 @@ fn constraint_dimension_sampler_document()
 fn contextual_annotations_document()
 -> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
     let mut document = workshop_document(0x7600_0000_0000_0000_0000_0000_0000_0002_u128)?;
-    let cell = |column: usize, row: usize| [-20.0 + 10.0 * column as f64, 12.0 - 8.0 * row as f64];
+    let cell = |column: u32, row: u32| {
+        [
+            10.0_f64.mul_add(f64::from(column), -20.0),
+            (-8.0_f64).mul_add(f64::from(row), 12.0),
+        ]
+    };
 
     let origin = cell(0, 0);
     let fixed = document
@@ -2189,8 +2194,8 @@ mod tests {
         EditorScene, EditorTool, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
         GeometryInteractionPolicy, GeometryPickScope, InferredRelation, Modifiers, PickTolerance,
-        PointerInput, RetainedEditorCoordinator, SceneAnnotationKind, SceneConstraintGlyph,
-        ScreenPoint, SelectionItem, Viewport,
+        PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
+        SceneConstraintGlyph, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -2381,6 +2386,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one public sampler audit keeps the complete seven-family inventory and geometry contract together"
+    )]
     fn dimension_sampler_publishes_all_seven_dimension_families() {
         let mut catalog = SampleCatalogState::default();
         let coordinator = catalog
@@ -2502,6 +2511,176 @@ mod tests {
                 SceneAnnotationKind::ExactTranslatedSegmentOffset,
             ])
         );
+        let geometry_for = |kind| {
+            scene
+                .annotations
+                .iter()
+                .filter(|annotation| annotation.kind == kind)
+                .map(|annotation| &annotation.geometry)
+                .collect::<Vec<_>>()
+        };
+        assert!(matches!(
+            geometry_for(SceneAnnotationKind::PointDistance).as_slice(),
+            [SceneAnnotationGeometry::LinearDimension { .. }]
+        ));
+        assert!(matches!(
+            geometry_for(SceneAnnotationKind::CurveLength).as_slice(),
+            [SceneAnnotationGeometry::LinearDimension { .. }]
+        ));
+        assert!(matches!(
+            geometry_for(SceneAnnotationKind::Radius).as_slice(),
+            [SceneAnnotationGeometry::RadialDimension {
+                diameter: false,
+                full_circle: false,
+                ..
+            }]
+        ));
+        assert!(matches!(
+            geometry_for(SceneAnnotationKind::Diameter).as_slice(),
+            [SceneAnnotationGeometry::RadialDimension {
+                diameter: true,
+                full_circle: true,
+                ..
+            }]
+        ));
+        assert!(matches!(
+            geometry_for(SceneAnnotationKind::OrientedAngle).as_slice(),
+            [SceneAnnotationGeometry::AngularDimension { .. }]
+        ));
+        for kind in [
+            SceneAnnotationKind::SupportingLineOffset,
+            SceneAnnotationKind::ExactTranslatedSegmentOffset,
+        ] {
+            assert!(matches!(
+                geometry_for(kind).as_slice(),
+                [SceneAnnotationGeometry::LinearDimension { .. }]
+            ));
+        }
+        let finite = |point: ScreenPoint| point.x.is_finite() && point.y.is_finite();
+        assert!(scene.annotations.iter().all(|annotation| {
+            annotation
+                .label_bounds
+                .is_none_or(|bounds| finite(bounds.min) && finite(bounds.max))
+                && annotation.geometry.arrowheads().iter().all(|arrow| {
+                    finite(arrow.tip) && finite(arrow.base_first) && finite(arrow.base_second)
+                })
+        }));
+        for annotation in scene
+            .annotations
+            .iter()
+            .filter(|annotation| !matches!(annotation.kind, SceneAnnotationKind::Constraint(_)))
+        {
+            assert!(annotation.is_movable());
+            assert!(
+                annotation.accessible_label.contains(" dimension;")
+                    && (annotation.accessible_label.contains("model units")
+                        || annotation.accessible_label.contains("degrees")),
+                "{}",
+                annotation.accessible_label,
+            );
+            let bounds = annotation.label_bounds.expect("dimension label bounds");
+            let label_center = ScreenPoint {
+                x: (bounds.min.x + bounds.max.x) * 0.5,
+                y: (bounds.min.y + bounds.max.y) * 0.5,
+            };
+            assert!(annotation.hit_test(label_center, 0.0));
+            for arrow in annotation.geometry.arrowheads() {
+                let centroid = ScreenPoint {
+                    x: (arrow.tip.x + arrow.base_first.x + arrow.base_second.x) / 3.0,
+                    y: (arrow.tip.y + arrow.base_first.y + arrow.base_second.y) / 3.0,
+                };
+                assert!(annotation.hit_test(centroid, 0.0));
+            }
+            match &annotation.geometry {
+                SceneAnnotationGeometry::LinearDimension {
+                    measured_first,
+                    measured_second,
+                    first,
+                    second,
+                    ..
+                } => {
+                    for (start, end) in [
+                        (*first, *second),
+                        (*measured_first, *first),
+                        (*measured_second, *second),
+                    ] {
+                        assert!(annotation.hit_test(
+                            ScreenPoint {
+                                x: (start.x + end.x) * 0.5,
+                                y: (start.y + end.y) * 0.5,
+                            },
+                            1.0e-9,
+                        ));
+                    }
+                }
+                SceneAnnotationGeometry::RadialDimension {
+                    center,
+                    edge,
+                    label_anchor,
+                    diameter,
+                    full_circle,
+                } => {
+                    let measurement_start = if *diameter && *full_circle {
+                        ScreenPoint {
+                            x: center.x.mul_add(2.0, -edge.x),
+                            y: center.y.mul_add(2.0, -edge.y),
+                        }
+                    } else {
+                        *center
+                    };
+                    for (start, end) in [(measurement_start, *edge), (*edge, *label_anchor)] {
+                        assert!(annotation.hit_test(
+                            ScreenPoint {
+                                x: (start.x + end.x) * 0.5,
+                                y: (start.y + end.y) * 0.5,
+                            },
+                            1.0e-9,
+                        ));
+                    }
+                }
+                SceneAnnotationGeometry::AngularDimension {
+                    vertex,
+                    first_ray,
+                    second_ray,
+                    radius,
+                    clockwise,
+                    ..
+                } => {
+                    for ray in [*first_ray, *second_ray] {
+                        assert!(annotation.hit_test(
+                            ScreenPoint {
+                                x: (vertex.x + ray.x) * 0.5,
+                                y: (vertex.y + ray.y) * 0.5,
+                            },
+                            1.0e-9,
+                        ));
+                    }
+                    let start = (first_ray.y - vertex.y).atan2(first_ray.x - vertex.x);
+                    let end = (second_ray.y - vertex.y).atan2(second_ray.x - vertex.x);
+                    let sweep = if *clockwise {
+                        (end - start).rem_euclid(std::f64::consts::TAU)
+                    } else {
+                        (start - end).rem_euclid(std::f64::consts::TAU)
+                    };
+                    let sign: f64 = if *clockwise { 1.0 } else { -1.0 };
+                    let inside_angle = sign.mul_add(sweep * 0.5, start);
+                    let outside_angle =
+                        (-sign).mul_add((std::f64::consts::TAU - sweep) * 0.5, start);
+                    let at_angle = |angle: f64| ScreenPoint {
+                        x: radius.mul_add(angle.cos(), vertex.x),
+                        y: radius.mul_add(angle.sin(), vertex.y),
+                    };
+                    assert!(annotation.hit_test(at_angle(inside_angle), 1.0e-9));
+                    assert!(
+                        !annotation.hit_test(at_angle(outside_angle), 1.0),
+                        "the unpainted complementary sector must remain targetless",
+                    );
+                }
+                SceneAnnotationGeometry::Label { .. }
+                | SceneAnnotationGeometry::Glyph { .. }
+                | SceneAnnotationGeometry::RightAngle { .. } => {}
+            }
+        }
     }
 
     #[test]
@@ -2559,6 +2738,39 @@ mod tests {
                 SceneConstraintGlyph::Fillet,
             ])
         );
+        for annotation in scene
+            .annotations
+            .iter()
+            .filter(|annotation| matches!(annotation.kind, SceneAnnotationKind::Constraint(_)))
+        {
+            match &annotation.geometry {
+                SceneAnnotationGeometry::Glyph { markers } => {
+                    assert!(annotation.is_movable());
+                    assert!(!markers.is_empty());
+                    for marker in markers {
+                        let bounds = marker.bounds();
+                        assert_eq!(bounds.center, marker.anchor);
+                        assert!((bounds.radius - 10.0).abs() <= f64::EPSILON);
+                        assert!(bounds.contains(marker.anchor));
+                        assert!(annotation.hit_test(marker.anchor, bounds.radius));
+                    }
+                }
+                SceneAnnotationGeometry::RightAngle { corner, .. } => {
+                    assert_eq!(
+                        annotation.kind,
+                        SceneAnnotationKind::Constraint(SceneConstraintGlyph::Perpendicular),
+                    );
+                    assert!(!annotation.is_movable());
+                    assert!(annotation.hit_test(*corner, 0.0));
+                }
+                SceneAnnotationGeometry::LinearDimension { .. }
+                | SceneAnnotationGeometry::RadialDimension { .. }
+                | SceneAnnotationGeometry::AngularDimension { .. }
+                | SceneAnnotationGeometry::Label { .. } => {
+                    panic!("constraint sampler published dimension geometry")
+                }
+            }
+        }
     }
 
     #[test]

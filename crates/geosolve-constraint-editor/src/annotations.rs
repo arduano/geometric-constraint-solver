@@ -2,17 +2,20 @@
 
 //! Geometry-derived, presentation-neutral constraint annotations.
 
+use std::collections::BTreeMap;
+
 use geosolve_sketch::{
     ContactId, CurveDefinition, CurveId, CurveSpan, DocumentCenterRef,
     DocumentConstraintDefinition as Constraint, DocumentConstraintId,
-    DocumentDimensionDefinition as Dimension, DocumentDimensionMode, DocumentSourceId, SketchDatum,
-    SketchDocument,
+    DocumentDimensionDefinition as Dimension, DocumentDimensionMode, DocumentId, DocumentSourceId,
+    ScalarUnit, SketchAcceptedDocumentState, SketchDatum, SketchDocument,
 };
 
+use crate::coordinator::display_dimension_target;
 use crate::{SceneCurve, ScenePoint, ScreenPoint, SelectionItem, Viewport};
 
 /// Semantic symbol requested for one constraint annotation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SceneConstraintGlyph {
     Fixed,
     Coincident,
@@ -91,6 +94,80 @@ pub enum SceneAnnotationVisibility {
 pub struct SceneGlyphMarker {
     pub anchor: ScreenPoint,
     pub leader_from: Option<ScreenPoint>,
+    /// Clockwise screen-space rotation of the compact mark around `anchor`.
+    ///
+    /// The value follows the SVG/canvas convention because screen Y increases
+    /// downward. It is geometry-derived and never presentation adapter state.
+    pub rotation_radians: f64,
+}
+
+impl SceneGlyphMarker {
+    /// Exact circular pointer bound rendered around every compact glyph.
+    pub const BOUND_RADIUS_PIXELS: f64 = 10.0;
+
+    #[must_use]
+    pub const fn bounds(self) -> SceneAnnotationGlyphBounds {
+        SceneAnnotationGlyphBounds {
+            center: self.anchor,
+            radius: Self::BOUND_RADIUS_PIXELS,
+        }
+    }
+}
+
+/// Exact circular bound shared by compact-glyph painting and pointer ownership.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneAnnotationGlyphBounds {
+    pub center: ScreenPoint,
+    pub radius: f64,
+}
+
+impl SceneAnnotationGlyphBounds {
+    #[must_use]
+    pub fn contains(self, point: ScreenPoint) -> bool {
+        point.is_finite() && self.center.distance(point) <= self.radius
+    }
+}
+
+/// Exact triangular arrowhead published by the headless annotation scene.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneAnnotationArrowhead {
+    pub tip: ScreenPoint,
+    pub base_first: ScreenPoint,
+    pub base_second: ScreenPoint,
+}
+
+impl SceneAnnotationArrowhead {
+    #[must_use]
+    pub fn proximity(self, point: ScreenPoint) -> f64 {
+        point_triangle_distance(point, self.tip, self.base_first, self.base_second)
+    }
+}
+
+/// Exact screen-space label rectangle shared by painting and picking.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneAnnotationLabelBounds {
+    pub min: ScreenPoint,
+    pub max: ScreenPoint,
+}
+
+impl SceneAnnotationLabelBounds {
+    #[must_use]
+    pub fn contains(self, point: ScreenPoint, tolerance: f64) -> bool {
+        point.is_finite()
+            && tolerance.is_finite()
+            && tolerance >= 0.0
+            && point.x >= self.min.x - tolerance
+            && point.x <= self.max.x + tolerance
+            && point.y >= self.min.y - tolerance
+            && point.y <= self.max.y + tolerance
+    }
+
+    #[must_use]
+    pub fn distance(self, point: ScreenPoint) -> f64 {
+        let x = point.x.clamp(self.min.x, self.max.x);
+        let y = point.y.clamp(self.min.y, self.max.y);
+        point.distance(ScreenPoint { x, y })
+    }
 }
 
 /// Screen-space geometry needed to render and hit-test an annotation.
@@ -108,6 +185,10 @@ pub enum SceneAnnotationGeometry {
         second_arm: ScreenPoint,
     },
     LinearDimension {
+        /// Accepted measurement attachments.
+        measured_first: ScreenPoint,
+        measured_second: ScreenPoint,
+        /// Offset dimension baseline endpoints.
         first: ScreenPoint,
         second: ScreenPoint,
         label_anchor: ScreenPoint,
@@ -117,6 +198,8 @@ pub enum SceneAnnotationGeometry {
         edge: ScreenPoint,
         label_anchor: ScreenPoint,
         diameter: bool,
+        /// Whether a diameter may truthfully cross the opposite side.
+        full_circle: bool,
     },
     AngularDimension {
         vertex: ScreenPoint,
@@ -128,11 +211,157 @@ pub enum SceneAnnotationGeometry {
     },
     Label {
         anchor: ScreenPoint,
+        leader_from: Option<ScreenPoint>,
     },
 }
 
+impl SceneAnnotationGeometry {
+    /// Publishes every arrowhead exactly once for shared rendering and picking.
+    #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive geometry dispatch keeps paired-arrow fallback and paint/pick identity together"
+    )]
+    pub fn arrowheads(&self) -> Vec<SceneAnnotationArrowhead> {
+        match self {
+            Self::LinearDimension { first, second, .. } => {
+                let Some(direction) = unit(second.x - first.x, second.y - first.y) else {
+                    return Vec::new();
+                };
+                let outside = first.distance(*second) < ANNOTATION_MIN_INWARD_ARROW_SPAN_PIXELS;
+                let first_base_direction = if outside {
+                    [-direction[0], -direction[1]]
+                } else {
+                    direction
+                };
+                let second_base_direction = if outside {
+                    direction
+                } else {
+                    [-direction[0], -direction[1]]
+                };
+                [
+                    annotation_arrowhead(*first, first_base_direction),
+                    annotation_arrowhead(*second, second_base_direction),
+                ]
+                .into_iter()
+                .flatten()
+                .collect()
+            }
+            Self::RadialDimension {
+                center,
+                edge,
+                diameter,
+                full_circle,
+                ..
+            } => {
+                let Some(direction) = unit(edge.x - center.x, edge.y - center.y) else {
+                    return Vec::new();
+                };
+                if *diameter && *full_circle {
+                    let opposite = ScreenPoint {
+                        x: center.x.mul_add(2.0, -edge.x),
+                        y: center.y.mul_add(2.0, -edge.y),
+                    };
+                    let outside =
+                        opposite.distance(*edge) < ANNOTATION_MIN_INWARD_ARROW_SPAN_PIXELS;
+                    let opposite_base_direction = if outside {
+                        [-direction[0], -direction[1]]
+                    } else {
+                        direction
+                    };
+                    let edge_base_direction = if outside {
+                        direction
+                    } else {
+                        [-direction[0], -direction[1]]
+                    };
+                    [
+                        annotation_arrowhead(opposite, opposite_base_direction),
+                        annotation_arrowhead(*edge, edge_base_direction),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect()
+                } else {
+                    annotation_arrowhead(*edge, [-direction[0], -direction[1]])
+                        .into_iter()
+                        .collect()
+                }
+            }
+            Self::AngularDimension {
+                vertex,
+                first_ray,
+                second_ray,
+                radius,
+                clockwise,
+                ..
+            } => {
+                let Some(first_direction) = unit(first_ray.x - vertex.x, first_ray.y - vertex.y)
+                else {
+                    return Vec::new();
+                };
+                let Some(second_direction) = unit(second_ray.x - vertex.x, second_ray.y - vertex.y)
+                else {
+                    return Vec::new();
+                };
+                let first_tip = offset(
+                    *vertex,
+                    first_direction[0] * *radius,
+                    first_direction[1] * *radius,
+                );
+                let second_tip = offset(
+                    *vertex,
+                    second_direction[0] * *radius,
+                    second_direction[1] * *radius,
+                );
+                let first_interior = if *clockwise {
+                    [-first_direction[1], first_direction[0]]
+                } else {
+                    [first_direction[1], -first_direction[0]]
+                };
+                let second_interior = if *clockwise {
+                    [second_direction[1], -second_direction[0]]
+                } else {
+                    [-second_direction[1], second_direction[0]]
+                };
+                let sweep = cross(first_direction, second_direction)
+                    .abs()
+                    .atan2(dot(first_direction, second_direction).clamp(-1.0, 1.0));
+                let outside = radius * sweep < ANNOTATION_MIN_INWARD_ARROW_SPAN_PIXELS;
+                let first_base_direction = if outside {
+                    [-first_interior[0], -first_interior[1]]
+                } else {
+                    first_interior
+                };
+                let second_base_direction = if outside {
+                    [-second_interior[0], -second_interior[1]]
+                } else {
+                    second_interior
+                };
+                [
+                    annotation_arrowhead(first_tip, first_base_direction),
+                    annotation_arrowhead(second_tip, second_base_direction),
+                ]
+                .into_iter()
+                .flatten()
+                .collect()
+            }
+            Self::Label {
+                anchor,
+                leader_from: Some(origin),
+            } => annotation_arrowhead(*origin, [anchor.x - origin.x, anchor.y - origin.y])
+                .into_iter()
+                .collect(),
+            Self::Glyph { .. }
+            | Self::RightAngle { .. }
+            | Self::Label {
+                leader_from: None, ..
+            } => Vec::new(),
+        }
+    }
+}
+
 /// Typed semantic category for one accepted annotation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SceneAnnotationKind {
     Constraint(SceneConstraintGlyph),
     PointDistance,
@@ -142,6 +371,175 @@ pub enum SceneAnnotationKind {
     OrientedAngle,
     SupportingLineOffset,
     ExactTranslatedSegmentOffset,
+}
+
+/// Stable identity of one movable annotation occurrence within a document.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct AnnotationLayoutKey {
+    pub document: DocumentId,
+    pub source: DocumentSourceId,
+    pub item: SelectionItem,
+    pub kind: SceneAnnotationKind,
+    pub marker_index: Option<usize>,
+}
+
+/// Semantic manual placement retained independently from sketch history.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AnnotationPlacement {
+    Linear {
+        perpendicular_pixels: f64,
+    },
+    Radial {
+        direction_radians: f64,
+        clearance_pixels: f64,
+    },
+    Angular {
+        radius_pixels: f64,
+    },
+    Free {
+        offset_pixels: [f64; 2],
+    },
+}
+
+impl AnnotationPlacement {
+    const MAX_ABS_PIXELS: f64 = 10_000.0;
+
+    #[must_use]
+    pub fn is_valid(self) -> bool {
+        match self {
+            Self::Linear {
+                perpendicular_pixels,
+            } => {
+                perpendicular_pixels.is_finite()
+                    && perpendicular_pixels.abs() <= Self::MAX_ABS_PIXELS
+            }
+            Self::Radial {
+                direction_radians,
+                clearance_pixels,
+            } => {
+                direction_radians.is_finite()
+                    && clearance_pixels.is_finite()
+                    && clearance_pixels.abs() <= Self::MAX_ABS_PIXELS
+            }
+            Self::Angular { radius_pixels } => {
+                radius_pixels.is_finite() && (12.0..=Self::MAX_ABS_PIXELS).contains(&radius_pixels)
+            }
+            Self::Free { offset_pixels } => offset_pixels
+                .iter()
+                .all(|value| value.is_finite() && value.abs() <= Self::MAX_ABS_PIXELS),
+        }
+    }
+}
+
+/// One exported cache row. Hosts persist these rows outside canonical sketch data.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AnnotationLayoutEntry {
+    pub key: AnnotationLayoutKey,
+    pub placement: AnnotationPlacement,
+}
+
+impl AnnotationLayoutEntry {
+    fn is_valid(self) -> bool {
+        if !self.placement.is_valid() {
+            return false;
+        }
+        match (self.key.item, self.key.kind, self.placement) {
+            (
+                SelectionItem::Constraint(_),
+                SceneAnnotationKind::Constraint(_),
+                AnnotationPlacement::Free { .. },
+            ) => self.key.marker_index.is_some(),
+            (
+                SelectionItem::Dimension(_),
+                SceneAnnotationKind::PointDistance
+                | SceneAnnotationKind::SupportingLineOffset
+                | SceneAnnotationKind::ExactTranslatedSegmentOffset,
+                AnnotationPlacement::Linear { .. },
+            )
+            | (
+                SelectionItem::Dimension(_),
+                SceneAnnotationKind::Radius | SceneAnnotationKind::Diameter,
+                AnnotationPlacement::Radial { .. },
+            )
+            | (
+                SelectionItem::Dimension(_),
+                SceneAnnotationKind::OrientedAngle,
+                AnnotationPlacement::Angular { .. },
+            )
+            | (
+                SelectionItem::Dimension(_),
+                SceneAnnotationKind::CurveLength,
+                AnnotationPlacement::Linear { .. } | AnnotationPlacement::Free { .. },
+            ) => self.key.marker_index.is_none(),
+            (
+                SelectionItem::Point(_)
+                | SelectionItem::Curve(_)
+                | SelectionItem::Constraint(_)
+                | SelectionItem::Dimension(_)
+                | SelectionItem::Datum(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_),
+                _,
+                _,
+            ) => false,
+        }
+    }
+}
+
+/// Presentation-only manual placement retained by [`crate::ConstraintEditor`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AnnotationLayoutState {
+    entries: BTreeMap<AnnotationLayoutKey, AnnotationPlacement>,
+}
+
+impl AnnotationLayoutState {
+    pub const VERSION: u32 = 1;
+    pub const MAX_ENTRIES: usize = 100_000;
+
+    #[must_use]
+    pub fn entries(&self) -> Vec<AnnotationLayoutEntry> {
+        self.entries
+            .iter()
+            .map(|(key, placement)| AnnotationLayoutEntry {
+                key: *key,
+                placement: *placement,
+            })
+            .collect()
+    }
+
+    /// Reconstructs a bounded cache, dropping malformed rows independently.
+    #[must_use]
+    pub fn from_entries(entries: impl IntoIterator<Item = AnnotationLayoutEntry>) -> Self {
+        let mut state = Self::default();
+        for entry in entries.into_iter().take(Self::MAX_ENTRIES) {
+            if entry.is_valid() {
+                state.entries.insert(entry.key, entry.placement);
+            }
+        }
+        state
+    }
+
+    pub(crate) fn get(&self, key: AnnotationLayoutKey) -> Option<AnnotationPlacement> {
+        self.entries.get(&key).copied()
+    }
+
+    pub(crate) fn insert(&mut self, key: AnnotationLayoutKey, placement: AnnotationPlacement) {
+        if placement.is_valid() {
+            self.entries.insert(key, placement);
+        }
+    }
+
+    pub(crate) fn remove_item(&mut self, item: SelectionItem) -> bool {
+        let before = self.entries.len();
+        self.entries.retain(|key, _| key.item != item);
+        self.entries.len() != before
+    }
+
+    pub(crate) fn clear(&mut self) -> bool {
+        let changed = !self.entries.is_empty();
+        self.entries.clear();
+        changed
+    }
 }
 
 /// One persistent constraint or dimension projected into an accepted editor scene.
@@ -162,9 +560,253 @@ pub struct SceneAnnotation {
     pub visibility: SceneAnnotationVisibility,
     /// Whether the persistent source is currently suppressed.
     pub suppressed: bool,
+    /// Compact CAD value painted on the canvas. Constraint glyphs carry none.
+    pub visible_text: Option<String>,
+    /// Full human-readable source/value used by title and accessibility surfaces.
+    pub accessible_label: String,
+    /// Exact label rectangle used by both rendering and pointer ownership.
+    pub label_bounds: Option<SceneAnnotationLabelBounds>,
+    /// Reference dimensions use parenthesized text and non-colour styling.
+    pub reference: bool,
 }
 
 impl SceneAnnotation {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive semantic placement dispatch keeps every annotation geometry form explicit"
+    )]
+    fn apply_placement(&mut self, placement: AnnotationPlacement) {
+        match (&mut self.geometry, placement) {
+            (
+                SceneAnnotationGeometry::LinearDimension {
+                    measured_first,
+                    measured_second,
+                    first,
+                    second,
+                    label_anchor,
+                },
+                AnnotationPlacement::Linear {
+                    perpendicular_pixels,
+                },
+            ) => {
+                if let Some(direction) = unit(
+                    measured_second.x - measured_first.x,
+                    measured_second.y - measured_first.y,
+                ) {
+                    let normal = [-direction[1], direction[0]];
+                    *first = offset(
+                        *measured_first,
+                        normal[0] * perpendicular_pixels,
+                        normal[1] * perpendicular_pixels,
+                    );
+                    *second = offset(
+                        *measured_second,
+                        normal[0] * perpendicular_pixels,
+                        normal[1] * perpendicular_pixels,
+                    );
+                    *label_anchor = midpoint(*first, *second);
+                }
+            }
+            (
+                SceneAnnotationGeometry::RadialDimension {
+                    center,
+                    edge,
+                    label_anchor,
+                    full_circle,
+                    ..
+                },
+                AnnotationPlacement::Radial {
+                    direction_radians,
+                    clearance_pixels,
+                },
+            ) => {
+                let length = center.distance(*edge);
+                let direction = if *full_circle {
+                    [direction_radians.cos(), direction_radians.sin()]
+                } else {
+                    // A bounded arc has no truthful boundary point at an arbitrary
+                    // polar direction. Keep its canonical on-arc attachment and
+                    // move the label only along that radius.
+                    unit(edge.x - center.x, edge.y - center.y).unwrap_or([1.0, 0.0])
+                };
+                if *full_circle {
+                    *edge = offset(*center, direction[0] * length, direction[1] * length);
+                }
+                *label_anchor = offset(
+                    *center,
+                    direction[0] * (length + clearance_pixels),
+                    direction[1] * (length + clearance_pixels),
+                );
+            }
+            (
+                SceneAnnotationGeometry::AngularDimension {
+                    vertex,
+                    first_ray,
+                    second_ray,
+                    radius,
+                    label_anchor,
+                    ..
+                },
+                AnnotationPlacement::Angular {
+                    radius_pixels: next_radius,
+                },
+            ) => {
+                let direction = unit(label_anchor.x - vertex.x, label_anchor.y - vertex.y)
+                    .unwrap_or([1.0, 0.0]);
+                let first_direction =
+                    unit(first_ray.x - vertex.x, first_ray.y - vertex.y).unwrap_or([1.0, 0.0]);
+                let second_direction =
+                    unit(second_ray.x - vertex.x, second_ray.y - vertex.y).unwrap_or([0.0, 1.0]);
+                *radius = next_radius;
+                *first_ray = offset(
+                    *vertex,
+                    first_direction[0] * (next_radius + 12.0),
+                    first_direction[1] * (next_radius + 12.0),
+                );
+                *second_ray = offset(
+                    *vertex,
+                    second_direction[0] * (next_radius + 12.0),
+                    second_direction[1] * (next_radius + 12.0),
+                );
+                *label_anchor = offset(
+                    *vertex,
+                    direction[0] * (next_radius + 18.0),
+                    direction[1] * (next_radius + 18.0),
+                );
+            }
+            (
+                SceneAnnotationGeometry::Glyph { markers },
+                AnnotationPlacement::Free { offset_pixels },
+            ) => {
+                for marker in markers {
+                    marker.anchor = offset(marker.anchor, offset_pixels[0], offset_pixels[1]);
+                }
+            }
+            (
+                SceneAnnotationGeometry::Label { anchor, .. },
+                AnnotationPlacement::Free { offset_pixels },
+            ) => {
+                *anchor = offset(*anchor, offset_pixels[0], offset_pixels[1]);
+            }
+            (
+                SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
+                | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
+                | SceneAnnotationGeometry::AngularDimension { label_anchor, .. },
+                AnnotationPlacement::Free { offset_pixels },
+            ) => {
+                *label_anchor = offset(*label_anchor, offset_pixels[0], offset_pixels[1]);
+            }
+            (
+                SceneAnnotationGeometry::RightAngle { .. }
+                | SceneAnnotationGeometry::Glyph { .. }
+                | SceneAnnotationGeometry::Label { .. }
+                | SceneAnnotationGeometry::LinearDimension { .. }
+                | SceneAnnotationGeometry::RadialDimension { .. }
+                | SceneAnnotationGeometry::AngularDimension { .. },
+                _,
+            ) => {}
+        }
+        self.refresh_label_bounds();
+    }
+
+    #[must_use]
+    pub const fn is_movable(&self) -> bool {
+        !matches!(self.geometry, SceneAnnotationGeometry::RightAngle { .. })
+    }
+
+    pub(crate) fn movable_handle_hit(
+        &self,
+        position: ScreenPoint,
+        marker_index: Option<usize>,
+    ) -> bool {
+        if !self.is_movable() || !position.is_finite() {
+            return false;
+        }
+        match &self.geometry {
+            SceneAnnotationGeometry::Glyph { markers } => marker_index
+                .and_then(|index| markers.get(index))
+                .is_some_and(|marker| marker.bounds().contains(position)),
+            SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
+            | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
+            | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => {
+                self.label_hit(position) || label_anchor.distance(position) <= 2.0
+            }
+            SceneAnnotationGeometry::Label { anchor, .. } => {
+                self.label_bounds
+                    .is_some_and(|bounds| bounds.contains(position, 2.0))
+                    || anchor.distance(position) <= 2.0
+            }
+            SceneAnnotationGeometry::RightAngle { .. } => false,
+        }
+    }
+
+    pub(crate) fn automatic_placement(
+        &self,
+        marker_index: Option<usize>,
+    ) -> Option<AnnotationPlacement> {
+        match &self.geometry {
+            SceneAnnotationGeometry::Glyph { markers } if marker_index? < markers.len() => {
+                Some(AnnotationPlacement::Free {
+                    offset_pixels: [0.0, 0.0],
+                })
+            }
+            SceneAnnotationGeometry::Label { .. } => Some(AnnotationPlacement::Free {
+                offset_pixels: [0.0, 0.0],
+            }),
+            SceneAnnotationGeometry::LinearDimension {
+                measured_first,
+                measured_second,
+                first,
+                ..
+            } => {
+                let direction = unit(
+                    measured_second.x - measured_first.x,
+                    measured_second.y - measured_first.y,
+                )?;
+                Some(AnnotationPlacement::Linear {
+                    perpendicular_pixels: (first.x - measured_first.x)
+                        .mul_add(-direction[1], (first.y - measured_first.y) * direction[0]),
+                })
+            }
+            SceneAnnotationGeometry::RadialDimension {
+                center,
+                edge,
+                label_anchor,
+                ..
+            } => {
+                let delta = [label_anchor.x - center.x, label_anchor.y - center.y];
+                let distance = delta[0].hypot(delta[1]);
+                let radius = center.distance(*edge);
+                Some(AnnotationPlacement::Radial {
+                    direction_radians: delta[1].atan2(delta[0]),
+                    clearance_pixels: distance - radius,
+                })
+            }
+            SceneAnnotationGeometry::AngularDimension { radius, .. } => {
+                Some(AnnotationPlacement::Angular {
+                    radius_pixels: *radius,
+                })
+            }
+            SceneAnnotationGeometry::Glyph { .. } | SceneAnnotationGeometry::RightAngle { .. } => {
+                None
+            }
+        }
+    }
+
+    pub(crate) const fn layout_key(
+        &self,
+        document: DocumentId,
+        marker_index: Option<usize>,
+    ) -> AnnotationLayoutKey {
+        AnnotationLayoutKey {
+            document,
+            source: self.source,
+            item: self.item,
+            kind: self.kind,
+            marker_index,
+        }
+    }
+
     /// Reports whether direct interaction context makes this annotation visible.
     #[must_use]
     pub fn is_visible(
@@ -191,8 +833,12 @@ impl SceneAnnotation {
 
     /// Returns the exact presentation occurrence under the pointer and its distance.
     ///
-    /// Glyph leaders are deliberately excluded: they provide contextual navigation,
-    /// but hovering a leader is not the same as hovering its icon.
+    /// Painted glyph leaders select the owning occurrence, while only the exact
+    /// glyph bound may begin movement.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive paint-primitive dispatch keeps shared picking geometry auditable"
+    )]
     pub(crate) fn proximity_hit(
         &self,
         position: ScreenPoint,
@@ -201,12 +847,27 @@ impl SceneAnnotation {
         if !position.is_finite() || !tolerance_pixels.is_finite() || tolerance_pixels < 0.0 {
             return None;
         }
-        let (occurrence, distance) =
+        let label_distance = self
+            .label_bounds
+            .map_or(f64::INFINITY, |bounds| bounds.distance(position));
+        let (occurrence, mut distance) =
             match &self.geometry {
                 SceneAnnotationGeometry::Glyph { markers } => markers
                     .iter()
                     .enumerate()
-                    .map(|(index, marker)| (Some(index), position.distance(marker.anchor)))
+                    .map(|(index, marker)| {
+                        let distance = marker.leader_from.map_or_else(
+                            || position.distance(marker.anchor),
+                            |origin| {
+                                position.distance(marker.anchor).min(point_segment_distance(
+                                    position,
+                                    origin,
+                                    marker.anchor,
+                                ))
+                            },
+                        );
+                        (Some(index), distance)
+                    })
                     .min_by(|first, second| {
                         first
                             .1
@@ -224,47 +885,85 @@ impl SceneAnnotation {
                         .min(point_segment_distance(position, *corner, *second_arm)),
                 ),
                 SceneAnnotationGeometry::LinearDimension {
+                    measured_first,
+                    measured_second,
                     label_anchor,
                     first,
                     second,
                 } => (
                     None,
-                    position
-                        .distance(*label_anchor)
-                        .min(point_segment_distance(position, *first, *second)),
+                    label_distance
+                        .min(position.distance(*label_anchor))
+                        .min(point_segment_distance(position, *first, *second))
+                        .min(point_segment_distance(position, *measured_first, *first))
+                        .min(point_segment_distance(position, *measured_second, *second)),
                 ),
                 SceneAnnotationGeometry::RadialDimension {
                     center,
                     edge,
                     label_anchor,
-                    ..
+                    diameter,
+                    full_circle,
                 } => (
                     None,
-                    position
-                        .distance(*label_anchor)
-                        .min(point_segment_distance(position, *center, *edge)),
+                    label_distance
+                        .min(position.distance(*label_anchor))
+                        .min(point_segment_distance(position, *edge, *label_anchor))
+                        .min(if *diameter && *full_circle {
+                            let opposite = ScreenPoint {
+                                x: center.x.mul_add(2.0, -edge.x),
+                                y: center.y.mul_add(2.0, -edge.y),
+                            };
+                            point_segment_distance(position, opposite, *edge)
+                        } else {
+                            point_segment_distance(position, *center, *edge)
+                        }),
                 ),
                 SceneAnnotationGeometry::AngularDimension {
                     vertex,
                     first_ray,
                     second_ray,
                     radius,
+                    clockwise,
                     label_anchor,
-                    ..
-                } => {
-                    let radial_distance = position.distance(*vertex);
-                    (
-                        None,
-                        position
-                            .distance(*label_anchor)
-                            .min((radial_distance - radius).abs())
-                            .min(point_segment_distance(position, *vertex, *first_ray))
-                            .min(point_segment_distance(position, *vertex, *second_ray)),
-                    )
-                }
-                SceneAnnotationGeometry::Label { anchor } => (None, position.distance(*anchor)),
+                } => (
+                    None,
+                    label_distance
+                        .min(position.distance(*label_anchor))
+                        .min(point_arc_distance(
+                            position,
+                            *vertex,
+                            *first_ray,
+                            *second_ray,
+                            *radius,
+                            *clockwise,
+                        ))
+                        .min(point_segment_distance(position, *vertex, *first_ray))
+                        .min(point_segment_distance(position, *vertex, *second_ray)),
+                ),
+                SceneAnnotationGeometry::Label {
+                    anchor,
+                    leader_from,
+                } => (
+                    None,
+                    label_distance.min(position.distance(*anchor)).min(
+                        leader_from.map_or(f64::INFINITY, |origin| {
+                            point_segment_distance(position, origin, *anchor)
+                        }),
+                    ),
+                ),
             };
+        for arrowhead in self.geometry.arrowheads() {
+            distance = distance.min(arrowhead.proximity(position));
+        }
         (distance <= tolerance_pixels).then_some((occurrence, distance))
+    }
+
+    /// Reports whether a press owns the movable label rather than another painted part.
+    #[must_use]
+    pub(crate) fn label_hit(&self, position: ScreenPoint) -> bool {
+        self.label_bounds
+            .is_some_and(|bounds| bounds.contains(position, 2.0))
     }
 
     /// Reports whether the pointer remains inside a bounded corridor from
@@ -306,7 +1005,7 @@ impl SceneAnnotation {
             | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => {
                 point_segment_distance(position, context_origin, *label_anchor)
             }
-            SceneAnnotationGeometry::Label { anchor } => {
+            SceneAnnotationGeometry::Label { anchor, .. } => {
                 point_segment_distance(position, context_origin, *anchor)
             }
         })
@@ -323,9 +1022,246 @@ impl SceneAnnotation {
             | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => {
                 vec![*label_anchor]
             }
-            SceneAnnotationGeometry::Label { anchor } => vec![*anchor],
+            SceneAnnotationGeometry::Label { anchor, .. } => vec![*anchor],
         }
     }
+
+    pub(crate) fn label_anchor(&self) -> Option<ScreenPoint> {
+        match &self.geometry {
+            SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
+            | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
+            | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => Some(*label_anchor),
+            SceneAnnotationGeometry::Label { anchor, .. } => Some(*anchor),
+            SceneAnnotationGeometry::Glyph { .. } | SceneAnnotationGeometry::RightAngle { .. } => {
+                None
+            }
+        }
+    }
+
+    pub(crate) fn refresh_label_bounds(&mut self) {
+        self.label_bounds = self
+            .visible_text
+            .as_deref()
+            .zip(self.label_anchor())
+            .map(|(text, anchor)| annotation_label_bounds(anchor, text));
+    }
+
+    fn update_dimension_value(&mut self, source_label: &str, value: Option<f64>) {
+        self.visible_text =
+            value.and_then(|value| compact_dimension_text(value, self.kind, self.reference));
+        self.accessible_label =
+            accessible_dimension_label(source_label, self.kind, self.reference, value);
+        self.refresh_label_bounds();
+    }
+}
+
+fn accessible_dimension_label(
+    source_label: &str,
+    kind: SceneAnnotationKind,
+    reference: bool,
+    value: Option<f64>,
+) -> String {
+    let family = match kind {
+        SceneAnnotationKind::PointDistance => "point-distance dimension",
+        SceneAnnotationKind::CurveLength => "curve-length dimension",
+        SceneAnnotationKind::Radius => "radius dimension",
+        SceneAnnotationKind::Diameter => "diameter dimension",
+        SceneAnnotationKind::OrientedAngle => "oriented-angle dimension",
+        SceneAnnotationKind::SupportingLineOffset => "supporting-line offset dimension",
+        SceneAnnotationKind::ExactTranslatedSegmentOffset => {
+            "exact translated-segment offset dimension"
+        }
+        SceneAnnotationKind::Constraint(_) => "constraint",
+    };
+    let mode = if reference { "Reference" } else { "Driving" };
+    let value = value
+        .filter(|value| value.is_finite())
+        .and_then(|value| {
+            if kind == SceneAnnotationKind::OrientedAngle {
+                display_dimension_target(value, ScalarUnit::Angle)
+                    .map(|display| format!("{} degrees", compact_number(display.value)))
+            } else {
+                Some(format!("{} model units", compact_number(value)))
+            }
+        })
+        .unwrap_or_else(|| "value unavailable".into());
+    format!("{source_label}; {mode} {family}; {value}")
+}
+
+fn annotation_label_bounds(anchor: ScreenPoint, text: &str) -> SceneAnnotationLabelBounds {
+    let character_count = u32::try_from(text.chars().count()).unwrap_or(u32::MAX);
+    let width = (f64::from(character_count) * 7.4 + 12.0).max(24.0);
+    let half_width = width * 0.5;
+    SceneAnnotationLabelBounds {
+        min: ScreenPoint {
+            x: anchor.x - half_width,
+            y: anchor.y - 10.0,
+        },
+        max: ScreenPoint {
+            x: anchor.x + half_width,
+            y: anchor.y + 10.0,
+        },
+    }
+}
+
+fn dimension_default_text(
+    document: &SketchDocument,
+    dimension: &geosolve_sketch::DocumentDimension,
+) -> Option<String> {
+    let value = dimension_stored_value(document, dimension)?;
+    compact_dimension_text(
+        value,
+        match dimension.definition {
+            Dimension::OrientedAngle { .. } => SceneAnnotationKind::OrientedAngle,
+            Dimension::Radius { .. } => SceneAnnotationKind::Radius,
+            Dimension::Diameter { .. } => SceneAnnotationKind::Diameter,
+            Dimension::PointDistance { .. } => SceneAnnotationKind::PointDistance,
+            Dimension::CurveLength { .. } => SceneAnnotationKind::CurveLength,
+            Dimension::SupportingLineOffset { .. } => SceneAnnotationKind::SupportingLineOffset,
+            Dimension::ExactTranslatedSegmentOffset { .. } => {
+                SceneAnnotationKind::ExactTranslatedSegmentOffset
+            }
+        },
+        dimension.mode == DocumentDimensionMode::Reference,
+    )
+}
+
+fn dimension_stored_value(
+    document: &SketchDocument,
+    dimension: &geosolve_sketch::DocumentDimension,
+) -> Option<f64> {
+    let target = match &dimension.definition {
+        Dimension::PointDistance { target, .. }
+        | Dimension::CurveLength { target, .. }
+        | Dimension::Radius { target, .. }
+        | Dimension::Diameter { target, .. }
+        | Dimension::OrientedAngle { target, .. }
+        | Dimension::SupportingLineOffset { target, .. }
+        | Dimension::ExactTranslatedSegmentOffset { target, .. } => *target,
+    };
+    document
+        .scalar(target)
+        .map(|scalar| scalar.value)
+        .filter(|value| value.is_finite())
+}
+
+pub(crate) fn update_dimension_values(
+    annotations: &mut [SceneAnnotation],
+    accepted: &SketchAcceptedDocumentState,
+) {
+    for annotation in annotations.iter_mut() {
+        let SelectionItem::Dimension(id) = annotation.item else {
+            continue;
+        };
+        let Some(dimension) = accepted
+            .document()
+            .dimension(id)
+            .filter(|dimension| dimension.source_id == annotation.source)
+        else {
+            annotation.update_dimension_value("Accepted dimension", None);
+            continue;
+        };
+        let value = match dimension.mode {
+            DocumentDimensionMode::Driving => {
+                let target = match &dimension.definition {
+                    Dimension::PointDistance { target, .. }
+                    | Dimension::CurveLength { target, .. }
+                    | Dimension::Radius { target, .. }
+                    | Dimension::Diameter { target, .. }
+                    | Dimension::OrientedAngle { target, .. }
+                    | Dimension::SupportingLineOffset { target, .. }
+                    | Dimension::ExactTranslatedSegmentOffset { target, .. } => *target,
+                };
+                accepted
+                    .document()
+                    .scalar(target)
+                    .map(|scalar| scalar.value)
+            }
+            DocumentDimensionMode::Reference => accepted.reference_value(id),
+        }
+        .filter(|value| value.is_finite());
+        annotation.update_dimension_value(&dimension.label, value);
+    }
+}
+
+/// Formats one finite dimension as compact conventional CAD notation.
+#[must_use]
+pub fn compact_dimension_text(
+    value: f64,
+    kind: SceneAnnotationKind,
+    reference: bool,
+) -> Option<String> {
+    if !value.is_finite() {
+        return None;
+    }
+    let converted = if kind == SceneAnnotationKind::OrientedAngle {
+        display_dimension_target(value, ScalarUnit::Angle)?.value
+    } else {
+        value
+    };
+    let number = compact_number(converted);
+    let value = match kind {
+        SceneAnnotationKind::Radius => format!("R{number}"),
+        SceneAnnotationKind::Diameter => format!("⌀{number}"),
+        SceneAnnotationKind::OrientedAngle => format!("{number}°"),
+        SceneAnnotationKind::Constraint(_)
+        | SceneAnnotationKind::PointDistance
+        | SceneAnnotationKind::CurveLength
+        | SceneAnnotationKind::SupportingLineOffset
+        | SceneAnnotationKind::ExactTranslatedSegmentOffset => number,
+    };
+    Some(if reference {
+        format!("({value})")
+    } else {
+        value
+    })
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "finite IEEE-754 base-10 exponents are bounded to approximately plus or minus 308"
+)]
+fn compact_number(value: f64) -> String {
+    let value = if value == 0.0 { 0.0 } else { value };
+    let magnitude = value.abs();
+    if magnitude == 0.0 {
+        return "0".into();
+    }
+    let mut exponent = magnitude.log10().floor() as i32;
+    if !(1.0e-3..1.0e5).contains(&magnitude) {
+        let mut scaled = value / 10.0_f64.powi(exponent);
+        scaled = (scaled * 1_000.0).round() / 1_000.0;
+        if scaled.abs() >= 10.0 {
+            scaled /= 10.0;
+            exponent += 1;
+        }
+        return format!("{}e{exponent}", trim_decimal(format!("{scaled:.3}")));
+    }
+    if exponent > 3 {
+        let step = 10.0_f64.powi(exponent - 3);
+        let rounded = (value / step).round() * step;
+        if rounded.abs() >= 1.0e5 {
+            return format!("{}e5", trim_decimal(format!("{:.3}", rounded / 1.0e5)));
+        }
+        return format!("{rounded:.0}");
+    }
+    let decimals = usize::try_from((3 - exponent).clamp(0, 12)).unwrap_or(0);
+    trim_decimal(format!("{value:.decimals$}"))
+}
+
+fn trim_decimal(mut value: String) -> String {
+    if value.contains('.') {
+        while value.ends_with('0') {
+            value.pop();
+        }
+        if value.ends_with('.') {
+            value.pop();
+        }
+    }
+    if value == "-0" {
+        value = "0".into();
+    }
+    value
 }
 
 pub(crate) fn build_annotations(
@@ -341,12 +1277,20 @@ pub(crate) fn build_annotations(
         if anchors.is_empty() {
             continue;
         }
+        let rotations = constraint_marker_rotations(
+            document,
+            curves,
+            &constraint.definition,
+            glyph,
+            &operands,
+            &anchors,
+        );
         let geometry = match &constraint.definition {
-            Constraint::Perpendicular { first, second } => {
+            Constraint::Perpendicular { first, second } if !constraint.suppressed => {
                 right_angle_geometry(curves, viewport, *first, *second)
-                    .unwrap_or_else(|| glyph_geometry(anchors))
+                    .unwrap_or_else(|| glyph_geometry(anchors, rotations))
             }
-            _ => glyph_geometry(anchors),
+            _ => glyph_geometry(anchors, rotations),
         };
         annotations.push(SceneAnnotation {
             item: SelectionItem::Constraint(constraint.id),
@@ -356,13 +1300,19 @@ pub(crate) fn build_annotations(
             geometry,
             visibility: SceneAnnotationVisibility::Contextual,
             suppressed: constraint.suppressed,
+            visible_text: None,
+            accessible_label: accessible_constraint_label(&constraint.label, glyph),
+            label_bounds: None,
+            reference: false,
         });
     }
     for dimension in document.dimensions() {
         if let Some((kind, operands, geometry)) =
             dimension_presentation(document, points, curves, viewport, &dimension.definition)
         {
-            annotations.push(SceneAnnotation {
+            let visible_text = dimension_default_text(document, dimension);
+            let reference = dimension.mode == DocumentDimensionMode::Reference;
+            let mut annotation = SceneAnnotation {
                 item: SelectionItem::Dimension(dimension.id),
                 source: dimension.source_id,
                 kind,
@@ -377,11 +1327,91 @@ pub(crate) fn build_annotations(
                     SceneAnnotationVisibility::Contextual
                 },
                 suppressed: dimension.suppressed,
-            });
+                accessible_label: accessible_dimension_label(
+                    &dimension.label,
+                    kind,
+                    reference,
+                    dimension_stored_value(document, dimension),
+                ),
+                visible_text,
+                label_bounds: None,
+                reference,
+            };
+            annotation.refresh_label_bounds();
+            annotations.push(annotation);
         }
     }
-    fan_out_glyphs(&mut annotations);
+    resolve_automatic_layout(
+        document.id(),
+        &mut annotations,
+        points,
+        curves,
+        viewport,
+        None,
+    );
     annotations
+}
+
+fn accessible_constraint_label(source_label: &str, glyph: SceneConstraintGlyph) -> String {
+    let family = match glyph {
+        SceneConstraintGlyph::Fixed => "fixed",
+        SceneConstraintGlyph::Coincident => "coincident",
+        SceneConstraintGlyph::Horizontal => "horizontal",
+        SceneConstraintGlyph::Vertical => "vertical",
+        SceneConstraintGlyph::PointOnCurve => "point-on-curve",
+        SceneConstraintGlyph::Parallel => "parallel",
+        SceneConstraintGlyph::Perpendicular => "perpendicular",
+        SceneConstraintGlyph::Concentric => "concentric",
+        SceneConstraintGlyph::Collinear => "collinear",
+        SceneConstraintGlyph::EqualLength => "equal-length",
+        SceneConstraintGlyph::EqualRadius => "equal-radius",
+        SceneConstraintGlyph::Midpoint => "midpoint",
+        SceneConstraintGlyph::Symmetry => "symmetry",
+        SceneConstraintGlyph::Contact => "contact",
+        SceneConstraintGlyph::Tangency => "tangency",
+        SceneConstraintGlyph::Direction => "direction",
+        SceneConstraintGlyph::Normal => "normal",
+        SceneConstraintGlyph::EqualCurvature => "equal-curvature",
+        SceneConstraintGlyph::Continuity => "continuity",
+        SceneConstraintGlyph::Fillet => "fillet",
+    };
+    format!("{source_label}; {family} constraint")
+}
+
+pub(crate) fn apply_layout(
+    document: DocumentId,
+    annotations: &mut [SceneAnnotation],
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+    layout: &AnnotationLayoutState,
+) {
+    for annotation in &mut *annotations {
+        if let SceneAnnotationGeometry::Glyph { markers } = &mut annotation.geometry {
+            for (index, marker) in markers.iter_mut().enumerate() {
+                let key = AnnotationLayoutKey {
+                    document,
+                    source: annotation.source,
+                    item: annotation.item,
+                    kind: annotation.kind,
+                    marker_index: Some(index),
+                };
+                if let Some(AnnotationPlacement::Free { offset_pixels }) = layout.get(key) {
+                    marker.anchor = offset(marker.anchor, offset_pixels[0], offset_pixels[1]);
+                }
+            }
+        } else if let Some(placement) = layout.get(annotation.layout_key(document, None)) {
+            annotation.apply_placement(placement);
+        }
+    }
+    resolve_automatic_layout(
+        document,
+        annotations,
+        points,
+        curves,
+        viewport,
+        Some(layout),
+    );
 }
 
 pub(crate) fn build_constraint_entries(document: &SketchDocument) -> Vec<SceneConstraintEntry> {
@@ -638,16 +1668,140 @@ fn constraint_entry_presentation(
     }
 }
 
-fn glyph_geometry(anchors: Vec<ScreenPoint>) -> SceneAnnotationGeometry {
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "the one-shot paired marker vectors are consumed together by scene composition"
+)]
+fn glyph_geometry(anchors: Vec<ScreenPoint>, rotations: Vec<f64>) -> SceneAnnotationGeometry {
     SceneAnnotationGeometry::Glyph {
         markers: anchors
             .into_iter()
-            .map(|anchor| SceneGlyphMarker {
-                anchor,
-                leader_from: None,
+            .enumerate()
+            .map(|(index, origin)| SceneGlyphMarker {
+                anchor: offset(origin, 24.0, -24.0),
+                leader_from: Some(origin),
+                rotation_radians: rotations.get(index).copied().unwrap_or(0.0),
             })
             .collect(),
     }
+}
+
+fn constraint_marker_rotations(
+    document: &SketchDocument,
+    curves: &[SceneCurve],
+    definition: &Constraint,
+    glyph: SceneConstraintGlyph,
+    operands: &[SelectionItem],
+    anchors: &[ScreenPoint],
+) -> Vec<f64> {
+    let fixed_rotation = match definition {
+        Constraint::SymmetricAboutLine { line, .. } => {
+            curve_direction_at(curves, *line, anchors[0])
+                .map(|direction| direction[1].atan2(direction[0]) - std::f64::consts::FRAC_PI_2)
+        }
+        Constraint::SymmetricAboutDatumAxis { axis, .. } => Some(match axis {
+            geosolve_sketch::DocumentCoordinateAxis::X => -std::f64::consts::FRAC_PI_2,
+            geosolve_sketch::DocumentCoordinateAxis::Y => 0.0,
+        }),
+        Constraint::CurveDirection { curve_contact, .. } => document
+            .contact(*curve_contact)
+            .and_then(|contact| curve_direction_at(curves, contact.curve, anchors[0]))
+            .map(|direction| direction[1].atan2(direction[0])),
+        _ => None,
+    };
+    if let Some(rotation) = fixed_rotation.filter(|rotation| rotation.is_finite()) {
+        return vec![rotation; anchors.len()];
+    }
+
+    let rotates_with_curve = matches!(
+        glyph,
+        SceneConstraintGlyph::PointOnCurve
+            | SceneConstraintGlyph::Parallel
+            | SceneConstraintGlyph::Perpendicular
+            | SceneConstraintGlyph::Collinear
+            | SceneConstraintGlyph::EqualLength
+            | SceneConstraintGlyph::Contact
+            | SceneConstraintGlyph::Tangency
+            | SceneConstraintGlyph::Direction
+            | SceneConstraintGlyph::Normal
+            | SceneConstraintGlyph::EqualCurvature
+            | SceneConstraintGlyph::Continuity
+            | SceneConstraintGlyph::Fillet
+    );
+    if !rotates_with_curve {
+        return vec![0.0; anchors.len()];
+    }
+
+    let spans = operands
+        .iter()
+        .filter_map(|operand| match operand {
+            SelectionItem::Curve(span) => Some(*span),
+            SelectionItem::Point(_)
+            | SelectionItem::Constraint(_)
+            | SelectionItem::Dimension(_)
+            | SelectionItem::Datum(_)
+            | SelectionItem::Feature(_)
+            | SelectionItem::FeatureCorner(_) => None,
+        })
+        .collect::<Vec<_>>();
+    anchors
+        .iter()
+        .map(|anchor| {
+            spans
+                .iter()
+                .filter_map(|span| {
+                    curve_direction_at(curves, *span, *anchor).map(|direction| {
+                        let distance = curves
+                            .iter()
+                            .filter(|curve| curve.span == *span)
+                            .flat_map(|curve| curve.screen_polyline.windows(2))
+                            .map(|segment| point_segment_distance(*anchor, segment[0], segment[1]))
+                            .min_by(f64::total_cmp)
+                            .unwrap_or(f64::INFINITY);
+                        (distance, *span, direction)
+                    })
+                })
+                .min_by(|first, second| {
+                    first
+                        .0
+                        .total_cmp(&second.0)
+                        .then_with(|| first.1.cmp(&second.1))
+                })
+                .map_or(0.0, |(_, _, direction)| direction[1].atan2(direction[0]))
+        })
+        .collect()
+}
+
+fn curve_direction_at(
+    curves: &[SceneCurve],
+    span: CurveSpan,
+    anchor: ScreenPoint,
+) -> Option<[f64; 2]> {
+    curves
+        .iter()
+        .enumerate()
+        .filter(|(_, curve)| curve.span == span)
+        .flat_map(|(curve_index, curve)| {
+            curve.screen_polyline.windows(2).enumerate().filter_map(
+                move |(segment_index, segment)| {
+                    let direction = unit(segment[1].x - segment[0].x, segment[1].y - segment[0].y)?;
+                    Some((
+                        point_segment_distance(anchor, segment[0], segment[1]),
+                        curve_index,
+                        segment_index,
+                        direction,
+                    ))
+                },
+            )
+        })
+        .min_by(|first, second| {
+            first
+                .0
+                .total_cmp(&second.0)
+                .then_with(|| first.1.cmp(&second.1))
+                .then_with(|| first.2.cmp(&second.2))
+        })
+        .map(|(_, _, _, direction)| direction)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -921,6 +2075,10 @@ fn constraint_presentation(
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive dimension-family dispatch keeps all seven public geometry contracts together"
+)]
 fn dimension_presentation(
     document: &SketchDocument,
     points: &[ScenePoint],
@@ -939,23 +2097,50 @@ fn dimension_presentation(
             Some((
                 SceneAnnotationKind::PointDistance,
                 vec![SelectionItem::Point(*first), SelectionItem::Point(*second)],
-                SceneAnnotationGeometry::LinearDimension {
-                    first: first_anchor,
-                    second: second_anchor,
-                    label_anchor: offset_midpoint(first_anchor, second_anchor, 16.0),
-                },
+                linear_dimension(first_anchor, second_anchor, 28.0)?,
             ))
         }
-        Dimension::CurveLength { curve, .. } => Some((
-            SceneAnnotationKind::CurveLength,
-            vec![SelectionItem::Curve(*curve)],
-            SceneAnnotationGeometry::Label {
-                anchor: offset(curve_anchor(curves, *curve)?, 0.0, -14.0),
-            },
-        )),
+        Dimension::CurveLength { curve, .. } => {
+            let span = *curve;
+            let definition = &document.curve(span.curve)?.definition;
+            let geometry = if matches!(
+                definition,
+                CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. }
+            ) {
+                let [first, second] = curve_endpoints(curves, span)?;
+                linear_dimension(first, second, 28.0)?
+            } else {
+                let anchor = curve_anchor(curves, span)?;
+                let curve = curves.iter().find(|candidate| candidate.span == span)?;
+                let middle = curve.screen_polyline.len().saturating_sub(1) / 2;
+                let before = curve
+                    .screen_polyline
+                    .get(middle.saturating_sub(1))
+                    .copied()
+                    .unwrap_or(anchor);
+                let after = curve
+                    .screen_polyline
+                    .get(middle.saturating_add(1))
+                    .copied()
+                    .unwrap_or(anchor);
+                let tangent = unit(after.x - before.x, after.y - before.y).unwrap_or([1.0, 0.0]);
+                SceneAnnotationGeometry::Label {
+                    anchor: offset(anchor, -tangent[1] * 30.0, tangent[0] * 30.0),
+                    leader_from: Some(anchor),
+                }
+            };
+            Some((
+                SceneAnnotationKind::CurveLength,
+                vec![SelectionItem::Curve(span)],
+                geometry,
+            ))
+        }
         Dimension::Radius { curve, .. } | Dimension::Diameter { curve, .. } => {
-            let (center, edge) = radial_geometry(document, points, curves, viewport, *curve)?;
+            let (center, edge, full_circle) =
+                radial_geometry(document, points, curves, viewport, *curve)?;
             let diameter = matches!(definition, Dimension::Diameter { .. });
+            let direction = unit(edge.x - center.x, edge.y - center.y)?;
+            let radius = center.distance(edge);
             Some((
                 if diameter {
                     SceneAnnotationKind::Diameter
@@ -966,8 +2151,13 @@ fn dimension_presentation(
                 SceneAnnotationGeometry::RadialDimension {
                     center,
                     edge,
-                    label_anchor: offset_midpoint(center, edge, -14.0),
+                    label_anchor: offset(
+                        center,
+                        direction[0] * (radius + 34.0),
+                        direction[1] * (radius + 34.0),
+                    ),
                     diameter,
+                    full_circle,
                 },
             ))
         }
@@ -983,29 +2173,48 @@ fn dimension_presentation(
             source,
             target_segment,
             ..
-        }
-        | Dimension::ExactTranslatedSegmentOffset {
-            source,
-            target_segment,
-            ..
         } => {
-            let first = curve_anchor(curves, *source)?;
-            let second = curve_anchor(curves, *target_segment)?;
+            let [source_start, source_end] = curve_endpoints(curves, *source)?;
+            let [target_start, target_end] = curve_endpoints(curves, *target_segment)?;
+            let direction = unit(source_end.x - source_start.x, source_end.y - source_start.y)?;
+            let target = midpoint(target_start, target_end);
+            let axial = dot(
+                [target.x - source_start.x, target.y - source_start.y],
+                direction,
+            );
+            let foot = offset(source_start, direction[0] * axial, direction[1] * axial);
             Some((
-                if matches!(definition, Dimension::SupportingLineOffset { .. }) {
-                    SceneAnnotationKind::SupportingLineOffset
-                } else {
-                    SceneAnnotationKind::ExactTranslatedSegmentOffset
-                },
+                SceneAnnotationKind::SupportingLineOffset,
                 vec![
                     SelectionItem::Curve(*source),
                     SelectionItem::Curve(*target_segment),
                 ],
-                SceneAnnotationGeometry::LinearDimension {
-                    first,
-                    second,
-                    label_anchor: offset_midpoint(first, second, 16.0),
-                },
+                linear_dimension(foot, target, 24.0)?,
+            ))
+        }
+        Dimension::ExactTranslatedSegmentOffset {
+            source,
+            target_segment,
+            ..
+        } => {
+            let [source_start, source_end] = curve_endpoints(curves, *source)?;
+            let [target_start, target_end] = curve_endpoints(curves, *target_segment)?;
+            let direct = source_start.distance(target_start) + source_end.distance(target_end);
+            let reversed = source_start.distance(target_end) + source_end.distance(target_start);
+            let (target_first, target_second) = if direct <= reversed {
+                (target_start, target_end)
+            } else {
+                (target_end, target_start)
+            };
+            let first = midpoint(source_start, source_end);
+            let second = midpoint(target_first, target_second);
+            Some((
+                SceneAnnotationKind::ExactTranslatedSegmentOffset,
+                vec![
+                    SelectionItem::Curve(*source),
+                    SelectionItem::Curve(*target_segment),
+                ],
+                linear_dimension(first, second, 24.0)?,
             ))
         }
     }
@@ -1038,7 +2247,10 @@ fn angle_geometry(
                 curve_anchor(curves, second).unwrap(),
             )
         });
-    let radius = 34.0;
+    let angle = cross(first_direction, second_direction)
+        .abs()
+        .atan2(dot(first_direction, second_direction).clamp(-1.0, 1.0));
+    let radius = (18.0 / (angle * 0.5).sin().abs().max(0.25)).clamp(34.0, 72.0);
     let first_ray = offset(
         vertex,
         first_direction[0] * (radius + 12.0),
@@ -1314,7 +2526,15 @@ fn right_angle_geometry(
     let [second_start, second_end] = curve_endpoints(curves, second)?;
     let first_line = unit(first_end.x - first_start.x, first_end.y - first_start.y)?;
     let second_line = unit(second_end.x - second_start.x, second_end.y - second_start.y)?;
+    if dot(first_line, second_line).abs() > 1.0e-6 {
+        return None;
+    }
     let vertex = line_intersection(first_start, first_line, second_start, second_line)?;
+    if !point_lies_on_segment(vertex, first_start, first_end)
+        || !point_lies_on_segment(vertex, second_start, second_end)
+    {
+        return None;
+    }
     if !point_within_view_margin(vertex, viewport, RIGHT_ANGLE_VIEW_MARGIN_PIXELS) {
         return None;
     }
@@ -1348,6 +2568,16 @@ fn right_angle_geometry(
         corner,
         second_arm,
     })
+}
+
+fn point_lies_on_segment(point: ScreenPoint, start: ScreenPoint, end: ScreenPoint) -> bool {
+    const EPSILON_PIXELS: f64 = 1.0e-6;
+    let length = start.distance(end);
+    length.is_finite()
+        && length > EPSILON_PIXELS
+        && point_segment_distance(point, start, end) <= EPSILON_PIXELS
+        && point.distance(start) <= length + EPSILON_PIXELS
+        && point.distance(end) <= length + EPSILON_PIXELS
 }
 
 fn span_ray_toward_interior(
@@ -1402,15 +2632,15 @@ fn radial_geometry(
     curves: &[SceneCurve],
     viewport: Viewport,
     id: CurveId,
-) -> Option<(ScreenPoint, ScreenPoint)> {
+) -> Option<(ScreenPoint, ScreenPoint, bool)> {
     let definition = &document.curve(id)?.definition;
-    let (center_id, parameter) = match definition {
+    let (center_id, parameter, full_circle) = match definition {
         // A full circle has no distinguished presentation point. Parameter zero is
         // the canonical positive-X branch and therefore stays stable across solves.
-        CurveDefinition::Circle { center, .. } => (*center, 0.0),
+        CurveDefinition::Circle { center, .. } => (*center, 0.0, true),
         // Bounded circular arcs use [0, 1], so their semantic midpoint is stable
         // even when adaptive tessellation changes.
-        CurveDefinition::CircularArc { center, .. } => (*center, 0.5),
+        CurveDefinition::CircularArc { center, .. } => (*center, 0.5, false),
         _ => return None,
     };
     let center = point_anchor(points, center_id)?;
@@ -1420,45 +2650,404 @@ fn radial_geometry(
     if !center.is_finite() || !edge.is_finite() {
         return None;
     }
-    Some((center, edge))
+    Some((center, edge, full_circle))
 }
 
 const GLYPH_MIN_SEPARATION_PIXELS: f64 = 22.0;
 const GLYPH_RING_STEP_PIXELS: f64 = 24.0;
 const GLYPH_MAX_SEARCH_RINGS: u32 = 64;
+const GLYPH_VIEWPORT_MARGIN_PIXELS: f64 = SceneGlyphMarker::BOUND_RADIUS_PIXELS + 4.0;
+const GLYPH_LABEL_CLEARANCE_PIXELS: f64 = SceneGlyphMarker::BOUND_RADIUS_PIXELS + 4.0;
+const AUTO_LAYOUT_CLEARANCE_PIXELS: f64 = 5.0;
+const AUTO_POINT_RADIUS_PIXELS: f64 = 7.0;
+const AUTO_DIMENSION_STEP_PIXELS: f64 = 20.0;
+const AUTO_DIMENSION_SEARCH_RINGS: u32 = 32;
 
-fn fan_out_glyphs(annotations: &mut [SceneAnnotation]) {
-    // Geometry-anchored right-angle squares do not move. Reserve their
-    // selectable corners before placing ordinary glyphs around dense junctions.
-    let mut occupied = annotations
-        .iter()
-        .filter_map(|annotation| match &annotation.geometry {
-            SceneAnnotationGeometry::RightAngle { corner, .. } => Some(*corner),
-            _ => None,
+#[derive(Clone, Copy)]
+enum AnnotationLayoutObstacle {
+    Rectangle(SceneAnnotationLabelBounds),
+    Circle {
+        center: ScreenPoint,
+        radius: f64,
+    },
+    Segment {
+        start: ScreenPoint,
+        end: ScreenPoint,
+    },
+    Arc {
+        center: ScreenPoint,
+        first_ray: ScreenPoint,
+        second_ray: ScreenPoint,
+        radius: f64,
+        clockwise: bool,
+    },
+}
+
+fn resolve_automatic_layout(
+    document: DocumentId,
+    annotations: &mut [SceneAnnotation],
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+    manual_layout: Option<&AnnotationLayoutState>,
+) {
+    let is_manual = |annotation: &SceneAnnotation, marker_index| {
+        manual_layout.is_some_and(|layout| {
+            layout
+                .get(annotation.layout_key(document, marker_index))
+                .is_some()
         })
-        .collect::<Vec<_>>();
-    for annotation in annotations {
+    };
+    let mut occupied = Vec::new();
+
+    // Fixed marks and explicit user placements own their locations. Automatic
+    // candidates are resolved around them rather than silently moving them.
+    for annotation in annotations.iter() {
+        match &annotation.geometry {
+            SceneAnnotationGeometry::RightAngle {
+                first_arm,
+                corner,
+                second_arm,
+                ..
+            } => {
+                occupied.push(AnnotationLayoutObstacle::Rectangle(bounds_for_points(&[
+                    *first_arm,
+                    *corner,
+                    *second_arm,
+                ])));
+                occupied.extend([*first_arm, *corner, *second_arm].map(|center| {
+                    AnnotationLayoutObstacle::Circle {
+                        center,
+                        radius: 0.0,
+                    }
+                }));
+            }
+            SceneAnnotationGeometry::Glyph { markers } => {
+                for (index, marker) in markers.iter().enumerate() {
+                    if is_manual(annotation, Some(index)) {
+                        push_marker_obstacles(marker, &mut occupied);
+                    }
+                }
+            }
+            SceneAnnotationGeometry::LinearDimension { .. }
+            | SceneAnnotationGeometry::RadialDimension { .. }
+            | SceneAnnotationGeometry::AngularDimension { .. }
+            | SceneAnnotationGeometry::Label { .. } => {
+                if is_manual(annotation, None) {
+                    push_dimension_obstacles(annotation, &mut occupied);
+                }
+            }
+        }
+    }
+
+    // Resolve dimension text before glyphs. Dimensions retain their semantic
+    // baseline/radius forms; only the typed automatic placement changes.
+    for annotation in annotations.iter_mut() {
+        if matches!(annotation.geometry, SceneAnnotationGeometry::Glyph { .. })
+            || is_manual(annotation, None)
+        {
+            continue;
+        }
+        place_dimension_automatically(annotation, &occupied, points, curves, viewport);
+        push_dimension_obstacles(annotation, &mut occupied);
+    }
+
+    // Each repeated relation marker has its own stable occurrence key, so a
+    // manually placed paired mark can reserve space while its sibling remains
+    // automatically recomputable.
+    for annotation in annotations.iter_mut() {
+        let item = annotation.item;
+        let source = annotation.source;
+        let kind = annotation.kind;
         let SceneAnnotationGeometry::Glyph { markers } = &mut annotation.geometry else {
             continue;
         };
-        for marker in markers {
-            let original = marker.anchor;
-            if !glyph_position_is_clear(original, &occupied) {
-                marker.anchor = glyph_fan_out_position(original, &occupied);
-                marker.leader_from = Some(original);
+        for (index, marker) in markers.iter_mut().enumerate() {
+            let key = AnnotationLayoutKey {
+                document,
+                source,
+                item,
+                kind,
+                marker_index: Some(index),
+            };
+            if manual_layout.is_none_or(|layout| layout.get(key).is_none()) {
+                marker.anchor =
+                    glyph_fan_out_position(marker.anchor, &occupied, points, curves, viewport);
             }
-            occupied.push(marker.anchor);
+            push_marker_obstacles(marker, &mut occupied);
         }
     }
 }
 
-fn glyph_position_is_clear(candidate: ScreenPoint, occupied: &[ScreenPoint]) -> bool {
-    occupied
-        .iter()
-        .all(|anchor| anchor.distance(candidate) >= GLYPH_MIN_SEPARATION_PIXELS)
+fn push_marker_obstacles(marker: &SceneGlyphMarker, occupied: &mut Vec<AnnotationLayoutObstacle>) {
+    if let Some(origin) = marker.leader_from {
+        occupied.push(AnnotationLayoutObstacle::Segment {
+            start: origin,
+            end: marker.anchor,
+        });
+    }
+    occupied.push(AnnotationLayoutObstacle::Circle {
+        center: marker.anchor,
+        radius: marker.bounds().radius,
+    });
 }
 
-fn glyph_fan_out_position(original: ScreenPoint, occupied: &[ScreenPoint]) -> ScreenPoint {
+fn push_dimension_obstacles(
+    annotation: &SceneAnnotation,
+    occupied: &mut Vec<AnnotationLayoutObstacle>,
+) {
+    if let Some(bounds) = annotation.label_bounds {
+        occupied.push(AnnotationLayoutObstacle::Rectangle(bounds));
+    }
+    let segment = |occupied: &mut Vec<_>, start, end| {
+        occupied.push(AnnotationLayoutObstacle::Segment { start, end });
+    };
+    match &annotation.geometry {
+        SceneAnnotationGeometry::LinearDimension {
+            measured_first,
+            measured_second,
+            first,
+            second,
+            ..
+        } => {
+            segment(occupied, *measured_first, *first);
+            segment(occupied, *measured_second, *second);
+            segment(occupied, *first, *second);
+        }
+        SceneAnnotationGeometry::RadialDimension {
+            center,
+            edge,
+            label_anchor,
+            diameter,
+            full_circle,
+        } => {
+            let start = if *diameter && *full_circle {
+                ScreenPoint {
+                    x: center.x.mul_add(2.0, -edge.x),
+                    y: center.y.mul_add(2.0, -edge.y),
+                }
+            } else {
+                *center
+            };
+            segment(occupied, start, *edge);
+            segment(occupied, *edge, *label_anchor);
+        }
+        SceneAnnotationGeometry::AngularDimension {
+            vertex,
+            first_ray,
+            second_ray,
+            radius,
+            clockwise,
+            ..
+        } => {
+            segment(occupied, *vertex, *first_ray);
+            segment(occupied, *vertex, *second_ray);
+            occupied.push(AnnotationLayoutObstacle::Arc {
+                center: *vertex,
+                first_ray: *first_ray,
+                second_ray: *second_ray,
+                radius: *radius,
+                clockwise: *clockwise,
+            });
+        }
+        SceneAnnotationGeometry::Label {
+            anchor,
+            leader_from: Some(origin),
+        } => segment(occupied, *origin, *anchor),
+        SceneAnnotationGeometry::Glyph { .. }
+        | SceneAnnotationGeometry::RightAngle { .. }
+        | SceneAnnotationGeometry::Label {
+            leader_from: None, ..
+        } => {}
+    }
+}
+
+fn place_dimension_automatically(
+    annotation: &mut SceneAnnotation,
+    occupied: &[AnnotationLayoutObstacle],
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+) {
+    if annotation.label_bounds.is_none()
+        || annotation_label_is_clear(annotation, occupied, points, curves, viewport)
+    {
+        return;
+    }
+    let Some(default) = annotation.automatic_placement(None) else {
+        return;
+    };
+    let base = annotation.clone();
+    let mut candidates = Vec::new();
+    match default {
+        AnnotationPlacement::Linear {
+            perpendicular_pixels,
+        } => {
+            let side = if perpendicular_pixels < 0.0 {
+                -1.0
+            } else {
+                1.0
+            };
+            for ring in 1..=AUTO_DIMENSION_SEARCH_RINGS {
+                let distance = AUTO_DIMENSION_STEP_PIXELS * f64::from(ring);
+                candidates.push(AnnotationPlacement::Linear {
+                    perpendicular_pixels: perpendicular_pixels + side * distance,
+                });
+                candidates.push(AnnotationPlacement::Linear {
+                    perpendicular_pixels: -perpendicular_pixels - side * distance,
+                });
+            }
+        }
+        AnnotationPlacement::Radial {
+            direction_radians,
+            clearance_pixels,
+        } => {
+            let full_circle = matches!(
+                annotation.geometry,
+                SceneAnnotationGeometry::RadialDimension {
+                    full_circle: true,
+                    ..
+                }
+            );
+            for ring in 0..=AUTO_DIMENSION_SEARCH_RINGS {
+                let clearance = clearance_pixels + AUTO_DIMENSION_STEP_PIXELS * f64::from(ring);
+                let phases = if full_circle { 16 } else { 1 };
+                for phase_index in 0..phases {
+                    let alternating = if phase_index == 0 {
+                        0.0
+                    } else {
+                        let step = f64::from((phase_index + 1) / 2);
+                        if phase_index % 2 == 1 { step } else { -step }
+                    };
+                    candidates.push(AnnotationPlacement::Radial {
+                        direction_radians: direction_radians
+                            + alternating * std::f64::consts::TAU / 16.0,
+                        clearance_pixels: clearance,
+                    });
+                }
+            }
+        }
+        AnnotationPlacement::Angular { radius_pixels } => {
+            for ring in 1..=AUTO_DIMENSION_SEARCH_RINGS {
+                candidates.push(AnnotationPlacement::Angular {
+                    radius_pixels: radius_pixels + AUTO_DIMENSION_STEP_PIXELS * f64::from(ring),
+                });
+            }
+        }
+        AnnotationPlacement::Free { .. } => {
+            for ring in 1..=AUTO_DIMENSION_SEARCH_RINGS {
+                let radius = AUTO_DIMENSION_STEP_PIXELS * f64::from(ring);
+                let slots = 8 * ring;
+                for phase_index in 0..slots {
+                    let phase = std::f64::consts::TAU * f64::from(phase_index) / f64::from(slots);
+                    candidates.push(AnnotationPlacement::Free {
+                        offset_pixels: [radius * phase.cos(), radius * phase.sin()],
+                    });
+                }
+            }
+        }
+    }
+    for placement in candidates {
+        let mut candidate = base.clone();
+        candidate.apply_placement(placement);
+        if annotation_label_is_clear(&candidate, occupied, points, curves, viewport) {
+            *annotation = candidate;
+            return;
+        }
+    }
+}
+
+fn annotation_label_is_clear(
+    annotation: &SceneAnnotation,
+    occupied: &[AnnotationLayoutObstacle],
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+) -> bool {
+    annotation.label_bounds.is_none_or(|bounds| {
+        rectangle_within_viewport(bounds, viewport, AUTO_LAYOUT_CLEARANCE_PIXELS)
+            && points.iter().all(|point| {
+                bounds.distance(point.screen_position)
+                    >= AUTO_POINT_RADIUS_PIXELS + AUTO_LAYOUT_CLEARANCE_PIXELS
+            })
+            && curves.iter().all(|curve| {
+                curve.screen_polyline.windows(2).all(|segment| {
+                    segment_rectangle_distance(segment[0], segment[1], bounds)
+                        >= AUTO_LAYOUT_CLEARANCE_PIXELS
+                })
+            })
+            && occupied.iter().all(|obstacle| {
+                rectangle_obstacle_distance(bounds, *obstacle) >= AUTO_LAYOUT_CLEARANCE_PIXELS
+            })
+    })
+}
+
+fn glyph_position_is_clear(
+    candidate: ScreenPoint,
+    occupied: &[AnnotationLayoutObstacle],
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+) -> bool {
+    candidate.is_finite()
+        && candidate.x >= GLYPH_VIEWPORT_MARGIN_PIXELS
+        && candidate.y >= GLYPH_VIEWPORT_MARGIN_PIXELS
+        && candidate.x <= viewport.screen_size[0] - GLYPH_VIEWPORT_MARGIN_PIXELS
+        && candidate.y <= viewport.screen_size[1] - GLYPH_VIEWPORT_MARGIN_PIXELS
+        && points.iter().all(|point| {
+            point.screen_position.distance(candidate)
+                >= SceneGlyphMarker::BOUND_RADIUS_PIXELS
+                    + AUTO_POINT_RADIUS_PIXELS
+                    + AUTO_LAYOUT_CLEARANCE_PIXELS
+        })
+        && curves.iter().all(|curve| {
+            curve.screen_polyline.windows(2).all(|segment| {
+                point_segment_distance(candidate, segment[0], segment[1])
+                    >= SceneGlyphMarker::BOUND_RADIUS_PIXELS + AUTO_LAYOUT_CLEARANCE_PIXELS
+            })
+        })
+        && occupied.iter().all(|obstacle| match obstacle {
+            AnnotationLayoutObstacle::Rectangle(bounds) => {
+                bounds.distance(candidate) >= GLYPH_LABEL_CLEARANCE_PIXELS
+            }
+            AnnotationLayoutObstacle::Circle { center, radius } => {
+                center.distance(candidate)
+                    >= GLYPH_MIN_SEPARATION_PIXELS
+                        + (radius - SceneGlyphMarker::BOUND_RADIUS_PIXELS).max(0.0)
+            }
+            AnnotationLayoutObstacle::Segment { start, end } => {
+                point_segment_distance(candidate, *start, *end)
+                    >= SceneGlyphMarker::BOUND_RADIUS_PIXELS + AUTO_LAYOUT_CLEARANCE_PIXELS
+            }
+            AnnotationLayoutObstacle::Arc {
+                center,
+                first_ray,
+                second_ray,
+                radius,
+                clockwise,
+            } => {
+                point_arc_distance(
+                    candidate,
+                    *center,
+                    *first_ray,
+                    *second_ray,
+                    *radius,
+                    *clockwise,
+                ) >= SceneGlyphMarker::BOUND_RADIUS_PIXELS + AUTO_LAYOUT_CLEARANCE_PIXELS
+            }
+        })
+}
+
+fn glyph_fan_out_position(
+    original: ScreenPoint,
+    occupied: &[AnnotationLayoutObstacle],
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+) -> ScreenPoint {
+    if glyph_position_is_clear(original, occupied, points, curves, viewport) {
+        return original;
+    }
     for ring_index in 1..=GLYPH_MAX_SEARCH_RINGS {
         let radius = GLYPH_RING_STEP_PIXELS * f64::from(ring_index);
         // Six slots per 24 px of radius keep neighboring candidates about
@@ -1467,23 +3056,190 @@ fn glyph_fan_out_position(original: ScreenPoint, occupied: &[ScreenPoint]) -> Sc
         for phase_index in 0..slots {
             let phase = std::f64::consts::TAU * f64::from(phase_index) / f64::from(slots);
             let candidate = offset(original, radius * phase.cos(), radius * phase.sin());
-            if glyph_position_is_clear(candidate, occupied) {
+            if glyph_position_is_clear(candidate, occupied, points, curves, viewport) {
                 return candidate;
             }
         }
     }
+    original
+}
 
-    // The document resource limits keep ordinary sketches far below this path.
-    // Still fail visibly and deterministically to the right instead of overlapping.
-    let rightmost = occupied
-        .iter()
-        .map(|anchor| anchor.x)
-        .max_by(f64::total_cmp)
-        .unwrap_or(original.x);
-    ScreenPoint {
-        x: rightmost + GLYPH_MIN_SEPARATION_PIXELS,
-        y: original.y,
+fn bounds_for_points(points: &[ScreenPoint]) -> SceneAnnotationLabelBounds {
+    SceneAnnotationLabelBounds {
+        min: ScreenPoint {
+            x: points
+                .iter()
+                .map(|point| point.x)
+                .min_by(f64::total_cmp)
+                .unwrap_or(0.0),
+            y: points
+                .iter()
+                .map(|point| point.y)
+                .min_by(f64::total_cmp)
+                .unwrap_or(0.0),
+        },
+        max: ScreenPoint {
+            x: points
+                .iter()
+                .map(|point| point.x)
+                .max_by(f64::total_cmp)
+                .unwrap_or(0.0),
+            y: points
+                .iter()
+                .map(|point| point.y)
+                .max_by(f64::total_cmp)
+                .unwrap_or(0.0),
+        },
     }
+}
+
+fn rectangle_within_viewport(
+    bounds: SceneAnnotationLabelBounds,
+    viewport: Viewport,
+    margin: f64,
+) -> bool {
+    bounds.min.x >= margin
+        && bounds.min.y >= margin
+        && bounds.max.x <= viewport.screen_size[0] - margin
+        && bounds.max.y <= viewport.screen_size[1] - margin
+}
+
+fn rectangle_obstacle_distance(
+    bounds: SceneAnnotationLabelBounds,
+    obstacle: AnnotationLayoutObstacle,
+) -> f64 {
+    match obstacle {
+        AnnotationLayoutObstacle::Rectangle(other) => rectangle_distance(bounds, other),
+        AnnotationLayoutObstacle::Circle { center, radius } => {
+            (bounds.distance(center) - radius).max(0.0)
+        }
+        AnnotationLayoutObstacle::Segment { start, end } => {
+            segment_rectangle_distance(start, end, bounds)
+        }
+        AnnotationLayoutObstacle::Arc {
+            center,
+            first_ray,
+            second_ray,
+            radius,
+            clockwise,
+        } => {
+            let center_of_bounds = ScreenPoint {
+                x: (bounds.min.x + bounds.max.x) * 0.5,
+                y: (bounds.min.y + bounds.max.y) * 0.5,
+            };
+            let half_diagonal = center_of_bounds.distance(bounds.max);
+            (point_arc_distance(
+                center_of_bounds,
+                center,
+                first_ray,
+                second_ray,
+                radius,
+                clockwise,
+            ) - half_diagonal)
+                .max(0.0)
+        }
+    }
+}
+
+fn rectangle_distance(
+    first: SceneAnnotationLabelBounds,
+    second: SceneAnnotationLabelBounds,
+) -> f64 {
+    let dx = if first.max.x < second.min.x {
+        second.min.x - first.max.x
+    } else if second.max.x < first.min.x {
+        first.min.x - second.max.x
+    } else {
+        0.0
+    };
+    let dy = if first.max.y < second.min.y {
+        second.min.y - first.max.y
+    } else if second.max.y < first.min.y {
+        first.min.y - second.max.y
+    } else {
+        0.0
+    };
+    dx.hypot(dy)
+}
+
+fn segment_rectangle_distance(
+    start: ScreenPoint,
+    end: ScreenPoint,
+    bounds: SceneAnnotationLabelBounds,
+) -> f64 {
+    if bounds.contains(start, 0.0)
+        || bounds.contains(end, 0.0)
+        || segment_intersects_rectangle(start, end, bounds)
+    {
+        return 0.0;
+    }
+    let corners = [
+        bounds.min,
+        ScreenPoint {
+            x: bounds.max.x,
+            y: bounds.min.y,
+        },
+        bounds.max,
+        ScreenPoint {
+            x: bounds.min.x,
+            y: bounds.max.y,
+        },
+    ];
+    bounds.distance(start).min(bounds.distance(end)).min(
+        corners
+            .into_iter()
+            .map(|corner| point_segment_distance(corner, start, end))
+            .min_by(f64::total_cmp)
+            .unwrap_or(f64::INFINITY),
+    )
+}
+
+fn segment_intersects_rectangle(
+    start: ScreenPoint,
+    end: ScreenPoint,
+    bounds: SceneAnnotationLabelBounds,
+) -> bool {
+    let top_right = ScreenPoint {
+        x: bounds.max.x,
+        y: bounds.min.y,
+    };
+    let bottom_left = ScreenPoint {
+        x: bounds.min.x,
+        y: bounds.max.y,
+    };
+    [
+        (bounds.min, top_right),
+        (top_right, bounds.max),
+        (bounds.max, bottom_left),
+        (bottom_left, bounds.min),
+    ]
+    .into_iter()
+    .any(|(first, second)| segments_intersect(start, end, first, second))
+}
+
+fn segments_intersect(
+    first_start: ScreenPoint,
+    first_end: ScreenPoint,
+    second_start: ScreenPoint,
+    second_end: ScreenPoint,
+) -> bool {
+    const EPSILON: f64 = 1.0e-9;
+    let orientation = |a: ScreenPoint, b: ScreenPoint, c: ScreenPoint| {
+        cross([b.x - a.x, b.y - a.y], [c.x - a.x, c.y - a.y])
+    };
+    let first_side = orientation(first_start, first_end, second_start);
+    let second_side = orientation(first_start, first_end, second_end);
+    let third_side = orientation(second_start, second_end, first_start);
+    let fourth_side = orientation(second_start, second_end, first_end);
+    (first_side * second_side < -EPSILON && third_side * fourth_side < -EPSILON)
+        || (first_side.abs() <= EPSILON
+            && point_lies_on_segment(second_start, first_start, first_end))
+        || (second_side.abs() <= EPSILON
+            && point_lies_on_segment(second_end, first_start, first_end))
+        || (third_side.abs() <= EPSILON
+            && point_lies_on_segment(first_start, second_start, second_end))
+        || (fourth_side.abs() <= EPSILON
+            && point_lies_on_segment(first_end, second_start, second_end))
 }
 
 fn unique_items(mut items: Vec<SelectionItem>) -> Vec<SelectionItem> {
@@ -1499,6 +3255,35 @@ fn midpoint(first: ScreenPoint, second: ScreenPoint) -> ScreenPoint {
     }
 }
 
+fn linear_dimension(
+    measured_first: ScreenPoint,
+    measured_second: ScreenPoint,
+    perpendicular_pixels: f64,
+) -> Option<SceneAnnotationGeometry> {
+    let direction = unit(
+        measured_second.x - measured_first.x,
+        measured_second.y - measured_first.y,
+    )?;
+    let normal = [-direction[1], direction[0]];
+    let first = offset(
+        measured_first,
+        normal[0] * perpendicular_pixels,
+        normal[1] * perpendicular_pixels,
+    );
+    let second = offset(
+        measured_second,
+        normal[0] * perpendicular_pixels,
+        normal[1] * perpendicular_pixels,
+    );
+    Some(SceneAnnotationGeometry::LinearDimension {
+        measured_first,
+        measured_second,
+        first,
+        second,
+        label_anchor: midpoint(first, second),
+    })
+}
+
 fn offset(point: ScreenPoint, x: f64, y: f64) -> ScreenPoint {
     ScreenPoint {
         x: point.x + x,
@@ -1506,10 +3291,34 @@ fn offset(point: ScreenPoint, x: f64, y: f64) -> ScreenPoint {
     }
 }
 
-fn offset_midpoint(first: ScreenPoint, second: ScreenPoint, distance: f64) -> ScreenPoint {
-    let middle = midpoint(first, second);
-    let direction = unit(second.x - first.x, second.y - first.y).unwrap_or([1.0, 0.0]);
-    offset(middle, -direction[1] * distance, direction[0] * distance)
+const ANNOTATION_ARROW_LENGTH_PIXELS: f64 = 7.0;
+const ANNOTATION_MIN_INWARD_ARROW_SPAN_PIXELS: f64 = 2.0 * ANNOTATION_ARROW_LENGTH_PIXELS + 4.0;
+
+fn annotation_arrowhead(
+    tip: ScreenPoint,
+    toward_interior: [f64; 2],
+) -> Option<SceneAnnotationArrowhead> {
+    const HALF_WIDTH_PIXELS: f64 = 3.5;
+    let direction = unit(toward_interior[0], toward_interior[1])?;
+    let base = offset(
+        tip,
+        direction[0] * ANNOTATION_ARROW_LENGTH_PIXELS,
+        direction[1] * ANNOTATION_ARROW_LENGTH_PIXELS,
+    );
+    let normal = [-direction[1], direction[0]];
+    Some(SceneAnnotationArrowhead {
+        tip,
+        base_first: offset(
+            base,
+            normal[0] * HALF_WIDTH_PIXELS,
+            normal[1] * HALF_WIDTH_PIXELS,
+        ),
+        base_second: offset(
+            base,
+            -normal[0] * HALF_WIDTH_PIXELS,
+            -normal[1] * HALF_WIDTH_PIXELS,
+        ),
+    })
 }
 
 fn unit(x: f64, y: f64) -> Option<[f64; 2]> {
@@ -1559,18 +3368,75 @@ fn point_segment_distance(point: ScreenPoint, start: ScreenPoint, end: ScreenPoi
     })
 }
 
+fn point_triangle_distance(
+    point: ScreenPoint,
+    first: ScreenPoint,
+    second: ScreenPoint,
+    third: ScreenPoint,
+) -> f64 {
+    let side = |start: ScreenPoint, end: ScreenPoint| {
+        (end.x - start.x).mul_add(point.y - start.y, -(end.y - start.y) * (point.x - start.x))
+    };
+    let signs = [side(first, second), side(second, third), side(third, first)];
+    let inside =
+        signs.iter().all(|value| *value >= -1.0e-9) || signs.iter().all(|value| *value <= 1.0e-9);
+    if inside {
+        0.0
+    } else {
+        point_segment_distance(point, first, second)
+            .min(point_segment_distance(point, second, third))
+            .min(point_segment_distance(point, third, first))
+    }
+}
+
+fn point_arc_distance(
+    point: ScreenPoint,
+    center: ScreenPoint,
+    first_ray: ScreenPoint,
+    second_ray: ScreenPoint,
+    radius: f64,
+    clockwise: bool,
+) -> f64 {
+    if !radius.is_finite() || radius <= 0.0 {
+        return f64::INFINITY;
+    }
+    let start = (first_ray.y - center.y).atan2(first_ray.x - center.x);
+    let end = (second_ray.y - center.y).atan2(second_ray.x - center.x);
+    let candidate = (point.y - center.y).atan2(point.x - center.x);
+    let sweep = if clockwise {
+        (end - start).rem_euclid(std::f64::consts::TAU)
+    } else {
+        (start - end).rem_euclid(std::f64::consts::TAU)
+    };
+    let progress = if clockwise {
+        (candidate - start).rem_euclid(std::f64::consts::TAU)
+    } else {
+        (start - candidate).rem_euclid(std::f64::consts::TAU)
+    };
+    if progress <= sweep + 1.0e-9 {
+        (point.distance(center) - radius).abs()
+    } else {
+        let first = offset(center, radius * start.cos(), radius * start.sin());
+        let second = offset(center, radius * end.cos(), radius * end.sin());
+        point.distance(first).min(point.distance(second))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use geosolve_sketch::{
-        ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentCenterRef,
-        DocumentCommandEffect, DocumentConstraintDefinition, DocumentDirectionSense, DocumentEdit,
-        DocumentFilletTrimEndpoint, DocumentLineSupportRef, DocumentSolveRequest, GeometryRole,
+        ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DocumentCenterRef,
+        DocumentCommandEffect, DocumentConstraintDefinition, DocumentConstraintId,
+        DocumentDimensionId, DocumentDirectionSense, DocumentEdit, DocumentFilletTrimEndpoint,
+        DocumentLineSupportRef, DocumentSolveRequest, DocumentSourceId, GeometryRole, PersistentId,
         RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
     };
 
     use super::{
-        SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationVisibility,
-        SceneConstraintGlyph, SceneCurve, ScreenPoint, contact_operand_anchor,
+        AnnotationLayoutEntry, AnnotationLayoutKey, AnnotationLayoutState, AnnotationPlacement,
+        SceneAnnotation, SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationVisibility,
+        SceneConstraintGlyph, SceneCurve, SceneGlyphMarker, ScreenPoint,
+        accessible_constraint_label, compact_dimension_text, contact_operand_anchor,
         curve_parameter_anchor,
     };
     use crate::{
@@ -1582,6 +3448,471 @@ mod tests {
 
     fn point(x: f64) -> ScreenPoint {
         ScreenPoint { x, y: 40.0 }
+    }
+
+    #[test]
+    fn m76_compact_cad_values_cover_prefix_suffix_reference_and_thresholds() {
+        assert_eq!(
+            compact_dimension_text(25.0, SceneAnnotationKind::PointDistance, false).as_deref(),
+            Some("25")
+        );
+        assert_eq!(
+            compact_dimension_text(12.0, SceneAnnotationKind::Radius, false).as_deref(),
+            Some("R12")
+        );
+        assert_eq!(
+            compact_dimension_text(24.0, SceneAnnotationKind::Diameter, true).as_deref(),
+            Some("(⌀24)")
+        );
+        assert_eq!(
+            compact_dimension_text(
+                std::f64::consts::FRAC_PI_4,
+                SceneAnnotationKind::OrientedAngle,
+                false,
+            )
+            .as_deref(),
+            Some("45°")
+        );
+        assert_eq!(
+            compact_dimension_text(-0.0, SceneAnnotationKind::CurveLength, false).as_deref(),
+            Some("0")
+        );
+        assert_eq!(
+            compact_dimension_text(0.000_5, SceneAnnotationKind::CurveLength, false).as_deref(),
+            Some("5e-4")
+        );
+        assert_eq!(
+            compact_dimension_text(1.0e-6, SceneAnnotationKind::CurveLength, false).as_deref(),
+            Some("1e-6")
+        );
+        assert_eq!(
+            compact_dimension_text(1.0, SceneAnnotationKind::CurveLength, false).as_deref(),
+            Some("1")
+        );
+        assert_eq!(
+            compact_dimension_text(100_000.0, SceneAnnotationKind::CurveLength, false).as_deref(),
+            Some("1e5")
+        );
+        assert_eq!(
+            compact_dimension_text(1.0e6, SceneAnnotationKind::CurveLength, false).as_deref(),
+            Some("1e6")
+        );
+        assert_eq!(
+            compact_dimension_text(12_345.0, SceneAnnotationKind::CurveLength, false).as_deref(),
+            Some("12350")
+        );
+        assert_eq!(
+            compact_dimension_text(999_950.0, SceneAnnotationKind::CurveLength, false).as_deref(),
+            Some("1e6")
+        );
+        assert_eq!(
+            compact_dimension_text(
+                5.0 * std::f64::consts::FRAC_PI_4,
+                SceneAnnotationKind::OrientedAngle,
+                false,
+            )
+            .as_deref(),
+            Some("45°"),
+            "compact display must preserve the shared acute supporting-line convention",
+        );
+    }
+
+    #[test]
+    fn m76_constraint_accessibility_always_names_the_semantic_family() {
+        let families = [
+            (SceneConstraintGlyph::Fixed, "fixed"),
+            (SceneConstraintGlyph::Coincident, "coincident"),
+            (SceneConstraintGlyph::Horizontal, "horizontal"),
+            (SceneConstraintGlyph::Vertical, "vertical"),
+            (SceneConstraintGlyph::PointOnCurve, "point-on-curve"),
+            (SceneConstraintGlyph::Parallel, "parallel"),
+            (SceneConstraintGlyph::Perpendicular, "perpendicular"),
+            (SceneConstraintGlyph::Concentric, "concentric"),
+            (SceneConstraintGlyph::Collinear, "collinear"),
+            (SceneConstraintGlyph::EqualLength, "equal-length"),
+            (SceneConstraintGlyph::EqualRadius, "equal-radius"),
+            (SceneConstraintGlyph::Midpoint, "midpoint"),
+            (SceneConstraintGlyph::Symmetry, "symmetry"),
+            (SceneConstraintGlyph::Contact, "contact"),
+            (SceneConstraintGlyph::Tangency, "tangency"),
+            (SceneConstraintGlyph::Direction, "direction"),
+            (SceneConstraintGlyph::Normal, "normal"),
+            (SceneConstraintGlyph::EqualCurvature, "equal-curvature"),
+            (SceneConstraintGlyph::Continuity, "continuity"),
+            (SceneConstraintGlyph::Fillet, "fillet"),
+        ];
+        for (glyph, family) in families {
+            assert_eq!(
+                accessible_constraint_label("alignment 2", glyph),
+                format!("alignment 2; {family} constraint"),
+            );
+        }
+    }
+
+    #[test]
+    fn m76_painted_glyph_leader_selects_without_becoming_a_move_handle() {
+        let marker = SceneGlyphMarker {
+            anchor: ScreenPoint { x: 60.0, y: 40.0 },
+            leader_from: Some(ScreenPoint { x: 20.0, y: 40.0 }),
+            rotation_radians: 0.0,
+        };
+        let annotation = SceneAnnotation {
+            item: SelectionItem::Constraint(DocumentConstraintId(PersistentId::from_u128(1))),
+            source: DocumentSourceId(PersistentId::from_u128(2)),
+            kind: SceneAnnotationKind::Constraint(SceneConstraintGlyph::Horizontal),
+            operands: Vec::new(),
+            geometry: SceneAnnotationGeometry::Glyph {
+                markers: vec![marker],
+            },
+            visibility: SceneAnnotationVisibility::Always,
+            suppressed: false,
+            visible_text: None,
+            accessible_label: "horizontal constraint".into(),
+            label_bounds: None,
+            reference: false,
+        };
+        let leader_probe = ScreenPoint { x: 40.0, y: 40.0 };
+        assert_eq!(
+            annotation.proximity_hit(leader_probe, 0.0),
+            Some((Some(0), 0.0))
+        );
+        assert!(!annotation.movable_handle_hit(leader_probe, Some(0)));
+        assert!(annotation.movable_handle_hit(marker.anchor, Some(0)));
+    }
+
+    #[test]
+    fn m76_right_angle_square_requires_accepted_perpendicular_visible_spans() {
+        let span = |id| CurveSpan::line(CurveId(PersistentId::from_u128(id)));
+        let scene_curve = |span, start, end| SceneCurve {
+            span,
+            authoring_eligible: true,
+            affine: true,
+            contact_domain: ContactDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            },
+            role: GeometryRole::Profile,
+            source_role: GeometryRole::Profile,
+            origin: SceneCurveOrigin::Native,
+            screen_polyline: vec![start, end],
+            screen_parameters: vec![0.0, 1.0],
+            drag_handle_point: None,
+        };
+        let first = span(1);
+        let second = span(2);
+        let viewport = Viewport::new([200.0, 120.0], [0.0, 0.0], 1.0).expect("viewport");
+        let horizontal = scene_curve(
+            first,
+            ScreenPoint { x: 10.0, y: 50.0 },
+            ScreenPoint { x: 90.0, y: 50.0 },
+        );
+        let skew = scene_curve(
+            second,
+            ScreenPoint { x: 50.0, y: 10.0 },
+            ScreenPoint { x: 70.0, y: 90.0 },
+        );
+        assert!(
+            super::right_angle_geometry(&[horizontal.clone(), skew], viewport, first, second)
+                .is_none()
+        );
+
+        let outside = scene_curve(
+            second,
+            ScreenPoint { x: 110.0, y: 20.0 },
+            ScreenPoint { x: 110.0, y: 80.0 },
+        );
+        assert!(
+            super::right_angle_geometry(&[horizontal.clone(), outside], viewport, first, second)
+                .is_none()
+        );
+
+        let genuine = scene_curve(
+            second,
+            ScreenPoint { x: 90.0, y: 20.0 },
+            ScreenPoint { x: 90.0, y: 80.0 },
+        );
+        assert!(
+            super::right_angle_geometry(&[horizontal, genuine], viewport, first, second).is_some()
+        );
+    }
+
+    #[test]
+    fn m76_automatic_dimension_layout_reserves_scene_geometry_and_annotations() {
+        let mut annotation = SceneAnnotation {
+            item: SelectionItem::Dimension(DocumentDimensionId(PersistentId::from_u128(1))),
+            source: DocumentSourceId(PersistentId::from_u128(2)),
+            kind: SceneAnnotationKind::PointDistance,
+            operands: Vec::new(),
+            geometry: SceneAnnotationGeometry::LinearDimension {
+                measured_first: ScreenPoint { x: 20.0, y: 40.0 },
+                measured_second: ScreenPoint { x: 120.0, y: 40.0 },
+                first: ScreenPoint { x: 20.0, y: 68.0 },
+                second: ScreenPoint { x: 120.0, y: 68.0 },
+                label_anchor: ScreenPoint { x: 70.0, y: 68.0 },
+            },
+            visibility: SceneAnnotationVisibility::Always,
+            suppressed: false,
+            visible_text: Some("100".into()),
+            accessible_label: "point-distance dimension; 100 model units".into(),
+            label_bounds: None,
+            reference: false,
+        };
+        annotation.refresh_label_bounds();
+        let blocker = SceneCurve {
+            span: CurveSpan::line(CurveId(PersistentId::from_u128(3))),
+            authoring_eligible: true,
+            affine: true,
+            contact_domain: ContactDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            },
+            role: GeometryRole::Profile,
+            source_role: GeometryRole::Profile,
+            origin: SceneCurveOrigin::Native,
+            screen_polyline: vec![
+                ScreenPoint { x: 10.0, y: 68.0 },
+                ScreenPoint { x: 130.0, y: 68.0 },
+            ],
+            screen_parameters: vec![0.0, 1.0],
+            drag_handle_point: None,
+        };
+        let occupied = [super::AnnotationLayoutObstacle::Rectangle(
+            super::SceneAnnotationLabelBounds {
+                min: ScreenPoint { x: 55.0, y: 80.0 },
+                max: ScreenPoint { x: 85.0, y: 100.0 },
+            },
+        )];
+        super::place_dimension_automatically(
+            &mut annotation,
+            &occupied,
+            &[],
+            &[blocker],
+            Viewport::new([160.0, 220.0], [0.0, 0.0], 1.0).expect("viewport"),
+        );
+        let SceneAnnotationGeometry::LinearDimension { label_anchor, .. } = annotation.geometry
+        else {
+            unreachable!()
+        };
+        assert!((label_anchor.y - 68.0).abs() > 1.0e-9);
+        assert!(super::annotation_label_is_clear(
+            &annotation,
+            &occupied,
+            &[],
+            &[],
+            Viewport::new([160.0, 220.0], [0.0, 0.0], 1.0).expect("viewport"),
+        ));
+    }
+
+    #[test]
+    fn m76_short_paired_arrows_move_outside_the_measured_span() {
+        let linear = SceneAnnotationGeometry::LinearDimension {
+            measured_first: ScreenPoint { x: 0.0, y: 0.0 },
+            measured_second: ScreenPoint { x: 10.0, y: 0.0 },
+            first: ScreenPoint { x: 0.0, y: 20.0 },
+            second: ScreenPoint { x: 10.0, y: 20.0 },
+            label_anchor: ScreenPoint { x: 5.0, y: 20.0 },
+        };
+        let arrows = linear.arrowheads();
+        assert_eq!(arrows.len(), 2);
+        assert!(arrows[0].base_first.x < arrows[0].tip.x);
+        assert!(arrows[1].base_first.x > arrows[1].tip.x);
+
+        let short_angle = SceneAnnotationGeometry::AngularDimension {
+            vertex: ScreenPoint { x: 0.0, y: 0.0 },
+            first_ray: ScreenPoint { x: 40.0, y: 0.0 },
+            second_ray: ScreenPoint {
+                x: 40.0 * 0.1_f64.cos(),
+                y: -40.0 * 0.1_f64.sin(),
+            },
+            radius: 12.0,
+            clockwise: false,
+            label_anchor: ScreenPoint { x: 30.0, y: -1.5 },
+        };
+        let arrows = short_angle.arrowheads();
+        assert_eq!(arrows.len(), 2);
+        let first_base_y = (arrows[0].base_first.y + arrows[0].base_second.y) * 0.5;
+        assert!(
+            first_base_y > arrows[0].tip.y,
+            "a cramped angular arrow must put its base outside the sector",
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one placement matrix keeps every M76 semantic cache form visibly comparable"
+    )]
+    fn m76_every_semantic_placement_form_moves_only_its_presentation_geometry() {
+        let annotation = |kind, geometry| {
+            let mut annotation = super::SceneAnnotation {
+                item: SelectionItem::Dimension(DocumentDimensionId(PersistentId::from_u128(1))),
+                source: DocumentSourceId(PersistentId::from_u128(2)),
+                kind,
+                operands: Vec::new(),
+                geometry,
+                visibility: SceneAnnotationVisibility::Always,
+                suppressed: false,
+                visible_text: Some("25".into()),
+                accessible_label: "dimension = 25".into(),
+                label_bounds: None,
+                reference: false,
+            };
+            annotation.refresh_label_bounds();
+            annotation
+        };
+
+        let mut linear = annotation(
+            SceneAnnotationKind::PointDistance,
+            SceneAnnotationGeometry::LinearDimension {
+                measured_first: ScreenPoint { x: 0.0, y: 0.0 },
+                measured_second: ScreenPoint { x: 100.0, y: 0.0 },
+                first: ScreenPoint { x: 0.0, y: 28.0 },
+                second: ScreenPoint { x: 100.0, y: 28.0 },
+                label_anchor: ScreenPoint { x: 50.0, y: 28.0 },
+            },
+        );
+        linear.apply_placement(AnnotationPlacement::Linear {
+            perpendicular_pixels: 40.0,
+        });
+        assert!(matches!(
+            linear.geometry,
+            SceneAnnotationGeometry::LinearDimension {
+                first: ScreenPoint { x: 0.0, y: 40.0 },
+                second: ScreenPoint { x: 100.0, y: 40.0 },
+                label_anchor: ScreenPoint { x: 50.0, y: 40.0 },
+                ..
+            }
+        ));
+
+        let mut radial = annotation(
+            SceneAnnotationKind::Radius,
+            SceneAnnotationGeometry::RadialDimension {
+                center: ScreenPoint { x: 0.0, y: 0.0 },
+                edge: ScreenPoint { x: 10.0, y: 0.0 },
+                label_anchor: ScreenPoint { x: 30.0, y: 0.0 },
+                diameter: false,
+                full_circle: true,
+            },
+        );
+        radial.apply_placement(AnnotationPlacement::Radial {
+            direction_radians: std::f64::consts::FRAC_PI_2,
+            clearance_pixels: 20.0,
+        });
+        let SceneAnnotationGeometry::RadialDimension {
+            edge, label_anchor, ..
+        } = radial.geometry
+        else {
+            unreachable!()
+        };
+        assert!(edge.x.abs() <= 1.0e-12 && (edge.y - 10.0).abs() <= 1.0e-12);
+        assert!(label_anchor.x.abs() <= 1.0e-12 && (label_anchor.y - 30.0).abs() <= 1.0e-12);
+
+        let mut bounded_radial = annotation(
+            SceneAnnotationKind::Radius,
+            SceneAnnotationGeometry::RadialDimension {
+                center: ScreenPoint { x: 0.0, y: 0.0 },
+                edge: ScreenPoint { x: 10.0, y: 0.0 },
+                label_anchor: ScreenPoint { x: 30.0, y: 0.0 },
+                diameter: false,
+                full_circle: false,
+            },
+        );
+        bounded_radial.apply_placement(AnnotationPlacement::Radial {
+            direction_radians: std::f64::consts::FRAC_PI_2,
+            clearance_pixels: 20.0,
+        });
+        assert!(matches!(
+            bounded_radial.geometry,
+            SceneAnnotationGeometry::RadialDimension {
+                edge: ScreenPoint { x: 10.0, y: 0.0 },
+                label_anchor: ScreenPoint { x: 30.0, y: 0.0 },
+                ..
+            }
+        ));
+
+        let mut angular = annotation(
+            SceneAnnotationKind::OrientedAngle,
+            SceneAnnotationGeometry::AngularDimension {
+                vertex: ScreenPoint { x: 0.0, y: 0.0 },
+                first_ray: ScreenPoint { x: 46.0, y: 0.0 },
+                second_ray: ScreenPoint { x: 0.0, y: 46.0 },
+                radius: 34.0,
+                clockwise: false,
+                label_anchor: ScreenPoint { x: 36.77, y: 36.77 },
+            },
+        );
+        angular.apply_placement(AnnotationPlacement::Angular {
+            radius_pixels: 50.0,
+        });
+        assert!(matches!(
+            angular.geometry,
+            SceneAnnotationGeometry::AngularDimension {
+                first_ray: ScreenPoint { x: 62.0, y: 0.0 },
+                second_ray: ScreenPoint { x: 0.0, y: 62.0 },
+                radius: 50.0,
+                ..
+            }
+        ));
+
+        let mut free = annotation(
+            SceneAnnotationKind::CurveLength,
+            SceneAnnotationGeometry::Label {
+                anchor: ScreenPoint { x: 10.0, y: 20.0 },
+                leader_from: Some(ScreenPoint { x: 5.0, y: 5.0 }),
+            },
+        );
+        free.apply_placement(AnnotationPlacement::Free {
+            offset_pixels: [7.0, -3.0],
+        });
+        assert!(matches!(
+            free.geometry,
+            SceneAnnotationGeometry::Label {
+                anchor: ScreenPoint { x: 17.0, y: 17.0 },
+                leader_from: Some(ScreenPoint { x: 5.0, y: 5.0 }),
+            }
+        ));
+        assert!(linear.label_bounds.is_some());
+        assert!(radial.label_bounds.is_some());
+        assert!(bounded_radial.label_bounds.is_some());
+        assert!(angular.label_bounds.is_some());
+        assert!(free.label_bounds.is_some());
+    }
+
+    #[test]
+    fn m76_layout_cache_is_bounded_deterministic_and_drops_invalid_rows() {
+        let document = geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(1));
+        let source = geosolve_sketch::DocumentSourceId(geosolve_sketch::PersistentId::from_u128(2));
+        let item = SelectionItem::Dimension(geosolve_sketch::DocumentDimensionId(
+            geosolve_sketch::PersistentId::from_u128(3),
+        ));
+        let key = AnnotationLayoutKey {
+            document,
+            source,
+            item,
+            kind: SceneAnnotationKind::PointDistance,
+            marker_index: None,
+        };
+        let state = AnnotationLayoutState::from_entries([
+            AnnotationLayoutEntry {
+                key,
+                placement: AnnotationPlacement::Linear {
+                    perpendicular_pixels: 32.0,
+                },
+            },
+            AnnotationLayoutEntry {
+                key,
+                placement: AnnotationPlacement::Free {
+                    offset_pixels: [f64::NAN, 0.0],
+                },
+            },
+        ]);
+        assert_eq!(state.entries().len(), 1);
+        assert_eq!(
+            state.entries()[0].placement,
+            AnnotationPlacement::Linear {
+                perpendicular_pixels: 32.0
+            }
+        );
     }
 
     #[test]
@@ -2039,9 +4370,13 @@ mod tests {
             panic!("concentric must use one glyph")
         };
         assert_eq!(markers.len(), 1);
-        assert_eq!(markers[0].anchor, expected_center);
-        assert_eq!(markers[0].leader_from, None);
-        assert!(concentric_annotation.hit_test(expected_center, 0.0));
+        assert!(
+            markers[0].anchor.distance(expected_center) >= super::GLYPH_MIN_SEPARATION_PIXELS,
+            "automatic placement must keep the center mark clear of its accepted geometry",
+        );
+        assert!(markers[0].anchor.is_finite());
+        assert_eq!(markers[0].leader_from, Some(expected_center));
+        assert!(concentric_annotation.hit_test(markers[0].anchor, 0.0));
         assert!(concentric_annotation.is_visible(
             &[SelectionItem::Curve(CurveSpan::line(circles[1]))],
             None,

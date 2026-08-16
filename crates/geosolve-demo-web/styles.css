@@ -853,8 +853,45 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-draft-guide button { padding: 0.32rem 0.5rem; }
 .wb-annotation { cursor: pointer; outline: none; }
-.wb-annotation.suppressed { opacity: 0.48; }
+.wb-dimension text { text-anchor: middle; }
+.wb-dimension-label-mask {
+  fill: #121617;
+  stroke: none;
+  pointer-events: none;
+}
+.wb-dimension text { pointer-events: none; }
+.wb-dimension.reference .wb-dimension-line,
+.wb-dimension.reference .wb-angle-arc {
+  stroke-dasharray: 4 3;
+}
+.wb-dimension.reference :is(.wb-dimension-line, .wb-angle-arc, .wb-dimension-arrow, text) {
+  opacity: 0.72;
+}
+.wb-dimension.reference .wb-dimension-witness { opacity: 0.45; }
+.wb-annotation.suppressed :is(
+  .wb-constraint-symbol,
+  .wb-annotation-leader,
+  .wb-dimension-line,
+  .wb-dimension-witness,
+  .wb-angle-arc,
+  .wb-dimension-arrow,
+  text
+) { opacity: 0.48; }
 .wb-annotation-hit { fill: transparent; stroke: none; pointer-events: all; }
+.wb-annotation-path-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 20;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.wb-annotation-label-hit { cursor: pointer; }
+.wb-annotation-move-hit,
+.wb-annotation.movable .wb-constraint-symbol { cursor: grab; }
+.wb-annotation-move-hit:active,
+.wb-annotation.movable .wb-constraint-symbol:active { cursor: grabbing; }
 .wb-constraint-symbol {
   fill: none;
   stroke: #d7a654;
@@ -869,8 +906,10 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke-dasharray: 2 2;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 .wb-dimension {
+  color: #79bfc4;
   fill: #79bfc4;
   font: 500 12px ui-monospace, monospace;
 }
@@ -884,7 +923,11 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   vector-effect: non-scaling-stroke;
 }
 .wb-dimension-witness { opacity: 0.62; }
-#wb-dimension-arrow path { fill: #79bfc4; stroke: none; }
+.wb-dimension-arrow {
+  fill: inherit;
+  stroke: none;
+  pointer-events: none;
+}
 .wb-constraint-symbol.hovered,
 .wb-annotation.hovered .wb-constraint-symbol,
 .wb-annotation:focus-visible .wb-constraint-symbol,
@@ -896,9 +939,15 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-dimension.hovered,
 .wb-dimension:focus-visible,
 .wb-dimension.selected {
+  color: #fff2c8;
   fill: #fff2c8;
   stroke: #fff2c8;
   filter: drop-shadow(0 0 3px rgb(239 184 86 / 50%));
+}
+.wb-dimension.hovered :is(.wb-dimension-line, .wb-dimension-witness, .wb-angle-arc),
+.wb-dimension:focus-visible :is(.wb-dimension-line, .wb-dimension-witness, .wb-angle-arc),
+.wb-dimension.selected :is(.wb-dimension-line, .wb-dimension-witness, .wb-angle-arc) {
+  stroke: currentcolor;
 }
 .wb-annotation.has-problem .wb-constraint-symbol {
   fill: none;
@@ -906,10 +955,21 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   filter: drop-shadow(0 0 4px rgb(255 82 69 / 60%));
 }
 .wb-dimension.has-problem {
+  color: #ff8b7d;
   fill: #ff8b7d;
   stroke: #ff8b7d;
   filter: drop-shadow(0 0 4px rgb(255 82 69 / 60%));
 }
+.wb-dimension.has-problem :is(.wb-dimension-line, .wb-dimension-witness, .wb-angle-arc) {
+  stroke: currentcolor;
+}
+.wb-option-actions {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 0.35rem;
+}
+.wb-option-actions button { white-space: normal; }
 .wb-error-overlay { pointer-events: none; }
 .wb-error-marker {
   cursor: help;

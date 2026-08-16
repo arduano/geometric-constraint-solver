@@ -15,8 +15,11 @@ mod feature_authoring;
 mod inference;
 
 pub use annotations::{
-    SceneAnnotation, SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationVisibility,
-    SceneConstraintEntry, SceneConstraintGlyph, SceneGlyphMarker, constraint_entries,
+    AnnotationLayoutEntry, AnnotationLayoutKey, AnnotationLayoutState, AnnotationPlacement,
+    SceneAnnotation, SceneAnnotationArrowhead, SceneAnnotationGeometry, SceneAnnotationGlyphBounds,
+    SceneAnnotationKind, SceneAnnotationLabelBounds, SceneAnnotationVisibility,
+    SceneConstraintEntry, SceneConstraintGlyph, SceneGlyphMarker, compact_dimension_text,
+    constraint_entries,
 };
 pub use authoring::{
     AuthoringApplication, AuthoringOperand, AuthoringOperandKind, AuthoringOptions,
@@ -104,6 +107,11 @@ impl ScreenPoint {
     fn is_finite(self) -> bool {
         self.x.is_finite() && self.y.is_finite()
     }
+}
+
+fn screen_unit(x: f64, y: f64) -> Option<[f64; 2]> {
+    let length = x.hypot(y);
+    (length.is_finite() && length > 1.0e-9).then_some([x / length, y / length])
 }
 
 /// Model-to-screen mapping supplied by the presentation layer.
@@ -913,6 +921,12 @@ pub struct EditorScene {
     pub computed_fillet_continuation_statuses: Vec<ComputedFilletContinuationStatus>,
     /// Accepted, geometry-derived constraint and dimension presentation.
     pub annotations: Vec<SceneAnnotation>,
+    /// Whether ordinary contextual constraint marks are part of this scene's
+    /// visible and interactive presentation surface.
+    ///
+    /// This is presentation-only scene policy. Keeping it on the headless DTO
+    /// ensures painting, hover and pointer-down all resolve the same marks.
+    pub show_all_constraint_annotations: bool,
     /// Complete persistent constraint list for presentation surfaces such as
     /// trees and inspectors. This remains populated even when a constraint has
     /// no drawable annotation anchor.
@@ -925,6 +939,58 @@ pub struct EditorScene {
 }
 
 impl EditorScene {
+    /// Resolves exact driving/reference values into compact labels and shared hit bounds.
+    pub fn update_annotation_values(
+        &mut self,
+        accepted: &geosolve_sketch::SketchAcceptedDocumentState,
+    ) -> bool {
+        if accepted.document().id() != self.accepted_document.id() {
+            return false;
+        }
+        annotations::update_dimension_values(&mut self.annotations, accepted);
+        true
+    }
+
+    /// Applies editor-owned presentation layout without changing accepted geometry authority.
+    pub fn apply_annotation_layout(&mut self, layout: &AnnotationLayoutState) {
+        // Recompose from geometry-derived automatic positions so repeated host
+        // rebuilds are idempotent. Runtime reference values are then copied
+        // back before manual placements and collision resolution are applied.
+        let previous = std::mem::take(&mut self.annotations);
+        let mut annotations = annotations::build_annotations(
+            &self.accepted_document,
+            &self.points,
+            &self.curves,
+            self.viewport,
+        );
+        for annotation in &mut annotations {
+            if let Some(prior) = previous
+                .iter()
+                .find(|prior| prior.item == annotation.item && prior.source == annotation.source)
+            {
+                annotation.visible_text.clone_from(&prior.visible_text);
+                annotation
+                    .accessible_label
+                    .clone_from(&prior.accessible_label);
+                annotation.reference = prior.reference;
+                annotation.refresh_label_bounds();
+            }
+        }
+        annotations::apply_layout(
+            self.accepted_document.id(),
+            &mut annotations,
+            &self.points,
+            &self.curves,
+            self.viewport,
+            layout,
+        );
+        self.annotations = annotations;
+    }
+
+    /// Sets the shared paint/pick visibility policy for contextual constraints.
+    pub fn set_show_all_constraint_annotations(&mut self, show: bool) {
+        self.show_all_constraint_annotations = show;
+    }
     /// Builds screen-space primitives only through public immutable sketch evaluation.
     ///
     /// # Errors
@@ -1038,6 +1104,7 @@ impl EditorScene {
             fillet_affordances: Vec::new(),
             computed_fillet_continuation_statuses: Vec::new(),
             annotations,
+            show_all_constraint_annotations: false,
             constraint_entries,
             construction_snap_points,
             accepted_document: accepted_document.clone(),
@@ -2468,7 +2535,9 @@ impl EditorScene {
         self.annotations
             .iter()
             .filter(|annotation| {
-                annotation.is_visible(selection, visibility_context, problem_items)
+                (self.show_all_constraint_annotations
+                    && matches!(annotation.kind, SceneAnnotationKind::Constraint(_)))
+                    || annotation.is_visible(selection, visibility_context, problem_items)
             })
             .filter_map(|annotation| {
                 let (marker_index, distance) =
@@ -2510,7 +2579,9 @@ impl EditorScene {
                 annotation.item == context_owner || annotation.operands.contains(&context_owner)
             })
             .filter(|annotation| {
-                annotation.is_visible(selection, Some(context_owner), problem_items)
+                (self.show_all_constraint_annotations
+                    && matches!(annotation.kind, SceneAnnotationKind::Constraint(_)))
+                    || annotation.is_visible(selection, Some(context_owner), problem_items)
             })
             .collect::<Vec<_>>();
         if related.iter().any(|annotation| {
@@ -2676,6 +2747,7 @@ pub struct PointerInput {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ActivePointerGestureKind {
     Point,
+    Annotation,
     FilletRadius,
     FilletContact,
 }
@@ -3537,6 +3609,20 @@ struct PointGesture {
     latest_request: Option<u64>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct AnnotationGesture {
+    pointer_id: u64,
+    key: AnnotationLayoutKey,
+    accepted_revision: u64,
+    design_identity: SketchDesignIdentity,
+    viewport: Viewport,
+    origin: ScreenPoint,
+    original: Option<AnnotationPlacement>,
+    automatic: AnnotationPlacement,
+    preview: Option<AnnotationPlacement>,
+    moved: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct FeatureRadiusGesture {
     pointer_id: u64,
@@ -3699,6 +3785,8 @@ pub struct ConstraintEditor {
     pick_tolerance: PickTolerance,
     drag_threshold_pixels: f64,
     point_gesture: Option<PointGesture>,
+    annotation_gesture: Option<AnnotationGesture>,
+    annotation_layout: AnnotationLayoutState,
     feature_radius_gesture: Option<FeatureRadiusGesture>,
     feature_contact_gesture: Option<FeatureContactGesture>,
     computed_fillet_continuation_status: Option<ComputedFilletContinuationStatus>,
@@ -3729,6 +3817,8 @@ impl Default for ConstraintEditor {
             pick_tolerance: PickTolerance::default(),
             drag_threshold_pixels: 3.0,
             point_gesture: None,
+            annotation_gesture: None,
+            annotation_layout: AnnotationLayoutState::default(),
             feature_radius_gesture: None,
             feature_contact_gesture: None,
             computed_fillet_continuation_status: None,
@@ -3783,6 +3873,7 @@ impl ConstraintEditor {
         self.tool = tool;
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
         effects.extend(self.clear_fillet_branch_preview());
@@ -3843,6 +3934,7 @@ impl ConstraintEditor {
     fn cancel_interaction_for_geometry_policy_change(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
         effects.extend(self.clear_fillet_branch_preview());
@@ -3908,7 +4000,8 @@ impl ConstraintEditor {
         if let Some(pending) = self.pending_construction_commit.as_mut() {
             pending.recovery_inference_engine.clear_session();
         }
-        let mut effects = self.invalidate_pointer_context();
+        let mut effects = self.cancel_annotation_gesture();
+        effects.extend(self.invalidate_pointer_context());
         effects.extend(self.clear_draft_inference_publication());
         effects
     }
@@ -3981,6 +4074,57 @@ impl ConstraintEditor {
         &self.selection
     }
 
+    /// Returns presentation-only manual annotation placement.
+    #[must_use]
+    pub const fn annotation_layout(&self) -> &AnnotationLayoutState {
+        &self.annotation_layout
+    }
+
+    /// Returns committed layout plus the current uncommitted drag preview.
+    ///
+    /// Hosts use this only while rebuilding a scene. Persistence must continue
+    /// to consume [`Self::annotation_layout`], so a canceled or interrupted
+    /// gesture can never reappear after reload.
+    #[must_use]
+    pub fn annotation_layout_for_scene(&self) -> AnnotationLayoutState {
+        let mut layout = self.annotation_layout.clone();
+        if let Some(gesture) = &self.annotation_gesture
+            && let Some(preview) = gesture.preview
+        {
+            layout.insert(gesture.key, preview);
+        }
+        layout
+    }
+
+    /// Restores a disposable layout cache after independently validating it.
+    pub fn restore_annotation_layout(&mut self, layout: AnnotationLayoutState) {
+        self.annotation_gesture = None;
+        self.annotation_layout = layout;
+    }
+
+    /// Resets the selected movable annotations to deterministic automatic placement.
+    pub fn reset_selected_annotation_layout(&mut self) -> bool {
+        let selection = self.selection.clone();
+        let canceled_preview = self
+            .annotation_gesture
+            .as_ref()
+            .is_some_and(|gesture| selection.contains(&gesture.key.item));
+        if canceled_preview {
+            self.annotation_gesture = None;
+        }
+        selection
+            .into_iter()
+            .fold(canceled_preview, |changed, item| {
+                self.annotation_layout.remove_item(item) || changed
+            })
+    }
+
+    /// Resets every manual annotation placement.
+    pub fn reset_all_annotation_layout(&mut self) -> bool {
+        let canceled_preview = self.annotation_gesture.take().is_some();
+        self.annotation_layout.clear() || canceled_preview
+    }
+
     /// Returns the exact pointer currently owned by an editor gesture.
     ///
     /// Presentation adapters use this only to mirror platform pointer capture;
@@ -3997,6 +4141,12 @@ impl ConstraintEditor {
             return Some(ActivePointerGesture {
                 pointer_id: gesture.pointer_id,
                 kind: ActivePointerGestureKind::FilletRadius,
+            });
+        }
+        if let Some(gesture) = &self.annotation_gesture {
+            return Some(ActivePointerGesture {
+                pointer_id: gesture.pointer_id,
+                kind: ActivePointerGestureKind::Annotation,
             });
         }
         if let Some(gesture) = self.point_gesture {
@@ -4385,7 +4535,10 @@ impl ConstraintEditor {
             effects.extend(self.draft_down(scene, input, inference));
             return effects;
         }
-        if self.feature_radius_gesture.is_some() || self.feature_contact_gesture.is_some() {
+        if self.annotation_gesture.is_some()
+            || self.feature_radius_gesture.is_some()
+            || self.feature_contact_gesture.is_some()
+        {
             return effects;
         }
         let target = self.resolve_select_pointer_target(scene, input.position, problem_items);
@@ -4403,6 +4556,34 @@ impl ConstraintEditor {
             resolved_input,
             target.map(ResolvedSelectPointerTarget::hit),
         ));
+        if let Some(ResolvedSelectPointerTarget::Annotation { occurrence, .. }) = target
+            && scene
+                .annotations
+                .iter()
+                .find(|annotation| annotation.item == occurrence.item)
+                .is_some_and(|annotation| {
+                    annotation.movable_handle_hit(input.position, occurrence.marker_index)
+                })
+            && let Some(annotation) = scene
+                .annotations
+                .iter()
+                .find(|annotation| annotation.item == occurrence.item)
+            && let Some(automatic) = annotation.automatic_placement(occurrence.marker_index)
+        {
+            let key = annotation.layout_key(scene.accepted_document.id(), occurrence.marker_index);
+            self.annotation_gesture = Some(AnnotationGesture {
+                pointer_id: input.pointer_id,
+                key,
+                accepted_revision: scene.accepted_revision,
+                design_identity: scene.design_identity,
+                viewport: scene.viewport,
+                origin: input.position,
+                original: self.annotation_layout.get(key),
+                automatic,
+                preview: None,
+                moved: false,
+            });
+        }
         effects
     }
 
@@ -4689,11 +4870,117 @@ impl ConstraintEditor {
             return effects;
         }
         if self.point_gesture.is_none() {
+            if self.annotation_gesture.is_some() {
+                self.move_annotation_gesture(scene, input);
+                return effects;
+            }
             effects.extend(self.move_hover(scene, input, problem_items));
             return effects;
         }
         effects.extend(self.move_point_gesture(scene, input));
         effects
+    }
+
+    fn move_annotation_gesture(&mut self, scene: &EditorScene, input: PointerInput) {
+        let Some(mut gesture) = self.annotation_gesture.clone() else {
+            return;
+        };
+        if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+            return;
+        }
+        if scene.accepted_revision != gesture.accepted_revision
+            || scene.design_identity != gesture.design_identity
+            || scene.viewport != gesture.viewport
+            || scene.accepted_document.id() != gesture.key.document
+        {
+            self.annotation_gesture = None;
+            return;
+        }
+        gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
+        if !gesture.moved {
+            self.annotation_gesture = Some(gesture);
+            return;
+        }
+        let Some(annotation) = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == gesture.key.item)
+        else {
+            return;
+        };
+        let base = gesture.original.unwrap_or(gesture.automatic);
+        let delta = [
+            input.position.x - gesture.origin.x,
+            input.position.y - gesture.origin.y,
+        ];
+        let placement = match (&annotation.geometry, base) {
+            (
+                SceneAnnotationGeometry::LinearDimension {
+                    measured_first,
+                    measured_second,
+                    ..
+                },
+                AnnotationPlacement::Linear {
+                    perpendicular_pixels,
+                },
+            ) => {
+                let Some(direction) = screen_unit(
+                    measured_second.x - measured_first.x,
+                    measured_second.y - measured_first.y,
+                ) else {
+                    return;
+                };
+                AnnotationPlacement::Linear {
+                    perpendicular_pixels: perpendicular_pixels
+                        + delta[0].mul_add(-direction[1], delta[1] * direction[0]),
+                }
+            }
+            (
+                SceneAnnotationGeometry::RadialDimension {
+                    center,
+                    edge,
+                    full_circle,
+                    ..
+                },
+                AnnotationPlacement::Radial { .. },
+            ) => {
+                let radial = [input.position.x - center.x, input.position.y - center.y];
+                let radius = center.distance(*edge);
+                let (direction_radians, distance) = if *full_circle {
+                    let distance = radial[0].hypot(radial[1]);
+                    if distance <= f64::EPSILON {
+                        return;
+                    }
+                    (radial[1].atan2(radial[0]), distance)
+                } else {
+                    let Some(direction) = screen_unit(edge.x - center.x, edge.y - center.y) else {
+                        return;
+                    };
+                    (
+                        direction[1].atan2(direction[0]),
+                        radial[0].mul_add(direction[0], radial[1] * direction[1]),
+                    )
+                };
+                AnnotationPlacement::Radial {
+                    direction_radians,
+                    clearance_pixels: distance - radius,
+                }
+            }
+            (
+                SceneAnnotationGeometry::AngularDimension { vertex, .. },
+                AnnotationPlacement::Angular { .. },
+            ) => AnnotationPlacement::Angular {
+                radius_pixels: (vertex.distance(input.position) - 18.0).max(12.0),
+            },
+            (_, AnnotationPlacement::Free { offset_pixels }) => AnnotationPlacement::Free {
+                offset_pixels: [offset_pixels[0] + delta[0], offset_pixels[1] + delta[1]],
+            },
+            _ => AnnotationPlacement::Free {
+                offset_pixels: delta,
+            },
+        };
+        gesture.preview = Some(placement);
+        self.annotation_gesture = Some(gesture);
     }
 
     fn move_feature_contact_gesture(
@@ -5108,6 +5395,10 @@ impl ConstraintEditor {
     }
 
     /// Completes an active point gesture. A click emits no geometry edit.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one terminal dispatch keeps all captured pointer gesture outcomes mutually exclusive"
+    )]
     pub fn pointer_up(
         &mut self,
         scene: &EditorScene,
@@ -5115,6 +5406,28 @@ impl ConstraintEditor {
         input: PointerInput,
     ) -> Vec<EditorEffect> {
         if self.tool != EditorTool::Select {
+            return Vec::new();
+        }
+        if self
+            .annotation_gesture
+            .as_ref()
+            .is_some_and(|gesture| gesture.pointer_id == input.pointer_id)
+        {
+            let Some(gesture) = self.annotation_gesture.take() else {
+                return Vec::new();
+            };
+            let current = input.position.is_finite()
+                && expected == gesture.design_identity
+                && scene.accepted_revision == gesture.accepted_revision
+                && scene.design_identity == gesture.design_identity
+                && scene.viewport == gesture.viewport
+                && scene.accepted_document.id() == gesture.key.document;
+            if current
+                && gesture.moved
+                && let Some(placement) = gesture.preview
+            {
+                self.annotation_layout.insert(gesture.key, placement);
+            }
             return Vec::new();
         }
         if let Some(gesture) = self.feature_contact_gesture {
@@ -5206,11 +5519,17 @@ impl ConstraintEditor {
     pub fn cancel(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
         effects.extend(self.clear_fillet_branch_preview());
         effects.extend(self.invalidate_pointer_context());
         effects
+    }
+
+    fn cancel_annotation_gesture(&mut self) -> Vec<EditorEffect> {
+        self.annotation_gesture = None;
+        Vec::new()
     }
 
     fn cancel_feature_radius_gesture(&mut self) -> Vec<EditorEffect> {
@@ -12868,6 +13187,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the retained M63 fixture verifies annotation visibility, occurrence picking, and geometry ownership together"
+    )]
     fn m63_annotations_are_geometry_anchored_contextual_and_pointer_selectable() {
         let mut document = SketchDocument::new(8.0).expect("document");
         let rectangle = document
@@ -12933,11 +13256,51 @@ mod tests {
             SceneAnnotationGeometry::Glyph { markers }
                 if markers.iter().any(|marker| marker.leader_from.is_some())
         ));
+        let dimension_bounds = scene
+            .annotations
+            .iter()
+            .filter_map(|candidate| candidate.label_bounds)
+            .collect::<Vec<_>>();
+        for marker in scene.annotations.iter().flat_map(|candidate| {
+            if let SceneAnnotationGeometry::Glyph { markers } = &candidate.geometry {
+                markers.as_slice()
+            } else {
+                &[]
+            }
+        }) {
+            assert!(
+                marker.anchor.x >= 14.0
+                    && marker.anchor.y >= 14.0
+                    && marker.anchor.x <= scene.viewport.screen_size[0] - 14.0
+                    && marker.anchor.y <= scene.viewport.screen_size[1] - 14.0
+            );
+            assert!(
+                dimension_bounds
+                    .iter()
+                    .all(|bounds| bounds.distance(marker.anchor) >= 14.0),
+                "automatic glyph bounds must reserve visible dimension labels"
+            );
+        }
 
         let marker = match &horizontal_annotation.geometry {
             SceneAnnotationGeometry::Glyph { markers } => markers[0].anchor,
             _ => panic!("horizontal must be a glyph"),
         };
+        assert!(
+            scene
+                .annotation_hit_test(marker, PickTolerance::default(), &[], None, &[])
+                .is_none(),
+            "contextual marks must not gain an invisible hit target by default"
+        );
+        let mut show_all_scene = scene.clone();
+        show_all_scene.set_show_all_constraint_annotations(true);
+        assert_eq!(
+            show_all_scene
+                .annotation_hit_test(marker, PickTolerance::default(), &[], None, &[])
+                .map(|hit| hit.item),
+            Some(horizontal),
+            "Display show-all must reveal the same shared paint/pick occurrence"
+        );
         let mut editor = ConstraintEditor::default();
         editor.set_selection([SelectionItem::Curve(related_curve)]);
         let effects =
@@ -12962,6 +13325,495 @@ mod tests {
         );
         assert_eq!(editor.hover_state(), EditorHoverState::default());
         assert!(editor.pointer_leave().is_empty());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one M76 transition fixture compares threshold, preview, cancellation, commit, pointer, camera, and reset invariants"
+    )]
+    fn m76_annotation_drag_threshold_cancel_commit_and_reset_are_presentation_only() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("start");
+        let end = document.add_point("end", [4.0, 0.0]).expect("end");
+        let line = document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        let constraint = document
+            .add_constraint(
+                "horizontal",
+                DocumentConstraintDefinition::Horizontal {
+                    line: CurveSpan::line(line),
+                },
+            )
+            .expect("constraint");
+        let scene = scene(&document);
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(constraint))
+            .expect("annotation");
+        let SceneAnnotationGeometry::Glyph { markers } = &annotation.geometry else {
+            panic!("horizontal annotation must be a glyph")
+        };
+        let origin = markers[0].anchor;
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection([SelectionItem::Curve(CurveSpan::line(line))]);
+        editor.pointer_move(
+            &scene,
+            pointer(76, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_down(
+            &scene,
+            pointer(76, origin.x, origin.y, Modifiers::default()),
+        );
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id: 76,
+                kind: ActivePointerGestureKind::Annotation,
+            })
+        );
+        assert!(
+            editor
+                .pointer_move(
+                    &scene,
+                    pointer(76, origin.x + 2.9, origin.y, Modifiers::default()),
+                )
+                .is_empty()
+        );
+        assert!(editor.annotation_layout().entries().is_empty());
+        editor.pointer_move(
+            &scene,
+            pointer(76, origin.x + 12.0, origin.y - 7.0, Modifiers::default()),
+        );
+        assert!(
+            editor.annotation_layout().entries().is_empty(),
+            "an in-flight preview must not enter the persistable cache",
+        );
+        let preview_layout = editor.annotation_layout_for_scene();
+        assert_eq!(preview_layout.entries().len(), 1);
+        let mut moved_scene = scene.clone();
+        moved_scene.apply_annotation_layout(&preview_layout);
+        let moved = match &moved_scene
+            .annotations
+            .iter()
+            .find(|candidate| candidate.item == annotation.item)
+            .expect("moved annotation")
+            .geometry
+        {
+            SceneAnnotationGeometry::Glyph { markers } => markers[0].anchor,
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            moved,
+            ScreenPoint {
+                x: origin.x + 12.0,
+                y: origin.y - 7.0
+            }
+        );
+        editor.cancel();
+        assert!(editor.annotation_layout().entries().is_empty());
+        assert!(editor.annotation_layout_for_scene().entries().is_empty());
+
+        editor.set_selection([SelectionItem::Curve(CurveSpan::line(line))]);
+        editor.pointer_move(
+            &scene,
+            pointer(78, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_down(
+            &scene,
+            pointer(78, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_move(
+            &scene,
+            pointer(78, origin.x + 10.0, origin.y, Modifiers::default()),
+        );
+        assert_eq!(editor.annotation_layout_for_scene().entries().len(), 1);
+        editor.activate_tool(EditorTool::Line);
+        assert!(editor.annotation_layout_for_scene().entries().is_empty());
+        editor.activate_tool(EditorTool::Select);
+
+        editor.set_selection([SelectionItem::Curve(CurveSpan::line(line))]);
+        editor.pointer_move(
+            &scene,
+            pointer(79, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_down(
+            &scene,
+            pointer(79, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_move(
+            &scene,
+            pointer(79, origin.x, origin.y + 10.0, Modifiers::default()),
+        );
+        assert_eq!(editor.annotation_layout_for_scene().entries().len(), 1);
+        editor.invalidate_draft_inference();
+        assert!(editor.annotation_layout_for_scene().entries().is_empty());
+
+        editor.set_selection([SelectionItem::Curve(CurveSpan::line(line))]);
+        editor.pointer_move(
+            &scene,
+            pointer(77, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_down(
+            &scene,
+            pointer(77, origin.x, origin.y, Modifiers::default()),
+        );
+        let released = pointer(77, origin.x + 8.0, origin.y + 6.0, Modifiers::default());
+        editor.pointer_move(&scene, released);
+        assert!(
+            editor
+                .pointer_up(&scene, scene.design_identity, released)
+                .is_empty()
+        );
+        assert_eq!(editor.annotation_layout().entries().len(), 1);
+        editor.set_selection([annotation.item]);
+        assert!(editor.reset_selected_annotation_layout());
+        assert!(editor.annotation_layout().entries().is_empty());
+
+        editor.set_selection([SelectionItem::Curve(CurveSpan::line(line))]);
+        editor.pointer_move(
+            &scene,
+            pointer(80, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_down(
+            &scene,
+            pointer(80, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_move(
+            &scene,
+            pointer(81, origin.x + 15.0, origin.y, Modifiers::default()),
+        );
+        assert!(editor.annotation_layout_for_scene().entries().is_empty());
+        assert_eq!(
+            editor
+                .active_pointer_gesture()
+                .map(|gesture| gesture.pointer_id),
+            Some(80)
+        );
+        editor.pointer_move(
+            &scene,
+            pointer(80, origin.x + 15.0, origin.y, Modifiers::default()),
+        );
+        assert_eq!(editor.annotation_layout_for_scene().entries().len(), 1);
+        let mut changed_camera = scene.clone();
+        changed_camera.viewport = Viewport::new(
+            scene.viewport.screen_size,
+            [1.0, -1.0],
+            scene.viewport.pixels_per_model_unit,
+        )
+        .expect("changed camera");
+        editor.pointer_move(
+            &changed_camera,
+            pointer(80, origin.x + 16.0, origin.y, Modifiers::default()),
+        );
+        assert!(editor.active_pointer_gesture().is_none());
+        assert!(editor.annotation_layout().entries().is_empty());
+
+        editor.pointer_move(
+            &scene,
+            pointer(82, origin.x, origin.y, Modifiers::default()),
+        );
+        editor.pointer_down(
+            &scene,
+            pointer(82, origin.x, origin.y, Modifiers::default()),
+        );
+        let moved = pointer(82, origin.x + 9.0, origin.y, Modifiers::default());
+        editor.pointer_move(&scene, moved);
+        editor.pointer_up(
+            &scene,
+            scene.design_identity,
+            pointer(83, moved.position.x, moved.position.y, Modifiers::default()),
+        );
+        assert_eq!(
+            editor
+                .active_pointer_gesture()
+                .map(|gesture| gesture.pointer_id),
+            Some(82)
+        );
+        let mut stale_scene = scene.clone();
+        stale_scene.accepted_revision = stale_scene.accepted_revision.wrapping_add(1);
+        editor.pointer_up(&stale_scene, scene.design_identity, moved);
+        assert!(editor.active_pointer_gesture().is_none());
+        assert!(editor.annotation_layout().entries().is_empty());
+
+        let second_item = SelectionItem::Constraint(DocumentConstraintId(
+            geosolve_sketch::PersistentId::from_u128(0x76),
+        ));
+        let first_key = annotation.layout_key(scene.accepted_document.id(), Some(0));
+        let second_key = AnnotationLayoutKey {
+            item: second_item,
+            ..first_key
+        };
+        editor.restore_annotation_layout(AnnotationLayoutState::from_entries([
+            AnnotationLayoutEntry {
+                key: first_key,
+                placement: AnnotationPlacement::Free {
+                    offset_pixels: [8.0, 6.0],
+                },
+            },
+            AnnotationLayoutEntry {
+                key: second_key,
+                placement: AnnotationPlacement::Free {
+                    offset_pixels: [-4.0, 9.0],
+                },
+            },
+        ]));
+        editor.set_selection([annotation.item, second_item]);
+        assert!(editor.reset_selected_annotation_layout());
+        assert!(editor.annotation_layout().entries().is_empty());
+    }
+
+    #[test]
+    fn m76_multi_marker_layout_moves_only_the_exact_glyph_occurrence() {
+        let (mut document, lines, _) = line_document();
+        let parallel = document
+            .add_constraint(
+                "parallel occurrence layout",
+                DocumentConstraintDefinition::Parallel {
+                    first: lines[0],
+                    second: lines[1],
+                },
+            )
+            .expect("parallel constraint");
+        let scene = scene(&document);
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(parallel))
+            .expect("parallel annotation");
+        let SceneAnnotationGeometry::Glyph { markers } = &annotation.geometry else {
+            panic!("parallel annotation must use glyph occurrences")
+        };
+        assert_eq!(markers.len(), 2);
+        let original = [markers[0].anchor, markers[1].anchor];
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection([SelectionItem::Curve(lines[1])]);
+        editor.pointer_move(
+            &scene,
+            pointer(76, original[1].x, original[1].y, Modifiers::default()),
+        );
+        editor.pointer_down(
+            &scene,
+            pointer(76, original[1].x, original[1].y, Modifiers::default()),
+        );
+        let released = pointer(
+            76,
+            original[1].x + 11.0,
+            original[1].y - 5.0,
+            Modifiers::default(),
+        );
+        editor.pointer_move(&scene, released);
+        editor.pointer_up(&scene, scene.design_identity, released);
+        let entries = editor.annotation_layout().entries();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].key.marker_index, Some(1));
+
+        let mut moved_scene = scene.clone();
+        moved_scene.apply_annotation_layout(editor.annotation_layout());
+        let moved_annotation = moved_scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(parallel))
+            .expect("moved parallel annotation");
+        let SceneAnnotationGeometry::Glyph { markers } = &moved_annotation.geometry else {
+            unreachable!()
+        };
+        assert_eq!(markers[0].anchor, original[0]);
+        assert_eq!(
+            markers[1].anchor,
+            ScreenPoint {
+                x: original[1].x + 11.0,
+                y: original[1].y - 5.0,
+            },
+        );
+    }
+
+    #[test]
+    fn m76_manual_glyph_placement_is_reserved_by_recomputed_automatic_neighbors() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("start");
+        let end = document.add_point("end", [4.0, 0.0]).expect("end");
+        let line = CurveSpan::line(
+            document
+                .add_curve(
+                    "line",
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("line"),
+        );
+        let constraints = ["first horizontal", "second horizontal"].map(|label| {
+            document
+                .add_constraint(label, DocumentConstraintDefinition::Horizontal { line })
+                .expect("horizontal constraint")
+        });
+        let mut scene = scene(&document);
+        let anchors = constraints.map(|id| {
+            scene
+                .annotations
+                .iter()
+                .find(|annotation| annotation.item == SelectionItem::Constraint(id))
+                .and_then(|annotation| match &annotation.geometry {
+                    SceneAnnotationGeometry::Glyph { markers } => {
+                        markers.first().map(|marker| marker.anchor)
+                    }
+                    SceneAnnotationGeometry::RightAngle { .. }
+                    | SceneAnnotationGeometry::LinearDimension { .. }
+                    | SceneAnnotationGeometry::RadialDimension { .. }
+                    | SceneAnnotationGeometry::AngularDimension { .. }
+                    | SceneAnnotationGeometry::Label { .. } => None,
+                })
+                .expect("glyph anchor")
+        });
+        let first_annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(constraints[0]))
+            .expect("first annotation");
+        let desired = anchors[1];
+        let layout = AnnotationLayoutState::from_entries([AnnotationLayoutEntry {
+            key: first_annotation.layout_key(scene.accepted_document.id(), Some(0)),
+            placement: AnnotationPlacement::Free {
+                offset_pixels: [desired.x - anchors[0].x, desired.y - anchors[0].y],
+            },
+        }]);
+        scene.apply_annotation_layout(&layout);
+        let moved = constraints.map(|id| {
+            scene
+                .annotations
+                .iter()
+                .find(|annotation| annotation.item == SelectionItem::Constraint(id))
+                .and_then(|annotation| match &annotation.geometry {
+                    SceneAnnotationGeometry::Glyph { markers } => {
+                        markers.first().map(|marker| marker.anchor)
+                    }
+                    SceneAnnotationGeometry::RightAngle { .. }
+                    | SceneAnnotationGeometry::LinearDimension { .. }
+                    | SceneAnnotationGeometry::RadialDimension { .. }
+                    | SceneAnnotationGeometry::AngularDimension { .. }
+                    | SceneAnnotationGeometry::Label { .. } => None,
+                })
+                .expect("moved glyph anchor")
+        });
+        assert_eq!(moved[0], desired, "manual occurrence must never auto-move");
+        assert!(
+            moved[1].distance(desired) >= 22.0 - 1.0e-9,
+            "automatic sibling must reserve the explicit manual placement",
+        );
+    }
+
+    #[test]
+    fn m76_annotation_commit_changes_no_solve_revision_or_sketch_history() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("start");
+        let end = document.add_point("end", [4.0, 0.0]).expect("end");
+        let line = document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        let constraint = document
+            .add_constraint(
+                "horizontal",
+                DocumentConstraintDefinition::Horizontal {
+                    line: CurveSpan::line(line),
+                },
+            )
+            .expect("constraint");
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene");
+        let marker = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(constraint))
+            .and_then(|annotation| match &annotation.geometry {
+                SceneAnnotationGeometry::Glyph { markers } => markers.first(),
+                _ => None,
+            })
+            .expect("horizontal marker")
+            .anchor;
+        let before_history = (coordinator.history_len(), coordinator.history_cursor());
+        let before_design = coordinator.session().design_identity();
+        let before_accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted before")
+            .identity();
+        let before_checkpoint = coordinator
+            .persistence_checkpoint()
+            .expect("checkpoint before");
+
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Curve(CurveSpan::line(line))]);
+        coordinator.editor_mut().pointer_move(
+            &scene,
+            pointer(76, marker.x, marker.y, Modifiers::default()),
+        );
+        coordinator.editor_mut().pointer_down(
+            &scene,
+            pointer(76, marker.x, marker.y, Modifiers::default()),
+        );
+        let released = pointer(76, marker.x + 12.0, marker.y + 8.0, Modifiers::default());
+        coordinator.editor_mut().pointer_move(&scene, released);
+        coordinator
+            .editor_mut()
+            .pointer_up(&scene, before_design, released);
+
+        assert_eq!(coordinator.editor().annotation_layout().entries().len(), 1);
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            before_history,
+        );
+        assert_eq!(coordinator.session().design_identity(), before_design);
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted after")
+                .identity(),
+            before_accepted,
+        );
+        let after_checkpoint = coordinator
+            .persistence_checkpoint()
+            .expect("checkpoint after");
+        assert_eq!(after_checkpoint.revisions(), before_checkpoint.revisions());
+        assert!(!coordinator.can_undo());
     }
 
     #[test]
@@ -13174,6 +14026,21 @@ mod tests {
             EditorHoverState::default(),
             "selection-driven visibility must revoke the old annotation navigation context",
         );
+        assert!(
+            hover_editor
+                .pointer_up(
+                    &scene,
+                    scene.design_identity,
+                    pointer(
+                        10,
+                        first_marker.anchor.x,
+                        first_marker.anchor.y,
+                        Modifiers::default(),
+                    ),
+                )
+                .is_empty(),
+            "an annotation click below the drag threshold must only end capture",
+        );
         assert_eq!(
             hover_editor.pointer_move(
                 &scene,
@@ -13185,21 +14052,50 @@ mod tests {
             "a fresh geometry sample must reacquire context after selection changes",
         );
 
-        let between_icons = ScreenPoint {
-            x: (first_marker.anchor.x + second_marker.anchor.x) * 0.5,
-            y: (first_marker.anchor.y + second_marker.anchor.y) * 0.5,
-        };
-        assert_eq!(
-            hover_editor.pointer_move(
-                &scene,
-                pointer(10, between_icons.x, between_icons.y, Modifiers::default(),),
-            ),
-            vec![EditorEffect::HoverChanged(context_state(None))]
-        );
         let second_occurrence = SceneAnnotationOccurrence {
             item: second_annotation.item,
             marker_index: Some(0),
         };
+        let first_leader_origin = first_marker.leader_from.expect("displaced marker leader");
+        let first_leader_sample = (4..=15)
+            .map(|step| {
+                let ratio = f64::from(step) / 20.0;
+                ScreenPoint {
+                    x: (first_marker.anchor.x - first_leader_origin.x)
+                        .mul_add(ratio, first_leader_origin.x),
+                    y: (first_marker.anchor.y - first_leader_origin.y)
+                        .mul_add(ratio, first_leader_origin.y),
+                }
+            })
+            .find(|position| {
+                scene
+                    .annotation_occurrence_hit_test(
+                        *position,
+                        PickTolerance::default(),
+                        hover_editor.selection(),
+                        Some(SelectionItem::Curve(related_curve)),
+                        &[],
+                    )
+                    .is_some_and(|(occurrence, _)| occurrence == first_occurrence)
+                    && position.distance(first_marker.anchor)
+                        > SceneGlyphMarker::BOUND_RADIUS_PIXELS
+            })
+            .expect("the painted leader must expose an unambiguous owning sample");
+        assert_eq!(
+            hover_editor.pointer_move(
+                &scene,
+                pointer(
+                    10,
+                    first_leader_sample.x,
+                    first_leader_sample.y,
+                    Modifiers::default(),
+                ),
+            ),
+            vec![EditorEffect::HoverChanged(context_state(Some(
+                EditorHoverTarget::Annotation(first_occurrence)
+            )))],
+            "a painted glyph leader must retain the exact owning annotation occurrence",
+        );
         assert_eq!(
             hover_editor.pointer_move(
                 &scene,
@@ -13212,7 +14108,11 @@ mod tests {
             ),
             vec![EditorEffect::HoverChanged(context_state(Some(
                 EditorHoverTarget::Annotation(second_occurrence)
-            )))]
+            )))],
+        );
+        assert_eq!(
+            hover_editor.hover_state(),
+            context_state(Some(EditorHoverTarget::Annotation(second_occurrence)))
         );
         assert_eq!(
             hover_editor.pointer_move(&scene, pointer(10, 10.0, 10.0, Modifiers::default())),
@@ -13250,16 +14150,20 @@ mod tests {
                 .expect("parallel line geometry");
             let start = *curve.screen_polyline.first().expect("line start");
             let end = *curve.screen_polyline.last().expect("line end");
+            let origin = ScreenPoint {
+                x: (start.x + end.x) * 0.5,
+                y: (start.y + end.y) * 0.5,
+            };
             assert_eq!(
                 marker.anchor,
                 ScreenPoint {
-                    x: (start.x + end.x) * 0.5,
-                    y: (start.y + end.y) * 0.5,
+                    x: origin.x + 24.0,
+                    y: origin.y - 24.0,
                 }
             );
             assert_ne!(marker.anchor, start);
             assert_ne!(marker.anchor, end);
-            assert_eq!(marker.leader_from, None);
+            assert_eq!(marker.leader_from, Some(origin));
         }
 
         let mut editor = ConstraintEditor::default();
@@ -13350,6 +14254,95 @@ mod tests {
                 SelectionItem::Curve(horizontal),
                 SelectionItem::Curve(vertical)
             ]
+        );
+
+        document
+            .set_element_user_suppressed(
+                geosolve_sketch::DocumentElementId::Constraint(perpendicular),
+                true,
+            )
+            .expect("suppress perpendicular relation");
+        let suppressed_scene = crate::tests::scene(&document);
+        let suppressed = suppressed_scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(perpendicular))
+            .expect("suppressed annotation");
+        assert!(suppressed.suppressed);
+        assert!(matches!(
+            suppressed.geometry,
+            SceneAnnotationGeometry::Glyph { .. }
+        ));
+    }
+
+    #[test]
+    fn m76_symmetry_glyph_rotates_with_its_oblique_local_axis() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let axis_start = document
+            .add_point("axis start", [-2.0, -2.0])
+            .expect("axis start");
+        let axis_end = document
+            .add_point("axis end", [2.0, 2.0])
+            .expect("axis end");
+        let first = document
+            .add_point("first symmetric point", [2.0, 0.0])
+            .expect("first symmetric point");
+        let second = document
+            .add_point("second symmetric point", [0.0, 2.0])
+            .expect("second symmetric point");
+        let axis = CurveSpan::line(
+            document
+                .add_curve(
+                    "oblique symmetry axis",
+                    CurveDefinition::Line {
+                        start: axis_start,
+                        end: axis_end,
+                        branch_direction: [std::f64::consts::FRAC_1_SQRT_2; 2],
+                    },
+                )
+                .expect("axis"),
+        );
+        let constraint = document
+            .add_constraint(
+                "oblique symmetry",
+                DocumentConstraintDefinition::SymmetricAboutLine {
+                    first,
+                    second,
+                    line: axis,
+                },
+            )
+            .expect("symmetry constraint");
+        let scene = scene(&document);
+        let marker = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(constraint))
+            .and_then(|annotation| match &annotation.geometry {
+                SceneAnnotationGeometry::Glyph { markers } => markers.first(),
+                SceneAnnotationGeometry::RightAngle { .. }
+                | SceneAnnotationGeometry::LinearDimension { .. }
+                | SceneAnnotationGeometry::RadialDimension { .. }
+                | SceneAnnotationGeometry::AngularDimension { .. }
+                | SceneAnnotationGeometry::Label { .. } => None,
+            })
+            .expect("symmetry marker");
+        let curve = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == axis)
+            .expect("axis scene curve");
+        let start = curve.screen_polyline.first().expect("axis start");
+        let end = curve.screen_polyline.last().expect("axis end");
+        let length = start.distance(*end);
+        let axis_direction = [(end.x - start.x) / length, (end.y - start.y) / length];
+        let icon_axis = [
+            -marker.rotation_radians.sin(),
+            marker.rotation_radians.cos(),
+        ];
+        assert!(
+            (axis_direction[0].mul_add(icon_axis[0], axis_direction[1] * icon_axis[1])).abs()
+                > 1.0 - 1.0e-12,
+            "the symmetry mark's local axis must follow the accepted oblique support",
         );
     }
 
@@ -14535,7 +15528,10 @@ mod tests {
             .expect("horizontal annotation");
         assert_eq!(annotation.visibility, SceneAnnotationVisibility::Contextual);
         let marker = ScreenPoint { x: 50.0, y: 50.0 };
-        annotation.geometry = SceneAnnotationGeometry::Label { anchor: marker };
+        annotation.geometry = SceneAnnotationGeometry::Label {
+            anchor: marker,
+            leader_from: None,
+        };
         let item = annotation.item;
         let occurrence = SceneAnnotationOccurrence {
             item,
@@ -14577,6 +15573,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one tolerance-boundary regression keeps the complete annotation precedence and occurrence tie contract together"
+    )]
     fn m75_annotation_priority_and_occurrence_ties_are_explicit_at_tolerance_boundary() {
         let (mut document, spans, _) = line_document();
         let constraints = ["first", "second"].map(|label| {
@@ -14605,6 +15605,7 @@ mod tests {
                             y: probe.y,
                         },
                         leader_from: None,
+                        rotation_radians: 0.0,
                     },
                     SceneGlyphMarker {
                         anchor: ScreenPoint {
@@ -14612,6 +15613,7 @@ mod tests {
                             y: probe.y,
                         },
                         leader_from: None,
+                        rotation_radians: 0.0,
                     },
                 ],
             };
@@ -14661,7 +15663,10 @@ mod tests {
 
         let origin = scene.viewport.model_to_screen([0.0, 0.0]);
         scene.annotations.truncate(1);
-        scene.annotations[0].geometry = SceneAnnotationGeometry::Label { anchor: origin };
+        scene.annotations[0].geometry = SceneAnnotationGeometry::Label {
+            anchor: origin,
+            leader_from: None,
+        };
         let datum_overlap_item = scene.annotations[0].item;
         let mut datum_overlap = super::ConstraintEditor::default();
         assert_eq!(
@@ -14696,7 +15701,10 @@ mod tests {
             .find(|annotation| annotation.item == item)
             .expect("horizontal annotation");
         assert_eq!(annotation.visibility, SceneAnnotationVisibility::Contextual);
-        annotation.geometry = SceneAnnotationGeometry::Label { anchor: position };
+        annotation.geometry = SceneAnnotationGeometry::Label {
+            anchor: position,
+            leader_from: None,
+        };
         assert!(
             scene
                 .annotation_occurrence_hit_test(position, PickTolerance::default(), &[], None, &[],)
@@ -14835,7 +15843,10 @@ mod tests {
                 .find(|annotation| annotation.item == annotation_item)
                 .expect("horizontal annotation");
             assert_eq!(annotation.visibility, SceneAnnotationVisibility::Contextual);
-            annotation.geometry = SceneAnnotationGeometry::Label { anchor: position };
+            annotation.geometry = SceneAnnotationGeometry::Label {
+                anchor: position,
+                leader_from: None,
+            };
             assert!(!annotation.is_visible(&[], Some(passive), &[]));
             assert!(annotation.is_visible(&[source], Some(passive), &[]));
         }
