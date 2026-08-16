@@ -178,7 +178,7 @@ reported the targeted F005 movement behavior fixed and requested sign-off once t
 regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
 the two-previously-Current transaction and CircularArc transport/domain regressions, while the
 198/198 golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B
-without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72-M74 are
+without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72-M75 are
 complete under their scoped approvals and exact final public-artifact verification. M74's separate
 hands-on scorecard transferred without a retroactive M74 pass into the M75 bug-fixing/UAT
 follow-up milestone. M75's implementation, clean qualification and immutable
@@ -186,8 +186,8 @@ initial Tailscale nomination passed, but finding M75-F001 withdrew it from UAT. 
 also passed a clean replacement gate and immutable freeze; focused browser qualification then
 opened M75-F002 because an overlying native SVG item hid the authenticated computed-radius owner.
 The F002 correction passes the complete clean replacement gate, immutable freeze and exact
-Tailscale verification. The supervising caller accepted the qualified interaction scope and
-requested closure; final public publication remains open.
+Tailscale verification. The supervising caller accepted the qualified interaction scope, and
+exact final public publication passes.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1911,7 +1911,7 @@ Status: **complete under the supervising caller's scoped close decision on 2026-
 clean release gate, immutable served-byte checks and final GitHub Pages artifact verification pass
 for the datum-axis-symmetry replacement. M74-U1 through M74-U8 remain deferred rather than marked
 passed; their future execution and findings belong to the next bug-fixing/UAT follow-up milestone,
-which was unstarted at M74 close and is now active as M75.
+which was unstarted at M74 close and later completed as M75.
 
 - Every sketch exposes immutable intrinsic Origin/X/Y datums with no persistent identity,
   variables, history, geometry counts or Fit contribution. They are selectable and inspectable;
@@ -1965,15 +1965,14 @@ HTTP 200, match the downloaded artifact byte-for-byte, use repository-prefixed a
 and the expected media types, and `/` equals `index.html`. The artifact's C-locale manifest
 aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`; the public M72
 compatibility and M74 Chromium checks pass at both desktop sizes. Every M74 acceptance gate passes
-under the scoped decision; U1-U8 remain deferred and are now carried by active M75.
+under the scoped decision; U1-U8 transferred without a retroactive M74 pass into completed M75.
 
 ## M75 acceptance: hover and primary pointer-owner parity
 
-Status: **active pending final publication; the post-F002 replacement is clean-qualified,
-byte-verified and accepted by the supervising caller as of 2026-08-16. Exact Pages publication and
-closure remain pending**. M75 owns the hands-on M74-U1 through M74-U8
-carryover as well as the new hover/click
-parity contract. The accepted M74 public artifact remains the baseline; it is not M75 evidence.
+Status: **complete (2026-08-16); the post-F002 replacement is clean-qualified, byte-verified,
+accepted by the supervising caller and exact-verified on GitHub Pages**. M75 owns the hands-on
+M74-U1 through M74-U8 carryover as well as the new hover/click parity contract. The exact M75
+Pages artifact below is final public authority.
 
 - For one finite Select pointer sample, headless hover prediction and primary pointer-down use the
   same candidates and exact order: applicable Fillet radius; draggable geometry consisting of
@@ -2075,9 +2074,9 @@ crossover and Trunk. Its exact no-rebuild seven-file snapshot
 `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is served by PID `37152`
 at `http://100.94.63.83:8080/`; old PID `4026985` is retired. HTTP evidence
 `/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies all seven files and `/` exactly, and Tailscale
-M72/M74 two-size plus M75 6/6 browser checks pass. This is current mechanical UAT authority only.
-No M75 human item is disposed by this evidence; explicit approval remains pending, GitHub Pages
-remains on accepted M74, and publication/closure remain open.
+M72/M74 two-size plus M75 6/6 browser checks pass. At that nomination checkpoint this was
+mechanical UAT authority only; no M75 human item was disposed by this evidence, and explicit
+approval, GitHub Pages publication and closure remained open.
 
 Scoped human result (2026-08-16): the supervising caller reviewed the exact post-F002 candidate,
 reported it "Looking good", and explicitly requested closure. M75-U1 through M75-U12 and the
@@ -2085,8 +2084,22 @@ F001/F002 targeted rechecks are accepted for scoped closure from that review plu
 mechanical/browser evidence. This disposition accepts the qualified candidate and interaction
 scope without claiming a separately logged exhaustive replay of every scripted permutation. Exact
 product source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
-`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, is approved. Final accepted-source GitHub Pages
-publication and byte verification remain required before M75 closes.
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, is approved. At that approval checkpoint, final
+accepted-source GitHub Pages publication and byte verification remained required before M75 close.
+
+Final public result (2026-08-16): documentation-only approval descendant
+`f80235978fbcdccd58c45a08bccf3969a20110c9`, tree
+`eb05b6496aa5c761e005a40da78d8fb96e84c16a`, deploys accepted product source
+`553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, through successful Pages run `31939764951`, artifact
+`9261974799` and deployment `5929879555`. The hosted complete release gate, native/WASM M75 11/11,
+demo-web 117/117, unchanged 270/270 golden, 70.90-second sparse crossover and repository-prefixed
+assembly pass. Downloaded ZIP/tar SHA-256 values are
+`8c031953dec4975c9b701a5ba30f060a95d5e0772286396f3c03ac74fb665fc0` and
+`8ac419fbea39c306e6ee529309f2d3965c93d4ff0459fd2e21179714e9b89c1d`; the seven-file manifest
+aggregate is `4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`. Every public response
+matches the artifact with HTTP 200, correct media/length, zero redirects and root equality; public
+M72/M74 two-size and M75 6/6 Chromium checks pass. Every M75 acceptance gate is complete.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -80,15 +80,15 @@ hover/click correction passed a clean replacement gate and immutable freeze. Foc
 qualification opened M75-F002 because native SVG paint above a computed Fillet radius grip hid
 the authenticated owner; review extended the same fix across the pointer-active rail and spoke.
 That adapter correction now passes the complete clean gate and exact immutable Tailscale
-nomination. The supervising caller accepted the post-F002 interaction scope and requested closure;
-exact M75 Pages publication and final closure remain pending.
+nomination. The supervising caller accepted the post-F002 interaction scope, and exact GitHub
+Pages publication now passes. M75 is complete; no later milestone is active.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
-1. `START_HERE.md` — current implementation handoff and next milestone.
+1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74 closed/public and M75 accepted pending publication.
+3. `PLAN.md` — authoritative roadmap, with M74 and M75 closed and publicly verified.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -97,8 +97,8 @@ Physics, collision and a production rendering system remain out of scope.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release scope.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
-11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — active hover/click
-    ownership milestone, accepted post-F002 candidate and pending final public closeout.
+11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — completed, approved
+    and publicly verified hover/click ownership milestone.
 
 ## Workspace
 
@@ -122,7 +122,7 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. M40.7, M53 and M61-M74 have explicit acceptance dispositions. New milestones
+and application undo. M40.7, M53 and M61-M75 have explicit acceptance dispositions. New milestones
 normally end in hands-on UAT after objective automation; M74 records an explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
 mobile support requirement.

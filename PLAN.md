@@ -67,15 +67,15 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M74 are complete; M74 closes under explicit scoped approval of its
+of every prepared UAT step. M71-M75 are complete. M74 closes under explicit scoped approval of its
 clean-qualified frozen candidate and exact final Pages publication, while its deferred scorecard
 transferred into M75. M75's initial immutable nomination was
 withdrawn after finding M75-F001. Its authoring-hover correction then passed a clean replacement
 gate and immutable freeze, but focused browser qualification found M75-F002 where native SVG paint
 above a computed Fillet radius affordance hid that owner from both hover and pointer-down. The F002
 adapter correction passes the complete clean replacement gate and immutable Tailscale nomination;
-the supervising caller has accepted the qualified interaction scope and requested closure. Exact
-M75 Pages publication remains open. M66's
+the supervising caller accepted the qualified interaction scope, and exact GitHub Pages
+publication now passes. No later milestone is active. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4572,7 +4572,7 @@ Status: **complete under the supervising caller's scoped close decision on 2026-
 implementation, automated/review evidence, complete clean release gate, immutable Tailscale
 candidate and exact final GitHub Pages publication pass. M74-U1 through M74-U8 remain deferred,
 not passed, and transfer with any findings to the next bug-fixing/UAT follow-up milestone, which
-was unstarted at M74 close and is now active as M75. `docs/M74_GOALS.md` owns the detailed scope.
+was unstarted at M74 close and later completed as M75. `docs/M74_GOALS.md` owns the detailed scope.
 
 - [x] Approve and record the M74 datum, inference and desktop-polish scope without activating
   draft-v5 as a supported persistence language.
@@ -4677,7 +4677,7 @@ correct, and the public M72 compatibility and M74 Chromium checks pass at `1440x
 `1024x720`. The frozen Tailscale snapshot remains accepted candidate evidence but was retired from
 service when M75 was nominated; it is not public-byte authority. With this publication verified,
 every M74 gate is complete under the scoped close decision; U1-U8 and any future findings remain
-deferred to the now-active M75 follow-up.
+deferred into the subsequently completed M75 follow-up.
 
 Gate: intrinsic datums remain permanent but identity-free; their ordinary relations solve, audit
 and follow lifecycle; headless picking/inference owns the exact priority and tolerance policy; the
@@ -4687,13 +4687,12 @@ UAT; and the accepted source is exact-verified by the final Pages publication.
 
 ### M75: hover and primary pointer-owner parity
 
-Status: **active pending final publication; the post-F002 replacement is clean-qualified,
-byte-verified and accepted by the supervising caller as of 2026-08-16. Exact Pages publication and
-closure remain pending**. This milestone makes Select
-hover predict the exact primary owner that the same pointer sample would
-receive on pointer-down, then executes the deferred M74-U1 through M74-U8 scorecard beside the new
-hover review. Active relation/dimension and Fillet authoring additionally preview the exact
-compatible operand or radius owner that unchanged pointer-down will consume.
+Status: **complete (2026-08-16); the post-F002 replacement is clean-qualified, byte-verified,
+accepted by the supervising caller and exact-verified on GitHub Pages**. This milestone makes Select
+hover predict the exact primary owner that the same pointer sample would receive on pointer-down,
+then executes the deferred M74-U1 through M74-U8 scorecard beside the new hover review. Active
+relation/dimension and Fillet authoring additionally preview the exact compatible operand or
+radius owner that unchanged pointer-down will consume.
 `docs/M75_GOALS.md` owns the detailed scope.
 
 - [x] Approve and record the M75 ownership, lifecycle, compatibility and carried-UAT contract.
@@ -4733,7 +4732,7 @@ compatible operand or radius owner that unchanged pointer-down will consume.
 - [x] Complete `docs/M75_UAT.md` at both desktop sizes and multiple zoom/tolerance fringes,
   including every deferred M74-U1 through M74-U8 item, hover/click parity and accessibility, then
   receive explicit supervising-human approval.
-- [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact
+- [x] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact
   byte-for-byte and close M75.
 
 Initial implementation checkpoint (2026-08-16): the shared Select resolver, problem-aware wrappers, deterministic
@@ -4803,9 +4802,9 @@ media/length/bytes, no redirect or content encoding, `/ == index.html` and a mat
 aggregate. Tailscale Chromium checks pass M72 and M74 at both sizes with unchanged script hashes
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`; M75 script hash
-`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6. This is the
-current mechanical UAT authority only. Every carried/new human item and explicit approval remain
-pending; GitHub Pages stays on accepted M74, and M75 publication/closure remain open.
+`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6. At that
+nomination checkpoint this was mechanical UAT authority only; every carried/new human item,
+explicit approval, GitHub Pages publication and closure remained open.
 
 Scoped human acceptance checkpoint (2026-08-16): the supervising caller reviewed the exact
 post-F002 candidate above, reported it "Looking good", and explicitly requested M75 closure. This
@@ -4813,8 +4812,27 @@ accepts M75-U1 through M75-U12 and the F001/F002 targeted rechecks for scoped cl
 qualified hover/click, overlap, radius-affordance and carried desktop interaction contract. It does
 not claim a separately logged exhaustive replay of every scripted permutation. The accepted
 product remains source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
-`83df4efb99ca66cf0cebc0caec4515b61afd33cf`. Final GitHub Pages publication and exact hosted-byte
-verification remain the only open closeout step.
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`. At that approval checkpoint, final GitHub Pages
+publication and exact hosted-byte verification remained the only open closeout step.
+
+Final public publication checkpoint (2026-08-16): accepted product source
+`553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, is deployed from documentation-only approval
+descendant `f80235978fbcdccd58c45a08bccf3969a20110c9`, tree
+`eb05b6496aa5c761e005a40da78d8fb96e84c16a`, by successful GitHub Pages run `31939764951`.
+Qualify-and-assemble job `95147135584` passes in 25m40s, including the 24m24s complete hosted
+release gate, M75 native/WASM 11/11, demo-web 117/117, unchanged 270/270 golden, the 70.90-second
+sparse crossover and 26-second repository-prefixed build. Deploy job `95149802628` passes in 11s
+through deployment `5929879555`. Artifact `9261974799` has ZIP SHA-256
+`8c031953dec4975c9b701a5ba30f060a95d5e0772286396f3c03ac74fb665fc0`, inner-tar SHA-256
+`8ac419fbea39c306e6ee529309f2d3965c93d4ff0459fd2e21179714e9b89c1d` and seven-file manifest
+aggregate `4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`. The public root and all
+seven paths return HTTP 200 with zero redirects, exact media types/lengths/bytes and no content
+encoding; `/` equals `index.html`, asset URLs are repository-prefixed, and the public M72/M74
+two-size plus M75 6/6 Chromium checks pass. Evidence is retained at
+`/tmp/geosolve-m75-pages-verify.NkQwem`. GitHub Pages is final M75 public-byte authority; the live
+frozen Tailscale snapshot remains accepted candidate evidence. Every M75 gate is complete, and no
+later milestone is activated by this closeout.
 
 Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
 its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other
@@ -4823,8 +4841,8 @@ when visible; context-only corridors remain targetless; stale hover cannot outli
 camera, scene or overlay state; active authoring hover and click share exact compatible candidate
 resolution and computed-preview authentication; the browser paints only authenticated headless hover state; existing
 tolerances, role ordering, schemas, equations, solver behavior and golden bytes remain unchanged;
-the carried and new human scorecards pass on a clean, byte-verified candidate before exact Pages
-publication.
+the carried and new human scorecards pass on a clean, byte-verified candidate; and exact Pages
+publication passes.
 
 ## Explicit non-goals
 

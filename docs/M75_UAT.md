@@ -2,11 +2,10 @@
 
 # M75 focused UAT — hover and primary pointer-owner parity
 
-Status: **the post-F002 replacement and focused F001/F002 hover recheck are accepted for scoped
-closure by the supervising caller on 2026-08-16; final GitHub Pages publication remains pending**.
+Status: **complete (2026-08-16); the post-F002 replacement and focused F001/F002 hover recheck are
+accepted for scoped closure and exact-verified on GitHub Pages**.
 The caller also accepted U1-U12 for scoped closure, but no separate step-by-step transcript was
-logged and this record does not invent one. GitHub Pages continues to serve accepted M74 until the
-exact accepted M75 product is published and byte-verified.
+logged and this record does not invent one. The exact M75 public artifact below is final authority.
 
 Withdrawn initial candidate source: `f3affff1b62b1cb484a59647c4072c94c3b12ada`
 
@@ -165,7 +164,27 @@ This evidence made the snapshot ready for human UAT; mechanical evidence alone d
 scorecard item. The supervising caller subsequently reported the candidate looking good and
 authorized closure. The scoped approval below accepts the current candidate, focused F001/F002
 hover recheck and U1-U12 without claiming a separately recorded observation for every prepared
-step. GitHub Pages remains accepted M74 authority until M75 publication and exact verification.
+step. At that approval checkpoint, GitHub Pages remained accepted M74 authority until M75
+publication and exact verification.
+
+### Final public authority
+
+Documentation-only approval descendant `f80235978fbcdccd58c45a08bccf3969a20110c9`, tree
+`eb05b6496aa5c761e005a40da78d8fb96e84c16a`, deploys accepted product source
+`553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, through successful Pages run `31939764951`, artifact
+`9261974799` and deployment `5929879555`. The hosted complete gate, repository-prefixed build and
+deploy pass. ZIP/tar SHA-256 values are
+`8c031953dec4975c9b701a5ba30f060a95d5e0772286396f3c03ac74fb665fc0` and
+`8ac419fbea39c306e6ee529309f2d3965c93d4ff0459fd2e21179714e9b89c1d`; the exact seven-file
+manifest and `4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b` aggregate are recorded
+in `docs/M75_IMPLEMENTATION.md`.
+
+The public root and every artifact path return HTTP 200 with zero redirects and match the artifact
+byte-for-byte; `/` equals `index.html`, asset URLs are repository-prefixed and media types are
+correct. M72/M74 checks pass at both desktop sizes and M75 passes 6/6 on the public URL. Evidence is
+retained at `/tmp/geosolve-m75-pages-verify.NkQwem`. GitHub Pages is final public-byte authority;
+the still-live frozen Tailscale snapshot remains accepted candidate evidence.
 
 ## Review matrix
 
@@ -432,10 +451,12 @@ New M75 items:
   grip/spoke/rail correction.
 - Final M75 approval: **Pass for scoped closure** — the supervising caller reported “Looking good”
   and authorized closure on 2026-08-16.
-- Exact GitHub Pages publication and hosted-byte verification: **Pending**; accepted M74 remains
-  public authority at this checkpoint.
+- Exact GitHub Pages publication and hosted-byte verification: **Pass** — run `31939764951`,
+  artifact `9261974799`, deployment `5929879555`, with all public bytes and browser matrices
+  verified.
 
 These dispositions come from explicit supervising-human approval, not automated evidence alone.
 The detailed U1-U12 steps were not individually logged, so their scoped passes must not be read as
 a step-by-step execution transcript. The exact accepted source/tree, immutable manifest and
-endpoint remain recorded above; append the final public artifact only after publication succeeds.
+endpoint remain recorded above. The final public artifact is recorded separately because its
+repository-prefixed assembly differs from the frozen Tailscale candidate.

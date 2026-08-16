@@ -145,7 +145,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ### Changed
 
-- M75 consolidates Select hover prediction and primary pointer-down targeting behind one private
+- Completed, approved and publicly verified M75 hover/pointer-owner parity. M75 consolidates Select
+  hover prediction and primary pointer-down targeting behind one private
   headless resolver. The shared order is validated Fillet radius, draggable point/semantic-centre
   geometry, visible annotation occurrence, remaining native/computed geometry, intrinsic datum,
   then none. Problem-forced annotations now participate in pointer-move as well as pointer-down,
@@ -165,8 +166,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   Tailscale byte verification. On 2026-08-16 the supervising caller accepted that candidate, the
   focused F001/F002 hover recheck and U1-U12 for scoped closure. The detailed UAT steps were not
   individually logged, so this disposition is not represented as a separate step-by-step replay.
-  Final exact GitHub Pages publication remains pending at this checkpoint; accepted M74 remains
-  public authority until it passes.
+  Documentation-only approval descendant `f80235978fbcdccd58c45a08bccf3969a20110c9` passes Pages
+  run `31939764951` and deploys artifact `9261974799` through deployment `5929879555`. All seven
+  public files byte-match the downloaded artifact, repository-prefixed URLs and media types are
+  correct, and public M72/M74/M75 Chromium checks pass. M75 is complete.
 - Completed, approved and publicly verified M73 retained-authoring semantic consolidation. One
   private `ConstructionStageSemantics` description now owns the remaining line/polyline
   stage/span/reference-handoff facts. The unreleased `ConstraintKind`,

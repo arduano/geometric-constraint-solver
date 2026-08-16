@@ -1332,7 +1332,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human acceptance dispositions
-are recorded at completed M40.7, M53 and M61-M74. M72's scoped UAT and exact final public-artifact
+are recorded at completed M40.7, M53 and M61-M75. M72's scoped UAT and exact final public-artifact
 verification complete its direct automated qualification. Completed M73 qualified its F001-F003
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
@@ -1341,14 +1341,15 @@ the final GitHub Pages artifact. M73 adds no new editable sample or browser scen
 explicit scoped closure approval on its clean-qualified, byte-verified F001 replacement. Its
 hands-on intrinsic-datum and desktop-polish scorecard is intentionally deferred into the next
 bug-fixing/UAT follow-up milestone rather than claimed as completed human evidence. Exact final
-M74 Pages publication passes. That follow-up is active as M75: its initial immutable nomination was
+M74 Pages publication passes. That follow-up became M75: its initial immutable nomination was
 withdrawn after M75-F001, the F001 replacement passed the complete clean gate and immutable
 nomination, and M75-F002 then withdrew it after browser paint order hid a valid computed-radius
 owner. The F002 correction now passes the complete clean replacement gate, immutable Tailscale
 nomination and exact served-byte checks. On 2026-08-16 the supervising caller accepted the exact
 post-F002 candidate, focused F001/F002 hover recheck and U1-U12 for scoped closure. The detailed
-UAT steps were not individually logged, so this is not a claimed step-by-step replay. GitHub Pages
-stays on accepted M74 until the pending exact M75 publication and hosted-byte verification pass.
+UAT steps were not individually logged, so this is not a claimed step-by-step replay. Exact Pages
+run `31939764951`, artifact `9261974799` and deployment `5929879555` now pass public-byte and
+M72/M74/M75 browser verification, completing M75. No later milestone is active.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1862,7 +1863,7 @@ the mapped sketch plane and existing captured-gesture completion remain unchange
 presentation tests own translation; `docs/M74_UAT.md` preserves the hands-on feel scorecard. Clean
 qualification and immutable Tailscale nomination pass. The supervising caller approved scoped M74
 closure on 2026-08-16 without a separate hands-on pass; that scorecard and any findings are
-deferred to the now-active M75 bug-fixing/UAT follow-up milestone.
+deferred into the subsequently completed M75 bug-fixing/UAT follow-up milestone.
 
 Final public publication (2026-08-16): accepted product source
 `55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
@@ -1874,12 +1875,12 @@ aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`.
 and all seven paths return HTTP 200 and match the artifact byte-for-byte; `/` equals `index.html`,
 application URLs are repository-prefixed, media types are correct, and both public two-size
 Chromium checks pass. The separate Tailscale bytes remain frozen-candidate evidence, not public
-publication authority. U1-U8 and future findings are carried by active M75.
+publication authority. U1-U8 transferred into M75 and are accepted under its scoped close decision.
 
 ### M75-H1 - Select hover predicts the primary pointer-down owner
 
-Status: implemented and clean-qualified natively and under WASM on the current post-F002 mechanical
-candidate; hands-on evidence has not started.
+Status: implemented and clean-qualified natively and under WASM, accepted for scoped closure on the
+post-F002 candidate, and exact-verified through the final public artifact.
 
 Construct finite accepted scenes whose projected hit envelopes overlap at every adjacent priority
 edge. For the same Select tool, scene, camera, problem set, policy and pointer coordinate, resolve
@@ -1902,8 +1903,8 @@ hover sample mutates accepted geometry, selection, history, Fillet state or scen
 
 ### M75-H2 - Problem annotations, deterministic occurrences and targetless context
 
-Status: implemented and clean-qualified natively and under WASM on the current post-F002 mechanical
-candidate; hands-on evidence has not started.
+Status: implemented and clean-qualified natively and under WASM, accepted for scoped closure on the
+post-F002 candidate, and exact-verified through the final public artifact.
 
 Create one constraint and one dimension occurrence that are normally hidden but forced visible by
 the current problem set. Each visible occurrence participates in the same annotation hit path used
@@ -1921,8 +1922,8 @@ placement, visibility, fan-out and hit tolerances remain unchanged.
 
 ### M75-H3 - Hover authority is revoked with its interaction context
 
-Status: implemented and clean-qualified on the current post-F002 mechanical candidate; hands-on
-evidence has not started.
+Status: implemented and clean-qualified, accepted for scoped closure on the post-F002 candidate,
+and exact-verified through the final public artifact.
 
 Acquire each owner class, then change the active tool or selection, pan/zoom/Fit/Origin camera,
 replace the accepted scene through edit/Undo/Redo/reload, hide the relevant visibility class, or
@@ -1946,7 +1947,8 @@ change.
 ### M75-F001 - Active authoring hover matches its unchanged click
 
 Status: confirmed against the initial frozen candidate; corrected with native/WASM 11/11 parity
-and a complete clean replacement gate. That replacement is withdrawn after M75-F002.
+and a complete clean replacement gate. The intermediate replacement is withdrawn after M75-F002;
+the corrected behavior is accepted and publicly verified on the final candidate.
 
 Activate an ordinary relation/dimension tool and sample an applicable point or curve. Compare the
 read-only hover item to the operand consumed by the unchanged click resolver. Repeat with an
@@ -1975,9 +1977,9 @@ Tailscale endpoint. M75-F002 supersedes it before any human evidence.
 
 ### M75-F002 - Computed-radius owner survives browser paint overlap
 
-Status: confirmed against the F001 replacement, corrected, clean-qualified and accepted for scoped
-closure on the post-F002 immutable candidate. The focused F001/F002 recheck is accepted; final
-GitHub Pages publication remains pending.
+Status: confirmed against the F001 replacement, corrected, clean-qualified, accepted for scoped
+closure on the post-F002 immutable candidate and exact-verified on GitHub Pages. The focused
+F001/F002 recheck and final publication pass.
 
 In the ordinary `fillet-workshop`, collect point `6600000000000000000000000000004f` and curve
 `66000000000000000000000000000038`, then sample the computed-radius grip where a native point
@@ -2017,8 +2019,13 @@ and M75 script hash `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c51
 passes 6/6 on the frozen bytes. This was current mechanical UAT authority at nomination. Automated
 evidence alone disposed no human item. The supervising caller subsequently accepted this exact
 candidate, the focused F001/F002 recheck and U1-U12 for scoped closure on 2026-08-16 without
-claiming an individually logged execution of every detailed step. Pages remains on accepted M74
-until final M75 publication and hosted-byte verification complete.
+claiming an individually logged execution of every detailed step. Documentation-only approval
+descendant `f80235978fbcdccd58c45a08bccf3969a20110c9` passes Pages run `31939764951`, artifact
+`9261974799` and deployment `5929879555`. ZIP/tar SHA-256 values are
+`8c031953dec4975c9b701a5ba30f060a95d5e0772286396f3c03ac74fb665fc0` and
+`8ac419fbea39c306e6ee529309f2d3965c93d4ff0459fd2e21179714e9b89c1d`; the seven-file aggregate is
+`4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`. Every public response and
+the public M72/M74/M75 browser matrices verify, completing M75.
 
 ### M75-U1 - Deferred M74 review and hover accessibility matrix
 

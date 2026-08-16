@@ -152,8 +152,8 @@ then opened M75-F002 because an overlying native SVG point hid the authenticated
 radius grip from hover and pointer-down; review extended the same owner across the visible rail and
 spoke. The complete-paint-stack correction passes the clean post-F002 replacement gate, immutable
 freeze and exact Tailscale verification. The supervising caller accepted that candidate's qualified
-interaction scope and requested closure; GitHub Pages intentionally remains on accepted M74 until
-the final M75 publication step completes.
+interaction scope, and exact M75 GitHub Pages publication now passes. M75 is complete; no later
+milestone is active.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -170,8 +170,8 @@ support and physics remain outside future acceptance.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
-11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — active hover/click
-    ownership milestone, accepted post-F002 candidate and pending final public closeout.
+11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — completed, approved
+    and publicly verified hover/click ownership milestone.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -446,7 +446,7 @@ independent review, two-size Chromium checks and immutable seven-file snapshot
 `/tmp/geosolve-m74-uat.jFfAm4` with aggregate
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`. The supervising caller
 explicitly approved scoped closure on 2026-08-16. U1-U8 remain deferred and transfer with any
-future findings to active M75. Documentation-only
+future findings into the subsequently completed M75. Documentation-only
 approval descendant `b6b1d62b49466ea06522dbdd3f5444a324d36584` passes GitHub Pages run
 `31923806117` and deploys artifact `9257602997`; the public seven-file manifest aggregate is
 `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`, every public path
@@ -466,8 +466,10 @@ Exact post-F002 source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
 read-only snapshot `/tmp/geosolve-m75-f002-uat.hlSQYT`, aggregate
 `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is byte-verified and live
 at `http://100.94.63.83:8080/` as the accepted candidate. The supervising caller approved its
-qualified interaction scope and requested closure; M75 Pages publication remains the only open
-closeout step, and both earlier snapshots are historical evidence.
+qualified interaction scope. Documentation-only descendant `f80235978fbcdccd58c45a08bccf3969a20110c9`
+passes Pages run `31939764951` and deploys artifact `9261974799` through deployment `5929879555`;
+all seven public paths byte-match the artifact, and public M72/M74/M75 browser checks pass. M75 is
+complete, while both earlier snapshots remain historical evidence.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -541,9 +543,9 @@ Durable milestone and cleanup records:
 - `docs/M74_GOALS.md` (completed scoped-close and public-release scope)
 - `docs/M74_IMPLEMENTATION.md` (clean qualification, frozen artifact and final-publication ledger)
 - `docs/M74_UAT.md` (explicitly deferred hands-on scorecard and scoped approval record)
-- `docs/M75_GOALS.md` (active hover/click ownership and carried-UAT scope)
-- `docs/M75_IMPLEMENTATION.md` (implemented behavior and clean frozen-candidate ledger)
-- `docs/M75_UAT.md` (current combined M74/M75 human scorecard)
+- `docs/M75_GOALS.md` (completed hover/click ownership and carried-UAT scope)
+- `docs/M75_IMPLEMENTATION.md` (completed implementation, qualification and public-release ledger)
+- `docs/M75_UAT.md` (approved combined M74/M75 scorecard and final public evidence)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

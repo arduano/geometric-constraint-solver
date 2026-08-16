@@ -2,12 +2,11 @@
 
 # M75 — hover and primary pointer-owner parity
 
-Status: **accepted for scoped closure by the supervising caller on 2026-08-16; final GitHub Pages
-publication remains pending**. The accepted product is the clean-qualified, byte-verified
+Status: **complete (2026-08-16); accepted for scoped closure and exact-verified on GitHub Pages**.
+The accepted product is the clean-qualified, byte-verified
 post-F002 candidate below. The caller accepted that candidate, the focused F001/F002 hover recheck
 and U1-U12 for scoped closure; this is not a claim that every prepared UAT step was individually
-executed or logged. GitHub Pages continues to serve accepted M74 until the remaining publication
-and exact hosted-byte verification complete.
+executed or logged. Exact public publication passes below, and no later milestone is active.
 
 ## Goal
 
@@ -201,8 +200,20 @@ and fetched aggregate. Tailscale M72/M74 checks pass at both desktop sizes with 
 the accepted M75 product candidate. On 2026-08-16 the supervising caller reported it looking good
 and authorized final closure. That scoped decision accepts the current candidate, focused
 F001/F002 hover recheck and U1-U12 without representing the detailed scorecard as an individually
-logged replay. Pages stays on accepted M74 until publication of these exact product bytes and
-hosted-byte verification complete.
+logged replay. At that approval checkpoint, Pages stayed on accepted M74 until publication of the
+accepted product and hosted-byte verification completed.
+
+Final public publication record (2026-08-16): documentation-only approval descendant
+`f80235978fbcdccd58c45a08bccf3969a20110c9`, tree
+`eb05b6496aa5c761e005a40da78d8fb96e84c16a`, deploys accepted product source
+`553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, through successful Pages run `31939764951`, artifact
+`9261974799` and deployment `5929879555`. ZIP/tar SHA-256 values are
+`8c031953dec4975c9b701a5ba30f060a95d5e0772286396f3c03ac74fb665fc0` and
+`8ac419fbea39c306e6ee529309f2d3965c93d4ff0459fd2e21179714e9b89c1d`; the seven-file manifest
+aggregate is `4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`. Every public file and
+root exact-verifies, and M72/M74 two-size plus M75 6/6 Chromium checks pass. GitHub Pages is final
+public-byte authority; the frozen Tailscale snapshot remains accepted candidate evidence.
 
 ## Acceptance
 
@@ -219,8 +230,8 @@ hosted-byte verification complete.
   outside the additive pointer-move wrappers remain unchanged.
 - The deferred M74 and new M75 scorecards are accepted for scoped closure on the immutable
   qualified candidate without claiming an individually logged replay. The focused F001/F002
-  hover recheck and final human approval pass; exact accepted-source GitHub Pages publication is
-  the sole remaining closeout step.
+  hover recheck and final human approval pass; exact accepted-source GitHub Pages publication and
+  hosted-byte/browser verification pass.
 
 ## Non-goals
 

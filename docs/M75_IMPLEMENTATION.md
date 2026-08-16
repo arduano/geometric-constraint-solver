@@ -2,11 +2,11 @@
 
 # M75 implementation — hover and primary pointer-owner parity
 
-Status: **the post-F002 replacement is accepted for scoped closure by the supervising caller on
-2026-08-16; final GitHub Pages publication remains pending**. The initial candidate and
+Status: **complete (2026-08-16); the post-F002 replacement is accepted for scoped closure and
+exact-verified on GitHub Pages**. The initial candidate and
 clean-qualified M75-F001 replacement remain historical evidence only. The caller accepted the
 current candidate, focused F001/F002 hover recheck and U1-U12 without claiming a separately logged
-step-by-step replay. GitHub Pages stays on accepted M74 until exact publication verification.
+step-by-step replay. Exact publication evidence is recorded below; no later milestone is active.
 
 Architecture decision: no new ADR is currently required. M75 consolidates existing editor-owned
 picking, annotation visibility and hover presentation within the accepted-scene boundary. It adds
@@ -203,7 +203,7 @@ cargo clippy --locked -p geosolve-constraint-editor \
 
 The initial immutable snapshot stays untouched as historical evidence. It is no longer a valid
 human-UAT candidate; the clean-qualified F001 replacement below has also been withdrawn by F002,
-and GitHub Pages remains on accepted M74.
+and at that checkpoint GitHub Pages remained on accepted M74.
 
 ## 7. M75-F001 replacement qualification ledger (superseded by M75-F002)
 
@@ -251,7 +251,8 @@ and M74 Chromium scripts pass at `1440x900` and `1024x720`; their SHA-256 hashes
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`.
 
 M75-F002 below withdraws this otherwise clean candidate from human UAT. Its snapshot and served
-bytes remain historical transport evidence only; GitHub Pages remains accepted M74 authority.
+bytes remain historical transport evidence only; at that checkpoint GitHub Pages remained
+accepted M74 authority.
 
 ## 8. Finding M75-F002 — top paint target hid the computed radius owner
 
@@ -313,7 +314,7 @@ ordinary relation/dimension compatibility and fallback, empty/inapplicable clear
 computed-radius grip, visible spoke and rail hover/capture/release promise. This was provisional
 presentation evidence; the clean nomination below repeats it over the frozen candidate.
 
-### Post-F002 clean qualification and current mechanical nomination
+### Post-F002 clean qualification and accepted candidate nomination
 
 Exact clean product source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
 `83df4efb99ca66cf0cebc0caec4515b61afd33cf`, was qualified with:
@@ -368,8 +369,45 @@ This snapshot was the current mechanical UAT authority at nomination. Mechanical
 alone disposed no human item. The supervising caller subsequently reported the candidate looking
 good and authorized closure on 2026-08-16. That scoped approval accepts the exact candidate,
 focused F001/F002 hover recheck and U1-U12; it does not claim that the detailed scorecard was
-individually executed or logged. GitHub Pages continues to serve accepted M74, so publication and
-exact hosted-byte verification remain the sole open closeout step.
+individually executed or logged. At that approval checkpoint, GitHub Pages still served accepted
+M74, so publication and exact hosted-byte verification remained the sole open closeout step.
+
+### Final GitHub Pages publication
+
+Accepted product source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, is deployed from documentation-only approval
+descendant `f80235978fbcdccd58c45a08bccf3969a20110c9`, tree
+`eb05b6496aa5c761e005a40da78d8fb96e84c16a`. GitHub Pages workflow run `31939764951` passes in
+25m59s. Qualify-and-assemble job `95147135584` passes in 25m40s, including the 24m24s complete
+hosted release gate, native/WASM M75 11/11, demo-web 117/117, unchanged 270/270 golden,
+70.90-second 256-moving-body sparse crossover and 26-second repository-prefixed build. Deploy job
+`95149802628` passes in 11s; deployment `5929879555` reports success with HTTPS enforcement at
+`https://arduano.github.io/geometric-constraint-solver/`.
+
+Artifact `9261974799`, name `github-pages`, was downloaded to
+`/tmp/geosolve-m75-pages-verify.NkQwem/github-pages.zip`. The ZIP is 2,108,111 bytes with SHA-256
+`8c031953dec4975c9b701a5ba30f060a95d5e0772286396f3c03ac74fb665fc0`, matching GitHub's digest,
+and contains only `artifact.tar`. The 6,277,120-byte inner tar has SHA-256
+`8ac419fbea39c306e6ee529309f2d3965c93d4ff0459fd2e21179714e9b89c1d` and extracts to exactly
+seven regular files with no links:
+
+| Final hosted artifact file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 19,087 | `6f9dbd39c3698b4ba8fbfd4e3a8d6006fc69f1078eeb90a6943df0468b46f4e9` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-3a692386adf1e085.js` | 33,221 | `ade1f75e65ca2636f29259c7b3716d375e0b3886a6ba1bdf61817686b2dad2d2` |
+| `geosolve-demo-web-3a692386adf1e085_bg.wasm` | 6,116,943 | `ff5939f6e52483b3815a141371ccf3e929c089f192f72b6ed47d607e93de924a` |
+| `index.html` | 27,618 | `80ba86454751c3d8a73e1dd1138a369fff0763b01c1ed70ad8acbe31880bb720` |
+| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+
+The C-locale manifest aggregate is
+`4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`. The public root and all
+seven paths return HTTP 200 with zero redirects, no content encoding and exact media types,
+content lengths and bytes; `/` equals `index.html`. Application asset URLs use only the
+`/geometric-constraint-solver/` prefix. Public M72 and M74 checks pass at both supported desktop
+sizes, and M75 passes 6/6. GitHub Pages is final public-byte authority; the frozen Tailscale
+snapshot remains accepted candidate evidence.
 
 ## 9. Initial qualification ledger (superseded by M75-F001)
 
@@ -483,8 +521,8 @@ M74_BASE_URL=http://100.94.63.83:8080/ node /tmp/m74_browser_check.mjs
 Their SHA-256 values are
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc` respectively. These are M72
-and M74 regression smoke results, not synthetic M75 human UAT. GitHub Pages continues to serve the
-accepted M74 artifact and is not M75 authority during UAT.
+and M74 regression smoke results, not synthetic M75 human UAT. At that checkpoint GitHub Pages
+continued to serve the accepted M74 artifact and was not M75 authority during UAT.
 
 ## 10. Completion gates
 
@@ -497,9 +535,9 @@ accepted M74 artifact and is not M75 authority during UAT.
 - **Pass for scoped closure:** U1-U12 and the focused F001/F002 hover recheck are accepted under the
   supervising caller's 2026-08-16 approval. This is not a claim that every detailed step, desktop
   size, zoom fringe or accessibility path was separately executed and logged.
-- **Pending:** deploy exact accepted product source
-  `553fd912730b1de3b39736c49b669e94cabdd2c3` through GitHub Pages and verify every hosted
-  byte/media type. M75 becomes fully complete only after that standard closeout step passes.
+- **Pass:** exact accepted product source `553fd912730b1de3b39736c49b669e94cabdd2c3`
+  is deployed through GitHub Pages; every hosted byte/media type and the public browser contracts
+  verify. M75 is complete.
 
 ## 11. Compatibility and limitations
 
