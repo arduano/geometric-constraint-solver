@@ -2,8 +2,9 @@
 
 # M76 — production-quality constraint annotations
 
-Status: active. This milestone turns the workbench annotations into a polished CAD demonstration
-without changing solver, sketch or branch semantics.
+Status: implementation, clean qualification and immutable Tailscale nomination complete; hands-on
+UAT and GitHub Pages publication remain open. This milestone turns the workbench annotations into
+a polished CAD demonstration without changing solver, sketch or branch semantics.
 
 ## Scope
 

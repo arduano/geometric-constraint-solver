@@ -1349,7 +1349,9 @@ nomination and exact served-byte checks. On 2026-08-16 the supervising caller ac
 post-F002 candidate, focused F001/F002 hover recheck and U1-U12 for scoped closure. The detailed
 UAT steps were not individually logged, so this is not a claimed step-by-step replay. Exact Pages
 run `31939764951`, artifact `9261974799` and deployment `5929879555` now pass public-byte and
-M72/M74/M75 browser verification, completing M75. No later milestone is active.
+M72/M74/M75 browser verification, completing M75. M76 implementation, clean qualification and
+immutable byte-verified Tailscale nomination pass; U1-U4, explicit approval, public publication and
+closure remain open. M76 is active and no later milestone is active.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1837,8 +1839,9 @@ the third operand reports `WrongOperandKind` while preserving the two valid pend
 design/history/checkpoint bytes. Application creates exactly one accepted history mutation.
 
 The retained definition has no synthetic curve or datum identity. Its tree entry and accepted
-annotation reuse the Symmetry glyph and paired-point midpoint anchor while including the selected
-datum for related highlighting. Suppress/reactivate/delete/dependency/Undo/Redo and draft-v5
+annotation reuse the Symmetry glyph and paired-point midpoint as the leader origin while placing
+the movable mark at its deterministic offset and including the selected datum for related
+highlighting. Suppress/reactivate/delete/dependency/Undo/Redo and draft-v5
 checkpoint reload follow the ordinary constraint lifecycle; canonical export returns
 `UnsupportedM74State`. Existing line-backed symmetry stays green. Focused sketch 9/9, editor
 native/WASM 5/5 and nine append-only golden rows own this scenario; the earlier M74 candidate is
@@ -2057,6 +2060,9 @@ Verify compact four-significant-digit values and truthful family-specific baseli
 leaders, arrows, arcs and label bounds. Exercise driving and reference presentation, extreme values,
 negative-zero cleanup, coarse/fine zoom and deterministic recomposition. Rendering and hit tests
 must consume the same finite primitives; an arc diameter must not invent an opposite arc point.
+Reference values must come only from exact matching accepted-document/revision hydration. A
+detached, revision-mismatched or accepted-document-mismatched scene reports `value unavailable`
+and never presents a dormant target scalar as a measured value.
 
 ### M76-A2 - Contextual twenty-category constraint sampler
 

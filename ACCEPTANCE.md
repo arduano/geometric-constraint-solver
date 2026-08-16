@@ -187,7 +187,8 @@ also passed a clean replacement gate and immutable freeze; focused browser quali
 opened M75-F002 because an overlying native SVG item hid the authenticated computed-radius owner.
 The F002 correction passes the complete clean replacement gate, immutable freeze and exact
 Tailscale verification. The supervising caller accepted the qualified interaction scope, and
-exact final public publication passes.
+exact final public publication passes. M76 implementation, clean qualification and immutable
+byte-verified Tailscale nomination pass; hands-on UAT and public publication remain open.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2103,8 +2104,8 @@ M72/M74 two-size and M75 6/6 Chromium checks pass. Every M75 acceptance gate is 
 
 ## M76 acceptance: production-quality constraint annotations
 
-Status: **active; implementation and focused native/WASM qualification pass. The clean release
-gate, frozen Tailscale candidate, hands-on UAT and publication criteria remain open**.
+Status: **active; implementation, clean release qualification and frozen byte-verified Tailscale
+nomination pass. Hands-on UAT and publication remain open**.
 
 - Every accepted dimension family has truthful geometry: point distance, affine line/polyline-span
   length, radius, diameter, oriented angle, supporting-line offset and exact translated-segment
@@ -2113,7 +2114,9 @@ gate, frozen Tailscale candidate, hands-on UAT and publication criteria remain o
 - Compact values use four significant digits, remove trailing and negative zero, use scientific
   notation below `1e-3` or at/above `1e5`, and use CAD prefixes/suffixes such as `R`, `⌀` and `°`.
   Reference values wrap the whole compact notation in parentheses and also use muted/dashed
-  non-colour styling. Inspector, tooltip and ARIA text retain full semantic names.
+  non-colour styling. Reference annotations use only exact accepted measurements; a detached scene
+  without matching accepted hydration reports `value unavailable` and never exposes its dormant
+  target scalar. Inspector, tooltip and ARIA text retain full semantic names.
 - All twenty `SceneConstraintGlyph` categories have a deliberate geometry-derived mark. Constraint
   marks are contextual by default and the Display control can show all. Right-angle squares stay
   locked to their geometric corner; every other glyph and every dimension can be moved.
@@ -2135,6 +2138,19 @@ gate, frozen Tailscale candidate, hands-on UAT and publication criteria remain o
 - The clean release gate and immutable byte-verified Tailscale candidate pass before hands-on review.
   `docs/M76_UAT.md` passes at `1440x900` and approximately `1024x720`, then explicit supervising
   approval and exact GitHub Pages publication are required before M76 closes.
+
+Mechanical nomination result (2026-08-17): source
+`37eade50b566f62905a395655bc80c17d9b6bef4`, tree
+`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, passes the complete clean 503-second release gate.
+Editor 353/353, demo-web 122/122, native/WASM M76 4/4 each, unchanged golden 270/270, the
+149.39-second sparse crossover, warnings-denied Rustdoc, licensing/package checks and Trunk 0.21.14
+assembly pass. The exact no-rebuild seven-file snapshot `/tmp/geosolve-m76-uat.puiPgO` is read-only
+and has ordered-manifest aggregate
+`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf`. PID `1077092` serves it at
+`http://100.94.63.83:8080/`; `/tmp/geosolve-m76-http-verify.noWQO3` proves HTTP 200, exact
+media/length/bytes, no redirects or content encoding, root equality and the same fetched aggregate.
+This disposes no human UAT item: U1-U4, explicit approval, GitHub Pages publication and closure
+remain open, and accepted M75 remains the public authority.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

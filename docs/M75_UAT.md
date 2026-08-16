@@ -115,9 +115,9 @@ Accepted product source: `553fd912730b1de3b39736c49b669e94cabdd2c3`
 
 Accepted product tree: `83df4efb99ca66cf0cebc0caec4515b61afd33cf`
 
-Current endpoint: `http://100.94.63.83:8080/`
+Historical accepted endpoint: `http://100.94.63.83:8080/` (now serving M76 bytes)
 
-Current server PID: `37152`
+Historical server PID: `37152` (retired before the M76 nomination)
 
 Server log: `/tmp/geosolve-m75-f002-uat.hlSQYT.server.log`
 
@@ -142,7 +142,7 @@ on the source above. Demo-web passes 117/117, M75 parity passes 11/11 natively a
 reviewed golden remains unchanged at 270/270, the sparse crossover completes in 141.82 seconds and
 Trunk release assembly passes. The seven files above are the gate output frozen without rebuilding.
 
-PID `37152` serves the exact argv:
+PID `37152` served the exact argv before retirement:
 
 ```text
 /nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m75-f002-uat.hlSQYT
@@ -184,7 +184,8 @@ The public root and every artifact path return HTTP 200 with zero redirects and 
 byte-for-byte; `/` equals `index.html`, asset URLs are repository-prefixed and media types are
 correct. M72/M74 checks pass at both desktop sizes and M75 passes 6/6 on the public URL. Evidence is
 retained at `/tmp/geosolve-m75-pages-verify.NkQwem`. GitHub Pages is final public-byte authority;
-the still-live frozen Tailscale snapshot remains accepted candidate evidence.
+the frozen Tailscale snapshot remains accepted candidate evidence but is no longer served at the
+shared endpoint.
 
 ## Review matrix
 

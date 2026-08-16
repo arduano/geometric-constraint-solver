@@ -81,14 +81,18 @@ qualification opened M75-F002 because native SVG paint above a computed Fillet r
 the authenticated owner; review extended the same fix across the pointer-active rail and spoke.
 That adapter correction now passes the complete clean gate and exact immutable Tailscale
 nomination. The supervising caller accepted the post-F002 interaction scope, and exact GitHub
-Pages publication now passes. M75 is complete; no later milestone is active.
+Pages publication now passes. M75 is complete. M76's seven-family dimensions, twenty-category
+constraint glyphs, deterministic shared layout/picking, presentation-only movement and fail-soft
+workspace-v6 cache are implemented and clean-qualified. Its exact immutable Tailscale candidate is
+byte-verified and live for hands-on UAT; Pages remains on accepted M75 until approval. M76 is the
+active milestone, and no later milestone is active.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74 and M75 closed and publicly verified.
+3. `PLAN.md` — authoritative roadmap, with M74/M75 closed and M76 mechanically nominated.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -99,6 +103,8 @@ Physics, collision and a production rendering system remain out of scope.
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
 11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — completed, approved
     and publicly verified hover/click ownership milestone.
+12. `docs/M76_GOALS.md`, `docs/M76_IMPLEMENTATION.md` and `docs/M76_UAT.md` — active annotation
+    milestone, mechanical nomination evidence and pending scorecard.
 
 ## Workspace
 

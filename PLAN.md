@@ -67,7 +67,9 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M75 are complete. M76 is active. M74 closes under explicit scoped approval of its
+of every prepared UAT step. M71-M75 are complete. M76 has completed implementation, clean
+qualification and immutable Tailscale nomination; human UAT and publication remain open. M74
+closes under explicit scoped approval of its
 clean-qualified frozen candidate and exact final Pages publication, while its deferred scorecard
 transferred into M75. M75's initial immutable nomination was
 withdrawn after finding M75-F001. Its authoring-hover correction then passed a clean replacement
@@ -75,7 +77,7 @@ gate and immutable freeze, but focused browser qualification found M75-F002 wher
 above a computed Fillet radius affordance hid that owner from both hover and pointer-down. The F002
 adapter correction passes the complete clean replacement gate and immutable Tailscale nomination;
 the supervising caller accepted the qualified interaction scope, and exact GitHub Pages
-publication now passes. No later milestone is active. M66's
+publication now passes. M76 is the active milestone; no later milestone is active. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -178,7 +180,7 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M74 have a recorded acceptance
+- Keep human acceptance records explicit: M40.7, M53 and M61-M75 have a recorded acceptance
   disposition. Newly scoped milestones normally end in supervising-human UAT; an explicit caller
   may instead defer an unexecuted hands-on scorecard without calling it passed, as recorded for
   M74. Every objective correctness, persistence, compatibility and presentation-adapter assertion
@@ -4846,10 +4848,10 @@ publication passes.
 
 ### M76: production-quality constraint annotations
 
-Status: **active (2026-08-16); implementation and qualification in progress**. M76 replaces the
-demo's provisional constraint and dimension marks with compact CAD notation, deterministic
-geometry-derived layout, and presentation-only manual placement. `docs/M76_GOALS.md` owns the
-approved contract.
+Status: **active (2026-08-17); implementation, clean qualification and immutable nomination
+complete; human UAT and publication open**. M76 replaces the demo's provisional constraint and
+dimension marks with compact CAD notation, deterministic geometry-derived layout, and
+presentation-only manual placement. `docs/M76_GOALS.md` owns the approved contract.
 
 - [x] Record the seven dimension families, twenty compact constraint categories, placement,
   compatibility, persistence and UAT contract.
@@ -4865,16 +4867,31 @@ approved contract.
   recover valid sketch geometry from stale, malformed or incompatible layout data.
 - [x] Add native/WASM scene, placement, drag, cancellation, history-neutrality, migration and
   corruption regressions plus thin demo rendering/input tests.
-- [ ] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
+- [x] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
   golden-oracle cleanliness, Rustdoc and Trunk release assembly.
-- [ ] Freeze and byte-verify an immutable Tailscale candidate, then complete `docs/M76_UAT.md` at
-  both supported desktop sizes and receive explicit supervising-human approval.
+- [x] Freeze and byte-verify an immutable Tailscale candidate.
+- [ ] Complete `docs/M76_UAT.md` at both supported desktop sizes and receive explicit
+  supervising-human approval.
 - [ ] Publish the exact accepted candidate to GitHub Pages, verify hosted bytes and close M76.
 
 Gate: annotation layout is deterministic and headless; rendering and picking consume the same exact
 primitives; manual movement is presentation-only; optional workspace data can never reject valid
 sketch geometry; all seven dimension families and twenty constraint glyph categories are legible;
 the frozen Tailscale candidate passes human review before public publication.
+
+Mechanical nomination checkpoint (2026-08-17): exact product source
+`37eade50b566f62905a395655bc80c17d9b6bef4`, tree
+`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, passes the complete clean release gate in 503 seconds.
+Editor unit tests pass 353/353, demo-web tests pass 122/122, M76 parity passes 4/4 natively and 4/4
+under WASM, the reviewed golden remains unchanged at 270/270, the release sparse crossover passes
+in 149.39 seconds, and Rustdoc, licensing, package-content and Trunk 0.21.14 assembly pass. The
+gate-produced seven files were copied without rebuilding to read-only
+`/tmp/geosolve-m76-uat.puiPgO`, ordered-manifest aggregate
+`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf`. PID `1077092` serves the
+snapshot at `http://100.94.63.83:8080/`; HTTP evidence at
+`/tmp/geosolve-m76-http-verify.noWQO3` verifies every file and `/` exactly. This is mechanical
+nomination only: U1-U4, explicit approval, GitHub Pages publication and M76 closure remain open,
+and accepted M75 remains public authority.
 
 ## Explicit non-goals
 

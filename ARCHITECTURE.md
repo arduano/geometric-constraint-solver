@@ -646,7 +646,7 @@ gesture, drafting, lifecycle and history policy and made this crate a thin adapt
 `geosolve-constraint-editor`. Cleanup M46-M50 replaces direct-test ownership and removes the
 second legacy application and old browser E2E; M51 consolidates the survivor around one workspace
 snapshot and direct presentation/evidence owners. Human acceptance dispositions are recorded at
-completed M40.7, M53 and M61-M74. Newly scoped milestones normally end in hands-on UAT after direct
+completed M40.7, M53 and M61-M75. Newly scoped milestones normally end in hands-on UAT after direct
 qualification; M74 records the explicit exception that defers its unexecuted scorecard without
 calling it passed.
 
