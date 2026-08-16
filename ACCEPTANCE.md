@@ -178,9 +178,10 @@ reported the targeted F005 movement behavior fixed and requested sign-off once t
 regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
 the two-previously-Current transaction and CircularArc transport/domain regressions, while the
 198/198 golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B
-without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72's
-public-workbench bulk fixes and GitHub Pages release are complete under the scoped 2026-08-15
-approval and exact final public-artifact verification recorded below.
+without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72 and M73
+are complete under their scoped approvals and exact final public-artifact verification. M74 has
+explicit scoped closure approval on its automated, review and frozen-artifact evidence; separate
+hands-on UAT is deferred without being marked passed, and final Pages publication is in progress.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1900,9 +1901,10 @@ gate passes.
 
 ## M74 acceptance: production-style sketch reference UX
 
-Status: **M74-F001 replacement nominated for focused UAT as of 2026-08-16**. The exact clean
-release gate and immutable served-byte checks pass for the datum-axis-symmetry replacement. Human
-acceptance and public release are not yet claimed.
+Status: **explicitly approved for scoped closure by the supervising caller on 2026-08-16; final
+public release is in progress**. The exact clean release gate and immutable served-byte checks pass
+for the datum-axis-symmetry replacement. Separate hands-on UAT is intentionally deferred into the
+next bug-fixing/UAT follow-up milestone and is not claimed as completed M74 evidence.
 
 - Every sketch exposes immutable intrinsic Origin/X/Y datums with no persistent identity,
   variables, history, geometry counts or Fit contribution. They are selectable and inspectable;
@@ -1927,11 +1929,11 @@ acceptance and public release are not yet claimed.
   toggle independently; the Origin-aligned adaptive `1–2–5` SVG grid is visual only and neither
   grid nor datums affect Fit.
 - Origin/empty-Fit camera behavior, adjusted-coordinate HUD, contextual cursors, isolated standard
-  Undo/Redo shortcuts and inert letterbox-band input pass focused presentation tests and the exact
-  desktop scorecard in `docs/M74_UAT.md`.
+  Undo/Redo shortcuts and inert letterbox-band input pass focused presentation tests. The hands-on
+  desktop scorecard remains preserved in `docs/M74_UAT.md` and is intentionally deferred.
 - Format, warnings-denied workspace Clippy, locked all-feature tests, native/WASM parity, reviewed
   golden disposition, Trunk and the complete clean release gate pass before immutable Tailscale
-  nomination. Explicit human approval and byte-verified accepted-source Pages publication close
+  nomination. The scoped approval below and byte-verified accepted-source Pages publication close
   M74.
 
 Mechanical nomination result (2026-08-16): exact product source
@@ -1939,8 +1941,15 @@ Mechanical nomination result (2026-08-16): exact product source
 `866fbf8b58ec19e72cbe6936e06f3615dba2f692`, passes the complete clean release gate. Its exact
 read-only seven-file snapshot `/tmp/geosolve-m74-uat.jFfAm4`, aggregate
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, is served and byte-verified
-at `http://100.94.63.83:8080/`. This satisfies mechanical nomination only; the human and public
-acceptance gates remain open.
+at `http://100.94.63.83:8080/`. This satisfied mechanical nomination only; the human and public
+acceptance gates remained open at that checkpoint.
+
+Scoped human result (2026-08-16): the supervising caller explicitly approved closing M74 from the
+existing automated, independent-review and frozen-artifact evidence without a separate hands-on
+UAT pass. M74-U1 through M74-U8 are therefore deferred rather than marked accepted. Their future
+execution and any resulting findings belong to the next bug-fixing/UAT follow-up milestone, which
+this decision does not start. The remaining standard closeout gate is byte-verified GitHub Pages
+publication of the accepted product.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -70,21 +70,26 @@ M72's public-workbench bulk fixes and GitHub Pages release are complete and expl
 The final accepted workbench is live at
 `https://arduano.github.io/geometric-constraint-solver/`; its deployed seven-file artifact and
 two-size Chromium contract are exactly verified. M73's behavior-preserving retained-authoring
-semantic consolidation is implemented, mechanically qualified and byte-verified as an immutable
-candidate; focused human UAT remains open under `docs/M73_GOALS.md`.
+semantic consolidation is complete, approved and publicly verified. M74's intrinsic reference
+geometry and production-style desktop polish are implemented, clean-qualified and frozen as a
+byte-verified candidate. The supervising caller approved scoped M74 closure from the automated,
+review and artifact evidence; separate hands-on UAT is deferred to the next bug-fixing/UAT batch,
+which remains unstarted, while final M74 Pages publication is in progress.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M73 mechanically complete and awaiting focused UAT.
+3. `PLAN.md` — authoritative roadmap, with M74 scoped closure approved and publication in progress.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
 7. `docs/M72_GOALS.md` — completed public-workbench bulk-fix and Pages-release scope.
 8. `docs/M72_IMPLEMENTATION.md` and `docs/M72_UAT.md` — closing evidence and approved review.
-9. `docs/M73_GOALS.md` — implemented retained-authoring consolidation awaiting focused UAT.
+9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release scope.
+10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — scoped closure,
+    frozen-candidate evidence and explicitly deferred hands-on scorecard.
 
 ## Workspace
 
@@ -108,9 +113,10 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. Human UAT is complete at M40.7, M53 and M61-M71; every newly scoped
-milestone from M70 onward ends in its own UAT and all objective behavior is directly automated
-first. The desktop demo has no future mobile support requirement.
+and application undo. M40.7, M53 and M61-M74 have explicit acceptance dispositions. New milestones
+normally end in hands-on UAT after objective automation; M74 records an explicit scoped exception
+that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
+mobile support requirement.
 
 ## Pre-1.0 API policy
 

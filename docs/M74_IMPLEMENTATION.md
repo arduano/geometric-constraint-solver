@@ -2,10 +2,11 @@
 
 # M74 implementation — Production-style sketch reference UX
 
-Status: **M74-F001 replacement nominated for focused UAT as of 2026-08-16**. Point-pair symmetry
-across intrinsic axes passes focused native/WASM and complete clean release qualification. Its
-immutable Tailscale candidate is byte-verified; explicit human approval and final GitHub Pages
-deployment remain open.
+Status: **explicitly approved for scoped closure by the supervising caller on 2026-08-16; final
+GitHub Pages deployment is in progress**. Point-pair symmetry across intrinsic axes passes focused
+native/WASM and complete clean release qualification, and its immutable Tailscale candidate is
+byte-verified. Separate hands-on UAT and findings are intentionally deferred to the next
+bug-fixing/UAT follow-up milestone, which is not started here.
 
 Architecture decision: no new ADR is currently required. Intrinsic datums extend the ordinary
 sketch/editor model within the retained-authoring and accepted-scene boundaries. Canonical sketch
@@ -290,16 +291,30 @@ M74_BASE_URL=http://100.94.63.83:8080/ node /tmp/m74_browser_check.mjs
 Their SHA-256 values remain
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc` respectively. This candidate
-is current UAT authority; the historical initial M74 snapshot remains read-only but unserved.
+is the accepted closing product candidate; the historical initial M74 snapshot remains read-only
+but unserved.
 
-## 6. Open completion gates
+## 6. Scoped closure and deferred UAT
 
-- Receive explicit supervising-human approval.
-- Deploy the exact accepted source through GitHub Pages and verify every hosted byte/media type.
+On 2026-08-16 the supervising caller explicitly approved closing M74 from the existing automated,
+independent-review, clean-gate and frozen-artifact evidence without waiting for separate hands-on
+UAT. M74-U1 through M74-U8 are intentionally **deferred**, not inferred to have passed. Their
+future execution and any resulting findings belong to the next bug-fixing/UAT follow-up milestone.
+This handoff does not activate, scope or otherwise start that milestone.
 
-## 7. Compatibility result so far
+The accepted product remains exact source `55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, and frozen Tailscale snapshot
+`/tmp/geosolve-m74-uat.jFfAm4`. No objective defect or unresolved mechanical blocker is carried by
+the M74 close decision.
 
-The in-progress APIs are additive pre-1.0 sketch/editor surface. They do not modify a released
+## 7. Remaining publication gate
+
+- Deploy the accepted product through GitHub Pages and verify every hosted artifact byte and media
+  type. This is the final standard M74 closeout action.
+
+## 8. Compatibility result
+
+The M74 APIs are additive pre-1.0 sketch/editor surface. They do not modify a released
 persistence language: canonical sketch v1-v4 remains the only supported sketch wire contract and
 rejects datum relations with `UnsupportedM74State`; the representations in draft-v5 side records
 remain unsupported. Intrinsic datums have no persistent identity, so hosts must not serialize a

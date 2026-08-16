@@ -129,10 +129,23 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   passes the complete gate with final multi-feature transaction and finite-arc transport
   regressions and produces release bytes identical to the F005 candidate. M70B is closed under the
   supervising human's requested scoped sign-off.
+- The completed M74 production-style reference UX cut. Every sketch exposes immutable intrinsic
+  Origin/X/Y datums with no persistent identity, variables, history, geometry count or Fit
+  contribution. Ordinary retained Origin coincidence, point-on-axis, line-collinear-with-axis and
+  point-pair symmetry-about-axis relations have checked analytic Jacobians, structured audit,
+  independent residual validation and normal lifecycle. Contextual authoring, pixel-bounded datum
+  inference, protected selection, reference presentation, adaptive visual grid, camera/HUD/cursor,
+  shortcut and letterbox behavior remain owned by the headless editor or thin demo adapter as
+  appropriate. Canonical sketch v1-v4 stays frozen and rejects datum relations with
+  `UnsupportedM74State`; draft-v5 side records remain unsupported. Product source `5569337` passes
+  focused native/WASM owners, the reviewed 270-row golden, independent review, the complete clean
+  gate and frozen-artifact verification. The supervising caller approved scoped closure on
+  2026-08-16 while explicitly deferring, rather than passing, the hands-on U1-U8 scorecard into an
+  unstarted bug-fixing/UAT follow-up milestone.
 
 ### Changed
 
-- Implemented and mechanically qualified M73 retained-authoring semantic consolidation. One
+- Completed, approved and publicly verified M73 retained-authoring semantic consolidation. One
   private `ConstructionStageSemantics` description now owns the remaining line/polyline
   stage/span/reference-handoff facts. The unreleased `ConstraintKind`,
   `ConstraintEditor::{available_constraints, constraint_edit}` and
@@ -142,10 +155,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   specialized branch construction. Private confirmation now carries and authenticates the exact
   selected inference candidate through guides, relations, references and commit lowering. That
   editor surface postdated published `0.2.0` and had no non-test direct caller, so no supported API
-  received a shortened deprecation interval. Clean implementation source `b1b2162` passes editor
-  321/321, M55 17/17, unchanged golden 234/234 and the complete release gate. No residual, solver,
-  branch, persistence, public commit DTO or browser behavior changed; focused M73 UAT remains
-  pending.
+  received a shortened deprecation interval. Accepted product source `4c93ac5` passes the complete
+  gate, focused approval and exact GitHub Pages artifact verification. No residual, solver, branch,
+  persistence, public commit DTO or browser behavior changed.
 - Completed and received supervising-human approval for M67 on 2026-08-08. The non-published
   workbench dropped its raw Production topology, Host-state evidence and Accepted redundancy
   developer cards while retaining Problems,
@@ -186,7 +198,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Closed M61 with explicit supervising-human approval for its recorded advanced-workbench scope.
   At that checkpoint the previously forecast M62-M64 hardening sequence was removed and M62 was
   left intentionally unscoped. M62-M64 were subsequently scoped, completed and individually
-  approved; every newly scoped milestone continues to end in its own UAT.
+  approved. New milestones normally end in hands-on UAT; M74 records an explicit scoped exception
+  that defers its unexecuted scorecard without calling it passed.
 - Completed the M46 ownership freeze: every old M14/M40/M44 browser/static assertion and
   legacy inline test has a named direct-test owner or reviewed retirement, while no old
   fixture, E2E script or playground code was deleted early.

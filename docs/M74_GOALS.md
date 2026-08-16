@@ -2,10 +2,11 @@
 
 # M74 — Production-style sketch reference UX
 
-Status: **M74-F001 replacement nominated for focused UAT as of 2026-08-16**. The original
-datum/reference scope and focused axis-symmetry follow-up are implemented, clean-qualified and
-served from a byte-verified immutable Tailscale snapshot. Supervising-human approval and final
-GitHub Pages publication are not yet complete.
+Status: **explicitly approved for scoped closure by the supervising caller on 2026-08-16; final
+GitHub Pages publication is in progress**. The datum/reference scope and axis-symmetry follow-up
+are implemented, clean-qualified and served from a byte-verified immutable Tailscale snapshot.
+Separate hands-on UAT and any findings are intentionally deferred to the next bug-fixing/UAT
+follow-up milestone, which is not started here.
 
 ## Goal
 
@@ -129,8 +130,15 @@ Mechanical nomination record (2026-08-16): product source
 `866fbf8b58ec19e72cbe6936e06f3615dba2f692`, passes the complete clean release gate. Its exact
 read-only snapshot `/tmp/geosolve-m74-uat.jFfAm4`, aggregate
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, is byte-verified at
-`http://100.94.63.83:8080/` and is current focused-UAT authority. Human approval and public Pages
-publication remain pending.
+`http://100.94.63.83:8080/` and was current focused-UAT authority at nomination. Human approval and
+public Pages publication remained pending at that checkpoint.
+
+Scoped closure record (2026-08-16): the supervising caller accepted the existing automated,
+independent-review, clean-gate and frozen-artifact evidence and explicitly waived a separate M74
+hands-on UAT pass. The U1-U8 scorecard remains available but is deferred, not marked passed. Its
+future execution and any findings belong to the next bug-fixing/UAT follow-up milestone. This
+record reserves that handoff without activating or planning the next milestone. Public Pages
+publication remains the final M74 closeout action.
 
 ## Acceptance
 
@@ -140,9 +148,11 @@ publication remain pending.
   composition rules above through public headless APIs; the browser only renders and translates
   input.
 - The grid, camera, HUD, cursors, keyboard shortcuts and letterbox behavior pass focused
-  presentation tests and desktop human UAT without adding grid snapping or browser-owned geometry.
-- The clean release gate and immutable Tailscale candidate pass before human review. Explicit
-  approval and exact accepted-source Pages publication are required before M74 closes.
+  presentation tests without adding grid snapping or browser-owned geometry. Hands-on feel review
+  is retained as deferred follow-up work rather than claimed M74 evidence.
+- The clean release gate and immutable Tailscale candidate pass. The explicit scoped closure
+  approval accepts that evidence without separate hands-on UAT; exact accepted-source Pages
+  publication remains required before final closeout.
 
 ## Non-goals
 

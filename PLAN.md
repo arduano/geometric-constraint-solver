@@ -67,8 +67,9 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71 is now the active retained-drafting-relations milestone described
-below and in ADR 0035. M66's
+of every prepared UAT step. M71-M73 are complete; M74 has explicit scoped closure approval on its
+clean-qualified frozen candidate, with final Pages publication in progress and hands-on UAT
+deferred to an unstarted follow-up milestone. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -171,11 +172,12 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M71 are complete and approved, and
-  every newly scoped milestone from M70 onward ends in its own supervising-human UAT. Every
-  objective correctness, persistence, compatibility and presentation-adapter assertion must pass
-  through direct unit or integration tests at its owning layer before a human checkpoint begins;
-  old CDP E2E suites are not a qualification path.
+- Keep human acceptance records explicit: M40.7, M53 and M61-M74 have a recorded acceptance
+  disposition. Newly scoped milestones normally end in supervising-human UAT; an explicit caller
+  may instead defer an unexecuted hands-on scorecard without calling it passed, as recorded for
+  M74. Every objective correctness, persistence, compatibility and presentation-adapter assertion
+  must pass through direct unit or integration tests at its owning layer before acceptance; old
+  CDP E2E suites are not a qualification path.
 
 ## Frozen baseline: M0-M7
 
@@ -4560,9 +4562,11 @@ changes; a clean replacement is byte-verified; and focused UAT is approved.
 
 ### M74: production-style sketch reference UX
 
-Status: **M74-F001 replacement nominated for focused UAT as of 2026-08-16**. The exact clean gate,
-immutable Tailscale snapshot and served-byte/browser checks pass. Explicit approval and
-accepted-source GitHub Pages publication remain open. `docs/M74_GOALS.md` owns the detailed scope.
+Status: **explicitly approved for scoped closure by the supervising caller on 2026-08-16; final
+GitHub Pages publication is in progress**. The implementation, automated/review evidence, clean
+gate and frozen Tailscale artifact pass. Separate hands-on UAT is intentionally deferred to the
+next bug-fixing/UAT follow-up milestone, which is not started here. `docs/M74_GOALS.md` owns the
+detailed scope.
 
 - [x] Approve and record the M74 datum, inference and desktop-polish scope without activating
   draft-v5 as a supported persistence language.
@@ -4590,7 +4594,8 @@ accepted-source GitHub Pages publication remain open. `docs/M74_GOALS.md` owns t
   snapshot containing M74-F001; withdraw the earlier bytes from current UAT authority.
 - [x] Freeze and byte-verify an immutable Tailscale UAT candidate and keep it live through
   follow-up fixes.
-- [ ] Receive explicit focused human approval of the replacement candidate.
+- [x] Record explicit supervising-caller approval to close from the automated, review and
+  frozen-artifact evidence while deferring, rather than claiming, separate hands-on UAT.
 - [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact byte-for-byte
   and close M74.
 
@@ -4637,13 +4642,22 @@ without rebuilding to read-only `/tmp/geosolve-m74-uat.jFfAm4`, ordered-manifest
 `2599593` at `http://100.94.63.83:8080/`. Proxy/cache-bypassed identity fetches of `/` and every
 asset return HTTP 200 with exact lengths, media types and bytes; `/` equals `index.html` and the
 fetched aggregate matches. M72 compatibility and M74 Chromium checks pass at `1440x900` and
-`1024x720`. This replacement is current UAT authority; explicit human approval and GitHub Pages
-publication remain pending.
+`1024x720`. This replacement was current UAT authority at that nomination checkpoint; explicit
+human approval and GitHub Pages publication remained pending then.
+
+Scoped closure decision (2026-08-16): the supervising caller explicitly approved closing M74
+without waiting for a separate hands-on UAT pass. M74-U1 through M74-U8 remain unexecuted as a
+manual scorecard and are recorded as **deferred**, not passed. Their future execution and any
+findings are assigned to the next bug-fixing/UAT follow-up milestone; that milestone is not
+activated or otherwise started by this record. The caller accepts the existing direct Rust/WASM,
+review, clean-gate, Chromium and frozen-artifact evidence as sufficient for M74 closure. GitHub
+Pages publication and exact hosted-artifact verification remain the final standard closeout step.
 
 Gate: intrinsic datums remain permanent but identity-free; their ordinary relations solve, audit
 and follow lifecycle; headless picking/inference owns the exact priority and tolerance policy; the
 browser adds only presentation/input translation; canonical sketch v1-v4 remains frozen; the clean
-candidate passes focused UAT and the accepted source is exact-verified after Pages publication.
+candidate passes the mechanical scorecard; the scoped closure decision explicitly defers hands-on
+UAT; and the accepted source is exact-verified after Pages publication.
 
 ## Explicit non-goals
 

@@ -1338,9 +1338,10 @@ construction-stage, contextual-authoring and candidate-trace consolidation plus 
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
 immutable Tailscale UAT snapshot, received focused supervising-human approval and exact-verified
 the final GitHub Pages artifact. M73 adds no new editable sample or browser scenario mode. M74 has
-a clean-qualified, byte-verified F001 replacement candidate under focused human UAT; its
-intrinsic-datum and desktop-polish scenarios below remain requirements rather than human
-acceptance or public-release evidence.
+explicit scoped closure approval on its clean-qualified, byte-verified F001 replacement. Its
+hands-on intrinsic-datum and desktop-polish scorecard is intentionally deferred into the next
+bug-fixing/UAT follow-up milestone rather than claimed as completed human evidence; final M74
+Pages publication is in progress, and the next milestone is not started here.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1851,9 +1852,10 @@ Fillet and active pan states expose distinct contextual cursors. `Ctrl/Cmd+Z`,
 dialog-owned targets; Ctrl+Command, Alt-modified and editing chords do nothing to sketch history.
 Pointer start, hover, double-click and wheel input in SVG letterbox bands are inert, while input in
 the mapped sketch plane and existing captured-gesture completion remain unchanged. Direct Rust/WASM
-presentation tests own translation; `docs/M74_UAT.md` owns focused feel and approval. Clean
-qualification and immutable Tailscale nomination now pass; focused human feel and approval remain
-pending.
+presentation tests own translation; `docs/M74_UAT.md` preserves the hands-on feel scorecard. Clean
+qualification and immutable Tailscale nomination pass. The supervising caller approved scoped M74
+closure on 2026-08-16 without a separate hands-on pass; that scorecard and any findings are
+deferred to the next bug-fixing/UAT follow-up milestone, which remains unstarted.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

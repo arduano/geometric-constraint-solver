@@ -119,7 +119,7 @@ remove or deprecate `SketchConstraintKind`, `DocumentConstraintDefinition`, dire
 any contextual authoring DTO or any persisted relation. All 20 contextual resolved families remain
 available through the retained authoring route, and no wire language changed.
 
-M74 is an in-progress additive pre-1.0 extension. `SketchDatum`, the four datum-backed document
+M74 is a completed additive pre-1.0 extension. `SketchDatum`, the four datum-backed document
 definitions, datum selection/scene DTOs, reference visibility, contextual resolved kinds and the
 typed protected-datum failure expose immutable Origin/X/Y operands without giving those datums a
 document ID, variable, allocator entry or persistent identity. Scene-clipped axis endpoints are
@@ -127,8 +127,9 @@ presentation data and must not be serialized as datum identity. Ordinary relatio
 datum own normal constraint IDs and lifecycle. Canonical sketch v1-v4 remains frozen: encoding a
 datum relation as v4 returns `UnsupportedM74State`, and its representation only in draft-v5 side
 records does not make v5 a supported input or canonical output language. This compatibility
-disposition remains provisional until M74 qualification and approval; no supported `0.2.0` API or
-wire reader is removed. M74-F001 adds `SymmetricAboutDatumAxis` to the in-memory document/runtime
+disposition is accepted under the 2026-08-16 scoped M74 close decision; no supported `0.2.0` API or
+wire reader is removed. Deferred hands-on UAT does not make the compatibility contract
+provisional. M74-F001 adds `SymmetricAboutDatumAxis` to the in-memory document/runtime
 enums, `Sketch::add_symmetric_about_datum_axis` and the matching contextual resolved kind. It uses
 the same unsupported draft-v5 side section and exact canonical-v4 rejection; no datum identity,
 hidden line or frozen-wire syntax is introduced.

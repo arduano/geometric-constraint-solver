@@ -2,10 +2,11 @@
 
 # M74 focused UAT — Production-style sketch reference UX
 
-Status: **M74-F001 replacement nominated; focused human UAT pending as of 2026-08-16**. The exact
-clean gate, immutable snapshot, served-byte verification and two-size Chromium checks pass.
-GitHub Pages continues to serve the accepted M73 build until this candidate receives explicit
-approval.
+Status: **M74 explicitly approved for scoped closure without a separate hands-on UAT pass on
+2026-08-16; final GitHub Pages publication is in progress**. The exact clean gate, independent
+review, immutable snapshot, served-byte verification and two-size Chromium checks are accepted as
+the closing evidence. U1-U8 remain intentionally deferred to the next bug-fixing/UAT follow-up
+milestone and are not claimed as manually passed.
 
 Candidate source: `55693372bea4759c9a67eee14f1af3d6a9e0690c`
 
@@ -46,8 +47,9 @@ evidence directory is `/tmp/geosolve-m74-http-verify.85lR5D`. Historical initial
 public M74 artifact exists yet.
 
 Direct Rust/WASM tests are authoritative for exact residuals, Jacobians, persistence rejection,
-pixel boundaries, action atomicity and history. Human UAT should judge visual hierarchy,
-discoverability, predictable capture and desktop interaction feel.
+pixel boundaries, action atomicity and history. The scorecard below remains the future hands-on
+check for visual hierarchy, discoverability, predictable capture and desktop interaction feel; it
+is deferred intact rather than converted into synthetic M74 evidence.
 
 ## M74-U1 — intrinsic datums look permanent and selectable
 
@@ -211,21 +213,23 @@ tree labels, inspector text, axis labels, HUD and camera controls for overlap or
 tablet behavior remain outside scope.
 
 Pass when the complete treatment feels like one coherent CAD demonstration at both supported
-desktop sizes. After explicit approval, deploy the exact accepted source to GitHub Pages and repeat
-one datum relation, one inference bundle, grid/camera/HUD checks and asset/media verification there.
+desktop sizes. This hands-on pass is now deferred to the next bug-fixing/UAT follow-up milestone;
+M74 publication proceeds from the accepted automated, review and frozen-artifact evidence.
 
 ## Approval record
 
-- M74-U1: **Pending**.
-- M74-U2: **Pending**.
-- M74-U3: **Pending**.
-- M74-U4: **Pending**.
-- M74-U5: **Pending**.
-- M74-U6: **Pending**.
-- M74-U7: **Pending**.
-- M74-U8: **Pending**.
-- Final M74 approval: **Pending**.
+- M74-U1: **Deferred; not manually executed or marked passed**.
+- M74-U2: **Deferred; not manually executed or marked passed**.
+- M74-U3: **Deferred; not manually executed or marked passed**.
+- M74-U4: **Deferred; not manually executed or marked passed**.
+- M74-U5: **Deferred; not manually executed or marked passed**.
+- M74-U6: **Deferred; not manually executed or marked passed**.
+- M74-U7: **Deferred; not manually executed or marked passed**.
+- M74-U8: **Deferred; not manually executed or marked passed**.
+- Final M74 approval: **Pass for scoped closure** — explicitly approved by the supervising caller
+  on 2026-08-16 from the automated, review and frozen-artifact evidence.
 
-Do not mark any item accepted from automated evidence alone. Record the nominated source/tree,
-immutable Tailscale manifest, exact human findings and final public artifact only after those events
-occur.
+This approval intentionally does not reinterpret automation as hands-on UAT. The complete U1-U8
+scorecard and any future findings transfer to the next bug-fixing/UAT follow-up milestone. That
+milestone is reserved by this handoff but is not activated, planned or started here. M74's final
+public artifact is recorded only after the Pages deployment actually succeeds and is byte-verified.
