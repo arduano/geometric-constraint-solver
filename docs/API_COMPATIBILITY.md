@@ -134,6 +134,17 @@ enums, `Sketch::add_symmetric_about_datum_axis` and the matching contextual reso
 the same unsupported draft-v5 side section and exact canonical-v4 rejection; no datum identity,
 hidden line or frozen-wire syntax is introduced.
 
+M75 is an additive pre-1.0 interaction correction in `geosolve-constraint-editor`. The existing
+pointer-move entry points remain source-compatible wrappers, while
+`ConstraintEditor::{pointer_move_with_problem_items,
+pointer_move_with_problem_items_and_draft_inference}` let a host supply the same current
+problem-forced annotation visibility already accepted by pointer-down. Select hover and primary
+pointer-down then share one private target resolver. Existing pointer-leave, cancellation and
+retained-state paths revoke proximity state when a host remaps the camera, scene or input owner. No
+general public hit-test hierarchy is introduced. This changes no supported `0.2.0` domain API,
+solver behavior, hit tolerance, constraint or dimension kind, canonical sketch v1-v4 bytes,
+unsupported draft-v5 disposition or persistence schema.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 

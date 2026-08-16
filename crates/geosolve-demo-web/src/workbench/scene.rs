@@ -400,15 +400,17 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
             let role = curve.role;
             let item = SelectionItem::Curve(curve.span);
             let interactive = curve.is_interactive(geometry_policy);
+            let hovered = geometry_is_hovered(hover, item);
             let _ = write!(
                 output,
                 concat!(
-                    "<path class=\"wb-curve{}{}{}{}{}{}\" d=\"{}\" ",
+                    "<path class=\"wb-curve{}{}{}{}{}{}{}\" d=\"{}\" ",
                     "data-persistent-id=\"{}\" {}",
                     "data-editor-segment=\"{}\" data-role=\"{}\" data-source-role=\"{}\" ",
                     "data-construction-origin=\"{}\" data-interactive=\"{}\"/>"
                 ),
                 if selected { " selected" } else { "" },
+                if hovered { " geometry-hovered" } else { "" },
                 if pending { " authoring-pending" } else { "" },
                 if related.contains(&item) {
                     " related"
@@ -454,6 +456,7 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
             &mut output,
             scene,
             selection,
+            hover,
             active_fillet_preview,
             fillet_action_stamp,
             geometry_policy,
@@ -471,19 +474,22 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
             .filter(|point| point.is_visible(geometry_policy))
         {
             let interactive = point.is_interactive(geometry_policy);
-            let selected = selection.contains(&SelectionItem::Point(point.id));
-            let pending = pending.contains(&SelectionItem::Point(point.id));
+            let item = SelectionItem::Point(point.id);
+            let selected = selection.contains(&item);
+            let hovered = geometry_is_hovered(hover, item);
+            let pending = pending.contains(&item);
             let target = EditorProblemTarget::Point(point.id);
             let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
             let _ = write!(
                 output,
                 concat!(
-                    "<circle class=\"wb-point{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
+                    "<circle class=\"wb-point{}{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
                     "data-persistent-id=\"{}\" {}data-interactive=\"{}\"/>"
                 ),
                 if selected { " selected" } else { "" },
+                if hovered { " geometry-hovered" } else { "" },
                 if pending { " authoring-pending" } else { "" },
-                if related.contains(&SelectionItem::Point(point.id)) {
+                if related.contains(&item) {
                     " related"
                 } else {
                     ""
@@ -648,8 +654,7 @@ fn render_datums(
     for datum in &scene.datums {
         let item = SelectionItem::Datum(datum.datum);
         let selected = selection.contains(&item);
-        let hovered =
-            matches!(hover.target, Some(EditorHoverTarget::Geometry(target)) if target == item);
+        let hovered = geometry_is_hovered(hover, item);
         let related = related.contains(&item);
         let state_classes = format!(
             "{}{}{}",
@@ -667,6 +672,10 @@ fn render_datums(
         }
     }
     output.push_str("</g>");
+}
+
+fn geometry_is_hovered(hover: EditorHoverState, item: SelectionItem) -> bool {
+    matches!(hover.target, Some(EditorHoverTarget::Geometry(target)) if target == item)
 }
 
 fn render_origin_datum(
@@ -875,6 +884,7 @@ fn render_computed_geometry(
     output: &mut String,
     scene: &EditorScene,
     selection: &[SelectionItem],
+    hover: EditorHoverState,
     active_fillet_preview: Option<&SceneFilletActionTarget>,
     fillet_action_stamp: Option<u64>,
     geometry_policy: GeometryInteractionPolicy,
@@ -901,13 +911,14 @@ fn render_computed_geometry(
         let item = SelectionItem::FeatureCorner(curve.owner);
         let selected = selection.contains(&item)
             || selection.contains(&SelectionItem::Feature(curve.owner.feature));
+        let hovered = geometry_is_hovered(hover, item);
         let affected = affected_owners.contains(&curve.owner);
         let interactive = curve.is_interactive(geometry_policy);
         let path = polyline_path(&curve.screen_polyline);
         let _ = write!(
             output,
             concat!(
-                "<g class=\"wb-computed-item{}{}{}\" {}",
+                "<g class=\"wb-computed-item{}{}{}{}\" {}",
                 "data-feature-id=\"{}\" data-feature-corner-id=\"{}\" ",
                 "data-computed-evaluation=\"{}\" data-computed-edge=\"{}\" data-role=\"{}\" ",
                 "data-interactive=\"{}\">",
@@ -915,6 +926,7 @@ fn render_computed_geometry(
                 "data-interactive=\"{}\" d=\"{}\"/>"
             ),
             if selected { " selected" } else { "" },
+            if hovered { " geometry-hovered" } else { "" },
             if affected {
                 " shared-radius-affected"
             } else {
@@ -2710,6 +2722,79 @@ mod tests {
         assert!(hidden.contains("data-grid-kind=\"adaptive-1-2-5\""));
 
         assert_offscreen_datum_clipping(&session);
+    }
+
+    #[test]
+    fn headless_hover_target_marks_exactly_one_native_or_datum_geometry_item() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let start = document.add_point("start", [-2.0, 1.0]).expect("point");
+        let end = document.add_point("end", [2.0, 1.0]).expect("point");
+        let curve = CurveSpan::line(
+            document
+                .add_curve(
+                    "line",
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("line"),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted scene");
+        let viewport = viewport();
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .expect("scene");
+        let render = |item| {
+            svg_markup_with_computed_context_action_stamp_and_display(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                &[],
+                &[],
+                EditorHoverState {
+                    target: Some(EditorHoverTarget::Geometry(item)),
+                    context_owner: Some(item),
+                },
+                None,
+                None,
+                None,
+                None,
+                None,
+                GeometryInteractionPolicy::default(),
+                CanvasDisplayOptions {
+                    grid_visible: false,
+                },
+                viewport,
+            )
+        };
+
+        let point_markup = render(SelectionItem::Point(start));
+        assert_eq!(point_markup.matches(" geometry-hovered").count(), 1);
+        assert!(point_markup.contains("class=\"wb-point geometry-hovered\" cx="));
+
+        let curve_markup = render(SelectionItem::Curve(curve));
+        assert_eq!(curve_markup.matches(" geometry-hovered").count(), 1);
+        assert!(curve_markup.contains("class=\"wb-curve geometry-hovered\" d="));
+
+        let datum_markup = render(SelectionItem::Datum(geosolve_sketch::SketchDatum::YAxis));
+        assert_eq!(datum_markup.matches(" geometry-hovered").count(), 1);
+        assert!(datum_markup.contains("wb-datum-y-axis geometry-hovered"));
     }
 
     #[test]

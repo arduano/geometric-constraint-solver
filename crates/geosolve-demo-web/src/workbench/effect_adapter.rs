@@ -34,6 +34,28 @@ pub(super) fn normalize_captured_client_point(
     normalize_client_point_inner(rect, screen_size, client, false)
 }
 
+/// Lifecycle action for a browser sample that cannot be mapped into the
+/// fitted sketch plane.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum UnmappedCanvasPointerAction {
+    /// An uncaptured pointer entered an SVG letterbox band. Its previous hover
+    /// and stationary sample no longer describe the pointer's semantic owner.
+    RevokePointerContext,
+    /// A captured interaction retains ownership across the fitted-plane edge.
+    PreserveCapturedGesture,
+}
+
+#[must_use]
+pub(super) const fn unmapped_canvas_pointer_action(
+    pointer_is_captured: bool,
+) -> UnmappedCanvasPointerAction {
+    if pointer_is_captured {
+        UnmappedCanvasPointerAction::PreserveCapturedGesture
+    } else {
+        UnmappedCanvasPointerAction::RevokePointerContext
+    }
+}
+
 fn normalize_client_point_inner(
     rect: ClientRect,
     screen_size: [f64; 2],
@@ -177,10 +199,10 @@ mod tests {
     };
 
     use super::{
-        ClientRect, ConstructionDispatch, PlannedConstructionDispatch,
+        ClientRect, ConstructionDispatch, PlannedConstructionDispatch, UnmappedCanvasPointerAction,
         dispatch_construction_effect, dispatch_planned_construction_effect, draft_inference_input,
         draft_inference_input_for_suppression, normalize_captured_client_point,
-        normalize_client_point,
+        normalize_client_point, unmapped_canvas_pointer_action,
     };
 
     fn input(pointer_id: u64, position: [f64; 2]) -> PointerInput {
@@ -290,6 +312,14 @@ mod tests {
             assert!(
                 normalize_captured_client_point(widescreen, [1000.0, 700.0], point).is_some(),
                 "captured interaction must retain its historical translated sample at {point:?}"
+            );
+            assert_eq!(
+                unmapped_canvas_pointer_action(false),
+                UnmappedCanvasPointerAction::RevokePointerContext,
+            );
+            assert_eq!(
+                unmapped_canvas_pointer_action(true),
+                UnmappedCanvasPointerAction::PreserveCapturedGesture,
             );
         }
         let alternate_css = ClientRect {

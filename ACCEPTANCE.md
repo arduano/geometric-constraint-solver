@@ -1960,6 +1960,59 @@ aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`;
 compatibility and M74 Chromium checks pass at both desktop sizes. Every M74 acceptance gate passes
 under the scoped decision; U1-U8 remain deferred and the follow-up milestone remains unstarted.
 
+## M75 acceptance: Select hover and primary pointer-owner parity
+
+Status: **active; implementation and prequalification complete as of 2026-08-16, with clean
+candidate qualification and all human evidence pending**. M75 owns the hands-on M74-U1 through
+M74-U8 carryover as well as the new hover/click parity contract. The accepted M74 public artifact
+remains the baseline; it is not M75 evidence.
+
+- For one finite Select pointer sample, headless hover prediction and primary pointer-down use the
+  same candidates and exact order: applicable Fillet radius; draggable geometry consisting of
+  points and semantic centres; visible annotation occurrence; other native or computed geometry;
+  intrinsic datum; no target.
+- Every target reports the existing semantic owner that pointer-down would use. Selection
+  modifiers may affect selection membership after resolution but do not create a second hit order
+  or change which candidate is primary.
+- An annotation made visible by current problem state is hoverable and clickable under the same
+  occurrence rules as an otherwise-visible annotation. Removing that visibility removes its hit
+  eligibility on the next authenticated scene.
+- Annotation candidates compare finite screen distance first, stable semantic item identity
+  second and occurrence identity third. Repeated evaluation of a crowded or exact-tie sample is
+  deterministic across native/WASM execution and scene rebuilds.
+- Contextual geometry/annotation corridors may reveal related annotations and operands while the
+  primary hover target remains `None`. Context paint never implies that pointer-down will select a
+  corridor-only annotation or geometry item.
+- A tool change, camera transform, accepted-scene replacement or overlay/input-ownership change
+  revokes stale hover before another canvas sample can be painted or clicked. Pointer leave and
+  other existing cancellation paths remain coherent with the same rule.
+- The browser maps input and paints only the headless hover target and related-context state. CSS,
+  DOM/SVG event targets, local distance checks and stale retained browser state never choose or
+  decorate a competing canvas owner.
+- Existing point/curve/annotation/Fillet/datum hit tolerances, Profile/Construction and native
+  role ordering, modifier semantics, solver equations, branch/rank/DOF behavior, canonical v1-v4
+  and unsupported draft-v5 persistence, and the reviewed authoring/scene golden remain unchanged.
+- The only additive public compatibility surface is problem-aware pointer-move wrappers over the
+  existing headless scene/selection DTOs. Existing lifecycle paths revoke camera, scene and
+  input-owner context. M75 adds no residual, constraint family, persistence version, browser-owned
+  geometry policy or general public hit-test framework.
+- Focused editor tests cover each precedence edge, problem-forced visibility, annotation ties,
+  context-only corridors and every invalidation trigger natively and under WASM. Thin web tests
+  prove event translation and headless-only paint; the existing golden must remain byte-identical.
+- Human review executes every deferred M74-U1 through M74-U8 item plus the M75 hover matrix at
+  `1440x900` and approximately `1024x720`, at coarse and fine zoom and just inside/outside existing
+  tolerance fringes. Keyboard focus, accessible names, non-colour focus/selection cues and overlay
+  ownership remain usable without manufacturing pointer hover.
+- Formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
+  checks, unchanged golden check/clean, Trunk and the complete clean release gate pass before an
+  immutable byte-verified Tailscale candidate is nominated. Explicit human approval and exact
+  accepted-source GitHub Pages verification are required before M75 closes.
+
+Implementation record (2026-08-16): the headless/shared-resolution and thin-browser requirements
+are implemented. Focused native/WASM parity, editor/web/workspace tests, warnings-denied Clippy,
+WASM check, unchanged 270-row golden check and Trunk release assembly pass. No clean-gate source,
+tree, manifest, endpoint, UAT disposition or public deployment has yet been nominated for M75.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit

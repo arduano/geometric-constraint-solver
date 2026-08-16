@@ -649,41 +649,6 @@ impl ProblemSetIdentity {
     }
 }
 
-#[cfg(any(target_arch = "wasm32", test))]
-fn geometry_hover_selector(item: geosolve_constraint_editor::SelectionItem) -> Option<String> {
-    match item {
-        geosolve_constraint_editor::SelectionItem::Point(point) => Some(format!(
-            "#wb-viewport [data-editor-item=\"point\"][data-persistent-id=\"{point}\"]"
-        )),
-        geosolve_constraint_editor::SelectionItem::Curve(span) => Some(format!(
-            "#wb-viewport [data-editor-item=\"curve\"][data-persistent-id=\"{}\"][data-editor-segment=\"{}\"]",
-            span.curve, span.segment
-        )),
-        geosolve_constraint_editor::SelectionItem::Datum(datum) => Some(format!(
-            "#wb-viewport [data-editor-item=\"datum\"][data-datum=\"{}\"]",
-            datum_key(datum),
-        )),
-        geosolve_constraint_editor::SelectionItem::Feature(feature) => Some(format!(
-            "#wb-viewport [data-editor-item=\"feature-corner\"][data-feature-id=\"{feature}\"]"
-        )),
-        geosolve_constraint_editor::SelectionItem::FeatureCorner(owner) => Some(format!(
-            "#wb-viewport [data-editor-item=\"feature-corner\"][data-feature-id=\"{}\"][data-feature-corner-id=\"{}\"]",
-            owner.feature, owner.corner
-        )),
-        geosolve_constraint_editor::SelectionItem::Constraint(_)
-        | geosolve_constraint_editor::SelectionItem::Dimension(_) => None,
-    }
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-const fn datum_key(datum: geosolve_sketch::SketchDatum) -> &'static str {
-    match datum {
-        geosolve_sketch::SketchDatum::Origin => "origin",
-        geosolve_sketch::SketchDatum::XAxis => "x-axis",
-        geosolve_sketch::SketchDatum::YAxis => "y-axis",
-    }
-}
-
 #[cfg(target_arch = "wasm32")]
 fn markup_fingerprint(value: &str) -> String {
     let hash = value
@@ -958,14 +923,13 @@ pub(crate) mod wasm {
         ActionState, AuthoringApplication, AuthoringOperand, AuthoringOutcome, AuthoringState,
         AuthoringTool, BranchAction, ConstraintIntent, ConstructionPreview, CoordinatorActionKind,
         DimensionKind, DimensionTargetDisplayUnit, DisabledReason, DraftInferenceInput,
-        EditorEffect, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringCandidate,
-        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick,
-        FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage, FeatureAuthoringState,
-        FeatureAuthoringTool, FeatureAuthoringTransaction, GeometryInteractionPolicy,
-        GeometryPickScope, GeometryRoleSelectionState, GeometryVisibility, Modifiers,
-        NurbsConstructionOptions, PickTolerance, PointerInput, RetainedEditorCoordinator,
-        SceneCurveOrigin, SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint,
-        SelectionItem,
+        EditorEffect, EditorScene, EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions,
+        FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringPointerDownOutcome,
+        FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
+        FeatureAuthoringTransaction, GeometryInteractionPolicy, GeometryPickScope,
+        GeometryRoleSelectionState, GeometryVisibility, Modifiers, NurbsConstructionOptions,
+        PickTolerance, PointerInput, RetainedEditorCoordinator, SceneCurveOrigin,
+        SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1226,6 +1190,9 @@ pub(crate) mod wasm {
                 .closest("[data-problem-marker]")
                 .is_ok_and(|marker| marker.is_some())
             {
+                let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
+                drop(wb);
                 let _ = render(&callback_document, &callback_workbench);
                 return;
             }
@@ -1264,6 +1231,7 @@ pub(crate) mod wasm {
                 .and_then(|key| tool_from_key(&key))
             {
                 let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
                 let option_kind = super::OptionOverlayKind::for_geometry_tool(tool);
                 if let Some(kind) = option_kind {
                     wb.option_overlay.open(kind);
@@ -1294,6 +1262,7 @@ pub(crate) mod wasm {
                 .and_then(|key| super::action_surface::authoring_tool_from_key(&key))
             {
                 let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
                 if let Some(kind) = super::OptionOverlayKind::for_authoring_tool(tool) {
                     wb.option_overlay.open(kind);
                     focus_option_control = Some(kind.first_control_id());
@@ -1307,6 +1276,7 @@ pub(crate) mod wasm {
                 .and_then(|key| super::action_surface::feature_tool_from_key(&key))
             {
                 let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
                 wb.option_overlay.open(super::OptionOverlayKind::Fillet);
                 focus_option_control = Some(super::OptionOverlayKind::Fillet.first_control_id());
                 activate_feature_authoring(&callback_document, &mut wb, tool);
@@ -1316,6 +1286,7 @@ pub(crate) mod wasm {
                 .and_then(super::OptionOverlayKind::from_key)
             {
                 let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
                 wb.option_overlay.open(kind);
                 focus_option_control = Some(kind.first_control_id());
             } else if target.has_attribute("data-fillet-action") {
@@ -1372,6 +1343,7 @@ pub(crate) mod wasm {
                     .coordinator
                     .editor_mut()
                     .activate_fillet_action(&scene, input);
+                clear_canvas_pointer_ownership(&mut wb);
                 if effects.is_empty() {
                     wb.notice = "Preview this Fillet branch choice before activating it".into();
                 } else {
@@ -1477,6 +1449,7 @@ pub(crate) mod wasm {
                     .is_some()
                 {
                     let mut wb = change_workbench.borrow_mut();
+                    clear_canvas_pointer_ownership(&mut wb);
                     let result = match wb.option_overlay.open {
                         Some(super::OptionOverlayKind::Equal) => update_authoring_options_for_tool(
                             &change_document,
@@ -1552,10 +1525,10 @@ pub(crate) mod wasm {
         required(document, "workbench-root")?
             .add_event_listener_with_callback("change", change.as_ref().unchecked_ref())?;
         change.forget();
-        install_fillet_action_focus(document, workbench)
+        install_focus_ownership(document, workbench)
     }
 
-    fn install_fillet_action_focus(
+    fn install_focus_ownership(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
     ) -> Result<(), JsValue> {
@@ -1563,36 +1536,61 @@ pub(crate) mod wasm {
         let focus_document = document.clone();
         let focus_workbench = Rc::clone(workbench);
         let focus_in = Closure::<dyn FnMut(FocusEvent)>::new(move |event: FocusEvent| {
-            let Some(target) = event
+            let Some(focused) = event
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
-                .and_then(|target| target.closest("[data-fillet-action]").ok().flatten())
-                .filter(|target| {
-                    target.get_attribute("data-fillet-action-input").as_deref()
-                        == Some("accessible")
-                })
             else {
                 return;
             };
+            if focused.closest("#wb-viewport").ok().flatten().is_some() {
+                return;
+            }
+            let accessible_fillet = focused
+                .closest("[data-fillet-action]")
+                .ok()
+                .flatten()
+                .filter(|target| {
+                    target.get_attribute("data-fillet-action-input").as_deref()
+                        == Some("accessible")
+                });
             let mut wb = focus_workbench.borrow_mut();
             wb.pointer_moves
                 .borrow_mut()
                 .invalidate_before_immediate_action();
-            let Some(scene) = editor_scene(&wb) else {
+            let cleared_pointer_context = clear_canvas_pointer_ownership(&mut wb);
+            let Some(accessible_fillet) = accessible_fillet else {
+                if cleared_pointer_context {
+                    drop(wb);
+                    let _ = render(&focus_document, &focus_workbench);
+                }
                 return;
             };
-            let Some(target) = fillet_action_target(&scene, &target, &wb.fillet_action_render)
+            let Some(scene) = editor_scene(&wb) else {
+                if cleared_pointer_context {
+                    drop(wb);
+                    let _ = render(&focus_document, &focus_workbench);
+                }
+                return;
+            };
+            let Some(target) =
+                fillet_action_target(&scene, &accessible_fillet, &wb.fillet_action_render)
             else {
+                if cleared_pointer_context {
+                    drop(wb);
+                    let _ = render(&focus_document, &focus_workbench);
+                }
                 return;
             };
             let effects = wb
                 .coordinator
                 .editor_mut()
                 .preview_fillet_action(&scene, SceneFilletActionInput::Accessible(target));
-            if effects.is_empty() {
+            if effects.is_empty() && !cleared_pointer_context {
                 return;
             }
-            dispatch_effects(&mut wb, effects);
+            if !effects.is_empty() {
+                dispatch_effects(&mut wb, effects);
+            }
             drop(wb);
             let _ = render(&focus_document, &focus_workbench);
         });
@@ -1912,10 +1910,16 @@ pub(crate) mod wasm {
             let Some(scene) = editor_scene(&wb) else {
                 return;
             };
+            let problem_items = current_problem_items(&wb.coordinator, &scene);
             let effects = wb
                 .coordinator
                 .editor_mut()
-                .pointer_move_with_draft_inference(&scene, sample.input, sample.inference);
+                .pointer_move_with_problem_items_and_draft_inference(
+                    &scene,
+                    sample.input,
+                    &problem_items,
+                    sample.inference,
+                );
             dispatch_effects(&mut wb, effects);
             save(&wb);
             drop(wb);
@@ -1940,6 +1944,14 @@ pub(crate) mod wasm {
         let callback_pointer_moves = Rc::clone(pointer_moves);
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             if event_targets_problem_marker(&event) {
+                callback_pointer_moves
+                    .borrow_mut()
+                    .invalidate_before_immediate_action();
+                let mut wb = callback_workbench.borrow_mut();
+                if clear_canvas_pointer_ownership(&mut wb) {
+                    drop(wb);
+                    let _ = render(&callback_document, &callback_workbench);
+                }
                 return;
             }
             if pointer_event_fillet_action(&event).is_some() {
@@ -1965,6 +1977,7 @@ pub(crate) mod wasm {
                         callback_pointer_moves
                             .borrow_mut()
                             .invalidate_before_immediate_action();
+                        let cleared_pointer_context = clear_canvas_pointer_ownership(&mut wb);
                         let effects = wb.coordinator.editor_mut().preview_fillet_action(
                             &scene,
                             SceneFilletActionInput::Canvas {
@@ -1972,8 +1985,10 @@ pub(crate) mod wasm {
                                 painted: Some(target),
                             },
                         );
-                        if !effects.is_empty() {
-                            dispatch_effects(&mut wb, effects);
+                        if !effects.is_empty() || cleared_pointer_context {
+                            if !effects.is_empty() {
+                                dispatch_effects(&mut wb, effects);
+                            }
                             drop(wb);
                             let _ = render(&callback_document, &callback_workbench);
                         }
@@ -1983,7 +1998,7 @@ pub(crate) mod wasm {
                     return;
                 }
             }
-            let input = {
+            let (input, captured) = {
                 let wb = callback_workbench.borrow();
                 if wb.pan_gesture.is_some() || wb.authoring.active_tool().is_some() {
                     return;
@@ -2002,10 +2017,20 @@ pub(crate) mod wasm {
                 } else {
                     pointer_input(&callback_viewport, scene.viewport, &event)
                 };
-                let Some(input) = input else {
-                    return;
-                };
-                input
+                (input, captured)
+            };
+            let Some(input) = input else {
+                if matches!(
+                    super::effect_adapter::unmapped_canvas_pointer_action(captured),
+                    super::effect_adapter::UnmappedCanvasPointerAction::RevokePointerContext
+                ) {
+                    let mut wb = callback_workbench.borrow_mut();
+                    if clear_unmapped_canvas_pointer(&mut wb) {
+                        drop(wb);
+                        let _ = render(&callback_document, &callback_workbench);
+                    }
+                }
+                return;
             };
             let Some(generation) = callback_pointer_moves.borrow_mut().push(input) else {
                 return;
@@ -2103,10 +2128,16 @@ pub(crate) mod wasm {
                 return;
             }
             if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
+                let problem_items = current_problem_items(&wb.coordinator, &scene);
                 let effects = wb
                     .coordinator
                     .editor_mut()
-                    .pointer_move_with_draft_inference(&scene, pending.input, pending.inference);
+                    .pointer_move_with_problem_items_and_draft_inference(
+                        &scene,
+                        pending.input,
+                        &problem_items,
+                        pending.inference,
+                    );
                 dispatch_effects(&mut wb, effects);
             }
             callback_pointer_moves.borrow_mut().observe(input);
@@ -2200,9 +2231,7 @@ pub(crate) mod wasm {
                         event.prevent_default();
                         match super::route_canvas_pan_pointer_down(&wb.pointer_captures) {
                             super::CanvasPanPointerDownRoute::BeginPan => {
-                                let effects =
-                                    wb.coordinator.editor_mut().clear_fillet_branch_preview();
-                                dispatch_effects(&mut wb, effects);
+                                clear_canvas_pointer_ownership(&mut wb);
                                 invalidate_draft_inference_for_camera_change(&mut wb);
                             }
                             super::CanvasPanPointerDownRoute::PreserveCapturedInteraction => {
@@ -2292,8 +2321,7 @@ pub(crate) mod wasm {
                 return;
             };
             if wb.pointer_captures.is_empty() {
-                let effects = wb.coordinator.editor_mut().clear_fillet_branch_preview();
-                dispatch_effects(&mut wb, effects);
+                clear_canvas_pointer_ownership(&mut wb);
             } else {
                 cancel_captured_canvas_interactions(
                     &callback_viewport,
@@ -2341,6 +2369,14 @@ pub(crate) mod wasm {
         let callback_viewport = viewport.clone();
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             if event_targets_problem_marker(&event) {
+                let mut wb = callback_workbench.borrow_mut();
+                wb.pointer_moves
+                    .borrow_mut()
+                    .invalidate_before_immediate_action();
+                if clear_canvas_pointer_ownership(&mut wb) {
+                    drop(wb);
+                    let _ = render(&callback_document, &callback_workbench);
+                }
                 return;
             }
             let painted_action = pointer_event_fillet_action(&event);
@@ -2354,7 +2390,16 @@ pub(crate) mod wasm {
             let Some(scene) = editor_scene(&wb) else {
                 return;
             };
+            let pointer_is_captured = wb.pointer_captures.contains(event.pointer_id());
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
+                if matches!(
+                    super::effect_adapter::unmapped_canvas_pointer_action(pointer_is_captured),
+                    super::effect_adapter::UnmappedCanvasPointerAction::RevokePointerContext
+                ) && clear_unmapped_canvas_pointer(&mut wb)
+                {
+                    drop(wb);
+                    let _ = render(&callback_document, &callback_workbench);
+                }
                 return;
             };
             if wb.pointer_captures.is_empty() {
@@ -2372,6 +2417,11 @@ pub(crate) mod wasm {
                     event.client_y(),
                 );
                 if painted.is_some() {
+                    wb.pointer_moves
+                        .borrow_mut()
+                        .invalidate_before_immediate_action();
+                    // The bubbled click consumes the preview authenticated by the
+                    // preceding move. Do not clear it between pointer-down and click.
                     return;
                 }
             }
@@ -2429,19 +2479,7 @@ pub(crate) mod wasm {
                 }
                 return;
             }
-            let problem_items = wb
-                .coordinator
-                .current_problem_metadata()
-                .map(|problem| {
-                    problem
-                        .targets
-                        .iter()
-                        .filter_map(|target| {
-                            super::scene::problem_selection_item(*target, Some(&scene))
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+            let problem_items = current_problem_items(&wb.coordinator, &scene);
             let effects = {
                 transition(
                     &mut wb.coordinator,
@@ -2558,10 +2596,16 @@ pub(crate) mod wasm {
         let Some(scene) = editor_scene(&wb) else {
             return;
         };
+        let problem_items = current_problem_items(&wb.coordinator, &scene);
         let effects = wb
             .coordinator
             .editor_mut()
-            .pointer_move_with_draft_inference(&scene, sample.input, sample.inference);
+            .pointer_move_with_problem_items_and_draft_inference(
+                &scene,
+                sample.input,
+                &problem_items,
+                sample.inference,
+            );
         if effects.is_empty() {
             return;
         }
@@ -3064,6 +3108,7 @@ pub(crate) mod wasm {
         reason = "the closed workbench action catalog is kept in one auditable dispatch table"
     )]
     fn perform_action(document: &Document, wb: &mut Workbench, action: &str) {
+        clear_canvas_pointer_ownership(wb);
         let result = match action {
             "new" => cancel_before_camera_change(document, wb).and_then(|()| {
                 let coordinator = empty_coordinator()?;
@@ -3439,8 +3484,7 @@ pub(crate) mod wasm {
 
     fn cancel_before_camera_change(document: &Document, wb: &mut Workbench) -> Result<(), String> {
         if wb.pointer_captures.is_empty() {
-            let effects = wb.coordinator.editor_mut().clear_fillet_branch_preview();
-            dispatch_effects(wb, effects);
+            clear_canvas_pointer_ownership(wb);
         } else {
             let viewport = required(document, "wb-viewport")
                 .map_err(|_| "canvas viewport is unavailable".to_owned())?;
@@ -4182,6 +4226,48 @@ pub(crate) mod wasm {
         )
     }
 
+    fn current_problem_items(
+        coordinator: &RetainedEditorCoordinator,
+        scene: &EditorScene,
+    ) -> Vec<SelectionItem> {
+        coordinator
+            .current_problem_metadata()
+            .map(|problem| {
+                problem
+                    .targets
+                    .iter()
+                    .filter_map(|target| super::scene::problem_selection_item(*target, Some(scene)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn clear_canvas_pointer_ownership(wb: &mut Workbench) -> bool {
+        let effects = wb.coordinator.editor_mut().pointer_leave();
+        if effects.is_empty() {
+            return false;
+        }
+        dispatch_effects(wb, effects);
+        true
+    }
+
+    fn clear_select_pointer_context(wb: &mut Workbench) -> bool {
+        if wb.coordinator.editor().tool() != EditorTool::Select {
+            return false;
+        }
+        let effects = wb.coordinator.editor_mut().invalidate_draft_inference();
+        if effects.is_empty() {
+            return false;
+        }
+        dispatch_effects(wb, effects);
+        true
+    }
+
+    fn clear_unmapped_canvas_pointer(wb: &mut Workbench) -> bool {
+        let cleared_sample = wb.pointer_moves.borrow_mut().clear_stationary_sample();
+        clear_select_pointer_context(wb) || cleared_sample
+    }
+
     fn fit_camera(wb: &mut Workbench) -> bool {
         let scene = editor_scene(wb);
         wb.camera.fit_scene_or_reset(scene.as_ref())
@@ -4273,13 +4359,6 @@ pub(crate) mod wasm {
                 wb.camera.viewport(),
             ),
         );
-        mark_geometry_hover(
-            document,
-            hover.target.and_then(|target| match target {
-                EditorHoverTarget::Geometry(item) => Some(item),
-                EditorHoverTarget::Annotation(_) => None,
-            }),
-        )?;
         let design = coordinator.session().design_document();
         let constraint_entries = geosolve_constraint_editor::constraint_entries(design);
         required(document, "wb-tree")?.set_inner_html(&super::panels::tree_markup_with_features(
@@ -4565,22 +4644,6 @@ pub(crate) mod wasm {
         required(document, "wb-datum-name")?.set_text_content(Some(name));
         required(document, "wb-datum-detail")?.set_text_content(Some(detail));
         inspector.remove_attribute("hidden")?;
-        Ok(())
-    }
-
-    fn mark_geometry_hover(
-        document: &Document,
-        item: Option<SelectionItem>,
-    ) -> Result<(), JsValue> {
-        let Some(selector) = item.and_then(super::geometry_hover_selector) else {
-            return Ok(());
-        };
-        let unmarked = format!("{selector}:not(.geometry-hovered)");
-        while let Some(element) = document.query_selector(&unmarked)? {
-            let mut classes = element.get_attribute("class").unwrap_or_default();
-            classes.push_str(" geometry-hovered");
-            element.set_attribute("class", classes.trim())?;
-        }
         Ok(())
     }
 
@@ -5674,8 +5737,8 @@ mod tests {
     use geosolve_constraint_editor::{
         AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ComputedSceneState,
         ConstraintIntent, DraftInferenceCompleteness, DraftInferenceResolution,
-        DraftInferenceStatus, EditorHoverState, EditorProblemScope, EditorScene, EditorTool,
-        FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        DraftInferenceStatus, EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene,
+        EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
         GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility, Modifiers, PickTolerance,
         PointerInput, RetainedEditorCoordinator, SceneCurveOrigin, ScreenPoint, SelectionItem,
@@ -5685,7 +5748,7 @@ mod tests {
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition,
         DocumentCurveNormalSide, DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession,
-        SketchAcceptedStateIdentity, SketchDatum, SketchDocument,
+        SketchAcceptedStateIdentity, SketchDocument,
     };
 
     use super::{
@@ -5697,7 +5760,7 @@ mod tests {
         HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
         ReproductionFocusReturn, apply_validated_reproduction, canvas_cursor_key,
         canvas_pointer_capture_kind, change_owns_option_control_click, compose_editor_scene,
-        coordinate_hud, foreground_overlay_escape_owner, geometry_hover_selector, history_shortcut,
+        coordinate_hud, foreground_overlay_escape_owner, history_shortcut,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         reproduction_focus_target_after_action, reproduction_overlay_presentation,
         reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
@@ -6647,7 +6710,7 @@ mod tests {
             ".wb-curve[data-role=\"construction\"]",
             ".wb-curve[data-construction-origin=\"implicit\"]",
             ".wb-tree-row[data-has-implicit-construction=\"true\"]::after",
-            ".wb-computed-item:not(.interaction-disabled):hover",
+            ".wb-computed-item.geometry-hovered",
         ] {
             assert!(css.contains(selector), "missing `{selector}` presentation");
         }
@@ -6858,6 +6921,43 @@ mod tests {
     }
 
     #[test]
+    fn selectable_canvas_target_emphasis_has_no_browser_pointer_hover_owner() {
+        let css = include_str!("../../styles.css");
+        for browser_owned_selector in [
+            ".wb-datum:hover",
+            ".wb-computed-item:not(.interaction-disabled):hover",
+            ".wb-dimension:hover",
+        ] {
+            assert!(
+                !css.contains(browser_owned_selector),
+                "{browser_owned_selector} would bypass the headless target resolver"
+            );
+        }
+        for headless_selector in [
+            ".wb-datum.geometry-hovered .wb-datum-line",
+            ".wb-computed-item.geometry-hovered .wb-computed-fillet",
+            ".wb-dimension.hovered",
+        ] {
+            assert!(
+                css.contains(headless_selector),
+                "missing headless-owned target selector {headless_selector}"
+            );
+        }
+        for keyboard_selector in [
+            ".wb-datum:focus-visible .wb-datum-line",
+            ".wb-annotation:focus-visible .wb-constraint-symbol",
+            ".wb-dimension:focus-visible",
+        ] {
+            assert!(
+                css.contains(keyboard_selector),
+                "missing keyboard focus selector {keyboard_selector}"
+            );
+        }
+        assert!(css.contains(".wb-fillet-action.previewed .wb-fillet-retained-direction"));
+        assert!(css.contains(".wb-error-marker:hover .wb-error-tooltip"));
+    }
+
+    #[test]
     fn production_canvas_controls_expose_history_display_origin_and_protected_datum_surfaces() {
         let html = include_str!("../../index.html");
         let css = include_str!("../../styles.css");
@@ -6970,7 +7070,7 @@ mod tests {
     }
 
     #[test]
-    fn canvas_cursor_context_and_datum_hover_identity_are_explicit() {
+    fn canvas_cursor_context_is_explicit() {
         assert_eq!(
             canvas_cursor_key(EditorTool::Select, false, false, false),
             "select"
@@ -6988,10 +7088,6 @@ mod tests {
             "fillet"
         );
         assert_eq!(canvas_cursor_key(EditorTool::Line, true, true, true), "pan");
-        assert_eq!(
-            geometry_hover_selector(SelectionItem::Datum(SketchDatum::YAxis)).as_deref(),
-            Some("#wb-viewport [data-editor-item=\"datum\"][data-datum=\"y-axis\"]")
-        );
     }
 
     #[test]
@@ -8229,14 +8325,28 @@ mod tests {
             "data-accepted-revision=\"{}\"",
             accepted.identity().revision().get()
         )));
-        assert!(
-            geometry_hover_selector(selected)
-                .expect("computed hover selector")
-                .contains("data-editor-item=\"feature-corner\"")
+        let hovered_markup = super::scene::svg_markup_with_context(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            EditorHoverState {
+                target: Some(EditorHoverTarget::Geometry(selected)),
+                context_owner: Some(selected),
+            },
+            None,
+            None,
+            viewport,
+        );
+        assert_eq!(
+            hovered_markup
+                .matches("class=\"wb-computed-item geometry-hovered\"")
+                .count(),
+            1,
+            "only the exact headless computed-corner target is emphasized"
         );
         let css = include_str!("../../styles.css");
         for selector in [
-            ".wb-computed-item:not(.interaction-disabled):hover .wb-computed-fillet",
             ".wb-computed-item.geometry-hovered .wb-computed-fillet",
             ".wb-computed-item.selected .wb-computed-fillet",
         ] {
@@ -8245,6 +8355,7 @@ mod tests {
                 "missing computed arc state selector"
             );
         }
+        assert!(!css.contains(".wb-computed-item:not(.interaction-disabled):hover"));
     }
 
     #[test]

@@ -145,6 +145,15 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ### Changed
 
+- M75 consolidates Select hover prediction and primary pointer-down targeting behind one private
+  headless resolver. The shared order is validated Fillet radius, draggable point/semantic-centre
+  geometry, visible annotation occurrence, remaining native/computed geometry, intrinsic datum,
+  then none. Problem-forced annotations now participate in pointer-move as well as pointer-down,
+  exact annotation ties are deterministic, contextual corridors remain targetless, and stale hover
+  is revoked when tool, camera, accepted-scene, geometry-policy or non-canvas input ownership
+  changes. The workbench paints only the returned headless owner; selectable canvas CSS/DOM hover
+  no longer supplies a competing semantic target. Existing hit tolerances, geometry-role ordering,
+  equations, persistence bytes and golden behavior remain unchanged.
 - Completed, approved and publicly verified M73 retained-authoring semantic consolidation. One
   private `ConstructionStageSemantics` description now owns the remaining line/polyline
   stage/span/reference-handoff facts. The unreleased `ConstraintKind`,

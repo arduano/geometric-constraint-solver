@@ -4678,6 +4678,58 @@ browser adds only presentation/input translation; canonical sketch v1-v4 remains
 candidate passes the mechanical scorecard; the scoped closure decision explicitly defers hands-on
 UAT; and the accepted source is exact-verified by the final Pages publication.
 
+### M75: Select hover and primary pointer-owner parity
+
+Status: **active; implementation and prequalification complete as of 2026-08-16, with clean
+candidate qualification and human UAT pending**. This milestone makes Select hover predict the
+exact primary owner that the same pointer sample would
+receive on pointer-down, then executes the deferred M74-U1 through M74-U8 scorecard beside the new
+hover review. `docs/M75_GOALS.md` owns the detailed scope.
+
+- [x] Approve and record the M75 ownership, lifecycle, compatibility and carried-UAT contract.
+- [x] Route Select pointer-move and pointer-down through one headless candidate construction and
+  precedence order: applicable Fillet radius, draggable point/semantic centre, visible annotation
+  occurrence, other native/computed geometry, intrinsic datum, then no primary target.
+- [x] Give problem-forced visible annotations the same hover and pointer-down eligibility as every
+  other visible occurrence; order annotation ties by screen distance, stable semantic item and
+  occurrence identity.
+- [x] Keep contextual reveal distinct from primary ownership: a geometry/annotation corridor may
+  reveal related context while reporting no hover target, and therefore cannot promise an
+  annotation or geometry click owner.
+- [x] Clear stale hover on tool, camera, accepted-scene and overlay/input-ownership changes, and
+  make the browser paint hover/related state only from the current headless result.
+- [x] Add focused native/WASM editor and thin web-adapter regressions for the complete precedence,
+  problem visibility, deterministic ties, context-only corridors and invalidation matrix. Preserve
+  all established hit tolerances, role ordering, solver/branch behavior, persistence schemas and
+  the existing authoring/scene golden bytes.
+- [x] Limit additive public compatibility surface to problem-aware pointer-move wrappers over
+  existing DTOs; use existing lifecycle paths for host-side remaps and add no new persistence,
+  solver, equation or browser-authority API.
+- [ ] Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant
+  native/WASM checks, unchanged golden check/clean, Trunk release assembly and the complete clean
+  release gate; freeze and byte-verify an immutable Tailscale candidate.
+- [ ] Complete `docs/M75_UAT.md` at both desktop sizes and multiple zoom/tolerance fringes,
+  including every deferred M74-U1 through M74-U8 item, hover/click parity and accessibility, then
+  receive explicit supervising-human approval.
+- [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact
+  byte-for-byte and close M75.
+
+Implementation checkpoint (2026-08-16): the shared resolver, problem-aware wrappers, deterministic
+ties, lifecycle invalidation and headless-only browser paint are implemented. Focused native/WASM
+parity, 338 editor unit tests plus all integration/doc tests, 113 web tests, the locked all-feature
+workspace suite, warnings-denied workspace Clippy, WASM check, unchanged 270-row golden check and
+Trunk release build pass. Clean-gate, immutable candidate, human UAT and public publication remain
+pending; the accepted M74 Pages artifact remains the product baseline.
+
+Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
+its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other
+native/computed geometry, intrinsic datum and none; problem-forced annotations participate exactly
+when visible; context-only corridors remain targetless; stale hover cannot outlive its owning tool,
+camera, scene or overlay state; the browser paints only authenticated headless hover state; existing
+tolerances, role ordering, schemas, equations, solver behavior and golden bytes remain unchanged;
+the carried and new human scorecards pass on a clean, byte-verified candidate before exact Pages
+publication.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

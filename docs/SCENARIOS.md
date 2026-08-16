@@ -1869,6 +1869,83 @@ application URLs are repository-prefixed, media types are correct, and both publ
 Chromium checks pass. The separate Tailscale bytes remain frozen-candidate evidence, not public
 publication authority. U1-U8 and future findings remain deferred to the unstarted follow-up.
 
+### M75-H1 - Select hover predicts the primary pointer-down owner
+
+Status: implemented and prequalified natively and under WASM; clean candidate evidence is pending.
+
+Construct finite accepted scenes whose projected hit envelopes overlap at every adjacent priority
+edge. For the same Select tool, scene, camera, problem set, policy and pointer coordinate, resolve
+pointer-move and pointer-down through one headless candidate construction. The primary owner must be
+the first applicable entry in this exact order:
+
+1. a current applicable Fillet radius surface or grip;
+2. draggable geometry: stored points and published semantic centers;
+3. a visible constraint or dimension annotation occurrence;
+4. other native or computed geometry;
+5. a visible intrinsic datum;
+6. no primary target.
+
+Exercise Fillet-over-point, point/center-over-annotation, annotation-over-curve, native/computed
+geometry-over-datum and datum-over-empty cases in both candidate insertion orders and at several
+viewport scales. Hover returns the existing semantic owner that an unmodified pointer-down would
+use. Shift/Ctrl/Command may subsequently change selection membership but cannot introduce a
+different primary hit order. Independently verify finite screen/model conversions and prove no
+hover sample mutates accepted geometry, selection, history, Fillet state or scene authority.
+
+### M75-H2 - Problem annotations, deterministic occurrences and targetless context
+
+Status: implemented and prequalified natively and under WASM; clean candidate evidence is pending.
+
+Create one constraint and one dimension occurrence that are normally hidden but forced visible by
+the current problem set. Each visible occurrence participates in the same annotation hit path used
+by pointer-down; clearing or replacing the owning problem/accepted scene removes its eligibility.
+For crowded visible annotations, compare finite screen distance, then stable semantic item identity,
+then occurrence identity. Repeat exact ties, reversed construction order, native/WASM replay and
+scene reconstruction; the selected occurrence and related operands remain deterministic without a
+browser-side tiebreak.
+
+Also sample every geometry/annotation contextual corridor outside all primary hit envelopes. The
+headless scene may reveal related annotations or operands, but its primary hover target is `None`
+and pointer-down cannot select a corridor-only item. Moving from that corridor onto a visible
+occurrence changes the primary target without losing the valid related context. Existing annotation
+placement, visibility, fan-out and hit tolerances remain unchanged.
+
+### M75-H3 - Hover authority is revoked with its interaction context
+
+Status: implemented and prequalified; clean candidate and hands-on evidence are pending.
+
+Acquire each owner class, then change the active tool, pan/zoom/Fit/Origin camera, replace the
+accepted scene through edit/Undo/Redo/reload, hide the relevant visibility class, or transfer
+pointer ownership to a tool popout/dialog/overlay. The stale hover target and related paint clear
+before the changed state can render. Returning to Select or the canvas does not resurrect it; a new
+mapped pointer sample is required. Existing pointer-leave/cancel behavior remains consistent.
+
+At the thin web boundary, submit only normalized pointer/context inputs and render only the current
+headless hover/related DTO. DOM/SVG event targets, CSS `:hover`, painted hit strokes and cached
+browser candidates cannot choose or preserve a second canvas owner. Focused native/WASM tests own
+resolution semantics; adapter tests own event translation and stale-paint clearing. The only
+additive public surface is problem-aware pointer movement over existing DTOs; existing lifecycle
+paths revoke host camera, scene and input-owner context. Solver, persistence, role ordering, hit
+tolerances and golden bytes do not change.
+
+### M75-U1 - Deferred M74 review and hover accessibility matrix
+
+Status: planned; every human disposition is pending.
+
+Run all eight deferred sections of `docs/M74_UAT.md` through the M75 scorecard: permanent/selectable
+datums, ordinary datum relations including axis symmetry, datum-inference priority, visual grid and
+camera behavior, coordinate HUD/cursors, editing-owned Undo/Redo, inert SVG letterbox bands and
+compact-desktop polish. Repeat the new H1-H3 hover paths at `1440x900` and approximately
+`1024x720`, at coarse and fine zoom and on both sides of existing point, annotation, curve, Fillet
+and datum tolerance fringes. Human review judges prediction stability and visual truthfulness;
+direct tests own exact boundary equality.
+
+Tab through existing tree, inspector, accessible Fillet controls, tool popouts and dialogs. Focus
+must remain visible without synthesizing pointer hover, accessible names remain meaningful, canvas
+hover never steals focus, and overlay ownership clears canvas hover. Selected/related/problem and
+primary-hover states retain non-colour visual distinctions. Record M74-U1 through M74-U8 and the new
+M75 hover/accessibility sections separately; automated evidence cannot mark any human item passed.
+
 ### M72-R1 - Recoverable public workbench bulk fixes
 
 In the ordinary editable workspace, create an incompatible driving dimension that publishes a

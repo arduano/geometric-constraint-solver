@@ -2073,28 +2073,61 @@ impl EditorScene {
         if !position.is_finite() || !tolerance.is_valid() {
             return None;
         }
+        self.geometry_hit_test_with_policy(position, tolerance, policy)
+            .or_else(|| self.datum_hit_test(position, policy))
+    }
+
+    fn geometry_hit_test_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<Hit> {
         best_policy_hit(
-            self.points
-                .iter()
-                .filter(|point| point.is_pickable(policy))
-                .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
-                .chain(
-                    self.curves
-                        .iter()
-                        .filter(|curve| curve.is_pickable(policy))
-                        .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels)),
-                )
-                .chain(
-                    self.computed_curves
-                        .iter()
-                        .filter(|curve| curve.is_pickable(policy))
-                        .filter_map(|curve| {
-                            computed_curve_hit(curve, position, tolerance.curve_pixels)
-                        }),
-                ),
+            self.geometry_hit_test_candidates(position, tolerance, policy),
             policy.scope,
         )
-        .or_else(|| self.datum_hit_test(position, policy))
+    }
+
+    fn draggable_geometry_hit_test_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<Hit> {
+        let hits = self
+            .geometry_hit_test_candidates(position, tolerance, policy)
+            .filter(|hit| {
+                self.drag_handle_point(hit.item).is_some()
+                    || self.feature_radius_handle(hit.item).is_some()
+            });
+        best_policy_hit(hits, policy.scope)
+    }
+
+    fn geometry_hit_test_candidates(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> impl Iterator<Item = Hit> + '_ {
+        self.points
+            .iter()
+            .filter(move |point| point.is_pickable(policy))
+            .filter_map(move |point| point_hit(point, position, tolerance.point_pixels))
+            .chain(
+                self.curves
+                    .iter()
+                    .filter(move |curve| curve.is_pickable(policy))
+                    .filter_map(move |curve| curve_hit(curve, position, tolerance.curve_pixels)),
+            )
+            .chain(
+                self.computed_curves
+                    .iter()
+                    .filter(move |curve| curve.is_pickable(policy))
+                    .filter_map(move |curve| {
+                        computed_curve_hit(curve, position, tolerance.curve_pixels)
+                    }),
+            )
     }
 
     fn datum_hit_test(
@@ -2448,7 +2481,13 @@ impl EditorScene {
                     distance,
                 ))
             })
-            .min_by(|first, second| first.1.total_cmp(&second.1))
+            .min_by(|first, second| {
+                first
+                    .1
+                    .total_cmp(&second.1)
+                    .then_with(|| first.0.item.cmp(&second.0.item))
+                    .then_with(|| first.0.marker_index.cmp(&second.0.marker_index))
+            })
     }
 
     fn contextual_annotation_transit(
@@ -3613,6 +3652,40 @@ struct AnnotationHoverContext {
     origin: ScreenPoint,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ResolvedSelectPointerTarget {
+    FilletRadius(Hit),
+    Geometry(Hit),
+    Annotation {
+        occurrence: SceneAnnotationOccurrence,
+        distance_pixels: f64,
+    },
+}
+
+impl ResolvedSelectPointerTarget {
+    const fn hit(self) -> Hit {
+        match self {
+            Self::FilletRadius(hit) | Self::Geometry(hit) => hit,
+            Self::Annotation {
+                occurrence,
+                distance_pixels,
+            } => Hit {
+                item: occurrence.item,
+                distance_pixels,
+                curve_parameter: None,
+                geometry: None,
+            },
+        }
+    }
+
+    const fn hover_target(self) -> EditorHoverTarget {
+        match self {
+            Self::FilletRadius(hit) | Self::Geometry(hit) => EditorHoverTarget::Geometry(hit.item),
+            Self::Annotation { occurrence, .. } => EditorHoverTarget::Annotation(occurrence),
+        }
+    }
+}
+
 /// Headless deterministic selection and point-gesture state machine.
 #[derive(Clone, Debug)]
 pub struct ConstraintEditor {
@@ -3706,12 +3779,16 @@ impl ConstraintEditor {
         if self.pending_construction_commit.is_some() {
             return Vec::new();
         }
+        let leaving_select = self.tool == EditorTool::Select && tool != EditorTool::Select;
         self.tool = tool;
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
         effects.extend(self.clear_fillet_branch_preview());
+        if leaving_select {
+            effects.extend(self.invalidate_pointer_context());
+        }
         effects
     }
 
@@ -3774,12 +3851,7 @@ impl ConstraintEditor {
     }
 
     fn clear_hover_for_geometry_policy_change(&mut self) -> Vec<EditorEffect> {
-        if self.hover_target.is_none() && self.hover_context.is_none() {
-            return Vec::new();
-        }
-        self.hover_target = None;
-        self.hover_context = None;
-        vec![EditorEffect::HoverChanged(EditorHoverState::default())]
+        self.invalidate_pointer_context()
     }
 
     /// Returns the role assigned atomically to curves created by the active
@@ -3826,7 +3898,7 @@ impl ConstraintEditor {
         self.draft_inference_resolution.as_ref()
     }
 
-    /// Invalidates camera/scene-bound inference memory and presentation.
+    /// Invalidates camera/scene-bound inference and pointer-context presentation.
     ///
     /// Presentation adapters call this immediately when the viewport changes;
     /// waiting for another pointer sample could otherwise leave stale guides on
@@ -3836,7 +3908,9 @@ impl ConstraintEditor {
         if let Some(pending) = self.pending_construction_commit.as_mut() {
             pending.recovery_inference_engine.clear_session();
         }
-        self.clear_draft_inference_publication()
+        let mut effects = self.invalidate_pointer_context();
+        effects.extend(self.clear_draft_inference_publication());
+        effects
     }
 
     fn clear_draft_inference_publication(&mut self) -> Vec<EditorEffect> {
@@ -4072,6 +4146,7 @@ impl ConstraintEditor {
 
     /// Replaces ordered persistent selection, removing later duplicates.
     pub fn set_selection(&mut self, selection: impl IntoIterator<Item = SelectionItem>) {
+        let previous = self.selection.clone();
         self.fillet_branch_preview = None;
         self.selection.clear();
         self.curve_pick_parameters.clear();
@@ -4080,6 +4155,13 @@ impl ConstraintEditor {
             if !self.selection.contains(&item) {
                 self.selection.push(item);
             }
+        }
+        if self.selection != previous {
+            // This setter predates effect-returning interaction transitions. Keep
+            // its unit API while revoking the cached prediction whose annotation
+            // visibility was evaluated against the previous selection. Hosts
+            // already rerender after replacing selection.
+            let _ = self.invalidate_pointer_context();
         }
     }
 
@@ -4134,6 +4216,7 @@ impl ConstraintEditor {
 
     /// Applies one toolkit-independent selection click.
     pub fn select_item(&mut self, item: SelectionItem, modifiers: Modifiers) {
+        let previous = self.selection.clone();
         self.fillet_branch_preview = None;
         if modifiers.extends_selection() {
             if let Some(index) = self.selection.iter().position(|selected| *selected == item) {
@@ -4153,6 +4236,99 @@ impl ConstraintEditor {
             self.curve_pick_origins.clear();
             self.selection.push(item);
         }
+        if self.selection != previous {
+            // Preserve the established unit-returning API. Direct callers and
+            // pointer-down both rerender through their selection mutation path,
+            // so clearing the authoritative state is sufficient and avoids a
+            // second public selection/effect surface.
+            let _ = self.invalidate_pointer_context();
+        }
+    }
+
+    fn resolve_select_pointer_target(
+        &self,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        problem_items: &[SelectionItem],
+    ) -> Option<ResolvedSelectPointerTarget> {
+        // This order is the single Select-mode pointer contract. In particular,
+        // direct manipulation predicts the same click through visible leaders,
+        // while annotations still precede passive geometry and intrinsic datums.
+        if !position.is_finite() || !self.pick_tolerance.is_valid() {
+            return None;
+        }
+        if let Some(SceneFilletHit::Radius {
+            owner,
+            distance_pixels,
+        }) = scene.resolve_fillet_hit_with_policy(
+            position,
+            self.pick_tolerance,
+            self.geometry_policy,
+        ) {
+            return Some(ResolvedSelectPointerTarget::FilletRadius(Hit {
+                item: SelectionItem::FeatureCorner(owner),
+                distance_pixels,
+                curve_parameter: None,
+                geometry: None,
+            }));
+        }
+        if let Some(hit) = scene.draggable_geometry_hit_test_with_policy(
+            position,
+            self.pick_tolerance,
+            self.geometry_policy,
+        ) {
+            return Some(ResolvedSelectPointerTarget::Geometry(hit));
+        }
+        let geometry_hit = scene.geometry_hit_test_with_policy(
+            position,
+            self.pick_tolerance,
+            self.geometry_policy,
+        );
+        let datum_hit = scene.datum_hit_test(position, self.geometry_policy);
+        // A passive geometry/datum hit reveals its contextual annotations at
+        // this very sample. Use that prospective context for both move and down
+        // so the first hover cannot paint the lower owner and then let a newly
+        // revealed annotation steal an unchanged click.
+        let retained_visibility_context = self.visibility_context();
+        let prospective_visibility_context = geometry_hit.or(datum_hit).map(|hit| hit.item);
+        let retained_annotation_hit = scene.annotation_occurrence_hit_test(
+            position,
+            self.pick_tolerance,
+            &self.selection,
+            retained_visibility_context,
+            problem_items,
+        );
+        let prospective_annotation_hit = (prospective_visibility_context
+            != retained_visibility_context)
+            .then(|| {
+                scene.annotation_occurrence_hit_test(
+                    position,
+                    self.pick_tolerance,
+                    &self.selection,
+                    prospective_visibility_context,
+                    problem_items,
+                )
+            })
+            .flatten();
+        let annotation_hit = retained_annotation_hit
+            .into_iter()
+            .chain(prospective_annotation_hit)
+            .min_by(|first, second| {
+                first
+                    .1
+                    .total_cmp(&second.1)
+                    .then_with(|| first.0.item.cmp(&second.0.item))
+                    .then_with(|| first.0.marker_index.cmp(&second.0.marker_index))
+            });
+        if let Some((occurrence, distance_pixels)) = annotation_hit {
+            return Some(ResolvedSelectPointerTarget::Annotation {
+                occurrence,
+                distance_pixels,
+            });
+        }
+        geometry_hit
+            .map(ResolvedSelectPointerTarget::Geometry)
+            .or_else(|| datum_hit.map(ResolvedSelectPointerTarget::Geometry))
     }
 
     /// Resolves a pointer press and changes selection immediately.
@@ -4205,58 +4381,21 @@ impl ConstraintEditor {
         if self.feature_radius_gesture.is_some() || self.feature_contact_gesture.is_some() {
             return effects;
         }
-        let fillet_hit = scene.resolve_fillet_hit_with_policy(
-            input.position,
-            self.pick_tolerance,
-            self.geometry_policy,
-        );
-        if let Some(SceneFilletHit::Radius {
-            owner,
-            distance_pixels,
-        }) = fillet_hit
+        let target = self.resolve_select_pointer_target(scene, input.position, problem_items);
+        let resolved_input = if matches!(target, Some(ResolvedSelectPointerTarget::FilletRadius(_)))
         {
-            effects.extend(self.pointer_down_resolved_hit(
-                scene,
-                PointerInput {
-                    modifiers: Modifiers::default(),
-                    ..input
-                },
-                Some(Hit {
-                    item: SelectionItem::FeatureCorner(owner),
-                    distance_pixels,
-                    curve_parameter: None,
-                    geometry: None,
-                }),
-            ));
-            return effects;
-        }
-        let geometry_hit = match fillet_hit {
-            Some(SceneFilletHit::Native(hit)) => Some(hit),
-            Some(SceneFilletHit::Radius { .. }) => unreachable!(),
-            None => scene.hit_test_with_policy(
-                input.position,
-                self.pick_tolerance,
-                self.geometry_policy,
-            ),
+            PointerInput {
+                modifiers: Modifiers::default(),
+                ..input
+            }
+        } else {
+            input
         };
-        let annotation_hit = scene.annotation_hit_test(
-            input.position,
-            self.pick_tolerance,
-            &self.selection,
-            self.visibility_context(),
-            problem_items,
-        );
-        // A visible dimension leader may cross a point or semantic circle handle.
-        // Preserve direct manipulation at that exact overlap; offset labels and
-        // annotations over non-draggable geometry retain their existing priority.
-        let hit = geometry_hit
-            .filter(|hit| {
-                scene.drag_handle_point(hit.item).is_some()
-                    || scene.feature_radius_handle(hit.item).is_some()
-            })
-            .or(annotation_hit)
-            .or(geometry_hit);
-        effects.extend(self.pointer_down_resolved_hit(scene, input, hit));
+        effects.extend(self.pointer_down_resolved_hit(
+            scene,
+            resolved_input,
+            target.map(ResolvedSelectPointerTarget::hit),
+        ));
         effects
     }
 
@@ -4469,7 +4608,12 @@ impl ConstraintEditor {
     /// Advances an active point gesture and emits projected-preview work only after
     /// the configured screen-space movement threshold.
     pub fn pointer_move(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
-        self.pointer_move_with_draft_inference(scene, input, DraftInferenceInput::default())
+        self.pointer_move_with_problem_items_and_draft_inference(
+            scene,
+            input,
+            &[],
+            DraftInferenceInput::default(),
+        )
     }
 
     /// Advances a gesture with explicit host-normalized drafting inference input.
@@ -4477,6 +4621,33 @@ impl ConstraintEditor {
         &mut self,
         scene: &EditorScene,
         input: PointerInput,
+        inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
+        self.pointer_move_with_problem_items_and_draft_inference(scene, input, &[], inference)
+    }
+
+    /// Advances a pointer sample while including diagnostically forced annotations.
+    pub fn pointer_move_with_problem_items(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+    ) -> Vec<EditorEffect> {
+        self.pointer_move_with_problem_items_and_draft_inference(
+            scene,
+            input,
+            problem_items,
+            DraftInferenceInput::default(),
+        )
+    }
+
+    /// Advances a pointer sample with both diagnostic annotation forcing and
+    /// explicit host-normalized drafting inference input.
+    pub fn pointer_move_with_problem_items_and_draft_inference(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
         inference: DraftInferenceInput,
     ) -> Vec<EditorEffect> {
         let mut effects = self.clear_fillet_branch_preview();
@@ -4493,7 +4664,7 @@ impl ConstraintEditor {
             return effects;
         }
         if self.point_gesture.is_none() {
-            effects.extend(self.move_hover(scene, input));
+            effects.extend(self.move_hover(scene, input, problem_items));
             return effects;
         }
         effects.extend(self.move_point_gesture(scene, input));
@@ -4637,61 +4808,52 @@ impl ConstraintEditor {
         (radius.is_finite() && radius > 0.0).then_some(radius)
     }
 
-    fn move_hover(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
+    fn move_hover(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+    ) -> Vec<EditorEffect> {
         if !input.position.is_finite() {
             return Vec::new();
         }
-        if let Some(hit @ SceneFilletHit::Radius { .. }) = scene.resolve_fillet_hit_with_policy(
-            input.position,
-            self.pick_tolerance,
-            self.geometry_policy,
-        ) {
-            let item = hit.item();
-            return self.set_hover_state(
-                Some(EditorHoverTarget::Geometry(item)),
-                Some(AnnotationHoverContext {
-                    owner: item,
-                    origin: input.position,
-                }),
-            );
-        }
-        let annotation_hit = scene.annotation_occurrence_hit_test(
-            input.position,
-            self.pick_tolerance,
-            &self.selection,
-            self.visibility_context(),
-            &[],
-        );
-        let geometry_hit =
-            scene.hit_test_with_policy(input.position, self.pick_tolerance, self.geometry_policy);
-        let (target, context) = if let Some((occurrence, _)) = annotation_hit {
-            let context = self.hover_context.filter(|context| {
-                scene.annotations.iter().any(|annotation| {
-                    annotation.item == occurrence.item
-                        && annotation.operands.contains(&context.owner)
-                })
-            });
-            (Some(EditorHoverTarget::Annotation(occurrence)), context)
-        } else if let Some(hit) = geometry_hit {
-            (
-                Some(EditorHoverTarget::Geometry(hit.item)),
-                Some(AnnotationHoverContext {
-                    owner: hit.item,
-                    origin: input.position,
-                }),
-            )
-        } else {
-            let context = self.hover_context.filter(|context| {
-                scene.contextual_annotation_transit(
-                    input.position,
-                    self.pick_tolerance,
-                    &self.selection,
-                    context.owner,
-                    context.origin,
-                    &[],
+        let resolved = self.resolve_select_pointer_target(scene, input.position, problem_items);
+        let (target, context) = match resolved {
+            Some(
+                target @ (ResolvedSelectPointerTarget::FilletRadius(_)
+                | ResolvedSelectPointerTarget::Geometry(_)),
+            ) => {
+                let item = target.hit().item;
+                (
+                    Some(target.hover_target()),
+                    Some(AnnotationHoverContext {
+                        owner: item,
+                        origin: input.position,
+                    }),
                 )
-            });
-            (None, context)
+            }
+            Some(target @ ResolvedSelectPointerTarget::Annotation { occurrence, .. }) => {
+                let context = self.hover_context.filter(|context| {
+                    scene.annotations.iter().any(|annotation| {
+                        annotation.item == occurrence.item
+                            && annotation.operands.contains(&context.owner)
+                    })
+                });
+                (Some(target.hover_target()), context)
+            }
+            None => {
+                let context = self.hover_context.filter(|context| {
+                    scene.contextual_annotation_transit(
+                        input.position,
+                        self.pick_tolerance,
+                        &self.selection,
+                        context.owner,
+                        context.origin,
+                        problem_items,
+                    )
+                });
+                (None, context)
+            }
         };
         self.set_hover_state(target, context)
     }
@@ -4734,11 +4896,20 @@ impl ConstraintEditor {
     /// Clears pointer hover when a presentation surface is left.
     pub fn pointer_leave(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.clear_fillet_branch_preview();
-        effects.extend(self.set_hover_state(None, None));
+        effects.extend(self.invalidate_pointer_context());
         if self.tool != EditorTool::Select {
             effects.extend(self.invalidate_draft_inference());
         }
         effects
+    }
+
+    /// Clears pointer proximity and retained annotation-navigation context.
+    ///
+    /// Presentation adapters call this when the accepted scene, viewport, or
+    /// another pointer-owning interaction surface is remapped without an
+    /// ordinary canvas pointer-leave sample.
+    fn invalidate_pointer_context(&mut self) -> Vec<EditorEffect> {
+        self.set_hover_state(None, None)
     }
 
     const fn visibility_context(&self) -> Option<SelectionItem> {
@@ -5013,7 +5184,7 @@ impl ConstraintEditor {
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
         effects.extend(self.clear_fillet_branch_preview());
-        effects.extend(self.set_hover_state(None, None));
+        effects.extend(self.invalidate_pointer_context());
         effects
     }
 
@@ -5694,6 +5865,7 @@ impl ConstraintEditor {
     }
 
     pub(crate) fn invalidate_for_retained_state_change(&mut self, force: bool) {
+        let _ = self.invalidate_pointer_context();
         let preserve_pending_ack = !force && self.pending_construction_commit.is_some();
         if force {
             self.pending_construction_commit = None;
@@ -11397,6 +11569,23 @@ mod tests {
             }]
         );
         assert_eq!(
+            editor.pointer_leave(),
+            vec![EditorEffect::FilletBranchPreviewChanged { target: None }],
+            "leaving before the bubbled click must revoke preview authority",
+        );
+        assert!(
+            editor
+                .activate_fillet_action(&fixture.scene, canvas)
+                .is_empty(),
+            "canvas pointer-down must preserve the preview until click activation consumes it",
+        );
+        assert_eq!(
+            editor.preview_fillet_action(&fixture.scene, canvas),
+            vec![EditorEffect::FilletBranchPreviewChanged {
+                target: Some(retained),
+            }]
+        );
+        assert_eq!(
             editor.activate_fillet_action(&fixture.scene, canvas),
             vec![
                 EditorEffect::CommitComputedFilletAction { target: retained },
@@ -12910,6 +13099,16 @@ mod tests {
             ),
             vec![EditorEffect::HoverChanged(context_state(None))]
         );
+        assert!(
+            hover_editor
+                .pointer_down(
+                    &scene,
+                    pointer(10, bridge.x, bridge.y, Modifiers::default()),
+                )
+                .is_empty(),
+            "a context-only corridor must not manufacture a click owner"
+        );
+        assert!(hover_editor.selection().is_empty());
 
         let first_occurrence = SceneAnnotationOccurrence {
             item: first_annotation.item,
@@ -14225,6 +14424,22 @@ mod tests {
                 let pointer_id =
                     u64::try_from(10 * roller_index + press_index + 1).expect("pointer identity");
                 let mut editor = ConstraintEditor::default();
+                let expected_item = if press_index == 0 {
+                    SelectionItem::Point(center)
+                } else {
+                    SelectionItem::Curve(CurveSpan::line(circle))
+                };
+                assert_eq!(
+                    editor.pointer_move(
+                        &scene,
+                        pointer(pointer_id, press.x, press.y, Modifiers::default()),
+                    ),
+                    vec![EditorEffect::HoverChanged(EditorHoverState {
+                        target: Some(EditorHoverTarget::Geometry(expected_item)),
+                        context_owner: Some(expected_item),
+                    })],
+                    "hover must predict the draggable click target through a dimension overlap",
+                );
                 let _ = editor.pointer_down(
                     &scene,
                     pointer(pointer_id, press.x, press.y, Modifiers::default()),
@@ -14235,13 +14450,8 @@ mod tests {
                 assert_eq!(gesture.pointer_id, pointer_id);
                 assert_eq!(gesture.point, center);
                 assert!(
-                    matches!(
-                        editor.selection(),
-                        [SelectionItem::Point(selected)] if *selected == center
-                    ) || matches!(
-                        editor.selection(),
-                        [SelectionItem::Curve(selected)] if selected.curve == circle
-                    )
+                    editor.selection() == [expected_item],
+                    "click must preserve the same predicted persistent target",
                 );
             }
         }
@@ -14268,6 +14478,365 @@ mod tests {
         );
         assert_eq!(editor.selection(), &[radius_dimension]);
         assert!(editor.point_gesture_snapshot().is_none());
+    }
+
+    #[test]
+    fn m75_problem_forced_annotation_has_identical_hover_and_click_target() {
+        let (mut document, spans, _) = line_document();
+        let horizontal = document
+            .add_constraint(
+                "problem horizontal",
+                DocumentConstraintDefinition::Horizontal { line: spans[0] },
+            )
+            .expect("horizontal constraint");
+        let mut scene = scene(&document);
+        let annotation = scene
+            .annotations
+            .iter_mut()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(horizontal))
+            .expect("horizontal annotation");
+        assert_eq!(annotation.visibility, SceneAnnotationVisibility::Contextual);
+        let marker = ScreenPoint { x: 50.0, y: 50.0 };
+        annotation.geometry = SceneAnnotationGeometry::Label { anchor: marker };
+        let item = annotation.item;
+        let occurrence = SceneAnnotationOccurrence {
+            item,
+            marker_index: None,
+        };
+        assert!(
+            scene.hit_test(marker, PickTolerance::default()).is_none(),
+            "the problem-forced occurrence must not gain visibility from an underlying owner",
+        );
+
+        let mut ordinary = ConstraintEditor::default();
+        assert!(
+            ordinary
+                .pointer_move(&scene, pointer(1, marker.x, marker.y, Modifiers::default()))
+                .is_empty()
+        );
+
+        let mut forced = ConstraintEditor::default();
+        assert_eq!(
+            forced.pointer_move_with_problem_items(
+                &scene,
+                pointer(2, marker.x, marker.y, Modifiers::default()),
+                &[item],
+            ),
+            vec![EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(occurrence)),
+                context_owner: None,
+            })]
+        );
+        assert_eq!(
+            forced.pointer_down_with_problem_items(
+                &scene,
+                pointer(2, marker.x, marker.y, Modifiers::default()),
+                &[item],
+            ),
+            vec![EditorEffect::SelectionChanged(vec![item])]
+        );
+        assert_eq!(forced.selection(), &[item]);
+    }
+
+    #[test]
+    fn m75_annotation_priority_and_occurrence_ties_are_explicit_at_tolerance_boundary() {
+        let (mut document, spans, _) = line_document();
+        let constraints = ["first", "second"].map(|label| {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::Horizontal { line: spans[0] },
+                )
+                .expect("horizontal constraint")
+        });
+        let mut scene = scene(&document);
+        let probe = ScreenPoint { x: 50.0, y: 50.0 };
+        let tolerance = PickTolerance::default().annotation_pixels;
+        scene.annotations.retain(|annotation| {
+            constraints
+                .map(SelectionItem::Constraint)
+                .contains(&annotation.item)
+        });
+        for annotation in &mut scene.annotations {
+            annotation.visibility = SceneAnnotationVisibility::Always;
+            annotation.geometry = SceneAnnotationGeometry::Glyph {
+                markers: vec![
+                    SceneGlyphMarker {
+                        anchor: ScreenPoint {
+                            x: probe.x - tolerance,
+                            y: probe.y,
+                        },
+                        leader_from: None,
+                    },
+                    SceneGlyphMarker {
+                        anchor: ScreenPoint {
+                            x: probe.x + tolerance,
+                            y: probe.y,
+                        },
+                        leader_from: None,
+                    },
+                ],
+            };
+        }
+        scene.annotations.reverse();
+        let expected_item = constraints
+            .map(SelectionItem::Constraint)
+            .into_iter()
+            .min()
+            .expect("constraint item");
+        let expected_occurrence = SceneAnnotationOccurrence {
+            item: expected_item,
+            marker_index: Some(0),
+        };
+        assert_eq!(
+            scene.annotation_occurrence_hit_test(probe, PickTolerance::default(), &[], None, &[],),
+            Some((expected_occurrence, tolerance))
+        );
+        assert!(
+            scene
+                .annotation_occurrence_hit_test(
+                    ScreenPoint {
+                        x: probe.x,
+                        y: probe.y + 0.01,
+                    },
+                    PickTolerance::default(),
+                    &[],
+                    None,
+                    &[],
+                )
+                .is_none(),
+            "a marker just outside the inclusive annotation radius must miss",
+        );
+
+        let mut editor = ConstraintEditor::default();
+        assert_eq!(
+            editor.pointer_move(&scene, pointer(3, probe.x, probe.y, Modifiers::default()),),
+            vec![EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(expected_occurrence)),
+                context_owner: None,
+            })]
+        );
+        assert_eq!(
+            editor.pointer_down(&scene, pointer(3, probe.x, probe.y, Modifiers::default()),),
+            vec![EditorEffect::SelectionChanged(vec![expected_item])]
+        );
+
+        let origin = scene.viewport.model_to_screen([0.0, 0.0]);
+        scene.annotations.truncate(1);
+        scene.annotations[0].geometry = SceneAnnotationGeometry::Label { anchor: origin };
+        let datum_overlap_item = scene.annotations[0].item;
+        let mut datum_overlap = super::ConstraintEditor::default();
+        assert_eq!(
+            datum_overlap
+                .pointer_move(&scene, pointer(4, origin.x, origin.y, Modifiers::default()),),
+            vec![EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                    item: datum_overlap_item,
+                    marker_index: None,
+                })),
+                context_owner: None,
+            })],
+            "a visible annotation must precede the intrinsic datum fallback",
+        );
+    }
+
+    #[test]
+    fn m75_first_sample_uses_prospective_context_for_hover_click_parity() {
+        let (mut document, spans, _) = line_document();
+        let horizontal = document
+            .add_constraint(
+                "contextual horizontal",
+                DocumentConstraintDefinition::Horizontal { line: spans[0] },
+            )
+            .expect("horizontal constraint");
+        let mut scene = scene(&document);
+        let position = scene.viewport.model_to_screen([0.0, 1.0]);
+        let item = SelectionItem::Constraint(horizontal);
+        let annotation = scene
+            .annotations
+            .iter_mut()
+            .find(|annotation| annotation.item == item)
+            .expect("horizontal annotation");
+        assert_eq!(annotation.visibility, SceneAnnotationVisibility::Contextual);
+        annotation.geometry = SceneAnnotationGeometry::Label { anchor: position };
+        assert!(
+            scene
+                .annotation_occurrence_hit_test(position, PickTolerance::default(), &[], None, &[],)
+                .is_none(),
+            "the annotation must begin hidden without geometry context",
+        );
+        assert_eq!(
+            scene
+                .annotation_occurrence_hit_test(
+                    position,
+                    PickTolerance::default(),
+                    &[],
+                    Some(SelectionItem::Curve(spans[0])),
+                    &[],
+                )
+                .map(|hit| hit.0.item),
+            Some(item),
+            "the passive curve at this sample must reveal the annotation",
+        );
+        assert!(
+            scene
+                .draggable_geometry_hit_test_with_policy(
+                    position,
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .is_none(),
+            "the overlap must exercise annotation versus passive geometry",
+        );
+
+        let occurrence = SceneAnnotationOccurrence {
+            item,
+            marker_index: None,
+        };
+        let mut editor = ConstraintEditor::default();
+        assert_eq!(
+            editor.pointer_move(
+                &scene,
+                pointer(5, position.x, position.y, Modifiers::default()),
+            ),
+            vec![EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(occurrence)),
+                context_owner: None,
+            })],
+            "the first sample must predict the newly revealed annotation owner",
+        );
+        assert_eq!(
+            editor.pointer_down(
+                &scene,
+                pointer(5, position.x, position.y, Modifiers::default()),
+            ),
+            vec![EditorEffect::SelectionChanged(vec![item])],
+        );
+        assert_eq!(editor.selection(), &[item]);
+    }
+
+    #[test]
+    fn m75_pointer_context_clears_on_owner_lifecycle_remaps() {
+        let (document, _, points) = line_document();
+        let scene = scene(&document);
+        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
+        let input = pointer(5, endpoint.x, endpoint.y, Modifiers::default());
+        let expected = EditorHoverState {
+            target: Some(EditorHoverTarget::Geometry(SelectionItem::Point(points[0]))),
+            context_owner: Some(SelectionItem::Point(points[0])),
+        };
+        let cleared = vec![EditorEffect::HoverChanged(EditorHoverState::default())];
+        let mut editor = ConstraintEditor::default();
+
+        assert_eq!(
+            editor.pointer_move(&scene, input),
+            vec![EditorEffect::HoverChanged(expected)]
+        );
+        assert_eq!(editor.activate_tool(EditorTool::Line), cleared);
+        assert_eq!(editor.hover_state(), EditorHoverState::default());
+
+        assert!(editor.activate_tool(EditorTool::Select).is_empty());
+        let _ = editor.pointer_move(&scene, input);
+        assert_eq!(editor.pointer_leave(), cleared);
+
+        let _ = editor.pointer_move(&scene, input);
+        assert_eq!(editor.invalidate_draft_inference(), cleared);
+
+        let _ = editor.pointer_move(&scene, input);
+        assert_eq!(
+            editor.set_geometry_pick_scope(GeometryPickScope::Profile),
+            cleared,
+        );
+
+        let _ = editor.pointer_move(&scene, input);
+        assert_eq!(editor.cancel(), cleared);
+
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("retained session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let _ = coordinator.editor_mut().pointer_move(&scene, input);
+        assert_eq!(coordinator.editor().hover_state(), expected);
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                geosolve_sketch::DocumentEdit::CreatePoint {
+                    label: "accepted scene remap".into(),
+                    position: [8.0, 8.0],
+                },
+            )
+            .expect("accepted scene-changing edit");
+        assert_eq!(
+            coordinator.editor().hover_state(),
+            EditorHoverState::default(),
+            "coordinator publication must invalidate pointer state with the retired scene",
+        );
+    }
+
+    #[test]
+    fn m75_selection_visibility_change_revokes_the_previous_pointer_owner() {
+        let (mut document, spans, _) = line_document();
+        let horizontal = document
+            .add_constraint(
+                "selection-revealed horizontal",
+                DocumentConstraintDefinition::Horizontal { line: spans[0] },
+            )
+            .expect("horizontal constraint");
+        let mut scene = scene(&document);
+        let position = scene.viewport.model_to_screen([0.0, -1.0]);
+        let source = SelectionItem::Curve(spans[0]);
+        let passive = SelectionItem::Curve(spans[1]);
+        let annotation_item = SelectionItem::Constraint(horizontal);
+        {
+            let annotation = scene
+                .annotations
+                .iter_mut()
+                .find(|annotation| annotation.item == annotation_item)
+                .expect("horizontal annotation");
+            assert_eq!(annotation.visibility, SceneAnnotationVisibility::Contextual);
+            annotation.geometry = SceneAnnotationGeometry::Label { anchor: position };
+            assert!(!annotation.is_visible(&[], Some(passive), &[]));
+            assert!(annotation.is_visible(&[source], Some(passive), &[]));
+        }
+        let geometry_hover = vec![EditorEffect::HoverChanged(EditorHoverState {
+            target: Some(EditorHoverTarget::Geometry(passive)),
+            context_owner: Some(passive),
+        })];
+        let annotation_hover = EditorHoverState {
+            target: Some(EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                item: annotation_item,
+                marker_index: None,
+            })),
+            context_owner: None,
+        };
+        let input = pointer(8, position.x, position.y, Modifiers::default());
+
+        let mut set_editor = ConstraintEditor::default();
+        assert_eq!(set_editor.pointer_move(&scene, input), geometry_hover);
+        set_editor.set_selection([source]);
+        assert_eq!(
+            set_editor.hover_state(),
+            EditorHoverState::default(),
+            "replacing selection must revoke a prediction made under old annotation visibility",
+        );
+        assert_eq!(
+            set_editor.pointer_move(&scene, input),
+            vec![EditorEffect::HoverChanged(annotation_hover)],
+        );
+
+        let mut click_editor = ConstraintEditor::default();
+        assert_eq!(click_editor.pointer_move(&scene, input), geometry_hover);
+        click_editor.select_item(source, Modifiers::default());
+        assert_eq!(click_editor.hover_state(), EditorHoverState::default());
+        assert_eq!(
+            click_editor.pointer_down(&scene, input),
+            vec![EditorEffect::SelectionChanged(vec![annotation_item])],
+            "the newly visible annotation is the next shared resolver owner",
+        );
+        assert_eq!(click_editor.selection(), &[annotation_item]);
     }
 
     #[test]

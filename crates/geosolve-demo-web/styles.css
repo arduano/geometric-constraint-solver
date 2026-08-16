@@ -587,15 +587,12 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-datum-x-axis .wb-datum-label { fill: #ba7770; }
 .wb-datum-y-axis .wb-datum-label { fill: #72ad9c; }
 .wb-datum-origin-label { fill: #c5a66a; font-size: 10px; font-weight: 600; }
-.wb-datum:hover .wb-datum-line,
-.wb-datum:hover .wb-datum-origin-ring,
-.wb-datum:hover .wb-datum-origin-cross,
 .wb-datum.geometry-hovered .wb-datum-line,
 .wb-datum.geometry-hovered .wb-datum-origin-ring,
 .wb-datum.geometry-hovered .wb-datum-origin-cross,
-.wb-datum:focus .wb-datum-line,
-.wb-datum:focus .wb-datum-origin-ring,
-.wb-datum:focus .wb-datum-origin-cross,
+.wb-datum:focus-visible .wb-datum-line,
+.wb-datum:focus-visible .wb-datum-origin-ring,
+.wb-datum:focus-visible .wb-datum-origin-cross,
 .wb-datum.selected .wb-datum-line,
 .wb-datum.selected .wb-datum-origin-ring,
 .wb-datum.selected .wb-datum-origin-cross {
@@ -609,9 +606,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke: #79bfc4;
   filter: drop-shadow(0 0 3px rgb(121 191 196 / 42%));
 }
-.wb-datum:hover .wb-datum-label,
 .wb-datum.geometry-hovered .wb-datum-label,
-.wb-datum:focus .wb-datum-label,
+.wb-datum:focus-visible .wb-datum-label,
 .wb-datum.selected .wb-datum-label { fill: #f2ca82; }
 .wb-curve {
   fill: none;
@@ -626,7 +622,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke: #8ed5ca;
   stroke-width: 2.6;
 }
-.wb-computed-item:not(.interaction-disabled):hover .wb-computed-fillet,
 .wb-computed-item.geometry-hovered .wb-computed-fillet,
 .wb-computed-item.selected .wb-computed-fillet {
   stroke: #efb856;
@@ -892,15 +887,14 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 #wb-dimension-arrow path { fill: #79bfc4; stroke: none; }
 .wb-constraint-symbol.hovered,
 .wb-annotation.hovered .wb-constraint-symbol,
-.wb-annotation:focus .wb-constraint-symbol,
+.wb-annotation:focus-visible .wb-constraint-symbol,
 .wb-annotation.selected .wb-constraint-symbol {
   fill: none;
   stroke: #fff2c8;
   filter: drop-shadow(0 0 3px rgb(239 184 86 / 50%));
 }
-.wb-dimension:hover,
 .wb-dimension.hovered,
-.wb-dimension:focus,
+.wb-dimension:focus-visible,
 .wb-dimension.selected {
   fill: #fff2c8;
   stroke: #fff2c8;

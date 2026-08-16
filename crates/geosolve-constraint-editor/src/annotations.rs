@@ -207,7 +207,12 @@ impl SceneAnnotation {
                     .iter()
                     .enumerate()
                     .map(|(index, marker)| (Some(index), position.distance(marker.anchor)))
-                    .min_by(|first, second| first.1.total_cmp(&second.1))?,
+                    .min_by(|first, second| {
+                        first
+                            .1
+                            .total_cmp(&second.1)
+                            .then_with(|| first.0.cmp(&second.0))
+                    })?,
                 SceneAnnotationGeometry::RightAngle {
                     first_arm,
                     corner,
