@@ -1900,9 +1900,9 @@ gate passes.
 
 ## M74 acceptance: production-style sketch reference UX
 
-Status: **M74-F001 integrated; replacement qualification in progress as of 2026-08-16**. The
-earlier candidate predates datum-axis symmetry. Focused native/WASM qualification passes, but a
-clean replacement nomination, human acceptance and public release are not yet claimed.
+Status: **M74-F001 replacement nominated for focused UAT as of 2026-08-16**. The exact clean
+release gate and immutable served-byte checks pass for the datum-axis-symmetry replacement. Human
+acceptance and public release are not yet claimed.
 
 - Every sketch exposes immutable intrinsic Origin/X/Y datums with no persistent identity,
   variables, history, geometry counts or Fit contribution. They are selectable and inspectable;
@@ -1933,6 +1933,14 @@ clean replacement nomination, human acceptance and public release are not yet cl
   golden disposition, Trunk and the complete clean release gate pass before immutable Tailscale
   nomination. Explicit human approval and byte-verified accepted-source Pages publication close
   M74.
+
+Mechanical nomination result (2026-08-16): exact product source
+`55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, passes the complete clean release gate. Its exact
+read-only seven-file snapshot `/tmp/geosolve-m74-uat.jFfAm4`, aggregate
+`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, is served and byte-verified
+at `http://100.94.63.83:8080/`. This satisfies mechanical nomination only; the human and public
+acceptance gates remain open.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

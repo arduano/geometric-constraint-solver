@@ -4560,10 +4560,9 @@ changes; a clean replacement is byte-verified; and focused UAT is approved.
 
 ### M74: production-style sketch reference UX
 
-Status: **M74-F001 integrated; replacement qualification in progress as of 2026-08-16**. The
-earlier immutable candidate predates datum-axis symmetry and is historical. Focused native/WASM
-hardening passes; a clean replacement nomination, explicit approval and accepted-source GitHub
-Pages publication remain open. `docs/M74_GOALS.md` owns the detailed scope.
+Status: **M74-F001 replacement nominated for focused UAT as of 2026-08-16**. The exact clean gate,
+immutable Tailscale snapshot and served-byte/browser checks pass. Explicit approval and
+accepted-source GitHub Pages publication remain open. `docs/M74_GOALS.md` owns the detailed scope.
 
 - [x] Approve and record the M74 datum, inference and desktop-polish scope without activating
   draft-v5 as a supported persistence language.
@@ -4587,10 +4586,11 @@ Pages publication remain open. `docs/M74_GOALS.md` owns the detailed scope.
 - [x] Close M74-F001 mechanically: add point-pair Symmetric across X/Y datums without hidden
   geometry, preserve drawn-line symmetry, and qualify exact residual/Jacobian/rank, authoring,
   scene, lifecycle and draft-v5 behavior.
-- [ ] Re-run the complete clean release gate and nominate a replacement immutable Tailscale
+- [x] Re-run the complete clean release gate and nominate a replacement immutable Tailscale
   snapshot containing M74-F001; withdraw the earlier bytes from current UAT authority.
-- [ ] Freeze and byte-verify an immutable Tailscale UAT candidate, keep it live through follow-up
-  fixes and receive explicit focused human approval.
+- [x] Freeze and byte-verify an immutable Tailscale UAT candidate and keep it live through
+  follow-up fixes.
+- [ ] Receive explicit focused human approval of the replacement candidate.
 - [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact byte-for-byte
   and close M74.
 
@@ -4621,8 +4621,24 @@ orders, ordinary scene/lifecycle/persistence behavior and the focused regression
 M74 passes **9/9**, editor M74 passes **5/5** natively and under WASM, complete editor remains
 **334/334** plus integrations, demo-web remains **111/111**, and the reviewed golden expands only
 by nine PASS rows from 261 to **270**. Targeted warnings-denied Clippy and golden
-`--require-clean` pass. Complete clean replacement qualification and nomination remain pending at
-this checkpoint.
+`--require-clean` pass. Complete clean replacement qualification and nomination were still
+pending at that checkpoint.
+
+M74-F001 replacement qualification/nomination note (2026-08-16): exact clean product source
+`55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` completely. The gate
+includes formatting, warnings-denied workspace Clippy, locked all-feature workspace tests,
+270/270 golden `--require-clean`, native/WASM transition and M74 parity, Rustdoc, benchmark
+compilation, M14/M32 performance, the release 256-moving-body sparse crossover in 86.79 seconds,
+licensing/package checks and Trunk 0.21.14 release assembly. Its exact seven-file output was copied
+without rebuilding to read-only `/tmp/geosolve-m74-uat.jFfAm4`, ordered-manifest aggregate
+`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, and is served by PID
+`2599593` at `http://100.94.63.83:8080/`. Proxy/cache-bypassed identity fetches of `/` and every
+asset return HTTP 200 with exact lengths, media types and bytes; `/` equals `index.html` and the
+fetched aggregate matches. M72 compatibility and M74 Chromium checks pass at `1440x900` and
+`1024x720`. This replacement is current UAT authority; explicit human approval and GitHub Pages
+publication remain pending.
 
 Gate: intrinsic datums remain permanent but identity-free; their ordinary relations solve, audit
 and follow lifecycle; headless picking/inference owns the exact priority and tolerance policy; the

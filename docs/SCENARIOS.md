@@ -1337,9 +1337,10 @@ verification complete its direct automated qualification. Completed M73 qualifie
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
 immutable Tailscale UAT snapshot, received focused supervising-human approval and exact-verified
-the final GitHub Pages artifact. M73 adds no new editable sample or browser scenario mode. M74 is
-active but unqualified; its intrinsic-datum and desktop-polish scenarios below are requirements,
-not completion evidence.
+the final GitHub Pages artifact. M73 adds no new editable sample or browser scenario mode. M74 has
+a clean-qualified, byte-verified F001 replacement candidate under focused human UAT; its
+intrinsic-datum and desktop-polish scenarios below remain requirements rather than human
+acceptance or public-release evidence.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 

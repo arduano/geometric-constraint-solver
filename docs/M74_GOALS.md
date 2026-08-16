@@ -2,10 +2,10 @@
 
 # M74 — Production-style sketch reference UX
 
-Status: **M74-F001 integrated; replacement qualification in progress as of 2026-08-16**. The
-original datum/reference scope and focused axis-symmetry follow-up are implemented. The earlier
-immutable candidate predates F001 and is historical; a clean replacement, supervising-human
-approval and final GitHub Pages publication are not yet complete.
+Status: **M74-F001 replacement nominated for focused UAT as of 2026-08-16**. The original
+datum/reference scope and focused axis-symmetry follow-up are implemented, clean-qualified and
+served from a byte-verified immutable Tailscale snapshot. Supervising-human approval and final
+GitHub Pages publication are not yet complete.
 
 ## Goal
 
@@ -123,6 +123,14 @@ keyboard and viewport-edge behavior without moving solver authority into the bro
 - Freeze and byte-verify an immutable Tailscale candidate for the focused scorecard in
   `docs/M74_UAT.md`. Keep it running for follow-up fixes until explicit approval, then deploy and
   exact-verify the accepted source through GitHub Pages.
+
+Mechanical nomination record (2026-08-16): product source
+`55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, passes the complete clean release gate. Its exact
+read-only snapshot `/tmp/geosolve-m74-uat.jFfAm4`, aggregate
+`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, is byte-verified at
+`http://100.94.63.83:8080/` and is current focused-UAT authority. Human approval and public Pages
+publication remain pending.
 
 ## Acceptance
 

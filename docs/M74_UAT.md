@@ -2,47 +2,48 @@
 
 # M74 focused UAT — Production-style sketch reference UX
 
-Status: **M74-F001 integrated; replacement candidate pending as of 2026-08-16**. The candidate
-recorded below predates datum-axis symmetry and is historical, not UAT authority. GitHub Pages
-continues to serve the accepted M73 build until replacement M74 bytes pass this scorecard and
-receive explicit approval.
+Status: **M74-F001 replacement nominated; focused human UAT pending as of 2026-08-16**. The exact
+clean gate, immutable snapshot, served-byte verification and two-size Chromium checks pass.
+GitHub Pages continues to serve the accepted M73 build until this candidate receives explicit
+approval.
 
-Historical candidate source: `7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`
+Candidate source: `55693372bea4759c9a67eee14f1af3d6a9e0690c`
 
-Candidate tree: `eff049a7fc0f2df941bcb1360ffb88f60868af21`
+Candidate tree: `866fbf8b58ec19e72cbe6936e06f3615dba2f692`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Server PID: `969003`
+Server PID: `2599593`
 
-Immutable snapshot: `/tmp/geosolve-m74-uat.MpvYrl` (directory `0555`, files `0444`)
+Immutable snapshot: `/tmp/geosolve-m74-uat.jFfAm4` (directory `0555`, files `0444`)
 
 Ordered-manifest aggregate:
-`2ceaa9f8707a54aa9bcbf62771a5cd0c3f6dd594bd5ba2829ffc370ee7588546`
+`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 16,385 | `180092f5db68423f14760db12265d06b81786df5ed3d3ba6f5ecd745e36ad567` |
+| `API_COMPATIBILITY.md` | 16,702 | `a3b8ca5a5d5999d09a05c7910eab952929e2dc3f07eeb27ccc36b7fe3a992701` |
 | `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
 | `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-90bff110a4eada3.js` | 33,221 | `115760f338139851520a5978ddaad4acb7441a5ec81a83d793885f81651eff16` |
-| `geosolve-demo-web-90bff110a4eada3_bg.wasm` | 6,091,298 | `f8389efd2c34519f38b0b3195a1efffe9a822c7641c124361997ab9131936b92` |
-| `index.html` | 27,474 | `a53bd7f661e92e5ba856ebdaca686c53ab3e1566d5c1ad32cc2a90065930c56a` |
+| `geosolve-demo-web-b110169860de7f0f.js` | 33,221 | `980c38ffa22901ee90bebec8b705f92b07b651ec92001fffd4a62ac03055b74b` |
+| `geosolve-demo-web-b110169860de7f0f_bg.wasm` | 6,102,644 | `d2932cf18e67a0e0c087ab4ccacf2ac3be086d2da74b10ac9026c53e4e64ccf4` |
+| `index.html` | 27,478 | `9968011bc0524e30d03a4c299098e047957af96336ec6289842d4ceb724a6fb5` |
 | `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
 
-The historical candidate's exact clean command
+The candidate's exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 on the candidate
-source. It includes the 261/261 golden check, native/WASM M74 3/3 parity, workspace format, Clippy,
-tests, Rustdoc, benchmark compilation, performance checks, licensing/package checks, the
-256-moving-body sparse crossover in 88.91 seconds and Trunk 0.21.14 release assembly.
+source. It includes the 270/270 golden check, native/WASM M74 5/5 parity, workspace format, Clippy,
+locked all-feature tests, Rustdoc, benchmark compilation, M14/M32 performance,
+licensing/package checks, the 256-moving-body sparse crossover in 86.79 seconds and Trunk 0.21.14
+release assembly.
 
 The gate distribution was copied without rebuilding. Proxy/cache-bypassed identity requests for
 all seven files and `/` return HTTP 200 from the Tailscale address with exact media types, lengths
 and bytes; `/` equals `index.html`, and the fetched aggregate matches. The M72 compatibility and
-M74 browser scripts both pass at `1440x900` and `1024x720`. Former server PID `3870531` has exited,
-while historical snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains unchanged. M74-F001 supersedes
-these M74 product bytes; do not approve them. No current replacement or public M74 artifact exists
-yet.
+M74 browser scripts both pass at `1440x900` and `1024x720` with no console/page errors. The HTTP
+evidence directory is `/tmp/geosolve-m74-http-verify.85lR5D`. Historical initial M74 snapshot
+`/tmp/geosolve-m74-uat.MpvYrl` remains read-only but is no longer served or UAT authority. No
+public M74 artifact exists yet.
 
 Direct Rust/WASM tests are authoritative for exact residuals, Jacobians, persistence rejection,
 pixel boundaries, action atomicity and history. Human UAT should judge visual hierarchy,
@@ -86,9 +87,9 @@ Pass when datums feel ever-present and useful but unmistakably different from ed
    have equal X coordinates and opposite Y coordinates. Repeat with Y axis: equal Y coordinates
    and opposite X coordinates.
 8. Repeat with the axis preselected first and with the two point selections reversed. Then enter
-   active Symmetric mode and pick point → point → axis. All complete routes should create one
-   ordinary relation; active mode should continue to ask for a line or reference axis after the
-   two points.
+   active Symmetric mode and pick point → point → axis by clicking the painted canvas axis itself,
+   not only its tree entry. All complete routes should create one ordinary relation; active mode
+   should continue to ask for a line or reference axis after the two points.
 9. In active Symmetric mode, pick the same point twice. Confirm the second pick is rejected without
    losing the valid first point. With two distinct points pending, pick Origin; it must reject and
    retain both points so selecting X or Y axis can immediately complete the relation.

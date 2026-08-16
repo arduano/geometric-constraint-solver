@@ -2,10 +2,10 @@
 
 # M74 implementation — Production-style sketch reference UX
 
-Status: **M74-F001 integrated; replacement qualification in progress as of 2026-08-16**. Focused
-native/WASM qualification passes for point-pair symmetry across intrinsic axes. The earlier
-candidate predates F001 and is historical; a clean replacement nomination, explicit human approval
-and final GitHub Pages deployment remain open.
+Status: **M74-F001 replacement nominated for focused UAT as of 2026-08-16**. Point-pair symmetry
+across intrinsic axes passes focused native/WASM and complete clean release qualification. Its
+immutable Tailscale candidate is byte-verified; explicit human approval and final GitHub Pages
+deployment remain open.
 
 Architecture decision: no new ADR is currently required. Intrinsic datums extend the ordinary
 sketch/editor model within the retained-authoring and accepted-scene boundaries. Canonical sketch
@@ -165,7 +165,20 @@ the hidden-datum miss and the independently visible-axis hit.
 
 M74-F001 focused qualification passes sketch 9/9, editor 5/5 natively and under WASM, complete
 editor 334/334 plus every integration, demo-web 111/111, targeted warnings-denied Clippy and the
-270/270 clean golden check. The complete clean replacement gate remains pending at this checkpoint.
+270/270 clean golden check. Exact committed product source
+`55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, then passed the complete clean replacement command:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+# exit 0
+```
+
+That gate repeated formatting, warnings-denied workspace Clippy, locked all-feature tests, the
+270/270 clean golden oracle, native/WASM transition and M74 parity, Rustdoc and benchmark
+compilation. M14/M32 performance passed, the release 256-moving-body sparse crossover passed in
+86.79 seconds, licensing/package contents passed, and Trunk 0.21.14 assembled the release
+distribution successfully.
 
 The historical initial candidate command passed from committed product source
 `7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`, tree
@@ -201,16 +214,17 @@ are regular, non-symlink files.
 The C-locale `sha256sum * | sha256sum` aggregate is
 `2ceaa9f8707a54aa9bcbf62771a5cd0c3f6dd594bd5ba2829ffc370ee7588546`.
 
-PID `969003` serves only this snapshot at `http://100.94.63.83:8080/` with exact argv:
+PID `969003` historically served only this snapshot at `http://100.94.63.83:8080/` with exact argv:
 
 ```text
 python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m74-uat.MpvYrl
 ```
 
-Its executable is
+Its executable was
 `/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14`.
-The former M73 server PID `3870531` exited only after the M74 snapshot was complete. Historical
-snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains read-only with its unchanged aggregate
+The process has exited. The former M73 server PID `3870531` exited only after the initial M74
+snapshot was complete. Historical snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains read-only with
+its unchanged aggregate
 `3153f3b7b75e55ecc27c8798f4f26c6368c5b1e8db8422ee44c8840612d7ba8e`.
 
 Proxy- and cache-bypassed, identity-encoded Tailscale requests for `/` and all seven named files
@@ -235,15 +249,55 @@ The reviewed script SHA-256 values are respectively
 M74-F001 changes product bytes, so this snapshot is retained only as historical evidence and is no
 longer current UAT authority. It must not receive human approval for the replacement scope.
 
-## 5. Open completion gates
+## 5. Current F001 replacement UAT candidate
 
-- Pass the complete clean replacement release gate from committed F001 source.
-- Copy its exact gate output without rebuilding, replace the live Tailscale candidate, byte-verify
-  every asset and complete `docs/M74_UAT.md` over those replacement bytes.
+The successful replacement gate's exact seven files were copied without rebuilding to
+`/tmp/geosolve-m74-uat.jFfAm4`. The directory is mode `0555`; every file is mode `0444`; all entries
+are regular, non-symlink files.
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 16,702 | `a3b8ca5a5d5999d09a05c7910eab952929e2dc3f07eeb27ccc36b7fe3a992701` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-b110169860de7f0f.js` | 33,221 | `980c38ffa22901ee90bebec8b705f92b07b651ec92001fffd4a62ac03055b74b` |
+| `geosolve-demo-web-b110169860de7f0f_bg.wasm` | 6,102,644 | `d2932cf18e67a0e0c087ab4ccacf2ac3be086d2da74b10ac9026c53e4e64ccf4` |
+| `index.html` | 27,478 | `9968011bc0524e30d03a4c299098e047957af96336ec6289842d4ceb724a6fb5` |
+| `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
+
+The C-locale `sha256sum * | sha256sum` aggregate is
+`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`.
+
+PID `2599593` serves only this snapshot at `http://100.94.63.83:8080/` with exact argv:
+
+```text
+python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m74-uat.jFfAm4
+```
+
+Proxy/cache-bypassed identity requests for `/` and all seven files return HTTP 200 with exact media
+types, lengths and bytes. `/` equals `index.html`, the fetched aggregate matches the frozen
+aggregate, and no response redirects or applies content encoding. HTTP evidence is retained at
+`/tmp/geosolve-m74-http-verify.85lR5D`.
+
+The unchanged reviewed browser scripts also pass directly over Tailscale at `1440x900` and
+`1024x720` with no console/page errors:
+
+```text
+M72_BASE_URL=http://100.94.63.83:8080/ node /tmp/m72_full_browser_check.mjs
+M74_BASE_URL=http://100.94.63.83:8080/ node /tmp/m74_browser_check.mjs
+```
+
+Their SHA-256 values remain
+`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
+`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc` respectively. This candidate
+is current UAT authority; the historical initial M74 snapshot remains read-only but unserved.
+
+## 6. Open completion gates
+
 - Receive explicit supervising-human approval.
 - Deploy the exact accepted source through GitHub Pages and verify every hosted byte/media type.
 
-## 6. Compatibility result so far
+## 7. Compatibility result so far
 
 The in-progress APIs are additive pre-1.0 sketch/editor surface. They do not modify a released
 persistence language: canonical sketch v1-v4 remains the only supported sketch wire contract and
