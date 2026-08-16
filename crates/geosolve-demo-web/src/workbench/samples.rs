@@ -9,9 +9,12 @@ use geosolve_constraint_editor::{
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan,
-    DesignPointId, DocumentCenterRef, DocumentConstraintDefinition, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentDirectionSense, DocumentId, DocumentLineSupportRef,
-    GeometryRole, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+    DesignPointId, DocumentAngleOrientation, DocumentArcSweep, DocumentCenterRef,
+    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
+    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentDirectionSense, DocumentFilletEndpointOrder, DocumentId,
+    DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef, GeometryRole,
+    LineLineFilletRequest, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
     SketchDocument, TangentOrientation, alpha_scenario,
 };
 
@@ -111,6 +114,8 @@ impl SampleId {
 #[derive(Clone, Copy)]
 enum SampleSource {
     Alpha(AlphaScenarioKind),
+    ConstraintDimensionSampler,
+    ContextualAnnotations,
     ConstructionReference,
     AutoConstraintDrafting,
     RetainedDraftingRelations,
@@ -200,11 +205,11 @@ const MECHANISMS: [SampleDefinition; 13] = [
 ];
 
 const CONSTRAINTS: [SampleDefinition; 8] = [
-    sample(
-        SampleId::ConstraintSampler,
-        "Constraint and dimension sampler",
-        AlphaScenarioKind::Corpus,
-    ),
+    SampleDefinition {
+        id: SampleId::ConstraintSampler,
+        title: "Constraint and dimension sampler",
+        source: SampleSource::ConstraintDimensionSampler,
+    },
     SampleDefinition {
         id: SampleId::AutoConstraintDrafting,
         title: "Auto-constraint drafting playground",
@@ -230,11 +235,11 @@ const CONSTRAINTS: [SampleDefinition; 8] = [
         "Angle and dimension annotations",
         AlphaScenarioKind::DirectedAngle,
     ),
-    sample(
-        SampleId::ContextualAnnotations,
-        "Contextual constraint annotations",
-        AlphaScenarioKind::Corpus,
-    ),
+    SampleDefinition {
+        id: SampleId::ContextualAnnotations,
+        title: "Contextual constraint annotations",
+        source: SampleSource::ContextualAnnotations,
+    },
     sample(
         SampleId::DenseJunction,
         "Dense constraint junction",
@@ -357,6 +362,8 @@ fn coordinator_from_source(source: SampleSource) -> Result<RetainedEditorCoordin
             let fixture = alpha_scenario(kind, 1.0).map_err(|error| error.to_string())?;
             (fixture.document, fixture.request)
         }
+        SampleSource::ConstraintDimensionSampler => constraint_dimension_sampler_document()?,
+        SampleSource::ContextualAnnotations => contextual_annotations_document()?,
         SampleSource::ConstructionReference => construction_reference_document()?,
         SampleSource::AutoConstraintDrafting => auto_constraint_drafting_document()?,
         SampleSource::RetainedDraftingRelations => retained_drafting_relations_document()?,
@@ -366,6 +373,949 @@ fn coordinator_from_source(source: SampleSource) -> Result<RetainedEditorCoordin
     let session = RetainedSketchDocumentSession::new(document, request, SolverConfig::default())
         .map_err(|error| error.to_string())?;
     RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one compact public specimen intentionally shows every dimension presentation family"
+)]
+fn constraint_dimension_sampler_document()
+-> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
+    let mut document = workshop_document(0x7600_0000_0000_0000_0000_0000_0000_0001_u128)?;
+
+    let distance_points = [
+        document
+            .add_point("Point-distance first point", [-20.0, 7.0])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Point-distance second point", [-15.0, 7.0])
+            .map_err(|error| error.to_string())?,
+    ];
+    let distance_target = document
+        .add_scalar(
+            "Point-distance target 5",
+            5.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Point distance",
+            DocumentDimensionDefinition::PointDistance {
+                first: distance_points[0],
+                second: distance_points[1],
+                target: distance_target,
+            },
+            DocumentDimensionMode::Reference,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let straight = add_line(
+        &mut document,
+        "Straight length specimen",
+        ("Straight length start", [-11.0, 7.0]),
+        ("Straight length end", [-6.0, 7.0]),
+    )?;
+    let straight_target = document
+        .add_scalar(
+            "Straight length target 5",
+            5.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Straight curve length",
+            DocumentDimensionDefinition::CurveLength {
+                curve: CurveSpan::line(straight),
+                target: straight_target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let arc_center = document
+        .add_point("Arc radius center", [11.0, 7.0])
+        .map_err(|error| error.to_string())?;
+    let arc_radius = document
+        .add_scalar(
+            "Arc radius value",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    let arc_start = document
+        .add_scalar(
+            "Arc radius start angle",
+            -std::f64::consts::FRAC_PI_4,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .map_err(|error| error.to_string())?;
+    let arc_end = document
+        .add_scalar(
+            "Arc radius end angle",
+            3.0 * std::f64::consts::FRAC_PI_4,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .map_err(|error| error.to_string())?;
+    let arc = document
+        .add_curve(
+            "Circular-arc radius specimen",
+            CurveDefinition::CircularArc {
+                center: arc_center,
+                radius: arc_radius,
+                start_angle: arc_start,
+                end_angle: arc_end,
+                sweep: DocumentArcSweep::CounterClockwise,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    let arc_radius_target = document
+        .add_scalar(
+            "Arc radius target 2",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Arc radius",
+            DocumentDimensionDefinition::Radius {
+                curve: arc,
+                target: arc_radius_target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let diameter_center = document
+        .add_point("Diameter circle center", [-18.0, -6.0])
+        .map_err(|error| error.to_string())?;
+    let diameter_radius = document
+        .add_scalar(
+            "Diameter circle radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    let diameter_circle = document
+        .add_curve(
+            "Full-circle diameter specimen",
+            CurveDefinition::Circle {
+                center: diameter_center,
+                radius: diameter_radius,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    let diameter_target = document
+        .add_scalar(
+            "Diameter target 4",
+            4.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Circle diameter",
+            DocumentDimensionDefinition::Diameter {
+                curve: diameter_circle,
+                target: diameter_target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let angle_first = add_line(
+        &mut document,
+        "Angle first leg",
+        ("Angle first vertex", [-10.0, -8.0]),
+        ("Angle first endpoint", [-6.0, -8.0]),
+    )?;
+    let angle_second = add_line(
+        &mut document,
+        "Angle second leg",
+        ("Angle second vertex", [-10.0, -8.0]),
+        ("Angle second endpoint", [-7.0, -5.0]),
+    )?;
+    let angle_target = document
+        .add_scalar(
+            "Angle target 45 degrees",
+            std::f64::consts::FRAC_PI_4,
+            ScalarUnit::Angle,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Oriented angle",
+            DocumentDimensionDefinition::OrientedAngle {
+                first: CurveSpan::line(angle_first),
+                second: CurveSpan::line(angle_second),
+                target: angle_target,
+                orientation: DocumentAngleOrientation::CounterClockwise,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let supporting_source = add_line(
+        &mut document,
+        "Supporting-offset source",
+        ("Supporting-offset source start", [-1.0, -9.0]),
+        ("Supporting-offset source end", [3.0, -9.0]),
+    )?;
+    let supporting_target = add_line(
+        &mut document,
+        "Supporting-offset target",
+        ("Supporting-offset target start", [0.0, -6.0]),
+        ("Supporting-offset target end", [4.0, -6.0]),
+    )?;
+    let supporting_value = document
+        .add_scalar(
+            "Supporting-offset target 3",
+            3.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Supporting-line offset",
+            DocumentDimensionDefinition::SupportingLineOffset {
+                source: CurveSpan::line(supporting_source),
+                target_segment: CurveSpan::line(supporting_target),
+                target: supporting_value,
+                side: DocumentLineSide::Left,
+                orientation: DocumentLineOffsetOrientation::Same,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let exact_source = add_line(
+        &mut document,
+        "Exact-offset source",
+        ("Exact-offset source start", [10.0, -9.0]),
+        ("Exact-offset source end", [14.0, -9.0]),
+    )?;
+    let exact_target = add_line(
+        &mut document,
+        "Exact-offset target",
+        ("Exact-offset target start", [10.0, -6.0]),
+        ("Exact-offset target end", [14.0, -6.0]),
+    )?;
+    let exact_value = document
+        .add_scalar(
+            "Exact-offset target 3",
+            3.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Exact translated-segment offset",
+            DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+                source: CurveSpan::line(exact_source),
+                target_segment: CurveSpan::line(exact_target),
+                target: exact_value,
+                side: DocumentLineSide::Left,
+                orientation: DocumentLineOffsetOrientation::Same,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one spatial 5-by-4 public specimen intentionally owns all twenty glyph categories"
+)]
+fn contextual_annotations_document()
+-> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
+    let mut document = workshop_document(0x7600_0000_0000_0000_0000_0000_0000_0002_u128)?;
+    let cell = |column: usize, row: usize| [-20.0 + 10.0 * column as f64, 12.0 - 8.0 * row as f64];
+
+    let origin = cell(0, 0);
+    let fixed = document
+        .add_point("Fixed specimen point", origin)
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Fixed",
+            DocumentConstraintDefinition::FixedPoint {
+                point: fixed,
+                target: origin,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(1, 0);
+    let coincident = [
+        document
+            .add_point("Coincident first point", origin)
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Coincident second point", origin)
+            .map_err(|error| error.to_string())?,
+    ];
+    let coincident_arms = [
+        document
+            .add_point("Coincident first arm", [origin[0] - 2.5, origin[1] - 1.5])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Coincident second arm", [origin[0] + 2.5, origin[1] + 1.5])
+            .map_err(|error| error.to_string())?,
+    ];
+    add_line_between(
+        &mut document,
+        "Coincident first support",
+        coincident_arms[0],
+        coincident[0],
+    )?;
+    add_line_between(
+        &mut document,
+        "Coincident second support",
+        coincident[1],
+        coincident_arms[1],
+    )?;
+    document
+        .add_constraint(
+            "Coincident",
+            DocumentConstraintDefinition::Coincident {
+                first: coincident[0],
+                second: coincident[1],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(2, 0);
+    let horizontal = add_line(
+        &mut document,
+        "Horizontal specimen",
+        ("Horizontal start", [origin[0] - 3.0, origin[1]]),
+        ("Horizontal end", [origin[0] + 3.0, origin[1]]),
+    )?;
+    document
+        .add_constraint(
+            "Horizontal",
+            DocumentConstraintDefinition::Horizontal {
+                line: CurveSpan::line(horizontal),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(3, 0);
+    let vertical = add_line(
+        &mut document,
+        "Vertical specimen",
+        ("Vertical start", [origin[0], origin[1] - 2.5]),
+        ("Vertical end", [origin[0], origin[1] + 2.5]),
+    )?;
+    document
+        .add_constraint(
+            "Vertical",
+            DocumentConstraintDefinition::Vertical {
+                line: CurveSpan::line(vertical),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(4, 0);
+    let on_curve = add_line(
+        &mut document,
+        "Point-on-curve support",
+        ("Point-on-curve start", [origin[0] - 3.0, origin[1]]),
+        ("Point-on-curve end", [origin[0] + 3.0, origin[1]]),
+    )?;
+    let on_curve_point = document
+        .add_point("Point on curve", origin)
+        .map_err(|error| error.to_string())?;
+    let on_curve_contact = document
+        .add_curve_contact(
+            "Point-on-curve contact",
+            CurveSpan::line(on_curve),
+            0.5,
+            0,
+            ContactNeighborhood::Interior,
+            None,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Point on curve",
+            DocumentConstraintDefinition::PointOnCurve {
+                point: on_curve_point,
+                contact: on_curve_contact,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(0, 1);
+    let parallel = [
+        add_line(
+            &mut document,
+            "Parallel first support",
+            ("Parallel first start", [origin[0] - 3.0, origin[1] - 1.0]),
+            ("Parallel first end", [origin[0] + 3.0, origin[1] - 1.0]),
+        )?,
+        add_line(
+            &mut document,
+            "Parallel second support",
+            ("Parallel second start", [origin[0] - 3.0, origin[1] + 1.0]),
+            ("Parallel second end", [origin[0] + 3.0, origin[1] + 1.0]),
+        )?,
+    ];
+    document
+        .add_constraint(
+            "Parallel",
+            DocumentConstraintDefinition::Parallel {
+                first: CurveSpan::line(parallel[0]),
+                second: CurveSpan::line(parallel[1]),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(1, 1);
+    let perpendicular = [
+        add_line(
+            &mut document,
+            "Perpendicular horizontal support",
+            (
+                "Perpendicular horizontal start",
+                [origin[0] - 3.0, origin[1]],
+            ),
+            ("Perpendicular horizontal end", [origin[0] + 3.0, origin[1]]),
+        )?,
+        add_line(
+            &mut document,
+            "Perpendicular vertical support",
+            ("Perpendicular vertical start", [origin[0], origin[1] - 2.5]),
+            ("Perpendicular vertical end", [origin[0], origin[1] + 2.5]),
+        )?,
+    ];
+    document
+        .add_constraint(
+            "Perpendicular",
+            DocumentConstraintDefinition::Perpendicular {
+                first: CurveSpan::line(perpendicular[0]),
+                second: CurveSpan::line(perpendicular[1]),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(2, 1);
+    let concentric_centers = [
+        document
+            .add_point("Concentric first center", origin)
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Concentric second center", origin)
+            .map_err(|error| error.to_string())?,
+    ];
+    let concentric = [
+        add_circle(
+            &mut document,
+            "Concentric outer circle",
+            concentric_centers[0],
+            2.3,
+        )?,
+        add_circle(
+            &mut document,
+            "Concentric inner circle",
+            concentric_centers[1],
+            1.2,
+        )?,
+    ];
+    document
+        .add_constraint(
+            "Concentric",
+            DocumentConstraintDefinition::Concentric {
+                first: DocumentCenterRef {
+                    curve: concentric[0],
+                },
+                second: DocumentCenterRef {
+                    curve: concentric[1],
+                },
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(3, 1);
+    let collinear = [
+        add_line(
+            &mut document,
+            "Collinear first support",
+            ("Collinear first start", [origin[0] - 3.5, origin[1]]),
+            ("Collinear first end", [origin[0] - 0.5, origin[1]]),
+        )?,
+        add_line(
+            &mut document,
+            "Collinear second support",
+            ("Collinear second start", [origin[0] + 0.5, origin[1]]),
+            ("Collinear second end", [origin[0] + 3.5, origin[1]]),
+        )?,
+    ];
+    document
+        .add_constraint(
+            "Collinear",
+            DocumentConstraintDefinition::Collinear {
+                first: DocumentLineSupportRef {
+                    span: CurveSpan::line(collinear[0]),
+                    direction: DocumentDirectionSense::Forward,
+                },
+                second: DocumentLineSupportRef {
+                    span: CurveSpan::line(collinear[1]),
+                    direction: DocumentDirectionSense::Forward,
+                },
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(4, 1);
+    let equal_length = [
+        add_line(
+            &mut document,
+            "Equal-length first support",
+            (
+                "Equal-length first start",
+                [origin[0] - 3.0, origin[1] - 1.3],
+            ),
+            ("Equal-length first end", [origin[0], origin[1] - 1.3]),
+        )?,
+        add_line(
+            &mut document,
+            "Equal-length second support",
+            ("Equal-length second start", [origin[0], origin[1] + 1.3]),
+            (
+                "Equal-length second end",
+                [origin[0] + 3.0, origin[1] + 1.3],
+            ),
+        )?,
+    ];
+    document
+        .add_constraint(
+            "Equal length",
+            DocumentConstraintDefinition::EqualLength {
+                first: CurveSpan::line(equal_length[0]),
+                second: CurveSpan::line(equal_length[1]),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(0, 2);
+    let equal_radius_centers = [
+        document
+            .add_point("Equal-radius first center", [origin[0] - 2.0, origin[1]])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Equal-radius second center", [origin[0] + 2.0, origin[1]])
+            .map_err(|error| error.to_string())?,
+    ];
+    let equal_radius = [
+        add_circle(
+            &mut document,
+            "Equal-radius first circle",
+            equal_radius_centers[0],
+            1.4,
+        )?,
+        add_circle(
+            &mut document,
+            "Equal-radius second circle",
+            equal_radius_centers[1],
+            1.4,
+        )?,
+    ];
+    document
+        .add_constraint(
+            "Equal radius",
+            DocumentConstraintDefinition::EqualRadius {
+                first: equal_radius[0],
+                second: equal_radius[1],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(1, 2);
+    let midpoint_line = add_line(
+        &mut document,
+        "Midpoint support",
+        ("Midpoint start", [origin[0] - 3.0, origin[1]]),
+        ("Midpoint end", [origin[0] + 3.0, origin[1]]),
+    )?;
+    let midpoint = document
+        .add_point("Midpoint point", origin)
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Midpoint",
+            DocumentConstraintDefinition::Midpoint {
+                point: midpoint,
+                line: CurveSpan::line(midpoint_line),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(2, 2);
+    let symmetry_axis = add_line(
+        &mut document,
+        "Symmetry axis",
+        ("Symmetry axis start", [origin[0] - 3.0, origin[1]]),
+        ("Symmetry axis end", [origin[0] + 3.0, origin[1]]),
+    )?;
+    let symmetric_points = [
+        document
+            .add_point("Symmetric first point", [origin[0], origin[1] + 2.0])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Symmetric second point", [origin[0], origin[1] - 2.0])
+            .map_err(|error| error.to_string())?,
+    ];
+    document
+        .add_constraint(
+            "Symmetry",
+            DocumentConstraintDefinition::SymmetricAboutLine {
+                first: symmetric_points[0],
+                second: symmetric_points[1],
+                line: CurveSpan::line(symmetry_axis),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(3, 2);
+    let contact_curves = [
+        add_line(
+            &mut document,
+            "Contact horizontal support",
+            ("Contact horizontal start", [origin[0] - 3.0, origin[1]]),
+            ("Contact horizontal end", [origin[0] + 3.0, origin[1]]),
+        )?,
+        add_line(
+            &mut document,
+            "Contact vertical support",
+            ("Contact vertical start", [origin[0], origin[1] - 2.5]),
+            ("Contact vertical end", [origin[0], origin[1] + 2.5]),
+        )?,
+    ];
+    let contact_slots = [
+        document
+            .add_curve_contact(
+                "Contact first slot",
+                CurveSpan::line(contact_curves[0]),
+                0.5,
+                0,
+                ContactNeighborhood::Interior,
+                None,
+            )
+            .map_err(|error| error.to_string())?,
+        document
+            .add_curve_contact(
+                "Contact second slot",
+                CurveSpan::line(contact_curves[1]),
+                0.5,
+                0,
+                ContactNeighborhood::Interior,
+                None,
+            )
+            .map_err(|error| error.to_string())?,
+    ];
+    document
+        .add_constraint(
+            "Contact",
+            DocumentConstraintDefinition::CurveCurveContact {
+                first_contact: contact_slots[0],
+                second_contact: contact_slots[1],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(4, 2);
+    let tangent_line = add_line(
+        &mut document,
+        "Tangency line",
+        ("Tangency line start", [origin[0] - 3.0, origin[1]]),
+        ("Tangency line end", [origin[0] + 3.0, origin[1]]),
+    )?;
+    let tangent_center = document
+        .add_point("Tangency circle center", [origin[0], origin[1] + 1.5])
+        .map_err(|error| error.to_string())?;
+    let tangent_circle = add_circle(&mut document, "Tangency circle", tangent_center, 1.5)?;
+    let tangent_circle_span = first_curve_span(&document, tangent_circle, "Tangency circle")?;
+    let tangent_contacts = [
+        document
+            .add_curve_contact(
+                "Tangency line contact",
+                CurveSpan::line(tangent_line),
+                0.5,
+                0,
+                ContactNeighborhood::Interior,
+                Some(TangentOrientation::Aligned),
+            )
+            .map_err(|error| error.to_string())?,
+        document
+            .add_curve_contact(
+                "Tangency circle contact",
+                tangent_circle_span,
+                1.5 * std::f64::consts::PI,
+                0,
+                ContactNeighborhood::Interior,
+                Some(TangentOrientation::Aligned),
+            )
+            .map_err(|error| error.to_string())?,
+    ];
+    document
+        .add_constraint(
+            "Tangency",
+            DocumentConstraintDefinition::LineCircleTangency {
+                line_contact: tangent_contacts[0],
+                circle_contact: tangent_contacts[1],
+                side: DocumentLineSide::Left,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(0, 3);
+    let direction_center = document
+        .add_point("Direction circle center", [origin[0], origin[1] - 1.5])
+        .map_err(|error| error.to_string())?;
+    let direction_circle = add_circle(&mut document, "Direction circle", direction_center, 1.5)?;
+    let direction_circle_span = first_curve_span(&document, direction_circle, "Direction circle")?;
+    let direction_line = add_line(
+        &mut document,
+        "Tangent-direction line",
+        ("Tangent-direction line start", [origin[0] - 3.0, origin[1]]),
+        ("Tangent-direction line end", [origin[0] + 3.0, origin[1]]),
+    )?;
+    let direction_contact = document
+        .add_curve_contact(
+            "Tangent-direction curve contact",
+            direction_circle_span,
+            std::f64::consts::FRAC_PI_2,
+            0,
+            ContactNeighborhood::Interior,
+            None,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Direction",
+            DocumentConstraintDefinition::CurveDirection {
+                line: CurveSpan::line(direction_line),
+                curve_contact: direction_contact,
+                relation: DocumentCurveDirectionRelation::Tangent {
+                    orientation: TangentOrientation::Opposed,
+                },
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(1, 3);
+    let normal_center = document
+        .add_point("Normal circle center", [origin[0], origin[1]])
+        .map_err(|error| error.to_string())?;
+    let normal_circle = add_circle(&mut document, "Normal circle", normal_center, 1.5)?;
+    let normal_circle_span = first_curve_span(&document, normal_circle, "Normal circle")?;
+    let normal_line = add_line(
+        &mut document,
+        "Normal-direction line",
+        ("Normal-direction line start", [origin[0] - 3.0, origin[1]]),
+        ("Normal-direction line end", [origin[0] + 3.0, origin[1]]),
+    )?;
+    let normal_contact = document
+        .add_curve_contact(
+            "Normal-direction curve contact",
+            normal_circle_span,
+            0.0,
+            0,
+            ContactNeighborhood::Interior,
+            None,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Normal",
+            DocumentConstraintDefinition::CurveDirection {
+                line: CurveSpan::line(normal_line),
+                curve_contact: normal_contact,
+                relation: DocumentCurveDirectionRelation::Normal {
+                    side: DocumentCurveNormalSide::Right,
+                },
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(2, 3);
+    let curvature_centers = [
+        document
+            .add_point("Equal-curvature first center", [origin[0] - 2.0, origin[1]])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point(
+                "Equal-curvature second center",
+                [origin[0] + 2.0, origin[1]],
+            )
+            .map_err(|error| error.to_string())?,
+    ];
+    let curvature_circles = [
+        add_circle(
+            &mut document,
+            "Equal-curvature first circle",
+            curvature_centers[0],
+            1.4,
+        )?,
+        add_circle(
+            &mut document,
+            "Equal-curvature second circle",
+            curvature_centers[1],
+            1.4,
+        )?,
+    ];
+    let curvature_spans = [
+        first_curve_span(
+            &document,
+            curvature_circles[0],
+            "Equal-curvature first circle",
+        )?,
+        first_curve_span(
+            &document,
+            curvature_circles[1],
+            "Equal-curvature second circle",
+        )?,
+    ];
+    let curvature_contacts = [
+        document
+            .add_curve_contact(
+                "Equal-curvature first contact",
+                curvature_spans[0],
+                0.0,
+                0,
+                ContactNeighborhood::Interior,
+                None,
+            )
+            .map_err(|error| error.to_string())?,
+        document
+            .add_curve_contact(
+                "Equal-curvature second contact",
+                curvature_spans[1],
+                0.0,
+                0,
+                ContactNeighborhood::Interior,
+                None,
+            )
+            .map_err(|error| error.to_string())?,
+    ];
+    document
+        .add_constraint(
+            "Equal curvature",
+            DocumentConstraintDefinition::EqualCurvature {
+                first_contact: curvature_contacts[0],
+                second_contact: curvature_contacts[1],
+                relation: DocumentCurveCurvatureRelation::Signed,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(3, 3);
+    let continuity_points = [
+        document
+            .add_point("Continuity first start", [origin[0] - 3.0, origin[1]])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Continuity seam", origin)
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Continuity second end", [origin[0] + 3.0, origin[1]])
+            .map_err(|error| error.to_string())?,
+    ];
+    let continuity_curves = [
+        add_line_between(
+            &mut document,
+            "Continuity incoming support",
+            continuity_points[0],
+            continuity_points[1],
+        )?,
+        add_line_between(
+            &mut document,
+            "Continuity outgoing support",
+            continuity_points[1],
+            continuity_points[2],
+        )?,
+    ];
+    let continuity_contacts = [
+        document
+            .add_curve_contact(
+                "Continuity incoming endpoint",
+                CurveSpan::line(continuity_curves[0]),
+                1.0,
+                0,
+                ContactNeighborhood::End,
+                None,
+            )
+            .map_err(|error| error.to_string())?,
+        document
+            .add_curve_contact(
+                "Continuity outgoing endpoint",
+                CurveSpan::line(continuity_curves[1]),
+                0.0,
+                0,
+                ContactNeighborhood::Start,
+                None,
+            )
+            .map_err(|error| error.to_string())?,
+    ];
+    document
+        .add_constraint(
+            "Continuity",
+            DocumentConstraintDefinition::EndpointContinuity {
+                first_contact: continuity_contacts[0],
+                second_contact: continuity_contacts[1],
+                continuity: DocumentCurveContinuity::G1,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let origin = cell(4, 3);
+    let fillet_parents = [
+        add_line(
+            &mut document,
+            "Fillet horizontal parent",
+            ("Fillet horizontal start", [origin[0] - 3.0, origin[1]]),
+            ("Fillet horizontal end", [origin[0] + 3.0, origin[1]]),
+        )?,
+        add_line(
+            &mut document,
+            "Fillet vertical parent",
+            ("Fillet vertical start", [origin[0], origin[1] - 2.5]),
+            ("Fillet vertical end", [origin[0], origin[1] + 2.5]),
+        )?,
+    ];
+    document
+        .add_line_line_fillet(
+            "Fillet",
+            LineLineFilletRequest {
+                first: CurveSpan::line(fillet_parents[0]),
+                first_side: DocumentCurveNormalSide::Left,
+                second: CurveSpan::line(fillet_parents[1]),
+                second_side: DocumentCurveNormalSide::Left,
+                endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+                sweep: DocumentArcSweep::CounterClockwise,
+                radius: 1.0,
+                radius_mode: DocumentDimensionMode::Reference,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
 }
 
 #[allow(
@@ -1045,15 +1995,40 @@ fn add_line(
     start: (&str, [f64; 2]),
     end: (&str, [f64; 2]),
 ) -> Result<CurveId, String> {
-    let delta = [end.1[0] - start.1[0], end.1[1] - start.1[1]];
-    let norm = delta[0].hypot(delta[1]);
-    let branch_direction = [delta[0] / norm, delta[1] / norm];
     let start = document
         .add_point(start.0, start.1)
         .map_err(|error| error.to_string())?;
     let end = document
         .add_point(end.0, end.1)
         .map_err(|error| error.to_string())?;
+    add_line_between(document, label, start, end)
+}
+
+fn add_line_between(
+    document: &mut SketchDocument,
+    label: &str,
+    start: DesignPointId,
+    end: DesignPointId,
+) -> Result<CurveId, String> {
+    let start_position = document
+        .point(start)
+        .ok_or_else(|| format!("{label} start point is missing"))?
+        .position;
+    let end_position = document
+        .point(end)
+        .ok_or_else(|| format!("{label} end point is missing"))?
+        .position;
+    let delta = [
+        end_position[0] - start_position[0],
+        end_position[1] - start_position[1],
+    ];
+    let norm = delta[0].hypot(delta[1]);
+    if !norm.is_finite() || norm == 0.0 {
+        return Err(format!(
+            "{label} line endpoints must be distinct and finite"
+        ));
+    }
+    let branch_direction = [delta[0] / norm, delta[1] / norm];
     document
         .add_curve(
             label,
@@ -1064,6 +2039,38 @@ fn add_line(
             },
         )
         .map_err(|error| error.to_string())
+}
+
+fn add_circle(
+    document: &mut SketchDocument,
+    label: &str,
+    center: DesignPointId,
+    radius: f64,
+) -> Result<CurveId, String> {
+    let radius = document
+        .add_scalar(
+            format!("{label} radius"),
+            radius,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_curve(label, CurveDefinition::Circle { center, radius })
+        .map_err(|error| error.to_string())
+}
+
+fn first_curve_span(
+    document: &SketchDocument,
+    curve: CurveId,
+    label: &str,
+) -> Result<CurveSpan, String> {
+    document
+        .curve_spans(curve)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("{label} exposes no selectable span"))
 }
 
 fn add_point_specimen_marker(
@@ -1175,14 +2182,15 @@ fn add_polyline(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
 
     use geosolve_constraint_editor::{
         ComputedFilletContinuationLimitKind, CoordinatorError, EditorEffect, EditorHoverState,
         EditorScene, EditorTool, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
         GeometryInteractionPolicy, GeometryPickScope, InferredRelation, Modifiers, PickTolerance,
-        PointerInput, RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
+        PointerInput, RetainedEditorCoordinator, SceneAnnotationKind, SceneConstraintGlyph,
+        ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1370,6 +2378,187 @@ mod tests {
         assert!(leaves.iter().all(|definition| {
             !definition.title.contains('M') || !definition.title.contains("M6")
         }));
+    }
+
+    #[test]
+    fn dimension_sampler_publishes_all_seven_dimension_families() {
+        let mut catalog = SampleCatalogState::default();
+        let coordinator = catalog
+            .open_key(SampleId::ConstraintSampler.key())
+            .expect("constraint and dimension sampler");
+        let document = coordinator.session().design_document();
+        assert_eq!(document.dimensions().len(), 7);
+        assert_eq!(
+            document
+                .dimensions()
+                .iter()
+                .filter(|dimension| matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::PointDistance { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            document
+                .dimensions()
+                .iter()
+                .filter(|dimension| matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::CurveLength { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            document
+                .dimensions()
+                .iter()
+                .filter(|dimension| matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::Radius { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            document
+                .dimensions()
+                .iter()
+                .filter(|dimension| matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::Diameter { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            document
+                .dimensions()
+                .iter()
+                .filter(|dimension| matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::OrientedAngle { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            document
+                .dimensions()
+                .iter()
+                .filter(|dimension| matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::SupportingLineOffset { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            document
+                .dimensions()
+                .iter()
+                .filter(|dimension| matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. }
+                ))
+                .count(),
+            1
+        );
+        assert!(document.dimensions().iter().any(|dimension| {
+            dimension.mode == geosolve_sketch::DocumentDimensionMode::Reference
+        }));
+
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted dimension sampler");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            document,
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 15.0).expect("dimension sampler viewport"),
+            0.25,
+        )
+        .expect("dimension sampler scene");
+        let kinds = scene
+            .annotations
+            .iter()
+            .filter_map(|annotation| match annotation.kind {
+                SceneAnnotationKind::Constraint(_) => None,
+                kind => Some(kind),
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            kinds,
+            BTreeSet::from([
+                SceneAnnotationKind::PointDistance,
+                SceneAnnotationKind::CurveLength,
+                SceneAnnotationKind::Radius,
+                SceneAnnotationKind::Diameter,
+                SceneAnnotationKind::OrientedAngle,
+                SceneAnnotationKind::SupportingLineOffset,
+                SceneAnnotationKind::ExactTranslatedSegmentOffset,
+            ])
+        );
+    }
+
+    #[test]
+    fn contextual_annotation_sampler_publishes_all_twenty_glyph_categories() {
+        let mut catalog = SampleCatalogState::default();
+        let coordinator = catalog
+            .open_key(SampleId::ContextualAnnotations.key())
+            .expect("contextual annotation sampler");
+        let document = coordinator.session().design_document();
+        assert_eq!(document.constraints().len(), 20);
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted contextual annotation sampler");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            document,
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 13.0)
+                .expect("contextual annotation sampler viewport"),
+            0.25,
+        )
+        .expect("contextual annotation sampler scene");
+        let glyphs = scene
+            .annotations
+            .iter()
+            .filter_map(|annotation| match annotation.kind {
+                SceneAnnotationKind::Constraint(glyph) => Some(glyph),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            glyphs,
+            BTreeSet::from([
+                SceneConstraintGlyph::Fixed,
+                SceneConstraintGlyph::Coincident,
+                SceneConstraintGlyph::Horizontal,
+                SceneConstraintGlyph::Vertical,
+                SceneConstraintGlyph::PointOnCurve,
+                SceneConstraintGlyph::Parallel,
+                SceneConstraintGlyph::Perpendicular,
+                SceneConstraintGlyph::Concentric,
+                SceneConstraintGlyph::Collinear,
+                SceneConstraintGlyph::EqualLength,
+                SceneConstraintGlyph::EqualRadius,
+                SceneConstraintGlyph::Midpoint,
+                SceneConstraintGlyph::Symmetry,
+                SceneConstraintGlyph::Contact,
+                SceneConstraintGlyph::Tangency,
+                SceneConstraintGlyph::Direction,
+                SceneConstraintGlyph::Normal,
+                SceneConstraintGlyph::EqualCurvature,
+                SceneConstraintGlyph::Continuity,
+                SceneConstraintGlyph::Fillet,
+            ])
+        );
     }
 
     #[test]
