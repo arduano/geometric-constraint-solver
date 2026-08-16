@@ -6,15 +6,15 @@ Status: **M74 is complete under the supervising caller's scoped close decision o
 The exact clean gate, independent review, immutable snapshot, served-byte verification and exact
 final GitHub Pages publication are accepted as closing evidence. U1-U8 remain intentionally
 deferred to the next bug-fixing/UAT follow-up milestone and are not claimed as manually passed;
-that milestone remains unstarted.
+that milestone is now active as M75.
 
 Candidate source: `55693372bea4759c9a67eee14f1af3d6a9e0690c`
 
 Candidate tree: `866fbf8b58ec19e72cbe6936e06f3615dba2f692`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
+Tailscale endpoint at M74 nomination: `http://100.94.63.83:8080/` (now serves M75)
 
-Server PID: `2599593`
+Historical server PID: `2599593` (retired when M75 was nominated)
 
 Immutable snapshot: `/tmp/geosolve-m74-uat.jFfAm4` (directory `0555`, files `0444`)
 

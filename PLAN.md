@@ -4566,7 +4566,7 @@ Status: **complete under the supervising caller's scoped close decision on 2026-
 implementation, automated/review evidence, complete clean release gate, immutable Tailscale
 candidate and exact final GitHub Pages publication pass. M74-U1 through M74-U8 remain deferred,
 not passed, and transfer with any findings to the next bug-fixing/UAT follow-up milestone, which
-remains unstarted. `docs/M74_GOALS.md` owns the detailed scope.
+was unstarted at M74 close and is now active as M75. `docs/M74_GOALS.md` owns the detailed scope.
 
 - [x] Approve and record the M74 datum, inference and desktop-polish scope without activating
   draft-v5 as a supported persistence language.
@@ -4668,9 +4668,10 @@ manifest aggregate `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97
 The public root and all seven files return HTTP 200 and match that artifact byte-for-byte; `/`
 equals `index.html`, application assets use `/geometric-constraint-solver/`, media types are
 correct, and the public M72 compatibility and M74 Chromium checks pass at `1440x900` and
-`1024x720`. The still-live Tailscale snapshot remains accepted frozen-candidate evidence, not
-public-byte authority. With this publication verified, every M74 gate is complete under the scoped
-close decision; U1-U8 and any future findings remain deferred to the unstarted follow-up milestone.
+`1024x720`. The frozen Tailscale snapshot remains accepted candidate evidence but was retired from
+service when M75 was nominated; it is not public-byte authority. With this publication verified,
+every M74 gate is complete under the scoped close decision; U1-U8 and any future findings remain
+deferred to the now-active M75 follow-up.
 
 Gate: intrinsic datums remain permanent but identity-free; their ordinary relations solve, audit
 and follow lifecycle; headless picking/inference owns the exact priority and tolerance policy; the
@@ -4680,9 +4681,9 @@ UAT; and the accepted source is exact-verified by the final Pages publication.
 
 ### M75: Select hover and primary pointer-owner parity
 
-Status: **active; implementation and prequalification complete as of 2026-08-16, with clean
-candidate qualification and human UAT pending**. This milestone makes Select hover predict the
-exact primary owner that the same pointer sample would
+Status: **active; implementation, clean qualification and immutable Tailscale nomination complete
+as of 2026-08-16, with human UAT pending**. This milestone makes Select hover predict the exact
+primary owner that the same pointer sample would
 receive on pointer-down, then executes the deferred M74-U1 through M74-U8 scorecard beside the new
 hover review. `docs/M75_GOALS.md` owns the detailed scope.
 
@@ -4707,7 +4708,7 @@ hover review. `docs/M75_GOALS.md` owns the detailed scope.
 - [x] Limit additive public compatibility surface to problem-aware pointer-move wrappers over
   existing DTOs; use existing lifecycle paths for host-side remaps and add no new persistence,
   solver, equation or browser-authority API.
-- [ ] Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant
+- [x] Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant
   native/WASM checks, unchanged golden check/clean, Trunk release assembly and the complete clean
   release gate; freeze and byte-verify an immutable Tailscale candidate.
 - [ ] Complete `docs/M75_UAT.md` at both desktop sizes and multiple zoom/tolerance fringes,
@@ -4720,9 +4721,19 @@ Implementation checkpoint (2026-08-16): the shared resolver, problem-aware wrapp
 ties, selection/lifecycle invalidation, authoring ownership and headless-only browser paint are
 implemented. Focused native/WASM parity passes 9/9, 339 editor unit tests plus all integration/doc
 tests pass, and 116 web tests, the locked all-feature workspace suite, warnings-denied workspace
-Clippy, WASM check, unchanged 270-row golden check and Trunk release build pass. Clean-gate,
-immutable candidate, human UAT and public publication remain pending; the accepted M74 Pages
-artifact remains the product baseline.
+Clippy, WASM check, unchanged 270-row golden check and Trunk release build pass.
+
+Mechanical nomination checkpoint (2026-08-16): exact clean product source
+`f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
+`7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete clean release gate. The exact
+gate-produced seven-file distribution was copied without rebuilding to read-only
+`/tmp/geosolve-m75-uat.hUSaG7`, C-locale ordered-manifest aggregate
+`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`, and is served by PID
+`3757674` at `http://100.94.63.83:8080/`. Proxy/cache-bypassed identity requests verify every file
+and `/` byte-for-byte with exact lengths and media types; `/` equals `index.html`, and both the M72
+compatibility and M74 Chromium checks pass at `1440x900` and `1024x720`. This is mechanical M75
+nomination only: M74-U1 through M74-U8 and M75-U9 through M75-U12 remain pending, GitHub Pages
+continues to serve accepted M74, and no M75 acceptance or closure is claimed.
 
 Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
 its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other

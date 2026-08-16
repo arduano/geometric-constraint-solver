@@ -6,7 +6,7 @@ Status: **complete under the supervising caller's scoped close decision on 2026-
 Point-pair symmetry across intrinsic axes passes focused native/WASM and complete clean release
 qualification, its immutable Tailscale candidate is byte-verified, and exact final GitHub Pages
 publication passes. M74-U1 through M74-U8 and any findings remain deferred to the next
-bug-fixing/UAT follow-up milestone, which remains unstarted.
+bug-fixing/UAT follow-up milestone, which is now active as M75.
 
 Architecture decision: no new ADR is currently required. Intrinsic datums extend the ordinary
 sketch/editor model within the retained-authoring and accepted-scene boundaries. Canonical sketch
@@ -269,7 +269,8 @@ are regular, non-symlink files.
 The C-locale `sha256sum * | sha256sum` aggregate is
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`.
 
-PID `2599593` serves only this snapshot at `http://100.94.63.83:8080/` with exact argv:
+At M74 nomination, PID `2599593` served only this snapshot at
+`http://100.94.63.83:8080/` with exact argv:
 
 ```text
 python3 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m74-uat.jFfAm4
@@ -292,7 +293,8 @@ Their SHA-256 values remain
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc` respectively. This candidate
 is the accepted closing product candidate; the historical initial M74 snapshot remains read-only
-but unserved.
+and unserved. PID `2599593` was retired when M75 was nominated; the F001 snapshot also remains
+read-only and unserved.
 
 ## 6. Scoped closure and deferred UAT
 
@@ -354,9 +356,10 @@ license responses also have exact lengths and expected media types. The reviewed
 and M74 reference-UX Chromium scripts pass against the public URL at `1440x900` and `1024x720`
 with no console or page errors.
 
-The still-live Tailscale distribution remains the accepted immutable frozen-candidate snapshot;
-the downloaded hosted artifact above is public-byte authority, and no Tailscale/Pages byte identity
-is claimed. Hands-on UAT remains deferred exactly as recorded in section 6.
+The frozen M74 Tailscale distribution remains accepted immutable candidate evidence but was
+retired from service when M75 was nominated. The downloaded hosted artifact above is public-byte
+authority, and no Tailscale/Pages byte identity is claimed. Hands-on UAT remains deferred exactly
+as recorded in section 6.
 
 ## 8. Compatibility result
 

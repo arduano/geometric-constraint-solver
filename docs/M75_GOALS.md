@@ -2,9 +2,9 @@
 
 # M75 — Select hover and primary pointer-owner parity
 
-Status: **active; implementation and prequalification complete as of 2026-08-16**. This document
-freezes the approved contract. Clean candidate qualification, immutable publication, human review
-and the public artifact remain pending.
+Status: **active; implementation, clean qualification and immutable Tailscale nomination complete
+as of 2026-08-16**. This document freezes the approved contract. Human review and the public M75
+artifact remain pending.
 
 ## Goal
 
@@ -96,6 +96,17 @@ unexecuted and are not retroactively accepted by M74's scoped close decision.
   M74-U8 item and accessibility review. Keep the candidate live through follow-up fixes.
 - After explicit supervising-human approval, deploy the exact accepted source through GitHub
   Pages and verify the hosted artifact byte-for-byte before closing M75.
+
+Mechanical nomination record (2026-08-16): exact clean product source
+`f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
+`7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete release gate, including the
+unchanged 270-row golden oracle and native/WASM M75 parity. The gate-produced distribution was
+copied without rebuilding to seven-file read-only snapshot `/tmp/geosolve-m75-uat.hUSaG7`, whose
+C-locale ordered-manifest aggregate is
+`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`. PID `3757674` serves it at
+`http://100.94.63.83:8080/`; direct byte/media verification and both retained two-size Chromium
+checks pass. This record satisfies only the mechanical portion of M75-Q001. M74-U1 through M74-U8,
+M75-U9 through M75-U12, final human approval and GitHub Pages publication remain open.
 
 ## Acceptance
 

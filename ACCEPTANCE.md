@@ -1905,7 +1905,7 @@ Status: **complete under the supervising caller's scoped close decision on 2026-
 clean release gate, immutable served-byte checks and final GitHub Pages artifact verification pass
 for the datum-axis-symmetry replacement. M74-U1 through M74-U8 remain deferred rather than marked
 passed; their future execution and findings belong to the next bug-fixing/UAT follow-up milestone,
-which remains unstarted.
+which was unstarted at M74 close and is now active as M75.
 
 - Every sketch exposes immutable intrinsic Origin/X/Y datums with no persistent identity,
   variables, history, geometry counts or Fit contribution. They are selectable and inspectable;
@@ -1941,9 +1941,10 @@ Mechanical nomination result (2026-08-16): exact product source
 `55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
 `866fbf8b58ec19e72cbe6936e06f3615dba2f692`, passes the complete clean release gate. Its exact
 read-only seven-file snapshot `/tmp/geosolve-m74-uat.jFfAm4`, aggregate
-`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, is served and byte-verified
-at `http://100.94.63.83:8080/`. This satisfied mechanical nomination only; the human and public
-acceptance gates remained open at that checkpoint.
+`1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`, was served and
+byte-verified at `http://100.94.63.83:8080/` at nomination. It was retired from service when M75
+was nominated but remains read-only. This satisfied mechanical nomination only; the human and
+public acceptance gates remained open at that checkpoint.
 
 Scoped human result (2026-08-16): the supervising caller explicitly approved closing M74 from the
 existing automated, independent-review and frozen-artifact evidence without a separate hands-on
@@ -1958,14 +1959,14 @@ HTTP 200, match the downloaded artifact byte-for-byte, use repository-prefixed a
 and the expected media types, and `/` equals `index.html`. The artifact's C-locale manifest
 aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`; the public M72
 compatibility and M74 Chromium checks pass at both desktop sizes. Every M74 acceptance gate passes
-under the scoped decision; U1-U8 remain deferred and the follow-up milestone remains unstarted.
+under the scoped decision; U1-U8 remain deferred and are now carried by active M75.
 
 ## M75 acceptance: Select hover and primary pointer-owner parity
 
-Status: **active; implementation and prequalification complete as of 2026-08-16, with clean
-candidate qualification and all human evidence pending**. M75 owns the hands-on M74-U1 through
-M74-U8 carryover as well as the new hover/click parity contract. The accepted M74 public artifact
-remains the baseline; it is not M75 evidence.
+Status: **active; implementation, clean qualification and immutable Tailscale nomination complete
+as of 2026-08-16, with all human evidence pending**. M75 owns the hands-on M74-U1 through M74-U8
+carryover as well as the new hover/click parity contract. The accepted M74 public artifact remains
+the baseline; it is not M75 evidence.
 
 - For one finite Select pointer sample, headless hover prediction and primary pointer-down use the
   same candidates and exact order: applicable Fillet radius; draggable geometry consisting of
@@ -2012,8 +2013,17 @@ remains the baseline; it is not M75 evidence.
 
 Implementation record (2026-08-16): the headless/shared-resolution and thin-browser requirements
 are implemented. Focused native/WASM parity, editor/web/workspace tests, warnings-denied Clippy,
-WASM check, unchanged 270-row golden check and Trunk release assembly pass. No clean-gate source,
-tree, manifest, endpoint, UAT disposition or public deployment has yet been nominated for M75.
+WASM check, unchanged 270-row golden check and Trunk release assembly pass.
+
+Mechanical nomination result (2026-08-16): exact product source
+`f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
+`7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete clean release gate. Its exact
+read-only seven-file snapshot `/tmp/geosolve-m75-uat.hUSaG7`, C-locale ordered-manifest aggregate
+`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`, is served and byte-verified
+at `http://100.94.63.83:8080/` by PID `3757674`; the unchanged M72 compatibility and M74 Chromium
+checks pass at both desktop sizes. This satisfies mechanical nomination only. Every M74-U1 through
+M74-U8 carryover and M75-U9 through M75-U12 item remains pending, no supervising-human M75
+disposition exists, and GitHub Pages remains on accepted M74.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

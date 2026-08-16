@@ -6,7 +6,7 @@ Status: **complete under the supervising caller's scoped close decision on 2026-
 datum/reference scope, axis-symmetry follow-up, clean release qualification, immutable Tailscale
 candidate and exact final GitHub Pages publication pass. M74-U1 through M74-U8 remain deferred,
 not passed, and transfer with any findings to the next bug-fixing/UAT follow-up milestone, which
-remains unstarted.
+was unstarted at M74 close and is now active as M75.
 
 ## Goal
 

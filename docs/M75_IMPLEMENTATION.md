@@ -1,10 +1,11 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M75 implementation plan — Select hover and primary pointer-owner parity
+# M75 implementation — Select hover and primary pointer-owner parity
 
-Status: **implemented and prequalified as of 2026-08-16; clean candidate qualification, immutable
-Tailscale nomination and human UAT remain pending**. This ledger records the implemented ownership,
-compatibility boundary and evidence without claiming milestone acceptance or public publication.
+Status: **implemented, clean-qualified and nominated as an immutable Tailscale candidate as of
+2026-08-16; human UAT and public M75 publication remain pending**. This ledger records the
+implemented ownership, compatibility boundary and evidence without claiming milestone acceptance
+or public publication.
 
 Architecture decision: no new ADR is currently required. M75 consolidates existing editor-owned
 picking, annotation visibility and hover presentation within the accepted-scene boundary. It adds
@@ -166,17 +167,93 @@ problem forwarding, queued-context revocation and Fillet feature-authoring owner
 focused post-review matrix passes 9/9 natively, 9/9 under WASM and 116/116 in the demo-web crate;
 focused warnings-denied Clippy and the demo-web WASM check pass.
 
-The exact complete clean release gate and `--require-clean` qualification remain pending until the
-implementation/prequalification commit is clean. No immutable distribution or human result is
-claimed by these provisional results.
+### Clean candidate qualification
+
+Exact product source `f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
+`7662abc8b7c71130f54fbf2745afa60f0d286431`, was clean-qualified with:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The final complete run exited 0. It includes formatting and diff checks, warnings-denied workspace
+Clippy, locked all-feature workspace tests, the unchanged 270/270 golden `--require-clean` oracle,
+M70/M71/M74/M75 WASM suites, the demo-web WASM check, warnings-denied Rustdoc, benchmark
+compilation, M14/M32 performance, licensing and package-content checks, the release 256-moving-body
+sparse crossover in 138.09 seconds, and Trunk 0.21.14 release assembly. M75 parity passes 9/9
+natively and 9/9 under WASM; editor unit tests pass 339/339 and demo-web tests pass 116/116.
+
+Final M14 p95 measurements were 0.270/1.219/3.212 ms for small import/first solve/incremental edit
+and 1.165/61.579/140.789 ms for the corresponding medium operations, all below their budgets. M32
+p95 measurements were 0.192/0.479 ms for construction-offset load/edit, 0.187/0.358 ms for NURBS
+load/knot insertion, 20.017 ms for all-family profile analysis and 15.799 ms for the NURBS
+self-intersection profile; observed peak RSS was 10,488 KiB.
+
+The first clean-gate attempt passed every step through the 140.70-second crossover and package
+checks, then Trunk reported a transient `ENOENT` while copying its optimized WASM into `dist`. This
+was a build-pipeline `HARNESS_ERROR`, not candidate evidence: the same isolated Trunk command
+passed on the unchanged clean source, and the complete release gate above was rerun from the start
+and passed before any artifact was frozen.
+
+### Immutable Tailscale candidate
+
+The final successful gate's exact seven files were copied without rebuilding to
+`/tmp/geosolve-m75-uat.hUSaG7`. The directory is mode `0555`; every entry is a regular,
+non-symlink file at mode `0444`.
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 17,616 | `be4769bf0f57d1f27d7068e6e1e47a41305a320d08948fa306a38ca620db92b3` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-fc3fd24fd70a16aa.js` | 33,221 | `1e24182d7c61f3681b5fd62591a2f33b4ada6e3a1d3fd2fe884ad3484a2060bc` |
+| `geosolve-demo-web-fc3fd24fd70a16aa_bg.wasm` | 6,109,194 | `76944eddca4ca6c95ad967c0b5b8dc215d292ca07515740fe3914588c1f4f70b` |
+| `index.html` | 27,478 | `e00a829f0f954422fd9c5454110fd67d979b5fde42934ac230fbf34822c18430` |
+| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+
+The C-locale `sha256sum * | sha256sum` aggregate is
+`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`. Source `dist` was hashed
+before and after the copy, every source/snapshot pair compared equal, and the read-only snapshot
+aggregate was rechecked after its modes changed.
+
+PID `3757674`, retained in command-runner session `23697`, serves only this snapshot at
+`http://100.94.63.83:8080/` with exact argv:
+
+```text
+/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m75-uat.hUSaG7
+```
+
+The exact old M74 PID `2599593` was retired only after the M75 snapshot was complete; historical
+snapshot `/tmp/geosolve-m74-uat.jFfAm4` remains read-only and unserved. An initial detached M75
+server launch was reaped with its launcher, so its first verifier failed closed with `curl` status
+7 before transferring a file. The retained foreground server above was then started and every
+verification was rerun in a fresh evidence directory; candidate bytes were unchanged.
+
+Proxy/cache-bypassed, identity-encoded requests for `/` and all seven files return HTTP 200 with
+exact media types, content lengths and bytes, zero redirects and no content encoding. `/` equals
+`index.html`, and the fetched ordered aggregate matches the frozen aggregate. Successful HTTP
+evidence is retained at `/tmp/geosolve-m75-http-verify.iY4VKV`.
+
+The unchanged compatibility scripts pass directly over Tailscale at `1440x900` and `1024x720`:
+
+```text
+M72_BASE_URL=http://100.94.63.83:8080/ node /tmp/m72_full_browser_check.mjs
+M74_BASE_URL=http://100.94.63.83:8080/ node /tmp/m74_browser_check.mjs
+```
+
+Their SHA-256 values are
+`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
+`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc` respectively. These are M72
+and M74 regression smoke results, not synthetic M75 human UAT. GitHub Pages continues to serve the
+accepted M74 artifact and is not M75 authority during UAT.
 
 ## 7. Completion gates
 
-- Implement the shared resolver, problem-aware pointer-move wrappers, invalidation and browser
-  translation without changing the frozen semantics.
-- Pass focused native/WASM/web and proportional compatibility qualification with unchanged golden
-  bytes.
-- Pass the complete clean release gate and freeze its exact output as a read-only, byte-verified
+- The shared resolver, problem-aware pointer-move wrappers, invalidation and browser translation
+  are implemented without changing the frozen semantics.
+- Focused native/WASM/web and proportional compatibility qualification passes with unchanged
+  golden bytes.
+- The complete clean release gate passes and its exact output is the read-only, byte-verified
   Tailscale candidate kept live through follow-up UAT.
 - Complete `docs/M75_UAT.md`, including every deferred M74-U1 through M74-U8 item, the new ownership
   matrix, two desktop sizes, zoom/tolerance fringes and accessibility.

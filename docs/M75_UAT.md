@@ -2,19 +2,48 @@
 
 # M75 focused UAT — Select hover and primary pointer-owner parity
 
-Status: **not started; candidate and every human disposition are pending as of 2026-08-16**.
-GitHub Pages currently serves the accepted M74 artifact. Do not use it as M75 authority. Run this
-scorecard only after a clean-qualified immutable M75 Tailscale candidate is recorded below.
+Status: **clean-qualified immutable candidate nominated; human scorecard not started and every
+human disposition remains pending as of 2026-08-16**. GitHub Pages currently serves the accepted
+M74 artifact. Do not use it as M75 authority.
 
-Candidate source: **Pending**
+Candidate source: `f3affff1b62b1cb484a59647c4072c94c3b12ada`
 
-Candidate tree: **Pending**
+Candidate tree: `7662abc8b7c71130f54fbf2745afa60f0d286431`
 
-Tailscale endpoint: **Pending**
+Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Server PID: **Pending**
+Server PID: `3757674` (retained command-runner session `23697`)
 
-Immutable snapshot and ordered-manifest aggregate: **Pending**
+Immutable snapshot: `/tmp/geosolve-m75-uat.hUSaG7` (directory `0555`, files `0444`)
+
+Ordered-manifest aggregate:
+`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 17,616 | `be4769bf0f57d1f27d7068e6e1e47a41305a320d08948fa306a38ca620db92b3` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-fc3fd24fd70a16aa.js` | 33,221 | `1e24182d7c61f3681b5fd62591a2f33b4ada6e3a1d3fd2fe884ad3484a2060bc` |
+| `geosolve-demo-web-fc3fd24fd70a16aa_bg.wasm` | 6,109,194 | `76944eddca4ca6c95ad967c0b5b8dc215d292ca07515740fe3914588c1f4f70b` |
+| `index.html` | 27,478 | `e00a829f0f954422fd9c5454110fd67d979b5fde42934ac230fbf34822c18430` |
+| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+
+The exact clean command
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 at the candidate
+source. It includes formatting, warnings-denied workspace Clippy, locked all-feature tests,
+unchanged 270/270 golden `--require-clean`, native/WASM M75 9/9 parity, Rustdoc, benchmark
+compilation, M14/M32 performance, the 138.09-second 256-moving-body crossover,
+licensing/package checks and Trunk 0.21.14 release assembly. The gate output was copied without
+rebuilding and contains exactly seven regular non-symlink files.
+
+Proxy/cache-bypassed identity requests for all seven files and `/` return HTTP 200 with exact media
+types, lengths and bytes, no redirect or content encoding; `/` equals `index.html`, and the fetched
+aggregate matches. Evidence is retained at `/tmp/geosolve-m75-http-verify.iY4VKV`. The unchanged
+M72 compatibility and M74 Chromium scripts pass at `1440x900` and `1024x720`; their SHA-256 values
+are `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
+`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`. These mechanical checks do
+not dispose any human scorecard item.
 
 Direct Rust/WASM tests will own exact precedence, distance comparisons, boundary equality,
 mutation freedom and invalidation. Human UAT judges whether hover truthfully predicts a click,
@@ -250,6 +279,7 @@ New M75 items:
 - M75-U12: **Pending**.
 - Final M75 approval: **Pending**.
 
-Do not mark any item passed from automated evidence alone. Record the exact nominated source/tree,
-immutable manifest, endpoint, findings, fixes/requalification, supervising-human disposition and
-final public artifact only after those events occur.
+Do not mark any item passed from automated evidence alone. The exact nominated source/tree,
+immutable manifest and endpoint are recorded above; add findings, any replacement
+fix/requalification, supervising-human disposition and final public artifact only after those
+events occur.
