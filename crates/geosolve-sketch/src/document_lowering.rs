@@ -1318,6 +1318,15 @@ fn lower_constraint(
             runtime_point(mappings, *second)?,
             runtime_segment(mappings, *line)?,
         )?,
+        C::SymmetricAboutDatumAxis {
+            first,
+            second,
+            axis,
+        } => sketch.add_symmetric_about_datum_axis(
+            runtime_point(mappings, *first)?,
+            runtime_point(mappings, *second)?,
+            *axis,
+        )?,
         C::LineCircleTangency {
             line_contact,
             circle_contact,

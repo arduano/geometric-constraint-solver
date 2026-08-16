@@ -2708,6 +2708,46 @@ pub(crate) struct SymmetryResidual {
     pub(crate) line_end: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct DatumAxisSymmetryResidual {
+    pub(crate) axis: crate::DocumentCoordinateAxis,
+}
+
+impl DatumAxisSymmetryResidual {
+    const fn coordinates(self) -> (usize, usize) {
+        match self.axis {
+            crate::DocumentCoordinateAxis::X => (1, 0),
+            crate::DocumentCoordinateAxis::Y => (0, 1),
+        }
+    }
+}
+
+impl ResidualEvaluator for DatumAxisSymmetryResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let (first, second) = two_points(variables, "datum-axis symmetry")?;
+        let (normal_coordinate, tangent_coordinate) = self.coordinates();
+        Ok(vec![
+            0.5 * (first[normal_coordinate] + second[normal_coordinate]),
+            second[tangent_coordinate] - first[tangent_coordinate],
+        ])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        two_points(variables, "datum-axis symmetry")?;
+        let (normal_coordinate, tangent_coordinate) = self.coordinates();
+        let mut first = vec![0.0; 4];
+        let mut second = vec![0.0; 4];
+        first[normal_coordinate] = 0.5;
+        second[normal_coordinate] = 0.5;
+        first[2 + tangent_coordinate] = -1.0;
+        second[2 + tangent_coordinate] = 1.0;
+        Ok(vec![
+            LocalJacobian::new(2, 2, first),
+            LocalJacobian::new(2, 2, second),
+        ])
+    }
+}
+
 impl ResidualEvaluator for SymmetryResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
         let values = self.values(variables)?;

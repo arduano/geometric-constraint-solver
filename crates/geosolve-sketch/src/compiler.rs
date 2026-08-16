@@ -25,16 +25,16 @@ use crate::residuals::{
     AxisDifferenceResidual, AxisDimensionResidual, AxisMidpointResidual, BezierIncidence,
     CircleArcTangencyResidual, CircleTangencyResidual, CircularArcLengthResidual,
     CircularSweepResidual, CoincidentResidual, CollinearResidual, ConicPropertyResidual,
-    ConicPropertyResidualKind, CurveParameterIncidence, DatumLineCollinearResidual,
-    DistanceResidual, EqualAngleResidual, EqualDistanceResidual, ExternalLineCollinearResidual,
-    FixedCoordinateResidual, GenericCurveDirectionResidual, GenericCurveFilletResidual,
-    GenericCurveIncidence, GenericCurvePairResidual, GenericEndpointContinuityResidual,
-    GenericEqualCurvatureResidual, GenericPathLengthResidual, GenericPointOnCurveResidual,
-    LineBezierTangencyResidual, LineCircleTangencyResidual, LineOffsetResidual,
-    LineOffsetResidualMode, M38DimensionResidual, MidpointResidual, NurbsWeightIncidence,
-    OrientedAngleResidual, PointOnBezierResidual, PointOnCircleResidual, PointOnLineResidual,
-    PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual, SegmentPairEquation,
-    SegmentPairResidual, SymmetryResidual,
+    ConicPropertyResidualKind, CurveParameterIncidence, DatumAxisSymmetryResidual,
+    DatumLineCollinearResidual, DistanceResidual, EqualAngleResidual, EqualDistanceResidual,
+    ExternalLineCollinearResidual, FixedCoordinateResidual, GenericCurveDirectionResidual,
+    GenericCurveFilletResidual, GenericCurveIncidence, GenericCurvePairResidual,
+    GenericEndpointContinuityResidual, GenericEqualCurvatureResidual, GenericPathLengthResidual,
+    GenericPointOnCurveResidual, LineBezierTangencyResidual, LineCircleTangencyResidual,
+    LineOffsetResidual, LineOffsetResidualMode, M38DimensionResidual, MidpointResidual,
+    NurbsWeightIncidence, OrientedAngleResidual, PointOnBezierResidual, PointOnCircleResidual,
+    PointOnLineResidual, PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual,
+    SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
 };
 
 /// Temporary point target supplied for one solve only.
@@ -4286,6 +4286,51 @@ fn compile_constraint(
                     coordinate,
                     target: 0.0,
                 },
+            )?;
+            (label, residual)
+        }
+        SketchConstraintKind::SymmetricAboutDatumAxis {
+            first,
+            second,
+            axis,
+        } => {
+            let first_name = sketch.point_name(first)?;
+            let second_name = sketch.point_name(second)?;
+            let (datum_name, normal_coordinate_name, tangent_coordinate_name) = match axis {
+                crate::DocumentCoordinateAxis::X => ("X axis", "y", "x"),
+                crate::DocumentCoordinateAxis::Y => ("Y axis", "x", "y"),
+            };
+            let label = format!(
+                "constraint {}: {first_name} and {second_name} symmetric about {datum_name}",
+                constraint.ordinal()
+            );
+            let source_id = problem.add_source(SourceConstraint::new(&label)?);
+            let mut bindings = pair_bindings(first_name, second_name);
+            bindings.push(AuditBinding::new("datum axis", datum_name));
+            let residual = ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                vec![
+                    point_variable(point_variables, first)?,
+                    point_variable(point_variables, second)?,
+                ],
+                2,
+                vec![scale, scale],
+                vec![
+                    audit_row(
+                        format!(
+                            "(({first_name}.{normal_coordinate_name} + {second_name}.{normal_coordinate_name}) / 2 - {datum_name}.{normal_coordinate_name}) / model_scale"
+                        ),
+                        bindings.clone(),
+                    ),
+                    audit_row(
+                        format!(
+                            "({second_name}.{tangent_coordinate_name} - {first_name}.{tangent_coordinate_name}) / model_scale"
+                        ),
+                        bindings,
+                    ),
+                ],
+                DatumAxisSymmetryResidual { axis },
             )?;
             (label, residual)
         }

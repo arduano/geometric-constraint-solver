@@ -595,6 +595,12 @@ pub enum SketchConstraintKind {
         second: PointId,
         line: SegmentId,
     },
+    /// Two native points reflected across an intrinsic Cartesian datum axis.
+    SymmetricAboutDatumAxis {
+        first: PointId,
+        second: PointId,
+        axis: crate::DocumentCoordinateAxis,
+    },
     PointSymmetry {
         first: PointId,
         second: PointId,
@@ -1437,6 +1443,26 @@ impl Sketch {
         }))
     }
 
+    /// Constrains two points to be mirror images across an intrinsic Cartesian datum axis.
+    ///
+    /// # Errors
+    /// Returns an error for missing or repeated point identities.
+    pub fn add_symmetric_about_datum_axis(
+        &mut self,
+        first: PointId,
+        second: PointId,
+        axis: crate::DocumentCoordinateAxis,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_point_pair(first, second)?;
+        Ok(
+            self.insert_constraint(SketchConstraintKind::SymmetricAboutDatumAxis {
+                first,
+                second,
+                axis,
+            }),
+        )
+    }
+
     /// Equates two point-pair distances without introducing a target dimension.
     ///
     /// # Errors
@@ -2191,7 +2217,8 @@ fn constraint_references_point(
         | SketchConstraintKind::PointOnDatumAxis { point: id, .. } => id == point,
         SketchConstraintKind::Coincident { first, second }
         | SketchConstraintKind::HorizontalPoints { first, second }
-        | SketchConstraintKind::VerticalPoints { first, second } => {
+        | SketchConstraintKind::VerticalPoints { first, second }
+        | SketchConstraintKind::SymmetricAboutDatumAxis { first, second, .. } => {
             first == point || second == point
         }
         SketchConstraintKind::Horizontal { segment }

@@ -535,6 +535,9 @@ fn relation_kind(definition: &DocumentConstraintDefinition) -> &'static str {
         DocumentConstraintDefinition::EqualRadius { .. } => "equal_circle_radius",
         DocumentConstraintDefinition::Midpoint { .. } => "midpoint_on_line",
         DocumentConstraintDefinition::SymmetricAboutLine { .. } => "symmetric_points_about_line",
+        DocumentConstraintDefinition::SymmetricAboutDatumAxis { .. } => {
+            "symmetric_points_about_datum_axis"
+        }
         DocumentConstraintDefinition::LineCircleTangency { .. } => "line_circle_tangency",
         DocumentConstraintDefinition::CircleCircleTangency { .. } => "circle_circle_tangency",
         DocumentConstraintDefinition::CircleArcTangency { .. } => "circle_arc_tangency",

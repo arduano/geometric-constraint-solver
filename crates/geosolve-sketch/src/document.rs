@@ -1114,6 +1114,12 @@ pub enum DocumentConstraintDefinition {
         second: DesignPointId,
         line: CurveSpan,
     },
+    /// Constrains two stored points to be reflections across an intrinsic Cartesian datum axis.
+    SymmetricAboutDatumAxis {
+        first: DesignPointId,
+        second: DesignPointId,
+        axis: DocumentCoordinateAxis,
+    },
     LineCircleTangency {
         line_contact: ContactId,
         circle_contact: ContactId,
@@ -2803,7 +2809,8 @@ impl TryFrom<&DocumentConstraintDefinition> for DocumentConstraintDefinitionV4 {
             | C::Collinear { .. } => return Err(DocumentError::UnsupportedM71State),
             C::CoincidentWithOrigin { .. }
             | C::PointOnDatumAxis { .. }
-            | C::CollinearWithDatumAxis { .. } => {
+            | C::CollinearWithDatumAxis { .. }
+            | C::SymmetricAboutDatumAxis { .. } => {
                 return Err(DocumentError::UnsupportedM74State);
             }
         })
@@ -3256,6 +3263,11 @@ enum DraftRetainedPlanarConstraintDefinition {
         line: DocumentLineSupportRef,
         axis: DocumentCoordinateAxis,
     },
+    SymmetricAboutDatumAxis {
+        first: DesignPointId,
+        second: DesignPointId,
+        axis: DocumentCoordinateAxis,
+    },
 }
 
 impl DraftRetainedPlanarConstraint {
@@ -3288,6 +3300,15 @@ impl DraftRetainedPlanarConstraint {
             DocumentConstraintDefinition::CollinearWithDatumAxis { line, axis } => {
                 DraftRetainedPlanarConstraintDefinition::CollinearWithDatumAxis { line, axis }
             }
+            DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                first,
+                second,
+                axis,
+            } => DraftRetainedPlanarConstraintDefinition::SymmetricAboutDatumAxis {
+                first,
+                second,
+                axis,
+            },
             _ => return None,
         };
         Some(Self {
@@ -3330,6 +3351,15 @@ impl From<DraftRetainedPlanarConstraint> for DocumentConstraint {
             DraftRetainedPlanarConstraintDefinition::CollinearWithDatumAxis { line, axis } => {
                 DocumentConstraintDefinition::CollinearWithDatumAxis { line, axis }
             }
+            DraftRetainedPlanarConstraintDefinition::SymmetricAboutDatumAxis {
+                first,
+                second,
+                axis,
+            } => DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                first,
+                second,
+                axis,
+            },
         };
         Self {
             id: value.id,
@@ -10554,7 +10584,9 @@ impl SketchDocument {
             C::Horizontal { line } | C::Vertical { line } => {
                 self.validate_line_span(*line)?;
             }
-            C::HorizontalPoints { first, second } | C::VerticalPoints { first, second } => {
+            C::HorizontalPoints { first, second }
+            | C::VerticalPoints { first, second }
+            | C::SymmetricAboutDatumAxis { first, second, .. } => {
                 self.require_distinct_points(*first, *second)?;
             }
             C::HorizontalPointToMidpoint { point, line }
@@ -12173,6 +12205,7 @@ const fn is_retained_planar_constraint(definition: &DocumentConstraintDefinition
             | DocumentConstraintDefinition::Concentric { .. }
             | DocumentConstraintDefinition::Collinear { .. }
             | DocumentConstraintDefinition::CollinearWithDatumAxis { .. }
+            | DocumentConstraintDefinition::SymmetricAboutDatumAxis { .. }
     )
 }
 
@@ -12182,6 +12215,7 @@ const fn is_datum_constraint(definition: &DocumentConstraintDefinition) -> bool 
         DocumentConstraintDefinition::CoincidentWithOrigin { .. }
             | DocumentConstraintDefinition::PointOnDatumAxis { .. }
             | DocumentConstraintDefinition::CollinearWithDatumAxis { .. }
+            | DocumentConstraintDefinition::SymmetricAboutDatumAxis { .. }
     )
 }
 
@@ -12404,6 +12438,7 @@ fn constraint_references_object(
             DocumentConstraintDefinition::Coincident { first, second }
             | DocumentConstraintDefinition::HorizontalPoints { first, second }
             | DocumentConstraintDefinition::VerticalPoints { first, second }
+            | DocumentConstraintDefinition::SymmetricAboutDatumAxis { first, second, .. }
             | DocumentConstraintDefinition::SymmetricAboutLine { first, second, .. },
             DocumentObjectId::Point(selected),
         ) => *first == selected || *second == selected,
