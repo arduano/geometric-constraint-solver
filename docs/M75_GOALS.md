@@ -190,9 +190,10 @@ Post-F002 replacement qualification/nomination record (2026-08-16): exact clean 
 including demo-web 117/117, M75 native/WASM 11/11, unchanged 270/270 golden, the 141.82-second
 sparse crossover and Trunk. The exact seven-file gate output was frozen without rebuilding to
 `/tmp/geosolve-m75-f002-uat.hlSQYT` at directory mode `0555`/file mode `0444`, ordered aggregate
-`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`. PID `37152` serves it at
+`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`. PID `37152` served it at
 `http://100.94.63.83:8080/` with log `/tmp/geosolve-m75-f002-uat.hlSQYT.server.log`; old PID
-`4026985` is retired. HTTP evidence `/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies exact
+`4026985` was already retired. PID `37152` was subsequently retired before M76 took the shared
+endpoint. HTTP evidence `/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies exact
 status/media/length/bytes for `/` and all seven files, no redirect/content encoding, root equality
 and fetched aggregate. Tailscale M72/M74 checks pass at both desktop sizes with script hashes
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and

@@ -2072,8 +2072,9 @@ Post-F002 mechanical nomination result (2026-08-16): exact clean source
 demo-web 117/117, native/WASM M75 11/11, unchanged 270/270 golden, the 141.82-second sparse
 crossover and Trunk. Its exact no-rebuild seven-file snapshot
 `/tmp/geosolve-m75-f002-uat.hlSQYT`, aggregate
-`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is served by PID `37152`
-at `http://100.94.63.83:8080/`; old PID `4026985` is retired. HTTP evidence
+`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, was served by PID `37152`
+at `http://100.94.63.83:8080/`; old PID `4026985` was already retired. PID `37152` was subsequently
+retired before M76 took the shared endpoint. HTTP evidence
 `/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies all seven files and `/` exactly, and Tailscale
 M72/M74 two-size plus M75 6/6 browser checks pass. At that nomination checkpoint this was
 mechanical UAT authority only; no M75 human item was disposed by this evidence, and explicit

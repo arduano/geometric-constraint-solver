@@ -2016,7 +2016,8 @@ Exact post-F002 source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
 demo-web 117/117, native/WASM M75 11/11, unchanged 270/270 golden, the 141.82-second sparse
 crossover and Trunk. Its no-rebuild read-only snapshot `/tmp/geosolve-m75-f002-uat.hlSQYT`,
 aggregate `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is byte-verified and
-served by PID `37152` at `http://100.94.63.83:8080/`; old PID `4026985` is retired. HTTP evidence is
+was served by PID `37152` at `http://100.94.63.83:8080/`; old PID `4026985` was already retired.
+PID `37152` was subsequently retired before M76 took the shared endpoint. HTTP evidence is
 retained at `/tmp/geosolve-m75-f002-http-verify.1nRxtz`. Tailscale M72/M74 checks pass at both sizes,
 and M75 script hash `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`
 passes 6/6 on the frozen bytes. This was current mechanical UAT authority at nomination. Automated

@@ -4797,8 +4797,9 @@ includes demo-web 117/117, M75 native/WASM 11/11, unchanged 270/270 golden, the 
 crossover and successful Trunk release assembly. Its exact seven-file output was frozen without
 rebuilding to read-only `/tmp/geosolve-m75-f002-uat.hlSQYT` (directory `0555`, files `0444`),
 ordered-manifest aggregate `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`.
-PID `37152` serves it at `http://100.94.63.83:8080/` with log
-`/tmp/geosolve-m75-f002-uat.hlSQYT.server.log`; old PID `4026985` is retired. HTTP evidence at
+PID `37152` served it at `http://100.94.63.83:8080/` with log
+`/tmp/geosolve-m75-f002-uat.hlSQYT.server.log`; old PID `4026985` was already retired. PID `37152`
+was subsequently retired before M76 took the shared endpoint. HTTP evidence at
 `/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies `/` and every file with HTTP 200, exact
 media/length/bytes, no redirect or content encoding, `/ == index.html` and a matching fetched
 aggregate. Tailscale Chromium checks pass M72 and M74 at both sizes with unchanged script hashes
@@ -4832,9 +4833,10 @@ aggregate `4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`. Th
 seven paths return HTTP 200 with zero redirects, exact media types/lengths/bytes and no content
 encoding; `/` equals `index.html`, asset URLs are repository-prefixed, and the public M72/M74
 two-size plus M75 6/6 Chromium checks pass. Evidence is retained at
-`/tmp/geosolve-m75-pages-verify.NkQwem`. GitHub Pages is final M75 public-byte authority; the live
-frozen Tailscale snapshot remains accepted candidate evidence. Every M75 gate is complete, and no
-later milestone is activated by this closeout.
+`/tmp/geosolve-m75-pages-verify.NkQwem`. GitHub Pages is final M75 public-byte authority; the frozen
+Tailscale snapshot remains accepted candidate evidence but is no longer served at the shared
+endpoint. Every M75 gate is complete. M76 was activated subsequently and does not change this
+closing evidence.
 
 Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
 its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other

@@ -345,16 +345,17 @@ non-symlink files at mode `0444`:
 | `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
 
 The C-locale ordered-manifest aggregate is
-`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`. PID `37152` serves only
+`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`. PID `37152` served only
 this snapshot at `http://100.94.63.83:8080/`; log
-`/tmp/geosolve-m75-f002-uat.hlSQYT.server.log` records the exact process. Its argv is:
+`/tmp/geosolve-m75-f002-uat.hlSQYT.server.log` records the exact historical process. Its argv was:
 
 ```text
 /nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m75-f002-uat.hlSQYT
 ```
 
-Old PID `4026985` was retired only after the new immutable snapshot and listener were verified. The
-F001 snapshot remains read-only and unserved. Proxy/cache-bypassed identity requests for `/` and all
+Old PID `4026985` was retired only after the new immutable snapshot and listener were verified. PID
+`37152` was subsequently retired before M76 took the shared endpoint. The F001 snapshot remains
+read-only and unserved. Proxy/cache-bypassed identity requests for `/` and all
 seven files return HTTP 200 with exact media types, content lengths and bytes, no redirect or
 content encoding; `/` equals `index.html` and the fetched aggregate matches. Evidence is retained
 at `/tmp/geosolve-m75-f002-http-verify.1nRxtz`.
