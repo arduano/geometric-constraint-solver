@@ -70,8 +70,11 @@ release output. That scoped approval closes M70B without claiming an unrecorded 
 of every prepared UAT step. M71-M74 are complete; M74 closes under explicit scoped approval of its
 clean-qualified frozen candidate and exact final Pages publication, while hands-on UAT remains
 deferred to the now-active M75 follow-up milestone. M75's initial immutable nomination was
-withdrawn after finding M75-F001; its authoring-hover correction is implemented and replacement
-qualification, combined human UAT and M75 Pages publication remain open. M66's
+withdrawn after finding M75-F001. Its authoring-hover correction then passed a clean replacement
+gate and immutable freeze, but focused browser qualification found M75-F002 where native SVG paint
+above a computed Fillet radius affordance hid that owner from both hover and pointer-down. The F002
+adapter correction and focused regression pass; post-F002 replacement qualification, combined
+human UAT and M75 Pages publication remain open. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4683,8 +4686,9 @@ UAT; and the accepted source is exact-verified by the final Pages publication.
 
 ### M75: hover and primary pointer-owner parity
 
-Status: **active; initial immutable nomination withdrawn after confirmed M75-F001, correction
-implemented and replacement qualification pending as of 2026-08-16**. This milestone makes Select
+Status: **active; the clean M75-F001 replacement was withdrawn after confirmed M75-F002, whose
+correction is implemented and focused-qualified pending post-F002 replacement nomination as of
+2026-08-16**. This milestone makes Select
 hover predict the exact primary owner that the same pointer sample would
 receive on pointer-down, then executes the deferred M74-U1 through M74-U8 scorecard beside the new
 hover review. Active relation/dimension and Fillet authoring additionally preview the exact
@@ -4708,6 +4712,9 @@ compatible operand or radius owner that unchanged pointer-down will consume.
 - [x] Correct finding M75-F001: share exact compatible native-candidate resolution between
   authoring hover and click, preserve wrong-kind overlap fallback, authenticate computed-radius
   intent through retained preview/scene/proximity checks, and prove hover mutation-free.
+- [x] Correct finding M75-F002: reconcile the complete Fillet-authoring browser paint stack with
+  the exact headless computed-radius owner for both hover and pointer-down, while retaining the
+  top painted item when no matching authenticated radius exists.
 - [x] Add focused native/WASM editor and thin web-adapter regressions for the complete precedence,
   problem visibility, deterministic ties, context-only corridors and invalidation matrix. Preserve
   all established hit tolerances, role ordering, solver/branch behavior, persistence schemas and
@@ -4718,8 +4725,10 @@ compatible operand or radius owner that unchanged pointer-down will consume.
 - [x] Pass the initial formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant
   native/WASM checks, unchanged golden check/clean, Trunk release assembly and the complete clean
   release gate; freeze and byte-verify the initial immutable Tailscale candidate.
-- [ ] Pass the same complete clean gate for the M75-F001 replacement; freeze, byte-verify and serve
-  a new immutable Tailscale candidate before resuming human UAT.
+- [x] Pass the same complete clean gate for the M75-F001 replacement; freeze and byte-verify the
+  immutable candidate. Focused browser qualification subsequently withdrew it after M75-F002.
+- [ ] Pass the complete clean gate for the post-F002 replacement; freeze, byte-verify and serve a
+  new immutable Tailscale candidate before resuming human UAT.
 - [ ] Complete `docs/M75_UAT.md` at both desktop sizes and multiple zoom/tolerance fringes,
   including every deferred M74-U1 through M74-U8 item, hover/click parity and accessibility, then
   receive explicit supervising-human approval.
@@ -4737,10 +4746,11 @@ Initial mechanical nomination checkpoint (2026-08-16; withdrawn for UAT by M75-F
 `7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete clean release gate. The exact
 gate-produced seven-file distribution was copied without rebuilding to read-only
 `/tmp/geosolve-m75-uat.hUSaG7`, C-locale ordered-manifest aggregate
-`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`, and is served by PID
-`3801058` at `http://100.94.63.83:8080/`. Proxy/cache-bypassed identity requests verify every file
-and `/` byte-for-byte with exact lengths and media types; `/` equals `index.html`, and both the M72
-compatibility and M74 Chromium checks pass at `1440x900` and `1024x720`. This is mechanical M75
+`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`, and was served by PID
+`3801058` at `http://100.94.63.83:8080/`; that PID has exited. Proxy/cache-bypassed identity
+requests verify every file and `/` byte-for-byte with exact lengths and media types; `/` equals
+`index.html`, and both the M72 compatibility and M74 Chromium checks pass at `1440x900` and
+`1024x720`. This is mechanical M75
 nomination only: M74-U1 through M74-U8 and M75-U9 through M75-U12 remain pending, GitHub Pages
 continues to serve accepted M74, and no M75 acceptance or closure is claimed.
 
@@ -4749,9 +4759,34 @@ clicks but discarded the corresponding uncaptured authoring moves, so no `geomet
 was painted. Ordinary relation/dimension authoring had the same omission. The correction shares
 the exact candidate resolver for move/down, carries computed-corner paint only as independently
 validated intent, and preserves captured radius movement. Focused native/WASM parity passes 11/11,
-demo-web tests pass 116/116 and focused warnings-denied Clippy passes. Replacement clean gate,
-freeze and Tailscale handover remain open; the old snapshot stays immutable and GitHub Pages stays
-on M74.
+demo-web tests pass 116/116 and focused warnings-denied Clippy passes.
+
+M75-F001 replacement qualification checkpoint (2026-08-16; withdrawn for UAT by M75-F002): exact
+clean product source `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`, tree
+`7bff59c5d4d36d1acb687a93d78707b32e323d65`, passes the complete release gate with native/WASM
+M75 parity 11/11, demo-web 116/116, unchanged 270-row golden and the 143.27-second sparse
+crossover. The exact gate-produced seven-file distribution was copied without rebuilding to
+read-only `/tmp/geosolve-m75-f001-uat.2Ju7gq`, ordered-manifest aggregate
+`9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`, and is temporarily served
+by PID `4026985` at `http://100.94.63.83:8080/`. Every file and `/` byte-matches with exact media
+types and lengths; the unchanged M72/M74 checks pass at both desktop sizes. This remains immutable
+mechanical evidence only and is not the current human-UAT authority.
+
+Finding M75-F002 checkpoint (2026-08-16): focused Chromium script
+`/tmp/m75_f001_browser_check.mjs` (SHA-256
+`4b8634c086730ad392e5e0aa466c7cc973ef7ec2b832a5f2651b9ac05fb2b87c`) passed five of six cases
+against that frozen candidate. At the `fillet-workshop` computed radius grip, a native point was
+painted above the correct `FeatureCorner`; the adapter forwarded only the point, hover selected an
+unrelated native curve and the unchanged press discarded the preview without capture. The
+correction inspects the complete paint stack only during uncaptured Fillet authoring and preserves
+the matching exact headless radius owner for move and down; the coordinator still authenticates
+preview, provenance, policy and proximity. Independent review also found the visible rail and
+spoke lacked an extractable owner; their shared affordance group now carries the same
+`FeatureCorner`. Demo-web tests pass 117/117, M75 native/WASM parity passes 11/11, focused
+warnings-denied Clippy, the WASM check, formatting and unchanged golden pass, and updated browser
+script SHA-256 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6 including
+grip, visible spoke and rail hover/capture/release. The complete clean post-F002 gate, immutable
+freeze and Tailscale handover remain open; GitHub Pages stays on M74.
 
 Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
 its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other

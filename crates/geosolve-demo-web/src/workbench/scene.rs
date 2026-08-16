@@ -1057,8 +1057,8 @@ fn render_fillet_affordances(
         let _ = write!(
             output,
             concat!(
-                "<g class=\"wb-fillet-radius-affordance\" data-feature-id=\"{}\" ",
-                "data-feature-corner-id=\"{}\">",
+                "<g class=\"wb-fillet-radius-affordance\" data-editor-item=\"feature-corner\" ",
+                "data-feature-id=\"{}\" data-feature-corner-id=\"{}\">",
                 "<path class=\"wb-fillet-radius-rail\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
                 "<path class=\"wb-fillet-radius-spoke\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
                 "<circle class=\"wb-fillet-radius-grip\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"6\" ",

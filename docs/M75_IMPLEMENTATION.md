@@ -2,10 +2,10 @@
 
 # M75 implementation — hover and primary pointer-owner parity
 
-Status: **M75-F001 correction implemented and focused-qualified as of 2026-08-16; replacement
-clean qualification and immutable nomination remain pending**. The initial candidate is retained
-as historical evidence but is withdrawn from hands-on UAT. This ledger records ownership,
-compatibility and evidence without claiming milestone acceptance or public publication.
+Status: **M75-F002 correction implemented and focused-qualified as of 2026-08-16; its complete
+clean qualification and immutable nomination remain pending**. The initial candidate and the
+clean-qualified M75-F001 replacement are retained as historical evidence but withdrawn from
+hands-on UAT. Every human item remains pending, and GitHub Pages remains on accepted M74.
 
 Architecture decision: no new ADR is currently required. M75 consolidates existing editor-owned
 picking, annotation visibility and hover presentation within the accepted-scene boundary. It adds
@@ -30,10 +30,14 @@ not publish a general-purpose hit-test framework or new public ownership type hi
 
 The web workbench continues to normalize browser coordinates and forward tool/camera/overlay
 transitions. It renders only the hover target, related operands and context supplied by the
-headless result. During computed-Fillet authoring, the coalesced pointer sample carries the exact
-painted item only as an intent hint; the coordinator independently reauthenticates retained
-preview ownership, scene provenance, geometry policy and proximity. Browser DOM/SVG targets,
-paint order, CSS `:hover` and local geometry checks cannot add or retain semantic hover state.
+headless result. During uncaptured computed-Fillet authoring, one move/down translation helper may
+enumerate the complete `elementsFromPoint` paint stack and retain the exact `FeatureCorner` already
+identified by a headless `SceneFilletHit::Radius`; otherwise it retains the top painted item. That
+item remains only an intent hint: the coordinator independently reauthenticates retained preview
+ownership, scene provenance, geometry policy and proximity. Browser DOM/SVG targets, paint order,
+CSS `:hover` and local geometry checks cannot add or retain semantic hover state.
+The pointer-active grip, rail and spoke inherit the same `FeatureCorner` identity from their
+radius-affordance group, so every visible headless radius surface can participate in translation.
 
 ### Unchanged domain owners
 
@@ -100,7 +104,10 @@ Fillet-radius gesture remains an editor-owned exception until its matching termi
 Uncaptured authoring movement is not discarded: the ordinary or grouped-Fillet owner publishes
 only the compatible native item that its unchanged press would consume. A current painted
 computed corner publishes its radius owner only after the same retained-preview/provenance checks
-as pointer-down and the same exact editor hit resolution as the radius gesture.
+as pointer-down and the same exact editor hit resolution as the radius gesture. When native SVG
+paint lies above that computed corner, the uncaptured Fillet-only adapter reconciliation supplies
+the matching headless radius owner to both paths. With no matching headless radius owner it leaves
+the top painted item as an untrusted hint rather than inventing browser-side precedence.
 
 ## 5. Focused regression plan
 
@@ -125,6 +132,10 @@ tests will reuse existing tolerances rather than update them.
 - Verify browser coordinates and current problems reach the headless wrapper unchanged.
 - Verify the workbench paints only the returned target/context and clears it synchronously on each
   invalidation trigger.
+- Verify a native point painted over the correct computed radius grip cannot hide the exact
+  headless `SceneFilletHit::Radius` owner from either move or unchanged down, that grip/rail/spoke
+  markup all extract the same `FeatureCorner`, and that a missing or foreign owner preserves the
+  top paint item only as an untrusted hint.
 - Verify overlay/focus and uncaptured letterbox routes jointly revoke the pending animation-frame
   sample, stationary pointer input and current headless context, while captured edge crossings are
   preserved.
@@ -189,10 +200,120 @@ cargo clippy --locked -p geosolve-constraint-editor \
   -- -D warnings                                               # pass
 ```
 
-The initial immutable snapshot stays untouched until a clean replacement is qualified. It is no
-longer a valid human-UAT candidate, and GitHub Pages remains on accepted M74.
+The initial immutable snapshot stays untouched as historical evidence. It is no longer a valid
+human-UAT candidate; the clean-qualified F001 replacement below has also been withdrawn by F002,
+and GitHub Pages remains on accepted M74.
 
-## 7. Initial qualification ledger (superseded by M75-F001)
+## 7. M75-F001 replacement qualification ledger (superseded by M75-F002)
+
+Exact clean product source `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`, tree
+`7bff59c5d4d36d1acb687a93d78707b32e323d65`, was qualified with:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The complete run exited 0. M75 parity passes 11/11 natively and 11/11 under WASM, demo-web tests
+pass 116/116, the reviewed golden remains unchanged at 270/270, and the sparse 256-moving-body
+crossover completes in 143.27 seconds. All remaining formatting, diff, warnings-denied Clippy,
+locked workspace, WASM, Rustdoc, benchmark, performance, licence/package and Trunk release-assembly
+steps in the gate pass.
+
+The gate-produced distribution was copied without rebuilding to
+`/tmp/geosolve-m75-f001-uat.2Ju7gq`. The directory is mode `0555`; its seven regular non-symlink
+files are mode `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 18,270 | `b2c503a0ca2ad33c0fcc137666a349a773630fb712a4cdd50f8fea64454614d0` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-41f4150de02af486.js` | 33,221 | `39eebb2d778b7470d0b2bd552ab7716cb12e38fe072bca05905e1f936fc81f09` |
+| `geosolve-demo-web-41f4150de02af486_bg.wasm` | 6,117,357 | `cc194398055211d420a82b058fb83cf3d3e2e54bcded5c6c5116cca086be3d7d` |
+| `index.html` | 27,478 | `fa50308533c8a98f2c8f37b63a72414ddba2f33d9a2f4339157779a7a2e875bc` |
+| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+
+Its C-locale ordered-manifest aggregate is
+`9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`. PID `4026985` serves that
+snapshot at `http://100.94.63.83:8080/`; its log is
+`/tmp/geosolve-m75-f001-uat.2Ju7gq.server.log`. The exact server argv is:
+
+```text
+/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m75-f001-uat.2Ju7gq
+```
+
+Proxy/cache-bypassed identity requests verify `/` and all seven files with HTTP 200, exact media
+types, lengths and bytes, no redirect or content encoding, `/ == index.html`, and a matching fetched
+aggregate. Evidence is retained at `/tmp/geosolve-m75-f001-http-verify.kXc5g5`. The unchanged M72
+and M74 Chromium scripts pass at `1440x900` and `1024x720`; their SHA-256 hashes are
+`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
+`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`.
+
+M75-F002 below withdraws this otherwise clean candidate from human UAT. Its snapshot and served
+bytes remain historical transport evidence only; GitHub Pages remains accepted M74 authority.
+
+## 8. Finding M75-F002 — top paint target hid the computed radius owner
+
+Exact reproduction uses the ordinary `fillet-workshop` scene. Collect point
+`6600000000000000000000000000004f` and curve `66000000000000000000000000000038`, then hover the
+computed-radius grip where a native point is painted above the correct `FeatureCorner`. The
+headless scene resolves that computed corner as `SceneFilletHit::Radius`, but the top-target-only
+adapter supplied native curve `66000000000000000000000000000052`. Hover therefore promised the
+wrong owner; pressing without moving destroyed the valid preview and did not capture a radius
+gesture. This is an adapter paint-stack defect, not a solver, feature, tolerance, scene-authority or
+coordinator-authentication failure.
+
+Independent adapter review reproduced a second surface of the same defect before commit: the
+pointer-active radius rail and spoke had no `data-editor-item` owner, so stack extraction returned
+no `FeatureCorner` even when the headless radius resolver accepted those visible surfaces.
+
+Correction:
+
+- Only while Fillet authoring owns uncaptured canvas input, the adapter enumerates the complete
+  `Document::elementsFromPoint` stack inside the workbench viewport.
+- One helper used by both pointer-move and pointer-down asks the headless scene for the exact
+  `SceneFilletHit::Radius` owner and selects its matching painted `FeatureCorner` wherever it occurs
+  in that stack.
+- The shared radius-affordance SVG group carries the existing `FeatureCorner` identity, allowing
+  grip, rail and spoke targets to extract the same owner without duplicating semantic policy.
+- If there is no matching headless radius owner, the helper returns the top painted item. It does
+  not promote a foreign computed item or create browser-side semantic precedence.
+- The coordinator remains final authority and repeats candidate, preview, accepted/design/computed
+  provenance, geometry-policy and exact-radius validation before hover or press can consume the
+  hint. Captured movement stays editor-owned.
+- Native presentation coverage freezes the radius-affordance owner attributes and all three
+  pointer-active surfaces in addition to the exact paint-order reconciliation regression.
+
+Focused correction evidence on the provisional implementation tree:
+
+```text
+cargo fmt --all -- --check                                      # pass
+git diff --check                                                # pass
+cargo test --locked -p geosolve-constraint-editor \
+  --test m75_hover_pointer_parity                               # 11 passed
+env NO_COLOR=true nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+   cargo test --locked -p geosolve-constraint-editor \
+   --test m75_hover_pointer_parity --target wasm32-unknown-unknown'
+                                                               # same 11 passed
+cargo test --locked -p geosolve-demo-web --lib                 # 117 passed
+cargo clippy --locked -p geosolve-constraint-editor \
+  -p geosolve-demo-web --all-targets --all-features \
+  -- -D warnings                                               # pass
+cargo check --locked -p geosolve-demo-web --all-features \
+  --target wasm32-unknown-unknown                              # pass
+./scripts/golden-authoring-scene-oracle.sh --check              # unchanged 270 rows
+```
+
+Focused Chromium script `/tmp/m75_f001_browser_check.mjs`, SHA-256
+`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes 6/6 against the
+provisional corrected local build. It covers Fillet point/curve hover and unchanged clicks,
+ordinary relation/dimension compatibility and fallback, empty/inapplicable clearing, and the
+computed-radius grip, visible spoke and rail hover/capture/release promise. This is provisional
+presentation evidence only. The complete clean F002 release gate, immutable freeze,
+HTTP/compatibility verification and replacement nomination remain pending before human UAT resumes.
+
+## 9. Initial qualification ledger (superseded by M75-F001)
 
 Prequalification evidence completed on the dirty implementation tree:
 
@@ -273,7 +394,7 @@ The C-locale `sha256sum * | sha256sum` aggregate is
 before and after the copy, every source/snapshot pair compared equal, and the read-only snapshot
 aggregate was rechecked after its modes changed.
 
-PID `3801058`, retained in command-runner session `47845`, serves only this snapshot at
+PID `3801058`, retained in command-runner session `47845`, served only this snapshot at
 `http://100.94.63.83:8080/` with exact argv:
 
 ```text
@@ -286,7 +407,8 @@ server launch was reaped with its launcher, so its first verifier failed closed 
 7 before transferring a file. The retained foreground server above was then started and every
 verification was rerun in a fresh evidence directory; candidate bytes were unchanged. The first
 retained process was subsequently reaped when its delegated command session ended before human
-handoff; PID `3801058` now serves the same revalidated read-only snapshot from the root session.
+handoff. PID `3801058` then served the same revalidated read-only snapshot from the root session;
+it has since exited after the F001 replacement occupied the endpoint.
 
 Proxy/cache-bypassed, identity-encoded requests for `/` and all seven files return HTTP 200 with
 exact media types, content lengths and bytes, zero redirects and no content encoding. `/` equals
@@ -306,7 +428,7 @@ Their SHA-256 values are
 and M74 regression smoke results, not synthetic M75 human UAT. GitHub Pages continues to serve the
 accepted M74 artifact and is not M75 authority during UAT.
 
-## 8. Completion gates
+## 10. Completion gates
 
 - The Select and authoring shared resolvers, pointer-move wrappers, invalidation and browser
   translation are implemented without changing the frozen semantics.
@@ -319,7 +441,7 @@ accepted M74 artifact and is not M75 authority during UAT.
 - Receive explicit supervising-human approval, deploy the exact accepted source through GitHub
   Pages, verify every hosted byte/media type and close M75.
 
-## 9. Compatibility and limitations
+## 11. Compatibility and limitations
 
 M75 is an additive pre-1.0 interaction correction. Public API growth is limited to problem-aware
 Select and domain-aware authoring pointer-move wrappers over existing DTOs. It does not activate

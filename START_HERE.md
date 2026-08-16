@@ -147,8 +147,12 @@ active M75. M75 unifies Select hover/primary pointer-down ownership and domain-a
 authoring hover/click ownership in the headless editor. Initial clean source
 `f3affff1b62b1cb484a59647c4072c94c3b12ada` and its immutable seven-file snapshot passed mechanical
 nomination, but M75-F001 withdrew that candidate after authoring moves were found to be discarded.
-The correction is implemented and focused-qualified; replacement nomination, every carried M74
-and new M75 human item remain pending, and GitHub Pages intentionally remains on accepted M74.
+The correction passed a clean replacement gate and immutable freeze. Focused browser qualification
+then opened M75-F002 because an overlying native SVG point hid the authenticated computed Fillet
+radius grip from hover and pointer-down; review extended the same owner across the visible rail and
+spoke. The complete-paint-stack correction is focused-qualified; post-F002 replacement nomination,
+every carried M74 and new M75 human item remain pending, and GitHub Pages intentionally remains on
+accepted M74.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -166,7 +170,7 @@ support and physics remain outside future acceptance.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
 11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — active hover/click
-    ownership milestone, M75-F001 replacement evidence and pending combined human scorecard.
+    ownership milestone, M75-F001/F002 replacement evidence and pending combined human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -451,10 +455,13 @@ resolver owns hover and primary pointer-down order, problem-forced annotations s
 hit path, context corridors remain targetless, and lifecycle changes revoke stale hover. Finding
 M75-F001 then showed that ordinary and Fillet authoring clicks accepted operands while uncaptured
 moves were discarded. The correction shares exact domain-aware candidate resolution for hover and
-click, including overlap fallback and authenticated computed-radius ownership, and passes focused
-native/WASM/web qualification. Replacement clean qualification and immutable Tailscale handover,
-human UAT and M75 Pages publication remain pending; the initial read-only snapshot is historical
-evidence only.
+click, including overlap fallback and authenticated computed-radius ownership, and passed a clean
+replacement gate and immutable freeze. Focused browser qualification found M75-F002 when a native
+SVG item painted above a computed radius grip hid the correct owner. The adapter now reconciles the
+full Fillet paint stack with the exact headless radius hit for both move and down, and gives the
+grip, rail and spoke one extractable owner; focused native/WASM/web/browser qualification passes.
+Post-F002 clean qualification and immutable Tailscale handover, human UAT and M75 Pages publication
+remain pending; both earlier read-only snapshots are historical evidence only.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

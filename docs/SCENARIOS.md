@@ -1342,8 +1342,10 @@ explicit scoped closure approval on its clean-qualified, byte-verified F001 repl
 hands-on intrinsic-datum and desktop-polish scorecard is intentionally deferred into the next
 bug-fixing/UAT follow-up milestone rather than claimed as completed human evidence. Exact final
 M74 Pages publication passes. That follow-up is active as M75: its initial immutable nomination was
-withdrawn after M75-F001, the authoring-hover correction is implemented, and replacement
-qualification plus every carried and new human disposition remain pending.
+withdrawn after M75-F001, the F001 replacement passed the complete clean gate and immutable
+nomination, and M75-F002 then withdrew it after browser paint order hid a valid computed-radius
+owner. The F002 correction is focused-qualified; its clean replacement qualification and every
+carried/new human disposition remain pending. GitHub Pages stays on accepted M74.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1873,8 +1875,8 @@ publication authority. U1-U8 and future findings are carried by active M75.
 
 ### M75-H1 - Select hover predicts the primary pointer-down owner
 
-Status: implemented and clean-qualified natively and under WASM on the initial candidate;
-replacement nomination after M75-F001 remains pending and hands-on evidence has not started.
+Status: implemented and clean-qualified natively and under WASM on both superseded candidates;
+replacement nomination after M75-F002 remains pending and hands-on evidence has not started.
 
 Construct finite accepted scenes whose projected hit envelopes overlap at every adjacent priority
 edge. For the same Select tool, scene, camera, problem set, policy and pointer coordinate, resolve
@@ -1897,8 +1899,8 @@ hover sample mutates accepted geometry, selection, history, Fillet state or scen
 
 ### M75-H2 - Problem annotations, deterministic occurrences and targetless context
 
-Status: implemented and clean-qualified natively and under WASM on the initial candidate;
-replacement nomination after M75-F001 remains pending and hands-on evidence has not started.
+Status: implemented and clean-qualified natively and under WASM on both superseded candidates;
+replacement nomination after M75-F002 remains pending and hands-on evidence has not started.
 
 Create one constraint and one dimension occurrence that are normally hidden but forced visible by
 the current problem set. Each visible occurrence participates in the same annotation hit path used
@@ -1916,8 +1918,8 @@ placement, visibility, fan-out and hit tolerances remain unchanged.
 
 ### M75-H3 - Hover authority is revoked with its interaction context
 
-Status: implemented and initially clean-qualified; replacement nomination after M75-F001 remains
-pending and hands-on evidence has not started.
+Status: implemented and clean-qualified on both superseded candidates; replacement nomination
+after M75-F002 remains pending and hands-on evidence has not started.
 
 Acquire each owner class, then change the active tool or selection, pan/zoom/Fit/Origin camera,
 replace the accepted scene through edit/Undo/Redo/reload, hide the relevant visibility class, or
@@ -1940,8 +1942,8 @@ change.
 
 ### M75-F001 - Active authoring hover matches its unchanged click
 
-Status: confirmed against the initial frozen candidate; corrected with native/WASM 11/11 parity;
-replacement clean qualification and immutable nomination remain pending.
+Status: confirmed against the initial frozen candidate; corrected with native/WASM 11/11 parity
+and a complete clean replacement gate. That replacement is withdrawn after M75-F002.
 
 Activate an ordinary relation/dimension tool and sample an applicable point or curve. Compare the
 read-only hover item to the operand consumed by the unchanged click resolver. Repeat with an
@@ -1960,6 +1962,46 @@ Every hover-only sequence preserves authoring state, preview candidate and snaps
 active gesture, history cursor/length, replay transcript, design/accepted documents and identities,
 feature identity and scene geometry. The browser RAF queue keeps the latest painted hint paired
 with the latest coalesced pointer coordinate; captured gestures remain editor-owned.
+
+Exact F001 replacement source `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`, tree
+`7bff59c5d4d36d1acb687a93d78707b32e323d65`, passes the complete gate with native/WASM M75 11/11,
+demo-web 116/116, unchanged 270-row golden evidence and a 143.27-second sparse crossover. Its
+read-only snapshot `/tmp/geosolve-m75-f001-uat.2Ju7gq`, aggregate
+`9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`, is byte-verified at the
+Tailscale endpoint. M75-F002 supersedes it before any human evidence.
+
+### M75-F002 - Computed-radius owner survives browser paint overlap
+
+Status: confirmed against the F001 replacement and corrected with focused native/WASM/web/browser
+evidence; the complete clean F002 gate and immutable replacement nomination remain pending.
+
+In the ordinary `fillet-workshop`, collect point `6600000000000000000000000000004f` and curve
+`66000000000000000000000000000038`, then sample the computed-radius grip where a native point
+paints above the correct `FeatureCorner`. The headless scene resolves the correct
+`SceneFilletHit::Radius`, but the former top-target-only adapter supplied native curve
+`66000000000000000000000000000052`; an unchanged press destroyed the valid preview and captured no
+radius gesture.
+
+The same adapter review must sample the visible radius rail and spoke. Both are pointer-active
+headless radius surfaces and therefore expose the same existing `FeatureCorner` identity as the
+grip; an identity-free rail/spoke target is the same F002 defect, not a new semantic owner.
+
+For uncaptured Fillet authoring only, move and down now share one adapter helper that enumerates the
+complete `elementsFromPoint` stack and reconciles the exact headless radius owner to its painted
+`FeatureCorner`. With no matching radius owner, it preserves the top painted item only as an intent
+hint and cannot promote a foreign computed item or create semantic browser precedence. The retained
+coordinator still authenticates candidate, preview, accepted/design/computed provenance, geometry
+policy and exact radius proximity before hover or down can consume the hint; captured movement
+remains editor-owned. The shared radius-affordance group supplies the same identity to grip, rail
+and spoke, while presentation coverage freezes all three pointer-active surfaces.
+
+Focused evidence passes demo-web 117/117, native/WASM M75 11/11, warnings-denied Clippy, demo-web
+WASM, formatting, diff and unchanged 270-row golden checks. Chromium script
+`/tmp/m75_f001_browser_check.mjs`, SHA-256
+`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes all 6/6 cases on a
+provisional corrected local build, including the overlapped grip and visible spoke/rail
+hover/capture/release paths. Automated evidence disposes no human item; Pages remains on accepted
+M74.
 
 ### M75-U1 - Deferred M74 review and hover accessibility matrix
 

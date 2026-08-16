@@ -154,10 +154,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   input ownership changes. M75-F001 routes uncaptured relation/dimension and grouped-Fillet
   movement to the same domain-aware compatible-candidate resolver as click, including wrong-kind
   overlap fallback and computed-preview radius authentication; captured Fillet-radius movement
-  remains intact. The workbench paints only the returned headless owner; a computed DOM item is an
-  independently validated intent hint, and selectable canvas CSS/DOM hover cannot supply a
-  competing semantic target. Existing hit tolerances, geometry-role ordering, equations,
-  persistence bytes and golden behavior remain unchanged.
+  remains intact. M75-F002 reconciles the complete uncaptured Fillet paint stack with the exact
+  headless computed-radius owner so a native item painted above the grip, rail or spoke cannot hide
+  the promised radius interaction from hover or pointer-down. The workbench paints only the
+  returned headless owner; a computed DOM item is an independently validated intent hint, and
+  selectable canvas CSS/DOM hover cannot supply a competing semantic target. Existing hit
+  tolerances, geometry-role ordering, equations, persistence bytes and golden behavior remain
+  unchanged.
 - Completed, approved and publicly verified M73 retained-authoring semantic consolidation. One
   private `ConstructionStageSemantics` description now owns the remaining line/polyline
   stage/span/reference-handoff facts. The unreleased `ConstraintKind`,

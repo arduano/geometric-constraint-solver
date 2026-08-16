@@ -2,18 +2,18 @@
 
 # M75 focused UAT — hover and primary pointer-owner parity
 
-Status: **initial candidate withdrawn after confirmed finding M75-F001; replacement qualification
-is pending and every human disposition remains pending as of 2026-08-16**. GitHub Pages currently
-serves the accepted M74 artifact. Do not use it as M75 authority.
+Status: **the clean-qualified M75-F001 replacement is withdrawn after confirmed M75-F002; the F002
+correction is focused-qualified, its replacement qualification is pending, and every human
+disposition remains pending as of 2026-08-16**. GitHub Pages currently serves the accepted M74
+artifact. Neither withdrawn M75 snapshot is human-UAT authority.
 
 Withdrawn initial candidate source: `f3affff1b62b1cb484a59647c4072c94c3b12ada`
 
 Withdrawn initial candidate tree: `7662abc8b7c71130f54fbf2745afa60f0d286431`
 
-Historical snapshot endpoint, temporarily retained until replacement handover:
-`http://100.94.63.83:8080/`
+Historical initial snapshot endpoint: `http://100.94.63.83:8080/` (no longer serving these bytes)
 
-Historical server PID: `3801058` (retained command-runner session `47845`)
+Historical initial server PID: `3801058` (exited; retained command-runner session `47845`)
 
 Withdrawn immutable snapshot: `/tmp/geosolve-m75-uat.hUSaG7` (directory `0555`, files `0444`)
 
@@ -49,9 +49,69 @@ not dispose any human scorecard item.
 M75-F001 invalidates this initial candidate for hands-on review: native relation/dimension and
 Fillet clicks work, but uncaptured authoring movement publishes no target. Direct Rust/WASM tests
 own the corrected exact precedence, distance comparisons, boundary equality, mutation freedom and
-invalidation. Human UAT resumes only on the replacement snapshot and judges whether hover
-truthfully predicts a click, whether related context is understandable, and whether the complete
-desktop interaction remains polished and accessible.
+invalidation.
+
+### Superseded M75-F001 replacement candidate
+
+Withdrawn replacement source: `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`
+
+Withdrawn replacement tree: `7bff59c5d4d36d1acb687a93d78707b32e323d65`
+
+Served historical endpoint: `http://100.94.63.83:8080/`
+
+Historical server PID: `4026985`
+
+Server log: `/tmp/geosolve-m75-f001-uat.2Ju7gq.server.log`
+
+Withdrawn immutable snapshot: `/tmp/geosolve-m75-f001-uat.2Ju7gq` (directory `0555`, files `0444`)
+
+Withdrawn ordered-manifest aggregate:
+`9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 18,270 | `b2c503a0ca2ad33c0fcc137666a349a773630fb712a4cdd50f8fea64454614d0` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-41f4150de02af486.js` | 33,221 | `39eebb2d778b7470d0b2bd552ab7716cb12e38fe072bca05905e1f936fc81f09` |
+| `geosolve-demo-web-41f4150de02af486_bg.wasm` | 6,117,357 | `cc194398055211d420a82b058fb83cf3d3e2e54bcded5c6c5116cca086be3d7d` |
+| `index.html` | 27,478 | `fa50308533c8a98f2c8f37b63a72414ddba2f33d9a2f4339157779a7a2e875bc` |
+| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+
+The exact clean command
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 on the source
+above. M75 parity passes 11/11 natively and under WASM, demo-web passes 116/116, the reviewed golden
+remains unchanged at 270/270, and the sparse crossover completes in 143.27 seconds. The exact
+gate-produced seven files were frozen without rebuilding.
+
+Proxy/cache-bypassed identity requests for `/` and every file return HTTP 200 with exact media
+types, lengths and bytes, no redirect or content encoding; `/` equals `index.html` and the fetched
+aggregate matches. Evidence is retained at `/tmp/geosolve-m75-f001-http-verify.kXc5g5`. The
+unchanged M72 and M74 Chromium scripts pass at both desktop sizes; their SHA-256 values are
+`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
+`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`.
+
+M75-F002 withdraws this replacement from hands-on review. In `fillet-workshop`, collecting point
+`6600000000000000000000000000004f` and curve `66000000000000000000000000000038`
+creates a computed-radius grip overlap where a native point paints above the correct
+`FeatureCorner`. The top-target-only adapter supplied native curve
+`66000000000000000000000000000052`; pressing without moving destroyed the preview and captured no
+radius gesture. The corrected provisional build enumerates the complete paint stack only for
+uncaptured Fillet authoring, reconciles the exact headless `SceneFilletHit::Radius` owner through
+one move/down helper, otherwise retains the top painted item without promoting an owner, and leaves
+the coordinator as final authority. Demo-web 117/117, native/WASM M75 11/11, focused Clippy, WASM,
+formatting, diff and unchanged-golden checks pass. `/tmp/m75_f001_browser_check.mjs`, SHA-256
+`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes 6/6 on that
+provisional local build. The complete clean F002 gate and immutable replacement remain pending.
+
+Independent adapter review also found the visible radius rail and spoke lacked an extractable
+`FeatureCorner` identity. The corrected radius-affordance group now supplies that same owner to the
+grip, rail and spoke; focused presentation coverage freezes all three surfaces, and the provisional
+browser run exercises visible spoke and rail hover/capture/release.
+
+Human UAT resumes only on that future replacement snapshot and judges whether hover truthfully
+predicts a click, whether related context is understandable, and whether the complete desktop
+interaction remains polished and accessible.
 
 ## Review matrix
 
@@ -263,7 +323,7 @@ context.
 Pass when the behavior stays predictable across scale and remains usable without conflating
 pointer hover, keyboard focus, selection or problem state.
 
-## M75-F001 targeted recheck — active authoring hover predicts click
+## M75-F001/F002 targeted recheck — active authoring hover predicts click
 
 Run this first on the replacement candidate. At minimum repeat steps 1–4 at both required desktop
 sizes; use coarse and fine zoom for the overlap case.
@@ -279,9 +339,14 @@ sizes; use coarse and fine zoom for the overlap case.
 4. Repeat representative ordinary authoring tools: Coincident over a point, Horizontal/Vertical
    over a line, and one dimension tool over its valid operand. Each hover predicts the operand;
    wrong-kind geometry does not highlight and cannot suppress an applicable fallback.
-5. Complete a Fillet preview, hover its interactive computed arc/radius surface, and press without
-   moving. The computed corner highlights first and the press begins the same radius gesture.
-   Native geometry beneath a current painted preview must not steal the promised owner.
+5. In **2D Fillet workshop**, collect point `6600000000000000000000000000004f` and curve
+   `66000000000000000000000000000038`, then hover the interactive computed-radius grip where native
+   paint overlaps it. The exact computed corner highlights even when a native point is painted
+   above it; native curve `66000000000000000000000000000052` must not become the promised owner.
+   Press without moving: the same radius gesture captures, the preview is retained and subsequent
+   movement changes the radius. Repeat on the visible rail, spoke and an isolated computed
+   arc/radius surface; every pointer-active radius surface must preview/capture the same corner, and
+   native geometry beneath or above a current painted preview cannot steal the authenticated owner.
 6. Move between point, line and empty canvas, then switch tools or leave the canvas. Highlighting
    updates or clears immediately. Once a radius drag captures the pointer, movement continues to
    the matching release without being rerouted to native authoring hover.
@@ -309,9 +374,10 @@ New M75 items:
 - M75-U11: **Pending**.
 - M75-U12: **Pending**.
 - M75-F001 targeted recheck: **Pending replacement candidate**.
+- M75-F002 targeted recheck: **Pending replacement candidate**.
 - Final M75 approval: **Pending**.
 
-Do not mark any item passed from automated evidence alone. The exact nominated source/tree,
-immutable manifest and endpoint are recorded above; add findings, any replacement
-fix/requalification, supervising-human disposition and final public artifact only after those
-events occur.
+Do not mark any item passed from automated evidence alone. The superseded nominations are recorded
+above; add the exact current source/tree, immutable manifest and endpoint only after the F002
+replacement qualifies, then add supervising-human disposition and the final public artifact only
+after those events occur.

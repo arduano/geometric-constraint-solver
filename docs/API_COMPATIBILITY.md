@@ -148,7 +148,10 @@ intent hint: current candidate, retained preview, accepted/design/computed prove
 headless radius proximity are independently validated before it can produce a computed-corner
 hover. Candidate enumeration and precedence remain private. Existing pointer-leave, cancellation
 and retained-state paths revoke proximity state when a host remaps the camera, scene or input
-owner. No general public hit-test hierarchy is introduced. This changes no supported `0.2.0`
+owner. M75-F002 changes only the private web translation of that hint: during uncaptured Fillet
+authoring, the complete SVG paint stack is reconciled with the exact headless radius owner so an
+overlying native item cannot hide the grip, rail or spoke; final authentication remains in the
+coordinator. No general public hit-test hierarchy is introduced. This changes no supported `0.2.0`
 domain API, solver behavior, hit tolerance, constraint or dimension kind, canonical sketch v1-v4
 bytes, unsupported draft-v5 disposition or persistence schema.
 

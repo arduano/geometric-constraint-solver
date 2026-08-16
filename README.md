@@ -75,9 +75,12 @@ geometry and production-style desktop polish are complete under the supervising 
 close decision and exact final GitHub Pages verification. Separate hands-on UAT remains deferred,
 not passed, and transfers with any findings to active M75. M75's shared headless Select resolver,
 hover/click ownership parity and stale-hover invalidation passed an initial clean immutable
-nomination. M75-F001 then exposed discarded active-authoring moves; the domain-aware authoring
-hover/click correction is implemented and focused-qualified. Replacement immutable nomination,
-combined human UAT and M75 Pages publication remain pending.
+nomination. M75-F001 then exposed discarded active-authoring moves; its domain-aware authoring
+hover/click correction passed a clean replacement gate and immutable freeze. Focused browser
+qualification opened M75-F002 because native SVG paint above a computed Fillet radius grip hid
+the authenticated owner; review extended the same fix across the pointer-active rail and spoke.
+That adapter correction is focused-qualified; post-F002 immutable nomination, combined human UAT
+and M75 Pages publication remain pending.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here

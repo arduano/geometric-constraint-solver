@@ -864,6 +864,39 @@ fn resolve_canvas_fillet_action_candidates(
     })
 }
 
+/// Reconciles the complete browser paint stack with one headless radius hit.
+///
+/// A native point or curve can be painted above the selected computed Fillet
+/// grip. Paint order is presentation detail: when the headless scene resolves
+/// an exact radius owner, that owner remains the intent hint if it occurs
+/// anywhere in the browser stack. The coordinator still authenticates the
+/// retained preview, scene provenance, policy, and exact hit before hover or
+/// pointer-down can consume the hint. Without a matching headless radius hit,
+/// the top painted item is retained and no browser-side semantic priority is
+/// invented.
+#[cfg(any(target_arch = "wasm32", test))]
+fn reconcile_feature_authoring_painted_items(
+    radius_owner: Option<geosolve_sketch_features::ComputedCornerRef>,
+    painted: impl IntoIterator<Item = geosolve_constraint_editor::SelectionItem>,
+) -> Option<geosolve_constraint_editor::SelectionItem> {
+    let mut first = None;
+    for item in painted {
+        if first.is_none() {
+            first = Some(item);
+        }
+        if matches!(
+            (radius_owner, item),
+            (
+                Some(expected),
+                geosolve_constraint_editor::SelectionItem::FeatureCorner(actual)
+            ) if actual == expected
+        ) {
+            return Some(item);
+        }
+    }
+    first
+}
+
 /// Revokes one temporary computed-feature owner. Selection cleanup belongs to
 /// the headless coordinator so every caller gets identical lifetime semantics.
 #[cfg(any(target_arch = "wasm32", test))]
@@ -2160,7 +2193,7 @@ pub(crate) mod wasm {
                     return;
                 }
             }
-            let (input, captured) = {
+            let (input, captured, painted_item) = {
                 let wb = callback_workbench.borrow();
                 if !wb.pointer_captures.is_empty()
                     && !wb.pointer_captures.contains(event.pointer_id())
@@ -2179,7 +2212,19 @@ pub(crate) mod wasm {
                 } else {
                     pointer_input(&callback_viewport, scene.viewport, &event)
                 };
-                (input, captured)
+                let painted_item = match input {
+                    Some(input) if !captured && wb.feature_authoring.active_tool().is_some() => {
+                        feature_authoring_painted_item_at_point(
+                            &callback_document,
+                            &scene,
+                            wb.coordinator.editor().geometry_interaction_policy(),
+                            input.position,
+                            &event,
+                        )
+                    }
+                    Some(_) | None => pointer_event_selection_item(&event),
+                };
+                (input, captured, painted_item)
             };
             let Some(input) = input else {
                 if matches!(
@@ -2194,7 +2239,6 @@ pub(crate) mod wasm {
                 }
                 return;
             };
-            let painted_item = pointer_event_selection_item(&event);
             let Some(generation) = callback_pointer_moves
                 .borrow_mut()
                 .push_with_painted_item(input, painted_item)
@@ -2364,13 +2408,46 @@ pub(crate) mod wasm {
         )
     }
 
-    /// Returns the stable identity painted directly under this pointer sample.
-    /// The coordinator treats it only as an intent hint and independently
-    /// validates current preview ownership, scene provenance and arc proximity.
+    /// Returns the topmost stable identity painted under this pointer sample.
     fn pointer_event_selection_item(event: &PointerEvent) -> Option<SelectionItem> {
         let origin = event.target()?.dyn_into::<Element>().ok()?;
         let target = origin.closest("[data-editor-item]").ok().flatten()?;
         selection_item(&target)
+    }
+
+    // `PointerEvent` exposes integral CSS pixels while the generated
+    // `Document::elements_from_point` binding requires `f32` CSS pixels.
+    #[allow(clippy::cast_precision_loss)]
+    fn feature_authoring_painted_item_at_point(
+        document: &Document,
+        scene: &EditorScene,
+        policy: GeometryInteractionPolicy,
+        position: ScreenPoint,
+        event: &PointerEvent,
+    ) -> Option<SelectionItem> {
+        let radius_owner = match scene.resolve_fillet_hit_with_policy(
+            position,
+            PickTolerance::default(),
+            policy,
+        ) {
+            Some(geosolve_constraint_editor::SceneFilletHit::Radius { owner, .. }) => Some(owner),
+            Some(geosolve_constraint_editor::SceneFilletHit::Native(_)) | None => None,
+        };
+        super::reconcile_feature_authoring_painted_items(
+            radius_owner,
+            document
+                .elements_from_point(event.client_x() as f32, event.client_y() as f32)
+                .iter()
+                .filter_map(|value| value.dyn_into::<Element>().ok())
+                .filter_map(|element| element.closest("[data-editor-item]").ok().flatten())
+                .filter(|element| {
+                    element
+                        .closest("#wb-viewport")
+                        .is_ok_and(|viewport| viewport.is_some())
+                })
+                .filter_map(|element| selection_item(&element)),
+        )
+        .or_else(|| pointer_event_selection_item(event))
     }
 
     fn install_pan_listeners(
@@ -2592,12 +2669,16 @@ pub(crate) mod wasm {
                 }
             }
             if wb.feature_authoring.active_tool().is_some() {
-                if let Some(outcome) = feature_canvas_pointer_down(
-                    &mut wb,
+                let painted_item = feature_authoring_painted_item_at_point(
+                    &callback_document,
                     &scene,
-                    input,
-                    pointer_event_selection_item(&event),
-                ) {
+                    wb.coordinator.editor().geometry_interaction_policy(),
+                    input.position,
+                    &event,
+                );
+                if let Some(outcome) =
+                    feature_canvas_pointer_down(&mut wb, &scene, input, painted_item)
+                {
                     match outcome {
                         FeatureAuthoringPointerDownOutcome::RadiusGesture { effects } => {
                             dispatch_effects(&mut wb, effects);
@@ -5926,10 +6007,11 @@ mod tests {
         canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
         coordinate_hud, current_problem_items, foreground_overlay_escape_owner, history_shortcut,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
-        reproduction_focus_target_after_action, reproduction_overlay_presentation,
-        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
-        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
-        route_canvas_pan_pointer_down, should_route_stationary_draft_inference,
+        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
+        reproduction_overlay_presentation, reproduction_payload_size_label,
+        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
+        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
+        should_route_stationary_draft_inference,
     };
 
     fn rejected_constraint_fixture() -> (
@@ -7497,6 +7579,49 @@ mod tests {
     }
 
     #[test]
+    fn headless_radius_owner_survives_an_overlying_native_paint_item() {
+        let (mut coordinator, _, points) = grouped_fillet_fixture();
+        let mut state = FeatureAuthoringState::default();
+        prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
+        let owners = coordinator
+            .feature_authoring_preview()
+            .expect("held grouped preview")
+            .corner_bindings()
+            .iter()
+            .map(|binding| binding.owner)
+            .collect::<Vec<_>>();
+        let expected = SelectionItem::FeatureCorner(owners[0]);
+        let native = SelectionItem::Point(points[1]);
+
+        assert_eq!(
+            reconcile_feature_authoring_painted_items(
+                Some(owners[0]),
+                [native, expected, SelectionItem::FeatureCorner(owners[1])],
+            ),
+            Some(expected),
+            "an overlying native SVG item must not hide the exact headless radius owner",
+        );
+        assert_eq!(
+            reconcile_feature_authoring_painted_items(Some(owners[0]), [expected, native]),
+            Some(expected),
+            "ordinary topmost radius paint remains unchanged",
+        );
+        assert_eq!(
+            reconcile_feature_authoring_painted_items(
+                Some(owners[0]),
+                [native, SelectionItem::FeatureCorner(owners[1])],
+            ),
+            Some(native),
+            "a foreign computed corner cannot be upgraded to the headless owner",
+        );
+        assert_eq!(
+            reconcile_feature_authoring_painted_items(None, [native, expected]),
+            Some(native),
+            "without a headless radius hit, browser paint order stays an intent hint only",
+        );
+    }
+
+    #[test]
     fn pointer_move_queue_keeps_only_latest_sample_and_terminal_invalidates_old_frame() {
         let input = |x| PointerInput {
             pointer_id: 7,
@@ -8497,6 +8622,25 @@ mod tests {
             1
         );
         assert_eq!(markup.matches("shared-radius-affected").count(), 2);
+        let radius_affordance_tag = markup
+            .split("<g class=\"wb-fillet-radius-affordance\"")
+            .nth(1)
+            .and_then(|markup| markup.split('>').next())
+            .expect("selected Fillet radius affordance tag");
+        assert!(radius_affordance_tag.contains("data-editor-item=\"feature-corner\""));
+        assert!(radius_affordance_tag.contains(&format!(
+            "data-feature-id=\"{}\"",
+            scene.computed_curves[0].owner.feature
+        )));
+        assert!(radius_affordance_tag.contains(&format!(
+            "data-feature-corner-id=\"{}\"",
+            scene.computed_curves[0].owner.corner
+        )));
+        assert_eq!(markup.matches("class=\"wb-fillet-radius-rail\"").count(), 1);
+        assert_eq!(
+            markup.matches("class=\"wb-fillet-radius-spoke\"").count(),
+            1
+        );
         assert_eq!(
             markup.matches("class=\"wb-fillet-radius-grip\"").count(),
             1,
