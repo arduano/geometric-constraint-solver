@@ -6,8 +6,9 @@ Status: **complete (2026-08-16); the post-F002 replacement is accepted for scope
 exact-verified on GitHub Pages**. The initial candidate and
 clean-qualified M75-F001 replacement remain historical evidence only. The caller accepted the
 current candidate, focused F001/F002 hover recheck and U1-U12 without claiming a separately logged
-step-by-step replay. Exact publication evidence is recorded below. M76 is now active; accepted M75
-remains public authority until an M76 candidate is explicitly approved and published.
+step-by-step replay. Exact publication evidence is recorded below. M76 subsequently reached scoped
+approval and final qualification; its publication closeout supersedes M75 as current authority
+without changing any M75 evidence.
 
 Architecture decision: no new ADR is currently required. M75 consolidates existing editor-owned
 picking, annotation visibility and hover presentation within the accepted-scene boundary. It adds

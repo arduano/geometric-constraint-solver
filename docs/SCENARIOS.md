@@ -1332,7 +1332,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human acceptance dispositions
-are recorded at completed M40.7, M53 and M61-M75. M72's scoped UAT and exact final public-artifact
+are recorded at completed M40.7, M53 and M61-M76. M72's scoped UAT and exact final public-artifact
 verification complete its direct automated qualification. Completed M73 qualified its F001-F003
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
@@ -1349,9 +1349,11 @@ nomination and exact served-byte checks. On 2026-08-16 the supervising caller ac
 post-F002 candidate, focused F001/F002 hover recheck and U1-U12 for scoped closure. The detailed
 UAT steps were not individually logged, so this is not a claimed step-by-step replay. Exact Pages
 run `31939764951`, artifact `9261974799` and deployment `5929879555` now pass public-byte and
-M72/M74/M75 browser verification, completing M75. M76 implementation, clean qualification and
-immutable byte-verified Tailscale nomination pass; U1-U4, explicit approval, public publication and
-closure remain open. M76 is active and no later milestone is active.
+M72/M74/M75 browser verification, completing M75. M76 implementation and its final angle/Origin
+feature refinements pass complete clean qualification and immutable byte-verified Tailscale
+replacement publication. The caller accepts U1-U4 for scoped closure and explicitly waives a
+separate post-refinement replay; that disposition does not invent individual observations. Exact
+GitHub Pages publication is the sole remaining closeout gate, and no later milestone is active.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1849,9 +1851,12 @@ not UAT authority after this product change.
 
 ### M74-W1 - Reference presentation is polished but equation-free
 
-At `1440x900` and approximately `1024x720`, inspect the dedicated Reference tree group, Origin/X/Y
-labels, protected inspector and normal/hover/selected/related styling. Native geometry must paint
-and pick above overlapping datums. References and Grid toggle independently. The adaptive SVG grid
+At `1440x900` and approximately `1024x720`, inspect the dedicated Reference tree group, which
+retains Origin/X/Y labels, plus the protected inspector and normal/hover/selected/related styling.
+The canvas renders the X/Y axes and their labels; their intersection communicates Origin without a
+duplicate marker, label or focus target. Headless Origin picking, authoring and protection remain
+unchanged. Native geometry must paint and pick above overlapping datums. References and Grid toggle
+independently. The adaptive SVG grid
 stays aligned to Origin and uses `1–2–5 × 10^n` major spacing across zoom, but has no editor-item,
 snap, relation, history or persistence semantics. Origin recentres without changing zoom; Fit uses
 only native accepted geometry and an empty Fit restores the canonical camera.
@@ -2061,6 +2066,10 @@ Verify compact four-significant-digit values and truthful family-specific baseli
 leaders, arrows, arcs and label bounds. Exercise driving and reference presentation, extreme values,
 negative-zero cleanup, coarse/fine zoom and deterministic recomposition. Rendering and hit tests
 must consume the same finite primitives; an arc diameter must not invent an opposite arc point.
+For shared-endpoint finite line rays whose interior wedge matches the accepted acute/right angle,
+the vertex, rays, arc, label and hit geometry occupy that wedge and the opposite arc point misses.
+An obtuse finite join retains the acute supporting-line presentation so sector and value remain
+consistent.
 Reference values must come only from exact matching accepted-document/revision hydration. A
 detached, revision-mismatched or accepted-document-mismatched scene reports `value unavailable`
 and never presents a dormant target scalar as a measured value.
@@ -2092,6 +2101,15 @@ item identity, placement form and finite values while preserving valid sketch pa
 must accept the sketch, discard only unusable layout and regenerate deterministic auto placement.
 Canonical sketch v1-v4 bytes, unsupported draft-v5 policy and `GEOSOLVE_REPRO_V1` authority remain
 unchanged.
+
+M76 closure uses exact clean-qualified source `9b4e7f72dcacefdf4d7847a22eb675c711068d26`,
+tree `e0591664fbeb2e353bc880dd826dc39ac1caeec9`, and no-rebuild snapshot
+`/tmp/geosolve-m76-uat.ctgYzp`, aggregate
+`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4`.
+U1-U4 are accepted for scoped closure under the caller's 2026-08-17 approval; the individual
+steps were not separately logged and a post-refinement replay was intentionally not required.
+The earlier `37eade50` nomination is superseded historical evidence. Exact Pages publication
+remains the final closeout operation.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

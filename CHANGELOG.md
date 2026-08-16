@@ -142,6 +142,18 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   gate and frozen-artifact verification. The supervising caller approved scoped closure on
   2026-08-16 while explicitly deferring, rather than passing, the hands-on U1-U8 scorecard into an
   unstarted bug-fixing/UAT follow-up milestone.
+- The scoped-approved M76 production-quality annotation cut. Public editor DTOs now describe exact
+  linear, radial, angular and compact-glyph paint/hit geometry, deterministic automatic placement
+  and presentation-only manual offsets for all seven dimension and twenty constraint families.
+  The demo's optional workspace-v6 annotation cache is fail-soft and remains outside canonical
+  sketch/reproduction authority. After initial review, shared-endpoint acute/right line angles were
+  refined to use their finite-ray interior wedge, and the intrinsic Origin retained all headless,
+  authoring, protection, tree and inspector semantics while dropping its redundant canvas marker,
+  label and focus target. This pre-existing angle-side behavior is treated as an M76 feature, not
+  an `M76-Fxxx` defect. Feature commit `a9fd6f6` and final clean-qualified source `9b4e7f7` pass the
+  complete release gate and exact immutable Tailscale verification. The caller accepted U1-U4 for
+  scoped closure without claiming or requiring a separately logged post-refinement replay; exact
+  GitHub Pages publication remains the final closeout operation.
 
 ### Changed
 

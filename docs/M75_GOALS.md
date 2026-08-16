@@ -6,8 +6,9 @@ Status: **complete (2026-08-16); accepted for scoped closure and exact-verified 
 The accepted product is the clean-qualified, byte-verified
 post-F002 candidate below. The caller accepted that candidate, the focused F001/F002 hover recheck
 and U1-U12 for scoped closure; this is not a claim that every prepared UAT step was individually
-executed or logged. Exact public publication passes below. M76 is now active; accepted M75 remains
-public authority until an M76 candidate is explicitly approved and published.
+executed or logged. Exact public publication passes below. M76 subsequently reached scoped
+approval and final qualification; its publication closeout supersedes M75 as current authority
+without changing any M75 evidence.
 
 ## Goal
 

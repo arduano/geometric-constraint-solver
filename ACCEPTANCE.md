@@ -187,8 +187,9 @@ also passed a clean replacement gate and immutable freeze; focused browser quali
 opened M75-F002 because an overlying native SVG item hid the authenticated computed-radius owner.
 The F002 correction passes the complete clean replacement gate, immutable freeze and exact
 Tailscale verification. The supervising caller accepted the qualified interaction scope, and
-exact final public publication passes. M76 implementation, clean qualification and immutable
-byte-verified Tailscale nomination pass; hands-on UAT and public publication remain open.
+exact final public publication passes. M76 implementation, clean qualification, immutable
+byte-verified Tailscale nomination and scoped human acceptance pass; final public publication
+remains open.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2105,13 +2106,18 @@ M72/M74 two-size and M75 6/6 Chromium checks pass. Every M75 acceptance gate is 
 
 ## M76 acceptance: production-quality constraint annotations
 
-Status: **active; implementation, clean release qualification and frozen byte-verified Tailscale
-nomination pass. Hands-on UAT and publication remain open**.
+Status: **closeout in progress; implementation, final clean release qualification, frozen
+byte-verified Tailscale nomination and scoped human approval pass. Exact GitHub Pages publication
+is the only open step; no later milestone is active**.
 
 - Every accepted dimension family has truthful geometry: point distance, affine line/polyline-span
   length, radius, diameter, oriented angle, supporting-line offset and exact translated-segment
   offset. The scene publishes the baseline, witnesses, leaders, sector arc,
   arrowheads and finite label bounds used by both rendering and picking.
+- A shared-endpoint acute/right line angle places its arc, label and hit geometry in the actual
+  finite-ray interior wedge, and the vertically opposite wedge does not hit. An obtuse finite join
+  retains the acute supporting-line presentation, and directed solver branch/value semantics do
+  not change.
 - Compact values use four significant digits, remove trailing and negative zero, use scientific
   notation below `1e-3` or at/above `1e5`, and use CAD prefixes/suffixes such as `R`, `⌀` and `°`.
   Reference values wrap the whole compact notation in parentheses and also use muted/dashed
@@ -2121,6 +2127,9 @@ nomination pass. Hands-on UAT and publication remain open**.
 - All twenty `SceneConstraintGlyph` categories have a deliberate geometry-derived mark. Constraint
   marks are contextual by default and the Display control can show all. Right-angle squares stay
   locked to their geometric corner; every other glyph and every dimension can be moved.
+- Origin remains an immutable, protected, selectable and inference-capable headless datum and a
+  Reference/inspector operand. The canvas omits its redundant ring, cross, text and focus target;
+  the protected X/Y-axis intersection communicates zero.
 - Select-mode label/glyph movement begins only after 3 px. Escape, pointer-capture loss, camera or
   tool change, and cancellation restore the original placement. Other annotation primitives
   select without starting a move.
@@ -2136,22 +2145,37 @@ nomination pass. Hands-on UAT and publication remain open**.
   geometry/hit parity, deterministic collision avoidance, move/cancel/reset/history neutrality,
   migration, corruption and regeneration. Existing canonical sketch v1-v4, unsupported draft-v5,
   `GEOSOLVE_REPRO_V1`, equations, solver history and explicit branch semantics remain unchanged.
-- The clean release gate and immutable byte-verified Tailscale candidate pass before hands-on review.
-  `docs/M76_UAT.md` passes at `1440x900` and approximately `1024x720`, then explicit supervising
-  approval and exact GitHub Pages publication are required before M76 closes.
+- The clean release gate and immutable byte-verified Tailscale candidate pass before closure. U1-U4
+  are accepted for scoped closure under explicit supervising-human approval; the individual steps
+  were intentionally not replayed or separately logged after the final refinements. Exact GitHub
+  Pages publication and hosted-byte verification are required before M76 closes.
 
-Mechanical nomination result (2026-08-17): source
-`37eade50b566f62905a395655bc80c17d9b6bef4`, tree
-`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, passes the complete clean 503-second release gate.
-Editor 353/353, demo-web 122/122, native/WASM M76 4/4 each, unchanged golden 270/270, the
-149.39-second sparse crossover, warnings-denied Rustdoc, licensing/package checks and Trunk 0.21.14
-assembly pass. The exact no-rebuild seven-file snapshot `/tmp/geosolve-m76-uat.puiPgO` is read-only
-and has ordered-manifest aggregate
-`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf`. PID `1077092` serves it at
-`http://100.94.63.83:8080/`; `/tmp/geosolve-m76-http-verify.noWQO3` proves HTTP 200, exact
+Final closeout nomination (2026-08-17): source
+`9b4e7f72dcacefdf4d7847a22eb675c711068d26`, tree
+`e0591664fbeb2e353bc880dd826dc39ac1caeec9`, includes the M76 feature refinements at
+`a9fd6f6a71edf5be9d9fb5856074d291192a898d` plus separate M22 property-oracle test hardening and
+passes the complete clean 569-second release gate. The angle-side behavior predated M76, so its
+corrected placement is an M76 feature refinement rather than an `M76-Fxxx` defect. Editor 353/353,
+demo-web 122/122, native/WASM M76 5/5 each, native/WASM M75 11/11 each, native/WASM M74 5/5 each,
+unchanged golden 270/270 and the 127.63-second sparse crossover pass, together with formatting,
+warnings-denied Clippy/Rustdoc, all workspace tests, benchmarks, licensing/package contents and
+Trunk 0.21.14 assembly. The exact no-rebuild seven-file snapshot `/tmp/geosolve-m76-uat.ctgYzp` is
+read-only (directory `0555`, all seven regular non-symlink files `0444`) and has ordered-manifest
+aggregate
+`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4`. PID `1455071`, retained
+command-runner session `70653`, serves it at `http://100.94.63.83:8080/`;
+`/tmp/geosolve-m76-http-verify.CqEufj` proves root plus every file returns HTTP 200 with exact
 media/length/bytes, no redirects or content encoding, root equality and the same fetched aggregate.
-This disposes no human UAT item: U1-U4, explicit approval, GitHub Pages publication and closure
-remain open, and accepted M75 remains the public authority.
+The supervising user reviewed the initial candidate, requested the two final feature refinements,
+and explicitly authorized closure without separate post-refinement UAT. That scoped approval
+accepts U1-U4 without claiming individually replayed or logged observations. Exact Pages
+publication remains the sole open acceptance item, and accepted M75 remains public authority until
+it passes.
+
+The initial nomination at source `37eade50b566f62905a395655bc80c17d9b6bef4`, tree
+`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, snapshot `/tmp/geosolve-m76-uat.puiPgO` and aggregate
+`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf` remains superseded
+historical evidence only; its PID `1077092` was retired.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

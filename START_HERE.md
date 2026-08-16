@@ -152,10 +152,11 @@ then opened M75-F002 because an overlying native SVG point hid the authenticated
 radius grip from hover and pointer-down; review extended the same owner across the visible rail and
 spoke. The complete-paint-stack correction passes the clean post-F002 replacement gate, immutable
 freeze and exact Tailscale verification. The supervising caller accepted that candidate's qualified
-interaction scope, and exact M75 GitHub Pages publication now passes. M75 is complete. M76 is the
-active production-quality annotation milestone: implementation, clean release qualification and
-an immutable byte-verified Tailscale nomination pass; hands-on UAT and GitHub Pages publication
-remain open. No later milestone is active.
+interaction scope, and exact M75 GitHub Pages publication now passes. M75 is complete. M76's
+production-quality annotations and final feature refinements are scoped-approved, clean-qualified
+and live as an immutable byte-verified Tailscale candidate. The caller explicitly waived a
+separate post-refinement UAT replay; exact GitHub Pages publication is the remaining closeout gate.
+No later milestone is active.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -174,8 +175,8 @@ support and physics remain outside future acceptance.
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
 11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — completed, approved
     and publicly verified hover/click ownership milestone.
-12. `docs/M76_GOALS.md`, `docs/M76_IMPLEMENTATION.md` and `docs/M76_UAT.md` — implemented,
-    clean-qualified annotation milestone and pending hands-on scorecard.
+12. `docs/M76_GOALS.md`, `docs/M76_IMPLEMENTATION.md` and `docs/M76_UAT.md` — scoped-approved,
+    feature-refined annotation milestone, final qualification and closure record.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -478,15 +479,17 @@ complete, while both earlier snapshots remain historical evidence.
 M76 replaces provisional annotations with seven truthful dimension forms, compact CAD notation,
 twenty deliberate constraint glyph categories, deterministic shared paint/hit geometry and
 presentation-only manual placement. Workspace v6 stores only a fail-soft optional annotation
-cache; canonical sketch bytes and all solver semantics remain unchanged. Exact product source
-`37eade50b566f62905a395655bc80c17d9b6bef4`, tree
-`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, passes the complete clean release gate. Its no-rebuild
-read-only seven-file snapshot `/tmp/geosolve-m76-uat.puiPgO`, aggregate
-`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf`, is byte-verified and live
-at `http://100.94.63.83:8080/`. Reference dimensions hydrate only from the exact matching accepted
-document/revision and otherwise report `value unavailable`; dormant targets are never presented as
-measurements. This mechanical nomination passes no human scorecard item. U1-U4, explicit approval,
-Pages publication and M76 closure remain open, and accepted M75 remains public authority.
+cache; canonical sketch bytes and all solver semantics remain unchanged. After reviewing the
+initial candidate, the caller requested two feature refinements: shared-endpoint acute/right line
+angles now use the finite-ray interior wedge, and the headless Origin remains fully functional
+without a redundant canvas marker or focus target. Feature commit `a9fd6f6a71edf5be9d9fb5856074d291192a898d`
+is clean-qualified at source `9b4e7f72dcacefdf4d7847a22eb675c711068d26`, tree
+`e0591664fbeb2e353bc880dd826dc39ac1caeec9`, by the complete 569-second release gate. Its exact
+no-rebuild read-only seven-file snapshot `/tmp/geosolve-m76-uat.ctgYzp`, aggregate
+`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4`, is byte-verified and live
+at `http://100.94.63.83:8080/`. The caller accepted U1-U4 for scoped closure without claiming a
+separately logged post-refinement replay. Exact GitHub Pages publication remains the final gate;
+the initial `37eade50` nomination is superseded evidence only.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -563,9 +566,9 @@ Durable milestone and cleanup records:
 - `docs/M75_GOALS.md` (completed hover/click ownership and carried-UAT scope)
 - `docs/M75_IMPLEMENTATION.md` (completed implementation, qualification and public-release ledger)
 - `docs/M75_UAT.md` (approved combined M74/M75 scorecard and final public evidence)
-- `docs/M76_GOALS.md` (active production-quality annotation scope)
-- `docs/M76_IMPLEMENTATION.md` (implemented, clean-qualified and immutable-nomination ledger)
-- `docs/M76_UAT.md` (pending focused annotation scorecard and exact live-candidate evidence)
+- `docs/M76_GOALS.md` (scoped-approved production-quality annotation scope)
+- `docs/M76_IMPLEMENTATION.md` (feature-refined implementation and final qualification ledger)
+- `docs/M76_UAT.md` (scoped closure decision and exact accepted-candidate evidence)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

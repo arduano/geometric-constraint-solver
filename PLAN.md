@@ -68,7 +68,8 @@ the closing regressions were satisfactory. Clean closing source `48e3cc3` passes
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
 of every prepared UAT step. M71-M75 are complete. M76 has completed implementation, clean
-qualification and immutable Tailscale nomination; human UAT and publication remain open. M74
+qualification, immutable Tailscale nomination and scoped human acceptance; final public
+publication remains open. M74
 closes under explicit scoped approval of its
 clean-qualified frozen candidate and exact final Pages publication, while its deferred scorecard
 transferred into M75. M75's initial immutable nomination was
@@ -77,7 +78,8 @@ gate and immutable freeze, but focused browser qualification found M75-F002 wher
 above a computed Fillet radius affordance hid that owner from both hover and pointer-down. The F002
 adapter correction passes the complete clean replacement gate and immutable Tailscale nomination;
 the supervising caller accepted the qualified interaction scope, and exact GitHub Pages
-publication now passes. M76 is the active milestone; no later milestone is active. M66's
+publication now passes. M76 remains active only for final Pages publication; no later milestone is
+active. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4850,10 +4852,11 @@ publication passes.
 
 ### M76: production-quality constraint annotations
 
-Status: **active (2026-08-17); implementation, clean qualification and immutable nomination
-complete; human UAT and publication open**. M76 replaces the demo's provisional constraint and
-dimension marks with compact CAD notation, deterministic geometry-derived layout, and
-presentation-only manual placement. `docs/M76_GOALS.md` owns the approved contract.
+Status: **closeout in progress (2026-08-17); implementation, final clean qualification, immutable
+nomination and scoped human approval complete; exact GitHub Pages publication is the only open
+step**. M76 replaces the demo's provisional constraint and dimension marks with compact CAD
+notation, deterministic geometry-derived layout, and presentation-only manual placement.
+`docs/M76_GOALS.md` owns the approved contract. No later milestone is active.
 
 - [x] Record the seven dimension families, twenty compact constraint categories, placement,
   compatibility, persistence and UAT contract.
@@ -4869,31 +4872,51 @@ presentation-only manual placement. `docs/M76_GOALS.md` owns the approved contra
   recover valid sketch geometry from stale, malformed or incompatible layout data.
 - [x] Add native/WASM scene, placement, drag, cancellation, history-neutrality, migration and
   corruption regressions plus thin demo rendering/input tests.
+- [x] Prefer the actual finite-ray interior wedge for a shared-endpoint acute/right line angle,
+  including its arc, label and hit geometry, while retaining the acute supporting-line fallback
+  for an obtuse finite join and leaving directed solver branch/value semantics unchanged.
+- [x] Remove the redundant Origin canvas ring/cross/text/focus target while retaining the protected
+  datum headlessly and in Reference/inspector interaction; the fixed axis intersection presents
+  zero without a duplicate annotation.
 - [x] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
   golden-oracle cleanliness, Rustdoc and Trunk release assembly.
 - [x] Freeze and byte-verify an immutable Tailscale candidate.
-- [ ] Complete `docs/M76_UAT.md` at both supported desktop sizes and receive explicit
-  supervising-human approval.
+- [x] Accept U1-U4 for scoped closure under explicit supervising-human approval. The individual
+  scorecard steps were intentionally not replayed or separately logged after the final refinements.
 - [ ] Publish the exact accepted candidate to GitHub Pages, verify hosted bytes and close M76.
 
 Gate: annotation layout is deterministic and headless; rendering and picking consume the same exact
 primitives; manual movement is presentation-only; optional workspace data can never reject valid
 sketch geometry; all seven dimension families and twenty constraint glyph categories are legible;
-the frozen Tailscale candidate passes human review before public publication.
+the final frozen Tailscale candidate is scoped-approved before public publication; and exact Pages
+publication passes.
 
-Mechanical nomination checkpoint (2026-08-17): exact product source
-`37eade50b566f62905a395655bc80c17d9b6bef4`, tree
-`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, passes the complete clean release gate in 503 seconds.
-Editor unit tests pass 353/353, demo-web tests pass 122/122, M76 parity passes 4/4 natively and 4/4
-under WASM, the reviewed golden remains unchanged at 270/270, the release sparse crossover passes
-in 149.39 seconds, and Rustdoc, licensing, package-content and Trunk 0.21.14 assembly pass. The
-gate-produced seven files were copied without rebuilding to read-only
-`/tmp/geosolve-m76-uat.puiPgO`, ordered-manifest aggregate
-`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf`. PID `1077092` serves the
-snapshot at `http://100.94.63.83:8080/`; HTTP evidence at
-`/tmp/geosolve-m76-http-verify.noWQO3` verifies every file and `/` exactly. This is mechanical
-nomination only: U1-U4, explicit approval, GitHub Pages publication and M76 closure remain open,
-and accepted M75 remains public authority.
+Final closeout nomination (2026-08-17): source
+`9b4e7f72dcacefdf4d7847a22eb675c711068d26`, tree
+`e0591664fbeb2e353bc880dd826dc39ac1caeec9`, includes feature-refinement commit
+`a9fd6f6a71edf5be9d9fb5856074d291192a898d` and separate M22 property-oracle test hardening. The
+angle-side behavior predated M76, so its corrected placement is an M76 feature refinement rather
+than an `M76-Fxxx` defect. The complete clean release gate passes in 569 seconds: editor 353/353,
+demo-web 122/122, M76 5/5 natively and 5/5 under WASM, carried M75 11/11 and M74 5/5 in both
+environments, unchanged golden 270/270 and sparse crossover in 127.63 seconds, together with
+formatting, warnings-denied Clippy/Rustdoc, all workspace tests, benchmarks, licensing/package
+contents and Trunk 0.21.14 assembly. The exact no-rebuild seven-file snapshot
+`/tmp/geosolve-m76-uat.ctgYzp` is read-only
+(directory `0555`, regular non-symlink files `0444`) with ordered-manifest aggregate
+`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4`. PID `1455071`, retained
+command-runner session `70653`, serves it at `http://100.94.63.83:8080/`;
+`/tmp/geosolve-m76-http-verify.CqEufj` proves root plus every file returns HTTP 200 with exact
+media/length/bytes, no redirects or encoding, root equality and the same fetched aggregate. The
+user reviewed the initial candidate, requested the two final feature refinements, and explicitly
+authorized closure without separate post-refinement UAT. U1-U4 are accepted for scoped closure
+under that approval without claiming individually replayed or logged observations. Exact GitHub
+Pages publication remains the sole closeout action; accepted M75 remains public authority until it
+passes.
+
+The initial nomination at source `37eade50b566f62905a395655bc80c17d9b6bef4`, tree
+`d6ad2f453d672accbcc3848a1a16d2039b3511d1`, snapshot `/tmp/geosolve-m76-uat.puiPgO` and aggregate
+`fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf` is retained as superseded
+historical evidence only; its PID `1077092` was retired.
 
 ## Explicit non-goals
 

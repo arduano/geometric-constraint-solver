@@ -163,6 +163,21 @@ subsequently passes Pages run `31939764951`, artifact `9261974799` and deploymen
 The exact public bytes and M72/M74/M75 browser contracts verify, completing this additive pre-1.0
 interaction correction without changing the accepted compatibility boundary.
 
+M76 is an additive pre-1.0 presentation extension in `geosolve-constraint-editor`.
+`AnnotationLayoutKey`, `AnnotationPlacement`, `AnnotationLayoutEntry` and
+`AnnotationLayoutState` expose bounded semantic placement state, while exact scene-annotation
+geometry publishes the baselines, witnesses, leaders, arcs, arrowheads, label bounds and glyph
+bounds shared by painting and picking. These DTOs add no equation, variable, residual, branch or
+accepted-sketch mutation. The workbench's workspace-v6 annotation cache is demo-local, optional,
+self-versioned and fail-soft; canonical sketch v1-v4, unsupported draft-v5, `GEOSOLVE_REPRO_V1`
+and every accepted document/reproduction contract remain unchanged. A malformed or stale cache is
+discarded while valid sketch state restores and deterministic automatic layout recomputes.
+Shared-endpoint angle wedge selection and omission of the redundant Origin canvas marker are
+presentation refinements only: the accepted oriented-angle value/branch and all intrinsic-Origin
+picking, authoring, protection, tree and inspector semantics are unchanged. This additive
+disposition is accepted under the caller's scoped M76 close decision without claiming a separate
+post-refinement UAT replay; exact Pages publication is the remaining release operation.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 
