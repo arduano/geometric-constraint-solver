@@ -190,14 +190,28 @@ const fn canvas_pointer_capture_kind(
 struct DraftingPointerSample {
     input: geosolve_constraint_editor::PointerInput,
     inference: geosolve_constraint_editor::DraftInferenceInput,
+    painted_item: Option<geosolve_constraint_editor::SelectionItem>,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
 impl DraftingPointerSample {
+    #[cfg(test)]
     const fn from_input(input: geosolve_constraint_editor::PointerInput) -> Self {
         Self {
             inference: effect_adapter::draft_inference_input(input.modifiers),
             input,
+            painted_item: None,
+        }
+    }
+
+    const fn with_painted_item(
+        input: geosolve_constraint_editor::PointerInput,
+        painted_item: Option<geosolve_constraint_editor::SelectionItem>,
+    ) -> Self {
+        Self {
+            inference: effect_adapter::draft_inference_input(input.modifiers),
+            input,
+            painted_item,
         }
     }
 
@@ -208,6 +222,7 @@ impl DraftingPointerSample {
         Self {
             input,
             inference: effect_adapter::draft_inference_input_for_suppression(suppressed),
+            painted_item: None,
         }
     }
 }
@@ -224,8 +239,22 @@ struct PointerMoveQueue {
 
 #[cfg(any(target_arch = "wasm32", test))]
 impl PointerMoveQueue {
+    #[cfg(test)]
     fn push(&mut self, input: geosolve_constraint_editor::PointerInput) -> Option<u64> {
         let sample = self.observe(input);
+        self.push_sample(sample)
+    }
+
+    fn push_with_painted_item(
+        &mut self,
+        input: geosolve_constraint_editor::PointerInput,
+        painted_item: Option<geosolve_constraint_editor::SelectionItem>,
+    ) -> Option<u64> {
+        let sample = self.observe_with_painted_item(input, painted_item);
+        self.push_sample(sample)
+    }
+
+    fn push_sample(&mut self, sample: DraftingPointerSample) -> Option<u64> {
         self.pending = Some(sample);
         if self.scheduled_generation.is_some() {
             return None;
@@ -239,9 +268,17 @@ impl PointerMoveQueue {
         &mut self,
         input: geosolve_constraint_editor::PointerInput,
     ) -> DraftingPointerSample {
+        self.observe_with_painted_item(input, None)
+    }
+
+    fn observe_with_painted_item(
+        &mut self,
+        input: geosolve_constraint_editor::PointerInput,
+        painted_item: Option<geosolve_constraint_editor::SelectionItem>,
+    ) -> DraftingPointerSample {
         self.last_input = Some(input);
         self.suppressed = input.modifiers.shift;
-        DraftingPointerSample::from_input(input)
+        DraftingPointerSample::with_painted_item(input, painted_item)
     }
 
     fn stationary_suppression(
@@ -372,17 +409,30 @@ fn current_problem_items(
         .unwrap_or_default()
 }
 
-/// Whether one browser move belongs to the ordinary headless editor.
-///
-/// Feature authoring owns uncaptured canvas movement itself. Its captured
-/// Fillet-radius gesture is still an editor gesture and must keep receiving
-/// movement until the matching terminal sample.
 #[cfg(any(target_arch = "wasm32", test))]
-const fn feature_authoring_allows_editor_pointer_move(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanvasPointerMoveOwner {
+    Editor,
+    OrdinaryAuthoring,
+    FeatureAuthoring,
+}
+
+/// Routes one mapped canvas move to the same headless state machine that will
+/// own an unchanged press. Captured gestures remain editor-owned until their
+/// matching terminal sample.
+#[cfg(any(target_arch = "wasm32", test))]
+const fn canvas_pointer_move_owner(
+    ordinary_authoring_active: bool,
     feature_authoring_active: bool,
     pointer_is_captured: bool,
-) -> bool {
-    !feature_authoring_active || pointer_is_captured
+) -> CanvasPointerMoveOwner {
+    if pointer_is_captured || (!ordinary_authoring_active && !feature_authoring_active) {
+        CanvasPointerMoveOwner::Editor
+    } else if feature_authoring_active {
+        CanvasPointerMoveOwner::FeatureAuthoring
+    } else {
+        CanvasPointerMoveOwner::OrdinaryAuthoring
+    }
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -1982,31 +2032,56 @@ pub(crate) mod wasm {
                 return;
             };
             let mut wb = frame_workbench.borrow_mut();
-            if wb.pan_gesture.is_some()
-                || wb.authoring.active_tool().is_some()
-                || !super::feature_authoring_allows_editor_pointer_move(
-                    wb.feature_authoring.active_tool().is_some(),
-                    wb.coordinator
-                        .editor()
-                        .active_pointer_gesture()
-                        .is_some_and(|gesture| gesture.pointer_id == sample.input.pointer_id),
-                )
-            {
+            if wb.pan_gesture.is_some() {
                 return;
             }
             let Some(scene) = editor_scene(&wb) else {
                 return;
             };
-            let problem_items = current_problem_items(&wb.coordinator, &scene);
-            let effects = wb
+            let pointer_is_captured = wb
                 .coordinator
-                .editor_mut()
-                .pointer_move_with_problem_items_and_draft_inference(
-                    &scene,
-                    sample.input,
-                    &problem_items,
-                    sample.inference,
-                );
+                .editor()
+                .active_pointer_gesture()
+                .is_some_and(|gesture| gesture.pointer_id == sample.input.pointer_id);
+            let owner = super::canvas_pointer_move_owner(
+                wb.authoring.active_tool().is_some(),
+                wb.feature_authoring.active_tool().is_some(),
+                pointer_is_captured,
+            );
+            let effects = match owner {
+                super::CanvasPointerMoveOwner::Editor => {
+                    let problem_items = current_problem_items(&wb.coordinator, &scene);
+                    wb.coordinator
+                        .editor_mut()
+                        .pointer_move_with_problem_items_and_draft_inference(
+                            &scene,
+                            sample.input,
+                            &problem_items,
+                            sample.inference,
+                        )
+                }
+                super::CanvasPointerMoveOwner::OrdinaryAuthoring => {
+                    let authoring = wb.authoring.clone();
+                    wb.coordinator.pointer_move_authoring(
+                        &authoring,
+                        &scene,
+                        sample.input,
+                        PickTolerance::default(),
+                    )
+                }
+                super::CanvasPointerMoveOwner::FeatureAuthoring => {
+                    let authoring = wb.feature_authoring.clone();
+                    wb.coordinator
+                        .pointer_move_feature_authoring(
+                            &authoring,
+                            &scene,
+                            sample.input,
+                            sample.painted_item,
+                            PickTolerance::default(),
+                        )
+                        .unwrap_or_else(|_| wb.coordinator.editor_mut().pointer_leave())
+                }
+            };
             dispatch_effects(&mut wb, effects);
             save(&wb);
             drop(wb);
@@ -2093,13 +2168,7 @@ pub(crate) mod wasm {
                     return;
                 }
                 let captured = wb.pointer_captures.contains(event.pointer_id());
-                if wb.pan_gesture.is_some()
-                    || wb.authoring.active_tool().is_some()
-                    || !super::feature_authoring_allows_editor_pointer_move(
-                        wb.feature_authoring.active_tool().is_some(),
-                        captured,
-                    )
-                {
+                if wb.pan_gesture.is_some() {
                     return;
                 }
                 let Some(scene) = editor_scene(&wb) else {
@@ -2125,7 +2194,11 @@ pub(crate) mod wasm {
                 }
                 return;
             };
-            let Some(generation) = callback_pointer_moves.borrow_mut().push(input) else {
+            let painted_item = pointer_event_selection_item(&event);
+            let Some(generation) = callback_pointer_moves
+                .borrow_mut()
+                .push_with_painted_item(input, painted_item)
+            else {
                 return;
             };
             schedule_pointer_move_frame(
@@ -5844,14 +5917,14 @@ mod tests {
     use super::{
         AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, CANVAS_PAN_POINTER_EVENTS,
         CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
-        CanvasPointerCaptures, CanvasPointerContextRoute, CanvasPointerOwnership,
-        CanvasPointerTerminal, CanvasPointerTerminalDisposition, CapturedCanvasPointer,
-        DismissibleDisclosure, DraftingPointerSample, FilletActionRenderAuthority,
-        ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
-        PointerMoveQueue, ReproductionFocusReturn, apply_validated_reproduction, canvas_cursor_key,
-        canvas_pointer_capture_kind, change_owns_option_control_click, compose_editor_scene,
-        coordinate_hud, current_problem_items, feature_authoring_allows_editor_pointer_move,
-        foreground_overlay_escape_owner, history_shortcut,
+        CanvasPointerCaptures, CanvasPointerContextRoute, CanvasPointerMoveOwner,
+        CanvasPointerOwnership, CanvasPointerTerminal, CanvasPointerTerminalDisposition,
+        CapturedCanvasPointer, DismissibleDisclosure, DraftingPointerSample,
+        FilletActionRenderAuthority, ForegroundOverlayEscapeOwner, HistoryShortcut,
+        OptionOverlayKind, OptionOverlayState, PointerMoveQueue, ReproductionFocusReturn,
+        apply_validated_reproduction, canvas_cursor_key, canvas_pointer_capture_kind,
+        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
+        coordinate_hud, current_problem_items, foreground_overlay_escape_owner, history_shortcut,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         reproduction_focus_target_after_action, reproduction_overlay_presentation,
         reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
@@ -7472,17 +7545,45 @@ mod tests {
             .expect("captured suppression sample");
         assert!(captured.inference.suppressed);
         assert_eq!(captured.input, suppressed);
+
+        let mut painted_queue = PointerMoveQueue::default();
+        let first_painted = SelectionItem::Datum(geosolve_sketch::SketchDatum::XAxis);
+        let latest_painted = SelectionItem::Datum(geosolve_sketch::SketchDatum::YAxis);
+        let painted_frame = painted_queue
+            .push_with_painted_item(input(9.0), Some(first_painted))
+            .expect("painted browser frame");
+        assert_eq!(
+            painted_queue.push_with_painted_item(input(10.0), Some(latest_painted)),
+            None,
+        );
+        assert_eq!(
+            painted_queue.take_for_frame(painted_frame),
+            Some(DraftingPointerSample::with_painted_item(
+                input(10.0),
+                Some(latest_painted),
+            )),
+            "RAF coalescing must keep the painted intent hint paired with the latest position",
+        );
     }
 
     #[test]
-    fn feature_authoring_suppresses_select_hover_but_keeps_its_captured_radius_gesture() {
-        assert!(feature_authoring_allows_editor_pointer_move(false, false));
-        assert!(
-            !feature_authoring_allows_editor_pointer_move(true, false),
-            "an uncaptured Fillet-authoring move belongs to native feature picking, not Select hover",
+    fn feature_authoring_routes_uncaptured_hover_and_keeps_its_captured_radius_gesture() {
+        assert_eq!(
+            canvas_pointer_move_owner(false, false, false),
+            CanvasPointerMoveOwner::Editor,
         );
-        assert!(
-            feature_authoring_allows_editor_pointer_move(true, true),
+        assert_eq!(
+            canvas_pointer_move_owner(true, false, false),
+            CanvasPointerMoveOwner::OrdinaryAuthoring,
+        );
+        assert_eq!(
+            canvas_pointer_move_owner(false, true, false),
+            CanvasPointerMoveOwner::FeatureAuthoring,
+            "an uncaptured Fillet-authoring move must reach its native authoring-owner resolver",
+        );
+        assert_eq!(
+            canvas_pointer_move_owner(false, true, true),
+            CanvasPointerMoveOwner::Editor,
             "the editor must continue an already captured Fillet-radius gesture",
         );
     }

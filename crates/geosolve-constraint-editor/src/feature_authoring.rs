@@ -217,6 +217,15 @@ pub struct FeatureAuthoringState {
     options: FeatureAuthoringOptions,
 }
 
+enum FeatureAuthoringPickResolution {
+    Accepted {
+        state: FeatureAuthoringState,
+        outcome: FeatureAuthoringOutcome,
+        item: SelectionItem,
+    },
+    Rejected(FeatureAuthoringOutcome),
+}
+
 impl FeatureAuthoringState {
     #[must_use]
     pub const fn active_tool(&self) -> Option<FeatureAuthoringTool> {
@@ -385,17 +394,60 @@ impl FeatureAuthoringState {
         tolerance: PickTolerance,
         policy: crate::GeometryInteractionPolicy,
     ) -> FeatureAuthoringOutcome {
+        match self
+            .resolve_pick_at_with_policy(snapshot, document, scene, position, tolerance, policy)
+        {
+            FeatureAuthoringPickResolution::Accepted { state, outcome, .. } => {
+                *self = state;
+                outcome
+            }
+            FeatureAuthoringPickResolution::Rejected(outcome) => outcome,
+        }
+    }
+
+    /// Resolves the exact native semantic item that an unchanged Fillet press
+    /// would accept next, without mutating the grouped candidate.
+    pub(crate) fn hover_item_at_with_policy(
+        &self,
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        document: &SketchDocument,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: crate::GeometryInteractionPolicy,
+    ) -> Option<SelectionItem> {
+        match self
+            .resolve_pick_at_with_policy(snapshot, document, scene, position, tolerance, policy)
+        {
+            FeatureAuthoringPickResolution::Accepted { item, .. } => Some(item),
+            FeatureAuthoringPickResolution::Rejected(_) => None,
+        }
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one shared hover/click resolver keeps Fillet incidence fallback and warning precedence atomic"
+    )]
+    fn resolve_pick_at_with_policy(
+        &self,
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        document: &SketchDocument,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: crate::GeometryInteractionPolicy,
+    ) -> FeatureAuthoringPickResolution {
         if self.active.is_none() {
-            return FeatureAuthoringOutcome::Inactive;
+            return FeatureAuthoringPickResolution::Rejected(FeatureAuthoringOutcome::Inactive);
         }
         if scene.accepted_revision != snapshot.accepted_state_identity().revision().get()
             || scene.design_identity != snapshot.sketch_input().design_identity()
             || document.id() != snapshot.accepted_state_identity().document()
         {
-            return self.warning(
+            return FeatureAuthoringPickResolution::Rejected(self.warning(
                 FeatureAuthoringWarningKind::StalePick,
                 "the visible Fillet hit scene belongs to an older accepted sketch input",
-            );
+            ));
         }
         let hits = match scene.native_authoring_hit_candidates_with_policy(
             position,
@@ -405,27 +457,30 @@ impl FeatureAuthoringState {
         ) {
             Ok(hits) => hits,
             Err(crate::NativeAuthoringHitError::CandidateLimitExceeded { .. }) => {
-                return self.warning(
+                return FeatureAuthoringPickResolution::Rejected(self.warning(
                     FeatureAuthoringWarningKind::WorkStopped,
                     "too many overlapping native Fillet hit candidates",
-                );
+                ));
             }
         };
         if hits.is_empty() {
-            return FeatureAuthoringOutcome::NoNativeHit(self.guidance());
+            return FeatureAuthoringPickResolution::Rejected(FeatureAuthoringOutcome::NoNativeHit(
+                self.guidance(),
+            ));
         }
         let incidences = match feature_hit_incidence_index(document, &hits) {
             Ok(incidences) => incidences,
             Err(kind) => {
-                return self.warning(
+                return FeatureAuthoringPickResolution::Rejected(self.warning(
                     kind,
                     "the native point under this click is not a current Fillet operand",
-                );
+                ));
             }
         };
         let mut first_resolution_warning = None;
         let mut duplicate_support_warning = None;
         for hit in hits {
+            let item = hit.item;
             let target = match resolve_feature_item_target_with_incidence(
                 snapshot,
                 document,
@@ -438,10 +493,10 @@ impl FeatureAuthoringState {
                     if matches!(hit.item, SelectionItem::Point(_))
                         && kind != FeatureAuthoringWarningKind::WrongOperandKind
                     {
-                        return self.warning(
+                        return FeatureAuthoringPickResolution::Rejected(self.warning(
                             kind,
                             "the native point under this click is not an unambiguous Fillet corner",
-                        );
+                        ));
                     }
                     first_resolution_warning.get_or_insert(kind);
                     continue;
@@ -457,27 +512,34 @@ impl FeatureAuthoringState {
             match outcome {
                 FeatureAuthoringOutcome::Warning(warning) => {
                     if is_corner {
-                        return FeatureAuthoringOutcome::Warning(warning);
+                        return FeatureAuthoringPickResolution::Rejected(
+                            FeatureAuthoringOutcome::Warning(warning),
+                        );
                     }
                     if warning.kind == FeatureAuthoringWarningKind::DuplicateSupport {
                         duplicate_support_warning.get_or_insert(warning);
                     } else {
-                        return FeatureAuthoringOutcome::Warning(warning);
+                        return FeatureAuthoringPickResolution::Rejected(
+                            FeatureAuthoringOutcome::Warning(warning),
+                        );
                     }
                 }
                 accepted => {
-                    *self = trial;
-                    return accepted;
+                    return FeatureAuthoringPickResolution::Accepted {
+                        state: trial,
+                        outcome: accepted,
+                        item,
+                    };
                 }
             }
         }
         if let Some(warning) = duplicate_support_warning {
-            FeatureAuthoringOutcome::Warning(warning)
+            FeatureAuthoringPickResolution::Rejected(FeatureAuthoringOutcome::Warning(warning))
         } else {
-            self.warning(
+            FeatureAuthoringPickResolution::Rejected(self.warning(
                 first_resolution_warning.unwrap_or(FeatureAuthoringWarningKind::WrongOperandKind),
                 "no applicable native Fillet operand is under this click",
-            )
+            ))
         }
     }
 

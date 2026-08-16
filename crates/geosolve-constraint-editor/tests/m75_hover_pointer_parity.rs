@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ActivePointerGesture, ActivePointerGestureKind, ConstraintEditor, EditorEffect,
-    EditorHoverState, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringOutcome,
+    ActivePointerGesture, ActivePointerGestureKind, AuthoringOutcome, AuthoringState,
+    AuthoringTool, ConstraintEditor, ConstraintIntent, EditorEffect, EditorHoverState,
+    EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringOutcome, FeatureAuthoringPreview,
     FeatureAuthoringState, FeatureAuthoringTool, GeometryPickScope, Modifiers, PickTolerance,
     PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationOccurrence,
     SceneAnnotationVisibility, SceneFilletHit, SceneGlyphMarker, ScreenPoint, SelectionItem,
@@ -24,6 +25,7 @@ struct PointerParityFixture {
     authoring: FeatureAuthoringState,
     first_span: CurveSpan,
     circle_span: CurveSpan,
+    corner: geosolve_sketch::DesignPointId,
     circle_center: geosolve_sketch::DesignPointId,
     overlap_point: geosolve_sketch::DesignPointId,
     overlap: ScreenPoint,
@@ -236,6 +238,7 @@ fn parity_fixture() -> PointerParityFixture {
         authoring,
         first_span,
         circle_span,
+        corner,
         circle_center,
         overlap_point,
         overlap,
@@ -781,6 +784,619 @@ fn annotation_precedes_passive_geometry_and_pointer_move_is_state_neutral() {
             .computed_fillet_continuation_status(),
         before_continuation.as_ref(),
     );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one M75-F001 owner regression freezes ordinary point, curve, fallback, clearing, and neutrality parity"
+)]
+fn ordinary_authoring_hover_is_the_exact_next_compatible_click_target() {
+    let mut fixture = parity_fixture();
+    let scene_before = fixture.base_scene.clone();
+    let design_before = fixture.coordinator.session().design_identity();
+    let design_document_before = fixture.coordinator.session().design_document().clone();
+    let accepted_before = fixture
+        .coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted ordinary-authoring source")
+        .identity();
+    let accepted_document_before = fixture
+        .coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted ordinary-authoring source")
+        .document()
+        .clone();
+    let feature_before = fixture.coordinator.feature_document().identity();
+    let preview_before = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .map(|preview| preview.metadata().clone());
+    let preview_candidate_before = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .expect("held preview before ordinary authoring hover")
+        .candidate()
+        .clone();
+    let preview_snapshot_before = {
+        let snapshot = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("held preview before ordinary authoring hover")
+            .snapshot();
+        (
+            snapshot.input(),
+            snapshot.evaluation_revision(),
+            snapshot.edges().to_vec(),
+        )
+    };
+    let history_before = fixture.coordinator.history_len();
+    let cursor_before = fixture.coordinator.history_cursor();
+    let transcript_before = fixture.coordinator.transcript().to_vec();
+    let selection_before = fixture.coordinator.editor().selection().to_vec();
+    let gesture_before = fixture.coordinator.editor().active_pointer_gesture();
+    let tolerance = PickTolerance::default();
+    let policy = fixture.coordinator.editor().geometry_interaction_policy();
+
+    let mut point_authoring = AuthoringState::default();
+    assert!(matches!(
+        point_authoring.activate(
+            fixture.coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Coincident),
+            &[],
+        ),
+        AuthoringOutcome::ModeEntered { .. }
+    ));
+    let point_authoring_before = point_authoring.clone();
+    let point_item = SelectionItem::Point(fixture.overlap_point);
+    assert_eq!(
+        fixture.coordinator.pointer_move_authoring(
+            &point_authoring,
+            &fixture.base_scene,
+            pointer(30, fixture.overlap, Modifiers::default()),
+            tolerance,
+        ),
+        hover_change(Some(EditorHoverTarget::Geometry(point_item)), None),
+        "ordinary hover must publish the nearer compatible point that the next click consumes",
+    );
+    assert_eq!(point_authoring, point_authoring_before);
+    assert_eq!(fixture.coordinator.history_len(), history_before);
+    assert_eq!(fixture.coordinator.history_cursor(), cursor_before);
+    assert_eq!(
+        fixture.coordinator.session().design_identity(),
+        design_before
+    );
+    assert_eq!(
+        fixture.coordinator.session().design_document(),
+        &design_document_before,
+    );
+    let accepted_after_hover = fixture
+        .coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted source after ordinary hover");
+    assert_eq!(accepted_after_hover.identity(), accepted_before);
+    assert_eq!(accepted_after_hover.document(), &accepted_document_before);
+    assert_eq!(
+        fixture.coordinator.feature_document().identity(),
+        feature_before
+    );
+    assert_eq!(
+        fixture
+            .coordinator
+            .feature_authoring_preview()
+            .map(FeatureAuthoringPreview::metadata),
+        preview_before.as_ref(),
+    );
+    assert_eq!(fixture.coordinator.editor().selection(), selection_before);
+    assert_eq!(fixture.coordinator.transcript(), transcript_before);
+    assert_eq!(
+        fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("ordinary authoring hover retains preview")
+            .candidate(),
+        &preview_candidate_before,
+    );
+    let preview_snapshot_after = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .expect("ordinary authoring hover retains preview")
+        .snapshot();
+    assert_eq!(
+        (
+            preview_snapshot_after.input(),
+            preview_snapshot_after.evaluation_revision(),
+            preview_snapshot_after.edges(),
+        ),
+        (
+            preview_snapshot_before.0,
+            preview_snapshot_before.1,
+            preview_snapshot_before.2.as_slice(),
+        ),
+    );
+    assert_eq!(
+        fixture.coordinator.editor().active_pointer_gesture(),
+        gesture_before,
+    );
+    assert_eq!(fixture.base_scene, scene_before);
+
+    let mut point_click = point_authoring.clone();
+    let point_outcome = point_click.pick_at_with_policy(
+        fixture.coordinator.session().design_document(),
+        &fixture.base_scene,
+        fixture.overlap,
+        tolerance,
+        policy,
+    );
+    assert!(matches!(
+        point_outcome,
+        AuthoringOutcome::Collecting { ref operands, .. }
+            if operands.first().map(|operand| operand.item) == Some(point_item)
+    ));
+
+    let curve_position = fixture.base_scene.viewport.model_to_screen([2.0, 0.0]);
+    let curve_item = SelectionItem::Curve(fixture.first_span);
+    let mut curve_authoring = AuthoringState::default();
+    assert!(matches!(
+        curve_authoring.activate(
+            fixture.coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Horizontal),
+            &[],
+        ),
+        AuthoringOutcome::ModeEntered { .. }
+    ));
+    assert_eq!(
+        fixture.coordinator.pointer_move_authoring(
+            &curve_authoring,
+            &fixture.base_scene,
+            pointer(31, curve_position, Modifiers::default()),
+            tolerance,
+        ),
+        hover_change(Some(EditorHoverTarget::Geometry(curve_item)), None),
+    );
+    let mut curve_click = curve_authoring.clone();
+    let curve_outcome = curve_click.pick_at_with_policy(
+        fixture.coordinator.session().design_document(),
+        &fixture.base_scene,
+        curve_position,
+        tolerance,
+        policy,
+    );
+    assert!(matches!(
+        curve_outcome,
+        AuthoringOutcome::Apply(ref application)
+            if application.operands.first().map(|operand| operand.item) == Some(curve_item)
+    ));
+
+    let reset_position = fixture.base_scene.viewport.model_to_screen([7.0, 3.0]);
+    assert_eq!(
+        fixture.coordinator.pointer_move_authoring(
+            &curve_authoring,
+            &fixture.base_scene,
+            pointer(32, reset_position, Modifiers::default()),
+            tolerance,
+        ),
+        hover_change(None, None),
+    );
+    assert_eq!(
+        fixture.coordinator.pointer_move_authoring(
+            &curve_authoring,
+            &fixture.base_scene,
+            pointer(33, fixture.overlap, Modifiers::default()),
+            tolerance,
+        ),
+        hover_change(Some(EditorHoverTarget::Geometry(curve_item)), None),
+        "an inapplicable nearer point must yield to the applicable line underneath it",
+    );
+    let mut fallback_click = curve_authoring.clone();
+    let fallback_outcome = fallback_click.pick_at_with_policy(
+        fixture.coordinator.session().design_document(),
+        &fixture.base_scene,
+        fixture.overlap,
+        tolerance,
+        policy,
+    );
+    assert!(matches!(
+        fallback_outcome,
+        AuthoringOutcome::Apply(ref application)
+            if application.operands.first().map(|operand| operand.item) == Some(curve_item)
+    ));
+
+    let inapplicable = fixture.base_scene.viewport.model_to_screen([3.0, 4.0]);
+    assert_eq!(
+        fixture.coordinator.pointer_move_authoring(
+            &curve_authoring,
+            &fixture.base_scene,
+            pointer(34, inapplicable, Modifiers::default()),
+            tolerance,
+        ),
+        hover_change(None, None),
+        "geometry that cannot be the next operand must clear authoring hover",
+    );
+    assert_eq!(
+        fixture.coordinator.pointer_move_authoring(
+            &curve_authoring,
+            &fixture.base_scene,
+            pointer(35, curve_position, Modifiers::default()),
+            tolerance,
+        ),
+        hover_change(Some(EditorHoverTarget::Geometry(curve_item)), None),
+    );
+    assert_eq!(
+        fixture.coordinator.pointer_move_authoring(
+            &curve_authoring,
+            &fixture.base_scene,
+            pointer(36, reset_position, Modifiers::default()),
+            tolerance,
+        ),
+        hover_change(None, None),
+        "empty canvas must clear authoring hover",
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one M75-F001 owner regression freezes grouped Fillet point, curve, fallback, clearing, and neutrality parity"
+)]
+fn grouped_fillet_hover_is_the_exact_next_native_click_target() {
+    let mut fixture = parity_fixture();
+    let snapshot = fixture
+        .coordinator
+        .feature_authoring_snapshot()
+        .expect("current feature-authoring snapshot");
+    let document = snapshot.sketch_document().clone();
+    let tolerance = PickTolerance::default();
+    let policy = fixture.coordinator.editor().geometry_interaction_policy();
+    let mut point_authoring = FeatureAuthoringState::default();
+    assert!(matches!(
+        point_authoring.activate(&snapshot, &document, FeatureAuthoringTool::Fillet, &[]),
+        FeatureAuthoringOutcome::ModeEntered(_)
+    ));
+    let point_authoring_before = point_authoring.clone();
+    let point_item = SelectionItem::Point(fixture.corner);
+    let point_position = fixture.base_scene.viewport.model_to_screen([4.0, 0.0]);
+    let scene_before = fixture.base_scene.clone();
+    let design_before = fixture.coordinator.session().design_identity();
+    let design_document_before = fixture.coordinator.session().design_document().clone();
+    let accepted_before = fixture
+        .coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted Fillet source")
+        .identity();
+    let accepted_document_before = fixture
+        .coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted Fillet source")
+        .document()
+        .clone();
+    let feature_before = fixture.coordinator.feature_document().identity();
+    let preview_before = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .map(|preview| preview.metadata().clone());
+    let preview_candidate_before = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .expect("held preview before Fillet authoring hover")
+        .candidate()
+        .clone();
+    let preview_snapshot_before = {
+        let snapshot = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("held preview before Fillet authoring hover")
+            .snapshot();
+        (
+            snapshot.input(),
+            snapshot.evaluation_revision(),
+            snapshot.edges().to_vec(),
+        )
+    };
+    let history_before = fixture.coordinator.history_len();
+    let cursor_before = fixture.coordinator.history_cursor();
+    let transcript_before = fixture.coordinator.transcript().to_vec();
+    let selection_before = fixture.coordinator.editor().selection().to_vec();
+    let gesture_before = fixture.coordinator.editor().active_pointer_gesture();
+
+    assert_eq!(
+        fixture
+            .coordinator
+            .pointer_move_feature_authoring(
+                &point_authoring,
+                &fixture.base_scene,
+                pointer(40, point_position, Modifiers::default()),
+                None,
+                tolerance,
+            )
+            .expect("Fillet point hover"),
+        hover_change(Some(EditorHoverTarget::Geometry(point_item)), None),
+    );
+    assert_eq!(point_authoring, point_authoring_before);
+    assert_eq!(fixture.coordinator.history_len(), history_before);
+    assert_eq!(fixture.coordinator.history_cursor(), cursor_before);
+    assert_eq!(
+        fixture.coordinator.session().design_identity(),
+        design_before
+    );
+    assert_eq!(
+        fixture.coordinator.session().design_document(),
+        &design_document_before,
+    );
+    let accepted_after_hover = fixture
+        .coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted source after Fillet hover");
+    assert_eq!(accepted_after_hover.identity(), accepted_before);
+    assert_eq!(accepted_after_hover.document(), &accepted_document_before);
+    assert_eq!(
+        fixture.coordinator.feature_document().identity(),
+        feature_before
+    );
+    assert_eq!(
+        fixture
+            .coordinator
+            .feature_authoring_preview()
+            .map(FeatureAuthoringPreview::metadata),
+        preview_before.as_ref(),
+    );
+    assert_eq!(fixture.coordinator.editor().selection(), selection_before);
+    assert_eq!(fixture.coordinator.transcript(), transcript_before);
+    assert_eq!(
+        fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("Fillet authoring hover retains preview")
+            .candidate(),
+        &preview_candidate_before,
+    );
+    let preview_snapshot_after = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .expect("Fillet authoring hover retains preview")
+        .snapshot();
+    assert_eq!(
+        (
+            preview_snapshot_after.input(),
+            preview_snapshot_after.evaluation_revision(),
+            preview_snapshot_after.edges(),
+        ),
+        (
+            preview_snapshot_before.0,
+            preview_snapshot_before.1,
+            preview_snapshot_before.2.as_slice(),
+        ),
+    );
+    assert_eq!(
+        fixture.coordinator.editor().active_pointer_gesture(),
+        gesture_before,
+    );
+    assert_eq!(fixture.base_scene, scene_before);
+
+    let mut point_click = point_authoring.clone();
+    let point_outcome = point_click.pick_at_with_policy(
+        &snapshot,
+        &document,
+        &fixture.base_scene,
+        point_position,
+        tolerance,
+        policy,
+    );
+    let mut explicit_point = point_authoring.clone();
+    let explicit_point_outcome =
+        explicit_point.pick_items(&snapshot, &document, &[(point_item, None)]);
+    assert_eq!(point_outcome, explicit_point_outcome);
+    assert_eq!(point_click, explicit_point);
+    assert!(matches!(
+        point_outcome,
+        FeatureAuthoringOutcome::PreviewRequested { .. }
+    ));
+
+    let curve_item = SelectionItem::Curve(fixture.first_span);
+    let curve_position = fixture.base_scene.viewport.model_to_screen([2.0, 0.0]);
+    let mut curve_authoring = FeatureAuthoringState::default();
+    assert!(matches!(
+        curve_authoring.activate(&snapshot, &document, FeatureAuthoringTool::Fillet, &[]),
+        FeatureAuthoringOutcome::ModeEntered(_)
+    ));
+    assert_eq!(
+        fixture
+            .coordinator
+            .pointer_move_feature_authoring(
+                &curve_authoring,
+                &fixture.base_scene,
+                pointer(41, curve_position, Modifiers::default()),
+                None,
+                tolerance,
+            )
+            .expect("Fillet curve hover"),
+        hover_change(Some(EditorHoverTarget::Geometry(curve_item)), None),
+    );
+    let mut curve_click = curve_authoring.clone();
+    let curve_outcome = curve_click.pick_at_with_policy(
+        &snapshot,
+        &document,
+        &fixture.base_scene,
+        curve_position,
+        tolerance,
+        policy,
+    );
+    assert!(matches!(
+        curve_outcome,
+        FeatureAuthoringOutcome::Collecting { ref pending, .. }
+            if pending.first().map(|pick| pick.curve.source.span) == Some(fixture.first_span)
+    ));
+
+    let empty = fixture.base_scene.viewport.model_to_screen([7.0, 3.0]);
+    assert_eq!(
+        fixture
+            .coordinator
+            .pointer_move_feature_authoring(
+                &curve_authoring,
+                &fixture.base_scene,
+                pointer(42, empty, Modifiers::default()),
+                None,
+                tolerance,
+            )
+            .expect("clear Fillet curve hover before overlap"),
+        hover_change(None, None),
+    );
+    let mut fallback_authoring = FeatureAuthoringState::default();
+    assert!(matches!(
+        fallback_authoring.activate(&snapshot, &document, FeatureAuthoringTool::Fillet, &[]),
+        FeatureAuthoringOutcome::ModeEntered(_)
+    ));
+    assert_eq!(
+        fixture
+            .coordinator
+            .pointer_move_feature_authoring(
+                &fallback_authoring,
+                &fixture.base_scene,
+                pointer(43, fixture.overlap, Modifiers::default()),
+                None,
+                tolerance,
+            )
+            .expect("Fillet overlap fallback hover"),
+        hover_change(Some(EditorHoverTarget::Geometry(curve_item)), None),
+        "an isolated overlapping point must yield to the applicable Fillet support beneath it",
+    );
+    let mut fallback_click = fallback_authoring.clone();
+    let fallback_outcome = fallback_click.pick_at_with_policy(
+        &snapshot,
+        &document,
+        &fixture.base_scene,
+        fixture.overlap,
+        tolerance,
+        policy,
+    );
+    assert!(matches!(
+        fallback_outcome,
+        FeatureAuthoringOutcome::Collecting { ref pending, .. }
+            if pending.first().map(|pick| pick.curve.source.span) == Some(fixture.first_span)
+    ));
+
+    let mut inapplicable_scene = fixture.base_scene.clone();
+    inapplicable_scene.curves.clear();
+    assert_eq!(
+        fixture
+            .coordinator
+            .pointer_move_feature_authoring(
+                &fallback_authoring,
+                &inapplicable_scene,
+                pointer(44, fixture.overlap, Modifiers::default()),
+                None,
+                tolerance,
+            )
+            .expect("inapplicable Fillet hover"),
+        hover_change(None, None),
+        "a native point that cannot form a Fillet corner must clear hover",
+    );
+    assert_eq!(
+        fixture
+            .coordinator
+            .pointer_move_feature_authoring(
+                &fallback_authoring,
+                &fixture.base_scene,
+                pointer(45, curve_position, Modifiers::default()),
+                None,
+                tolerance,
+            )
+            .expect("re-prime Fillet curve hover"),
+        hover_change(Some(EditorHoverTarget::Geometry(curve_item)), None),
+    );
+    assert_eq!(
+        fixture
+            .coordinator
+            .pointer_move_feature_authoring(
+                &fallback_authoring,
+                &fixture.base_scene,
+                pointer(46, empty, Modifiers::default()),
+                None,
+                tolerance,
+            )
+            .expect("empty Fillet hover"),
+        hover_change(None, None),
+        "empty canvas must clear Fillet authoring hover",
+    );
+
+    let mut stale_computed_scene = fixture.computed_scene.clone();
+    stale_computed_scene.accepted_revision =
+        stale_computed_scene.accepted_revision.saturating_add(1);
+    let completed_authoring_before = fixture.authoring.clone();
+    let preview_before_stale_hint = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .expect("held preview before stale painted hint")
+        .metadata()
+        .clone();
+    let stale_hint = fixture.coordinator.pointer_move_feature_authoring(
+        &fixture.authoring,
+        &stale_computed_scene,
+        pointer(47, fixture.overlap, Modifiers::default()),
+        Some(SelectionItem::FeatureCorner(fixture.owner)),
+        tolerance,
+    );
+    assert!(
+        stale_hint.is_err(),
+        "a stale painted preview owner must fail closed instead of falling through to overlapping native geometry",
+    );
+    assert_eq!(
+        fixture.coordinator.editor().hover_state(),
+        EditorHoverState::default(),
+        "a rejected painted hint must not publish the native line beneath it",
+    );
+    assert_eq!(fixture.authoring, completed_authoring_before);
+    assert_eq!(
+        fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("stale painted hint retains preview")
+            .metadata(),
+        &preview_before_stale_hint,
+    );
+
+    let corner_item = SelectionItem::FeatureCorner(fixture.owner);
+    let radius_input = pointer(48, fixture.overlap, Modifiers::default());
+    assert_eq!(
+        fixture
+            .coordinator
+            .pointer_move_feature_authoring(
+                &fixture.authoring,
+                &fixture.computed_scene,
+                radius_input,
+                Some(corner_item),
+                tolerance,
+            )
+            .expect("current painted Fillet radius hover"),
+        hover_change(Some(EditorHoverTarget::Geometry(corner_item)), None),
+        "the painted preview target must predict the radius gesture consumed by unchanged pointer-down",
+    );
+    let mut radius_authoring = fixture.authoring.clone();
+    let radius_authoring_before = radius_authoring.clone();
+    let radius_down = fixture
+        .coordinator
+        .transact_feature_authoring_pointer_down(
+            &mut radius_authoring,
+            &fixture.computed_scene,
+            radius_input,
+            Some(corner_item),
+            tolerance,
+            "M75-F001 unchanged authoring radius click",
+        )
+        .expect("painted Fillet radius pointer-down");
+    assert!(matches!(
+        radius_down,
+        geosolve_constraint_editor::FeatureAuthoringPointerDownOutcome::RadiusGesture { .. }
+    ));
+    assert_eq!(radius_authoring, radius_authoring_before);
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]

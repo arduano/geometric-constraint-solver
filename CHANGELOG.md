@@ -151,11 +151,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   then none. Problem-forced annotations now participate in pointer-move as well as pointer-down,
   exact annotation ties are deterministic, contextual corridors remain targetless, and stale hover
   is revoked when tool, selection/visibility, camera, accepted-scene, geometry-policy or non-canvas
-  input ownership changes. Uncaptured feature-authoring movement cannot leak a Select owner while
-  captured Fillet-radius movement remains intact. The workbench paints only the returned headless
-  owner; selectable canvas CSS/DOM hover no longer supplies a competing semantic target. Existing
-  hit tolerances, geometry-role ordering, equations, persistence bytes and golden behavior remain
-  unchanged.
+  input ownership changes. M75-F001 routes uncaptured relation/dimension and grouped-Fillet
+  movement to the same domain-aware compatible-candidate resolver as click, including wrong-kind
+  overlap fallback and computed-preview radius authentication; captured Fillet-radius movement
+  remains intact. The workbench paints only the returned headless owner; a computed DOM item is an
+  independently validated intent hint, and selectable canvas CSS/DOM hover cannot supply a
+  competing semantic target. Existing hit tolerances, geometry-role ordering, equations,
+  persistence bytes and golden behavior remain unchanged.
 - Completed, approved and publicly verified M73 retained-authoring semantic consolidation. One
   private `ConstructionStageSemantics` description now owns the remaining line/polyline
   stage/span/reference-handoff facts. The unreleased `ConstraintKind`,

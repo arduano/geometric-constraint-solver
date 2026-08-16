@@ -40,8 +40,8 @@ use thiserror::Error;
 
 use crate::feature_authoring::resolve_feature_item_picks;
 use crate::{
-    ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
-    ComputedFilletContinuationLimit, ComputedFilletContinuationLimitKind,
+    ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringState,
+    AuthoringTool, ComputedFilletContinuationLimit, ComputedFilletContinuationLimitKind,
     ComputedFilletContinuationStatus, ComputedFilletInteractionSample, ConstraintActionRequest,
     ConstraintEditor, ConstraintIntent, ConstraintRelationChoice, ConstructionCommitPlan,
     ConstructionCommitResult, ConstructionCommitToken, ConstructionProposal, ConstructionResult,
@@ -2412,6 +2412,107 @@ impl RetainedEditorCoordinator {
         ComputedFeatureAuthoringSnapshot::capture(&self.session).map_err(Into::into)
     }
 
+    /// Publishes the exact compatible native item that an unchanged ordinary
+    /// constraint/dimension authoring press would consume.
+    pub fn pointer_move_authoring(
+        &mut self,
+        state: &AuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        tolerance: PickTolerance,
+    ) -> Vec<EditorEffect> {
+        let target = state.hover_item_at_with_policy(
+            self.session.design_document(),
+            scene,
+            input.position,
+            tolerance,
+            self.editor.geometry_interaction_policy(),
+        );
+        self.editor.set_authoring_hover_target(target)
+    }
+
+    /// Publishes the exact compatible item that an unchanged grouped Fillet
+    /// authoring press would consume, without changing the candidate or
+    /// retained feature preview. A painted computed corner remains only an
+    /// intent hint and must pass the same retained-preview and scene checks as
+    /// pointer-down before it can precede native operand picking.
+    ///
+    /// # Errors
+    ///
+    /// Rejects when no current accepted feature-authoring snapshot exists or
+    /// when a painted computed-corner hint does not match the exact retained
+    /// preview, scene provenance, and independently resolved radius hit.
+    pub fn pointer_move_feature_authoring(
+        &mut self,
+        state: &FeatureAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        painted_item: Option<SelectionItem>,
+        tolerance: PickTolerance,
+    ) -> Result<Vec<EditorEffect>, CoordinatorError> {
+        if let Some(owner) =
+            self.validated_feature_authoring_radius_owner(state, scene, painted_item)?
+        {
+            let target = self
+                .editor
+                .feature_radius_hover_item(scene, input.position, owner, tolerance)
+                .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+            return Ok(self.editor.set_authoring_hover_target(Some(target)));
+        }
+        let snapshot = self.feature_authoring_snapshot()?;
+        let target = state.hover_item_at_with_policy(
+            &snapshot,
+            snapshot.sketch_document(),
+            scene,
+            input.position,
+            tolerance,
+            self.editor.geometry_interaction_policy(),
+        );
+        Ok(self.editor.set_authoring_hover_target(target))
+    }
+
+    fn validated_feature_authoring_radius_owner(
+        &self,
+        state: &FeatureAuthoringState,
+        scene: &EditorScene,
+        painted_item: Option<SelectionItem>,
+    ) -> Result<Option<ComputedCornerRef>, CoordinatorError> {
+        let Some(SelectionItem::FeatureCorner(owner)) = painted_item else {
+            return Ok(None);
+        };
+        let candidate = match state.apply() {
+            FeatureAuthoringOutcome::Apply(candidate) => candidate,
+            FeatureAuthoringOutcome::ModeEntered(_)
+            | FeatureAuthoringOutcome::NoNativeHit(_)
+            | FeatureAuthoringOutcome::Collecting { .. }
+            | FeatureAuthoringOutcome::PreviewRequested { .. }
+            | FeatureAuthoringOutcome::Warning(_)
+            | FeatureAuthoringOutcome::CandidateCleared(_)
+            | FeatureAuthoringOutcome::ModeExited
+            | FeatureAuthoringOutcome::Inactive => {
+                return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+            }
+        };
+        let preview = self
+            .feature_authoring_preview
+            .as_ref()
+            .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+        let accepted = self
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+        if preview.metadata.feature != owner.feature
+            || preview.corner_index(owner).is_none()
+            || preview.candidate() != &candidate
+            || scene.accepted_revision != accepted.identity().revision().get()
+            || scene.design_identity != accepted.design_identity()
+            || scene.computed_input != Some(preview.snapshot().input())
+        {
+            return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+        }
+        Ok(Some(owner))
+    }
+
     /// Converts current native point/span selection into an ordered stream of
     /// exact computed-Fillet picks. Several corner points remain several pairs.
     ///
@@ -2514,37 +2615,9 @@ impl RetainedEditorCoordinator {
         tolerance: PickTolerance,
         label: impl Into<String>,
     ) -> Result<FeatureAuthoringPointerDownOutcome, CoordinatorError> {
-        if let Some(SelectionItem::FeatureCorner(owner)) = painted_item {
-            let candidate = match state.apply() {
-                FeatureAuthoringOutcome::Apply(candidate) => candidate,
-                FeatureAuthoringOutcome::ModeEntered(_)
-                | FeatureAuthoringOutcome::NoNativeHit(_)
-                | FeatureAuthoringOutcome::Collecting { .. }
-                | FeatureAuthoringOutcome::PreviewRequested { .. }
-                | FeatureAuthoringOutcome::Warning(_)
-                | FeatureAuthoringOutcome::CandidateCleared(_)
-                | FeatureAuthoringOutcome::ModeExited
-                | FeatureAuthoringOutcome::Inactive => {
-                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
-                }
-            };
-            let preview = self
-                .feature_authoring_preview
-                .as_ref()
-                .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
-            let accepted = self
-                .session
-                .accepted_state_for_current_input()
-                .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
-            if preview.metadata.feature != owner.feature
-                || preview.corner_index(owner).is_none()
-                || preview.candidate() != &candidate
-                || scene.accepted_revision != accepted.identity().revision().get()
-                || scene.design_identity != accepted.design_identity()
-                || scene.computed_input != Some(preview.snapshot().input())
-            {
-                return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
-            }
+        if let Some(owner) =
+            self.validated_feature_authoring_radius_owner(state, scene, painted_item)?
+        {
             if self.editor.active_pointer_gesture().is_some() {
                 return Ok(FeatureAuthoringPointerDownOutcome::RadiusGesture {
                     effects: Vec::new(),

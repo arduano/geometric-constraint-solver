@@ -4127,6 +4127,13 @@ impl ConstraintEditor {
         }
     }
 
+    pub(crate) fn set_authoring_hover_target(
+        &mut self,
+        item: Option<SelectionItem>,
+    ) -> Vec<EditorEffect> {
+        self.set_hover_state(item.map(EditorHoverTarget::Geometry), None)
+    }
+
     /// Returns the explicit user-picked parameter for one selected curve span.
     #[must_use]
     pub fn curve_pick_parameter(&self, span: CurveSpan) -> Option<f64> {
@@ -4425,39 +4432,57 @@ impl ConstraintEditor {
             modifiers: Modifiers::default(),
             ..input
         };
-        let mut effects = match scene.resolve_fillet_hit_with_policy(
-            input.position,
-            tolerance,
-            self.geometry_policy,
-        ) {
-            Some(SceneFilletHit::Radius {
-                owner: resolved,
-                distance_pixels,
-            }) if resolved == owner => self.pointer_down_resolved_hit(
-                scene,
-                direct_input,
-                Some(Hit {
-                    item: SelectionItem::FeatureCorner(owner),
-                    distance_pixels,
-                    curve_parameter: None,
-                    geometry: None,
-                }),
-            ),
-            Some(SceneFilletHit::Radius { .. }) => return None,
-            Some(SceneFilletHit::Native(_)) | None => {
-                let hit = scene
-                    .computed_curves
-                    .iter()
-                    .find(|curve| curve.owner == owner && curve.is_pickable(self.geometry_policy))
-                    .and_then(|curve| {
-                        computed_curve_hit(curve, input.position, tolerance.curve_pixels)
-                    })?;
-                self.pointer_down_resolved_hit(scene, direct_input, Some(hit))
-            }
-        };
+        let hit = self.resolve_feature_radius_hit(scene, input.position, owner, tolerance)?;
+        let mut effects = self.pointer_down_resolved_hit(scene, direct_input, Some(hit));
         let mut combined = self.clear_fillet_branch_preview();
         combined.append(&mut effects);
         Some(combined)
+    }
+
+    pub(crate) fn feature_radius_hover_item(
+        &self,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        tolerance: PickTolerance,
+    ) -> Option<SelectionItem> {
+        if self.feature_radius_gesture.is_some()
+            || self.feature_contact_gesture.is_some()
+            || self.tool != EditorTool::Select
+        {
+            return None;
+        }
+        self.resolve_feature_radius_hit(scene, position, owner, tolerance)
+            .map(|hit| hit.item)
+    }
+
+    fn resolve_feature_radius_hit(
+        &self,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        tolerance: PickTolerance,
+    ) -> Option<Hit> {
+        if !position.is_finite() || !tolerance.is_valid() {
+            return None;
+        }
+        match scene.resolve_fillet_hit_with_policy(position, tolerance, self.geometry_policy) {
+            Some(SceneFilletHit::Radius {
+                owner: resolved,
+                distance_pixels,
+            }) if resolved == owner => Some(Hit {
+                item: SelectionItem::FeatureCorner(owner),
+                distance_pixels,
+                curve_parameter: None,
+                geometry: None,
+            }),
+            Some(SceneFilletHit::Radius { .. }) => None,
+            Some(SceneFilletHit::Native(_)) | None => scene
+                .computed_curves
+                .iter()
+                .find(|curve| curve.owner == owner && curve.is_pickable(self.geometry_policy))
+                .and_then(|curve| computed_curve_hit(curve, position, tolerance.curve_pixels)),
+        }
     }
 
     #[cfg(test)]

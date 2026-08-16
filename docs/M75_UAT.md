@@ -1,22 +1,23 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M75 focused UAT — Select hover and primary pointer-owner parity
+# M75 focused UAT — hover and primary pointer-owner parity
 
-Status: **clean-qualified immutable candidate nominated; human scorecard not started and every
-human disposition remains pending as of 2026-08-16**. GitHub Pages currently serves the accepted
-M74 artifact. Do not use it as M75 authority.
+Status: **initial candidate withdrawn after confirmed finding M75-F001; replacement qualification
+is pending and every human disposition remains pending as of 2026-08-16**. GitHub Pages currently
+serves the accepted M74 artifact. Do not use it as M75 authority.
 
-Candidate source: `f3affff1b62b1cb484a59647c4072c94c3b12ada`
+Withdrawn initial candidate source: `f3affff1b62b1cb484a59647c4072c94c3b12ada`
 
-Candidate tree: `7662abc8b7c71130f54fbf2745afa60f0d286431`
+Withdrawn initial candidate tree: `7662abc8b7c71130f54fbf2745afa60f0d286431`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
+Historical snapshot endpoint, temporarily retained until replacement handover:
+`http://100.94.63.83:8080/`
 
-Server PID: `3801058` (retained command-runner session `47845`)
+Historical server PID: `3801058` (retained command-runner session `47845`)
 
-Immutable snapshot: `/tmp/geosolve-m75-uat.hUSaG7` (directory `0555`, files `0444`)
+Withdrawn immutable snapshot: `/tmp/geosolve-m75-uat.hUSaG7` (directory `0555`, files `0444`)
 
-Ordered-manifest aggregate:
+Withdrawn ordered-manifest aggregate:
 `69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`
 
 | File | Bytes | SHA-256 |
@@ -29,7 +30,7 @@ Ordered-manifest aggregate:
 | `index.html` | 27,478 | `e00a829f0f954422fd9c5454110fd67d979b5fde42934ac230fbf34822c18430` |
 | `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
 
-The exact clean command
+The initial candidate's exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 at the candidate
 source. It includes formatting, warnings-denied workspace Clippy, locked all-feature tests,
 unchanged 270/270 golden `--require-clean`, native/WASM M75 9/9 parity, Rustdoc, benchmark
@@ -45,10 +46,12 @@ are `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`. These mechanical checks do
 not dispose any human scorecard item.
 
-Direct Rust/WASM tests will own exact precedence, distance comparisons, boundary equality,
-mutation freedom and invalidation. Human UAT judges whether hover truthfully predicts a click,
-whether related context is understandable, and whether the complete desktop interaction remains
-polished and accessible.
+M75-F001 invalidates this initial candidate for hands-on review: native relation/dimension and
+Fillet clicks work, but uncaptured authoring movement publishes no target. Direct Rust/WASM tests
+own the corrected exact precedence, distance comparisons, boundary equality, mutation freedom and
+invalidation. Human UAT resumes only on the replacement snapshot and judges whether hover
+truthfully predicts a click, whether related context is understandable, and whether the complete
+desktop interaction remains polished and accessible.
 
 ## Review matrix
 
@@ -234,8 +237,10 @@ Acquire a clear primary hover before each step.
 5. Leave/re-enter the mapped plane and letterbox bands. No stale browser-only CSS/SVG highlight
    survives when headless state reports none.
 6. Activate Fillet authoring and move across points, annotations, geometry and datums before
-   pressing. No Select hover appears while feature picking owns the canvas. Start a Fillet-radius
-   drag from a prepared preview and confirm its captured movement still tracks until release.
+   pressing. Only the exact applicable native point/curve operand highlights; unrelated Select
+   annotation/datum ownership does not leak into authoring. Start a Fillet-radius drag from a
+   prepared preview and confirm its computed owner highlights before the press and its captured
+   movement still tracks until release.
 
 Pass when every painted hover is visibly tied to the current headless tool/camera/scene/input
 context.
@@ -258,6 +263,32 @@ context.
 Pass when the behavior stays predictable across scale and remains usable without conflating
 pointer hover, keyboard focus, selection or problem state.
 
+## M75-F001 targeted recheck — active authoring hover predicts click
+
+Run this first on the replacement candidate. At minimum repeat steps 1–4 at both required desktop
+sizes; use coarse and fine zoom for the overlap case.
+
+1. Open **2D Fillet workshop**, activate Fillet, and hover an applicable native corner point. The
+   point gains the primary hover treatment before clicking; clicking without moving consumes that
+   same corner and advances/previews the Fillet collector.
+2. Restart Fillet and hover the middle of an applicable native line. The line highlights before
+   the press, and clicking without moving makes that same line `authoring-pending`.
+3. Use an overlap where the visually nearer item is not valid for the current stage but an
+   underlying line is valid. Hover and unchanged click both choose the applicable line. Empty or
+   wholly inapplicable geometry shows no primary highlight.
+4. Repeat representative ordinary authoring tools: Coincident over a point, Horizontal/Vertical
+   over a line, and one dimension tool over its valid operand. Each hover predicts the operand;
+   wrong-kind geometry does not highlight and cannot suppress an applicable fallback.
+5. Complete a Fillet preview, hover its interactive computed arc/radius surface, and press without
+   moving. The computed corner highlights first and the press begins the same radius gesture.
+   Native geometry beneath a current painted preview must not steal the promised owner.
+6. Move between point, line and empty canvas, then switch tools or leave the canvas. Highlighting
+   updates or clears immediately. Once a radius drag captures the pointer, movement continues to
+   the matching release without being rerouted to native authoring hover.
+
+Pass when active authoring hover is a truthful, restrained preview of the exact next click target
+and never looks like an unrelated Select-mode highlight.
+
 ## Approval record
 
 Carried deferred items:
@@ -277,6 +308,7 @@ New M75 items:
 - M75-U10: **Pending**.
 - M75-U11: **Pending**.
 - M75-U12: **Pending**.
+- M75-F001 targeted recheck: **Pending replacement candidate**.
 - Final M75 approval: **Pending**.
 
 Do not mark any item passed from automated evidence alone. The exact nominated source/tree,

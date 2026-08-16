@@ -175,6 +175,15 @@ pub struct AuthoringState {
     options: AuthoringOptions,
 }
 
+enum AuthoringPickResolution {
+    Accepted {
+        state: AuthoringState,
+        outcome: AuthoringOutcome,
+        item: SelectionItem,
+    },
+    Rejected(AuthoringOutcome),
+}
+
 impl AuthoringState {
     #[must_use]
     pub const fn active_tool(&self) -> Option<AuthoringTool> {
@@ -324,8 +333,41 @@ impl AuthoringState {
         tolerance: PickTolerance,
         policy: GeometryInteractionPolicy,
     ) -> AuthoringOutcome {
+        match self.resolve_pick_at_with_policy(document, scene, position, tolerance, policy) {
+            AuthoringPickResolution::Accepted { state, outcome, .. } => {
+                *self = state;
+                outcome
+            }
+            AuthoringPickResolution::Rejected(outcome) => outcome,
+        }
+    }
+
+    /// Resolves the exact semantic item that an unchanged canvas press would
+    /// accept next, without mutating authoring state.
+    pub(crate) fn hover_item_at_with_policy(
+        &self,
+        document: &SketchDocument,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<SelectionItem> {
+        match self.resolve_pick_at_with_policy(document, scene, position, tolerance, policy) {
+            AuthoringPickResolution::Accepted { item, .. } => Some(item),
+            AuthoringPickResolution::Rejected(_) => None,
+        }
+    }
+
+    fn resolve_pick_at_with_policy(
+        &self,
+        document: &SketchDocument,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> AuthoringPickResolution {
         let Some(tool) = self.active else {
-            return AuthoringOutcome::Inactive;
+            return AuthoringPickResolution::Rejected(AuthoringOutcome::Inactive);
         };
         let hits = match scene.native_authoring_hit_candidates_with_policy(
             position,
@@ -335,16 +377,20 @@ impl AuthoringState {
         ) {
             Ok(hits) => hits,
             Err(crate::NativeAuthoringHitError::CandidateLimitExceeded { .. }) => {
-                return AuthoringOutcome::Warning(AuthoringWarning {
-                    reason: DisabledReason::WrongOperandKind,
-                    expected: expected_operands(document, tool, &self.pending),
-                    message: "too many overlapping authoring candidates under this click".into(),
-                });
+                return AuthoringPickResolution::Rejected(AuthoringOutcome::Warning(
+                    AuthoringWarning {
+                        reason: DisabledReason::WrongOperandKind,
+                        expected: expected_operands(document, tool, &self.pending),
+                        message: "too many overlapping authoring candidates under this click"
+                            .into(),
+                    },
+                ));
             }
         };
         let mut first_warning = None;
         let mut first_collecting = None;
         for hit in hits {
+            let item = hit.item;
             let mut trial = self.clone();
             let outcome = trial.pick(
                 document,
@@ -352,8 +398,11 @@ impl AuthoringState {
             );
             match outcome {
                 AuthoringOutcome::Apply(_) => {
-                    *self = trial;
-                    return outcome;
+                    return AuthoringPickResolution::Accepted {
+                        state: trial,
+                        outcome,
+                        item,
+                    };
                 }
                 AuthoringOutcome::Collecting { .. } => {
                     // A newly admissible variable-arity prefix (for example a
@@ -362,7 +411,7 @@ impl AuthoringState {
                     // click. Retain the first valid prefix only if no later
                     // hit can apply immediately.
                     if first_collecting.is_none() {
-                        first_collecting = Some((trial, outcome));
+                        first_collecting = Some((trial, outcome, item));
                     }
                 }
                 AuthoringOutcome::Warning(value) => {
@@ -374,18 +423,23 @@ impl AuthoringState {
                 | AuthoringOutcome::Inactive => {}
             }
         }
-        if let Some((trial, outcome)) = first_collecting {
-            *self = trial;
-            return outcome;
+        if let Some((state, outcome, item)) = first_collecting {
+            return AuthoringPickResolution::Accepted {
+                state,
+                outcome,
+                item,
+            };
         }
-        AuthoringOutcome::Warning(first_warning.unwrap_or_else(|| {
-            warning(
-                document,
-                tool,
-                &self.pending,
-                DisabledReason::WrongOperandKind,
-            )
-        }))
+        AuthoringPickResolution::Rejected(AuthoringOutcome::Warning(first_warning.unwrap_or_else(
+            || {
+                warning(
+                    document,
+                    tool,
+                    &self.pending,
+                    DisabledReason::WrongOperandKind,
+                )
+            },
+        )))
     }
 
     /// Clears a terminal application attempt while retaining the repeated tool.

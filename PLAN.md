@@ -69,8 +69,9 @@ release gate with those focused regressions, the unchanged 198/198 golden and by
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
 of every prepared UAT step. M71-M74 are complete; M74 closes under explicit scoped approval of its
 clean-qualified frozen candidate and exact final Pages publication, while hands-on UAT remains
-deferred to the now-active M75 follow-up milestone. M75 implementation, clean qualification and
-immutable Tailscale nomination pass; combined human UAT and M75 Pages publication remain open. M66's
+deferred to the now-active M75 follow-up milestone. M75's initial immutable nomination was
+withdrawn after finding M75-F001; its authoring-hover correction is implemented and replacement
+qualification, combined human UAT and M75 Pages publication remain open. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4680,13 +4681,15 @@ browser adds only presentation/input translation; canonical sketch v1-v4 remains
 candidate passes the mechanical scorecard; the scoped closure decision explicitly defers hands-on
 UAT; and the accepted source is exact-verified by the final Pages publication.
 
-### M75: Select hover and primary pointer-owner parity
+### M75: hover and primary pointer-owner parity
 
-Status: **active; implementation, clean qualification and immutable Tailscale nomination complete
-as of 2026-08-16, with human UAT pending**. This milestone makes Select hover predict the exact
-primary owner that the same pointer sample would
+Status: **active; initial immutable nomination withdrawn after confirmed M75-F001, correction
+implemented and replacement qualification pending as of 2026-08-16**. This milestone makes Select
+hover predict the exact primary owner that the same pointer sample would
 receive on pointer-down, then executes the deferred M74-U1 through M74-U8 scorecard beside the new
-hover review. `docs/M75_GOALS.md` owns the detailed scope.
+hover review. Active relation/dimension and Fillet authoring additionally preview the exact
+compatible operand or radius owner that unchanged pointer-down will consume.
+`docs/M75_GOALS.md` owns the detailed scope.
 
 - [x] Approve and record the M75 ownership, lifecycle, compatibility and carried-UAT contract.
 - [x] Route Select pointer-move and pointer-down through one headless candidate construction and
@@ -4699,32 +4702,37 @@ hover review. `docs/M75_GOALS.md` owns the detailed scope.
   reveal related context while reporting no hover target, and therefore cannot promise an
   annotation or geometry click owner.
 - [x] Clear stale hover on tool, selection/visibility, camera, accepted-scene and
-  overlay/input-ownership changes; suppress uncaptured Select hover during feature authoring while
-  preserving a captured Fillet-radius gesture; and paint hover/related state only from the current
-  headless result.
+  overlay/input-ownership changes; route uncaptured relation/dimension and Fillet movement to its
+  domain-aware authoring owner while preserving a captured Fillet-radius gesture; and paint
+  hover/related state only from the current headless result.
+- [x] Correct finding M75-F001: share exact compatible native-candidate resolution between
+  authoring hover and click, preserve wrong-kind overlap fallback, authenticate computed-radius
+  intent through retained preview/scene/proximity checks, and prove hover mutation-free.
 - [x] Add focused native/WASM editor and thin web-adapter regressions for the complete precedence,
   problem visibility, deterministic ties, context-only corridors and invalidation matrix. Preserve
   all established hit tolerances, role ordering, solver/branch behavior, persistence schemas and
   the existing authoring/scene golden bytes.
-- [x] Limit additive public compatibility surface to problem-aware pointer-move wrappers over
-  existing DTOs; use existing lifecycle paths for host-side remaps and add no new persistence,
-  solver, equation or browser-authority API.
-- [x] Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant
+- [x] Limit additive public compatibility surface to problem-aware Select and domain-aware
+  authoring pointer-move wrappers over existing DTOs; use existing lifecycle paths for host-side
+  remaps and add no new persistence, solver, equation or browser-authority API.
+- [x] Pass the initial formatting, warnings-denied workspace Clippy, locked all-feature tests, relevant
   native/WASM checks, unchanged golden check/clean, Trunk release assembly and the complete clean
-  release gate; freeze and byte-verify an immutable Tailscale candidate.
+  release gate; freeze and byte-verify the initial immutable Tailscale candidate.
+- [ ] Pass the same complete clean gate for the M75-F001 replacement; freeze, byte-verify and serve
+  a new immutable Tailscale candidate before resuming human UAT.
 - [ ] Complete `docs/M75_UAT.md` at both desktop sizes and multiple zoom/tolerance fringes,
   including every deferred M74-U1 through M74-U8 item, hover/click parity and accessibility, then
   receive explicit supervising-human approval.
 - [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact
   byte-for-byte and close M75.
 
-Implementation checkpoint (2026-08-16): the shared resolver, problem-aware wrappers, deterministic
+Initial implementation checkpoint (2026-08-16): the shared Select resolver, problem-aware wrappers, deterministic
 ties, selection/lifecycle invalidation, authoring ownership and headless-only browser paint are
 implemented. Focused native/WASM parity passes 9/9, 339 editor unit tests plus all integration/doc
 tests pass, and 116 web tests, the locked all-feature workspace suite, warnings-denied workspace
 Clippy, WASM check, unchanged 270-row golden check and Trunk release build pass.
 
-Mechanical nomination checkpoint (2026-08-16): exact clean product source
+Initial mechanical nomination checkpoint (2026-08-16; withdrawn for UAT by M75-F001): exact clean product source
 `f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
 `7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete clean release gate. The exact
 gate-produced seven-file distribution was copied without rebuilding to read-only
@@ -4736,11 +4744,21 @@ compatibility and M74 Chromium checks pass at `1440x900` and `1024x720`. This is
 nomination only: M74-U1 through M74-U8 and M75-U9 through M75-U12 remain pending, GitHub Pages
 continues to serve accepted M74, and no M75 acceptance or closure is claimed.
 
+Finding M75-F001 checkpoint (2026-08-16): the frozen candidate accepted Fillet native point/curve
+clicks but discarded the corresponding uncaptured authoring moves, so no `geometry-hovered` target
+was painted. Ordinary relation/dimension authoring had the same omission. The correction shares
+the exact candidate resolver for move/down, carries computed-corner paint only as independently
+validated intent, and preserves captured radius movement. Focused native/WASM parity passes 11/11,
+demo-web tests pass 116/116 and focused warnings-denied Clippy passes. Replacement clean gate,
+freeze and Tailscale handover remain open; the old snapshot stays immutable and GitHub Pages stays
+on M74.
+
 Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
 its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other
 native/computed geometry, intrinsic datum and none; problem-forced annotations participate exactly
 when visible; context-only corridors remain targetless; stale hover cannot outlive its owning tool,
-camera, scene or overlay state; the browser paints only authenticated headless hover state; existing
+camera, scene or overlay state; active authoring hover and click share exact compatible candidate
+resolution and computed-preview authentication; the browser paints only authenticated headless hover state; existing
 tolerances, role ordering, schemas, equations, solver behavior and golden bytes remain unchanged;
 the carried and new human scorecards pass on a clean, byte-verified candidate before exact Pages
 publication.

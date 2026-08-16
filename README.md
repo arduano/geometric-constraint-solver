@@ -74,16 +74,17 @@ semantic consolidation is complete, approved and publicly verified. M74's intrin
 geometry and production-style desktop polish are complete under the supervising caller's scoped
 close decision and exact final GitHub Pages verification. Separate hands-on UAT remains deferred,
 not passed, and transfers with any findings to active M75. M75's shared headless Select resolver,
-hover/click ownership parity and stale-hover invalidation are implemented, clean-qualified and
-served as an immutable Tailscale candidate; combined human UAT and M75 Pages publication remain
-pending.
+hover/click ownership parity and stale-hover invalidation passed an initial clean immutable
+nomination. M75-F001 then exposed discarded active-authoring moves; the domain-aware authoring
+hover/click correction is implemented and focused-qualified. Replacement immutable nomination,
+combined human UAT and M75 Pages publication remain pending.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74 closed/public and M75 active on frozen UAT.
+3. `PLAN.md` — authoritative roadmap, with M74 closed/public and M75 active on replacement UAT.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -93,7 +94,7 @@ Physics, collision and a production rendering system remain out of scope.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
 11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — active hover/click
-    ownership milestone, frozen candidate and pending combined human scorecard.
+    ownership milestone, M75-F001 replacement and pending combined human scorecard.
 
 ## Workspace
 

@@ -25,11 +25,12 @@ advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
 - **Baseline:** implemented and accepted behavior through M74. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers, rather than passes, hands-on UAT. M1-M7 remain the frozen regression baseline.
-- **Active target:** M75 makes one presentation-independent Select resolver own hover prediction
-  and primary pointer-down targeting, including problem-visible annotations, deterministic
-  occurrence ties, targetless context corridors and lifecycle revocation. Implementation and
-  clean immutable Tailscale nomination pass; carried M74 and new M75 human UAT plus final M75
-  GitHub Pages publication remain pending.
+- **Active target:** M75 makes presentation-independent resolvers own Select and active-authoring
+  hover/click parity, including problem-visible annotations, deterministic occurrence ties,
+  targetless context corridors, compatible operand fallback and lifecycle revocation. The initial
+  immutable candidate was withdrawn after M75-F001; its correction is implemented, while
+  replacement qualification, carried M74/new M75 human UAT and final Pages publication remain
+  pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1246,8 +1247,9 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   270-row reviewed golden, independent review, complete clean gate, Chromium checks and frozen
   artifact pass. The supervising caller explicitly approved scoped closure on 2026-08-16 while
   leaving U1-U8 deferred to the now-active M75 bug-fixing/UAT follow-up milestone.
-- M75: active Select hover and primary pointer-owner parity milestone. One headless resolver owns
-  the complete target order and invalidation lifecycle; focused native/WASM/web tests, unchanged
-  270-row golden, complete clean gate and immutable served candidate pass. All carried M74-U1
-  through M74-U8 and new M75-U9 through M75-U12 human dispositions remain pending, and GitHub
-  Pages remains on accepted M74.
+- M75: active hover and primary pointer-owner parity milestone. One headless resolver owns the
+  Select target order and invalidation lifecycle; domain-aware ordinary/Fillet resolvers own the
+  exact next compatible authoring operand. The initial clean immutable candidate passed but was
+  withdrawn after M75-F001 exposed discarded authoring movement. The correction passes focused
+  native/WASM/web qualification; replacement clean gate/nomination, all carried M74-U1 through
+  M74-U8 and new M75 human dispositions remain pending, and Pages stays on accepted M74.

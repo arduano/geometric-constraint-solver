@@ -1341,8 +1341,9 @@ the final GitHub Pages artifact. M73 adds no new editable sample or browser scen
 explicit scoped closure approval on its clean-qualified, byte-verified F001 replacement. Its
 hands-on intrinsic-datum and desktop-polish scorecard is intentionally deferred into the next
 bug-fixing/UAT follow-up milestone rather than claimed as completed human evidence. Exact final
-M74 Pages publication passes. That follow-up is active as M75: its implementation, clean gate and
-immutable Tailscale nomination pass, while every carried and new human disposition remains pending.
+M74 Pages publication passes. That follow-up is active as M75: its initial immutable nomination was
+withdrawn after M75-F001, the authoring-hover correction is implemented, and replacement
+qualification plus every carried and new human disposition remain pending.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1872,8 +1873,8 @@ publication authority. U1-U8 and future findings are carried by active M75.
 
 ### M75-H1 - Select hover predicts the primary pointer-down owner
 
-Status: implemented and clean-qualified natively and under WASM; immutable Tailscale nomination
-passes and hands-on evidence remains pending.
+Status: implemented and clean-qualified natively and under WASM on the initial candidate;
+replacement nomination after M75-F001 remains pending and hands-on evidence has not started.
 
 Construct finite accepted scenes whose projected hit envelopes overlap at every adjacent priority
 edge. For the same Select tool, scene, camera, problem set, policy and pointer coordinate, resolve
@@ -1896,8 +1897,8 @@ hover sample mutates accepted geometry, selection, history, Fillet state or scen
 
 ### M75-H2 - Problem annotations, deterministic occurrences and targetless context
 
-Status: implemented and clean-qualified natively and under WASM; immutable Tailscale nomination
-passes and hands-on evidence remains pending.
+Status: implemented and clean-qualified natively and under WASM on the initial candidate;
+replacement nomination after M75-F001 remains pending and hands-on evidence has not started.
 
 Create one constraint and one dimension occurrence that are normally hidden but forced visible by
 the current problem set. Each visible occurrence participates in the same annotation hit path used
@@ -1915,24 +1916,50 @@ placement, visibility, fan-out and hit tolerances remain unchanged.
 
 ### M75-H3 - Hover authority is revoked with its interaction context
 
-Status: implemented and clean-qualified; immutable Tailscale nomination passes and hands-on
-evidence remains pending.
+Status: implemented and initially clean-qualified; replacement nomination after M75-F001 remains
+pending and hands-on evidence has not started.
 
 Acquire each owner class, then change the active tool or selection, pan/zoom/Fit/Origin camera,
 replace the accepted scene through edit/Undo/Redo/reload, hide the relevant visibility class, or
 transfer pointer ownership to a tool popout/dialog/overlay. The stale hover target and related
 paint clear before the changed state can render. Returning to Select or the canvas does not
 resurrect it; a new mapped pointer sample is required. Existing pointer-leave/cancel behavior
-remains consistent. While Fillet feature authoring owns uncaptured movement, no Select owner is
-published; its already captured radius gesture continues normally.
+remains consistent. While ordinary or Fillet authoring owns uncaptured movement, no unrelated
+Select owner is published; its exact compatible next operand is published instead. An already
+captured radius gesture continues normally.
 
 At the thin web boundary, submit only normalized pointer/context inputs and render only the current
 headless hover/related DTO. DOM/SVG event targets, CSS `:hover`, painted hit strokes and cached
-browser candidates cannot choose or preserve a second canvas owner. Focused native/WASM tests own
-resolution semantics; adapter tests own event translation and stale-paint clearing. The only
-additive public surface is problem-aware pointer movement over existing DTOs; existing lifecycle
-paths revoke host camera, scene and input-owner context. Solver, persistence, role ordering, hit
-tolerances and golden bytes do not change.
+browser candidates cannot choose or preserve a second canvas owner. A painted computed corner is
+only an intent hint and must pass current-preview/provenance/proximity validation. Focused
+native/WASM tests own resolution semantics; adapter tests own event translation and stale-paint
+clearing. Additive public surface is limited to problem-aware Select and domain-aware authoring
+pointer movement over existing DTOs; existing lifecycle paths revoke host camera, scene and
+input-owner context. Solver, persistence, role ordering, hit tolerances and golden bytes do not
+change.
+
+### M75-F001 - Active authoring hover matches its unchanged click
+
+Status: confirmed against the initial frozen candidate; corrected with native/WASM 11/11 parity;
+replacement clean qualification and immutable nomination remain pending.
+
+Activate an ordinary relation/dimension tool and sample an applicable point or curve. Compare the
+read-only hover item to the operand consumed by the unchanged click resolver. Repeat with an
+inapplicable nearer point overlapping an applicable line: both paths must skip the point and choose
+the line. Empty or wholly inapplicable samples clear the hover target. Exercise both collecting and
+immediately applying stages.
+
+Repeat for grouped Fillet authoring with an unambiguous native corner point, one native curve,
+isolated-point-over-curve fallback and a current computed preview radius. A painted computed corner
+must match the complete retained candidate, feature/corner binding, accepted/design/computed scene
+stamps, geometry policy and exact headless radius hit. Hover then reports that `FeatureCorner`, and
+an unchanged pointer-down begins the same radius gesture. A stale/foreign/spoofed painted corner
+fails closed without falling through to native geometry.
+
+Every hover-only sequence preserves authoring state, preview candidate and snapshot, selection,
+active gesture, history cursor/length, replay transcript, design/accepted documents and identities,
+feature identity and scene geometry. The browser RAF queue keeps the latest painted hint paired
+with the latest coalesced pointer coordinate; captured gestures remain editor-owned.
 
 ### M75-U1 - Deferred M74 review and hover accessibility matrix
 

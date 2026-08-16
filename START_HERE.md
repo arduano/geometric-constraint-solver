@@ -143,10 +143,12 @@ desktop polish. Its exact clean product source `55693372bea4759c9a67eee14f1af3d6
 and read-only snapshot `/tmp/geosolve-m74-uat.jFfAm4` are qualified and byte-verified. The
 supervising caller approved scoped M74 closure from that evidence, and exact final GitHub Pages
 publication passes. Hands-on UAT remains deferred, not passed, and transfers with any findings to
-active M75. M75 unifies Select hover and primary pointer-down ownership in the headless editor;
-exact clean product source `f3affff1b62b1cb484a59647c4072c94c3b12ada` is qualified and its
-immutable seven-file snapshot is byte-verified at `http://100.94.63.83:8080/`. Every carried M74
-and new M75 human item remains pending, and GitHub Pages intentionally remains on accepted M74.
+active M75. M75 unifies Select hover/primary pointer-down ownership and domain-aware active
+authoring hover/click ownership in the headless editor. Initial clean source
+`f3affff1b62b1cb484a59647c4072c94c3b12ada` and its immutable seven-file snapshot passed mechanical
+nomination, but M75-F001 withdrew that candidate after authoring moves were found to be discarded.
+The correction is implemented and focused-qualified; replacement nomination, every carried M74
+and new M75 human item remain pending, and GitHub Pages intentionally remains on accepted M74.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -164,7 +166,7 @@ support and physics remain outside future acceptance.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
 11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — active hover/click
-    ownership milestone, clean candidate evidence and pending combined human scorecard.
+    ownership milestone, M75-F001 replacement evidence and pending combined human scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -444,14 +446,15 @@ approval descendant `b6b1d62b49466ea06522dbdd3f5444a324d36584` passes GitHub Pag
 `31923806117` and deploys artifact `9257602997`; the public seven-file manifest aggregate is
 `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`, every public path
 byte-matches the artifact, and the public M72/M74 two-size Chromium checks pass.
-M75 is implemented, clean-qualified and nominated for human UAT. One headless Select resolver owns
-hover and primary pointer-down order, problem-forced annotations share the ordinary hit path,
-context corridors remain targetless, and lifecycle changes revoke stale hover. Product source
-`f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
-`7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete clean gate; immutable snapshot
-`/tmp/geosolve-m75-uat.hUSaG7`, aggregate
-`69425a504453eda6645c96b6163b5b899ab455f40828f3cdecc73b90ff3c41d9`, is served and
-byte-verified at `http://100.94.63.83:8080/`. Human UAT and M75 Pages publication remain pending.
+M75's initial candidate passed clean qualification and immutable nomination. One headless Select
+resolver owns hover and primary pointer-down order, problem-forced annotations share the ordinary
+hit path, context corridors remain targetless, and lifecycle changes revoke stale hover. Finding
+M75-F001 then showed that ordinary and Fillet authoring clicks accepted operands while uncaptured
+moves were discarded. The correction shares exact domain-aware candidate resolution for hover and
+click, including overlap fallback and authenticated computed-radius ownership, and passes focused
+native/WASM/web qualification. Replacement clean qualification and immutable Tailscale handover,
+human UAT and M75 Pages publication remain pending; the initial read-only snapshot is historical
+evidence only.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

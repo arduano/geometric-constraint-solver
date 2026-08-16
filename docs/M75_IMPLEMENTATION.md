@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# M75 implementation — Select hover and primary pointer-owner parity
+# M75 implementation — hover and primary pointer-owner parity
 
-Status: **implemented, clean-qualified and nominated as an immutable Tailscale candidate as of
-2026-08-16; human UAT and public M75 publication remain pending**. This ledger records the
-implemented ownership, compatibility boundary and evidence without claiming milestone acceptance
-or public publication.
+Status: **M75-F001 correction implemented and focused-qualified as of 2026-08-16; replacement
+clean qualification and immutable nomination remain pending**. The initial candidate is retained
+as historical evidence but is withdrawn from hands-on UAT. This ledger records ownership,
+compatibility and evidence without claiming milestone acceptance or public publication.
 
 Architecture decision: no new ADR is currently required. M75 consolidates existing editor-owned
 picking, annotation visibility and hover presentation within the accepted-scene boundary. It adds
@@ -20,18 +20,20 @@ Both pointer-move prediction and primary pointer-down call it with the same acce
 viewport, visibility, current problem set, active tool and finite pointer sample. Existing semantic
 selection items remain the result identities.
 
-The only additive public surface is problem-aware pointer-move wrappers over the existing
-scene/selection DTOs. Existing pointer-leave, cancellation and retained-state paths revoke
-host-side camera, scene or input-ownership remaps. Candidate enumeration, comparison and
-precedence remain private; M75 does not publish a general-purpose hit-test framework or new public
-ownership type hierarchy.
+The additive public surface is limited to problem-aware Select and domain-aware authoring
+pointer-move wrappers over existing scene, selection, authoring-state and normalized-input DTOs.
+Existing pointer-leave, cancellation and retained-state paths revoke host-side camera, scene or
+input-ownership remaps. Candidate enumeration, comparison and precedence remain private; M75 does
+not publish a general-purpose hit-test framework or new public ownership type hierarchy.
 
 ### Demo web adapter
 
 The web workbench continues to normalize browser coordinates and forward tool/camera/overlay
 transitions. It renders only the hover target, related operands and context supplied by the
-headless result. Browser DOM/SVG targets, paint order, CSS `:hover` and local geometry checks will
-not add or retain semantic hover state.
+headless result. During computed-Fillet authoring, the coalesced pointer sample carries the exact
+painted item only as an intent hint; the coordinator independently reauthenticates retained
+preview ownership, scene provenance, geometry policy and proximity. Browser DOM/SVG targets,
+paint order, CSS `:hover` and local geometry checks cannot add or retain semantic hover state.
 
 ### Unchanged domain owners
 
@@ -95,6 +97,10 @@ to the prior state cannot restore cached hover; a fresh valid canvas pointer sam
 The browser will rerender the cleared headless state immediately and will not preserve a DOM-only
 highlight. Ordinary and feature authoring suppress uncaptured Select movement. A captured
 Fillet-radius gesture remains an editor-owned exception until its matching terminal sample.
+Uncaptured authoring movement is not discarded: the ordinary or grouped-Fillet owner publishes
+only the compatible native item that its unchanged press would consume. A current painted
+computed corner publishes its radius owner only after the same retained-preview/provenance checks
+as pointer-down and the same exact editor hit resolution as the radius gesture.
 
 ## 5. Focused regression plan
 
@@ -107,6 +113,8 @@ Fillet-radius gesture remains an editor-owned exception until its matching termi
   construction.
 - Separate context-only corridor reveal from primary target selection.
 - Exercise tool, camera, scene, visibility/problem and overlay-ownership invalidation.
+- Cover ordinary and grouped-Fillet point/curve operands, wrong-kind overlap fallback, empty and
+  inapplicable clearing, computed-radius ownership and stale painted-hint rejection.
 - Assert pointer-move is mutation-free and immediate pointer-down consumes the same owner.
 
 Run the semantic cases natively and with `wasm-bindgen-test-runner`. Exact hit-envelope boundary
@@ -120,8 +128,10 @@ tests will reuse existing tolerances rather than update them.
 - Verify overlay/focus and uncaptured letterbox routes jointly revoke the pending animation-frame
   sample, stationary pointer input and current headless context, while captured edge crossings are
   preserved.
-- Verify uncaptured Fillet feature-authoring movement cannot enter Select hover resolution while a
-  captured Fillet-radius gesture still can.
+- Verify uncaptured ordinary/Fillet authoring movement reaches its own resolver rather than Select,
+  while a captured Fillet-radius gesture remains editor-owned.
+- Verify RAF coalescing keeps the latest painted intent hint paired with the latest pointer sample;
+  the hint alone cannot authenticate a computed owner.
 - Verify a DOM/SVG target or CSS hover cannot manufacture a semantic canvas owner.
 - Preserve existing keyboard focus, accessible names and non-colour focus/selection cues while
   overlay ownership suppresses canvas hover.
@@ -134,7 +144,55 @@ tests will reuse existing tolerances rather than update them.
 - Independently compare accepted document/geometry, history, rank/DOF, branches, problem set and
   persistence bytes before and after hover-only sequences.
 
-## 6. Qualification ledger
+## 6. Finding M75-F001 — authoring hover was suppressed
+
+Reproduction against initial frozen candidate `f3affff1b62b1cb484a59647c4072c94c3b12ada` used the
+ordinary editable `fillet-workshop` sample. After activating Fillet, hovering an applicable point
+or curve left its class as `wb-point` or `wb-curve` and published zero `.geometry-hovered`
+elements. Clicking curve `66000000000000000000000000000038` immediately made that same curve
+`authoring-pending`. This is a confirmed presentation-independent interaction defect, not a CSS,
+solver, tolerance, persistence or geometry failure.
+
+Root cause: the adapter deliberately discarded all uncaptured ordinary and feature-authoring
+pointer moves. Clicks separately called domain-aware candidate resolvers, so routing those moves
+through Select would still have produced wrong overlap/applicability semantics.
+
+Correction:
+
+- `AuthoringState` and `FeatureAuthoringState` now resolve click and read-only hover through the
+  same ordered candidate path, preserving warning and fallback precedence.
+- The retained coordinator publishes authoring hover through the existing `EditorHoverState` and
+  `EditorEffect::HoverChanged` contract. No selection, authoring, preview, history/transcript,
+  gesture, accepted scene or geometry state changes.
+- Computed preview-radius hover and pointer-down share candidate/preview/provenance validation and
+  exact headless radius-hit resolution. A stale painted corner fails closed without native
+  fallback.
+- The browser routes uncaptured moves to Editor, ordinary authoring or feature authoring according
+  to the current owner; captured movement remains Editor-owned. RAF samples coalesce pointer input
+  and painted intent together.
+
+Focused correction evidence on the implementation tree:
+
+```text
+cargo fmt --all -- --check                                      # pass
+git diff --check                                                # pass
+cargo test --locked -p geosolve-constraint-editor \
+  --test m75_hover_pointer_parity                               # 11 passed
+env NO_COLOR=true nix-shell shell.nix --run \
+  'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+   cargo test --locked -p geosolve-constraint-editor \
+   --test m75_hover_pointer_parity --target wasm32-unknown-unknown'
+                                                               # same 11 passed
+cargo test --locked -p geosolve-demo-web --lib                 # 116 passed
+cargo clippy --locked -p geosolve-constraint-editor \
+  -p geosolve-demo-web --all-targets --all-features \
+  -- -D warnings                                               # pass
+```
+
+The initial immutable snapshot stays untouched until a clean replacement is qualified. It is no
+longer a valid human-UAT candidate, and GitHub Pages remains on accepted M74.
+
+## 7. Initial qualification ledger (superseded by M75-F001)
 
 Prequalification evidence completed on the dirty implementation tree:
 
@@ -167,7 +225,7 @@ problem forwarding, queued-context revocation and Fillet feature-authoring owner
 focused post-review matrix passes 9/9 natively, 9/9 under WASM and 116/116 in the demo-web crate;
 focused warnings-denied Clippy and the demo-web WASM check pass.
 
-### Clean candidate qualification
+### Initial clean candidate qualification
 
 Exact product source `f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
 `7662abc8b7c71130f54fbf2745afa60f0d286431`, was clean-qualified with:
@@ -177,7 +235,6 @@ env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
 The final complete run exited 0. It includes formatting and diff checks, warnings-denied workspace
-Clippy, locked all-feature workspace tests, the unchanged 270/270 golden `--require-clean` oracle,
 M70/M71/M74/M75 WASM suites, the demo-web WASM check, warnings-denied Rustdoc, benchmark
 compilation, M14/M32 performance, licensing and package-content checks, the release 256-moving-body
 sparse crossover in 138.09 seconds, and Trunk 0.21.14 release assembly. M75 parity passes 9/9
@@ -195,7 +252,7 @@ was a build-pipeline `HARNESS_ERROR`, not candidate evidence: the same isolated 
 passed on the unchanged clean source, and the complete release gate above was rerun from the start
 and passed before any artifact was frozen.
 
-### Immutable Tailscale candidate
+### Initial immutable Tailscale candidate
 
 The final successful gate's exact seven files were copied without rebuilding to
 `/tmp/geosolve-m75-uat.hUSaG7`. The directory is mode `0555`; every entry is a regular,
@@ -249,10 +306,10 @@ Their SHA-256 values are
 and M74 regression smoke results, not synthetic M75 human UAT. GitHub Pages continues to serve the
 accepted M74 artifact and is not M75 authority during UAT.
 
-## 7. Completion gates
+## 8. Completion gates
 
-- The shared resolver, problem-aware pointer-move wrappers, invalidation and browser translation
-  are implemented without changing the frozen semantics.
+- The Select and authoring shared resolvers, pointer-move wrappers, invalidation and browser
+  translation are implemented without changing the frozen semantics.
 - Focused native/WASM/web and proportional compatibility qualification passes with unchanged
   golden bytes.
 - The complete clean release gate passes and its exact output is the read-only, byte-verified
@@ -262,9 +319,9 @@ accepted M74 artifact and is not M75 authority during UAT.
 - Receive explicit supervising-human approval, deploy the exact accepted source through GitHub
   Pages, verify every hosted byte/media type and close M75.
 
-## 8. Compatibility and limitations
+## 9. Compatibility and limitations
 
 M75 is an additive pre-1.0 interaction correction. Public API growth is limited to problem-aware
-pointer-move wrappers over existing DTOs. It does not activate sketch v5, change canonical v1-v4,
-retune hit or drafting-inference tolerances, change annotation placement, support mobile/tablet or
-add hover semantics to non-Select authoring tools.
+Select and domain-aware authoring pointer-move wrappers over existing DTOs. It does not activate
+sketch v5, change canonical v1-v4, retune hit or drafting-inference tolerances, change annotation
+placement, support mobile/tablet or add a second hover system to geometry drafting tools.

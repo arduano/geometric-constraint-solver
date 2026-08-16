@@ -182,7 +182,9 @@ without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 
 complete under their scoped approvals and exact final public-artifact verification. M74's separate
 hands-on UAT is deferred without being marked passed and transfers to the next bug-fixing/UAT
 follow-up milestone, now active as M75. M75's implementation, clean qualification and immutable
-Tailscale nomination pass; its combined human scorecard and final public publication remain open.
+initial Tailscale nomination passed, but finding M75-F001 withdrew it from UAT. The correction is
+implemented; replacement qualification, the combined human scorecard and final public publication
+remain open.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1962,12 +1964,12 @@ aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`;
 compatibility and M74 Chromium checks pass at both desktop sizes. Every M74 acceptance gate passes
 under the scoped decision; U1-U8 remain deferred and are now carried by active M75.
 
-## M75 acceptance: Select hover and primary pointer-owner parity
+## M75 acceptance: hover and primary pointer-owner parity
 
-Status: **active; implementation, clean qualification and immutable Tailscale nomination complete
-as of 2026-08-16, with all human evidence pending**. M75 owns the hands-on M74-U1 through M74-U8
-carryover as well as the new hover/click parity contract. The accepted M74 public artifact remains
-the baseline; it is not M75 evidence.
+Status: **active; initial immutable nomination withdrawn after confirmed M75-F001, correction
+implemented and replacement qualification pending as of 2026-08-16, with all human evidence
+pending**. M75 owns the hands-on M74-U1 through M74-U8 carryover as well as the new hover/click
+parity contract. The accepted M74 public artifact remains the baseline; it is not M75 evidence.
 
 - For one finite Select pointer sample, headless hover prediction and primary pointer-down use the
   same candidates and exact order: applicable Fillet radius; draggable geometry consisting of
@@ -1988,18 +1990,25 @@ the baseline; it is not M75 evidence.
 - A tool, selection/annotation-visibility, camera, accepted-scene or overlay/input-ownership
   change revokes stale hover before another canvas sample can be painted or clicked. Pointer leave
   and other existing cancellation paths remain coherent with the same rule. Uncaptured
-  computed-feature authoring movement cannot publish a Select hover owner; an already captured
-  Fillet-radius gesture retains movement through its terminal sample.
+  relation/dimension or computed-feature authoring movement cannot publish an unrelated Select
+  owner: it publishes only the exact compatible authoring operand that unchanged pointer-down
+  consumes. An already captured Fillet-radius gesture retains movement through its terminal sample.
+- Ordinary authoring and grouped Fillet share native candidate resolution between hover and click,
+  including point/curve eligibility, wrong-kind overlap fallback and empty/inapplicable clearing.
+  A painted computed corner is admitted only after the same retained-preview/scene authentication
+  and exact radius-hit resolution as pointer-down; stale hints fail closed without native fallback.
+  Hover alone leaves authoring state, preview candidate/snapshot, selection, gesture,
+  history/transcript and accepted geometry unchanged.
 - The browser maps input and paints only the headless hover target and related-context state. CSS,
   DOM/SVG event targets, local distance checks and stale retained browser state never choose or
   decorate a competing canvas owner.
 - Existing point/curve/annotation/Fillet/datum hit tolerances, Profile/Construction and native
   role ordering, modifier semantics, solver equations, branch/rank/DOF behavior, canonical v1-v4
   and unsupported draft-v5 persistence, and the reviewed authoring/scene golden remain unchanged.
-- The only additive public compatibility surface is problem-aware pointer-move wrappers over the
-  existing headless scene/selection DTOs. Existing lifecycle paths revoke camera, scene and
-  input-owner context. M75 adds no residual, constraint family, persistence version, browser-owned
-  geometry policy or general public hit-test framework.
+- The only additive public compatibility surface is problem-aware Select and domain-aware
+  authoring pointer-move wrappers over the existing headless DTOs. Existing lifecycle paths revoke
+  camera, scene and input-owner context. M75 adds no residual, constraint family, persistence
+  version, browser-owned geometry policy or general public hit-test framework.
 - Focused editor tests cover each precedence edge, problem-forced visibility, annotation ties,
   context-only corridors and every invalidation trigger natively and under WASM. Thin web tests
   prove event translation and headless-only paint; the existing golden must remain byte-identical.
@@ -2012,11 +2021,11 @@ the baseline; it is not M75 evidence.
   immutable byte-verified Tailscale candidate is nominated. Explicit human approval and exact
   accepted-source GitHub Pages verification are required before M75 closes.
 
-Implementation record (2026-08-16): the headless/shared-resolution and thin-browser requirements
+Initial implementation record (2026-08-16): the Select headless/shared-resolution and thin-browser requirements
 are implemented. Focused native/WASM parity, editor/web/workspace tests, warnings-denied Clippy,
 WASM check, unchanged 270-row golden check and Trunk release assembly pass.
 
-Mechanical nomination result (2026-08-16): exact product source
+Initial mechanical nomination result (2026-08-16; withdrawn for UAT by M75-F001): exact product source
 `f3affff1b62b1cb484a59647c4072c94c3b12ada`, tree
 `7662abc8b7c71130f54fbf2745afa60f0d286431`, passes the complete clean release gate. Its exact
 read-only seven-file snapshot `/tmp/geosolve-m75-uat.hUSaG7`, C-locale ordered-manifest aggregate
@@ -2025,6 +2034,15 @@ at `http://100.94.63.83:8080/` by PID `3801058`; the unchanged M72 compatibility
 checks pass at both desktop sizes. This satisfies mechanical nomination only. Every M74-U1 through
 M74-U8 carryover and M75-U9 through M75-U12 item remains pending, no supervising-human M75
 disposition exists, and GitHub Pages remains on accepted M74.
+
+Finding M75-F001 (2026-08-16): on the initial frozen candidate, Fillet native point/curve clicks
+worked while the corresponding uncaptured pointer moves were discarded, producing no hover target;
+ordinary relation/dimension authoring was affected by the same adapter suppression. The correction
+shares the exact domain-aware candidate resolver between move/down, authenticates computed-radius
+intent independently of DOM paint and keeps captured gestures editor-owned. Focused native/WASM
+parity passes 11/11, demo-web tests pass 116/116 and focused warnings-denied Clippy passes. The
+complete clean replacement gate, immutable freeze and Tailscale handover must pass before human UAT
+resumes. No M75 human item is disposed by this evidence.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 
