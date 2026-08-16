@@ -6263,6 +6263,7 @@ pub enum ResolvedConstraintKind {
     EqualCurvature,
     Midpoint,
     SymmetricAboutLine,
+    SymmetricAboutDatumAxis,
     CurveTangency,
     EndpointContinuity,
 }
@@ -6293,6 +6294,7 @@ impl ResolvedConstraintKind {
             Self::EqualCurvature => "Equal curvature",
             Self::Midpoint => "Midpoint",
             Self::SymmetricAboutLine => "Symmetric about line",
+            Self::SymmetricAboutDatumAxis => "Symmetric about datum axis",
             Self::CurveTangency => "Tangent",
             Self::EndpointContinuity => "Endpoint continuity",
         }

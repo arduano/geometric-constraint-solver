@@ -528,6 +528,21 @@ fn constraint_entry_presentation(
                 SelectionItem::Curve(*line),
             ],
         ),
+        Constraint::SymmetricAboutDatumAxis {
+            first,
+            second,
+            axis,
+        } => (
+            SceneConstraintGlyph::Symmetry,
+            vec![
+                SelectionItem::Point(*first),
+                SelectionItem::Point(*second),
+                SelectionItem::Datum(match axis {
+                    geosolve_sketch::DocumentCoordinateAxis::X => SketchDatum::XAxis,
+                    geosolve_sketch::DocumentCoordinateAxis::Y => SketchDatum::YAxis,
+                }),
+            ],
+        ),
         Constraint::LineCircleTangency {
             line_contact,
             circle_contact,
@@ -749,6 +764,24 @@ fn constraint_presentation(
                 SelectionItem::Point(*first),
                 SelectionItem::Point(*second),
                 SelectionItem::Curve(*line),
+            ];
+            let anchors = paired_point_anchor(points, *first, *second)
+                .into_iter()
+                .collect();
+            (SceneConstraintGlyph::Symmetry, operands, anchors)
+        }
+        Constraint::SymmetricAboutDatumAxis {
+            first,
+            second,
+            axis,
+        } => {
+            let operands = vec![
+                SelectionItem::Point(*first),
+                SelectionItem::Point(*second),
+                SelectionItem::Datum(match axis {
+                    geosolve_sketch::DocumentCoordinateAxis::X => SketchDatum::XAxis,
+                    geosolve_sketch::DocumentCoordinateAxis::Y => SketchDatum::YAxis,
+                }),
             ];
             let anchors = paired_point_anchor(points, *first, *second)
                 .into_iter()

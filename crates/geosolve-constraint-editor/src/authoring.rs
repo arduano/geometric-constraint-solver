@@ -698,7 +698,7 @@ fn expected_operands(
             if operands.len() < 2 {
                 vec![Point]
             } else {
-                vec![Line]
+                vec![Line, DatumAxis]
             }
         }
         AuthoringTool::Dimension(DimensionKind::Radius | DimensionKind::Diameter) => {

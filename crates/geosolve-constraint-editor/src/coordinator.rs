@@ -6256,6 +6256,7 @@ impl RetainedEditorCoordinator {
             | ResolvedConstraintKind::EqualRadius
             | ResolvedConstraintKind::Midpoint
             | ResolvedConstraintKind::SymmetricAboutLine
+            | ResolvedConstraintKind::SymmetricAboutDatumAxis
             | ResolvedConstraintKind::RadialLine => Vec::new(),
         };
         let tangency = resolved == ResolvedConstraintKind::CurveTangency;
@@ -8440,6 +8441,14 @@ pub(crate) fn resolve_constraint(
     if intent == ConstraintIntent::Lock && selection_contains_datum(selection) {
         return Err(DisabledReason::ProtectedDatum);
     }
+    if intent == ConstraintIntent::Symmetric {
+        return match symmetric_operands(document, selection)? {
+            (_, _, SymmetricReference::Line(_)) => Ok(ResolvedConstraintKind::SymmetricAboutLine),
+            (_, _, SymmetricReference::DatumAxis(_)) => {
+                Ok(ResolvedConstraintKind::SymmetricAboutDatumAxis)
+            }
+        };
+    }
     let resolved = match (intent, selection) {
         (ConstraintIntent::Lock, [SelectionItem::Point(_)]) => ResolvedConstraintKind::FixedPoint,
         (
@@ -8642,14 +8651,6 @@ pub(crate) fn resolve_constraint(
             | [SelectionItem::Curve(line), SelectionItem::Point(_)],
         ) if line_endpoints(document, *line).is_ok() => ResolvedConstraintKind::Midpoint,
         (
-            ConstraintIntent::Symmetric,
-            [
-                SelectionItem::Point(_),
-                SelectionItem::Point(_),
-                SelectionItem::Curve(line),
-            ],
-        ) if line_endpoints(document, *line).is_ok() => ResolvedConstraintKind::SymmetricAboutLine,
-        (
             ConstraintIntent::Tangent,
             [SelectionItem::Curve(first), SelectionItem::Curve(second)],
         ) if supports_curve_contact(document, *first)
@@ -8690,6 +8691,55 @@ pub(crate) fn resolve_constraint(
         }
     };
     Ok(resolved)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SymmetricReference {
+    Line(CurveSpan),
+    DatumAxis(geosolve_sketch::DocumentCoordinateAxis),
+}
+
+fn symmetric_operands(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+) -> Result<(DesignPointId, DesignPointId, SymmetricReference), DisabledReason> {
+    if selection.len() != 3 {
+        if let [SelectionItem::Point(first), SelectionItem::Point(second)] = selection
+            && first == second
+        {
+            return Err(DisabledReason::SameSemanticOperand);
+        }
+        return Err(DisabledReason::WrongArity);
+    }
+    let mut points = selection.iter().filter_map(|item| match item {
+        SelectionItem::Point(point) => Some(*point),
+        _ => None,
+    });
+    let first = points.next().ok_or(DisabledReason::WrongOperandKind)?;
+    let second = points.next().ok_or(DisabledReason::WrongOperandKind)?;
+    if points.next().is_some() {
+        return Err(DisabledReason::WrongOperandKind);
+    }
+    if first == second {
+        return Err(DisabledReason::SameSemanticOperand);
+    }
+    let mut references = selection.iter().filter_map(|item| match item {
+        SelectionItem::Curve(line) if line_endpoints(document, *line).is_ok() => {
+            Some(SymmetricReference::Line(*line))
+        }
+        SelectionItem::Datum(datum) => datum.coordinate_axis().map(SymmetricReference::DatumAxis),
+        SelectionItem::Point(_)
+        | SelectionItem::Constraint(_)
+        | SelectionItem::Dimension(_)
+        | SelectionItem::Curve(_)
+        | SelectionItem::Feature(_)
+        | SelectionItem::FeatureCorner(_) => None,
+    });
+    let reference = references.next().ok_or(DisabledReason::WrongOperandKind)?;
+    if references.next().is_some() {
+        return Err(DisabledReason::WrongOperandKind);
+    }
+    Ok((first, second, reference))
 }
 
 pub(crate) fn selection_exists(document: &SketchDocument, item: SelectionItem) -> bool {
@@ -9285,18 +9335,30 @@ fn simple_constraint_definition(
             point: *point,
             line: *line,
         },
-        (
-            ResolvedConstraintKind::SymmetricAboutLine,
-            [
-                SelectionItem::Point(first),
-                SelectionItem::Point(second),
-                SelectionItem::Curve(line),
-            ],
-        ) => DocumentConstraintDefinition::SymmetricAboutLine {
-            first: *first,
-            second: *second,
-            line: *line,
-        },
+        (ResolvedConstraintKind::SymmetricAboutLine, selection) => {
+            let (first, second, SymmetricReference::Line(line)) =
+                symmetric_operands(document, selection).ok()?
+            else {
+                return None;
+            };
+            DocumentConstraintDefinition::SymmetricAboutLine {
+                first,
+                second,
+                line,
+            }
+        }
+        (ResolvedConstraintKind::SymmetricAboutDatumAxis, selection) => {
+            let (first, second, SymmetricReference::DatumAxis(axis)) =
+                symmetric_operands(document, selection).ok()?
+            else {
+                return None;
+            };
+            DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                first,
+                second,
+                axis,
+            }
+        }
         // Specialized contact-bearing kinds and any mismatched operand bundle
         // remain fail-closed at this simple lowerer.
         _ => return None,

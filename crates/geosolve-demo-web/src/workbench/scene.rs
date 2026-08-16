@@ -1777,7 +1777,8 @@ const fn constraint_glyph(
         DocumentConstraintDefinition::EqualLength { .. } => ("equal-length", "L="),
         DocumentConstraintDefinition::EqualRadius { .. } => ("equal-radius", "R="),
         DocumentConstraintDefinition::Midpoint { .. } => ("midpoint", "Mid"),
-        DocumentConstraintDefinition::SymmetricAboutLine { .. } => ("symmetry", "Sym"),
+        DocumentConstraintDefinition::SymmetricAboutLine { .. }
+        | DocumentConstraintDefinition::SymmetricAboutDatumAxis { .. } => ("symmetry", "Sym"),
         DocumentConstraintDefinition::CurveCurveContact { .. } => ("generic-contact", "Touch"),
         DocumentConstraintDefinition::CurveCurveTangency { .. } => ("generic-tangency", "Tan"),
         DocumentConstraintDefinition::LineCircleTangency { .. }
@@ -2375,11 +2376,12 @@ mod tests {
     use geosolve_sketch::{
         ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
         DocumentAngleOrientation, DocumentCenterRef, DocumentConstraintDefinition,
-        DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
-        DocumentLineSupportRef, DocumentObjectId, DocumentParameterId, DocumentParameterKind,
-        DocumentParameterTarget, DocumentSolveRequest, GeometryRole, ParameterBatch,
-        ParameterBatchEntry, ParameterValue, PersistentId, RetainedSketchDocumentSession,
-        ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
+        DocumentCoordinateAxis, DocumentDimensionDefinition, DocumentDimensionMode,
+        DocumentDirectionSense, DocumentEdit, DocumentLineSupportRef, DocumentObjectId,
+        DocumentParameterId, DocumentParameterKind, DocumentParameterTarget, DocumentSolveRequest,
+        GeometryRole, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
+        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDesignIdentity,
+        SketchDocument,
     };
     use geosolve_sketch_features::{
         ComputedFeatureCornerId, ComputedFeatureId, NativeCurveSpanSource,
@@ -3003,6 +3005,11 @@ mod tests {
                 second: point(2),
                 line: line(3),
             },
+            DocumentConstraintDefinition::SymmetricAboutDatumAxis {
+                first: point(1),
+                second: point(2),
+                axis: DocumentCoordinateAxis::X,
+            },
             DocumentConstraintDefinition::CurveCurveContact {
                 first_contact: contact(4),
                 second_contact: contact(8),
@@ -3027,6 +3034,7 @@ mod tests {
             "equal-length",
             "equal-radius",
             "midpoint",
+            "symmetry",
             "symmetry",
             "generic-contact",
             "generic-tangency",
