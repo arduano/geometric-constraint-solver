@@ -22,7 +22,8 @@ fn spatial_performance_corpus_shapes_are_deterministic() {
 #[ignore = "explicit release performance gate; dense-authoritative rank is intentionally expensive"]
 fn exact_auto_sparse_crossover_solves_and_validates_256_moving_body_chain() {
     const MOVING_BODIES: usize = 256;
-    const RELEASE_BUDGET: Duration = Duration::from_secs(180);
+    const REFERENCE_TARGET: Duration = Duration::from_secs(180);
+    const SHARED_RUNNER_RELEASE_CEILING: Duration = Duration::from_secs(240);
     let (assembly, last_body) = fixed_frame_chain(MOVING_BODIES);
     let mut config = SolverConfig {
         linear_solve_backend: LinearSolveBackendPolicy::Auto,
@@ -60,9 +61,18 @@ fn exact_auto_sparse_crossover_solves_and_validates_256_moving_body_chain() {
     assert_eq!(report.sparse_fallback_reason, None);
     assert!(report.hard_residual_max <= 1.0e-9);
     assert!(
-        elapsed <= RELEASE_BUDGET,
-        "256-moving-body release corpus took {elapsed:?}"
+        elapsed <= SHARED_RUNNER_RELEASE_CEILING,
+        "256-moving-body release corpus took {elapsed:?}, exceeding the \
+         {SHARED_RUNNER_RELEASE_CEILING:?} shared-runner release ceiling \
+         ({REFERENCE_TARGET:?} reference target)"
     );
+    if elapsed > REFERENCE_TARGET {
+        eprintln!(
+            "256-moving-body release corpus took {elapsed:?}, exceeding the \
+             {REFERENCE_TARGET:?} reference target while remaining within the \
+             {SHARED_RUNNER_RELEASE_CEILING:?} shared-runner release ceiling"
+        );
+    }
 }
 
 fn fixed_frame_chain(moving_bodies: usize) -> (SpatialAssembly, SpatialBodyId) {

@@ -925,7 +925,8 @@ body position, body/feature velocity and coordinate rates over six phases, two
 embeddings and all required scales. The normal performance corpus fixes 43/255/256
 moving-body shapes; the explicit release gate proves the true 256-moving-body,
 1536-active-column `Auto` density boundary selects `SparseQr`, preserves dense rank
-1536 and validates residuals within its 180-second budget. Locked format/diff,
+1536 and validates residuals against its 180-second reference target and 240-second
+shared-runner release ceiling. Locked format/diff,
 warnings-denied workspace Clippy, full workspace tests, WASM, rustdoc, core
 benchmark compilation and release Trunk gates pass.
 

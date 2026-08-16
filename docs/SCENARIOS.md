@@ -945,7 +945,8 @@ geometry, audit and revision.
 - normal performance tests fix 43, 255 and 256 moving-body compile shapes. The
   explicit release-only 256-moving-body chain has 1536 active columns, selects
   `SparseQr` under `Auto`, preserves dense-authoritative rank 1536 and validates
-  ordinary hard residuals within a 180-second reference budget.
+  ordinary hard residuals against a 180-second reference target and a 240-second
+  shared-runner release ceiling. All semantic assertions precede the elapsed-time check.
 
 ## M24 sketch extension and embedding fixtures
 

@@ -26,7 +26,7 @@ not interactive-performance promises.
 | Sparse crossover | Connected 64/128/256-column hard systems; `Auto` threshold remains 256 columns/rows/entries at density `<= 1/128` |
 | Sketch interaction | M14 small and medium documents with current native import/first/incremental solve ceilings; browser-render evidence is historical |
 | Advanced sketch | 1,000-control/128-contact NURBS locality and M28 105-pair correctness; no general interactive timing claim |
-| Spatial release | 256 moving bodies, 1,536 active coordinates, validated `SparseQr`, dense-authoritative rank and 180-second ceiling |
+| Spatial release | 256 moving bodies, 1,536 active coordinates, validated `SparseQr`, dense-authoritative rank, 180-second reference target and 240-second shared-runner ceiling |
 
 Historical M14 and M16 measurements and exact workload boundaries remain in
 `docs/M14_PERFORMANCE.md` and `docs/M16_SPARSE_CROSSOVER.md`. Their numbers are
@@ -59,8 +59,27 @@ remain enforced; the browser row is a retired historical measurement:
 
 The 256-moving-body spatial release fixture solved and independently validated
 1,536 active coordinates with the `SparseQr` step path in `88.29s`, below its
-`180s` ceiling. Historically, the desktop five-stage scissor burst coalesced 40
+`180s` reference target. Historically, the desktop five-stage scissor burst coalesced 40
 pointer events to one render in `37ms`, below its then-current `100ms` ceiling.
+
+## 2026-08-17 shared-runner ceiling hardening
+
+GitHub-hosted Pages qualification exposed repeatable worker-speed variance without a workload,
+solver or correctness change. The same release-test source and Cargo target identifier passed
+hosted runs between `70.90s` and `176.43s`, while M72 run `31802816639` attempt 1 took
+`209.045026946s` and M76 run `31957299907` attempts 1 and 2 took `209.696267408s` and
+`208.757508921s`. The final M76 candidate passed locally in `127.63s`. The M72 and M76 test files
+are byte-identical before this hardening (SHA-256
+`792de60d4fbfdc1f44ea155cbcd3859e9886a96e713c60bb090ea487947d1b4b`), every hosted log names
+Cargo target identifier `m23_performance-fc7d3725cd48ab90`, and no `geosolve-core`,
+`geosolve-geometry`, `geosolve-linkage` or `Cargo.lock` file changed between those checkpoints.
+
+Every convergence, hard-validity, dense-authoritative rank, sparse-backend, no-fallback and
+independently validated residual assertion executes before timing is considered. The `180s`
+desktop/reference target therefore remains an explicit advisory signal, while `240s` is the
+enforced shared-runner release ceiling. This accommodates the measured hosted envelope with about
+31 seconds of headroom without changing the workload, backend policy, correctness tolerance or any
+success-like solver status.
 
 ## Commands
 
@@ -85,8 +104,9 @@ direct owners. Its recorded measurements remain historical evidence, not a curre
 
 ## Budgets and rebaselining
 
-The native M14 import/solve/edit ceilings and the M23 180-second release ceiling
-remain enforced gates. The M14 browser-render/burst ceilings were retired with the
+The native M14 import/solve/edit ceilings and the M23 240-second shared-runner release ceiling
+remain enforced gates; M23 also reports when the 180-second reference target is exceeded. The M14
+browser-render/burst ceilings were retired with the
 browser harness at M50. Criterion measurements are observational. A change outside normal noise requires
 investigation but does not fail solely by percentage. Rebaselining an enforced
 budget requires a documented workload or reference-environment change, preserved

@@ -466,7 +466,10 @@ atomic failed-import rollback. Full-catalog and malformed persistence tests pass
 Generated scale/common-left `SE(3)` and byte-mutation properties, a 36-case
 analytic position/velocity oracle and the explicit 256-moving-body release `Auto`
 crossover complete the final linkage corpus without weakening independent
-residual validation or dense rank authority. M23 acceptance is complete.
+residual validation or dense rank authority. The crossover retains a 180-second reference target
+and uses a 240-second shared-runner release ceiling; convergence, validity, rank, sparse-backend,
+fallback and residual assertions remain mandatory before timing is considered. M23 acceptance is
+complete.
 
 ## M24 acceptance: sketch extension and embedding foundation
 
