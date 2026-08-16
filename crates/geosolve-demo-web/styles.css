@@ -561,11 +561,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke: transparent;
   pointer-events: all;
 }
-.wb-datum-origin .wb-datum-hit { stroke-width: 0; }
 .wb-datum-axis .wb-datum-hit { stroke-width: 8; }
-.wb-datum-line,
-.wb-datum-origin-ring,
-.wb-datum-origin-cross {
+.wb-datum-line {
   fill: none;
   stroke: #6f7b7b;
   stroke-width: 1.25;
@@ -573,8 +570,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-datum-x-axis .wb-datum-line { stroke: #8c5b55; }
 .wb-datum-y-axis .wb-datum-line { stroke: #4f8273; }
-.wb-datum-origin-ring,
-.wb-datum-origin-cross { stroke: #d2a65d; stroke-width: 1.5; }
 .wb-datum-label {
   fill: #879390;
   font: 700 11px ui-monospace, monospace;
@@ -586,23 +581,14 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-datum-x-axis .wb-datum-label { fill: #ba7770; }
 .wb-datum-y-axis .wb-datum-label { fill: #72ad9c; }
-.wb-datum-origin-label { fill: #c5a66a; font-size: 10px; font-weight: 600; }
 .wb-datum.geometry-hovered .wb-datum-line,
-.wb-datum.geometry-hovered .wb-datum-origin-ring,
-.wb-datum.geometry-hovered .wb-datum-origin-cross,
 .wb-datum:focus-visible .wb-datum-line,
-.wb-datum:focus-visible .wb-datum-origin-ring,
-.wb-datum:focus-visible .wb-datum-origin-cross,
-.wb-datum.selected .wb-datum-line,
-.wb-datum.selected .wb-datum-origin-ring,
-.wb-datum.selected .wb-datum-origin-cross {
+.wb-datum.selected .wb-datum-line {
   stroke: #efb856;
   stroke-width: 2.2;
   filter: drop-shadow(0 0 3px rgb(239 184 86 / 50%));
 }
-.wb-datum.related .wb-datum-line,
-.wb-datum.related .wb-datum-origin-ring,
-.wb-datum.related .wb-datum-origin-cross {
+.wb-datum.related .wb-datum-line {
   stroke: #79bfc4;
   filter: drop-shadow(0 0 3px rgb(121 191 196 / 42%));
 }

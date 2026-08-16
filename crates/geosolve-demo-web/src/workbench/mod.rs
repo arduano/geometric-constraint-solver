@@ -7721,7 +7721,7 @@ mod tests {
         assert!(css.contains(".wb-grid-minor"));
         assert!(css.contains(".wb-grid-major"));
         assert!(css.contains("[data-canvas-cursor=\"draw\"]"));
-        assert!(css.contains(".wb-datum-origin-ring"));
+        assert!(!css.contains(".wb-datum-origin"));
         assert!(css.contains(".wb-dimension.reference .wb-dimension-line"));
         assert!(css.contains(".wb-annotation-path-hit"));
         assert!(css.contains(".wb-annotation-move-hit"));

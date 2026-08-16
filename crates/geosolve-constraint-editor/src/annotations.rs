@@ -2236,25 +2236,28 @@ fn angle_geometry(
 ) -> Option<SceneAnnotationGeometry> {
     let [first_start, first_end] = curve_endpoints(curves, first)?;
     let [second_start, second_end] = curve_endpoints(curves, second)?;
-    let first_direction = unit(first_end.x - first_start.x, first_end.y - first_start.y)?;
-    let mut second_direction = unit(second_end.x - second_start.x, second_end.y - second_start.y)?;
-    if dot(first_direction, second_direction) < 0.0 {
-        second_direction = [-second_direction[0], -second_direction[1]];
-    }
-    let vertex = line_intersection(first_start, first_direction, second_start, second_direction)
-        .filter(|point| {
-            point.is_finite()
-                && point.x >= -250.0
-                && point.y >= -250.0
-                && point.x <= viewport.screen_size[0] + 250.0
-                && point.y <= viewport.screen_size[1] + 250.0
-        })
-        .unwrap_or_else(|| {
-            midpoint(
-                curve_anchor(curves, first).unwrap(),
-                curve_anchor(curves, second).unwrap(),
-            )
-        });
+    let first_line = unit(first_end.x - first_start.x, first_end.y - first_start.y)?;
+    let second_line = unit(second_end.x - second_start.x, second_end.y - second_start.y)?;
+    let shared_frame =
+        shared_endpoint_angle_frame(first_start, first_end, second_start, second_end)
+            .filter(|(vertex, _, _)| point_within_view_margin(*vertex, viewport, 250.0));
+    let (vertex, first_direction, second_direction) = if let Some(frame) = shared_frame {
+        frame
+    } else {
+        let mut second_direction = second_line;
+        if dot(first_line, second_direction) < 0.0 {
+            second_direction = [-second_direction[0], -second_direction[1]];
+        }
+        let vertex = line_intersection(first_start, first_line, second_start, second_direction)
+            .filter(|point| point_within_view_margin(*point, viewport, 250.0))
+            .unwrap_or_else(|| {
+                midpoint(
+                    curve_anchor(curves, first).unwrap(),
+                    curve_anchor(curves, second).unwrap(),
+                )
+            });
+        (vertex, first_line, second_direction)
+    };
     let angle = cross(first_direction, second_direction)
         .abs()
         .atan2(dot(first_direction, second_direction).clamp(-1.0, 1.0));
@@ -2286,6 +2289,47 @@ fn angle_geometry(
             bisector[1] * (radius + 18.0),
         ),
     })
+}
+
+fn shared_endpoint_angle_frame(
+    first_start: ScreenPoint,
+    first_end: ScreenPoint,
+    second_start: ScreenPoint,
+    second_end: ScreenPoint,
+) -> Option<(ScreenPoint, [f64; 2], [f64; 2])> {
+    const SHARED_ENDPOINT_EPSILON_PIXELS: f64 = 1.0e-6;
+    const ACUTE_DOT_EPSILON: f64 = 1.0e-12;
+
+    let candidates = [
+        (first_start, second_start, first_end, second_end),
+        (first_start, second_end, first_end, second_start),
+        (first_end, second_start, first_start, second_end),
+        (first_end, second_end, first_start, second_start),
+    ];
+    let (first_shared, second_shared, first_other, second_other) = candidates
+        .into_iter()
+        .filter(|(first_shared, second_shared, _, _)| {
+            first_shared.distance(*second_shared) <= SHARED_ENDPOINT_EPSILON_PIXELS
+        })
+        .min_by(|first, second| {
+            first
+                .0
+                .distance(first.1)
+                .total_cmp(&second.0.distance(second.1))
+        })?;
+    let vertex = midpoint(first_shared, second_shared);
+    let first_direction = unit(first_other.x - vertex.x, first_other.y - vertex.y)?;
+    let second_direction = unit(second_other.x - vertex.x, second_other.y - vertex.y)?;
+
+    // M62 deliberately presents the acute supporting-line value. When the two
+    // finite rays form that same acute/right wedge, prefer it over the opposite
+    // endpoint-order-dependent wedge. An obtuse finite join retains the acute
+    // supporting-line fallback so the painted sector stays truthful to its value.
+    (dot(first_direction, second_direction) >= -ACUTE_DOT_EPSILON).then_some((
+        vertex,
+        first_direction,
+        second_direction,
+    ))
 }
 
 fn point_relation(

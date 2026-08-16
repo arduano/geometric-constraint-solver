@@ -661,9 +661,10 @@ fn render_datums(
             if related { " related" } else { "" },
         );
         match datum.datum {
-            SketchDatum::Origin => {
-                render_origin_datum(output, datum, &state_classes, viewport);
-            }
+            // The axis intersection already presents Origin visually. Keep the
+            // headless datum for picking/authoring and its accessible tree row,
+            // but do not paint a duplicate canvas marker or focus target.
+            SketchDatum::Origin => {}
             SketchDatum::XAxis | SketchDatum::YAxis => {
                 render_axis_datum(output, datum, &state_classes, viewport);
             }
@@ -674,45 +675,6 @@ fn render_datums(
 
 fn geometry_is_hovered(hover: EditorHoverState, item: SelectionItem) -> bool {
     matches!(hover.target, Some(EditorHoverTarget::Geometry(target)) if target == item)
-}
-
-fn render_origin_datum(
-    output: &mut String,
-    datum: &SceneDatum,
-    state_classes: &str,
-    viewport: Viewport,
-) {
-    if !datum.is_visible_in_viewport(viewport) {
-        return;
-    }
-    let point = datum.screen_start;
-    let label_x = (point.x + 11.0).min(viewport.screen_size[0] - 42.0);
-    let label_y = (point.y - 9.0).max(13.0).min(viewport.screen_size[1] - 5.0);
-    let _ = write!(
-        output,
-        concat!(
-            "<g class=\"wb-datum wb-datum-origin{}\" role=\"button\" tabindex=\"0\" ",
-            "aria-label=\"Origin · protected intrinsic reference\" data-editor-item=\"datum\" ",
-            "data-datum=\"origin\" data-protected=\"true\">",
-            "<circle class=\"wb-datum-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"6\"/>",
-            "<circle class=\"wb-datum-origin-ring\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"4.5\"/>",
-            "<path class=\"wb-datum-origin-cross\" d=\"M{:.3} {:.3}H{:.3}M{:.3} {:.3}V{:.3}\"/>",
-            "<text class=\"wb-datum-label wb-datum-origin-label\" x=\"{:.3}\" y=\"{:.3}\">Origin</text></g>"
-        ),
-        state_classes,
-        point.x,
-        point.y,
-        point.x,
-        point.y,
-        point.x - 7.0,
-        point.y,
-        point.x + 7.0,
-        point.x,
-        point.y - 7.0,
-        point.y + 7.0,
-        label_x,
-        label_y,
-    );
 }
 
 fn render_axis_datum(
@@ -2853,7 +2815,7 @@ mod tests {
     }
 
     #[test]
-    fn intrinsic_datums_render_as_selectable_protected_references_behind_native_geometry() {
+    fn intrinsic_origin_stays_headless_while_only_axes_render_behind_native_geometry() {
         let document = SketchDocument::new(10.0).expect("document");
         let session = RetainedSketchDocumentSession::new(
             document,
@@ -2890,12 +2852,23 @@ mod tests {
             CanvasDisplayOptions::default(),
             viewport,
         );
-        for (key, label) in [("origin", "Origin"), ("x-axis", "X"), ("y-axis", "Y")] {
+        assert_eq!(scene.datums.len(), 3);
+        assert!(
+            scene
+                .datums
+                .iter()
+                .any(|datum| datum.datum == geosolve_sketch::SketchDatum::Origin)
+        );
+        for (key, label) in [("x-axis", "X"), ("y-axis", "Y")] {
             assert!(markup.contains(&format!("data-datum=\"{key}\"")));
             assert!(markup.contains(label));
         }
-        assert_eq!(markup.matches("data-protected=\"true\"").count(), 3);
-        assert!(markup.contains("wb-datum-origin selected"));
+        assert!(!markup.contains("data-datum=\"origin\""));
+        assert!(!markup.contains("wb-datum-origin"));
+        assert!(!markup.contains("wb-datum-origin-ring"));
+        assert!(!markup.contains("wb-datum-origin-cross"));
+        assert!(!markup.contains(">Origin<"));
+        assert_eq!(markup.matches("data-protected=\"true\"").count(), 2);
         assert!(markup.contains("M0.000 350.000L1000.000 350.000"));
         assert!(markup.contains("M500.000 700.000L500.000 0.000"));
         let references = markup.find("class=\"wb-reference-geometry\"").unwrap();

@@ -6,10 +6,10 @@ use geosolve_constraint_editor::{
     SceneAnnotationKind, SceneConstraintGlyph, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
-    AlphaScenarioKind, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentCenterRef,
-    DocumentConstraintDefinition, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
-    DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionMode,
-    DocumentDirectionSense, DocumentLineSupportRef, DocumentSolveRequest,
+    AlphaScenarioKind, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentAngleOrientation,
+    DocumentCenterRef, DocumentConstraintDefinition, DocumentCurveCurvatureRelation,
+    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentDirectionSense, DocumentLineSupportRef, DocumentSolveRequest,
     RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
     TangentOrientation, alpha_scenario,
 };
@@ -532,6 +532,138 @@ fn all_seven_dimension_families_publish_native_wasm_geometry() {
         assert!(annotation.hit_test(center, 0.0));
         assert!(annotation.is_movable());
     }
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the native/WASM regression constructs and independently checks the complete shared-wedge paint/pick contract"
+)]
+fn shared_endpoint_angle_uses_the_finite_interior_wedge() {
+    let mut document = SketchDocument::new(8.0).expect("angle document");
+    let first_outer = document
+        .add_point("first outer", [-4.0, 0.0])
+        .expect("first outer point");
+    let second_outer = document
+        .add_point("second outer", [-3.0, 4.0])
+        .expect("second outer point");
+    let shared = document
+        .add_point("shared vertex", [0.0, 0.0])
+        .expect("shared vertex");
+    let first = document
+        .add_curve(
+            "first ray",
+            CurveDefinition::Line {
+                start: first_outer,
+                end: shared,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .expect("first line");
+    let second = document
+        .add_curve(
+            "second ray",
+            CurveDefinition::Line {
+                start: second_outer,
+                end: shared,
+                branch_direction: [0.6, -0.8],
+            },
+        )
+        .expect("second line");
+    let target = document
+        .add_scalar(
+            "clockwise acute angle",
+            (4.0_f64).atan2(3.0),
+            ScalarUnit::Angle,
+            ScalarDomain::Positive,
+        )
+        .expect("angle target");
+    let dimension = document
+        .add_dimension(
+            "shared endpoint angle",
+            DocumentDimensionDefinition::OrientedAngle {
+                first: CurveSpan::line(first),
+                second: CurveSpan::line(second),
+                target,
+                orientation: DocumentAngleOrientation::Clockwise,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .expect("angle dimension");
+
+    let scene = accepted_scene(document, DocumentSolveRequest::default());
+    let annotation = scene
+        .annotations
+        .iter()
+        .find(|annotation| annotation.item == SelectionItem::Dimension(dimension))
+        .expect("shared endpoint annotation");
+    let SceneAnnotationGeometry::AngularDimension {
+        vertex,
+        first_ray,
+        second_ray,
+        radius,
+        label_anchor,
+        ..
+    } = annotation.geometry
+    else {
+        panic!("shared endpoint angle must publish angular geometry");
+    };
+    let shared_screen = scene
+        .points
+        .iter()
+        .find(|point| point.id == shared)
+        .expect("shared scene point")
+        .screen_position;
+    let first_outer_screen = scene
+        .points
+        .iter()
+        .find(|point| point.id == first_outer)
+        .expect("first outer scene point")
+        .screen_position;
+    let second_outer_screen = scene
+        .points
+        .iter()
+        .find(|point| point.id == second_outer)
+        .expect("second outer scene point")
+        .screen_position;
+    assert!(distance(vertex, shared_screen) <= 1.0e-9);
+
+    let normalized = |from: ScreenPoint, to: ScreenPoint| {
+        let delta = [to.x - from.x, to.y - from.y];
+        let length = delta[0].hypot(delta[1]);
+        [delta[0] / length, delta[1] / length]
+    };
+    let dot = |first: [f64; 2], second: [f64; 2]| first[0].mul_add(second[0], first[1] * second[1]);
+    let first_finite_ray = normalized(vertex, first_outer_screen);
+    let second_finite_ray = normalized(vertex, second_outer_screen);
+    assert!(dot(normalized(vertex, first_ray), first_finite_ray) >= 1.0 - 1.0e-12);
+    assert!(dot(normalized(vertex, second_ray), second_finite_ray) >= 1.0 - 1.0e-12);
+
+    let interior_bisector = normalized(
+        vertex,
+        ScreenPoint {
+            x: vertex.x + first_finite_ray[0] + second_finite_ray[0],
+            y: vertex.y + first_finite_ray[1] + second_finite_ray[1],
+        },
+    );
+    let label_direction = normalized(vertex, label_anchor);
+    assert!(dot(label_direction, interior_bisector) >= 1.0 - 1.0e-12);
+    assert!(dot(label_direction, first_finite_ray) > 0.0);
+    assert!(dot(label_direction, second_finite_ray) > 0.0);
+
+    let interior_arc = ScreenPoint {
+        x: vertex.x + interior_bisector[0] * radius,
+        y: vertex.y + interior_bisector[1] * radius,
+    };
+    let opposite_arc = ScreenPoint {
+        x: vertex.x - interior_bisector[0] * radius,
+        y: vertex.y - interior_bisector[1] * radius,
+    };
+    assert!(annotation.hit_test(interior_arc, 1.0e-9));
+    assert!(!annotation.hit_test(opposite_arc, 1.0e-9));
+    assert_eq!(annotation.visible_text.as_deref(), Some("53.13°"));
+    assert_eq!(annotation.geometry.arrowheads().len(), 2);
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
