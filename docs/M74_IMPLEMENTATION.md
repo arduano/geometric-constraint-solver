@@ -2,9 +2,10 @@
 
 # M74 implementation — Production-style sketch reference UX
 
-Status: **release candidate nominated; focused human UAT pending as of 2026-08-16**. Focused and
-workspace-wide qualification, the clean committed release gate and an immutable byte-verified
-Tailscale candidate pass. Explicit human approval and final GitHub Pages deployment remain open.
+Status: **M74-F001 integrated; replacement qualification in progress as of 2026-08-16**. Focused
+native/WASM qualification passes for point-pair symmetry across intrinsic axes. The earlier
+candidate predates F001 and is historical; a clean replacement nomination, explicit human approval
+and final GitHub Pages deployment remain open.
 
 Architecture decision: no new ADR is currently required. Intrinsic datums extend the ordinary
 sketch/editor model within the retained-authoring and accepted-scene boundaries. Canonical sketch
@@ -24,6 +25,9 @@ v1-v4 remains frozen, and the browser continues to consume public scene/audit AP
   constraints with datum-specific source labels and audit bindings. Datum-line collinearity uses a
   datum-specific signed-angle/support residual plus an ordinary length-retention preference that
   selects a non-degenerate solution without adding a hard dimension.
+- M74-F001 adds `SymmetricAboutDatumAxis` across document/runtime/lowering, a public
+  `Sketch::add_symmetric_about_datum_axis` builder and a two-row constant analytic residual. It
+  carries only two point variables plus the closed X/Y axis enum: no hidden line or datum identity.
 - `crates/geosolve-sketch/tests/m74_reference_geometry.rs` is the focused domain suite
   for scale behavior, residuals, finite-difference Jacobians, audit descriptors, lifecycle and
   draft-v5 round trips.
@@ -35,6 +39,10 @@ v1-v4 remains frozen, and the browser continues to consume public scene/audit AP
   DTOs clip the infinite semantic axes to the current finite viewport for presentation.
 - Contextual authoring resolves Origin coincidence, point-on-axis and line-on-axis collinearity in
   either operand order. Parallel/Perpendicular with X/Y axes lower to ordinary Horizontal/Vertical.
+- Symmetric resolves two distinct points plus a line or intrinsic X/Y axis. Complete preselection
+  is permutation-independent while active authoring remains point → point → reference; repeated
+  points and Origin reject with typed, mutation-free failures. Datum symmetry reuses the ordinary
+  Symmetry glyph/paired-point anchor and publishes the datum among related operands.
 - `DisabledReason::ProtectedDatum` owns datum mutation rejection. The coordinator
   guards deletion, suppression/reactivation, geometry-role conversion, Lock and drag startup; a
   datum drag is selection-only and creates no gesture, problem or history entry.
@@ -75,6 +83,14 @@ motion by collapsing toward zero; it is not a dimension or hard relation. The an
 must match a central finite-difference oracle and every success-like solve must pass independent
 finite residual validation.
 
+Datum-axis symmetry contributes exactly two model-unit hard rows. For X axis they are
+`(first.y + second.y)/2` and `second.x - first.x`; for Y axis they are
+`(first.x + second.x)/2` and `second.y - first.y`. Each row is divided by document model scale.
+The constant analytic Jacobian has `0.5/0.5` normal-coordinate entries and `-1/+1`
+tangent-coordinate entries. Two otherwise-free points therefore report numerical rank two and
+right nullity two. The focused tests independently recompute both normalized equations at scales
+`1e-6`, `1` and `1e6` rather than trusting the solver-owned audit alone.
+
 Datums themselves never enter the document allocator, coordinate vector, persistent graph or
 history. A relation that refers to a datum is ordinary design intent: it owns a constraint ID,
 participates in dependency deletion and suppression, and may be removed without removing the
@@ -98,16 +114,16 @@ The current implementation has passed:
 
 ```text
 cargo test --locked -p geosolve-sketch --test m74_reference_geometry --all-features
-# 6 passed
+# 9 passed
 
 cargo test --locked -p geosolve-constraint-editor --test m74_reference_geometry --all-features
-# 3 passed natively
+# 5 passed natively
 
 env NO_COLOR=true nix-shell shell.nix --run \
   'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
    cargo test --locked -p geosolve-constraint-editor --test m74_reference_geometry \
    --target wasm32-unknown-unknown'
-# the same 3 passed under wasm-bindgen-test-runner
+# the same 5 passed under wasm-bindgen-test-runner
 
 cargo test --locked -p geosolve-constraint-editor --all-features
 # 334 unit tests plus every integration and doc-test target passed
@@ -125,7 +141,7 @@ cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown
 ./scripts/golden-authoring-scene-oracle.sh --survey
 ./scripts/golden-authoring-scene-oracle.sh --check
 ./scripts/golden-authoring-scene-oracle.sh --require-clean
-# reviewed 261/261 PASS inventory matches exactly
+# reviewed 270/270 PASS inventory matches exactly
 
 env NO_COLOR=true nix-shell shell.nix --run \
   'cd crates/geosolve-demo-web && trunk build --release --locked'
@@ -136,9 +152,10 @@ M74_BASE_URL=http://127.0.0.1:8094/ node /tmp/m74_browser_check.mjs
 # Chromium passed at 1440x900 and 1024x720 with no console or page errors
 ```
 
-The golden expansion adds 27 reviewed rows: deterministic plus eight seeded cases for Origin
-coincidence, point-on-datum-axis and datum-line collinearity. Its SHA-256 is
-`805dc2a9bde96d3c7980e7ee314527d0406b6e88fbd370fb97eff760224b3c84`.
+The original golden expansion added 27 reviewed rows for Origin coincidence, point-on-datum-axis
+and datum-line collinearity. M74-F001 appends exactly nine more PASS rows for datum-axis symmetry;
+all prior 261 rows remain byte-identical. The resulting fixture SHA-256 is
+`7a4afd4fbd70d0ef6454e5f07f00fde7afb64eec59d329acfba7f761d986e343`.
 
 An independent implementation review found no solver, persistence, accepted-scene or authority
 blocker. It identified stale HUD-on-leave, delayed pan cursor and invisible edge-datum hits; all
@@ -146,7 +163,11 @@ three received focused corrections before release nomination. Follow-on review t
 off-screen-Origin/visible-axis picking interaction and added exact native/WASM evidence for both
 the hidden-datum miss and the independently visible-axis hit.
 
-The exact clean candidate command also passed from committed product source
+M74-F001 focused qualification passes sketch 9/9, editor 5/5 natively and under WASM, complete
+editor 334/334 plus every integration, demo-web 111/111, targeted warnings-denied Clippy and the
+270/270 clean golden check. The complete clean replacement gate remains pending at this checkpoint.
+
+The historical initial candidate command passed from committed product source
 `7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`, tree
 `eff049a7fc0f2df941bcb1360ffb88f60868af21`:
 
@@ -161,7 +182,7 @@ M14/M32 performance examples passed, the release 256-moving-body sparse crossove
 88.91 seconds, licensing and package contents passed, and Trunk 0.21.14 assembled the release
 distribution successfully.
 
-## 4. Immutable UAT candidate
+## 4. Historical initial UAT candidate
 
 The seven files produced by that successful gate were copied without rebuilding to
 `/tmp/geosolve-m74-uat.MpvYrl`. The directory is mode `0555`; every file is mode `0444`; all entries
@@ -211,12 +232,15 @@ The reviewed script SHA-256 values are respectively
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`.
 
+M74-F001 changes product bytes, so this snapshot is retained only as historical evidence and is no
+longer current UAT authority. It must not receive human approval for the replacement scope.
+
 ## 5. Open completion gates
 
-- Complete `docs/M74_UAT.md` over the live immutable candidate and receive explicit
-  supervising-human approval.
-- Keep the Tailscale candidate live through any follow-up fixes; nominate a new clean immutable
-  snapshot if product bytes change.
+- Pass the complete clean replacement release gate from committed F001 source.
+- Copy its exact gate output without rebuilding, replace the live Tailscale candidate, byte-verify
+  every asset and complete `docs/M74_UAT.md` over those replacement bytes.
+- Receive explicit supervising-human approval.
 - Deploy the exact accepted source through GitHub Pages and verify every hosted byte/media type.
 
 ## 6. Compatibility result so far

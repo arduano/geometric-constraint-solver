@@ -1812,6 +1812,28 @@ suppresses Y axis. Horizontal still composes with Y axis and Vertical with X axi
 candidate containing the expected two guides and two retained relations. Candidate authentication,
 commit, Undo/Redo and rejection are atomic and independently preserve finite accepted geometry.
 
+### M74-F001 - Symmetric uses intrinsic X/Y axes directly
+
+Create two otherwise-free stored points and apply Symmetric with X axis, then Y axis. For X,
+independently verify the accepted point midpoint has zero Y and both X coordinates agree; for Y,
+verify zero midpoint X and equal Y. Repeat at model scales `1e-6`, `1` and `1e6` and with reversed
+point order. The two normalized hard rows are finite and independently within `1e-9`, their
+analytic Jacobian matches central finite differences, and the accepted rank/right-nullity are
+exactly two/two.
+
+Active collection remains point → point → line/reference axis. Complete preselection accepts all
+six point/point/axis permutations; a repeated point reports `SameSemanticOperand`, and Origin as
+the third operand reports `WrongOperandKind` while preserving the two valid pending points and all
+design/history/checkpoint bytes. Application creates exactly one accepted history mutation.
+
+The retained definition has no synthetic curve or datum identity. Its tree entry and accepted
+annotation reuse the Symmetry glyph and paired-point midpoint anchor while including the selected
+datum for related highlighting. Suppress/reactivate/delete/dependency/Undo/Redo and draft-v5
+checkpoint reload follow the ordinary constraint lifecycle; canonical export returns
+`UnsupportedM74State`. Existing line-backed symmetry stays green. Focused sketch 9/9, editor
+native/WASM 5/5 and nine append-only golden rows own this scenario; the earlier M74 candidate is
+not UAT authority after this product change.
+
 ### M74-W1 - Reference presentation is polished but equation-free
 
 At `1440x900` and approximately `1024x720`, inspect the dedicated Reference tree group, Origin/X/Y

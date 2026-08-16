@@ -1900,9 +1900,9 @@ gate passes.
 
 ## M74 acceptance: production-style sketch reference UX
 
-Status: **clean candidate nominated; focused human UAT pending as of 2026-08-16**. The scope in
-`docs/M74_GOALS.md`, complete clean committed gate and immutable byte-verified Tailscale nomination
-pass, but human acceptance and public release are not yet claimed.
+Status: **M74-F001 integrated; replacement qualification in progress as of 2026-08-16**. The
+earlier candidate predates datum-axis symmetry. Focused native/WASM qualification passes, but a
+clean replacement nomination, human acceptance and public release are not yet claimed.
 
 - Every sketch exposes immutable intrinsic Origin/X/Y datums with no persistent identity,
   variables, history, geometry counts or Fit contribution. They are selectable and inspectable;
@@ -1910,6 +1910,11 @@ pass, but human acceptance and public release are not yet claimed.
 - Origin coincidence, point-on-datum-axis and affine-line collinearity solve with finite
   independently validated residuals, checked Jacobians and structured audit descriptors. Their
   relations follow ordinary suppress/reactivate/delete/history lifecycle while the datums remain.
+- Symmetric accepts two distinct points plus X/Y axis in every complete preselection order while
+  active collection remains point → point → reference. Its two model-scale-normalized rows enforce
+  exact reflection, have checked analytic Jacobians, rank two/two remaining DOF, structured audit,
+  ordinary lifecycle/reload and no hidden line or datum identity. Origin/repeated-point inputs
+  reject without mutation and ordinary drawn-line symmetry remains unchanged.
 - Canonical sketch v1-v4 bytes remain frozen and reject datum relations with
   `UnsupportedM74State`; only unsupported draft-v5 side records may represent them.
 - Native geometry outranks datums and Origin outranks axes. Origin inference uses `6/9 px`

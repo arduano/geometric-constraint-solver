@@ -4560,10 +4560,10 @@ changes; a clean replacement is byte-verified; and focused UAT is approved.
 
 ### M74: production-style sketch reference UX
 
-Status: **clean candidate nominated; focused human UAT pending as of 2026-08-16**. Intrinsic datum,
-editor/inference and workbench changes pass the complete clean gate and immutable byte-verified
-Tailscale nomination. Explicit approval and accepted-source GitHub Pages publication remain open.
-`docs/M74_GOALS.md` owns the detailed scope.
+Status: **M74-F001 integrated; replacement qualification in progress as of 2026-08-16**. The
+earlier immutable candidate predates datum-axis symmetry and is historical. Focused native/WASM
+hardening passes; a clean replacement nomination, explicit approval and accepted-source GitHub
+Pages publication remain open. `docs/M74_GOALS.md` owns the detailed scope.
 
 - [x] Approve and record the M74 datum, inference and desktop-polish scope without activating
   draft-v5 as a supported persistence language.
@@ -4584,6 +4584,11 @@ Tailscale nomination. Explicit approval and accepted-source GitHub Pages publica
   row-by-row; preserve the current golden if focused tests own the new dimension.
 - [x] Pass formatting, warnings-denied workspace Clippy, locked all-feature tests, native/WASM
   checks, Trunk release build, golden survey/check/clean and the complete clean release gate.
+- [x] Close M74-F001 mechanically: add point-pair Symmetric across X/Y datums without hidden
+  geometry, preserve drawn-line symmetry, and qualify exact residual/Jacobian/rank, authoring,
+  scene, lifecycle and draft-v5 behavior.
+- [ ] Re-run the complete clean release gate and nominate a replacement immutable Tailscale
+  snapshot containing M74-F001; withdraw the earlier bytes from current UAT authority.
 - [ ] Freeze and byte-verify an immutable Tailscale UAT candidate, keep it live through follow-up
   fixes and receive explicit focused human approval.
 - [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact byte-for-byte
@@ -4596,7 +4601,7 @@ for the three datum relation families. Focused sketch **6/6**, M74 editor **3/3*
 locked all-feature tests, native/WASM M74 parity, the 261-row golden disposition, Trunk release
 assembly and two-size Chromium smoke pass. No public M74 artifact exists yet.
 
-Release nomination note (2026-08-16): exact clean product source
+Historical initial release nomination note (2026-08-16): exact clean product source
 `7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`, tree
 `eff049a7fc0f2df941bcb1360ffb88f60868af21`, passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` completely. Its exact
@@ -4606,8 +4611,18 @@ gate-produced seven files were copied without rebuilding to read-only
 `http://100.94.63.83:8080/` under PID `969003`. Proxy/cache-bypassed identity fetches for all seven
 files and `/` return HTTP 200 with exact lengths, media types and bytes; `/` equals `index.html` and
 the fetched aggregate matches. M72 compatibility and M74 Chromium checks pass at `1440x900` and
-`1024x720`. Historical M73 snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains unchanged. This snapshot
-is current UAT authority; focused human approval remains pending.
+`1024x720`. Historical M73 snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains unchanged. M74-F001 now
+supersedes these product bytes; this snapshot remains historical evidence and is not current UAT
+authority.
+
+M74-F001 implementation checkpoint (2026-08-16): commits `cff2ff0`, `0ffbd0b` and `ab4879a` add
+identity-free point-pair symmetry across X/Y axes, contextual authoring in all complete-selection
+orders, ordinary scene/lifecycle/persistence behavior and the focused regression matrix. Sketch
+M74 passes **9/9**, editor M74 passes **5/5** natively and under WASM, complete editor remains
+**334/334** plus integrations, demo-web remains **111/111**, and the reviewed golden expands only
+by nine PASS rows from 261 to **270**. Targeted warnings-denied Clippy and golden
+`--require-clean` pass. Complete clean replacement qualification and nomination remain pending at
+this checkpoint.
 
 Gate: intrinsic datums remain permanent but identity-free; their ordinary relations solve, audit
 and follow lifecycle; headless picking/inference owns the exact priority and tolerance policy; the

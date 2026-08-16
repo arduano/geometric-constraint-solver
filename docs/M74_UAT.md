@@ -2,11 +2,12 @@
 
 # M74 focused UAT — Production-style sketch reference UX
 
-Status: **clean candidate nominated and mechanically verified; focused human UAT pending as of
-2026-08-16**. GitHub Pages continues to serve the accepted M73 build until M74 passes this
-scorecard and receives explicit approval.
+Status: **M74-F001 integrated; replacement candidate pending as of 2026-08-16**. The candidate
+recorded below predates datum-axis symmetry and is historical, not UAT authority. GitHub Pages
+continues to serve the accepted M73 build until replacement M74 bytes pass this scorecard and
+receive explicit approval.
 
-Candidate source: `7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`
+Historical candidate source: `7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`
 
 Candidate tree: `eff049a7fc0f2df941bcb1360ffb88f60868af21`
 
@@ -29,7 +30,7 @@ Ordered-manifest aggregate:
 | `index.html` | 27,474 | `a53bd7f661e92e5ba856ebdaca686c53ab3e1566d5c1ad32cc2a90065930c56a` |
 | `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
 
-The exact clean command
+The historical candidate's exact clean command
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 on the candidate
 source. It includes the 261/261 golden check, native/WASM M74 3/3 parity, workspace format, Clippy,
 tests, Rustdoc, benchmark compilation, performance checks, licensing/package checks, the
@@ -39,8 +40,9 @@ The gate distribution was copied without rebuilding. Proxy/cache-bypassed identi
 all seven files and `/` return HTTP 200 from the Tailscale address with exact media types, lengths
 and bytes; `/` equals `index.html`, and the fetched aggregate matches. The M72 compatibility and
 M74 browser scripts both pass at `1440x900` and `1024x720`. Former server PID `3870531` has exited,
-while historical snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains unchanged. This M74 snapshot is
-the current UAT authority; no public M74 artifact exists yet.
+while historical snapshot `/tmp/geosolve-m73-uat.JKAWtJ` remains unchanged. M74-F001 supersedes
+these M74 product bytes; do not approve them. No current replacement or public M74 artifact exists
+yet.
 
 Direct Rust/WASM tests are authoritative for exact residuals, Jacobians, persistence rejection,
 pixel boundaries, action atomicity and history. Human UAT should judge visual hierarchy,
@@ -80,6 +82,21 @@ Pass when datums feel ever-present and useful but unmistakably different from ed
 6. Save/reload the ordinary browser workspace and confirm the relations return. This exercises the
    existing draft-v5 workspace side records; it is not evidence that canonical sketch v5 is
    supported.
+7. Draw two free points, select both points plus X axis, and apply Symmetric. Confirm the points
+   have equal X coordinates and opposite Y coordinates. Repeat with Y axis: equal Y coordinates
+   and opposite X coordinates.
+8. Repeat with the axis preselected first and with the two point selections reversed. Then enter
+   active Symmetric mode and pick point → point → axis. All complete routes should create one
+   ordinary relation; active mode should continue to ask for a line or reference axis after the
+   two points.
+9. In active Symmetric mode, pick the same point twice. Confirm the second pick is rejected without
+   losing the valid first point. With two distinct points pending, pick Origin; it must reject and
+   retain both points so selecting X or Y axis can immediately complete the relation.
+10. Select/hover the symmetry annotation and referenced axis. Confirm the usual Symmetry glyph is
+    anchored midway between the paired points and becomes related through the axis. Suppress,
+    reactivate, delete, Undo/Redo and save/reload one axis-symmetry relation.
+11. Recheck ordinary two-point-plus-drawn-line Symmetric. Its established behavior must remain
+    unchanged; axis support must not create or expose a hidden construction line.
 
 Pass when relations behave like ordinary removable design intent and the referenced datum never
 behaves like a removable document object.

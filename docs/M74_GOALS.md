@@ -2,9 +2,10 @@
 
 # M74 — Production-style sketch reference UX
 
-Status: **clean candidate nominated; focused human UAT pending as of 2026-08-16**. The scope,
-implementation, clean committed release gate and immutable byte-verified Tailscale candidate pass.
-Supervising-human approval and final GitHub Pages publication are not yet complete.
+Status: **M74-F001 integrated; replacement qualification in progress as of 2026-08-16**. The
+original datum/reference scope and focused axis-symmetry follow-up are implemented. The earlier
+immutable candidate predates F001 and is historical; a clean replacement, supervising-human
+approval and final GitHub Pages publication are not yet complete.
 
 ## Goal
 
@@ -64,6 +65,24 @@ keyboard and viewport-edge behavior without moving solver authority into the bro
   describe one authenticated terminal candidate. Undo/Redo restores the whole accepted edit in one
   history step.
 
+### M74-F001 — point-pair symmetry across datum axes
+
+- Extend ordinary Symmetric authoring to accept two distinct stored points plus intrinsic X or Y
+  axis. Active authoring remains point → point → line/reference axis; a complete preselection works
+  in every operand order. Origin and repeated-point operands reject without mutation.
+- Persist `SymmetricAboutDatumAxis { first, second, axis }` as one ordinary relation without a
+  hidden line, datum variable or datum ID. X-axis symmetry enforces
+  `(first.y + second.y)/2 = 0` and `second.x - first.x = 0`; Y-axis symmetry swaps X/Y.
+- Normalize both rows by model scale, provide an analytic Jacobian and structured audit bindings,
+  and independently validate finite accepted geometry. Two otherwise-free points have rank two
+  and two remaining degrees of freedom.
+- Reuse the Symmetry glyph and paired-point anchor, include the datum in related operands, and keep
+  suppression, delete, dependency, Undo/Redo and draft-v5 reload in the ordinary relation
+  lifecycle. Canonical v1-v4 remains frozen and returns `UnsupportedM74State` on export.
+- Preserve drawn-line symmetry unchanged. This finding does not add Origin/point symmetry,
+  geometry duplication, a Mirror tool, angle-to-axis dimensions, rectangle snapping or new
+  tangent/distance datum relations.
+
 ### M74-W001 — production-style desktop presentation
 
 - Render a dedicated **Reference geometry** tree group, infinite-looking colour-distinct axes,
@@ -94,6 +113,9 @@ keyboard and viewport-edge behavior without moving solver authority into the bro
 - Add focused domain, editor, inference and web-presentation regressions, including operand
   reversal, datum protection, lifecycle, picking priority, exact tolerances, Shift/visibility
   suppression, circle exclusion, same-axis precedence, orthogonal bundles and atomic history.
+- Cover datum-axis symmetry on both axes, three model scales, swapped point order, every complete
+  preselection permutation, active collection/rejection, rank/DOF, central finite differences,
+  audit, lifecycle, scene ownership and native/WASM checkpoint reload.
 - Review any required authoring/scene golden expansion row-by-row. Do not regenerate the golden
   blindly; retain the existing fixture unchanged if datum authoring is fully owned by focused tests.
 - Pass format, warnings-denied workspace Clippy, locked all-feature tests, relevant native/WASM
@@ -117,6 +139,6 @@ keyboard and viewport-edge behavior without moving solver authority into the bro
 ## Non-goals
 
 M74 does not release sketch v5, persist the intrinsic datums, add user-created datum systems,
-construction planes, mirroring, grid snapping, unit/expression entry, mobile/tablet layout, a new
-solver priority system or a production renderer. It does not alter canonical v1-v4 bytes or make
-the demonstration workbench a separate product API.
+construction planes, general geometry mirroring/a Mirror tool, grid snapping, unit/expression
+entry, mobile/tablet layout, a new solver priority system or a production renderer. It does not
+alter canonical v1-v4 bytes or make the demonstration workbench a separate product API.
