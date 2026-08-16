@@ -43,7 +43,7 @@ proptest! {
             }
 
             let parameter = 0.43;
-            let step = 1.0e-5;
+            let step = 5.0e-6;
             let before = curve
                 .jet_on_span(span.index(), parameter - step)
                 .unwrap()
@@ -59,7 +59,13 @@ proptest! {
             let tangent_rate = (after.unit_tangent - before.unit_tangent) / (2.0 * step);
             let oracle = tangent_rate.dot(&current.left_normal) / current_jet.first_derivative.norm();
             let scale = oracle.abs().max(current.signed_curvature.abs()).max(1.0e-8);
-            prop_assert!((oracle - current.signed_curvature).abs() / scale <= 2.0e-5);
+            prop_assert!(
+                (oracle - current.signed_curvature).abs() / scale <= 2.0e-5,
+                "span={:?} oracle={oracle:.17e} curvature={:.17e} scale={scale:.17e} relative={:.17e}",
+                span.index(),
+                current.signed_curvature,
+                (oracle - current.signed_curvature).abs() / scale,
+            );
         }
 
         let refined = curve.insert_knot(0.47).unwrap();
