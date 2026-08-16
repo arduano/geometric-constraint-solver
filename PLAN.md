@@ -67,8 +67,8 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M73 are complete; M74 has explicit scoped closure approval on its
-clean-qualified frozen candidate, with final Pages publication in progress and hands-on UAT
+of every prepared UAT step. M71-M74 are complete; M74 closes under explicit scoped approval of its
+clean-qualified frozen candidate and exact final Pages publication, while hands-on UAT remains
 deferred to an unstarted follow-up milestone. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
@@ -4562,11 +4562,11 @@ changes; a clean replacement is byte-verified; and focused UAT is approved.
 
 ### M74: production-style sketch reference UX
 
-Status: **explicitly approved for scoped closure by the supervising caller on 2026-08-16; final
-GitHub Pages publication is in progress**. The implementation, automated/review evidence, clean
-gate and frozen Tailscale artifact pass. Separate hands-on UAT is intentionally deferred to the
-next bug-fixing/UAT follow-up milestone, which is not started here. `docs/M74_GOALS.md` owns the
-detailed scope.
+Status: **complete under the supervising caller's scoped close decision on 2026-08-16**. The
+implementation, automated/review evidence, complete clean release gate, immutable Tailscale
+candidate and exact final GitHub Pages publication pass. M74-U1 through M74-U8 remain deferred,
+not passed, and transfer with any findings to the next bug-fixing/UAT follow-up milestone, which
+remains unstarted. `docs/M74_GOALS.md` owns the detailed scope.
 
 - [x] Approve and record the M74 datum, inference and desktop-polish scope without activating
   draft-v5 as a supported persistence language.
@@ -4596,7 +4596,7 @@ detailed scope.
   follow-up fixes.
 - [x] Record explicit supervising-caller approval to close from the automated, review and
   frozen-artifact evidence while deferring, rather than claiming, separate hands-on UAT.
-- [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact byte-for-byte
+- [x] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact byte-for-byte
   and close M74.
 
 Implementation checkpoint (2026-08-16): the complete domain/editor/demo behavior and focused
@@ -4604,7 +4604,7 @@ regressions are integrated. The reviewed authoring/scene oracle expands from 234
 for the three datum relation families. Focused sketch **6/6**, M74 editor **3/3**, complete editor
 **334/334** plus integrations and demo-web **111/111** pass. Warnings-denied workspace Clippy,
 locked all-feature tests, native/WASM M74 parity, the 261-row golden disposition, Trunk release
-assembly and two-size Chromium smoke pass. No public M74 artifact exists yet.
+assembly and two-size Chromium smoke pass. No public M74 artifact existed at that checkpoint.
 
 Historical initial release nomination note (2026-08-16): exact clean product source
 `7ac3f3b41942a4f4bf5f1a4f06fd59b37caa37a8`, tree
@@ -4650,14 +4650,33 @@ without waiting for a separate hands-on UAT pass. M74-U1 through M74-U8 remain u
 manual scorecard and are recorded as **deferred**, not passed. Their future execution and any
 findings are assigned to the next bug-fixing/UAT follow-up milestone; that milestone is not
 activated or otherwise started by this record. The caller accepts the existing direct Rust/WASM,
-review, clean-gate, Chromium and frozen-artifact evidence as sufficient for M74 closure. GitHub
-Pages publication and exact hosted-artifact verification remain the final standard closeout step.
+review, clean-gate, Chromium and frozen-artifact evidence as sufficient for M74 closure. The final
+GitHub Pages publication below completes the standard closeout step.
+
+Final public publication checkpoint (2026-08-16): accepted product source
+`55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, is deployed from documentation-only approval
+descendant `b6b1d62b49466ea06522dbdd3f5444a324d36584`, tree
+`cba65ae9349a4d1f6e79cebc2f1994aab8be19c3`, by successful GitHub Pages run `31923806117`.
+The 34m54s qualify-and-assemble job `95108012557` includes the complete 33m40s hosted release gate,
+270/270 clean golden oracle, 176.43-second 256-moving-body sparse crossover and 29-second
+repository-prefixed build; deploy job `95111536044` passes in 10s through deployment `5927348343`.
+Artifact `9257602997` has downloaded ZIP SHA-256
+`60cf4c4985e08517c6a9a949bdacb4faf31f7069079a65e9b5e8c8f7ef21f955`, inner tar SHA-256
+`14ef2ae52b641620f958fb9df66bb40570f0b26911da695e632ac747bb7a9985` and C-locale seven-file
+manifest aggregate `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`.
+The public root and all seven files return HTTP 200 and match that artifact byte-for-byte; `/`
+equals `index.html`, application assets use `/geometric-constraint-solver/`, media types are
+correct, and the public M72 compatibility and M74 Chromium checks pass at `1440x900` and
+`1024x720`. The still-live Tailscale snapshot remains accepted frozen-candidate evidence, not
+public-byte authority. With this publication verified, every M74 gate is complete under the scoped
+close decision; U1-U8 and any future findings remain deferred to the unstarted follow-up milestone.
 
 Gate: intrinsic datums remain permanent but identity-free; their ordinary relations solve, audit
 and follow lifecycle; headless picking/inference owns the exact priority and tolerance policy; the
 browser adds only presentation/input translation; canonical sketch v1-v4 remains frozen; the clean
 candidate passes the mechanical scorecard; the scoped closure decision explicitly defers hands-on
-UAT; and the accepted source is exact-verified after Pages publication.
+UAT; and the accepted source is exact-verified by the final Pages publication.
 
 ## Explicit non-goals
 

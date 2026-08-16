@@ -71,25 +71,25 @@ The final accepted workbench is live at
 `https://arduano.github.io/geometric-constraint-solver/`; its deployed seven-file artifact and
 two-size Chromium contract are exactly verified. M73's behavior-preserving retained-authoring
 semantic consolidation is complete, approved and publicly verified. M74's intrinsic reference
-geometry and production-style desktop polish are implemented, clean-qualified and frozen as a
-byte-verified candidate. The supervising caller approved scoped M74 closure from the automated,
-review and artifact evidence; separate hands-on UAT is deferred to the next bug-fixing/UAT batch,
-which remains unstarted, while final M74 Pages publication is in progress.
+geometry and production-style desktop polish are complete under the supervising caller's scoped
+close decision and exact final GitHub Pages verification. Separate hands-on UAT remains deferred,
+not passed, and transfers with any findings to the next bug-fixing/UAT batch, which remains
+unstarted.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74 scoped closure approved and publication in progress.
+3. `PLAN.md` — authoritative roadmap, with M74 scoped-closed and publicly verified.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
 7. `docs/M72_GOALS.md` — completed public-workbench bulk-fix and Pages-release scope.
 8. `docs/M72_IMPLEMENTATION.md` and `docs/M72_UAT.md` — closing evidence and approved review.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release scope.
-10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — scoped closure,
-    frozen-candidate evidence and explicitly deferred hands-on scorecard.
+10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
+    closure, final public-release evidence and explicitly deferred hands-on scorecard.
 
 ## Workspace
 

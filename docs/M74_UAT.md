@@ -2,11 +2,11 @@
 
 # M74 focused UAT — Production-style sketch reference UX
 
-Status: **M74 explicitly approved for scoped closure without a separate hands-on UAT pass on
-2026-08-16; final GitHub Pages publication is in progress**. The exact clean gate, independent
-review, immutable snapshot, served-byte verification and two-size Chromium checks are accepted as
-the closing evidence. U1-U8 remain intentionally deferred to the next bug-fixing/UAT follow-up
-milestone and are not claimed as manually passed.
+Status: **M74 is complete under the supervising caller's scoped close decision on 2026-08-16**.
+The exact clean gate, independent review, immutable snapshot, served-byte verification and exact
+final GitHub Pages publication are accepted as closing evidence. U1-U8 remain intentionally
+deferred to the next bug-fixing/UAT follow-up milestone and are not claimed as manually passed;
+that milestone remains unstarted.
 
 Candidate source: `55693372bea4759c9a67eee14f1af3d6a9e0690c`
 
@@ -43,8 +43,17 @@ all seven files and `/` return HTTP 200 from the Tailscale address with exact me
 and bytes; `/` equals `index.html`, and the fetched aggregate matches. The M72 compatibility and
 M74 browser scripts both pass at `1440x900` and `1024x720` with no console/page errors. The HTTP
 evidence directory is `/tmp/geosolve-m74-http-verify.85lR5D`. Historical initial M74 snapshot
-`/tmp/geosolve-m74-uat.MpvYrl` remains read-only but is no longer served or UAT authority. No
-public M74 artifact exists yet.
+`/tmp/geosolve-m74-uat.MpvYrl` remains read-only but is no longer served or UAT authority.
+
+Final public authority is documentation-only approval descendant
+`b6b1d62b49466ea06522dbdd3f5444a324d36584`, successful Pages run `31923806117`, deployment
+`5927348343` and artifact `9257602997` at
+`https://arduano.github.io/geometric-constraint-solver/`. The public root and all seven paths
+return HTTP 200 and byte-match the downloaded artifact; `/` equals `index.html`, application URLs
+are repository-prefixed, media types are correct, and both public browser scripts pass at the two
+desktop sizes. The hosted artifact's C-locale manifest aggregate is
+`df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`; the complete file
+manifest and archive hashes are recorded in `docs/M74_IMPLEMENTATION.md`.
 
 Direct Rust/WASM tests are authoritative for exact residuals, Jacobians, persistence rejection,
 pixel boundaries, action atomicity and history. The scorecard below remains the future hands-on
@@ -214,7 +223,8 @@ tablet behavior remain outside scope.
 
 Pass when the complete treatment feels like one coherent CAD demonstration at both supported
 desktop sizes. This hands-on pass is now deferred to the next bug-fixing/UAT follow-up milestone;
-M74 publication proceeds from the accepted automated, review and frozen-artifact evidence.
+M74's final publication has completed from the accepted automated, review and frozen-artifact
+evidence.
 
 ## Approval record
 
@@ -232,4 +242,5 @@ M74 publication proceeds from the accepted automated, review and frozen-artifact
 This approval intentionally does not reinterpret automation as hands-on UAT. The complete U1-U8
 scorecard and any future findings transfer to the next bug-fixing/UAT follow-up milestone. That
 milestone is reserved by this handoff but is not activated, planned or started here. M74's final
-public artifact is recorded only after the Pages deployment actually succeeds and is byte-verified.
+public artifact is successful Pages run `31923806117`, deployment `5927348343` and artifact
+`9257602997`; its hosted bytes are exact-verified above.

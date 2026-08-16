@@ -2,11 +2,11 @@
 
 # M74 implementation — Production-style sketch reference UX
 
-Status: **explicitly approved for scoped closure by the supervising caller on 2026-08-16; final
-GitHub Pages deployment is in progress**. Point-pair symmetry across intrinsic axes passes focused
-native/WASM and complete clean release qualification, and its immutable Tailscale candidate is
-byte-verified. Separate hands-on UAT and findings are intentionally deferred to the next
-bug-fixing/UAT follow-up milestone, which is not started here.
+Status: **complete under the supervising caller's scoped close decision on 2026-08-16**.
+Point-pair symmetry across intrinsic axes passes focused native/WASM and complete clean release
+qualification, its immutable Tailscale candidate is byte-verified, and exact final GitHub Pages
+publication passes. M74-U1 through M74-U8 and any findings remain deferred to the next
+bug-fixing/UAT follow-up milestone, which remains unstarted.
 
 Architecture decision: no new ADR is currently required. Intrinsic datums extend the ordinary
 sketch/editor model within the retained-authoring and accepted-scene boundaries. Canonical sketch
@@ -307,10 +307,56 @@ The accepted product remains exact source `55693372bea4759c9a67eee14f1af3d6a9e06
 `/tmp/geosolve-m74-uat.jFfAm4`. No objective defect or unresolved mechanical blocker is carried by
 the M74 close decision.
 
-## 7. Remaining publication gate
+## 7. Final GitHub Pages publication
 
-- Deploy the accepted product through GitHub Pages and verify every hosted artifact byte and media
-  type. This is the final standard M74 closeout action.
+Accepted product source `55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, is deployed from documentation-only approval
+descendant `b6b1d62b49466ea06522dbdd3f5444a324d36584`, tree
+`cba65ae9349a4d1f6e79cebc2f1994aab8be19c3`. The descendant changes no product code or
+mathematical semantic.
+
+GitHub Pages workflow run
+`https://github.com/arduano/geometric-constraint-solver/actions/runs/31923806117` passed at that
+head. The complete run took **35m11s**. Qualify-and-assemble job `95108012557` passed in **34m54s**,
+including the complete hosted release gate in **33m40s**, the clean 270/270 authoring/scene oracle,
+the 256-moving-body sparse crossover in **176.43s**, and repository-prefixed artifact assembly in
+**29s**. Deploy job `95111536044` passed in **10s**; deployment `5927348343` reports success at
+`https://arduano.github.io/geometric-constraint-solver/` with HTTPS enforcement.
+
+GitHub Pages artifact `9257602997`, name `github-pages`, was downloaded to
+`/tmp/geosolve-m74-pages-verify.euXzjA/github-pages.zip`. The ZIP is **2,101,342 bytes**, contains
+only `artifact.tar`, and has SHA-256
+`60cf4c4985e08517c6a9a949bdacb4faf31f7069079a65e9b5e8c8f7ef21f955`, matching GitHub's digest.
+The inner tar at `/tmp/geosolve-m74-pages-verify.euXzjA/outer/artifact.tar` is **6,256,640 bytes**
+with SHA-256 `14ef2ae52b641620f958fb9df66bb40570f0b26911da695e632ac747bb7a9985`.
+It extracts to exactly seven regular files under `/tmp/geosolve-m74-pages-verify.euXzjA/site`, with
+no links or extra payload files:
+
+| Final hosted artifact file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 16,777 | `27168726e6949aa3bc7c20444daa3be053d843ae5ab020bdd198af51303eb624` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-e30eda572f3b8726.js` | 33,221 | `980c38ffa22901ee90bebec8b705f92b07b651ec92001fffd4a62ac03055b74b` |
+| `geosolve-demo-web-e30eda572f3b8726_bg.wasm` | 6,102,557 | `b3a1ea0c07ccc43b9e2cf7129945e048fc2bcad5ca627d516ad26361be254b60` |
+| `index.html` | 27,618 | `912c53d5c1b20f15b984ea3833057bd48262acd8fb87bbbb509c17b0c73f322e` |
+| `styles-711a681b653e6d49.css` | 30,861 | `d75f830c2e0af21399fd94f31dda74888a4ce82bbe7527521c7d5f5a1c948532` |
+
+The C-locale `sha256sum * | sha256sum` aggregate is
+`df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`.
+
+The public root and all seven artifact paths return HTTP 200. Every named response compares
+byte-for-byte with artifact `9257602997`, and `/` equals `index.html`. `index.html` references the
+application JavaScript, WASM and CSS only through the `/geometric-constraint-solver/` repository
+prefix and contains no unprefixed application asset URL. JavaScript is served as
+`application/javascript`, WASM as `application/wasm` and CSS as `text/css`; HTML, Markdown and
+license responses also have exact lengths and expected media types. The reviewed M72 compatibility
+and M74 reference-UX Chromium scripts pass against the public URL at `1440x900` and `1024x720`
+with no console or page errors.
+
+The still-live Tailscale distribution remains the accepted immutable frozen-candidate snapshot;
+the downloaded hosted artifact above is public-byte authority, and no Tailscale/Pages byte identity
+is claimed. Hands-on UAT remains deferred exactly as recorded in section 6.
 
 ## 8. Compatibility result
 

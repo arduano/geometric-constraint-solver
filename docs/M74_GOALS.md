@@ -2,11 +2,11 @@
 
 # M74 — Production-style sketch reference UX
 
-Status: **explicitly approved for scoped closure by the supervising caller on 2026-08-16; final
-GitHub Pages publication is in progress**. The datum/reference scope and axis-symmetry follow-up
-are implemented, clean-qualified and served from a byte-verified immutable Tailscale snapshot.
-Separate hands-on UAT and any findings are intentionally deferred to the next bug-fixing/UAT
-follow-up milestone, which is not started here.
+Status: **complete under the supervising caller's scoped close decision on 2026-08-16**. The
+datum/reference scope, axis-symmetry follow-up, clean release qualification, immutable Tailscale
+candidate and exact final GitHub Pages publication pass. M74-U1 through M74-U8 remain deferred,
+not passed, and transfer with any findings to the next bug-fixing/UAT follow-up milestone, which
+remains unstarted.
 
 ## Goal
 
@@ -137,8 +137,19 @@ Scoped closure record (2026-08-16): the supervising caller accepted the existing
 independent-review, clean-gate and frozen-artifact evidence and explicitly waived a separate M74
 hands-on UAT pass. The U1-U8 scorecard remains available but is deferred, not marked passed. Its
 future execution and any findings belong to the next bug-fixing/UAT follow-up milestone. This
-record reserves that handoff without activating or planning the next milestone. Public Pages
-publication remains the final M74 closeout action.
+record reserves that handoff without activating or planning the next milestone.
+
+Final public publication record (2026-08-16): accepted product source
+`55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, is deployed from documentation-only approval
+descendant `b6b1d62b49466ea06522dbdd3f5444a324d36584`, tree
+`cba65ae9349a4d1f6e79cebc2f1994aab8be19c3`, by successful Pages run `31923806117`, artifact
+`9257602997` and deployment `5927348343`. The downloaded ZIP and inner tar SHA-256 values are
+`60cf4c4985e08517c6a9a949bdacb4faf31f7069079a65e9b5e8c8f7ef21f955` and
+`14ef2ae52b641620f958fb9df66bb40570f0b26911da695e632ac747bb7a9985`; the seven-file manifest
+aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`. The public root
+and every artifact path return HTTP 200 and match the artifact byte-for-byte, application URLs are
+repository-prefixed, media types are correct, and the public M72/M74 two-size Chromium checks pass.
 
 ## Acceptance
 
@@ -152,7 +163,7 @@ publication remains the final M74 closeout action.
   is retained as deferred follow-up work rather than claimed M74 evidence.
 - The clean release gate and immutable Tailscale candidate pass. The explicit scoped closure
   approval accepts that evidence without separate hands-on UAT; exact accepted-source Pages
-  publication remains required before final closeout.
+  publication passes. Every M74 goal is complete under the scoped decision.
 
 ## Non-goals
 

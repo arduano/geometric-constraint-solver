@@ -141,8 +141,9 @@ authenticated without changing accepted behavior. M74 then adds immutable Origin
 geometry, datum-backed relations, axis symmetry, bounded datum inference and production-style
 desktop polish. Its exact clean product source `55693372bea4759c9a67eee14f1af3d6a9e0690c`
 and read-only snapshot `/tmp/geosolve-m74-uat.jFfAm4` are qualified and byte-verified. The
-supervising caller approved scoped M74 closure from that evidence; hands-on UAT is deferred to the
-next bug-fixing/UAT batch, which remains unstarted, while final Pages publication is in progress.
+supervising caller approved scoped M74 closure from that evidence, and exact final GitHub Pages
+publication passes. Hands-on UAT remains deferred, not passed, and transfers with any findings to
+the next bug-fixing/UAT batch, which remains unstarted.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -157,8 +158,8 @@ support and physics remain outside future acceptance.
 7. `docs/adr/0001-*.md` through `docs/adr/0035-*.md`
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
-10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — scoped closure,
-    frozen-candidate evidence and explicitly deferred hands-on scorecard.
+10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
+    closure, final public-release evidence and explicitly deferred hands-on scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -433,8 +434,11 @@ independent review, two-size Chromium checks and immutable seven-file snapshot
 `/tmp/geosolve-m74-uat.jFfAm4` with aggregate
 `1e5d00474c383102f4f6189a534e5acb395d92e94a7c0853b72d9c25b0f4fe13`. The supervising caller
 explicitly approved scoped closure on 2026-08-16. U1-U8 remain deferred and transfer with any
-future findings to the next bug-fixing/UAT batch; that milestone is not started. Final M74 Pages
-publication is in progress.
+future findings to the next bug-fixing/UAT batch; that milestone is not started. Documentation-only
+approval descendant `b6b1d62b49466ea06522dbdd3f5444a324d36584` passes GitHub Pages run
+`31923806117` and deploys artifact `9257602997`; the public seven-file manifest aggregate is
+`df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`, every public path
+byte-matches the artifact, and the public M72/M74 two-size Chromium checks pass.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -505,8 +509,8 @@ Durable milestone and cleanup records:
 - `docs/M73_GOALS.md` (completed retained-authoring semantic-consolidation scope)
 - `docs/M73_IMPLEMENTATION.md` (completed implementation and public-release ledger)
 - `docs/M73_UAT.md` (approved focused behavior-preservation scorecard)
-- `docs/M74_GOALS.md` (scoped-closed production-style reference UX scope)
-- `docs/M74_IMPLEMENTATION.md` (clean qualification, frozen artifact and closeout ledger)
+- `docs/M74_GOALS.md` (completed scoped-close and public-release scope)
+- `docs/M74_IMPLEMENTATION.md` (clean qualification, frozen artifact and final-publication ledger)
 - `docs/M74_UAT.md` (explicitly deferred hands-on scorecard and scoped approval record)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

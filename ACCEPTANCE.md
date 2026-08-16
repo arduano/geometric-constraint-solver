@@ -178,10 +178,10 @@ reported the targeted F005 movement behavior fixed and requested sign-off once t
 regressions were satisfactory. Clean closing source `48e3cc3` passes the complete release gate with
 the two-previously-Current transaction and CircularArc transport/domain regressions, while the
 198/198 golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B
-without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72 and M73
-are complete under their scoped approvals and exact final public-artifact verification. M74 has
-explicit scoped closure approval on its automated, review and frozen-artifact evidence; separate
-hands-on UAT is deferred without being marked passed, and final Pages publication is in progress.
+without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72-M74 are
+complete under their scoped approvals and exact final public-artifact verification. M74's separate
+hands-on UAT is deferred without being marked passed and transfers to the next bug-fixing/UAT
+follow-up milestone, which remains unstarted.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1901,10 +1901,11 @@ gate passes.
 
 ## M74 acceptance: production-style sketch reference UX
 
-Status: **explicitly approved for scoped closure by the supervising caller on 2026-08-16; final
-public release is in progress**. The exact clean release gate and immutable served-byte checks pass
-for the datum-axis-symmetry replacement. Separate hands-on UAT is intentionally deferred into the
-next bug-fixing/UAT follow-up milestone and is not claimed as completed M74 evidence.
+Status: **complete under the supervising caller's scoped close decision on 2026-08-16**. The exact
+clean release gate, immutable served-byte checks and final GitHub Pages artifact verification pass
+for the datum-axis-symmetry replacement. M74-U1 through M74-U8 remain deferred rather than marked
+passed; their future execution and findings belong to the next bug-fixing/UAT follow-up milestone,
+which remains unstarted.
 
 - Every sketch exposes immutable intrinsic Origin/X/Y datums with no persistent identity,
   variables, history, geometry counts or Fit contribution. They are selectable and inspectable;
@@ -1933,8 +1934,8 @@ next bug-fixing/UAT follow-up milestone and is not claimed as completed M74 evid
   desktop scorecard remains preserved in `docs/M74_UAT.md` and is intentionally deferred.
 - Format, warnings-denied workspace Clippy, locked all-feature tests, native/WASM parity, reviewed
   golden disposition, Trunk and the complete clean release gate pass before immutable Tailscale
-  nomination. The scoped approval below and byte-verified accepted-source Pages publication close
-  M74.
+  nomination. The scoped approval below and byte-verified accepted-source Pages publication have
+  closed M74.
 
 Mechanical nomination result (2026-08-16): exact product source
 `55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
@@ -1948,8 +1949,16 @@ Scoped human result (2026-08-16): the supervising caller explicitly approved clo
 existing automated, independent-review and frozen-artifact evidence without a separate hands-on
 UAT pass. M74-U1 through M74-U8 are therefore deferred rather than marked accepted. Their future
 execution and any resulting findings belong to the next bug-fixing/UAT follow-up milestone, which
-this decision does not start. The remaining standard closeout gate is byte-verified GitHub Pages
-publication of the accepted product.
+this decision does not start.
+
+Final public result (2026-08-16): documentation-only approval descendant
+`b6b1d62b49466ea06522dbdd3f5444a324d36584` passes GitHub Pages run `31923806117` and deploys
+artifact `9257602997` through deployment `5927348343`. The public root and all seven files return
+HTTP 200, match the downloaded artifact byte-for-byte, use repository-prefixed application URLs
+and the expected media types, and `/` equals `index.html`. The artifact's C-locale manifest
+aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`; the public M72
+compatibility and M74 Chromium checks pass at both desktop sizes. Every M74 acceptance gate passes
+under the scoped decision; U1-U8 remain deferred and the follow-up milestone remains unstarted.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

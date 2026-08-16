@@ -1331,8 +1331,8 @@ required.
 
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
-owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M73. M72's scoped UAT and exact final public-artifact
+owning Rust/WASM layer. Old browser E2E is not a qualification path. Human acceptance dispositions
+are recorded at completed M40.7, M53 and M61-M74. M72's scoped UAT and exact final public-artifact
 verification complete its direct automated qualification. Completed M73 qualified its F001-F003
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
@@ -1340,8 +1340,8 @@ immutable Tailscale UAT snapshot, received focused supervising-human approval an
 the final GitHub Pages artifact. M73 adds no new editable sample or browser scenario mode. M74 has
 explicit scoped closure approval on its clean-qualified, byte-verified F001 replacement. Its
 hands-on intrinsic-datum and desktop-polish scorecard is intentionally deferred into the next
-bug-fixing/UAT follow-up milestone rather than claimed as completed human evidence; final M74
-Pages publication is in progress, and the next milestone is not started here.
+bug-fixing/UAT follow-up milestone rather than claimed as completed human evidence. Exact final
+M74 Pages publication passes, and the next milestone remains unstarted.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1856,6 +1856,18 @@ presentation tests own translation; `docs/M74_UAT.md` preserves the hands-on fee
 qualification and immutable Tailscale nomination pass. The supervising caller approved scoped M74
 closure on 2026-08-16 without a separate hands-on pass; that scorecard and any findings are
 deferred to the next bug-fixing/UAT follow-up milestone, which remains unstarted.
+
+Final public publication (2026-08-16): accepted product source
+`55693372bea4759c9a67eee14f1af3d6a9e0690c`, tree
+`866fbf8b58ec19e72cbe6936e06f3615dba2f692`, is deployed from documentation-only approval
+descendant `b6b1d62b49466ea06522dbdd3f5444a324d36584` by successful Pages run `31923806117` as
+artifact `9257602997` through deployment `5927348343`. Its downloaded inner tar SHA-256 is
+`14ef2ae52b641620f958fb9df66bb40570f0b26911da695e632ac747bb7a9985` and seven-file manifest
+aggregate is `df421cc0050c31008e5cb5620092c4d05e91191fd1eccaaf020ca437ce97e725`. The public root
+and all seven paths return HTTP 200 and match the artifact byte-for-byte; `/` equals `index.html`,
+application URLs are repository-prefixed, media types are correct, and both public two-size
+Chromium checks pass. The separate Tailscale bytes remain frozen-candidate evidence, not public
+publication authority. U1-U8 and future findings remain deferred to the unstarted follow-up.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
