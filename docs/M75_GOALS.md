@@ -7,7 +7,10 @@ The accepted product is the clean-qualified, byte-verified
 post-F002 candidate below. The caller accepted that candidate, the focused F001/F002 hover recheck
 and U1-U12 for scoped closure; this is not a claim that every prepared UAT step was individually
 executed or logged. Exact public publication passes below. M76 subsequently reached scoped
-approval and final qualification; its publication closeout supersedes M75 as current authority
+approval, final qualification and exact public verification. Final M76 source
+`a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
+`248cba4509a992aeff7a02dd6d57a1a2481380a4`, passes Pages run `31961652265`, artifact
+`9267811418` and deployment `5933831093`, superseding M75 and becoming current public authority
 without changing any M75 evidence.
 
 ## Goal
@@ -215,8 +218,9 @@ Final public publication record (2026-08-16): documentation-only approval descen
 `8c031953dec4975c9b701a5ba30f060a95d5e0772286396f3c03ac74fb665fc0` and
 `8ac419fbea39c306e6ee529309f2d3965c93d4ff0459fd2e21179714e9b89c1d`; the seven-file manifest
 aggregate is `4c2da7d7860ac0bcadc64722007b5accb01aa999aa79f3046ba9d2868e86ef3b`. Every public file and
-root exact-verifies, and M72/M74 two-size plus M75 6/6 Chromium checks pass. GitHub Pages is final
-public-byte authority; the frozen Tailscale snapshot remains accepted candidate evidence.
+root exact-verifies, and M72/M74 two-size plus M75 6/6 Chromium checks pass. GitHub Pages was M75's
+final public-byte authority at closure; completed M76 now supersedes it. The frozen M75 Tailscale
+snapshot remains accepted historical candidate evidence.
 
 ## Acceptance
 

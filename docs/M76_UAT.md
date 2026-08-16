@@ -2,15 +2,15 @@
 
 # M76 focused UAT — production-quality annotations
 
-Status: **accepted for scoped closure (2026-08-17); separate post-refinement hands-on UAT was
-explicitly waived**. The caller reviewed the initial candidate, reported that it looked good,
-requested two final feature refinements and authorized closure after they were implemented. U1-U4
-are accepted under that authority; no individual step-by-step replay was logged or is claimed.
-GitHub Pages publication and exact public-byte verification remain pending.
+Status: **complete (2026-08-17); scoped human acceptance and exact public publication pass, and
+separate post-refinement hands-on UAT was explicitly waived**. The caller reviewed the initial
+candidate, reported that it looked good, requested two final feature refinements and authorized
+closure after they were implemented. U1-U4 are accepted under that authority; no individual
+step-by-step replay was logged or is claimed.
 
-Accepted clean-qualified source: `9b4e7f72dcacefdf4d7847a22eb675c711068d26`
+Accepted clean-qualified source: `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`
 
-Accepted clean-qualified tree: `e0591664fbeb2e353bc880dd826dc39ac1caeec9`
+Accepted clean-qualified tree: `248cba4509a992aeff7a02dd6d57a1a2481380a4`
 
 M76 feature-refinement commit: `a9fd6f6a71edf5be9d9fb5856074d291192a898d`
 
@@ -18,16 +18,16 @@ M76 feature-refinement tree: `2627e1d0ffdc500166bbcee50626fc9d65e05b67`
 
 Current endpoint: `http://100.94.63.83:8080/`
 
-Current server PID: `1455071` (retained command-runner session `70653`)
+Current server PID: `1780608` (retained command-runner session `30164`)
 
-Immutable snapshot: `/tmp/geosolve-m76-uat.ctgYzp` (directory `0555`, files `0444`)
+Immutable snapshot: `/tmp/geosolve-m76-final-uat.65Y8J1` (directory `0555`, files `0444`)
 
 Ordered-manifest aggregate:
-`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4`
+`967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `API_COMPATIBILITY.md` | 19,296 | `ab28a050a47a4b64fd20f6b821658246444528eee9b0c4499627af381427b72f` |
+| `API_COMPATIBILITY.md` | 20,587 | `24934e6d620dc89078ab41c155acd2a31bba4260a82cfe4c37077421cc1ab853` |
 | `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
 | `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
 | `geosolve-demo-web-55053c1ba5c6df34.js` | 33,221 | `d8974bcac131556374933e638799af9ee854a913e819e5ce492c9c0707547e0a` |
@@ -36,17 +36,17 @@ Ordered-manifest aggregate:
 | `styles-c2e1aed7dc61439c.css` | 31,750 | `69e4241bdcafc260ec6248ecc0a94f0cdb6420155419dd103a30d49ee1d467ee` |
 
 The exact clean command
-`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 after 569
-seconds at the accepted source above. Editor passes 353/353, demo-web 122/122, M76 native/WASM
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0 at the accepted
+source above. Editor passes 353/353, demo-web 122/122, M76 native/WASM
 parity 5/5 each, M75 native/WASM 11/11 each, M74 native/WASM 5/5 each, and the reviewed golden
-remains unchanged at 270/270. The 127.63-second sparse crossover, formatting, warnings-denied
+remains unchanged at 270/270. The 151.76-second sparse crossover, formatting, warnings-denied
 Clippy and Rustdoc, locked workspace tests, benchmarks, licensing/package-content checks and Trunk
 0.21.14 assembly also pass. The seven files above are the gate output frozen without rebuilding.
 
 Proxy/cache-bypassed identity requests for `/` and every file return HTTP 200 with exact media
 types, lengths and bytes, no redirects or content encoding; `/` equals `index.html`, and the
-fetched aggregate matches. Evidence is retained at `/tmp/geosolve-m76-http-verify.CqEufj`. The
-superseded server PID `1077092` was retired before this candidate was served.
+fetched aggregate matches. Evidence is retained at `/tmp/geosolve-m76-final-http-verify.UwoaMK`.
+The superseded server PIDs `1077092` and `1455071` were retired before this candidate was served.
 
 ## Refinements included after initial review
 
@@ -63,6 +63,39 @@ The initial reviewed nomination at source `37eade50b566f62905a395655bc80c17d9b6b
 `/tmp/geosolve-m76-uat.puiPgO`, aggregate
 `fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf`, is superseded evidence
 only. It is not the accepted final candidate.
+
+The intermediate clean-qualified source `9b4e7f72dcacefdf4d7847a22eb675c711068d26`, snapshot
+`/tmp/geosolve-m76-uat.ctgYzp` and aggregate
+`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4` are also superseded
+historical evidence.
+
+## Final public publication
+
+GitHub Pages run `31961652265` passes at exact source
+`a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`. Qualify job `95200423007` includes the complete
+release gate and 184.090683967-second sparse crossover; deploy job `95204687455` and deployment
+`5933831093` report success at `https://arduano.github.io/geometric-constraint-solver/`.
+
+Artifact `9267811418` is 2,164,829 bytes with ZIP/GitHub SHA-256
+`dba7e2f5e1b7a51390ec1d840e7869d69968114bcf13250e641448a02d0cb60b`, inner-tar SHA-256
+`be18173d61fef8ead3d00cf2dd560f893a7731eff7fa3bdfc0b81aadab6298e5` and exact seven-file
+manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`.
+The public root and every file return HTTP 200 with expected media types, zero redirects and
+artifact-identical bytes; `/` equals `index.html`. Evidence is retained at
+`/tmp/geosolve-m76-pages-verify.ijOz7p` and independently repeated at
+`/tmp/geosolve-m76-pages-verify.hVSqQJ`. The repository-prefixed Pages rebuild is public-byte
+authority and is not claimed byte-identical to the frozen Tailscale output.
+
+The unchanged M72 public Chromium check passes at `1440x900` and `1024x720`. M76-adapted copies of
+the retained M74/M75 checks change only their obsolete Origin-canvas expectations to the approved
+two-axis intersection contract. Hashes
+`4aff982c6a9e10702d7b0179c17682c6904bb6c28362ebefe967705a984c3355` and
+`161e96d541dbcc189dbbc23c47da672e3080b7c7646e45c11ef458a5e521a067` pass M74 at both sizes and
+M75 6/6.
+
+The preceding Pages run `31957299907` failed twice solely at the old 180-second wall-clock
+assertion after all semantic assertions passed. The 180-second reference is now advisory under a
+240-second shared-runner ceiling, with no solver/workload change and no M76 finding.
 
 ## Prepared review scope
 
@@ -111,7 +144,8 @@ deterministic automatic layout.
   refinements.
 - Final supervising approval: Received 2026-08-17, including explicit waiver of separate
   post-refinement UAT.
-- GitHub Pages publication: Pending as the remaining standard closeout step.
+- GitHub Pages publication: Passed and exact-verified at source `a7769e4` through run
+  `31961652265`, artifact `9267811418` and deployment `5933831093`.
 
-GitHub Pages remains on accepted M75 until this approved M76 candidate is published and exact
-public bytes are verified. No later milestone is active.
+GitHub Pages now serves the accepted M76 candidate and exact public bytes are verified. No later
+milestone is active.

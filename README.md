@@ -85,16 +85,22 @@ Pages publication now passes. M75 is complete. M76's seven-family dimensions, tw
 constraint glyphs, deterministic shared layout/picking, presentation-only movement and fail-soft
 workspace-v6 cache are implemented and clean-qualified. Shared-endpoint acute/right line angles
 now occupy the finite-ray interior wedge, and Origin remains a protected headless/tree datum while
-its redundant canvas mark is omitted. The exact replacement Tailscale candidate is byte-verified;
-the caller accepted U1-U4 for scoped closure without requiring a separate post-refinement replay.
-GitHub Pages publication is the sole remaining closeout gate, and no later milestone is active.
+its redundant canvas mark is omitted. This pre-existing angle-side behavior is an M76 feature
+refinement, not a defect. The exact replacement Tailscale candidate remains separate byte-verified
+evidence; the caller accepted U1-U4 for scoped closure without requiring or inventing a separate
+post-refinement replay. Final source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
+`248cba4509a992aeff7a02dd6d57a1a2481380a4`, passes Pages run `31961652265`, artifact
+`9267811418` and deployment `5933831093`. The artifact's ordered seven-file aggregate is
+`41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`; root and every hosted file
+byte-match it at the expected media types. No Tailscale/Pages byte identity is claimed. M76 is
+complete and no later milestone is active.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74/M75 closed and M76 scoped-approved for closure.
+3. `PLAN.md` — authoritative roadmap, with M74-M76 closed and no later milestone active.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.

@@ -1354,7 +1354,8 @@ M72/M74/M75 browser verification, completing M75. M76 implementation and its fin
 feature refinements pass complete clean qualification and immutable byte-verified Tailscale
 replacement publication. The caller accepts U1-U4 for scoped closure and explicitly waives a
 separate post-refinement replay; that disposition does not invent individual observations. Exact
-GitHub Pages publication is the sole remaining closeout gate, and no later milestone is active.
+GitHub Pages publication, the unchanged retained M72 browser verification and M76-adapted retained
+M74/M75 browser verification now pass, completing M76. No later milestone is active.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -2103,14 +2104,28 @@ must accept the sketch, discard only unusable layout and regenerate deterministi
 Canonical sketch v1-v4 bytes, unsupported draft-v5 policy and `GEOSOLVE_REPRO_V1` authority remain
 unchanged.
 
-M76 closure uses exact clean-qualified source `9b4e7f72dcacefdf4d7847a22eb675c711068d26`,
-tree `e0591664fbeb2e353bc880dd826dc39ac1caeec9`, and no-rebuild snapshot
-`/tmp/geosolve-m76-uat.ctgYzp`, aggregate
-`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4`.
+M76 closure uses exact clean-qualified source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`,
+tree `248cba4509a992aeff7a02dd6d57a1a2481380a4`, and no-rebuild snapshot
+`/tmp/geosolve-m76-final-uat.65Y8J1`, aggregate
+`967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`.
 U1-U4 are accepted for scoped closure under the caller's 2026-08-17 approval; the individual
-steps were not separately logged and a post-refinement replay was intentionally not required.
-The earlier `37eade50` nomination is superseded historical evidence. Exact Pages publication
-remains the final closeout operation.
+steps were not separately logged and a post-refinement replay was intentionally not required. The
+angle-side correction is an M76 feature refinement, not an `M76-Fxxx` defect. The earlier
+`37eade50` and `9b4e7f7` nominations remain superseded historical evidence.
+
+Final public scenario evidence comes from successful Pages run `31961652265`, qualify job
+`95200423007`, deploy job `95204687455`, artifact `9267811418` and deployment `5933831093`.
+The artifact ZIP/GitHub digest is
+`dba7e2f5e1b7a51390ec1d840e7869d69968114bcf13250e641448a02d0cb60b`, its inner-tar digest is
+`be18173d61fef8ead3d00cf2dd560f893a7731eff7fa3bdfc0b81aadab6298e5`, and its exact seven-file
+manifest aggregate is `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`.
+Root plus all seven public paths byte-match that hosted artifact. The unchanged M72 check passes at
+both desktop sizes. M76-adapted copies of the retained M74 and M75 checks replace only their
+obsolete Origin-canvas expectations with the approved two-axis intersection contract; hashes
+`4aff982c6a9e10702d7b0179c17682c6904bb6c28362ebefe967705a984c3355` and
+`161e96d541dbcc189dbbc23c47da672e3080b7c7646e45c11ef458a5e521a067` pass M74 at both sizes and
+M75 6/6. Pages is final public-byte authority; the Tailscale snapshot is separately frozen
+candidate evidence and no cross-build byte identity is claimed. M76 is complete.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

@@ -25,8 +25,9 @@ advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
 - **Baseline:** implemented and accepted behavior through M76. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers its hands-on scorecard into M75; M75 completes hover/click ownership parity under scoped approval and exact public verification; M76 completes production-quality annotation geometry, placement, persistence and final presentation refinements under explicit scoped approval. M1-M7 remain the frozen regression baseline.
-- **Active target:** none. M76 is scoped-approved and clean-qualified; exact GitHub Pages
-  publication is its remaining closeout operation. No later milestone is active.
+- **Active target:** none. M76 is scoped-approved, clean-qualified and exactly verified on GitHub
+  Pages from final source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
+  `248cba4509a992aeff7a02dd6d57a1a2481380a4`. No later milestone is active.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1253,8 +1254,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   focused native/WASM/web/browser qualification and the complete clean replacement gate. Exact
   source `553fd912730b1de3b39736c49b669e94cabdd2c3` is frozen and byte-verified. The supervising
   caller accepted the qualified carried/new interaction scope. Pages run `31939764951`, artifact
-  `9261974799` and deployment `5929879555` are exact-verified, completing M75. No next milestone is
-  active.
+  `9261974799` and deployment `5929879555` are exact-verified, completing M75. M76 has since
+  superseded that publication as current public authority.
 - M76: completed the production-quality annotation cut. `geosolve-constraint-editor` owns exact
   linear, radial, angular and compact-glyph paint/hit geometry plus deterministic automatic and
   presentation-only manual placement; the demo persists only a fail-soft workspace-v6 cache.
@@ -1262,8 +1263,21 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   joins retain a value-consistent acute supporting-line presentation. Origin remains an immutable
   selectable/inference-capable datum and Reference-tree target, but its X/Y-axis intersection now
   communicates zero without a redundant canvas marker, label or focus target. Feature commit
-  `a9fd6f6a71edf5be9d9fb5856074d291192a898d` is clean-qualified at source
-  `9b4e7f72dcacefdf4d7847a22eb675c711068d26`; its exact no-rebuild seven-file Tailscale candidate
-  is byte-verified. The caller accepted U1-U4 for scoped closure and explicitly waived a separate
-  post-refinement replay. Exact Pages publication remains the final closeout operation; no later
+  `a9fd6f6a71edf5be9d9fb5856074d291192a898d` is included in final clean-qualified source
+  `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
+  `248cba4509a992aeff7a02dd6d57a1a2481380a4`. Its exact no-rebuild seven-file Tailscale snapshot
+  `/tmp/geosolve-m76-final-uat.65Y8J1`, aggregate
+  `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`, remains separate
+  byte-verified candidate evidence. That final source passes Pages run `31961652265`, including
+  qualification job `95200423007` and its `184.090683967s` sparse corpus after all semantic
+  assertions. That observation exceeds the retained `180s` advisory target but remains below the
+  enforced `240s` shared-runner ceiling; the earlier `209.696267408s` and `208.757508921s` attempts
+  were timing-only infrastructure failures. Deploy job `95204687455` and deployment `5933831093`
+  succeed. Artifact `9267811418` is 2,164,829 bytes, has Actions digest
+  `dba7e2f5e1b7a51390ec1d840e7869d69968114bcf13250e641448a02d0cb60b`, extracted-tar SHA-256
+  `be18173d61fef8ead3d00cf2dd560f893a7731eff7fa3bdfc0b81aadab6298e5` and ordered seven-file
+  aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`. Root and all seven public
+  files byte-match that Pages artifact at the expected media types; this makes no byte-identity
+  claim against the separately built Tailscale snapshot. The caller accepted U1-U4 for scoped
+  closure and explicitly waived a separate post-refinement replay. M76 is complete and no later
   milestone is active.

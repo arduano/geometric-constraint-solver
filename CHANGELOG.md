@@ -150,10 +150,19 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   refined to use their finite-ray interior wedge, and the intrinsic Origin retained all headless,
   authoring, protection, tree and inspector semantics while dropping its redundant canvas marker,
   label and focus target. This pre-existing angle-side behavior is treated as an M76 feature, not
-  an `M76-Fxxx` defect. Feature commit `a9fd6f6` and final clean-qualified source `9b4e7f7` pass the
-  complete release gate and exact immutable Tailscale verification. The caller accepted U1-U4 for
-  scoped closure without claiming or requiring a separately logged post-refinement replay; exact
-  GitHub Pages publication remains the final closeout operation.
+  an `M76-Fxxx` defect. Feature commit `a9fd6f6` is included in final source
+  `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
+  `248cba4509a992aeff7a02dd6d57a1a2481380a4`, which passes the complete local release gate and
+  exact immutable Tailscale verification at aggregate
+  `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`, then passes GitHub Pages
+  run `31961652265`. Its
+  `184.090683967s` sparse corpus remains below the enforced `240s` shared-runner ceiling after all
+  semantic checks, while the preceding `209.696267408s` and `208.757508921s` attempts are retained
+  as timing-only infrastructure history. Artifact `9267811418`, deploy job `95204687455` and
+  deployment `5933831093` succeed; root and all seven hosted files exact-verify against ordered
+  manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96` at expected media types.
+  The caller accepted U1-U4 for scoped closure without claiming or requiring a separately logged
+  post-refinement replay. M76 is complete.
 
 ### Changed
 

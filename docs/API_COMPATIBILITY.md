@@ -176,7 +176,13 @@ Shared-endpoint angle wedge selection and omission of the redundant Origin canva
 presentation refinements only: the accepted oriented-angle value/branch and all intrinsic-Origin
 picking, authoring, protection, tree and inspector semantics are unchanged. This additive
 disposition is accepted under the caller's scoped M76 close decision without claiming a separate
-post-refinement UAT replay; exact Pages publication is the remaining release operation.
+post-refinement UAT replay. Final source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
+`248cba4509a992aeff7a02dd6d57a1a2481380a4`, passes GitHub Pages run `31961652265`, artifact
+`9267811418` and deployment `5933831093`; root and all seven hosted files byte-match the artifact's
+ordered-manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`
+at their expected media types. The separately built Tailscale candidate remains qualification
+evidence rather than a claim of Pages byte identity. M76 is complete without changing the accepted
+compatibility boundary.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

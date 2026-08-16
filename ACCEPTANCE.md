@@ -188,8 +188,8 @@ opened M75-F002 because an overlying native SVG item hid the authenticated compu
 The F002 correction passes the complete clean replacement gate, immutable freeze and exact
 Tailscale verification. The supervising caller accepted the qualified interaction scope, and
 exact final public publication passes. M76 implementation, clean qualification, immutable
-byte-verified Tailscale nomination and scoped human acceptance pass; final public publication
-remains open.
+byte-verified Tailscale nomination, scoped human acceptance and exact final public publication all
+pass. No later milestone is active.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2109,9 +2109,9 @@ M72/M74 two-size and M75 6/6 Chromium checks pass. Every M75 acceptance gate is 
 
 ## M76 acceptance: production-quality constraint annotations
 
-Status: **closeout in progress; implementation, final clean release qualification, frozen
-byte-verified Tailscale nomination and scoped human approval pass. Exact GitHub Pages publication
-is the only open step; no later milestone is active**.
+Status: **complete (2026-08-17); implementation, final clean release qualification, frozen
+byte-verified Tailscale nomination, scoped human approval and exact GitHub Pages publication pass.
+No later milestone is active**.
 
 - Every accepted dimension family has truthful geometry: point distance, affine line/polyline-span
   length, radius, diameter, oriented angle, supporting-line offset and exact translated-segment
@@ -2153,27 +2153,50 @@ is the only open step; no later milestone is active**.
   were intentionally not replayed or separately logged after the final refinements. Exact GitHub
   Pages publication and hosted-byte verification are required before M76 closes.
 
-Final closeout nomination (2026-08-17): source
-`9b4e7f72dcacefdf4d7847a22eb675c711068d26`, tree
-`e0591664fbeb2e353bc880dd826dc39ac1caeec9`, includes the M76 feature refinements at
-`a9fd6f6a71edf5be9d9fb5856074d291192a898d` plus separate M22 property-oracle test hardening and
-passes the complete clean 569-second release gate. The angle-side behavior predated M76, so its
-corrected placement is an M76 feature refinement rather than an `M76-Fxxx` defect. Editor 353/353,
-demo-web 122/122, native/WASM M76 5/5 each, native/WASM M75 11/11 each, native/WASM M74 5/5 each,
-unchanged golden 270/270 and the 127.63-second sparse crossover pass, together with formatting,
-warnings-denied Clippy/Rustdoc, all workspace tests, benchmarks, licensing/package contents and
-Trunk 0.21.14 assembly. The exact no-rebuild seven-file snapshot `/tmp/geosolve-m76-uat.ctgYzp` is
-read-only (directory `0555`, all seven regular non-symlink files `0444`) and has ordered-manifest
-aggregate
-`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4`. PID `1455071`, retained
-command-runner session `70653`, serves it at `http://100.94.63.83:8080/`;
-`/tmp/geosolve-m76-http-verify.CqEufj` proves root plus every file returns HTTP 200 with exact
-media/length/bytes, no redirects or content encoding, root equality and the same fetched aggregate.
-The supervising user reviewed the initial candidate, requested the two final feature refinements,
-and explicitly authorized closure without separate post-refinement UAT. That scoped approval
-accepts U1-U4 without claiming individually replayed or logged observations. Exact Pages
-publication remains the sole open acceptance item, and accepted M75 remains public authority until
-it passes.
+Final closeout candidate (2026-08-17): source
+`a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
+`248cba4509a992aeff7a02dd6d57a1a2481380a4`, includes the M76 feature refinements at
+`a9fd6f6a71edf5be9d9fb5856074d291192a898d` plus separate M22 property-oracle and
+milestone-neutral shared-runner performance-gate hardening. The angle-side behavior predated M76,
+so its corrected placement is an M76 feature refinement rather than an `M76-Fxxx` defect. The
+complete clean release gate passes: editor 353/353, demo-web 122/122, native/WASM M76 5/5 each,
+native/WASM M75 11/11 each, native/WASM M74 5/5 each, unchanged golden 270/270 and the
+151.76-second sparse crossover, together with formatting, warnings-denied Clippy/Rustdoc, all
+workspace tests, benchmarks, licensing/package contents and Trunk 0.21.14 assembly. The exact
+no-rebuild seven-file snapshot `/tmp/geosolve-m76-final-uat.65Y8J1` is read-only (directory `0555`,
+all seven regular non-symlink files `0444`) and has ordered-manifest aggregate
+`967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`. PID `1780608`, retained
+command-runner session `30164`, serves it at `http://100.94.63.83:8080/`;
+`/tmp/geosolve-m76-final-http-verify.UwoaMK` proves root plus every file returns HTTP 200 with
+exact media/length/bytes, no redirects or content encoding, root equality and the same fetched
+aggregate. The supervising user reviewed the initial candidate, requested the two final feature
+refinements, and explicitly authorized closure without separate post-refinement UAT. That scoped
+approval accepts U1-U4 without claiming individually replayed or logged observations.
+
+Pages run `31957299907` failed twice solely because the former 180-second wall-clock assertion saw
+209.696267408 and 208.757508921 seconds; every convergence, validity, rank, `SparseQr`, fallback
+and residual assertion had already passed, so no M76 finding was opened. The milestone-neutral
+gate now retains 180 seconds as its reference and enforces a 240-second shared-runner ceiling with
+no solver/workload change. Exact source `a7769e4` passes Pages run `31961652265`, qualify job
+`95200423007` with a 184.090683967-second crossover, deploy job `95204687455` and deployment
+`5933831093`. Artifact `9267811418` is 2,164,829 bytes with ZIP/GitHub SHA-256
+`dba7e2f5e1b7a51390ec1d840e7869d69968114bcf13250e641448a02d0cb60b`, inner-tar SHA-256
+`be18173d61fef8ead3d00cf2dd560f893a7731eff7fa3bdfc0b81aadab6298e5` and exact seven-file
+manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`.
+Root and all seven public paths byte-match the artifact with expected media types and zero
+redirects; evidence is `/tmp/geosolve-m76-pages-verify.ijOz7p`. The hosted repository-prefixed
+rebuild is not asserted byte-identical to the separately frozen Tailscale output. Exact public
+publication completes the final M76 acceptance item. The unchanged M72 Chromium check passes at
+both desktop sizes. M76-adapted retained M74/M75 checks change only their obsolete Origin-canvas
+expectations to the approved two-axis intersection contract; hashes
+`4aff982c6a9e10702d7b0179c17682c6904bb6c28362ebefe967705a984c3355` and
+`161e96d541dbcc189dbbc23c47da672e3080b7c7646e45c11ef458a5e521a067` pass M74 at both sizes and
+M75 6/6.
+
+The prior clean-qualified source `9b4e7f72dcacefdf4d7847a22eb675c711068d26`, tree
+`e0591664fbeb2e353bc880dd826dc39ac1caeec9`, snapshot `/tmp/geosolve-m76-uat.ctgYzp` and aggregate
+`337b0e6a2ce2b6a9aed979d0a4849e2d0887c092df66efa345d4917929d01dd4` remain superseded
+historical evidence; PID `1455071` was retired before the final snapshot took the shared endpoint.
 
 The initial nomination at source `37eade50b566f62905a395655bc80c17d9b6bef4`, tree
 `d6ad2f453d672accbcc3848a1a16d2039b3511d1`, snapshot `/tmp/geosolve-m76-uat.puiPgO` and aggregate

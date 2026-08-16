@@ -7,7 +7,10 @@ exact-verified on GitHub Pages**. The initial candidate and
 clean-qualified M75-F001 replacement remain historical evidence only. The caller accepted the
 current candidate, focused F001/F002 hover recheck and U1-U12 without claiming a separately logged
 step-by-step replay. Exact publication evidence is recorded below. M76 subsequently reached scoped
-approval and final qualification; its publication closeout supersedes M75 as current authority
+approval, final qualification and exact public verification. Final M76 source
+`a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
+`248cba4509a992aeff7a02dd6d57a1a2481380a4`, passes Pages run `31961652265`, artifact
+`9267811418` and deployment `5933831093`, superseding M75 and becoming current public authority
 without changing any M75 evidence.
 
 Architecture decision: no new ADR is currently required. M75 consolidates existing editor-owned
@@ -409,8 +412,9 @@ The C-locale manifest aggregate is
 seven paths return HTTP 200 with zero redirects, no content encoding and exact media types,
 content lengths and bytes; `/` equals `index.html`. Application asset URLs use only the
 `/geometric-constraint-solver/` prefix. Public M72 and M74 checks pass at both supported desktop
-sizes, and M75 passes 6/6. GitHub Pages is final public-byte authority; the frozen Tailscale
-snapshot remains accepted candidate evidence.
+sizes, and M75 passes 6/6. GitHub Pages was M75's final public-byte authority at closure; completed
+M76 now supersedes it. The frozen M75 Tailscale snapshot remains accepted historical candidate
+evidence.
 
 ## 9. Initial qualification ledger (superseded by M75-F001)
 
