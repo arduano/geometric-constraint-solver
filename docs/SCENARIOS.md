@@ -1344,8 +1344,9 @@ bug-fixing/UAT follow-up milestone rather than claimed as completed human eviden
 M74 Pages publication passes. That follow-up is active as M75: its initial immutable nomination was
 withdrawn after M75-F001, the F001 replacement passed the complete clean gate and immutable
 nomination, and M75-F002 then withdrew it after browser paint order hid a valid computed-radius
-owner. The F002 correction is focused-qualified; its clean replacement qualification and every
-carried/new human disposition remain pending. GitHub Pages stays on accepted M74.
+owner. The F002 correction now passes the complete clean replacement gate, immutable Tailscale
+nomination and exact served-byte checks. Every carried/new human disposition remains pending;
+GitHub Pages stays on accepted M74.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1875,8 +1876,8 @@ publication authority. U1-U8 and future findings are carried by active M75.
 
 ### M75-H1 - Select hover predicts the primary pointer-down owner
 
-Status: implemented and clean-qualified natively and under WASM on both superseded candidates;
-replacement nomination after M75-F002 remains pending and hands-on evidence has not started.
+Status: implemented and clean-qualified natively and under WASM on the current post-F002 mechanical
+candidate; hands-on evidence has not started.
 
 Construct finite accepted scenes whose projected hit envelopes overlap at every adjacent priority
 edge. For the same Select tool, scene, camera, problem set, policy and pointer coordinate, resolve
@@ -1899,8 +1900,8 @@ hover sample mutates accepted geometry, selection, history, Fillet state or scen
 
 ### M75-H2 - Problem annotations, deterministic occurrences and targetless context
 
-Status: implemented and clean-qualified natively and under WASM on both superseded candidates;
-replacement nomination after M75-F002 remains pending and hands-on evidence has not started.
+Status: implemented and clean-qualified natively and under WASM on the current post-F002 mechanical
+candidate; hands-on evidence has not started.
 
 Create one constraint and one dimension occurrence that are normally hidden but forced visible by
 the current problem set. Each visible occurrence participates in the same annotation hit path used
@@ -1918,8 +1919,8 @@ placement, visibility, fan-out and hit tolerances remain unchanged.
 
 ### M75-H3 - Hover authority is revoked with its interaction context
 
-Status: implemented and clean-qualified on both superseded candidates; replacement nomination
-after M75-F002 remains pending and hands-on evidence has not started.
+Status: implemented and clean-qualified on the current post-F002 mechanical candidate; hands-on
+evidence has not started.
 
 Acquire each owner class, then change the active tool or selection, pan/zoom/Fit/Origin camera,
 replace the accepted scene through edit/Undo/Redo/reload, hide the relevant visibility class, or
@@ -1972,8 +1973,8 @@ Tailscale endpoint. M75-F002 supersedes it before any human evidence.
 
 ### M75-F002 - Computed-radius owner survives browser paint overlap
 
-Status: confirmed against the F001 replacement and corrected with focused native/WASM/web/browser
-evidence; the complete clean F002 gate and immutable replacement nomination remain pending.
+Status: confirmed against the F001 replacement, corrected, and clean-qualified on the current
+post-F002 immutable mechanical candidate; all human evidence remains pending.
 
 In the ordinary `fillet-workshop`, collect point `6600000000000000000000000000004f` and curve
 `66000000000000000000000000000038`, then sample the computed-radius grip where a native point
@@ -2000,8 +2001,18 @@ WASM, formatting, diff and unchanged 270-row golden checks. Chromium script
 `/tmp/m75_f001_browser_check.mjs`, SHA-256
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes all 6/6 cases on a
 provisional corrected local build, including the overlapped grip and visible spoke/rail
-hover/capture/release paths. Automated evidence disposes no human item; Pages remains on accepted
-M74.
+hover/capture/release paths.
+
+Exact post-F002 source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes the complete 480.94-second release gate with
+demo-web 117/117, native/WASM M75 11/11, unchanged 270/270 golden, the 141.82-second sparse
+crossover and Trunk. Its no-rebuild read-only snapshot `/tmp/geosolve-m75-f002-uat.hlSQYT`,
+aggregate `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is byte-verified and
+served by PID `37152` at `http://100.94.63.83:8080/`; old PID `4026985` is retired. HTTP evidence is
+retained at `/tmp/geosolve-m75-f002-http-verify.1nRxtz`. Tailscale M72/M74 checks pass at both sizes,
+and M75 script hash `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`
+passes 6/6 on the frozen bytes. This is current mechanical UAT authority. Automated evidence
+disposes no human item; explicit approval remains pending and Pages remains on accepted M74.
 
 ### M75-U1 - Deferred M74 review and hover accessibility matrix
 

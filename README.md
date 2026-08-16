@@ -79,8 +79,9 @@ nomination. M75-F001 then exposed discarded active-authoring moves; its domain-a
 hover/click correction passed a clean replacement gate and immutable freeze. Focused browser
 qualification opened M75-F002 because native SVG paint above a computed Fillet radius grip hid
 the authenticated owner; review extended the same fix across the pointer-active rail and spoke.
-That adapter correction is focused-qualified; post-F002 immutable nomination, combined human UAT
-and M75 Pages publication remain pending.
+That adapter correction now passes the complete clean gate and exact immutable Tailscale
+nomination. The post-F002 snapshot is current mechanical UAT authority; combined human UAT,
+explicit approval and M75 Pages publication/closure remain pending.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
@@ -97,7 +98,8 @@ Physics, collision and a production rendering system remain out of scope.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
 11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — active hover/click
-    ownership milestone, M75-F001 replacement and pending combined human scorecard.
+    ownership milestone, current post-F002 mechanical candidate and pending combined human
+    scorecard.
 
 ## Workspace
 

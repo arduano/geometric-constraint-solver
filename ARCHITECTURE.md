@@ -30,9 +30,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   targetless context corridors, compatible operand fallback and lifecycle revocation. The initial
   immutable candidate was withdrawn after M75-F001; that correction passed a clean replacement
   gate, but M75-F002 found the browser forwarded only native paint above a computed Fillet radius
-  surface. Full-stack reconciliation and one owner across grip/rail/spoke are focused-qualified,
-  while post-F002 replacement qualification, carried M74/new M75 human UAT and final Pages
-  publication remain pending.
+  surface. Full-stack reconciliation and one owner across grip/rail/spoke pass the complete clean
+  post-F002 gate and exact immutable Tailscale nomination. That snapshot is current mechanical UAT
+  authority; carried M74/new M75 human UAT, explicit approval and final Pages publication remain
+  pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1255,6 +1256,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   withdrawn after M75-F001 exposed discarded authoring movement. Its correction passed the clean
   replacement gate, then M75-F002 exposed native paint hiding a computed radius grip/surface and
   identity-free rail/spoke markup. The complete-paint-stack/shared-affordance correction passes
-  focused native/WASM/web/browser qualification;
-  post-F002 replacement clean gate/nomination, all carried M74-U1 through M74-U8 and new M75 human
-  dispositions remain pending, and Pages stays on accepted M74.
+  focused native/WASM/web/browser qualification and the complete clean replacement gate. Exact
+  source `553fd912730b1de3b39736c49b669e94cabdd2c3` is frozen and byte-verified as current mechanical
+  UAT authority; all carried M74-U1 through M74-U8 and new M75 human dispositions plus explicit
+  approval remain pending, and Pages stays on accepted M74.

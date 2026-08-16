@@ -2,11 +2,10 @@
 
 # M75 — hover and primary pointer-owner parity
 
-Status: **active; the initial immutable candidate was withdrawn after M75-F001, its clean-qualified
-replacement was withdrawn after confirmed M75-F002, and the F002 correction is focused-qualified
-with replacement qualification pending as of 2026-08-16**. This document freezes the amended
-approved contract. Human review and the public M75 artifact remain pending; GitHub Pages continues
-to serve accepted M74.
+Status: **active; the post-F002 replacement is clean-qualified, byte-verified and current mechanical
+UAT authority as of 2026-08-16**. This document freezes the amended approved contract. Every human
+review item and explicit approval remain pending; GitHub Pages continues to serve accepted M74,
+and M75 publication/closure remain open.
 
 ## Goal
 
@@ -153,8 +152,8 @@ clean product source `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`, tree
 `7bff59c5d4d36d1acb687a93d78707b32e323d65`, passes the complete release gate with native/WASM
 M75 parity 11/11, demo-web 116/116, unchanged 270-row golden evidence and the 143.27-second sparse
 crossover. Its gate-produced seven-file snapshot `/tmp/geosolve-m75-f001-uat.2Ju7gq` has ordered
-aggregate `9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967` and is served at
-`http://100.94.63.83:8080/` by PID `4026985`, with log
+aggregate `9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967` and was served at
+`http://100.94.63.83:8080/` by PID `4026985`, which is retired, with historical log
 `/tmp/geosolve-m75-f001-uat.2Ju7gq.server.log`. HTTP evidence is retained at
 `/tmp/geosolve-m75-f001-http-verify.kXc5g5`; the unchanged M72 and M74 scripts, hashes
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
@@ -173,14 +172,30 @@ coordinator remains final authority. Demo-web passes 117/117, native/WASM M75 pa
 and focused Clippy, WASM, formatting, diff and unchanged-golden checks pass. Browser script
 `/tmp/m75_f001_browser_check.mjs` at SHA-256
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6 on the
-provisional corrected local build. The complete clean F002 gate and replacement immutable
-nomination remain pending before any human UAT resumes.
+provisional corrected local build.
 
 Independent adapter review then found the same owner was absent from the pointer-active radius rail
 and spoke markup, so those visible surfaces could not enter the paint reconciliation at all. The
 shared radius-affordance group now carries the same `FeatureCorner` identity as its grip; the
 presentation regression freezes grip, rail and spoke extraction, and the same browser run samples
 the visible spoke and rail through hover/capture/release before replacement qualification.
+
+Post-F002 replacement qualification/nomination record (2026-08-16): exact clean product source
+`553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes the complete release gate in 480.94 seconds,
+including demo-web 117/117, M75 native/WASM 11/11, unchanged 270/270 golden, the 141.82-second
+sparse crossover and Trunk. The exact seven-file gate output was frozen without rebuilding to
+`/tmp/geosolve-m75-f002-uat.hlSQYT` at directory mode `0555`/file mode `0444`, ordered aggregate
+`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`. PID `37152` serves it at
+`http://100.94.63.83:8080/` with log `/tmp/geosolve-m75-f002-uat.hlSQYT.server.log`; old PID
+`4026985` is retired. HTTP evidence `/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies exact
+status/media/length/bytes for `/` and all seven files, no redirect/content encoding, root equality
+and fetched aggregate. Tailscale M72/M74 checks pass at both desktop sizes with script hashes
+`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
+`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`; M75 hash
+`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6. This snapshot
+is current mechanical UAT authority only. All human items and explicit approval remain pending;
+Pages stays on accepted M74 and publication/closure remain open.
 
 ## Acceptance
 

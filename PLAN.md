@@ -73,8 +73,8 @@ deferred to the now-active M75 follow-up milestone. M75's initial immutable nomi
 withdrawn after finding M75-F001. Its authoring-hover correction then passed a clean replacement
 gate and immutable freeze, but focused browser qualification found M75-F002 where native SVG paint
 above a computed Fillet radius affordance hid that owner from both hover and pointer-down. The F002
-adapter correction and focused regression pass; post-F002 replacement qualification, combined
-human UAT and M75 Pages publication remain open. M66's
+adapter correction now passes the complete clean replacement gate and immutable Tailscale
+nomination; combined human UAT and M75 Pages publication remain open. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4686,9 +4686,9 @@ UAT; and the accepted source is exact-verified by the final Pages publication.
 
 ### M75: hover and primary pointer-owner parity
 
-Status: **active; the clean M75-F001 replacement was withdrawn after confirmed M75-F002, whose
-correction is implemented and focused-qualified pending post-F002 replacement nomination as of
-2026-08-16**. This milestone makes Select
+Status: **active; the post-F002 replacement is clean-qualified, byte-verified and current mechanical
+UAT authority as of 2026-08-16; every human disposition, explicit approval, Pages publication and
+closure remain pending**. This milestone makes Select
 hover predict the exact primary owner that the same pointer sample would
 receive on pointer-down, then executes the deferred M74-U1 through M74-U8 scorecard beside the new
 hover review. Active relation/dimension and Fillet authoring additionally preview the exact
@@ -4727,7 +4727,7 @@ compatible operand or radius owner that unchanged pointer-down will consume.
   release gate; freeze and byte-verify the initial immutable Tailscale candidate.
 - [x] Pass the same complete clean gate for the M75-F001 replacement; freeze and byte-verify the
   immutable candidate. Focused browser qualification subsequently withdrew it after M75-F002.
-- [ ] Pass the complete clean gate for the post-F002 replacement; freeze, byte-verify and serve a
+- [x] Pass the complete clean gate for the post-F002 replacement; freeze, byte-verify and serve the
   new immutable Tailscale candidate before resuming human UAT.
 - [ ] Complete `docs/M75_UAT.md` at both desktop sizes and multiple zoom/tolerance fringes,
   including every deferred M74-U1 through M74-U8 item, hover/click parity and accessibility, then
@@ -4767,10 +4767,10 @@ clean product source `57f407ada2eb8a16f8162d1db4126d5c5024f1b4`, tree
 M75 parity 11/11, demo-web 116/116, unchanged 270-row golden and the 143.27-second sparse
 crossover. The exact gate-produced seven-file distribution was copied without rebuilding to
 read-only `/tmp/geosolve-m75-f001-uat.2Ju7gq`, ordered-manifest aggregate
-`9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`, and is temporarily served
-by PID `4026985` at `http://100.94.63.83:8080/`. Every file and `/` byte-matches with exact media
-types and lengths; the unchanged M72/M74 checks pass at both desktop sizes. This remains immutable
-mechanical evidence only and is not the current human-UAT authority.
+`9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`, and was served by PID
+`4026985` at `http://100.94.63.83:8080/`; that PID has been retired. Every file and `/` byte-matches
+with exact media types and lengths, and the unchanged M72/M74 checks pass at both desktop sizes.
+This remains immutable historical evidence only and is not the current human-UAT authority.
 
 Finding M75-F002 checkpoint (2026-08-16): focused Chromium script
 `/tmp/m75_f001_browser_check.mjs` (SHA-256
@@ -4785,8 +4785,26 @@ spoke lacked an extractable owner; their shared affordance group now carries the
 `FeatureCorner`. Demo-web tests pass 117/117, M75 native/WASM parity passes 11/11, focused
 warnings-denied Clippy, the WASM check, formatting and unchanged golden pass, and updated browser
 script SHA-256 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6 including
-grip, visible spoke and rail hover/capture/release. The complete clean post-F002 gate, immutable
-freeze and Tailscale handover remain open; GitHub Pages stays on M74.
+grip, visible spoke and rail hover/capture/release.
+
+Post-F002 replacement qualification/nomination note (2026-08-16): exact clean product source
+`553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` in 480.94 seconds. The gate
+includes demo-web 117/117, M75 native/WASM 11/11, unchanged 270/270 golden, the 141.82-second sparse
+crossover and successful Trunk release assembly. Its exact seven-file output was frozen without
+rebuilding to read-only `/tmp/geosolve-m75-f002-uat.hlSQYT` (directory `0555`, files `0444`),
+ordered-manifest aggregate `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`.
+PID `37152` serves it at `http://100.94.63.83:8080/` with log
+`/tmp/geosolve-m75-f002-uat.hlSQYT.server.log`; old PID `4026985` is retired. HTTP evidence at
+`/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies `/` and every file with HTTP 200, exact
+media/length/bytes, no redirect or content encoding, `/ == index.html` and a matching fetched
+aggregate. Tailscale Chromium checks pass M72 and M74 at both sizes with unchanged script hashes
+`4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
+`e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`; M75 script hash
+`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6. This is the
+current mechanical UAT authority only. Every carried/new human item and explicit approval remain
+pending; GitHub Pages stays on accepted M74, and M75 publication/closure remain open.
 
 Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
 its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other

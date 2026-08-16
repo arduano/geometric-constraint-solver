@@ -185,8 +185,9 @@ follow-up milestone, now active as M75. M75's implementation, clean qualificatio
 initial Tailscale nomination passed, but finding M75-F001 withdrew it from UAT. The F001 correction
 also passed a clean replacement gate and immutable freeze; focused browser qualification then
 opened M75-F002 because an overlying native SVG item hid the authenticated computed-radius owner.
-The F002 correction is focused-qualified; post-F002 replacement qualification, the combined human
-scorecard and final public publication remain open.
+The F002 correction now passes the complete clean replacement gate, immutable freeze and exact
+Tailscale verification. The combined human scorecard, explicit approval and final public
+publication remain open.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1968,9 +1969,9 @@ under the scoped decision; U1-U8 remain deferred and are now carried by active M
 
 ## M75 acceptance: hover and primary pointer-owner parity
 
-Status: **active; the clean M75-F001 replacement was withdrawn after confirmed M75-F002, whose
-correction is implemented and focused-qualified pending post-F002 replacement nomination as of
-2026-08-16; all human evidence remains pending**. M75 owns the hands-on M74-U1 through M74-U8
+Status: **active; the post-F002 replacement is clean-qualified, byte-verified and current mechanical
+UAT authority as of 2026-08-16; all human evidence, explicit approval, Pages publication and closure
+remain pending**. M75 owns the hands-on M74-U1 through M74-U8
 carryover as well as the new hover/click
 parity contract. The accepted M74 public artifact remains the baseline; it is not M75 evidence.
 
@@ -2063,9 +2064,20 @@ while the coordinator remains the final preview/provenance/policy/proximity auth
 affordance now exposes that owner through grip, rail and spoke. Demo-web tests pass 117/117,
 native/WASM M75 parity passes 11/11, focused Clippy, WASM, formatting and golden checks pass, and
 the focused browser matrix passes 6/6 across the native operands plus all three radius surfaces on
-a provisional corrected build. The clean post-F002 gate, immutable freeze and replacement
-Tailscale handover must pass before human UAT resumes. No M75 human item is disposed by this
-evidence; GitHub Pages remains on accepted M74.
+a provisional corrected build.
+
+Post-F002 mechanical nomination result (2026-08-16): exact clean source
+`553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes the complete 480.94-second release gate with
+demo-web 117/117, native/WASM M75 11/11, unchanged 270/270 golden, the 141.82-second sparse
+crossover and Trunk. Its exact no-rebuild seven-file snapshot
+`/tmp/geosolve-m75-f002-uat.hlSQYT`, aggregate
+`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is served by PID `37152`
+at `http://100.94.63.83:8080/`; old PID `4026985` is retired. HTTP evidence
+`/tmp/geosolve-m75-f002-http-verify.1nRxtz` verifies all seven files and `/` exactly, and Tailscale
+M72/M74 two-size plus M75 6/6 browser checks pass. This is current mechanical UAT authority only.
+No M75 human item is disposed by this evidence; explicit approval remains pending, GitHub Pages
+remains on accepted M74, and publication/closure remain open.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -2,10 +2,10 @@
 
 # M75 implementation — hover and primary pointer-owner parity
 
-Status: **M75-F002 correction implemented and focused-qualified as of 2026-08-16; its complete
-clean qualification and immutable nomination remain pending**. The initial candidate and the
-clean-qualified M75-F001 replacement are retained as historical evidence but withdrawn from
-hands-on UAT. Every human item remains pending, and GitHub Pages remains on accepted M74.
+Status: **the post-F002 replacement is clean-qualified, byte-verified and current mechanical UAT
+authority as of 2026-08-16**. The initial candidate and clean-qualified M75-F001 replacement remain
+historical evidence only. Every human item and explicit approval remain pending; GitHub Pages stays
+on accepted M74, and M75 publication/closure remain open.
 
 Architecture decision: no new ADR is currently required. M75 consolidates existing editor-owned
 picking, annotation visibility and hover presentation within the accepted-scene boundary. It adds
@@ -234,8 +234,8 @@ files are mode `0444`:
 | `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
 
 Its C-locale ordered-manifest aggregate is
-`9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`. PID `4026985` serves that
-snapshot at `http://100.94.63.83:8080/`; its log is
+`9ecf1dde82ca777ae8de6dc380606512008b3bf088808e995fd0c4b2b8896967`. PID `4026985` served that
+snapshot at `http://100.94.63.83:8080/` before being retired; its historical log is
 `/tmp/geosolve-m75-f001-uat.2Ju7gq.server.log`. The exact server argv is:
 
 ```text
@@ -309,9 +309,63 @@ Focused Chromium script `/tmp/m75_f001_browser_check.mjs`, SHA-256
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes 6/6 against the
 provisional corrected local build. It covers Fillet point/curve hover and unchanged clicks,
 ordinary relation/dimension compatibility and fallback, empty/inapplicable clearing, and the
-computed-radius grip, visible spoke and rail hover/capture/release promise. This is provisional
-presentation evidence only. The complete clean F002 release gate, immutable freeze,
-HTTP/compatibility verification and replacement nomination remain pending before human UAT resumes.
+computed-radius grip, visible spoke and rail hover/capture/release promise. This was provisional
+presentation evidence; the clean nomination below repeats it over the frozen candidate.
+
+### Post-F002 clean qualification and current mechanical nomination
+
+Exact clean product source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, was qualified with:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The complete gate exited 0 in 480.94 seconds. Demo-web passes 117/117, M75 parity passes 11/11
+natively and 11/11 under WASM, the reviewed golden remains unchanged at 270/270, the sparse
+256-moving-body crossover completes in 141.82 seconds, and Trunk release assembly passes. The
+gate's remaining formatting, diff, warnings-denied Clippy, locked workspace, WASM, Rustdoc,
+benchmark, performance and licence/package checks also pass.
+
+The exact gate-produced distribution was copied without rebuilding to
+`/tmp/geosolve-m75-f002-uat.hlSQYT`. The directory is mode `0555`; all seven entries are regular
+non-symlink files at mode `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 18,564 | `b99a56b9c1aa8679538726c95b1ed29729174ff2945a44be1ea07b08d6f22cf2` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-35551745a5e20011.js` | 33,221 | `ade1f75e65ca2636f29259c7b3716d375e0b3886a6ba1bdf61817686b2dad2d2` |
+| `geosolve-demo-web-35551745a5e20011_bg.wasm` | 6,117,030 | `9d01af2fee2d7ce3884020579187037eb617fe73ede243e491842ba044adf9dc` |
+| `index.html` | 27,478 | `9bff14da5388601e8d48a175e65c033141f383736fcd9da4065350eb9baebf33` |
+| `styles-5ae33f7d5d5aaecf.css` | 30,672 | `54e768998dbc7ba1bac4da87b5b48feac14abe214448790afade36fa42990fb4` |
+
+The C-locale ordered-manifest aggregate is
+`eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`. PID `37152` serves only
+this snapshot at `http://100.94.63.83:8080/`; log
+`/tmp/geosolve-m75-f002-uat.hlSQYT.server.log` records the exact process. Its argv is:
+
+```text
+/nix/store/gxzhl7aaiid7zp3y47jqqiq7zg5mqpwp-python3-3.14.6/bin/python3.14 -u -m http.server 8080 --bind 100.94.63.83 --directory /tmp/geosolve-m75-f002-uat.hlSQYT
+```
+
+Old PID `4026985` was retired only after the new immutable snapshot and listener were verified. The
+F001 snapshot remains read-only and unserved. Proxy/cache-bypassed identity requests for `/` and all
+seven files return HTTP 200 with exact media types, content lengths and bytes, no redirect or
+content encoding; `/` equals `index.html` and the fetched aggregate matches. Evidence is retained
+at `/tmp/geosolve-m75-f002-http-verify.1nRxtz`.
+
+The unchanged M72 and M74 scripts pass over Tailscale at both `1440x900` and `1024x720`; their
+SHA-256 values remain `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44`
+and `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`. M75 script
+`/tmp/m75_f001_browser_check.mjs`, SHA-256
+`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes 6/6 against these
+exact frozen bytes, including native authoring and grip/spoke/rail hover/capture/release.
+
+This snapshot is current mechanical UAT authority. Mechanical qualification disposes no human
+item: every carried and new scorecard entry, the F001/F002 targeted recheck and explicit approval
+remain pending. GitHub Pages continues to serve accepted M74; publication and closure remain open.
 
 ## 9. Initial qualification ledger (superseded by M75-F001)
 
