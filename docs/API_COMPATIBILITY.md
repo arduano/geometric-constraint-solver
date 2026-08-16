@@ -153,7 +153,13 @@ authoring, the complete SVG paint stack is reconciled with the exact headless ra
 overlying native item cannot hide the grip, rail or spoke; final authentication remains in the
 coordinator. No general public hit-test hierarchy is introduced. This changes no supported `0.2.0`
 domain API, solver behavior, hit tolerance, constraint or dimension kind, canonical sketch v1-v4
-bytes, unsupported draft-v5 disposition or persistence schema.
+bytes, unsupported draft-v5 disposition or persistence schema. This compatibility disposition is
+accepted under the supervising caller's 2026-08-16 scoped M75 close decision against exact product
+source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`. That decision accepts the candidate, focused
+F001/F002 hover recheck and U1-U12 without claiming an individually logged replay of every UAT
+step. Final GitHub Pages publication and hosted-byte verification remain pending; this does not
+make the accepted compatibility boundary provisional.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

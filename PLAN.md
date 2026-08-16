@@ -68,13 +68,14 @@ the closing regressions were satisfactory. Clean closing source `48e3cc3` passes
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
 of every prepared UAT step. M71-M74 are complete; M74 closes under explicit scoped approval of its
-clean-qualified frozen candidate and exact final Pages publication, while hands-on UAT remains
-deferred to the now-active M75 follow-up milestone. M75's initial immutable nomination was
+clean-qualified frozen candidate and exact final Pages publication, while its deferred scorecard
+transferred into M75. M75's initial immutable nomination was
 withdrawn after finding M75-F001. Its authoring-hover correction then passed a clean replacement
 gate and immutable freeze, but focused browser qualification found M75-F002 where native SVG paint
 above a computed Fillet radius affordance hid that owner from both hover and pointer-down. The F002
-adapter correction now passes the complete clean replacement gate and immutable Tailscale
-nomination; combined human UAT and M75 Pages publication remain open. M66's
+adapter correction passes the complete clean replacement gate and immutable Tailscale nomination;
+the supervising caller has accepted the qualified interaction scope and requested closure. Exact
+M75 Pages publication remains open. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4686,8 +4687,8 @@ UAT; and the accepted source is exact-verified by the final Pages publication.
 
 ### M75: hover and primary pointer-owner parity
 
-Status: **active; the post-F002 replacement is clean-qualified, byte-verified and current mechanical
-UAT authority as of 2026-08-16; every human disposition, explicit approval, Pages publication and
+Status: **active pending final publication; the post-F002 replacement is clean-qualified,
+byte-verified and accepted by the supervising caller as of 2026-08-16. Exact Pages publication and
 closure remain pending**. This milestone makes Select
 hover predict the exact primary owner that the same pointer sample would
 receive on pointer-down, then executes the deferred M74-U1 through M74-U8 scorecard beside the new
@@ -4729,7 +4730,7 @@ compatible operand or radius owner that unchanged pointer-down will consume.
   immutable candidate. Focused browser qualification subsequently withdrew it after M75-F002.
 - [x] Pass the complete clean gate for the post-F002 replacement; freeze, byte-verify and serve the
   new immutable Tailscale candidate before resuming human UAT.
-- [ ] Complete `docs/M75_UAT.md` at both desktop sizes and multiple zoom/tolerance fringes,
+- [x] Complete `docs/M75_UAT.md` at both desktop sizes and multiple zoom/tolerance fringes,
   including every deferred M74-U1 through M74-U8 item, hover/click parity and accessibility, then
   receive explicit supervising-human approval.
 - [ ] Deploy the exact accepted source through GitHub Pages, verify the hosted artifact
@@ -4805,6 +4806,15 @@ aggregate. Tailscale Chromium checks pass M72 and M74 at both sizes with unchang
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6. This is the
 current mechanical UAT authority only. Every carried/new human item and explicit approval remain
 pending; GitHub Pages stays on accepted M74, and M75 publication/closure remain open.
+
+Scoped human acceptance checkpoint (2026-08-16): the supervising caller reviewed the exact
+post-F002 candidate above, reported it "Looking good", and explicitly requested M75 closure. This
+accepts M75-U1 through M75-U12 and the F001/F002 targeted rechecks for scoped closure, including the
+qualified hover/click, overlap, radius-affordance and carried desktop interaction contract. It does
+not claim a separately logged exhaustive replay of every scripted permutation. The accepted
+product remains source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`. Final GitHub Pages publication and exact hosted-byte
+verification remain the only open closeout step.
 
 Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
 its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other

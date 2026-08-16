@@ -2,10 +2,11 @@
 
 # M75 implementation — hover and primary pointer-owner parity
 
-Status: **the post-F002 replacement is clean-qualified, byte-verified and current mechanical UAT
-authority as of 2026-08-16**. The initial candidate and clean-qualified M75-F001 replacement remain
-historical evidence only. Every human item and explicit approval remain pending; GitHub Pages stays
-on accepted M74, and M75 publication/closure remain open.
+Status: **the post-F002 replacement is accepted for scoped closure by the supervising caller on
+2026-08-16; final GitHub Pages publication remains pending**. The initial candidate and
+clean-qualified M75-F001 replacement remain historical evidence only. The caller accepted the
+current candidate, focused F001/F002 hover recheck and U1-U12 without claiming a separately logged
+step-by-step replay. GitHub Pages stays on accepted M74 until exact publication verification.
 
 Architecture decision: no new ADR is currently required. M75 consolidates existing editor-owned
 picking, annotation visibility and hover presentation within the accepted-scene boundary. It adds
@@ -363,9 +364,12 @@ and `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`. M75 scri
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes 6/6 against these
 exact frozen bytes, including native authoring and grip/spoke/rail hover/capture/release.
 
-This snapshot is current mechanical UAT authority. Mechanical qualification disposes no human
-item: every carried and new scorecard entry, the F001/F002 targeted recheck and explicit approval
-remain pending. GitHub Pages continues to serve accepted M74; publication and closure remain open.
+This snapshot was the current mechanical UAT authority at nomination. Mechanical qualification
+alone disposed no human item. The supervising caller subsequently reported the candidate looking
+good and authorized closure on 2026-08-16. That scoped approval accepts the exact candidate,
+focused F001/F002 hover recheck and U1-U12; it does not claim that the detailed scorecard was
+individually executed or logged. GitHub Pages continues to serve accepted M74, so publication and
+exact hosted-byte verification remain the sole open closeout step.
 
 ## 9. Initial qualification ledger (superseded by M75-F001)
 
@@ -484,16 +488,18 @@ accepted M74 artifact and is not M75 authority during UAT.
 
 ## 10. Completion gates
 
-- The Select and authoring shared resolvers, pointer-move wrappers, invalidation and browser
-  translation are implemented without changing the frozen semantics.
-- Focused native/WASM/web and proportional compatibility qualification passes with unchanged
-  golden bytes.
-- The complete clean release gate passes and its exact output is the read-only, byte-verified
-  Tailscale candidate kept live through follow-up UAT.
-- Complete `docs/M75_UAT.md`, including every deferred M74-U1 through M74-U8 item, the new ownership
-  matrix, two desktop sizes, zoom/tolerance fringes and accessibility.
-- Receive explicit supervising-human approval, deploy the exact accepted source through GitHub
-  Pages, verify every hosted byte/media type and close M75.
+- **Pass:** the Select and authoring shared resolvers, pointer-move wrappers, invalidation and
+  browser translation are implemented without changing the frozen semantics.
+- **Pass:** focused native/WASM/web and proportional compatibility qualification passes with
+  unchanged golden bytes.
+- **Pass:** the complete clean release gate passes and its exact output is the read-only,
+  byte-verified Tailscale candidate kept live through follow-up UAT.
+- **Pass for scoped closure:** U1-U12 and the focused F001/F002 hover recheck are accepted under the
+  supervising caller's 2026-08-16 approval. This is not a claim that every detailed step, desktop
+  size, zoom fringe or accessibility path was separately executed and logged.
+- **Pending:** deploy exact accepted product source
+  `553fd912730b1de3b39736c49b669e94cabdd2c3` through GitHub Pages and verify every hosted
+  byte/media type. M75 becomes fully complete only after that standard closeout step passes.
 
 ## 11. Compatibility and limitations
 

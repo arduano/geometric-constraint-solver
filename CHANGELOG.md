@@ -160,7 +160,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   returned headless owner; a computed DOM item is an independently validated intent hint, and
   selectable canvas CSS/DOM hover cannot supply a competing semantic target. Existing hit
   tolerances, geometry-role ordering, equations, persistence bytes and golden behavior remain
-  unchanged.
+  unchanged. Exact product source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+  `83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes the complete clean gate and immutable
+  Tailscale byte verification. On 2026-08-16 the supervising caller accepted that candidate, the
+  focused F001/F002 hover recheck and U1-U12 for scoped closure. The detailed UAT steps were not
+  individually logged, so this disposition is not represented as a separate step-by-step replay.
+  Final exact GitHub Pages publication remains pending at this checkpoint; accepted M74 remains
+  public authority until it passes.
 - Completed, approved and publicly verified M73 retained-authoring semantic consolidation. One
   private `ConstructionStageSemantics` description now owns the remaining line/polyline
   stage/span/reference-handoff facts. The unreleased `ConstraintKind`,

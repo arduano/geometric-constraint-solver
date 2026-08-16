@@ -1345,8 +1345,10 @@ M74 Pages publication passes. That follow-up is active as M75: its initial immut
 withdrawn after M75-F001, the F001 replacement passed the complete clean gate and immutable
 nomination, and M75-F002 then withdrew it after browser paint order hid a valid computed-radius
 owner. The F002 correction now passes the complete clean replacement gate, immutable Tailscale
-nomination and exact served-byte checks. Every carried/new human disposition remains pending;
-GitHub Pages stays on accepted M74.
+nomination and exact served-byte checks. On 2026-08-16 the supervising caller accepted the exact
+post-F002 candidate, focused F001/F002 hover recheck and U1-U12 for scoped closure. The detailed
+UAT steps were not individually logged, so this is not a claimed step-by-step replay. GitHub Pages
+stays on accepted M74 until the pending exact M75 publication and hosted-byte verification pass.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -1973,8 +1975,9 @@ Tailscale endpoint. M75-F002 supersedes it before any human evidence.
 
 ### M75-F002 - Computed-radius owner survives browser paint overlap
 
-Status: confirmed against the F001 replacement, corrected, and clean-qualified on the current
-post-F002 immutable mechanical candidate; all human evidence remains pending.
+Status: confirmed against the F001 replacement, corrected, clean-qualified and accepted for scoped
+closure on the post-F002 immutable candidate. The focused F001/F002 recheck is accepted; final
+GitHub Pages publication remains pending.
 
 In the ordinary `fillet-workshop`, collect point `6600000000000000000000000000004f` and curve
 `66000000000000000000000000000038`, then sample the computed-radius grip where a native point
@@ -2011,12 +2014,17 @@ aggregate `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is
 served by PID `37152` at `http://100.94.63.83:8080/`; old PID `4026985` is retired. HTTP evidence is
 retained at `/tmp/geosolve-m75-f002-http-verify.1nRxtz`. Tailscale M72/M74 checks pass at both sizes,
 and M75 script hash `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`
-passes 6/6 on the frozen bytes. This is current mechanical UAT authority. Automated evidence
-disposes no human item; explicit approval remains pending and Pages remains on accepted M74.
+passes 6/6 on the frozen bytes. This was current mechanical UAT authority at nomination. Automated
+evidence alone disposed no human item. The supervising caller subsequently accepted this exact
+candidate, the focused F001/F002 recheck and U1-U12 for scoped closure on 2026-08-16 without
+claiming an individually logged execution of every detailed step. Pages remains on accepted M74
+until final M75 publication and hosted-byte verification complete.
 
 ### M75-U1 - Deferred M74 review and hover accessibility matrix
 
-Status: planned; every human disposition is pending.
+Status: accepted for scoped closure under the supervising caller's 2026-08-16 approval. U1-U12
+were not individually logged, so this status records the explicit closing disposition rather than
+a separate step-by-step execution transcript.
 
 Run all eight deferred sections of `docs/M74_UAT.md` through the M75 scorecard: permanent/selectable
 datums, ordinary datum relations including axis symmetry, datum-inference priority, visual grid and
@@ -2029,8 +2037,10 @@ direct tests own exact boundary equality.
 Tab through existing tree, inspector, accessible Fillet controls, tool popouts and dialogs. Focus
 must remain visible without synthesizing pointer hover, accessible names remain meaningful, canvas
 hover never steals focus, and overlay ownership clears canvas hover. Selected/related/problem and
-primary-hover states retain non-colour visual distinctions. Record M74-U1 through M74-U8 and the new
-M75 hover/accessibility sections separately; automated evidence cannot mark any human item passed.
+primary-hover states retain non-colour visual distinctions. The prepared matrix remains the
+reference for any future focused regression. For M75 closure, M74-U1/M75-U1 through M75-U12 are
+accepted under the scoped approval above; that disposition comes from the supervising caller
+rather than automation and does not invent individual observations.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

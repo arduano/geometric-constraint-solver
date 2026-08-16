@@ -142,8 +142,8 @@ geometry, datum-backed relations, axis symmetry, bounded datum inference and pro
 desktop polish. Its exact clean product source `55693372bea4759c9a67eee14f1af3d6a9e0690c`
 and read-only snapshot `/tmp/geosolve-m74-uat.jFfAm4` are qualified and byte-verified. The
 supervising caller approved scoped M74 closure from that evidence, and exact final GitHub Pages
-publication passes. Hands-on UAT remains deferred, not passed, and transfers with any findings to
-active M75. M75 unifies Select hover/primary pointer-down ownership and domain-aware active
+publication passes. Its hands-on scorecard transferred without a retroactive M74 pass into M75.
+M75 unifies Select hover/primary pointer-down ownership and domain-aware active
 authoring hover/click ownership in the headless editor. Initial clean source
 `f3affff1b62b1cb484a59647c4072c94c3b12ada` and its immutable seven-file snapshot passed mechanical
 nomination, but M75-F001 withdrew that candidate after authoring moves were found to be discarded.
@@ -151,9 +151,9 @@ The correction passed a clean replacement gate and immutable freeze. Focused bro
 then opened M75-F002 because an overlying native SVG point hid the authenticated computed Fillet
 radius grip from hover and pointer-down; review extended the same owner across the visible rail and
 spoke. The complete-paint-stack correction passes the clean post-F002 replacement gate, immutable
-freeze and exact Tailscale verification. That snapshot is current mechanical UAT authority; every
-carried M74 and new M75 human item plus explicit approval remain pending, and GitHub Pages
-intentionally remains on accepted M74.
+freeze and exact Tailscale verification. The supervising caller accepted that candidate's qualified
+interaction scope and requested closure; GitHub Pages intentionally remains on accepted M74 until
+the final M75 publication step completes.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -171,8 +171,7 @@ support and physics remain outside future acceptance.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
     closure, final public-release evidence and explicitly deferred hands-on scorecard.
 11. `docs/M75_GOALS.md`, `docs/M75_IMPLEMENTATION.md` and `docs/M75_UAT.md` — active hover/click
-    ownership milestone, current post-F002 mechanical candidate and pending combined human
-    scorecard.
+    ownership milestone, accepted post-F002 candidate and pending final public closeout.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -466,8 +465,9 @@ Exact post-F002 source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
 `83df4efb99ca66cf0cebc0caec4515b61afd33cf`, passes the complete clean gate. Its no-rebuild
 read-only snapshot `/tmp/geosolve-m75-f002-uat.hlSQYT`, aggregate
 `eae64913c29d760f6eb64d7681212facca0c6d8869dee9631aeb9d77b059a139`, is byte-verified and live
-at `http://100.94.63.83:8080/` as current mechanical UAT authority. Human UAT, explicit approval
-and M75 Pages publication/closure remain pending; both earlier snapshots are historical evidence.
+at `http://100.94.63.83:8080/` as the accepted candidate. The supervising caller approved its
+qualified interaction scope and requested closure; M75 Pages publication remains the only open
+closeout step, and both earlier snapshots are historical evidence.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

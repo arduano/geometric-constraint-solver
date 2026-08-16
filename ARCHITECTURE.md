@@ -31,9 +31,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   immutable candidate was withdrawn after M75-F001; that correction passed a clean replacement
   gate, but M75-F002 found the browser forwarded only native paint above a computed Fillet radius
   surface. Full-stack reconciliation and one owner across grip/rail/spoke pass the complete clean
-  post-F002 gate and exact immutable Tailscale nomination. That snapshot is current mechanical UAT
-  authority; carried M74/new M75 human UAT, explicit approval and final Pages publication remain
-  pending.
+  post-F002 gate and exact immutable Tailscale nomination. The supervising caller accepted that
+  qualified interaction scope and requested closure; final Pages publication remains pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1249,14 +1248,15 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   bounded datum inference and production-style desktop presentation. Direct Rust/WASM owners, the
   270-row reviewed golden, independent review, complete clean gate, Chromium checks and frozen
   artifact pass. The supervising caller explicitly approved scoped closure on 2026-08-16 while
-  leaving U1-U8 deferred to the now-active M75 bug-fixing/UAT follow-up milestone.
-- M75: active hover and primary pointer-owner parity milestone. One headless resolver owns the
+  transferring U1-U8 without a retroactive M74 pass into the M75 bug-fixing/UAT follow-up.
+- M75: accepted pending-publication hover and primary pointer-owner parity milestone. One headless
+  resolver owns the
   Select target order and invalidation lifecycle; domain-aware ordinary/Fillet resolvers own the
   exact next compatible authoring operand. The initial clean immutable candidate passed but was
   withdrawn after M75-F001 exposed discarded authoring movement. Its correction passed the clean
   replacement gate, then M75-F002 exposed native paint hiding a computed radius grip/surface and
   identity-free rail/spoke markup. The complete-paint-stack/shared-affordance correction passes
   focused native/WASM/web/browser qualification and the complete clean replacement gate. Exact
-  source `553fd912730b1de3b39736c49b669e94cabdd2c3` is frozen and byte-verified as current mechanical
-  UAT authority; all carried M74-U1 through M74-U8 and new M75 human dispositions plus explicit
-  approval remain pending, and Pages stays on accepted M74.
+  source `553fd912730b1de3b39736c49b669e94cabdd2c3` is frozen and byte-verified. The supervising
+  caller accepted the qualified carried/new interaction scope and requested closure; Pages stays on
+  accepted M74 until final publication completes.

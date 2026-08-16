@@ -2,9 +2,11 @@
 
 # M75 focused UAT — hover and primary pointer-owner parity
 
-Status: **the post-F002 replacement is clean-qualified, byte-verified and current mechanical UAT
-authority as of 2026-08-16; every human disposition and explicit approval remain pending**. GitHub
-Pages continues to serve accepted M74. Use only the current Tailscale snapshot below for M75 UAT.
+Status: **the post-F002 replacement and focused F001/F002 hover recheck are accepted for scoped
+closure by the supervising caller on 2026-08-16; final GitHub Pages publication remains pending**.
+The caller also accepted U1-U12 for scoped closure, but no separate step-by-step transcript was
+logged and this record does not invent one. GitHub Pages continues to serve accepted M74 until the
+exact accepted M75 product is published and byte-verified.
 
 Withdrawn initial candidate source: `f3affff1b62b1cb484a59647c4072c94c3b12ada`
 
@@ -108,11 +110,11 @@ Independent adapter review also found the visible radius rail and spoke lacked a
 grip, rail and spoke; focused presentation coverage freezes all three surfaces, and the provisional
 browser run exercises visible spoke and rail hover/capture/release.
 
-### Current post-F002 mechanical UAT candidate
+### Accepted post-F002 candidate
 
-Current source: `553fd912730b1de3b39736c49b669e94cabdd2c3`
+Accepted product source: `553fd912730b1de3b39736c49b669e94cabdd2c3`
 
-Current tree: `83df4efb99ca66cf0cebc0caec4515b61afd33cf`
+Accepted product tree: `83df4efb99ca66cf0cebc0caec4515b61afd33cf`
 
 Current endpoint: `http://100.94.63.83:8080/`
 
@@ -159,10 +161,11 @@ values are `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` an
 `1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e`, passes 6/6 on the same
 frozen bytes, including native authoring and grip/spoke/rail hover/capture/release.
 
-This evidence makes the snapshot ready for human UAT; it does not pass any scorecard item. Human
-review judges whether hover truthfully predicts a click, whether related context is understandable,
-and whether the complete desktop interaction remains polished and accessible. GitHub Pages remains
-accepted M74 authority until explicit M75 approval and publication.
+This evidence made the snapshot ready for human UAT; mechanical evidence alone did not pass a
+scorecard item. The supervising caller subsequently reported the candidate looking good and
+authorized closure. The scoped approval below accepts the current candidate, focused F001/F002
+hover recheck and U1-U12 without claiming a separately recorded observation for every prepared
+step. GitHub Pages remains accepted M74 authority until M75 publication and exact verification.
 
 ## Review matrix
 
@@ -409,25 +412,30 @@ and never looks like an unrelated Select-mode highlight.
 
 Carried deferred items:
 
-- M74-U1 / M75-U1: **Pending**.
-- M74-U2 / M75-U2: **Pending**.
-- M74-U3 / M75-U3: **Pending**.
-- M74-U4 / M75-U4: **Pending**.
-- M74-U5 / M75-U5: **Pending**.
-- M74-U6 / M75-U6: **Pending**.
-- M74-U7 / M75-U7: **Pending**.
-- M74-U8 / M75-U8: **Pending**.
+- M74-U1 / M75-U1: **Pass for scoped closure under supervising approval**.
+- M74-U2 / M75-U2: **Pass for scoped closure under supervising approval**.
+- M74-U3 / M75-U3: **Pass for scoped closure under supervising approval**.
+- M74-U4 / M75-U4: **Pass for scoped closure under supervising approval**.
+- M74-U5 / M75-U5: **Pass for scoped closure under supervising approval**.
+- M74-U6 / M75-U6: **Pass for scoped closure under supervising approval**.
+- M74-U7 / M75-U7: **Pass for scoped closure under supervising approval**.
+- M74-U8 / M75-U8: **Pass for scoped closure under supervising approval**.
 
 New M75 items:
 
-- M75-U9: **Pending**.
-- M75-U10: **Pending**.
-- M75-U11: **Pending**.
-- M75-U12: **Pending**.
-- M75-F001 targeted recheck: **Pending**.
-- M75-F002 targeted recheck: **Pending**.
-- Final M75 approval: **Pending**.
+- M75-U9: **Pass for scoped closure under supervising approval**.
+- M75-U10: **Pass for scoped closure under supervising approval**.
+- M75-U11: **Pass for scoped closure under supervising approval**.
+- M75-U12: **Pass for scoped closure under supervising approval**.
+- M75-F001 targeted recheck: **Pass** on the accepted post-F002 candidate.
+- M75-F002 targeted recheck: **Pass** on the accepted post-F002 candidate, including the
+  grip/spoke/rail correction.
+- Final M75 approval: **Pass for scoped closure** — the supervising caller reported “Looking good”
+  and authorized closure on 2026-08-16.
+- Exact GitHub Pages publication and hosted-byte verification: **Pending**; accepted M74 remains
+  public authority at this checkpoint.
 
-Do not mark any item passed from automated evidence alone. The exact current source/tree, immutable
-manifest and endpoint are recorded above; add supervising-human disposition and the final public
-artifact only after those events occur.
+These dispositions come from explicit supervising-human approval, not automated evidence alone.
+The detailed U1-U12 steps were not individually logged, so their scoped passes must not be read as
+a step-by-step execution transcript. The exact accepted source/tree, immutable manifest and
+endpoint remain recorded above; append the final public artifact only after publication succeeds.

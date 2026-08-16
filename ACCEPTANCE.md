@@ -180,14 +180,14 @@ the two-previously-Current transaction and CircularArc transport/domain regressi
 198/198 golden and F005 release bytes remain unchanged. The resulting scoped approval closes M70B
 without claiming an unrecorded exhaustive UAT replay. M71 is complete under ADR 0035. M72-M74 are
 complete under their scoped approvals and exact final public-artifact verification. M74's separate
-hands-on UAT is deferred without being marked passed and transfers to the next bug-fixing/UAT
-follow-up milestone, now active as M75. M75's implementation, clean qualification and immutable
+hands-on scorecard transferred without a retroactive M74 pass into the M75 bug-fixing/UAT
+follow-up milestone. M75's implementation, clean qualification and immutable
 initial Tailscale nomination passed, but finding M75-F001 withdrew it from UAT. The F001 correction
 also passed a clean replacement gate and immutable freeze; focused browser qualification then
 opened M75-F002 because an overlying native SVG item hid the authenticated computed-radius owner.
-The F002 correction now passes the complete clean replacement gate, immutable freeze and exact
-Tailscale verification. The combined human scorecard, explicit approval and final public
-publication remain open.
+The F002 correction passes the complete clean replacement gate, immutable freeze and exact
+Tailscale verification. The supervising caller accepted the qualified interaction scope and
+requested closure; final public publication remains open.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1969,9 +1969,9 @@ under the scoped decision; U1-U8 remain deferred and are now carried by active M
 
 ## M75 acceptance: hover and primary pointer-owner parity
 
-Status: **active; the post-F002 replacement is clean-qualified, byte-verified and current mechanical
-UAT authority as of 2026-08-16; all human evidence, explicit approval, Pages publication and closure
-remain pending**. M75 owns the hands-on M74-U1 through M74-U8
+Status: **active pending final publication; the post-F002 replacement is clean-qualified,
+byte-verified and accepted by the supervising caller as of 2026-08-16. Exact Pages publication and
+closure remain pending**. M75 owns the hands-on M74-U1 through M74-U8
 carryover as well as the new hover/click
 parity contract. The accepted M74 public artifact remains the baseline; it is not M75 evidence.
 
@@ -2078,6 +2078,15 @@ at `http://100.94.63.83:8080/`; old PID `4026985` is retired. HTTP evidence
 M72/M74 two-size plus M75 6/6 browser checks pass. This is current mechanical UAT authority only.
 No M75 human item is disposed by this evidence; explicit approval remains pending, GitHub Pages
 remains on accepted M74, and publication/closure remain open.
+
+Scoped human result (2026-08-16): the supervising caller reviewed the exact post-F002 candidate,
+reported it "Looking good", and explicitly requested closure. M75-U1 through M75-U12 and the
+F001/F002 targeted rechecks are accepted for scoped closure from that review plus the recorded
+mechanical/browser evidence. This disposition accepts the qualified candidate and interaction
+scope without claiming a separately logged exhaustive replay of every scripted permutation. Exact
+product source `553fd912730b1de3b39736c49b669e94cabdd2c3`, tree
+`83df4efb99ca66cf0cebc0caec4515b61afd33cf`, is approved. Final accepted-source GitHub Pages
+publication and byte verification remain required before M75 closes.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -2,10 +2,12 @@
 
 # M75 — hover and primary pointer-owner parity
 
-Status: **active; the post-F002 replacement is clean-qualified, byte-verified and current mechanical
-UAT authority as of 2026-08-16**. This document freezes the amended approved contract. Every human
-review item and explicit approval remain pending; GitHub Pages continues to serve accepted M74,
-and M75 publication/closure remain open.
+Status: **accepted for scoped closure by the supervising caller on 2026-08-16; final GitHub Pages
+publication remains pending**. The accepted product is the clean-qualified, byte-verified
+post-F002 candidate below. The caller accepted that candidate, the focused F001/F002 hover recheck
+and U1-U12 for scoped closure; this is not a claim that every prepared UAT step was individually
+executed or logged. GitHub Pages continues to serve accepted M74 until the remaining publication
+and exact hosted-byte verification complete.
 
 ## Goal
 
@@ -20,8 +22,10 @@ current painted Fillet preview arc may preview its independently validated radiu
 inapplicable nearer item yields to the same applicable fallback as click rather than suppressing
 feedback or publishing unrelated Select hover.
 
-M75 also receives the deferred M74-U1 through M74-U8 hands-on scorecard. Those items remain
-unexecuted and are not retroactively accepted by M74's scoped close decision.
+M75 also receives the deferred M74-U1 through M74-U8 hands-on scorecard. They were not
+retroactively accepted by M74's scoped close decision. The later M75 close decision accepts those
+carried items, together with M75-U9 through M75-U12, only for scoped M75 closure; it does not invent
+a separate step-by-step human transcript.
 
 ## Accepted work
 
@@ -193,9 +197,12 @@ status/media/length/bytes for `/` and all seven files, no redirect/content encod
 and fetched aggregate. Tailscale M72/M74 checks pass at both desktop sizes with script hashes
 `4fdf48db8a39c5f10e42bbd6da34421bf1f1a4450d3bd92e7b04bc1ec6f87b44` and
 `e6606f7756d33fff091b228dfd5b6395ceda5deb5e014946635fefb1cc539bcc`; M75 hash
-`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6. This snapshot
-is current mechanical UAT authority only. All human items and explicit approval remain pending;
-Pages stays on accepted M74 and publication/closure remain open.
+`1109ad79c20534bfd7e862c07a313a78938ac062f1a49757f09ce740c5168f8e` passes 6/6. This snapshot is
+the accepted M75 product candidate. On 2026-08-16 the supervising caller reported it looking good
+and authorized final closure. That scoped decision accepts the current candidate, focused
+F001/F002 hover recheck and U1-U12 without representing the detailed scorecard as an individually
+logged replay. Pages stays on accepted M74 until publication of these exact product bytes and
+hosted-byte verification complete.
 
 ## Acceptance
 
@@ -210,8 +217,10 @@ Pages stays on accepted M74 and publication/closure remain open.
   cases, without mutating retained state.
 - Existing tolerances, role order, schemas, equations, solver/golden behavior and public semantics
   outside the additive pointer-move wrappers remain unchanged.
-- The complete deferred M74 and new M75 human scorecards pass on an immutable qualified candidate,
-  then the accepted source is exact-verified on GitHub Pages.
+- The deferred M74 and new M75 scorecards are accepted for scoped closure on the immutable
+  qualified candidate without claiming an individually logged replay. The focused F001/F002
+  hover recheck and final human approval pass; exact accepted-source GitHub Pages publication is
+  the sole remaining closeout step.
 
 ## Non-goals
 
