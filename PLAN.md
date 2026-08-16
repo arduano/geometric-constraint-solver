@@ -4696,8 +4696,10 @@ hover review. `docs/M75_GOALS.md` owns the detailed scope.
 - [x] Keep contextual reveal distinct from primary ownership: a geometry/annotation corridor may
   reveal related context while reporting no hover target, and therefore cannot promise an
   annotation or geometry click owner.
-- [x] Clear stale hover on tool, camera, accepted-scene and overlay/input-ownership changes, and
-  make the browser paint hover/related state only from the current headless result.
+- [x] Clear stale hover on tool, selection/visibility, camera, accepted-scene and
+  overlay/input-ownership changes; suppress uncaptured Select hover during feature authoring while
+  preserving a captured Fillet-radius gesture; and paint hover/related state only from the current
+  headless result.
 - [x] Add focused native/WASM editor and thin web-adapter regressions for the complete precedence,
   problem visibility, deterministic ties, context-only corridors and invalidation matrix. Preserve
   all established hit tolerances, role ordering, solver/branch behavior, persistence schemas and
@@ -4715,11 +4717,12 @@ hover review. `docs/M75_GOALS.md` owns the detailed scope.
   byte-for-byte and close M75.
 
 Implementation checkpoint (2026-08-16): the shared resolver, problem-aware wrappers, deterministic
-ties, lifecycle invalidation and headless-only browser paint are implemented. Focused native/WASM
-parity, 338 editor unit tests plus all integration/doc tests, 113 web tests, the locked all-feature
-workspace suite, warnings-denied workspace Clippy, WASM check, unchanged 270-row golden check and
-Trunk release build pass. Clean-gate, immutable candidate, human UAT and public publication remain
-pending; the accepted M74 Pages artifact remains the product baseline.
+ties, selection/lifecycle invalidation, authoring ownership and headless-only browser paint are
+implemented. Focused native/WASM parity passes 9/9, 339 editor unit tests plus all integration/doc
+tests pass, and 116 web tests, the locked all-feature workspace suite, warnings-denied workspace
+Clippy, WASM check, unchanged 270-row golden check and Trunk release build pass. Clean-gate,
+immutable candidate, human UAT and public publication remain pending; the accepted M74 Pages
+artifact remains the product baseline.
 
 Gate: one headless Select resolution owns both hover prediction and primary pointer-down targeting;
 its order is Fillet radius, draggable point/semantic centre, visible annotation occurrence, other

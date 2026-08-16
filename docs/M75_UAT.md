@@ -196,13 +196,17 @@ Acquire a clear primary hover before each step.
    a new valid canvas move.
 2. Pan, zoom, Fit and use Origin. Camera motion clears the prior target/context; stationary old
    screen coordinates do not retain it against moved geometry.
-3. Edit, Delete, Undo/Redo, load a sample/workspace and toggle the relevant visibility/problem
-   state. The old scene's target clears before the replacement paints.
+3. Change selection, then Edit, Delete, Undo/Redo, load a sample/workspace and toggle the relevant
+   visibility/problem state. The old prediction clears before changed annotation eligibility or a
+   replacement scene paints.
 4. Open a tool popout, dialog or other canvas overlay and move into it. Canvas hover clears while
    the overlay owns input. Closing it or returning focus does not resurrect hover without a new
    canvas move.
 5. Leave/re-enter the mapped plane and letterbox bands. No stale browser-only CSS/SVG highlight
    survives when headless state reports none.
+6. Activate Fillet authoring and move across points, annotations, geometry and datums before
+   pressing. No Select hover appears while feature picking owns the canvas. Start a Fillet-radius
+   drag from a prepared preview and confirm its captured movement still tracks until release.
 
 Pass when every painted hover is visibly tied to the current headless tool/camera/scene/input
 context.

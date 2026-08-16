@@ -1983,9 +1983,11 @@ remains the baseline; it is not M75 evidence.
 - Contextual geometry/annotation corridors may reveal related annotations and operands while the
   primary hover target remains `None`. Context paint never implies that pointer-down will select a
   corridor-only annotation or geometry item.
-- A tool change, camera transform, accepted-scene replacement or overlay/input-ownership change
-  revokes stale hover before another canvas sample can be painted or clicked. Pointer leave and
-  other existing cancellation paths remain coherent with the same rule.
+- A tool, selection/annotation-visibility, camera, accepted-scene or overlay/input-ownership
+  change revokes stale hover before another canvas sample can be painted or clicked. Pointer leave
+  and other existing cancellation paths remain coherent with the same rule. Uncaptured
+  computed-feature authoring movement cannot publish a Select hover owner; an already captured
+  Fillet-radius gesture retains movement through its terminal sample.
 - The browser maps input and paints only the headless hover target and related-context state. CSS,
   DOM/SVG event targets, local distance checks and stale retained browser state never choose or
   decorate a competing canvas owner.

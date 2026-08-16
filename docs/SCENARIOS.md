@@ -1914,11 +1914,13 @@ placement, visibility, fan-out and hit tolerances remain unchanged.
 
 Status: implemented and prequalified; clean candidate and hands-on evidence are pending.
 
-Acquire each owner class, then change the active tool, pan/zoom/Fit/Origin camera, replace the
-accepted scene through edit/Undo/Redo/reload, hide the relevant visibility class, or transfer
-pointer ownership to a tool popout/dialog/overlay. The stale hover target and related paint clear
-before the changed state can render. Returning to Select or the canvas does not resurrect it; a new
-mapped pointer sample is required. Existing pointer-leave/cancel behavior remains consistent.
+Acquire each owner class, then change the active tool or selection, pan/zoom/Fit/Origin camera,
+replace the accepted scene through edit/Undo/Redo/reload, hide the relevant visibility class, or
+transfer pointer ownership to a tool popout/dialog/overlay. The stale hover target and related
+paint clear before the changed state can render. Returning to Select or the canvas does not
+resurrect it; a new mapped pointer sample is required. Existing pointer-leave/cancel behavior
+remains consistent. While Fillet feature authoring owns uncaptured movement, no Select owner is
+published; its already captured radius gesture continues normally.
 
 At the thin web boundary, submit only normalized pointer/context inputs and render only the current
 headless hover/related DTO. DOM/SVG event targets, CSS `:hover`, painted hit strokes and cached

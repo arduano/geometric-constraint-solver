@@ -2,13 +2,14 @@
 
 use geosolve_constraint_editor::{
     ActivePointerGesture, ActivePointerGestureKind, ConstraintEditor, EditorEffect,
-    EditorHoverState, EditorHoverTarget, EditorScene, FeatureAuthoringOutcome,
-    FeatureAuthoringState, FeatureAuthoringTool, Modifiers, PickTolerance, PointerInput,
-    RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationOccurrence,
-    SceneAnnotationVisibility, SceneFilletHit, ScreenPoint, SelectionItem, Viewport,
+    EditorHoverState, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringOutcome,
+    FeatureAuthoringState, FeatureAuthoringTool, GeometryPickScope, Modifiers, PickTolerance,
+    PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationOccurrence,
+    SceneAnnotationVisibility, SceneFilletHit, SceneGlyphMarker, ScreenPoint, SelectionItem,
+    Viewport,
 };
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentSolveRequest,
+    CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentEdit, DocumentSolveRequest,
     RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDatum, SketchDocument,
     SolverConfig,
 };
@@ -779,5 +780,143 @@ fn annotation_precedes_passive_geometry_and_pointer_move_is_state_neutral() {
             .editor()
             .computed_fillet_continuation_status(),
         before_continuation.as_ref(),
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn exact_annotation_ties_ignore_scene_order_and_choose_the_first_occurrence() {
+    let fixture = parity_fixture();
+    let mut scene = fixture.base_scene.clone();
+    let mut items = scene
+        .annotations
+        .iter()
+        .map(|annotation| annotation.item)
+        .collect::<Vec<_>>();
+    items.sort_unstable();
+    items.dedup();
+    let items = items.into_iter().take(2).collect::<Vec<_>>();
+    assert_eq!(items.len(), 2, "fixture must contain competing annotations");
+
+    let probe = ScreenPoint { x: 40.0, y: 40.0 };
+    let tolerance = PickTolerance::default().annotation_pixels;
+    scene
+        .annotations
+        .retain(|annotation| items.contains(&annotation.item));
+    for annotation in &mut scene.annotations {
+        annotation.visibility = SceneAnnotationVisibility::Always;
+        annotation.geometry = SceneAnnotationGeometry::Glyph {
+            markers: vec![
+                SceneGlyphMarker {
+                    anchor: ScreenPoint {
+                        x: probe.x - tolerance,
+                        y: probe.y,
+                    },
+                    leader_from: None,
+                },
+                SceneGlyphMarker {
+                    anchor: ScreenPoint {
+                        x: probe.x + tolerance,
+                        y: probe.y,
+                    },
+                    leader_from: None,
+                },
+            ],
+        };
+    }
+    let expected_item = items[0];
+    let expected_occurrence = SceneAnnotationOccurrence {
+        item: expected_item,
+        marker_index: Some(0),
+    };
+
+    for reverse_scene_order in [false, true] {
+        let mut ordered_scene = scene.clone();
+        if reverse_scene_order {
+            ordered_scene.annotations.reverse();
+        }
+        let mut editor = ConstraintEditor::default();
+        assert_eq!(
+            editor.pointer_move(&ordered_scene, pointer(20, probe, Modifiers::default()),),
+            hover_change(
+                Some(EditorHoverTarget::Annotation(expected_occurrence)),
+                None,
+            ),
+            "distance ties must resolve by semantic item and then marker occurrence",
+        );
+        let _ = editor.pointer_down(&ordered_scene, pointer(20, probe, Modifiers::default()));
+        assert_eq!(
+            editor.selection(),
+            &[expected_item],
+            "pointer-down must consume the same semantic tie winner as hover",
+        );
+    }
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn pointer_context_is_revoked_by_every_scene_or_input_owner_lifecycle() {
+    let mut fixture = parity_fixture();
+    let point_item = SelectionItem::Point(fixture.overlap_point);
+    let expected = EditorHoverState {
+        target: Some(EditorHoverTarget::Geometry(point_item)),
+        context_owner: Some(point_item),
+    };
+    let cleared = hover_change(None, None);
+    let input = pointer(21, fixture.overlap, Modifiers::default());
+    let prime = |editor: &mut ConstraintEditor| {
+        assert_eq!(
+            editor.pointer_move(&fixture.base_scene, input),
+            hover_change(
+                Some(EditorHoverTarget::Geometry(point_item)),
+                Some(point_item)
+            ),
+        );
+        assert_eq!(editor.hover_state(), expected);
+    };
+
+    let mut tool_editor = ConstraintEditor::default();
+    prime(&mut tool_editor);
+    assert_eq!(tool_editor.activate_tool(EditorTool::Line), cleared);
+    assert_eq!(tool_editor.hover_state(), EditorHoverState::default());
+
+    let mut leave_editor = ConstraintEditor::default();
+    prime(&mut leave_editor);
+    assert_eq!(leave_editor.pointer_leave(), cleared);
+    assert_eq!(leave_editor.hover_state(), EditorHoverState::default());
+
+    let mut cancel_editor = ConstraintEditor::default();
+    prime(&mut cancel_editor);
+    assert_eq!(cancel_editor.cancel(), cleared);
+    assert_eq!(cancel_editor.hover_state(), EditorHoverState::default());
+
+    let mut camera_editor = ConstraintEditor::default();
+    prime(&mut camera_editor);
+    assert_eq!(camera_editor.invalidate_draft_inference(), cleared);
+    assert_eq!(camera_editor.hover_state(), EditorHoverState::default());
+
+    let mut policy_editor = ConstraintEditor::default();
+    prime(&mut policy_editor);
+    assert_eq!(
+        policy_editor.set_geometry_pick_scope(GeometryPickScope::Profile),
+        cleared,
+    );
+    assert_eq!(policy_editor.hover_state(), EditorHoverState::default());
+
+    prime(fixture.coordinator.editor_mut());
+    fixture
+        .coordinator
+        .apply_edit(
+            fixture.coordinator.session().design_identity(),
+            DocumentEdit::CreatePoint {
+                label: "accepted scene replacement".into(),
+                position: [8.0, 8.0],
+            },
+        )
+        .expect("accepted scene replacement");
+    assert_eq!(
+        fixture.coordinator.editor().hover_state(),
+        EditorHoverState::default(),
+        "retained publication must not preserve hover from the replaced accepted scene",
     );
 }

@@ -307,6 +307,84 @@ impl PointerMoveQueue {
     }
 }
 
+/// Browser input-ownership transitions that retire a canvas pointer sample.
+///
+/// Overlay and focus ownership always revoke the sample. An unmapped sample
+/// does so only when no captured gesture still owns the pointer.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanvasPointerContextRoute {
+    OverlayOrFocus,
+    UnmappedCanvas { pointer_is_captured: bool },
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Debug, Default, PartialEq)]
+struct CanvasPointerContextRevocation {
+    effects: Vec<geosolve_constraint_editor::EditorEffect>,
+    cleared_stationary_sample: bool,
+}
+
+/// Applies one browser pointer-ownership route without DOM state.
+///
+/// Keeping queue invalidation and headless hover invalidation together means
+/// an already-scheduled animation frame cannot repaint the retired owner.
+#[cfg(any(target_arch = "wasm32", test))]
+fn revoke_canvas_pointer_context(
+    pointer_moves: &mut PointerMoveQueue,
+    editor: &mut geosolve_constraint_editor::ConstraintEditor,
+    route: CanvasPointerContextRoute,
+) -> CanvasPointerContextRevocation {
+    let revoke = match route {
+        CanvasPointerContextRoute::OverlayOrFocus => true,
+        CanvasPointerContextRoute::UnmappedCanvas {
+            pointer_is_captured,
+        } => matches!(
+            effect_adapter::unmapped_canvas_pointer_action(pointer_is_captured),
+            effect_adapter::UnmappedCanvasPointerAction::RevokePointerContext
+        ),
+    };
+    if !revoke {
+        return CanvasPointerContextRevocation::default();
+    }
+    CanvasPointerContextRevocation {
+        cleared_stationary_sample: pointer_moves.clear_stationary_sample(),
+        effects: editor.pointer_leave(),
+    }
+}
+
+/// Converts current retained diagnostic targets into the exact selection
+/// identities consumed by problem-aware pointer move/down wrappers.
+#[cfg(any(target_arch = "wasm32", test))]
+fn current_problem_items(
+    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
+    scene: &geosolve_constraint_editor::EditorScene,
+) -> Vec<geosolve_constraint_editor::SelectionItem> {
+    coordinator
+        .current_problem_metadata()
+        .map(|problem| {
+            problem
+                .targets
+                .iter()
+                .filter_map(|target| scene::problem_selection_item(*target, Some(scene)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Whether one browser move belongs to the ordinary headless editor.
+///
+/// Feature authoring owns uncaptured canvas movement itself. Its captured
+/// Fillet-radius gesture is still an editor gesture and must keep receiving
+/// movement until the matching terminal sample.
+#[cfg(any(target_arch = "wasm32", test))]
+const fn feature_authoring_allows_editor_pointer_move(
+    feature_authoring_active: bool,
+    pointer_is_captured: bool,
+) -> bool {
+    !feature_authoring_active || pointer_is_captured
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AuthoringItemInput {
@@ -1904,7 +1982,16 @@ pub(crate) mod wasm {
                 return;
             };
             let mut wb = frame_workbench.borrow_mut();
-            if wb.pan_gesture.is_some() || wb.authoring.active_tool().is_some() {
+            if wb.pan_gesture.is_some()
+                || wb.authoring.active_tool().is_some()
+                || !super::feature_authoring_allows_editor_pointer_move(
+                    wb.feature_authoring.active_tool().is_some(),
+                    wb.coordinator
+                        .editor()
+                        .active_pointer_gesture()
+                        .is_some_and(|gesture| gesture.pointer_id == sample.input.pointer_id),
+                )
+            {
                 return;
             }
             let Some(scene) = editor_scene(&wb) else {
@@ -2000,18 +2087,24 @@ pub(crate) mod wasm {
             }
             let (input, captured) = {
                 let wb = callback_workbench.borrow();
-                if wb.pan_gesture.is_some() || wb.authoring.active_tool().is_some() {
-                    return;
-                }
                 if !wb.pointer_captures.is_empty()
                     && !wb.pointer_captures.contains(event.pointer_id())
+                {
+                    return;
+                }
+                let captured = wb.pointer_captures.contains(event.pointer_id());
+                if wb.pan_gesture.is_some()
+                    || wb.authoring.active_tool().is_some()
+                    || !super::feature_authoring_allows_editor_pointer_move(
+                        wb.feature_authoring.active_tool().is_some(),
+                        captured,
+                    )
                 {
                     return;
                 }
                 let Some(scene) = editor_scene(&wb) else {
                     return;
                 };
-                let captured = wb.pointer_captures.contains(event.pointer_id());
                 let input = if captured {
                     captured_pointer_input(&callback_viewport, scene.viewport, &event)
                 } else {
@@ -4230,42 +4323,37 @@ pub(crate) mod wasm {
         coordinator: &RetainedEditorCoordinator,
         scene: &EditorScene,
     ) -> Vec<SelectionItem> {
-        coordinator
-            .current_problem_metadata()
-            .map(|problem| {
-                problem
-                    .targets
-                    .iter()
-                    .filter_map(|target| super::scene::problem_selection_item(*target, Some(scene)))
-                    .collect()
-            })
-            .unwrap_or_default()
+        super::current_problem_items(coordinator, scene)
     }
 
     fn clear_canvas_pointer_ownership(wb: &mut Workbench) -> bool {
-        let effects = wb.coordinator.editor_mut().pointer_leave();
-        if effects.is_empty() {
-            return false;
-        }
-        dispatch_effects(wb, effects);
-        true
+        apply_canvas_pointer_context_route(wb, super::CanvasPointerContextRoute::OverlayOrFocus)
     }
 
-    fn clear_select_pointer_context(wb: &mut Workbench) -> bool {
-        if wb.coordinator.editor().tool() != EditorTool::Select {
-            return false;
+    fn apply_canvas_pointer_context_route(
+        wb: &mut Workbench,
+        route: super::CanvasPointerContextRoute,
+    ) -> bool {
+        let pointer_moves = Rc::clone(&wb.pointer_moves);
+        let revocation = super::revoke_canvas_pointer_context(
+            &mut pointer_moves.borrow_mut(),
+            wb.coordinator.editor_mut(),
+            route,
+        );
+        let changed = revocation.cleared_stationary_sample || !revocation.effects.is_empty();
+        if !revocation.effects.is_empty() {
+            dispatch_effects(wb, revocation.effects);
         }
-        let effects = wb.coordinator.editor_mut().invalidate_draft_inference();
-        if effects.is_empty() {
-            return false;
-        }
-        dispatch_effects(wb, effects);
-        true
+        changed
     }
 
     fn clear_unmapped_canvas_pointer(wb: &mut Workbench) -> bool {
-        let cleared_sample = wb.pointer_moves.borrow_mut().clear_stationary_sample();
-        clear_select_pointer_context(wb) || cleared_sample
+        apply_canvas_pointer_context_route(
+            wb,
+            super::CanvasPointerContextRoute::UnmappedCanvas {
+                pointer_is_captured: false,
+            },
+        )
     }
 
     fn fit_camera(wb: &mut Workbench) -> bool {
@@ -5736,36 +5824,39 @@ pub(crate) mod wasm {
 mod tests {
     use geosolve_constraint_editor::{
         AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ComputedSceneState,
-        ConstraintIntent, DraftInferenceCompleteness, DraftInferenceResolution,
+        ConstraintEditor, ConstraintIntent, DraftInferenceCompleteness, DraftInferenceResolution,
         DraftInferenceStatus, EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene,
         EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
         GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility, Modifiers, PickTolerance,
-        PointerInput, RetainedEditorCoordinator, SceneCurveOrigin, ScreenPoint, SelectionItem,
-        Viewport,
+        PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry,
+        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneCurveOrigin, ScreenPoint,
+        SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition,
-        DocumentCurveNormalSide, DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession,
-        SketchAcceptedStateIdentity, SketchDocument,
+        DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit,
+        DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession, ScalarDomain,
+        ScalarUnit, SketchAcceptedStateIdentity, SketchDocument,
     };
 
     use super::{
         AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, CANVAS_PAN_POINTER_EVENTS,
         CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
-        CanvasPointerCaptures, CanvasPointerOwnership, CanvasPointerTerminal,
-        CanvasPointerTerminalDisposition, CapturedCanvasPointer, DismissibleDisclosure,
-        DraftingPointerSample, FilletActionRenderAuthority, ForegroundOverlayEscapeOwner,
-        HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
-        ReproductionFocusReturn, apply_validated_reproduction, canvas_cursor_key,
+        CanvasPointerCaptures, CanvasPointerContextRoute, CanvasPointerOwnership,
+        CanvasPointerTerminal, CanvasPointerTerminalDisposition, CapturedCanvasPointer,
+        DismissibleDisclosure, DraftingPointerSample, FilletActionRenderAuthority,
+        ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
+        PointerMoveQueue, ReproductionFocusReturn, apply_validated_reproduction, canvas_cursor_key,
         canvas_pointer_capture_kind, change_owns_option_control_click, compose_editor_scene,
-        coordinate_hud, foreground_overlay_escape_owner, history_shortcut,
+        coordinate_hud, current_problem_items, feature_authoring_allows_editor_pointer_move,
+        foreground_overlay_escape_owner, history_shortcut,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         reproduction_focus_target_after_action, reproduction_overlay_presentation,
         reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
-        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
-        should_route_stationary_draft_inference,
+        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
+        route_canvas_pan_pointer_down, should_route_stationary_draft_inference,
     };
 
     fn rejected_constraint_fixture() -> (
@@ -5941,6 +6032,109 @@ mod tests {
         for line in lines {
             assert!(markup.contains(&format!("data-persistent-id=\"{}\"", line.curve)));
         }
+    }
+
+    #[test]
+    fn current_problem_targets_are_forwarded_to_problem_aware_pointer_input() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("point");
+        let second = document.add_point("second", [2.0, 0.0]).expect("point");
+        let line = document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start: first,
+                    end: second,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        for (label, point, target) in [
+            ("fix first", first, [0.0, 0.0]),
+            ("fix second", second, [2.0, 0.0]),
+        ] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("fixed point");
+        }
+        let target = document
+            .add_scalar(
+                "conflicting length",
+                3.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("length target");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted fixed line");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreateDimension {
+                    label: "conflicting length".into(),
+                    definition: DocumentDimensionDefinition::CurveLength {
+                        curve: CurveSpan::line(line),
+                        target,
+                    },
+                    mode: DocumentDimensionMode::Driving,
+                },
+            )
+            .expect("retained rejected dimension");
+        let mut scene = compose_editor_scene(&coordinator, super::scene::viewport(), 0.25)
+            .expect("detached accepted presentation scene");
+        let problem_items = current_problem_items(&coordinator, &scene);
+        assert!(
+            !problem_items.is_empty(),
+            "the rejected attempt must expose at least one mapped problem target",
+        );
+        let item = problem_items
+            .iter()
+            .copied()
+            .find(|item| matches!(item, SelectionItem::Dimension(_)))
+            .expect("rejected dimension target must be forwarded");
+        let annotation = scene
+            .annotations
+            .first_mut()
+            .expect("fixed-line scene retains annotation geometry");
+        let probe = ScreenPoint { x: 40.0, y: 40.0 };
+        annotation.item = item;
+        annotation.visibility = SceneAnnotationVisibility::Contextual;
+        annotation.geometry = SceneAnnotationGeometry::Label { anchor: probe };
+        scene
+            .annotations
+            .retain(|annotation| annotation.item == item);
+
+        let input = PointerInput {
+            pointer_id: 301,
+            position: probe,
+            modifiers: Modifiers::default(),
+        };
+        let mut ordinary = ConstraintEditor::default();
+        assert!(ordinary.pointer_move(&scene, input).is_empty());
+
+        let mut problem_aware = ConstraintEditor::default();
+        let effects = problem_aware.pointer_move_with_problem_items(&scene, input, &problem_items);
+        assert_eq!(
+            effects,
+            vec![geosolve_constraint_editor::EditorEffect::HoverChanged(
+                EditorHoverState {
+                    target: Some(EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                        item,
+                        marker_index: None,
+                    })),
+                    context_owner: None,
+                },
+            )],
+            "the browser adapter's current problem items must reach headless hover resolution",
+        );
     }
 
     fn assert_rejected_constraint_scene_authority(
@@ -7278,6 +7472,98 @@ mod tests {
             .expect("captured suppression sample");
         assert!(captured.inference.suppressed);
         assert_eq!(captured.input, suppressed);
+    }
+
+    #[test]
+    fn feature_authoring_suppresses_select_hover_but_keeps_its_captured_radius_gesture() {
+        assert!(feature_authoring_allows_editor_pointer_move(false, false));
+        assert!(
+            !feature_authoring_allows_editor_pointer_move(true, false),
+            "an uncaptured Fillet-authoring move belongs to native feature picking, not Select hover",
+        );
+        assert!(
+            feature_authoring_allows_editor_pointer_move(true, true),
+            "the editor must continue an already captured Fillet-radius gesture",
+        );
+    }
+
+    #[test]
+    fn overlay_focus_and_letterbox_routes_revoke_queued_and_current_canvas_hover() {
+        let (coordinator, _, _, _) = rejected_constraint_fixture();
+        let scene = compose_editor_scene(&coordinator, super::scene::viewport(), 0.25)
+            .expect("detached accepted presentation scene");
+        let point = scene.points.first().expect("accepted point");
+        let input = PointerInput {
+            pointer_id: 302,
+            position: point.screen_position,
+            modifiers: Modifiers::default(),
+        };
+        let expected_hover = EditorHoverState {
+            target: Some(EditorHoverTarget::Geometry(SelectionItem::Point(point.id))),
+            context_owner: Some(SelectionItem::Point(point.id)),
+        };
+
+        for owner in ["overlay", "focus"] {
+            let mut editor = ConstraintEditor::default();
+            let _ = editor.pointer_move(&scene, input);
+            assert_eq!(editor.hover_state(), expected_hover, "{owner} precondition");
+            let mut queue = PointerMoveQueue::default();
+            let generation = queue.push(input).expect("queued browser frame");
+            let revoked = revoke_canvas_pointer_context(
+                &mut queue,
+                &mut editor,
+                CanvasPointerContextRoute::OverlayOrFocus,
+            );
+            assert!(
+                revoked.cleared_stationary_sample,
+                "{owner} clears HUD input"
+            );
+            assert_eq!(
+                revoked.effects,
+                vec![geosolve_constraint_editor::EditorEffect::HoverChanged(
+                    EditorHoverState::default(),
+                )],
+            );
+            assert_eq!(
+                queue.take_for_frame(generation),
+                None,
+                "{owner} revokes RAF"
+            );
+            assert_eq!(editor.hover_state(), EditorHoverState::default());
+        }
+
+        let mut editor = ConstraintEditor::default();
+        let _ = editor.pointer_move(&scene, input);
+        let mut queue = PointerMoveQueue::default();
+        let generation = queue.push(input).expect("queued letterbox frame");
+        let revoked = revoke_canvas_pointer_context(
+            &mut queue,
+            &mut editor,
+            CanvasPointerContextRoute::UnmappedCanvas {
+                pointer_is_captured: false,
+            },
+        );
+        assert!(revoked.cleared_stationary_sample);
+        assert!(!revoked.effects.is_empty());
+        assert_eq!(queue.take_for_frame(generation), None);
+        assert_eq!(editor.hover_state(), EditorHoverState::default());
+
+        let mut captured_editor = ConstraintEditor::default();
+        let _ = captured_editor.pointer_move(&scene, input);
+        let mut captured_queue = PointerMoveQueue::default();
+        let captured_generation = captured_queue.push(input).expect("captured browser frame");
+        assert_eq!(
+            revoke_canvas_pointer_context(
+                &mut captured_queue,
+                &mut captured_editor,
+                CanvasPointerContextRoute::UnmappedCanvas {
+                    pointer_is_captured: true,
+                },
+            ),
+            super::CanvasPointerContextRevocation::default(),
+        );
+        assert_eq!(captured_editor.hover_state(), expected_hover);
+        assert!(captured_queue.take_for_frame(captured_generation).is_some());
     }
 
     #[test]

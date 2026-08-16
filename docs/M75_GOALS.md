@@ -56,9 +56,12 @@ unexecuted and are not retroactively accepted by M74's scoped close decision.
 
 ### M75-R004 — state lifecycle and browser authority
 
-- Revoke stale hover on active-tool changes, camera changes, accepted-scene replacement and
-  overlay/dialog/input-ownership changes. Existing pointer-leave, visibility and cancellation
-  paths remain coherent with the same rule.
+- Revoke stale hover on active-tool changes, selection/annotation-visibility changes, camera
+  changes, accepted-scene replacement and overlay/dialog/input-ownership changes. Existing
+  pointer-leave, visibility and cancellation paths remain coherent with the same rule.
+- Suppress Select hover while ordinary or computed-feature authoring owns uncaptured canvas input.
+  An already captured Fillet-radius gesture continues to receive its matching movement and
+  terminal samples.
 - Returning to Select or canvas ownership does not resurrect a revoked result; a new valid mapped
   pointer sample is required.
 - Paint hover, related operands and contextual annotations in the browser only from current
@@ -100,8 +103,8 @@ unexecuted and are not retroactively accepted by M74's scoped close decision.
   reports none.
 - Problem-forced annotations, crowded occurrence ties and context-only corridors obey the exact
   headless rules above natively, under WASM and through the thin browser adapter.
-- Stale hover cannot survive a change to its owning tool, camera, scene or overlay/input context;
-  browser paint has no independent semantic hover authority.
+- Stale hover cannot survive a change to its owning tool, selection/visibility, camera, scene or
+  overlay/input context; browser paint has no independent semantic hover authority.
 - Existing tolerances, role order, schemas, equations, solver/golden behavior and public semantics
   outside the additive problem-aware pointer-move wrappers remain unchanged.
 - The complete deferred M74 and new M75 human scorecards pass on an immutable qualified candidate,

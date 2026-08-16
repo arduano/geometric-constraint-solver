@@ -12935,10 +12935,8 @@ mod tests {
             effects,
             vec![EditorEffect::SelectionChanged(vec![horizontal])]
         );
-        assert_eq!(
-            editor.pointer_leave(),
-            vec![EditorEffect::HoverChanged(EditorHoverState::default())]
-        );
+        assert_eq!(editor.hover_state(), EditorHoverState::default());
+        assert!(editor.pointer_leave().is_empty());
     }
 
     #[test]
@@ -13145,6 +13143,21 @@ mod tests {
         assert_eq!(
             effects,
             vec![EditorEffect::SelectionChanged(vec![first_annotation.item])]
+        );
+        assert_eq!(
+            hover_editor.hover_state(),
+            EditorHoverState::default(),
+            "selection-driven visibility must revoke the old annotation navigation context",
+        );
+        assert_eq!(
+            hover_editor.pointer_move(
+                &scene,
+                pointer(10, context_origin.x, context_origin.y, Modifiers::default()),
+            ),
+            vec![EditorEffect::HoverChanged(context_state(Some(
+                EditorHoverTarget::Geometry(SelectionItem::Curve(related_curve))
+            )))],
+            "a fresh geometry sample must reacquire context after selection changes",
         );
 
         let between_icons = ScreenPoint {

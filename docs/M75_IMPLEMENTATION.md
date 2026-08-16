@@ -84,6 +84,7 @@ The retained coordinator/web seam clears the current hover target and related co
 of these owning inputs changes:
 
 - active tool;
+- selection or another annotation-visibility input;
 - camera/viewport transform, including pan, zoom, Fit and Origin recentering;
 - accepted scene or visibility/problem composition;
 - overlay, dialog, input or other non-canvas pointer ownership.
@@ -91,7 +92,8 @@ of these owning inputs changes:
 Existing pointer-leave and cancellation paths will share the same revocation behavior. Returning
 to the prior state cannot restore cached hover; a fresh valid canvas pointer sample is required.
 The browser will rerender the cleared headless state immediately and will not preserve a DOM-only
-highlight.
+highlight. Ordinary and feature authoring suppress uncaptured Select movement. A captured
+Fillet-radius gesture remains an editor-owned exception until its matching terminal sample.
 
 ## 5. Focused regression plan
 
@@ -114,6 +116,11 @@ tests will reuse existing tolerances rather than update them.
 - Verify browser coordinates and current problems reach the headless wrapper unchanged.
 - Verify the workbench paints only the returned target/context and clears it synchronously on each
   invalidation trigger.
+- Verify overlay/focus and uncaptured letterbox routes jointly revoke the pending animation-frame
+  sample, stationary pointer input and current headless context, while captured edge crossings are
+  preserved.
+- Verify uncaptured Fillet feature-authoring movement cannot enter Select hover resolution while a
+  captured Fillet-radius gesture still can.
 - Verify a DOM/SVG target or CSS hover cannot manufacture a semantic canvas owner.
 - Preserve existing keyboard focus, accessible names and non-colour focus/selection cues while
   overlay ownership suppresses canvas hover.
@@ -134,13 +141,13 @@ Prequalification evidence completed on the dirty implementation tree:
 cargo fmt --all -- --check                                      # pass
 git diff --check                                                # pass
 cargo test --locked -p geosolve-constraint-editor \
-  --test m75_hover_pointer_parity                               # 7 passed
+  --test m75_hover_pointer_parity                               # 9 passed
 env NO_COLOR=true nix-shell shell.nix --run \
   'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
    cargo test --locked -p geosolve-constraint-editor \
    --test m75_hover_pointer_parity --target wasm32-unknown-unknown'
-                                                               # same 7 passed
-cargo test --locked -p geosolve-demo-web --lib --all-features  # 113 passed
+                                                               # same 9 passed
+cargo test --locked -p geosolve-demo-web --lib --all-features  # 116 passed
 cargo clippy --locked --workspace --all-targets --all-features \
   -- -D warnings                                               # pass
 cargo test --locked --workspace --all-features                 # pass
@@ -151,6 +158,13 @@ env NO_COLOR=true nix-shell shell.nix --run \
   'cd crates/geosolve-demo-web && env -u NO_COLOR \
    trunk build --release --locked'                             # pass
 ```
+
+Independent review then closed three concrete gaps before candidate nomination: portable WASM
+coverage now includes exact annotation ties and the lifecycle matrix; selection changes revoke a
+prediction evaluated under old annotation visibility; and the thin adapter has executable current
+problem forwarding, queued-context revocation and Fillet feature-authoring ownership tests. The
+focused post-review matrix passes 9/9 natively, 9/9 under WASM and 116/116 in the demo-web crate;
+focused warnings-denied Clippy and the demo-web WASM check pass.
 
 The exact complete clean release gate and `--require-clean` qualification remain pending until the
 implementation/prequalification commit is clean. No immutable distribution or human result is
