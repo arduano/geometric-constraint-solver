@@ -248,6 +248,10 @@ fn parity_fixture() -> PointerParityFixture {
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exact context-transition regression derives and exercises both sides of the reveal-only corridor contract"
+)]
 fn context_corridor_reveals_only_and_never_becomes_a_click_target() {
     let fixture = parity_fixture();
     let line_item = SelectionItem::Curve(fixture.first_span);
@@ -298,19 +302,38 @@ fn context_corridor_reveals_only_and_never_becomes_a_click_target() {
                 })
         })
         .expect("passive curve sample outside every revealed annotation");
+    let corridor_delta = ScreenPoint {
+        x: marker_anchor.x - context_origin.x,
+        y: marker_anchor.y - context_origin.y,
+    };
+    let corridor_length = corridor_delta.x.hypot(corridor_delta.y);
+    assert!(corridor_length > 0.0);
+    let corridor_normal = ScreenPoint {
+        x: -corridor_delta.y / corridor_length,
+        y: corridor_delta.x / corridor_length,
+    };
     let corridor = (1..100)
-        .map(|step| {
+        .flat_map(|step| {
             let ratio = f64::from(step) / 100.0;
-            ScreenPoint {
+            let center = ScreenPoint {
                 x: (marker_anchor.x - context_origin.x).mul_add(ratio, context_origin.x),
                 y: (marker_anchor.y - context_origin.y).mul_add(ratio, context_origin.y),
-            }
+            };
+            [-13.0, 13.0].map(|normal_offset| ScreenPoint {
+                x: corridor_normal.x.mul_add(normal_offset, center.x),
+                y: corridor_normal.y.mul_add(normal_offset, center.y),
+            })
         })
         .find(|position| {
             fixture.base_scene.hit_test(*position, tolerance).is_none()
                 && !fixture.base_scene.annotations.iter().any(|annotation| {
                     annotation.is_visible(&[], Some(line_item), &[])
                         && annotation.hit_test(*position, tolerance.annotation_pixels)
+                })
+                && fixture.base_scene.annotations.iter().any(|annotation| {
+                    annotation.operands.contains(&line_item)
+                        && annotation.is_visible(&[], Some(line_item), &[])
+                        && annotation.context_hit_test(*position, context_origin, 14.0)
                 })
         })
         .expect("bounded reveal-only corridor sample");

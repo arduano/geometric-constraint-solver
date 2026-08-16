@@ -540,12 +540,18 @@ fn datum_axis_symmetry_active_authoring_scene_lifecycle_and_reload_are_exact() {
         .find(|point| point.id == second)
         .unwrap()
         .screen_position;
+    let semantic_anchor = ScreenPoint {
+        x: 0.5 * (first_screen.x + second_screen.x),
+        y: 0.5 * (first_screen.y + second_screen.y),
+    };
+    assert_eq!(markers[0].leader_from, Some(semantic_anchor));
     assert_eq!(
         markers[0].anchor,
         ScreenPoint {
-            x: 0.5 * (first_screen.x + second_screen.x),
-            y: 0.5 * (first_screen.y + second_screen.y),
-        }
+            x: semantic_anchor.x + 24.0,
+            y: semantic_anchor.y - 24.0,
+        },
+        "M76 keeps the exact paired-point midpoint as the leader origin while placing the movable mark clear of its operands"
     );
 
     coordinator

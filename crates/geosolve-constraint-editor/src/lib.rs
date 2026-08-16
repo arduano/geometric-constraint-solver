@@ -944,7 +944,10 @@ impl EditorScene {
         &mut self,
         accepted: &geosolve_sketch::SketchAcceptedDocumentState,
     ) -> bool {
-        if accepted.document().id() != self.accepted_document.id() {
+        if accepted.document().id() != self.accepted_document.id()
+            || accepted.identity().revision().get() != self.accepted_revision
+            || accepted.document() != &self.accepted_document
+        {
             return false;
         }
         annotations::update_dimension_values(&mut self.annotations, accepted);
@@ -14399,6 +14402,83 @@ mod tests {
         assert_eq!(second_center, first_center);
         assert!(second_edge.x > first_edge.x);
         assert!((second_edge.y - first_edge.y).abs() <= f64::EPSILON);
+    }
+
+    #[test]
+    fn m76_reference_annotation_never_presents_its_dormant_target_as_measurement() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("first");
+        let second = document.add_point("second", [3.0, 4.0]).expect("second");
+        let dormant_target = document
+            .add_scalar(
+                "dormant reference target",
+                123.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("target");
+        let dimension = document
+            .add_dimension(
+                "actual endpoint distance",
+                geosolve_sketch::DocumentDimensionDefinition::PointDistance {
+                    first,
+                    second,
+                    target: dormant_target,
+                },
+                DocumentDimensionMode::Reference,
+            )
+            .expect("reference dimension");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted");
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene");
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Dimension(dimension))
+            .expect("reference annotation");
+        assert_eq!(annotation.visible_text, None);
+        assert!(annotation.accessible_label.contains("value unavailable"));
+        assert!(!annotation.accessible_label.contains("123"));
+
+        let mut divergent_document = accepted.document().clone();
+        divergent_document
+            .set_point_position(second, [0.0, 10.0])
+            .expect("divergent second point");
+        let divergent_session = RetainedSketchDocumentSession::new(
+            divergent_document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("divergent same-document session");
+        let divergent_accepted = divergent_session
+            .accepted_state()
+            .expect("divergent accepted");
+        assert_eq!(divergent_accepted.document().id(), accepted.document().id());
+        assert_ne!(divergent_accepted.document(), accepted.document());
+        assert!(!scene.update_annotation_values(divergent_accepted));
+
+        assert!(scene.update_annotation_values(accepted));
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Dimension(dimension))
+            .expect("resolved reference annotation");
+        assert_eq!(annotation.visible_text.as_deref(), Some("(5)"));
+        assert!(annotation.accessible_label.contains("5 model units"));
+        assert!(!annotation.accessible_label.contains("123"));
     }
 
     #[test]

@@ -1108,6 +1108,12 @@ fn dimension_default_text(
     document: &SketchDocument,
     dimension: &geosolve_sketch::DocumentDimension,
 ) -> Option<String> {
+    if dimension.mode == DocumentDimensionMode::Reference {
+        // Reference measurements are accepted-result data, not their dormant
+        // target scalar. `EditorScene::update_annotation_values` supplies the
+        // independently evaluated accepted value before presentation.
+        return None;
+    }
     let value = dimension_stored_value(document, dimension)?;
     compact_dimension_text(
         value,
@@ -1331,7 +1337,9 @@ pub(crate) fn build_annotations(
                     &dimension.label,
                     kind,
                     reference,
-                    dimension_stored_value(document, dimension),
+                    (!reference)
+                        .then(|| dimension_stored_value(document, dimension))
+                        .flatten(),
                 ),
                 visible_text,
                 label_bounds: None,

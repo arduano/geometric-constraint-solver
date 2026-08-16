@@ -2482,7 +2482,7 @@ mod tests {
             .session()
             .accepted_state_for_current_input()
             .expect("accepted dimension sampler");
-        let scene = EditorScene::from_accepted_for_design(
+        let mut scene = EditorScene::from_accepted_for_design(
             accepted.identity().revision().get(),
             accepted.design_identity(),
             accepted.document(),
@@ -2491,6 +2491,7 @@ mod tests {
             0.25,
         )
         .expect("dimension sampler scene");
+        assert!(scene.update_annotation_values(accepted));
         let kinds = scene
             .annotations
             .iter()

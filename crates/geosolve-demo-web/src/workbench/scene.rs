@@ -3395,7 +3395,7 @@ mod tests {
         )
         .unwrap();
         let accepted = session.accepted_state().unwrap();
-        let scene = EditorScene::from_accepted_for_design(
+        let mut scene = EditorScene::from_accepted_for_design(
             accepted.identity().revision().get(),
             session.design_identity(),
             accepted.document(),
@@ -3404,6 +3404,7 @@ mod tests {
             0.8,
         )
         .unwrap();
+        assert!(scene.update_annotation_values(accepted));
         let selection = [SelectionItem::Point(rectangle.points[0])];
         let markup = svg_markup(
             Some(&scene),

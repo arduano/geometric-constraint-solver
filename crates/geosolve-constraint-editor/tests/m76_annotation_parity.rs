@@ -37,7 +37,7 @@ fn accepted_scene(document: SketchDocument, request: DocumentSolveRequest) -> Ed
     let session = RetainedSketchDocumentSession::new(document, request, SolverConfig::default())
         .expect("accepted annotation session");
     let accepted = session.accepted_state().expect("accepted annotation state");
-    EditorScene::from_accepted_for_design(
+    let mut scene = EditorScene::from_accepted_for_design(
         accepted.identity().revision().get(),
         session.design_identity(),
         accepted.document(),
@@ -45,7 +45,9 @@ fn accepted_scene(document: SketchDocument, request: DocumentSolveRequest) -> Ed
         Viewport::new([1000.0, 700.0], [100.0, 0.0], 3.0).expect("annotation viewport"),
         0.25,
     )
-    .expect("accepted annotation scene")
+    .expect("accepted annotation scene");
+    assert!(scene.update_annotation_values(accepted));
+    scene
 }
 
 fn alpha_scene(kind: AlphaScenarioKind) -> EditorScene {
@@ -303,7 +305,7 @@ fn annotation_fixture() -> (
     .expect("session");
     let accepted = session.accepted_state().expect("accepted");
     let document_id = accepted.document().id();
-    let scene = EditorScene::from_accepted_for_design(
+    let mut scene = EditorScene::from_accepted_for_design(
         accepted.identity().revision().get(),
         session.design_identity(),
         accepted.document(),
@@ -312,6 +314,7 @@ fn annotation_fixture() -> (
         0.5,
     )
     .expect("scene");
+    assert!(scene.update_annotation_values(accepted));
     let item = SelectionItem::Constraint(constraint);
     let marker = scene
         .annotations
@@ -533,6 +536,10 @@ fn all_seven_dimension_families_publish_native_wasm_geometry() {
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive native/WASM loop validates the closed twenty-glyph annotation contract"
+)]
 fn all_twenty_constraint_glyph_families_publish_native_wasm_geometry() {
     use std::collections::BTreeSet;
 
