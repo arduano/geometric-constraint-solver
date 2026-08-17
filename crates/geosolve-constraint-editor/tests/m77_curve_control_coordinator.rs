@@ -7,8 +7,9 @@
 )]
 
 use geosolve_constraint_editor::{
-    CoordinatorError, EditorEffect, EditorScene, Modifiers, PointerInput, ReplayAction,
-    RetainedEditorCoordinator, SceneCurveControl, ScreenPoint, SelectionItem, Viewport,
+    ComputedSceneState, CoordinatorError, EditorEffect, EditorError, EditorScene, Modifiers,
+    PointerInput, ReplayAction, RetainedEditorCoordinator, SceneCurveControl, ScreenPoint,
+    SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveId, CurveSpan, DesignScalarId, DocumentArcSweep,
@@ -52,13 +53,27 @@ fn prepared_preview_scene(
     interaction_revision: u64,
     interaction_design: geosolve_sketch::SketchDesignIdentity,
 ) -> EditorScene {
+    let origin = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap();
+    assert_eq!(interaction_revision, origin.identity().revision().get());
+    assert_eq!(interaction_design, coordinator.session().design_identity());
     let source = coordinator.visible_preview_session().unwrap();
     let accepted = source.accepted_state_for_current_input().unwrap();
-    let mut scene = EditorScene::from_accepted_for_design(
-        interaction_revision,
-        interaction_design,
+    let accepted_input = source.accepted_prepared_input().unwrap();
+    let ComputedSceneState::Current { expected, snapshot } = coordinator.computed_scene_state()
+    else {
+        panic!("prepared candidate must retain exact computed output")
+    };
+    let mut scene = EditorScene::from_accepted_with_computed(
+        accepted.identity().revision().get(),
+        source.design_identity(),
         accepted.document(),
-        coordinator.session().design_document(),
+        source.design_document(),
+        &accepted_input,
+        expected,
+        snapshot,
         viewport,
         0.5,
     )
@@ -67,7 +82,35 @@ fn prepared_preview_scene(
         .editor()
         .populate_curve_controls(&mut scene)
         .unwrap();
+    coordinator
+        .retain_curve_control_preview_interaction_origin(&mut scene)
+        .unwrap();
     scene
+}
+
+fn exact_computed_preview_scene(
+    coordinator: &RetainedEditorCoordinator,
+    viewport: Viewport,
+) -> EditorScene {
+    let source = coordinator.visible_preview_session().unwrap();
+    let accepted = source.accepted_state_for_current_input().unwrap();
+    let accepted_input = source.accepted_prepared_input().unwrap();
+    let ComputedSceneState::Current { expected, snapshot } = coordinator.computed_scene_state()
+    else {
+        panic!("expected exact computed preview state")
+    };
+    EditorScene::from_accepted_with_computed(
+        accepted.identity().revision().get(),
+        source.design_identity(),
+        accepted.document(),
+        source.design_document(),
+        &accepted_input,
+        expected,
+        snapshot,
+        viewport,
+        0.5,
+    )
+    .unwrap()
 }
 
 fn circle_fixture() -> (
@@ -670,6 +713,428 @@ fn prepared_curve_control_preview_commits_exact_patch_as_one_history_step() {
         .find(|candidate| candidate.id == *requested_control)
         .expect("recomputed radius control after reload");
     assert_eq!(reloaded_control.model_position, [3.0, 0.0]);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one regression binds strict computed provenance, detached authority and the complete live gesture transaction"
+)]
+fn m77_f012_candidate_scene_keeps_truthful_provenance_and_the_live_gesture_origin() {
+    let (mut coordinator, scene, control, radius, viewport) = circle_fixture();
+    let origin_accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .identity();
+    let origin_design = scene.design_identity;
+    let pointer_id = 7_031;
+
+    assert!(
+        coordinator
+            .pointer_down(&scene, pointer(pointer_id, control.screen_position))
+            .is_empty()
+    );
+    let first_position = ScreenPoint {
+        x: control.screen_position.x + 50.0,
+        y: control.screen_position.y,
+    };
+    let first_request = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, first_position));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control: requested_control,
+            model_position,
+            ..
+        },
+    ] = first_request.as_slice()
+    else {
+        panic!("expected first curve-control request: {first_request:?}")
+    };
+    assert!(matches!(
+        coordinator
+            .resolve_curve_control_preview(
+                pointer_id,
+                *request_id,
+                *expected,
+                *requested_control,
+                *model_position,
+            )
+            .as_slice(),
+        [EditorEffect::PreviewCurveControl { .. }]
+    ));
+
+    let candidate_session = coordinator.visible_preview_session().unwrap().clone();
+    let candidate_accepted_state = candidate_session
+        .accepted_state_for_current_input()
+        .unwrap();
+    let candidate_accepted = candidate_accepted_state.identity();
+    let candidate_input = candidate_session.accepted_prepared_input().unwrap();
+    let candidate_design = candidate_session.design_identity();
+    assert_ne!(candidate_accepted, origin_accepted);
+    assert_ne!(candidate_design, origin_design);
+
+    let ComputedSceneState::Current { expected, snapshot } = coordinator.computed_scene_state()
+    else {
+        panic!("expected exact candidate computed state")
+    };
+    assert!(matches!(
+        EditorScene::from_accepted_with_computed(
+            origin_accepted.revision().get(),
+            origin_design,
+            candidate_accepted_state.document(),
+            candidate_session.design_document(),
+            &candidate_input,
+            expected,
+            snapshot,
+            viewport,
+            0.5,
+        ),
+        Err(EditorError::StaleComputedFeatureSnapshot)
+    ));
+
+    let candidate_scene = exact_computed_preview_scene(&coordinator, viewport);
+    assert_eq!(
+        candidate_scene.accepted_revision,
+        candidate_accepted.revision().get()
+    );
+    assert_eq!(candidate_scene.design_identity, candidate_design);
+    assert!(
+        candidate_scene
+            .clone()
+            .with_retained_session(&candidate_session)
+            .is_ok(),
+        "the unadapted exact candidate scene can authenticate only its candidate session"
+    );
+
+    let mut mismatched_candidate = candidate_scene.clone();
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut mismatched_candidate)
+        .unwrap();
+    let origin_computed_input = coordinator.computed_evaluation_input().unwrap();
+    assert_ne!(
+        mismatched_candidate.computed_input,
+        Some(origin_computed_input)
+    );
+    mismatched_candidate.computed_input = Some(origin_computed_input);
+    assert!(matches!(
+        coordinator.retain_curve_control_preview_interaction_origin(&mut mismatched_candidate),
+        Err(CoordinatorError::Editor(
+            EditorError::StalePreparedSketchInput
+        ))
+    ));
+
+    let mut tampered = candidate_scene.clone();
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut tampered)
+        .unwrap();
+    tampered.curve_controls[0].screen_position.x += 1.0;
+    assert!(matches!(
+        coordinator.retain_curve_control_preview_interaction_origin(&mut tampered),
+        Err(CoordinatorError::Editor(
+            EditorError::StalePreparedSketchInput
+        ))
+    ));
+
+    let mut detached = candidate_scene.clone();
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut detached)
+        .unwrap();
+    coordinator
+        .retain_curve_control_preview_interaction_origin(&mut detached)
+        .unwrap();
+    assert_eq!(
+        detached.accepted_revision,
+        candidate_accepted.revision().get()
+    );
+    assert_eq!(detached.design_identity, candidate_design);
+    assert_eq!(detached.computed_input, candidate_scene.computed_input);
+    assert!(matches!(
+        detached
+            .clone()
+            .with_retained_session(coordinator.session()),
+        Err(EditorError::StalePreparedSketchInput)
+    ));
+    assert!(matches!(
+        detached.clone().with_retained_session(&candidate_session),
+        Err(EditorError::StalePreparedSketchInput)
+    ));
+    let candidate_control = detached
+        .curve_controls
+        .iter()
+        .find(|candidate| candidate.id == control.id)
+        .unwrap();
+    assert_eq!(candidate_control.model_position, [3.0, 0.0]);
+
+    let mut rewritten_stamps = detached.clone();
+    rewritten_stamps.accepted_revision = origin_accepted.revision().get();
+    rewritten_stamps.design_identity = origin_design;
+    let mut forged_move_editor = coordinator.editor().clone();
+    assert!(matches!(
+        forged_move_editor
+            .pointer_move(
+                &rewritten_stamps,
+                pointer(pointer_id, candidate_control.screen_position),
+            )
+            .as_slice(),
+        [EditorEffect::ClearCurveControlPreview]
+    ));
+    assert!(forged_move_editor.active_pointer_gesture().is_none());
+    let mut forged_release_editor = coordinator.editor().clone();
+    assert!(matches!(
+        forged_release_editor
+            .pointer_up(
+                &rewritten_stamps,
+                origin_design,
+                pointer(pointer_id, candidate_control.screen_position),
+            )
+            .as_slice(),
+        [EditorEffect::ClearCurveControlPreview]
+    ));
+    assert!(forged_release_editor.active_pointer_gesture().is_none());
+
+    let mut altered_after_attachment = detached.clone();
+    altered_after_attachment.curve_controls[0].screen_position.x += 1.0;
+    let mut altered_editor = coordinator.editor().clone();
+    assert!(matches!(
+        altered_editor
+            .pointer_move(
+                &altered_after_attachment,
+                pointer(pointer_id, candidate_control.screen_position),
+            )
+            .as_slice(),
+        [EditorEffect::ClearCurveControlPreview]
+    ));
+    assert!(altered_editor.active_pointer_gesture().is_none());
+
+    let second_position = ScreenPoint {
+        x: first_position.x + 25.0,
+        y: first_position.y,
+    };
+    let second_request = coordinator
+        .editor_mut()
+        .pointer_move(&detached, pointer(pointer_id, second_position));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control: requested_control,
+            model_position,
+            ..
+        },
+    ] = second_request.as_slice()
+    else {
+        panic!("expected continued curve-control request: {second_request:?}")
+    };
+    let second_request_id = *request_id;
+    let second_expected = *expected;
+    let second_control = *requested_control;
+    let second_model_position = *model_position;
+    assert!(matches!(
+        coordinator
+            .resolve_curve_control_preview(
+                pointer_id,
+                second_request_id,
+                second_expected,
+                second_control,
+                second_model_position,
+            )
+            .as_slice(),
+        [EditorEffect::PreviewCurveControl { .. }]
+    ));
+
+    let final_candidate_session = coordinator.visible_preview_session().unwrap().clone();
+    let final_candidate = final_candidate_session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .identity();
+    let mut final_scene = exact_computed_preview_scene(&coordinator, viewport);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut final_scene)
+        .unwrap();
+    coordinator
+        .retain_curve_control_preview_interaction_origin(&mut final_scene)
+        .unwrap();
+    assert_eq!(
+        final_scene.accepted_revision,
+        final_candidate.revision().get()
+    );
+    assert_eq!(
+        final_scene.design_identity,
+        final_candidate_session.design_identity()
+    );
+    let release = coordinator.editor_mut().pointer_up(
+        &final_scene,
+        origin_design,
+        pointer(pointer_id, second_position),
+    );
+    let [
+        commit @ EditorEffect::CommitCurveControl {
+            request_id,
+            control: committed_control,
+            ..
+        },
+    ] = release.as_slice()
+    else {
+        panic!("expected exact detached-preview commit: {release:?}")
+    };
+    assert_eq!(*request_id, second_request_id);
+    assert_eq!(*committed_control, second_control);
+    let history_before = coordinator.history_len();
+    coordinator.apply_editor_effect(commit).unwrap().unwrap();
+    assert_eq!(coordinator.history_len(), history_before + 1);
+    assert_eq!(
+        coordinator
+            .session()
+            .design_document()
+            .scalar(radius)
+            .unwrap()
+            .value,
+        3.5
+    );
+}
+
+#[test]
+fn m77_f012_older_candidate_scene_cannot_release_a_newer_unseen_candidate() {
+    let (mut coordinator, scene, control, radius, viewport) = circle_fixture();
+    let pointer_id = 77_012;
+    let before_history = coordinator.history_len();
+    let before_transcript = coordinator.transcript().len();
+    let before_design = coordinator
+        .session()
+        .design_document()
+        .to_canonical_json()
+        .unwrap();
+
+    assert!(
+        coordinator
+            .pointer_down(&scene, pointer(pointer_id, control.screen_position))
+            .is_empty()
+    );
+    let first_position = ScreenPoint {
+        x: control.screen_position.x + 50.0,
+        y: control.screen_position.y,
+    };
+    let first_request = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, first_position));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control: requested_control,
+            model_position,
+            ..
+        },
+    ] = first_request.as_slice()
+    else {
+        panic!("expected first candidate request: {first_request:?}")
+    };
+    assert!(matches!(
+        coordinator
+            .resolve_curve_control_preview(
+                pointer_id,
+                *request_id,
+                *expected,
+                *requested_control,
+                *model_position,
+            )
+            .as_slice(),
+        [EditorEffect::PreviewCurveControl { .. }]
+    ));
+    let older_candidate = prepared_preview_scene(
+        &coordinator,
+        viewport,
+        scene.accepted_revision,
+        scene.design_identity,
+    );
+
+    let second_position = ScreenPoint {
+        x: first_position.x + 25.0,
+        y: first_position.y,
+    };
+    let second_request = coordinator
+        .editor_mut()
+        .pointer_move(&older_candidate, pointer(pointer_id, second_position));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control: requested_control,
+            model_position,
+            ..
+        },
+    ] = second_request.as_slice()
+    else {
+        panic!("expected continued candidate request: {second_request:?}")
+    };
+    assert!(matches!(
+        coordinator
+            .resolve_curve_control_preview(
+                pointer_id,
+                *request_id,
+                *expected,
+                *requested_control,
+                *model_position,
+            )
+            .as_slice(),
+        [EditorEffect::PreviewCurveControl { .. }]
+    ));
+
+    let mut stale_move_editor = coordinator.editor().clone();
+    assert_eq!(
+        stale_move_editor.pointer_move(
+            &older_candidate,
+            pointer(
+                pointer_id,
+                ScreenPoint {
+                    x: second_position.x + 10.0,
+                    y: second_position.y,
+                },
+            ),
+        ),
+        vec![EditorEffect::ClearCurveControlPreview]
+    );
+    assert!(stale_move_editor.active_pointer_gesture().is_none());
+
+    let release = coordinator.editor_mut().pointer_up(
+        &older_candidate,
+        scene.design_identity,
+        pointer(pointer_id, second_position),
+    );
+    let [clear @ EditorEffect::ClearCurveControlPreview] = release.as_slice() else {
+        panic!("an older candidate scene released a newer unseen patch: {release:?}")
+    };
+    assert!(coordinator.editor().active_pointer_gesture().is_none());
+    assert!(coordinator.apply_editor_effect(clear).unwrap().is_none());
+    assert!(!coordinator.curve_control_preview_active());
+    assert!(coordinator.visible_preview_session().is_none());
+    assert_eq!(coordinator.history_len(), before_history);
+    assert_eq!(coordinator.transcript().len(), before_transcript);
+    assert_eq!(
+        coordinator
+            .session()
+            .design_document()
+            .to_canonical_json()
+            .unwrap(),
+        before_design
+    );
+    assert_eq!(
+        coordinator
+            .session()
+            .design_document()
+            .scalar(radius)
+            .unwrap()
+            .value,
+        2.0
+    );
 }
 
 #[test]

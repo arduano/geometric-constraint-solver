@@ -2269,6 +2269,19 @@ fn construction_markup(preview: &ConstructionPreview, viewport: Viewport) -> Str
             marker(&mut output, viewport, *center, "wb-draft-center");
             marker(&mut output, viewport, *start, "wb-draft-start");
         }
+        ConstructionPreview::EllipticalArcSupport {
+            center,
+            major_axis_point,
+            support_points,
+            trim_start,
+        } => elliptical_arc_support_markup(
+            &mut output,
+            viewport,
+            *center,
+            *major_axis_point,
+            support_points,
+            *trim_start,
+        ),
         ConstructionPreview::ControlPolygon { kind, points } => {
             advanced_control_polygon(&mut output, viewport, *kind, points);
         }
@@ -2629,7 +2642,11 @@ fn construction_geometry_markup(
             control_points,
             curve_points,
         } => {
-            advanced_control_polygon(output, viewport, *kind, control_points);
+            if *kind == AdvancedConstructionKind::EllipticalArc {
+                elliptical_arc_control_markup(output, viewport, control_points);
+            } else {
+                advanced_control_polygon(output, viewport, *kind, control_points);
+            }
             let points = curve_points
                 .iter()
                 .copied()
@@ -2645,6 +2662,73 @@ fn construction_geometry_markup(
             }
         }
     }
+}
+
+fn elliptical_arc_support_markup(
+    output: &mut String,
+    viewport: Viewport,
+    center: [f64; 2],
+    major_axis_point: [f64; 2],
+    support_points: &[[f64; 2]],
+    trim_start: Option<[f64; 2]>,
+) {
+    let center_screen = viewport.model_to_screen(center);
+    let major_screen = viewport.model_to_screen(major_axis_point);
+    let support = support_points
+        .iter()
+        .copied()
+        .map(|point| viewport.model_to_screen(point))
+        .collect::<Vec<_>>();
+    if support.len() >= 2 {
+        let _ = write!(
+            output,
+            "<path class=\"wb-draft-ellipse-support\" d=\"{}\"/>",
+            polyline_path(&support),
+        );
+    }
+    let _ = write!(
+        output,
+        "<path class=\"wb-draft-major-axis\" d=\"M {:.3} {:.3} L {:.3} {:.3}\"/>",
+        center_screen.x, center_screen.y, major_screen.x, major_screen.y,
+    );
+    marker(output, viewport, center, "wb-draft-center");
+    marker(
+        output,
+        viewport,
+        major_axis_point,
+        "wb-draft-major-axis-point",
+    );
+    if let Some(start) = trim_start {
+        marker(output, viewport, start, "wb-draft-start");
+    }
+}
+
+fn elliptical_arc_control_markup(output: &mut String, viewport: Viewport, points: &[[f64; 2]]) {
+    let [center, major_axis_point, trim_start, trim_end] = points else {
+        advanced_control_polygon(
+            output,
+            viewport,
+            AdvancedConstructionKind::EllipticalArc,
+            points,
+        );
+        return;
+    };
+    let center_screen = viewport.model_to_screen(*center);
+    let major_screen = viewport.model_to_screen(*major_axis_point);
+    let _ = write!(
+        output,
+        "<path class=\"wb-draft-major-axis\" d=\"M {:.3} {:.3} L {:.3} {:.3}\"/>",
+        center_screen.x, center_screen.y, major_screen.x, major_screen.y,
+    );
+    marker(output, viewport, *center, "wb-draft-center");
+    marker(
+        output,
+        viewport,
+        *major_axis_point,
+        "wb-draft-major-axis-point",
+    );
+    marker(output, viewport, *trim_start, "wb-draft-start");
+    marker(output, viewport, *trim_end, "wb-draft-end");
 }
 
 fn advanced_control_polygon(
@@ -2726,14 +2810,14 @@ fn escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        ComputedFeatureProblemMetadata, ConstraintEditor, ConstructionPreviewGeometry,
-        DraftInferenceBehavior, DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput,
-        DraftInferencePolicy, DraftInferenceResolution, DraftInferenceSample,
-        DraftInferenceSubject, DraftReferenceAnchor, DraftReferenceOrigin, EditorHoverState,
-        EditorHoverTarget, EditorProblemScope, EditorScene, GeometryInteractionPolicy,
-        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
-        SceneAnnotationLabelBounds, SceneAnnotationOccurrence, ScenePointRoleIncidence,
-        ScreenPoint, SelectionItem, Viewport,
+        AdvancedConstructionKind, ComputedFeatureProblemMetadata, ConstraintEditor,
+        ConstructionPreview, ConstructionPreviewGeometry, DraftInferenceBehavior,
+        DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy,
+        DraftInferenceResolution, DraftInferenceSample, DraftInferenceSubject,
+        DraftReferenceAnchor, DraftReferenceOrigin, EditorHoverState, EditorHoverTarget,
+        EditorProblemScope, EditorScene, GeometryInteractionPolicy, RetainedEditorCoordinator,
+        SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationLabelBounds,
+        SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -2753,8 +2837,8 @@ mod tests {
 
     use super::{
         CanvasCamera, CanvasDisplayOptions, adaptive_grid_spec, annotation_geometry,
-        constraint_glyph, construction_geometry_markup, dimension_kind, grid_path,
-        render_curve_controls, svg_markup, svg_markup_with_computed_context,
+        constraint_glyph, construction_geometry_markup, construction_markup, dimension_kind,
+        grid_path, render_curve_controls, svg_markup, svg_markup_with_computed_context,
         svg_markup_with_computed_context_action_stamp_and_display,
         svg_markup_with_computed_context_and_action_stamp, svg_markup_with_context, viewport,
     };
@@ -3538,6 +3622,46 @@ mod tests {
         );
         assert!(minor.contains("A 50.000 50.000 0 0 0"));
         assert!(major.contains("A 50.000 50.000 0 1 0"));
+    }
+
+    #[test]
+    fn elliptical_arc_support_preview_renders_projection_without_a_fake_control_polygon() {
+        let markup = construction_markup(
+            &ConstructionPreview::EllipticalArcSupport {
+                center: [0.0, 0.0],
+                major_axis_point: [4.0, 0.0],
+                support_points: vec![[4.0, 0.0], [0.0, 2.0], [-4.0, 0.0], [0.0, -2.0], [4.0, 0.0]],
+                trim_start: Some([0.0, 2.0]),
+            },
+            viewport(),
+        );
+        assert!(markup.contains("class=\"wb-draft-ellipse-support\""));
+        assert!(markup.contains("class=\"wb-draft-major-axis\""));
+        assert!(markup.contains("wb-draft-center"));
+        assert!(markup.contains("wb-draft-major-axis-point"));
+        assert!(markup.contains("wb-draft-start"));
+        assert!(!markup.contains("wb-draft-control-polygon"));
+    }
+
+    #[test]
+    fn completed_elliptical_arc_preview_renders_spatial_roles_without_a_fake_control_polygon() {
+        let mut markup = String::new();
+        construction_geometry_markup(
+            &mut markup,
+            &ConstructionPreviewGeometry::AdvancedCurve {
+                kind: AdvancedConstructionKind::EllipticalArc,
+                control_points: vec![[0.0, 0.0], [4.0, 0.0], [0.0, 2.0], [-4.0, 0.0]],
+                curve_points: vec![[0.0, 2.0], [-2.8, 1.4], [-4.0, 0.0]],
+            },
+            viewport(),
+        );
+        assert!(markup.contains("class=\"wb-draft-major-axis\""));
+        assert!(markup.contains("wb-draft-center"));
+        assert!(markup.contains("wb-draft-major-axis-point"));
+        assert!(markup.contains("wb-draft-start"));
+        assert!(markup.contains("wb-draft-end"));
+        assert!(markup.contains("data-draft-kind=\"elliptical-arc\""));
+        assert!(!markup.contains("wb-draft-control-polygon"));
     }
 
     #[test]

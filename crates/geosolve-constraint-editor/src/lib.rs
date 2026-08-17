@@ -875,6 +875,78 @@ struct DraftInferenceSceneSeal {
     construction_snap_points: Vec<ScenePoint>,
 }
 
+/// Exact candidate-scene values retained beside the pointer-down stamp for one
+/// already-live selected-curve control gesture.
+///
+/// A prepared control edit advances the candidate design and accepted revision
+/// before compare-and-swap publication. The scene must therefore keep those
+/// candidate identities truthful while separately remembering which durable
+/// pointer-down interaction it may complete. This private seal prevents a host
+/// from changing the candidate control surface after that origin was attached.
+#[derive(Clone, Debug, PartialEq)]
+struct CurveControlInteractionOrigin {
+    accepted_revision: u64,
+    design_identity: SketchDesignIdentity,
+    request_id: u64,
+    model_position: [f64; 2],
+    candidate_revision: u64,
+    candidate_design_identity: SketchDesignIdentity,
+    viewport: Viewport,
+    curve_controls: Vec<SceneCurveControl>,
+    curve_control_guides: Vec<SceneCurveControlGuide>,
+}
+
+impl CurveControlInteractionOrigin {
+    fn capture(
+        scene: &EditorScene,
+        accepted_revision: u64,
+        design_identity: SketchDesignIdentity,
+        request_id: u64,
+        model_position: [f64; 2],
+    ) -> Self {
+        Self {
+            accepted_revision,
+            design_identity,
+            request_id,
+            model_position,
+            candidate_revision: scene.accepted_revision,
+            candidate_design_identity: scene.design_identity,
+            viewport: scene.viewport,
+            curve_controls: scene.curve_controls.clone(),
+            curve_control_guides: scene.curve_control_guides.clone(),
+        }
+    }
+
+    fn matches(
+        &self,
+        scene: &EditorScene,
+        accepted_revision: u64,
+        design_identity: SketchDesignIdentity,
+        viewport: Viewport,
+        control: DocumentCurveControlId,
+        owner: CurveSpan,
+    ) -> bool {
+        self.accepted_revision == accepted_revision
+            && self.design_identity == design_identity
+            && self.candidate_revision == scene.accepted_revision
+            && self.candidate_design_identity == scene.design_identity
+            && self.viewport == viewport
+            && scene.viewport == viewport
+            && self.curve_controls == scene.curve_controls
+            && self.curve_control_guides == scene.curve_control_guides
+            && scene.curve_controls.iter().any(|candidate| {
+                candidate.id == control && candidate.owner == owner && candidate.is_editable()
+            })
+    }
+
+    fn matches_request(&self, last_valid_request: Option<(u64, [f64; 2])>) -> bool {
+        last_valid_request.is_some_and(|(request_id, model_position)| {
+            self.request_id == request_id
+                && model_positions_bit_equal(self.model_position, model_position)
+        })
+    }
+}
+
 impl DraftInferenceSceneSeal {
     fn capture(scene: &EditorScene) -> Self {
         Self {
@@ -933,6 +1005,7 @@ pub struct EditorScene {
     pub feature_identity: Option<geosolve_sketch_features::ComputedFeatureDocumentIdentity>,
     pub computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
     fillet_interaction_origin: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    curve_control_interaction_origin: Option<CurveControlInteractionOrigin>,
     /// Explicit direct-manipulation affordances supplied for current Fillet corners.
     pub fillet_affordances: Vec<SceneFilletCornerAffordances>,
     /// Typed per-corner continuation limits. These remain available even when a
@@ -1015,6 +1088,7 @@ impl EditorScene {
     }
 
     fn set_selected_curve_controls(&mut self, owner: Option<CurveSpan>) -> Result<(), EditorError> {
+        self.curve_control_interaction_origin = None;
         self.curve_controls.clear();
         self.curve_control_guides.clear();
         let Some(owner) = owner else {
@@ -1192,6 +1266,7 @@ impl EditorScene {
             feature_identity: None,
             computed_input: None,
             fillet_interaction_origin: None,
+            curve_control_interaction_origin: None,
             fillet_affordances: Vec::new(),
             computed_fillet_continuation_statuses: Vec::new(),
             annotations,
@@ -1264,6 +1339,55 @@ impl EditorScene {
         self.draft_inference_semantics_are_sealed()
             .then_some(self.prepared_input)
             .flatten()
+    }
+
+    pub(crate) fn set_curve_control_interaction_origin(
+        &mut self,
+        accepted_revision: u64,
+        design_identity: SketchDesignIdentity,
+        request_id: u64,
+        model_position: [f64; 2],
+    ) {
+        self.prepared_input = None;
+        self.draft_inference_seal = None;
+        self.curve_control_interaction_origin = Some(CurveControlInteractionOrigin::capture(
+            self,
+            accepted_revision,
+            design_identity,
+            request_id,
+            model_position,
+        ));
+    }
+
+    fn accepts_curve_control_gesture(
+        &self,
+        accepted_revision: u64,
+        design_identity: SketchDesignIdentity,
+        viewport: Viewport,
+        control: DocumentCurveControlId,
+        owner: CurveSpan,
+        last_valid_request: Option<(u64, [f64; 2])>,
+    ) -> bool {
+        let control_is_current = self.curve_controls.iter().any(|candidate| {
+            candidate.id == control && candidate.owner == owner && candidate.is_editable()
+        });
+        let current_scene = self.accepted_revision == accepted_revision
+            && self.design_identity == design_identity
+            && self.viewport == viewport
+            && control_is_current;
+        self.curve_control_interaction_origin
+            .as_ref()
+            .map_or(current_scene, |origin| {
+                origin.matches_request(last_valid_request)
+                    && origin.matches(
+                        self,
+                        accepted_revision,
+                        design_identity,
+                        viewport,
+                        control,
+                        owner,
+                    )
+            })
     }
 
     fn matches_design_filter(&self, design: &SketchDocument) -> bool {
@@ -3096,7 +3220,11 @@ pub enum ConstructionProposal {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConicConstructionOptions {
     pub minor_axis_ratio: f64,
+    /// Retained for source compatibility with hosts that store one common conic
+    /// option record. Staged elliptical-arc authoring derives Start spatially.
     pub arc_start: f64,
+    /// Retained for source compatibility with hosts that store one common conic
+    /// option record. Staged elliptical-arc authoring derives End spatially.
     pub arc_end: f64,
     pub arc_sweep: DocumentArcSweep,
     pub middle_weight: f64,
@@ -3166,6 +3294,17 @@ pub enum ConstructionPreview {
     ArcRadiusGuide {
         center: [f64; 2],
         start: [f64; 2],
+    },
+    /// Support ellipse established by the first two elliptical-arc clicks.
+    /// Once present, `trim_start` is the radial inverse projection of the
+    /// third spatial click rather than an independently persisted point.
+    EllipticalArcSupport {
+        center: [f64; 2],
+        major_axis_point: [f64; 2],
+        /// Public-domain-evaluated support ellipse polyline. Presentation
+        /// adapters render these points without reconstructing conic equations.
+        support_points: Vec<[f64; 2]>,
+        trim_start: Option<[f64; 2]>,
     },
     ControlPolygon {
         kind: AdvancedConstructionKind,
@@ -5325,15 +5464,14 @@ impl ConstraintEditor {
         if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
             return Vec::new();
         }
-        if scene.accepted_revision != gesture.accepted_revision
-            || scene.design_identity != gesture.expected
-            || scene.viewport != gesture.viewport
-            || !scene.curve_controls.iter().any(|control| {
-                control.id == gesture.control
-                    && control.owner == gesture.owner
-                    && control.is_editable()
-            })
-        {
+        if !scene.accepts_curve_control_gesture(
+            gesture.accepted_revision,
+            gesture.expected,
+            gesture.viewport,
+            gesture.control,
+            gesture.owner,
+            gesture.last_valid_request,
+        ) {
             return self.cancel_curve_control_gesture();
         }
         gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
@@ -5862,14 +6000,14 @@ impl ConstraintEditor {
             }
             self.curve_control_gesture = None;
             let current = expected == gesture.expected
-                && scene.design_identity == gesture.expected
-                && scene.accepted_revision == gesture.accepted_revision
-                && scene.viewport == gesture.viewport
-                && scene.curve_controls.iter().any(|control| {
-                    control.id == gesture.control
-                        && control.owner == gesture.owner
-                        && control.is_editable()
-                });
+                && scene.accepts_curve_control_gesture(
+                    gesture.accepted_revision,
+                    gesture.expected,
+                    gesture.viewport,
+                    gesture.control,
+                    gesture.owner,
+                    gesture.last_valid_request,
+                );
             return if !gesture.moved {
                 Vec::new()
             } else if current {
@@ -6976,13 +7114,19 @@ fn construction_stage_semantics(
         EditorTool::CubicBezier => {
             (stage_index < 4).then(|| ConstructionStageSemantics::point_operand(stage_index))
         }
-        EditorTool::Ellipse | EditorTool::EllipticalArc | EditorTool::Hyperbola => {
-            match stage_index {
-                0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
-                1 => Some(ConstructionStageSemantics::point_operand(1)),
-                _ => None,
-            }
-        }
+        EditorTool::Ellipse | EditorTool::Hyperbola => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 => Some(ConstructionStageSemantics::point_operand(1)),
+            _ => None,
+        },
+        EditorTool::EllipticalArc => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 => Some(ConstructionStageSemantics::point_operand(1)),
+            2 | 3 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            _ => None,
+        },
         EditorTool::RationalQuadraticConic => match stage_index {
             0 => Some(ConstructionStageSemantics::point_operand(0)),
             1 => Some(ConstructionStageSemantics::coordinate_only(
@@ -8373,12 +8517,140 @@ fn nurbs_proposal(draft: &Draft) -> Option<ConstructionProposal> {
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct EllipticalArcClickProjection {
+    parameter: f64,
+    position: [f64; 2],
+}
+
+/// Radially projects a spatial trim click through normalized ellipse space.
+///
+/// The parameter convention matches `Ellipse2`: zero is the stored positive
+/// major direction and positive angles turn toward its left-normal minor axis.
+/// The resulting point is therefore on the exact support ellipse while the
+/// raw click remains transient interaction input.
+fn project_elliptical_arc_click(
+    center: [f64; 2],
+    major_axis_point: [f64; 2],
+    minor_axis_ratio: f64,
+    target: [f64; 2],
+) -> Option<EllipticalArcClickProjection> {
+    if !center.into_iter().all(f64::is_finite)
+        || !major_axis_point.into_iter().all(f64::is_finite)
+        || !target.into_iter().all(f64::is_finite)
+        || !minor_axis_ratio.is_finite()
+        || minor_axis_ratio <= 0.0
+        || minor_axis_ratio > 1.0
+    {
+        return None;
+    }
+    let major = [
+        major_axis_point[0] - center[0],
+        major_axis_point[1] - center[1],
+    ];
+    let semi_major = major[0].hypot(major[1]);
+    let semi_minor = semi_major * minor_axis_ratio;
+    if !semi_major.is_finite() || !semi_minor.is_finite() || semi_major <= 0.0 || semi_minor <= 0.0
+    {
+        return None;
+    }
+    let major_direction = [major[0] / semi_major, major[1] / semi_major];
+    let minor_direction = [-major_direction[1], major_direction[0]];
+    let difference = [target[0] - center[0], target[1] - center[1]];
+    let normalized_major =
+        difference[0].mul_add(major_direction[0], difference[1] * major_direction[1]) / semi_major;
+    let normalized_minor =
+        difference[0].mul_add(minor_direction[0], difference[1] * minor_direction[1]) / semi_minor;
+    if !normalized_major.is_finite()
+        || !normalized_minor.is_finite()
+        || (normalized_major == 0.0 && normalized_minor == 0.0)
+    {
+        return None;
+    }
+    let parameter = normalized_minor.atan2(normalized_major);
+    let major_offset = semi_major * parameter.cos();
+    let minor_offset = semi_minor * parameter.sin();
+    let position = [
+        major_offset.mul_add(
+            major_direction[0],
+            minor_offset.mul_add(minor_direction[0], center[0]),
+        ),
+        major_offset.mul_add(
+            major_direction[1],
+            minor_offset.mul_add(minor_direction[1], center[1]),
+        ),
+    ];
+    (parameter.is_finite() && position.into_iter().all(f64::is_finite)).then_some(
+        EllipticalArcClickProjection {
+            parameter,
+            position,
+        },
+    )
+}
+
+fn elliptical_arc_click_projection(
+    draft: &Draft,
+    index: usize,
+) -> Option<EllipticalArcClickProjection> {
+    project_elliptical_arc_click(
+        *draft.positions.first()?,
+        *draft.positions.get(1)?,
+        draft.conic_options.minor_axis_ratio,
+        *draft.positions.get(index)?,
+    )
+}
+
+fn elliptical_arc_preview_positions(draft: &Draft) -> Option<Vec<[f64; 2]>> {
+    if draft.tool != EditorTool::EllipticalArc || draft.positions.len() > 4 {
+        return None;
+    }
+    let mut positions = draft.positions.clone();
+    for (index, position) in positions.iter_mut().enumerate().skip(2) {
+        *position = elliptical_arc_click_projection(draft, index)?.position;
+    }
+    Some(positions)
+}
+
+fn elliptical_arc_support_preview(draft: &Draft) -> Option<ConstructionPreview> {
+    let [center, major_axis_point, ..] = draft.positions.as_slice() else {
+        return None;
+    };
+    let positions = elliptical_arc_preview_positions(draft)?;
+    let proposal = ConstructionProposal::Ellipse {
+        center: draft.points[0],
+        major_axis_point: draft.points[1],
+        minor_axis_ratio: draft.conic_options.minor_axis_ratio,
+    };
+    let ConstructionPreviewGeometry::AdvancedCurve { curve_points, .. } =
+        advanced_curve_preview(&proposal, &positions[..2], EditorTool::Ellipse)?
+    else {
+        return None;
+    };
+    Some(ConstructionPreview::EllipticalArcSupport {
+        center: *center,
+        major_axis_point: *major_axis_point,
+        support_points: curve_points,
+        trim_start: positions.get(2).copied(),
+    })
+}
+
+fn elliptical_arc_sweep_is_nonzero(start: f64, end: f64, sweep: DocumentArcSweep) -> bool {
+    let magnitude = match sweep {
+        DocumentArcSweep::CounterClockwise => (end - start).rem_euclid(std::f64::consts::TAU),
+        DocumentArcSweep::Clockwise => (start - end).rem_euclid(std::f64::consts::TAU),
+    };
+    magnitude.is_finite() && magnitude > 0.0
+}
+
 fn valid_draft_stage(draft: &Draft) -> bool {
     match draft.tool {
         EditorTool::Point => draft.positions.len() == 1,
-        EditorTool::Line | EditorTool::Rectangle | EditorTool::Circle => {
-            draft.positions.len() < 2 || draft_proposal(draft).is_some()
-        }
+        EditorTool::Line
+        | EditorTool::Rectangle
+        | EditorTool::Circle
+        | EditorTool::Ellipse
+        | EditorTool::Parabola
+        | EditorTool::Hyperbola => draft.positions.len() < 2 || draft_proposal(draft).is_some(),
         EditorTool::Polyline | EditorTool::Nurbs => draft.positions.windows(2).all(nonzero_segment),
         EditorTool::CounterClockwiseArc => {
             let start_is_valid =
@@ -8389,10 +8661,14 @@ fn valid_draft_stage(draft: &Draft) -> bool {
             draft.positions.len() < 3 || draft_proposal(draft).is_some()
         }
         EditorTool::CubicBezier => draft.positions.len() < 4 || draft_proposal(draft).is_some(),
-        EditorTool::Ellipse
-        | EditorTool::EllipticalArc
-        | EditorTool::Parabola
-        | EditorTool::Hyperbola => draft.positions.len() < 2 || draft_proposal(draft).is_some(),
+        EditorTool::EllipticalArc => {
+            let axis_is_valid = draft.positions.len() < 2 || nonzero_segment(&draft.positions[..2]);
+            let start_is_valid =
+                draft.positions.len() < 3 || elliptical_arc_click_projection(draft, 2).is_some();
+            axis_is_valid
+                && start_is_valid
+                && (draft.positions.len() < 4 || draft_proposal(draft).is_some())
+        }
         EditorTool::Select => false,
     }
 }
@@ -8511,14 +8787,23 @@ fn draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
             })
         }
         EditorTool::EllipticalArc
-            if draft.points.len() == 2 && nonzero_segment(&draft.positions[..2]) =>
+            if draft.points.len() == 4 && nonzero_segment(&draft.positions[..2]) =>
         {
+            let start = elliptical_arc_click_projection(draft, 2)?;
+            let end = elliptical_arc_click_projection(draft, 3)?;
+            if !elliptical_arc_sweep_is_nonzero(
+                start.parameter,
+                end.parameter,
+                draft.conic_options.arc_sweep,
+            ) {
+                return None;
+            }
             Some(ConstructionProposal::EllipticalArc {
                 center: draft.points[0],
                 major_axis_point: draft.points[1],
                 minor_axis_ratio: draft.conic_options.minor_axis_ratio,
-                start_angle: draft.conic_options.arc_start,
-                end_angle: draft.conic_options.arc_end,
+                start_angle: start.parameter,
+                end_angle: end.parameter,
                 sweep: draft.conic_options.arc_sweep,
             })
         }
@@ -8580,6 +8865,13 @@ fn draft_preview(draft: &Draft) -> Option<ConstructionPreview> {
             }),
             _ => complete_preview(draft),
         },
+        EditorTool::EllipticalArc if draft_proposal(draft).is_none() => {
+            match draft.positions.as_slice() {
+                [center] => Some(ConstructionPreview::Anchor { position: *center }),
+                [_, _] | [_, _, _] => elliptical_arc_support_preview(draft),
+                _ => None,
+            }
+        }
         tool if advanced_kind(tool).is_some() && draft_proposal(draft).is_none() => {
             Some(ConstructionPreview::ControlPolygon {
                 kind: advanced_kind(tool).expect("guarded advanced tool"),
@@ -8636,7 +8928,15 @@ fn complete_preview(draft: &Draft) -> Option<ConstructionPreview> {
         | ConstructionProposal::Parabola { .. }
         | ConstructionProposal::Hyperbola { .. }
         | ConstructionProposal::Nurbs { .. } => {
-            advanced_curve_preview(&proposal, &draft.positions, draft.tool)?
+            let projected_positions = if draft.tool == EditorTool::EllipticalArc {
+                Some(elliptical_arc_preview_positions(draft)?)
+            } else {
+                None
+            };
+            let control_points = projected_positions
+                .as_deref()
+                .unwrap_or(draft.positions.as_slice());
+            advanced_curve_preview(&proposal, control_points, draft.tool)?
         }
     };
     Some(ConstructionPreview::Complete { proposal, geometry })
@@ -9450,7 +9750,17 @@ mod tests {
             (EditorTool::Ellipse, 2, None),
             (EditorTool::EllipticalArc, 0, Some(centered(0))),
             (EditorTool::EllipticalArc, 1, Some(point(1))),
-            (EditorTool::EllipticalArc, 2, None),
+            (
+                EditorTool::EllipticalArc,
+                2,
+                Some(coordinate_only(ConstructionCoordinateRole::CoordinateOnly)),
+            ),
+            (
+                EditorTool::EllipticalArc,
+                3,
+                Some(coordinate_only(ConstructionCoordinateRole::CoordinateOnly)),
+            ),
+            (EditorTool::EllipticalArc, 4, None),
             (EditorTool::RationalQuadraticConic, 0, Some(point(0))),
             (
                 EditorTool::RationalQuadraticConic,
@@ -10066,16 +10376,32 @@ mod tests {
                     preferred_candidate: None,
                 },
             );
-            if tool == EditorTool::CounterClockwiseArc {
-                let third = scene.viewport.model_to_screen([0.0, 3.0]);
-                effects = editor.pointer_down_with_draft_inference(
-                    &scene,
-                    pointer(pointer_id, third.x, third.y, Modifiers::default()),
-                    DraftInferenceInput {
-                        suppressed: true,
-                        preferred_candidate: None,
-                    },
-                );
+            match tool {
+                EditorTool::CounterClockwiseArc => {
+                    let third = scene.viewport.model_to_screen([0.0, 3.0]);
+                    effects = editor.pointer_down_with_draft_inference(
+                        &scene,
+                        pointer(pointer_id, third.x, third.y, Modifiers::default()),
+                        DraftInferenceInput {
+                            suppressed: true,
+                            preferred_candidate: None,
+                        },
+                    );
+                }
+                EditorTool::EllipticalArc => {
+                    for trim in [[2.0, 2.0], [-1.0, 1.5]] {
+                        let trim = scene.viewport.model_to_screen(trim);
+                        effects = editor.pointer_down_with_draft_inference(
+                            &scene,
+                            pointer(pointer_id, trim.x, trim.y, Modifiers::default()),
+                            DraftInferenceInput {
+                                suppressed: true,
+                                preferred_candidate: None,
+                            },
+                        );
+                    }
+                }
+                _ => {}
             }
             let (_, plan) = construction_plan_effect(&effects);
             assert!(matches!(

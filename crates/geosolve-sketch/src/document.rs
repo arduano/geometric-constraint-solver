@@ -12707,6 +12707,47 @@ fn push_axis_controls(
     minor_axis_ratio: DesignScalarId,
     availability: DocumentCurveControlAvailability,
 ) -> Result<(), DocumentCurveControlError> {
+    let definition = &document
+        .curve(curve)
+        .ok_or(DocumentCurveControlError::UnknownControl {
+            curve,
+            kind: DocumentCurveControlKind::MinorAxis,
+        })?
+        .definition;
+    // Elliptical-arc trims may occupy either signed minor pole. Put the size
+    // grip on the pole whose nearest trim endpoint is farther away, keeping the
+    // ordinary positive pole for full ellipses and deterministic arc ties.
+    let minor_axis_endpoint = if matches!(definition, CurveDefinition::EllipticalArc { .. }) {
+        let start = document.evaluate_conic_feature(
+            curve,
+            DocumentConicFeature::BoundedEndpoint {
+                endpoint: FeatureEndpoint::Start,
+            },
+        )?;
+        let end = document.evaluate_conic_feature(
+            curve,
+            DocumentConicFeature::BoundedEndpoint {
+                endpoint: FeatureEndpoint::End,
+            },
+        )?;
+        let separation = |endpoint| -> Result<f64, DocumentCurveControlError> {
+            let position = document.evaluate_conic_feature(
+                curve,
+                DocumentConicFeature::MinorAxisEndpoint { endpoint },
+            )?;
+            let distance = |trim: [f64; 2]| (position[0] - trim[0]).hypot(position[1] - trim[1]);
+            Ok(distance(start).min(distance(end)))
+        };
+        let negative = separation(FeatureEndpoint::Start)?;
+        let positive = separation(FeatureEndpoint::End)?;
+        if negative > positive {
+            FeatureEndpoint::Start
+        } else {
+            FeatureEndpoint::End
+        }
+    } else {
+        FeatureEndpoint::End
+    };
     push_curve_control(
         controls,
         curve,
@@ -12730,7 +12771,7 @@ fn push_axis_controls(
         document.evaluate_conic_feature(
             curve,
             DocumentConicFeature::MinorAxisEndpoint {
-                endpoint: FeatureEndpoint::End,
+                endpoint: minor_axis_endpoint,
             },
         )?,
         DocumentCurveControlTarget::Scalar(minor_axis_ratio),

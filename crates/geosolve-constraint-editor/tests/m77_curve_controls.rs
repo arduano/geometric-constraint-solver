@@ -402,6 +402,297 @@ fn selected_only_circle_cage_owns_exact_hover_click_and_point_alias() {
 }
 
 #[test]
+fn m77_f013_elliptical_arc_minor_axis_grip_is_distinct_and_directly_hittable() {
+    for (label, start_angle, end_angle) in [
+        ("positive trim", 0.0, std::f64::consts::FRAC_PI_2),
+        ("negative trim", -std::f64::consts::FRAC_PI_2, 0.0),
+        (
+            "both minor poles",
+            -std::f64::consts::FRAC_PI_2,
+            std::f64::consts::FRAC_PI_2,
+        ),
+    ] {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let center = document.add_point("center", [0.0, 0.0]).unwrap();
+        let major_axis = document.add_point("major axis", [4.0, 0.0]).unwrap();
+        let ratio = document
+            .add_scalar(
+                "minor ratio",
+                0.5,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: f64::from_bits(1),
+                    upper: 1.0,
+                },
+            )
+            .unwrap();
+        let start = document
+            .add_scalar(
+                "start",
+                start_angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let end = document
+            .add_scalar("end", end_angle, ScalarUnit::Angle, ScalarDomain::Finite)
+            .unwrap();
+        let arc = document
+            .add_curve(
+                label,
+                CurveDefinition::EllipticalArc {
+                    center,
+                    major_axis_point: major_axis,
+                    minor_axis_ratio: ratio,
+                    start_angle: start,
+                    end_angle: end,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                },
+            )
+            .unwrap();
+        let owner = CurveSpan::line(arc);
+        let mut scene = accepted_scene(&document);
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection([SelectionItem::Curve(owner)]);
+        editor
+            .populate_curve_controls(&mut scene)
+            .unwrap_or_else(|error| panic!("{label}: elliptical-arc cage: {error}"));
+
+        let control = |kind| {
+            scene
+                .curve_controls
+                .iter()
+                .find(|control| control.id.kind == kind)
+                .unwrap_or_else(|| panic!("{label}: missing {kind:?}"))
+        };
+        let minor = control(DocumentCurveControlKind::MinorAxis);
+        assert_ne!(
+            minor.screen_position,
+            control(DocumentCurveControlKind::TrimStart).screen_position,
+            "{label}"
+        );
+        assert_ne!(
+            minor.screen_position,
+            control(DocumentCurveControlKind::TrimEnd).screen_position,
+            "{label}"
+        );
+        assert!(
+            matches!(
+                scene.curve_control_hit_test(minor.screen_position, PickTolerance::default()),
+                Some(SceneCurveControlHit::Direct { control, owner: hit_owner, .. })
+                    if control == minor.id && hit_owner == owner
+            ),
+            "{label}"
+        );
+        for trim_kind in [
+            DocumentCurveControlKind::TrimStart,
+            DocumentCurveControlKind::TrimEnd,
+        ] {
+            let trim = control(trim_kind);
+            assert!(
+                matches!(
+                    scene.curve_control_hit_test(trim.screen_position, PickTolerance::default()),
+                    Some(SceneCurveControlHit::Direct { control, owner: hit_owner, .. })
+                        if control == trim.id && hit_owner == owner
+                ),
+                "{label}: {trim_kind:?}"
+            );
+        }
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exact overlap regression verifies both trim roles, three zooms, semantic ownership, and independent hit targets"
+)]
+fn m77_f014_stored_major_axis_point_owns_a_coincident_elliptical_arc_pole() {
+    for (label, start_angle, end_angle, trim_kind) in [
+        (
+            "start at major pole",
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            DocumentCurveControlKind::TrimStart,
+        ),
+        (
+            "end at major pole",
+            -std::f64::consts::FRAC_PI_2,
+            0.0,
+            DocumentCurveControlKind::TrimEnd,
+        ),
+    ] {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let center = document.add_point("center", [0.0, 0.0]).unwrap();
+        let major_axis = document.add_point("major axis", [4.0, 0.0]).unwrap();
+        let ratio = document
+            .add_scalar(
+                "minor ratio",
+                0.5,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: f64::from_bits(1),
+                    upper: 1.0,
+                },
+            )
+            .unwrap();
+        let start = document
+            .add_scalar(
+                "start",
+                start_angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let end = document
+            .add_scalar("end", end_angle, ScalarUnit::Angle, ScalarDomain::Finite)
+            .unwrap();
+        let arc = document
+            .add_curve(
+                label,
+                CurveDefinition::EllipticalArc {
+                    center,
+                    major_axis_point: major_axis,
+                    minor_axis_ratio: ratio,
+                    start_angle: start,
+                    end_angle: end,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                },
+            )
+            .unwrap();
+        let owner = CurveSpan::line(arc);
+
+        for zoom in [5.0, 50.0, 500.0] {
+            let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], zoom).expect("viewport");
+            let mut scene = accepted_scene_with_viewport(&document, viewport);
+            let mut editor = ConstraintEditor::default();
+            editor.set_selection([SelectionItem::Curve(owner)]);
+            editor
+                .populate_curve_controls(&mut scene)
+                .unwrap_or_else(|error| panic!("{label} at zoom {zoom}: cage: {error}"));
+
+            let control = |kind| {
+                scene
+                    .curve_controls
+                    .iter()
+                    .find(|control| control.id.kind == kind)
+                    .unwrap_or_else(|| panic!("{label} at zoom {zoom}: missing {kind:?}"))
+            };
+            let major = control(DocumentCurveControlKind::MajorAxisPoint);
+            let trim = control(trim_kind);
+            assert_eq!(
+                major.model_position.map(f64::to_bits),
+                trim.model_position.map(f64::to_bits),
+                "{label} at zoom {zoom}: both controls describe the same physical pole"
+            );
+            assert!(
+                ((major.screen_position.x - trim.screen_position.x)
+                    .hypot(major.screen_position.y - trim.screen_position.y)
+                    - 16.0)
+                    .abs()
+                    <= 1.0e-12,
+                "{label} at zoom {zoom}: the derived trim needs a stable screen-space offset"
+            );
+            assert!(
+                matches!(
+                    scene.curve_control_hit_test(
+                        major.screen_position,
+                        PickTolerance::default()
+                    ),
+                    Some(SceneCurveControlHit::PointAlias {
+                        control,
+                        point,
+                        owner: hit_owner,
+                        ..
+                    }) if control == major.id && point == major_axis && hit_owner == owner
+                ),
+                "{label} at zoom {zoom}: the stored point must own the physical pole"
+            );
+            assert!(
+                matches!(
+                    scene.curve_control_hit_test(trim.screen_position, PickTolerance::default()),
+                    Some(SceneCurveControlHit::Direct {
+                        control,
+                        owner: hit_owner,
+                        ..
+                    }) if control == trim.id && hit_owner == owner
+                ),
+                "{label} at zoom {zoom}: the separated trim must remain directly hittable"
+            );
+        }
+    }
+}
+
+#[test]
+fn m77_f015_shifted_minor_axis_rail_survives_exact_shift_zoom() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let center = document.add_point("center", [0.0, 0.0]).unwrap();
+    let major_axis = document.add_point("major axis", [4.0, 0.0]).unwrap();
+    let ratio = document
+        .add_scalar(
+            "minor ratio",
+            0.5,
+            ScalarUnit::Parameter,
+            ScalarDomain::Bounded {
+                lower: f64::from_bits(1),
+                upper: 1.0,
+            },
+        )
+        .unwrap();
+    let start = document
+        .add_scalar(
+            "start",
+            -std::f64::consts::FRAC_PI_2,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .unwrap();
+    let end = document
+        .add_scalar(
+            "end",
+            std::f64::consts::FRAC_PI_2,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .unwrap();
+    let arc = document
+        .add_curve(
+            "elliptical arc",
+            CurveDefinition::EllipticalArc {
+                center,
+                major_axis_point: major_axis,
+                minor_axis_ratio: ratio,
+                start_angle: start,
+                end_angle: end,
+                sweep: DocumentArcSweep::CounterClockwise,
+            },
+        )
+        .unwrap();
+    let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 16.0).expect("viewport");
+    let mut scene = accepted_scene_with_viewport(&document, viewport);
+    let mut editor = ConstraintEditor::default();
+    editor.set_selection([SelectionItem::Curve(CurveSpan::line(arc))]);
+    editor
+        .populate_curve_controls(&mut scene)
+        .expect("elliptical-arc cage");
+
+    let minor = scene
+        .curve_controls
+        .iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::MinorAxis)
+        .expect("minor-axis grip");
+    let rail = minor
+        .rail
+        .expect("the screen-separated grip must retain its size rail");
+    assert_eq!(rail.model_direction[0].to_bits(), 0.0f64.to_bits());
+    assert_eq!(rail.model_direction[1].abs().to_bits(), 1.0f64.to_bits());
+    let distance = |point: ScreenPoint| {
+        (point.x - minor.screen_position.x).hypot(point.y - minor.screen_position.y)
+    };
+    assert!((distance(rail.screen_start) - 44.0).abs() <= 1.0e-12);
+    assert!((distance(rail.screen_end) - 44.0).abs() <= 1.0e-12);
+}
+
+#[test]
 #[allow(
     clippy::too_many_lines,
     reason = "one zoom-independent geometry matrix keeps all three published grip primitives explicit"

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    EditorEffect, EditorScene, Modifiers, PointerInput, RetainedEditorCoordinator,
+    ConicConstructionOptions, ConstraintEditor, ConstructionPreview, ConstructionProposal,
+    EditorEffect, EditorScene, EditorTool, Modifiers, PointerInput, RetainedEditorCoordinator,
     SceneCurveControl, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
@@ -391,6 +392,171 @@ fn every_curve_family_publishes_the_same_finite_control_catalog_on_native_and_wa
         ]),
         "the closed alpha curve-family catalog changed",
     );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one native/WASM transaction keeps all four spatial stages and exact projected persistence together"
+)]
+fn m77_f013_elliptical_arc_authoring_uses_four_spatial_projected_stages() {
+    let document = SketchDocument::new(10.0).expect("authoring document");
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("authoring session");
+    let coordinator = RetainedEditorCoordinator::new(session).expect("authoring coordinator");
+    let viewport = Viewport::new([1_000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+    let current = scene(&coordinator, viewport);
+    let mut editor = ConstraintEditor::default();
+    editor.activate_tool(EditorTool::EllipticalArc);
+    editor
+        .set_conic_options(ConicConstructionOptions {
+            minor_axis_ratio: 0.5,
+            arc_start: 2.4,
+            arc_end: -2.3,
+            arc_sweep: DocumentArcSweep::Clockwise,
+            ..ConicConstructionOptions::default()
+        })
+        .expect("spatial arc options");
+
+    let center = [0.4, -0.3];
+    let major_axis = [4.4, -0.3];
+    let raw_start = [2.4, 2.7];
+    let raw_end = [-2.6, -1.3];
+    let clicks = [center, major_axis, raw_start, raw_end];
+    let mut terminal = Vec::new();
+    for (index, model) in clicks.into_iter().enumerate() {
+        let effects =
+            editor.pointer_down(&current, pointer(8_000, viewport.model_to_screen(model)));
+        let committed = effects.iter().any(|effect| {
+            matches!(
+                effect,
+                EditorEffect::CommitConstruction { .. }
+                    | EditorEffect::CommitConstructionPlan { .. }
+            )
+        });
+        assert_eq!(
+            committed,
+            index == 3,
+            "elliptical arc committed at spatial stage {}: {effects:?}",
+            index + 1,
+        );
+        if matches!(index, 1 | 2) {
+            let preview = effects.iter().find_map(|effect| match effect {
+                EditorEffect::PreviewConstruction(preview) => Some(preview),
+                _ => None,
+            });
+            let Some(ConstructionPreview::EllipticalArcSupport {
+                support_points,
+                trim_start,
+                ..
+            }) = preview
+            else {
+                panic!(
+                    "missing support-ellipse preview at stage {}: {effects:?}",
+                    index + 1
+                )
+            };
+            assert!(support_points.len() >= 16);
+            assert!(
+                support_points
+                    .iter()
+                    .flatten()
+                    .all(|value| value.is_finite())
+            );
+            assert_eq!(trim_start.is_some(), index == 2);
+        }
+        if index == 3 {
+            terminal = effects;
+        }
+    }
+
+    let proposal = terminal
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::CommitConstruction { proposal, .. } => Some(proposal.clone()),
+            EditorEffect::CommitConstructionPlan { plan, .. } => Some(plan.proposal.clone()),
+            _ => None,
+        })
+        .expect("terminal elliptical-arc proposal");
+    let ConstructionProposal::EllipticalArc {
+        center: center_operand,
+        major_axis_point,
+        minor_axis_ratio,
+        start_angle,
+        end_angle,
+        sweep,
+        ..
+    } = proposal
+    else {
+        panic!("elliptical-arc proposal expected")
+    };
+    let expected_start = (3.0_f64 / 2.0).atan2(2.0 / 4.0);
+    let expected_end = (-1.0_f64 / 2.0).atan2(-3.0 / 4.0);
+    assert_close(minor_axis_ratio, 0.5, "minor-axis option");
+    assert_close(start_angle, expected_start, "spatial start parameter");
+    assert_close(end_angle, expected_end, "spatial end parameter");
+    assert_eq!(sweep, DocumentArcSweep::Clockwise);
+    assert!((start_angle - 2.4).abs() > 1.0e-3);
+    assert!((end_angle + 2.3).abs() > 1.0e-3);
+
+    let proposal = ConstructionProposal::EllipticalArc {
+        center: center_operand,
+        major_axis_point,
+        minor_axis_ratio,
+        start_angle,
+        end_angle,
+        sweep,
+    };
+    let mut constructed = SketchDocument::new(10.0).expect("constructed document");
+    let result = proposal
+        .apply(&mut constructed)
+        .expect("spatial arc applies");
+    assert_eq!(
+        result.points.len(),
+        2,
+        "trim clicks are not persistent points"
+    );
+    assert_eq!(result.scalars.len(), 3);
+    let controls = constructed
+        .curve_controls(result.curves[0])
+        .expect("constructed arc controls");
+    for (kind, raw) in [
+        (DocumentCurveControlKind::TrimStart, raw_start),
+        (DocumentCurveControlKind::TrimEnd, raw_end),
+    ] {
+        let endpoint = controls
+            .iter()
+            .find(|control| control.id.kind == kind)
+            .unwrap_or_else(|| panic!("missing {kind:?}"))
+            .position;
+        let normalized = [
+            (endpoint[0] - center[0]) / 4.0,
+            (endpoint[1] - center[1]) / 2.0,
+        ];
+        assert_close(
+            normalized[0].mul_add(normalized[0], normalized[1] * normalized[1]),
+            1.0,
+            "projected endpoint lies on support ellipse",
+        );
+        let raw_normalized = [(raw[0] - center[0]) / 4.0, (raw[1] - center[1]) / 2.0];
+        assert!(normalized[0] * raw_normalized[0] + normalized[1] * raw_normalized[1] > 0.0);
+        assert_close(
+            normalized[0] * raw_normalized[1] - normalized[1] * raw_normalized[0],
+            0.0,
+            "projected endpoint retains normalized radial direction",
+        );
+    }
+    RetainedSketchDocumentSession::new(
+        constructed,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("constructed arc independently accepts");
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]

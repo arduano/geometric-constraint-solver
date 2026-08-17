@@ -1137,3 +1137,68 @@ fn accepted_session_rational_edit_is_one_undoable_transaction() {
     session.undo(session.revision()).unwrap();
     assert_eq!(session.export_json().unwrap(), before);
 }
+
+#[test]
+fn m77_f013_elliptical_arc_minor_axis_chooses_the_clearer_signed_rail() {
+    for (label, start_angle, end_angle, expected_minor) in [
+        (
+            "positive trim",
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            [0.0, -2.0],
+        ),
+        (
+            "negative trim",
+            -std::f64::consts::FRAC_PI_2,
+            0.0,
+            [0.0, 2.0],
+        ),
+    ] {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let center = document.add_point("center", [0.0, 0.0]).unwrap();
+        let major_axis = document.add_point("major axis", [4.0, 0.0]).unwrap();
+        let ratio = document
+            .add_scalar("minor ratio", 0.5, ScalarUnit::Parameter, ratio_domain())
+            .unwrap();
+        let start = document
+            .add_scalar(
+                "start",
+                start_angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let end = document
+            .add_scalar("end", end_angle, ScalarUnit::Angle, ScalarDomain::Finite)
+            .unwrap();
+        let arc = document
+            .add_curve(
+                label,
+                CurveDefinition::EllipticalArc {
+                    center,
+                    major_axis_point: major_axis,
+                    minor_axis_ratio: ratio,
+                    start_angle: start,
+                    end_angle: end,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                },
+            )
+            .unwrap();
+
+        let controls = document.curve_controls(arc).expect("curve controls");
+        let position = |kind| {
+            controls
+                .iter()
+                .find(|control| control.id.kind == kind)
+                .unwrap_or_else(|| panic!("{label}: missing {kind:?}"))
+                .position
+        };
+        let minor = position(DocumentCurveControlKind::MinorAxis);
+        let trim_start = position(DocumentCurveControlKind::TrimStart);
+        let trim_end = position(DocumentCurveControlKind::TrimEnd);
+
+        assert_eq!(pair_bits(minor), pair_bits(expected_minor), "{label}");
+        assert_ne!(pair_bits(minor), pair_bits(trim_start), "{label}");
+        assert_ne!(pair_bits(minor), pair_bits(trim_end), "{label}");
+    }
+}

@@ -3,7 +3,7 @@
 //! Selected-curve control-cage presentation and exact headless hit geometry.
 
 use geosolve_sketch::{
-    CurveDefinition, CurveId, CurveSpan, DesignPointId, DocumentCurveControl,
+    CurveDefinition, CurveId, CurveSpan, DesignPointId, DocumentArcSweep, DocumentCurveControl,
     DocumentCurveControlAvailability, DocumentCurveControlId, DocumentCurveControlKind,
     DocumentCurveControlTarget, DocumentCurveControlWithholdingReason,
     DocumentRationalConicControlMode, SketchDocument,
@@ -17,6 +17,7 @@ use super::{
 const CONTROL_GRIP_RADIUS_PIXELS: f64 = 4.5;
 const STORED_POINT_GRIP_RADIUS_PIXELS: f64 = 3.5;
 const HALF_SIZE_RAIL_PIXELS: f64 = 44.0;
+const OVERLAPPING_DERIVED_GRIP_SHIFT_PIXELS: f64 = 16.0;
 
 /// Stable screen-visible role of one selected-curve grip.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -132,6 +133,9 @@ pub struct SceneCurveControl {
     pub role: SceneCurveControlRole,
     pub interaction: SceneCurveControlInteraction,
     pub model_position: [f64; 2],
+    /// Painted grip center. This normally projects `model_position`; a crowded
+    /// derived grip may move along its tangent or one-dimensional rail so
+    /// coincident semantic controls remain independently acquirable.
     pub screen_position: ScreenPoint,
     pub grip: SceneCurveControlGripGeometry,
     pub rail: Option<SceneCurveControlRail>,
@@ -219,6 +223,13 @@ impl SceneCurveControlHit {
             } => distance_pixels,
         }
     }
+
+    const fn semantic_priority(self) -> u8 {
+        match self {
+            Self::PointAlias { .. } => 0,
+            Self::Direct { .. } => 1,
+        }
+    }
 }
 
 pub(crate) fn build_selected_curve_controls(
@@ -252,9 +263,129 @@ pub(crate) fn build_selected_curve_controls(
         .into_iter()
         .map(|control| scene_control(curve.label.as_str(), owner, viewport, control))
         .collect::<Vec<_>>();
+    separate_overlapping_elliptical_arc_trim_grips(&curve.definition, &mut controls);
+    separate_overlapping_elliptical_arc_minor_grip(&curve.definition, &mut controls);
     attach_size_rails(&mut controls, viewport);
     let guides = build_guides(&curve.definition, &controls, viewport);
     Ok((controls, guides))
+}
+
+fn separate_overlapping_elliptical_arc_trim_grips(
+    definition: &CurveDefinition,
+    controls: &mut [SceneCurveControl],
+) {
+    let CurveDefinition::EllipticalArc { sweep, .. } = definition else {
+        return;
+    };
+    let Some(center_screen) = controls
+        .iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::Center)
+        .map(|control| control.screen_position)
+    else {
+        return;
+    };
+    let Some(major_screen) = controls
+        .iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::MajorAxisPoint)
+        .map(|control| control.screen_position)
+    else {
+        return;
+    };
+    let axis = [
+        major_screen.x - center_screen.x,
+        major_screen.y - center_screen.y,
+    ];
+    let axis_length = axis[0].hypot(axis[1]);
+    if !axis_length.is_finite() || axis_length <= 0.0 {
+        return;
+    }
+    let sweep_sign = match sweep {
+        DocumentArcSweep::CounterClockwise => 1.0,
+        DocumentArcSweep::Clockwise => -1.0,
+    };
+    let traversal_tangent = [
+        sweep_sign * axis[1] / axis_length,
+        -sweep_sign * axis[0] / axis_length,
+    ];
+    let painted_clearance = STORED_POINT_GRIP_RADIUS_PIXELS + CONTROL_GRIP_RADIUS_PIXELS + 2.0;
+    for control in controls.iter_mut().filter(|control| {
+        matches!(
+            control.id.kind,
+            DocumentCurveControlKind::TrimStart | DocumentCurveControlKind::TrimEnd
+        )
+    }) {
+        if control.screen_position.distance(major_screen) > painted_clearance {
+            continue;
+        }
+        let endpoint_sign = match control.id.kind {
+            DocumentCurveControlKind::TrimStart => 1.0,
+            DocumentCurveControlKind::TrimEnd => -1.0,
+            _ => unreachable!("filtered elliptical-arc trim"),
+        };
+        let shifted = ScreenPoint {
+            x: (endpoint_sign * OVERLAPPING_DERIVED_GRIP_SHIFT_PIXELS)
+                .mul_add(traversal_tangent[0], control.screen_position.x),
+            y: (endpoint_sign * OVERLAPPING_DERIVED_GRIP_SHIFT_PIXELS)
+                .mul_add(traversal_tangent[1], control.screen_position.y),
+        };
+        control.screen_position = shifted;
+        control.grip = SceneCurveControlGripGeometry::Square {
+            center: shifted,
+            half_extent_pixels: CONTROL_GRIP_RADIUS_PIXELS,
+        };
+    }
+}
+
+fn separate_overlapping_elliptical_arc_minor_grip(
+    definition: &CurveDefinition,
+    controls: &mut [SceneCurveControl],
+) {
+    if !matches!(definition, CurveDefinition::EllipticalArc { .. }) {
+        return;
+    }
+    let Some(minor_index) = controls
+        .iter()
+        .position(|control| control.id.kind == DocumentCurveControlKind::MinorAxis)
+    else {
+        return;
+    };
+    let minor_screen = controls[minor_index].screen_position;
+    let painted_separation = 2.0 * CONTROL_GRIP_RADIUS_PIXELS + 2.0;
+    let overlaps_trim = controls.iter().any(|control| {
+        matches!(
+            control.id.kind,
+            DocumentCurveControlKind::TrimStart | DocumentCurveControlKind::TrimEnd
+        ) && minor_screen.distance(control.screen_position) <= painted_separation
+    });
+    if !overlaps_trim {
+        return;
+    }
+    let Some(center_screen) = controls
+        .iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::Center)
+        .map(|control| control.screen_position)
+    else {
+        return;
+    };
+    let direction = [
+        minor_screen.x - center_screen.x,
+        minor_screen.y - center_screen.y,
+    ];
+    let length = direction[0].hypot(direction[1]);
+    if !length.is_finite() || length <= 0.0 {
+        return;
+    }
+    let shift = OVERLAPPING_DERIVED_GRIP_SHIFT_PIXELS / length;
+    let shifted = ScreenPoint {
+        x: shift.mul_add(direction[0], minor_screen.x),
+        y: shift.mul_add(direction[1], minor_screen.y),
+    };
+    let control = &mut controls[minor_index];
+    control.screen_position = shifted;
+    control.grip = SceneCurveControlGripGeometry::Diamond {
+        center: shifted,
+        radius_pixels: CONTROL_GRIP_RADIUS_PIXELS,
+    };
 }
 
 fn scene_control(
@@ -385,9 +516,10 @@ fn attach_size_rails(controls: &mut [SceneCurveControl], viewport: Viewport) {
             control.model_position[0] + model_direction[0],
             control.model_position[1] + model_direction[1],
         ]);
+        let true_screen_position = viewport.model_to_screen(control.model_position);
         let screen_direction = [
-            direction_tip.x - control.screen_position.x,
-            direction_tip.y - control.screen_position.y,
+            direction_tip.x - true_screen_position.x,
+            direction_tip.y - true_screen_position.y,
         ];
         let screen_length = screen_direction[0].hypot(screen_direction[1]);
         if !screen_length.is_finite() || screen_length <= 0.0 {
@@ -674,6 +806,7 @@ pub(crate) fn curve_control_hit_test(
             first_priority
                 .cmp(second_priority)
                 .then_with(|| first.distance_pixels().total_cmp(&second.distance_pixels()))
+                .then_with(|| first.semantic_priority().cmp(&second.semantic_priority()))
                 .then_with(|| first.control().cmp(&second.control()))
         })
         .map(|(_, hit)| hit)

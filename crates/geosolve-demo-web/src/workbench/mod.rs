@@ -1553,22 +1553,14 @@ fn compose_editor_scene(
     let accepted = source.accepted_state()?;
     let current_accepted = source.accepted_state_for_current_input().is_some();
     let prepared_curve_preview = coordinator.curve_control_preview_active();
-    let interaction_revision = if prepared_curve_preview {
-        coordinator
-            .session()
-            .accepted_state_for_current_input()?
-            .identity()
-            .revision()
-            .get()
-    } else {
-        accepted.identity().revision().get()
-    };
+    let scene_revision = accepted.identity().revision().get();
+    let scene_design_identity = source.design_identity();
     let native_scene = || {
         EditorScene::from_accepted_for_design(
-            interaction_revision,
-            coordinator.session().design_identity(),
+            scene_revision,
+            scene_design_identity,
             accepted.document(),
-            coordinator.session().design_document(),
+            source.design_document(),
             viewport,
             chord_tolerance_pixels,
         )
@@ -1581,10 +1573,10 @@ fn compose_editor_scene(
         ComputedSceneState::Current { expected, snapshot } => {
             let accepted_input = source.accepted_prepared_input()?;
             let mut scene = EditorScene::from_accepted_with_computed(
-                interaction_revision,
-                coordinator.session().design_identity(),
+                scene_revision,
+                scene_design_identity,
                 accepted.document(),
-                coordinator.session().design_document(),
+                source.design_document(),
                 &accepted_input,
                 expected,
                 snapshot,
@@ -1614,9 +1606,9 @@ fn compose_editor_scene(
         return None;
     }
     scene.apply_annotation_layout(&coordinator.editor().annotation_layout_for_scene());
-    // A prepared curve-control candidate deliberately retains the pointer-down design/revision
-    // stamp until compare-and-swap publication. It is an independently accepted render preview,
-    // not drafting authority for the candidate design, so keep that scene detached.
+    // A prepared curve-control candidate keeps truthful candidate geometry/computed provenance
+    // and remains detached from drafting authority. The coordinator separately authenticates the
+    // durable pointer-down origin after the exact selected-control layer has been rebuilt.
     let mut scene = if prepared_curve_preview {
         scene
     } else {
@@ -1626,6 +1618,11 @@ fn compose_editor_scene(
         .editor()
         .populate_curve_controls(&mut scene)
         .ok()?;
+    if prepared_curve_preview {
+        coordinator
+            .retain_curve_control_preview_interaction_origin(&mut scene)
+            .ok()?;
+    }
     Some(scene)
 }
 
@@ -5835,14 +5832,6 @@ pub(crate) mod wasm {
                 conic_tool == Some(EditorTool::RationalQuadraticConic),
             ),
             (
-                "wb-conic-arc-start-field",
-                conic_tool == Some(EditorTool::EllipticalArc),
-            ),
-            (
-                "wb-conic-arc-end-field",
-                conic_tool == Some(EditorTool::EllipticalArc),
-            ),
-            (
                 "wb-conic-arc-sweep-field",
                 conic_tool == Some(EditorTool::EllipticalArc),
             ),
@@ -5871,6 +5860,10 @@ pub(crate) mod wasm {
             (
                 "wb-conic-rational-help",
                 conic_tool == Some(EditorTool::RationalQuadraticConic),
+            ),
+            (
+                "wb-conic-elliptical-arc-help",
+                conic_tool == Some(EditorTool::EllipticalArc),
             ),
         ] {
             set_hidden(&required(document, id)?, !visible)?;
@@ -6583,6 +6576,8 @@ pub(crate) mod wasm {
         match tool {
             EditorTool::Polyline => "Add another vertex or Finish the polyline",
             EditorTool::Nurbs => "Add another control or Finish the NURBS",
+            EditorTool::CounterClockwiseArc => "Click Centre, Start, then End",
+            EditorTool::EllipticalArc => "Click Centre, Major axis, Start, then End",
             EditorTool::RationalQuadraticConic => {
                 super::rational_conic_construction_copy(rational_weight).0
             }
@@ -6660,8 +6655,6 @@ pub(crate) mod wasm {
             EditorTool::EllipticalArc => {
                 let mut options = editor.conic_options();
                 options.minor_axis_ratio = number("wb-conic-ratio", "Minor-axis ratio")?;
-                options.arc_start = number("wb-conic-arc-start", "Arc start")?.to_radians();
-                options.arc_end = number("wb-conic-arc-end", "Arc end")?.to_radians();
                 options.arc_sweep = if select_value(document, "wb-conic-arc-sweep").as_deref()
                     == Some("clockwise")
                 {
@@ -8674,6 +8667,383 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one browser-adapter regression compares the complete point-alias preview transaction across both arc families"
+    )]
+    fn m77_f012_arc_point_alias_preview_remains_visible_for_both_families() {
+        for (label, elliptical, move_major_axis) in [
+            ("circular centre", false, false),
+            ("elliptical centre", true, false),
+            ("elliptical major axis", true, true),
+        ] {
+            let mut document = SketchDocument::new(10.0).expect("document");
+            let center = document.add_point("centre", [0.0, 0.0]).unwrap();
+            let radius = document
+                .add_scalar("radius", 3.0, ScalarUnit::Length, ScalarDomain::Positive)
+                .unwrap();
+            let start = document
+                .add_scalar("start", -0.5, ScalarUnit::Angle, ScalarDomain::Finite)
+                .unwrap();
+            let end = document
+                .add_scalar("end", 1.25, ScalarUnit::Angle, ScalarDomain::Finite)
+                .unwrap();
+            let (curve, point) = if elliptical {
+                let major_axis = document.add_point("major axis", [3.0, 0.0]).unwrap();
+                let ratio = document
+                    .add_scalar(
+                        "minor ratio",
+                        0.5,
+                        ScalarUnit::Parameter,
+                        ScalarDomain::Bounded {
+                            lower: f64::from_bits(1),
+                            upper: 1.0,
+                        },
+                    )
+                    .unwrap();
+                let curve = document
+                    .add_curve(
+                        "elliptical arc",
+                        CurveDefinition::EllipticalArc {
+                            center,
+                            major_axis_point: major_axis,
+                            minor_axis_ratio: ratio,
+                            start_angle: start,
+                            end_angle: end,
+                            sweep: geosolve_sketch::DocumentArcSweep::CounterClockwise,
+                        },
+                    )
+                    .unwrap();
+                (curve, if move_major_axis { major_axis } else { center })
+            } else {
+                let curve = document
+                    .add_curve(
+                        "circular arc",
+                        CurveDefinition::CircularArc {
+                            center,
+                            radius,
+                            start_angle: start,
+                            end_angle: end,
+                            sweep: geosolve_sketch::DocumentArcSweep::CounterClockwise,
+                        },
+                    )
+                    .unwrap();
+                (curve, center)
+            };
+            let session = RetainedSketchDocumentSession::new(
+                document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .unwrap();
+            let mut coordinator = RetainedEditorCoordinator::new(session).unwrap();
+            let owner = CurveSpan::line(curve);
+            coordinator
+                .editor_mut()
+                .set_selection([SelectionItem::Curve(owner)]);
+            let viewport = Viewport::new([1000.0, 700.0], [1.5, 0.5], 80.0).unwrap();
+            let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+                .unwrap_or_else(|| panic!("{label}: initial scene"));
+            let control = scene
+                .curve_controls
+                .iter()
+                .find(|control| {
+                    matches!(
+                        control.interaction,
+                        geosolve_constraint_editor::SceneCurveControlInteraction::PointAlias(
+                            candidate
+                        ) if candidate == point
+                    )
+                })
+                .unwrap_or_else(|| panic!("{label}: point alias"));
+            let pointer = |position| PointerInput {
+                pointer_id: 77,
+                position,
+                modifiers: Modifiers::default(),
+            };
+            assert!(
+                coordinator
+                    .pointer_down(&scene, pointer(control.screen_position))
+                    .is_empty(),
+                "{label}: pointer down"
+            );
+            let before = coordinator
+                .session()
+                .design_document()
+                .point(point)
+                .unwrap()
+                .position;
+            let target = [before[0] + 0.75, before[1] + 0.5];
+            let target_screen = viewport.model_to_screen(target);
+            let request = coordinator
+                .editor_mut()
+                .pointer_move(&scene, pointer(target_screen));
+            let [
+                geosolve_constraint_editor::EditorEffect::RequestProjectedPointMove {
+                    pointer_id,
+                    request_id,
+                    point: requested_point,
+                    model_position,
+                },
+            ] = request.as_slice()
+            else {
+                panic!("{label}: projected point request: {request:?}")
+            };
+            assert_eq!(*requested_point, point, "{label}: request owner");
+            let acknowledgement = coordinator.resolve_projected_point_move(
+                *pointer_id,
+                *request_id,
+                *requested_point,
+                *model_position,
+            );
+            assert!(
+                matches!(
+                    acknowledgement.as_slice(),
+                    [geosolve_constraint_editor::EditorEffect::PreviewPointMove {
+                        point: previewed,
+                        ..
+                    }] if *previewed == point
+                ),
+                "{label}: preview acknowledgement: {acknowledgement:?}"
+            );
+
+            let preview_scene = compose_editor_scene(&coordinator, viewport, 0.25)
+                .unwrap_or_else(|| panic!("{label}: accepted preview must remain renderable"));
+            let previewed = preview_scene
+                .points
+                .iter()
+                .find(|candidate| candidate.id == point)
+                .unwrap_or_else(|| panic!("{label}: preview point"));
+            assert_eq!(
+                previewed.model_position.map(f64::to_bits),
+                target.map(f64::to_bits),
+                "{label}: visible preview"
+            );
+
+            let expected = coordinator.session().design_identity();
+            let release = coordinator.editor_mut().pointer_up(
+                &preview_scene,
+                expected,
+                pointer(target_screen),
+            );
+            let [
+                effect @ geosolve_constraint_editor::EditorEffect::CommitPointMove {
+                    point: committed,
+                    ..
+                },
+            ] = release.as_slice()
+            else {
+                panic!("{label}: commit effect: {release:?}")
+            };
+            assert_eq!(*committed, point, "{label}: commit owner");
+            coordinator
+                .apply_editor_effect(effect)
+                .unwrap_or_else(|error| panic!("{label}: commit failed: {error}"));
+            assert_eq!(
+                coordinator
+                    .session()
+                    .design_document()
+                    .point(point)
+                    .unwrap()
+                    .position
+                    .map(f64::to_bits),
+                target.map(f64::to_bits),
+                "{label}: durable position"
+            );
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one browser-adapter regression compares the complete direct-trim preview transaction across both arc families"
+    )]
+    fn m77_f012_arc_direct_trim_preview_stays_visible_and_commits_for_both_families() {
+        for (label, elliptical) in [("circular trim", false), ("elliptical trim", true)] {
+            let mut document = SketchDocument::new(10.0).expect("document");
+            let center = document.add_point("centre", [0.0, 0.0]).unwrap();
+            let radius = document
+                .add_scalar("radius", 3.0, ScalarUnit::Length, ScalarDomain::Positive)
+                .unwrap();
+            let start = document
+                .add_scalar("start", -0.5, ScalarUnit::Angle, ScalarDomain::Finite)
+                .unwrap();
+            let end = document
+                .add_scalar("end", 1.25, ScalarUnit::Angle, ScalarDomain::Finite)
+                .unwrap();
+            let curve = if elliptical {
+                let major_axis = document.add_point("major axis", [3.0, 0.0]).unwrap();
+                let ratio = document
+                    .add_scalar(
+                        "minor ratio",
+                        0.5,
+                        ScalarUnit::Parameter,
+                        ScalarDomain::Bounded {
+                            lower: f64::from_bits(1),
+                            upper: 1.0,
+                        },
+                    )
+                    .unwrap();
+                document
+                    .add_curve(
+                        "elliptical arc",
+                        CurveDefinition::EllipticalArc {
+                            center,
+                            major_axis_point: major_axis,
+                            minor_axis_ratio: ratio,
+                            start_angle: start,
+                            end_angle: end,
+                            sweep: geosolve_sketch::DocumentArcSweep::CounterClockwise,
+                        },
+                    )
+                    .unwrap()
+            } else {
+                document
+                    .add_curve(
+                        "circular arc",
+                        CurveDefinition::CircularArc {
+                            center,
+                            radius,
+                            start_angle: start,
+                            end_angle: end,
+                            sweep: geosolve_sketch::DocumentArcSweep::CounterClockwise,
+                        },
+                    )
+                    .unwrap()
+            };
+            let session = RetainedSketchDocumentSession::new(
+                document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .unwrap();
+            let mut coordinator = RetainedEditorCoordinator::new(session).unwrap();
+            let owner = CurveSpan::line(curve);
+            coordinator
+                .editor_mut()
+                .set_selection([SelectionItem::Curve(owner)]);
+            let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 80.0).unwrap();
+            let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+                .unwrap_or_else(|| panic!("{label}: initial scene"));
+            let control = scene
+                .curve_controls
+                .iter()
+                .find(|control| {
+                    control.id.kind == geosolve_sketch::DocumentCurveControlKind::TrimStart
+                })
+                .unwrap_or_else(|| panic!("{label}: start control"));
+            let history_before = coordinator.history_len();
+            let cursor_before = coordinator.history_cursor();
+            let pointer = |position| PointerInput {
+                pointer_id: 78,
+                position,
+                modifiers: Modifiers::default(),
+            };
+            assert!(
+                coordinator
+                    .pointer_down(&scene, pointer(control.screen_position))
+                    .is_empty(),
+                "{label}: pointer down"
+            );
+            let target_model = if elliptical {
+                [3.0 * 0.5f64.cos(), 1.5 * 0.5f64.sin()]
+            } else {
+                [3.0 * 0.5f64.cos(), 3.0 * 0.5f64.sin()]
+            };
+            let target_screen = viewport.model_to_screen(target_model);
+            let request = coordinator
+                .editor_mut()
+                .pointer_move(&scene, pointer(target_screen));
+            let [
+                geosolve_constraint_editor::EditorEffect::RequestCurveControlPreview {
+                    pointer_id,
+                    request_id,
+                    expected,
+                    control: requested_control,
+                    model_position,
+                },
+            ] = request.as_slice()
+            else {
+                panic!("{label}: curve-control request: {request:?}")
+            };
+            let acknowledgement = coordinator.resolve_curve_control_preview(
+                *pointer_id,
+                *request_id,
+                *expected,
+                *requested_control,
+                *model_position,
+            );
+            assert!(
+                matches!(
+                    acknowledgement.as_slice(),
+                    [geosolve_constraint_editor::EditorEffect::PreviewCurveControl {
+                        control: previewed,
+                        ..
+                    }] if *previewed == control.id
+                ),
+                "{label}: preview acknowledgement: {acknowledgement:?}"
+            );
+            let preview_scene = compose_editor_scene(&coordinator, viewport, 0.25)
+                .unwrap_or_else(|| panic!("{label}: accepted preview must remain renderable"));
+            let preview_control = preview_scene
+                .curve_controls
+                .iter()
+                .find(|candidate| candidate.id == control.id)
+                .unwrap_or_else(|| panic!("{label}: preview control"));
+            assert_ne!(
+                preview_control.model_position.map(f64::to_bits),
+                control.model_position.map(f64::to_bits),
+                "{label}: visible preview"
+            );
+            let expected = coordinator.session().design_identity();
+            let release = coordinator.editor_mut().pointer_up(
+                &preview_scene,
+                expected,
+                pointer(target_screen),
+            );
+            let [effect @ geosolve_constraint_editor::EditorEffect::CommitCurveControl { .. }] =
+                release.as_slice()
+            else {
+                panic!("{label}: commit effect: {release:?}")
+            };
+            coordinator
+                .apply_editor_effect(effect)
+                .unwrap_or_else(|error| panic!("{label}: commit failed: {error}"));
+            assert_eq!(
+                coordinator.history_len(),
+                history_before + 1,
+                "{label}: one durable history row"
+            );
+            assert_eq!(
+                coordinator.history_cursor(),
+                cursor_before + 1,
+                "{label}: one durable history step"
+            );
+            let (geosolve_sketch::CurveDefinition::CircularArc { start_angle, .. }
+            | geosolve_sketch::CurveDefinition::EllipticalArc { start_angle, .. }) = &coordinator
+                .session()
+                .design_document()
+                .curve(curve)
+                .unwrap()
+                .definition
+            else {
+                panic!("{label}: arc family changed")
+            };
+            assert!(
+                (coordinator
+                    .session()
+                    .design_document()
+                    .scalar(*start_angle)
+                    .unwrap()
+                    .value
+                    - 0.5)
+                    .abs()
+                    < 1.0e-12
+            );
+        }
+    }
+
+    #[test]
     fn m77_inspector_disables_every_withheld_property_action_with_a_reason() {
         let (mut coordinator, curve) = m77_rational_coordinator(0.5);
         coordinator
@@ -9425,11 +9795,13 @@ mod tests {
             "wb-authoring-second-rate-field",
             "wb-authoring-angle-orientation-field",
             "wb-conic-weight-field",
-            "wb-conic-arc-start-field",
+            "wb-conic-elliptical-arc-help",
             "wb-conic-semi-conjugate-field",
         ] {
             assert!(html.contains(&format!("id=\"{conditional}\"")));
         }
+        assert!(!html.contains("wb-conic-arc-start"));
+        assert!(!html.contains("wb-conic-arc-end"));
         let palette = html
             .split("id=\"wb-tool-palette\"")
             .nth(1)

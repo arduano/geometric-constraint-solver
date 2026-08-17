@@ -181,13 +181,12 @@
             <div id="wb-option-panel-conic" class="wb-option-panel" data-wb-option-panel="conic" hidden>
               <label id="wb-conic-ratio-field">Minor-axis ratio<input id="wb-conic-ratio" type="number" min="0" max="1" step="any" value="0.5" /></label>
               <label id="wb-conic-weight-field">Rational weight<input id="wb-conic-weight" type="number" min="-1" step="any" value="1" /></label>
-              <label id="wb-conic-arc-start-field">Arc start (degrees)<input id="wb-conic-arc-start" type="number" step="any" value="0" /></label>
-              <label id="wb-conic-arc-end-field">Arc end (degrees)<input id="wb-conic-arc-end" type="number" step="any" value="90" /></label>
               <label id="wb-conic-arc-sweep-field">Arc sweep<select id="wb-conic-arc-sweep"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label>
               <label id="wb-conic-trim-start-field">Trim start<input id="wb-conic-trim-start" type="number" step="any" value="-1" /></label>
               <label id="wb-conic-trim-end-field">Trim end<input id="wb-conic-trim-end" type="number" step="any" value="1" /></label>
               <label id="wb-conic-semi-conjugate-field">Semi-conjugate<input id="wb-conic-semi-conjugate" type="number" min="0" step="any" value="1" /></label>
               <label id="wb-conic-hyperbola-branch-field">Hyperbola branch<select id="wb-conic-hyperbola-branch"><option value="positive">Positive</option><option value="negative">Negative</option></select></label>
+              <p id="wb-conic-elliptical-arc-help" class="wb-option-help">Click Centre, Major axis, Start, then End. Start and End are projected onto the support ellipse; sweep direction remains explicit.</p>
               <p id="wb-conic-rational-help" class="wb-option-help">Click Start, then the ordinary middle control P1, then End. The curve usually does not pass through P1; weight controls its influence and must be greater than −1.</p>
             </div>
             <div id="wb-option-panel-nurbs" class="wb-option-panel" data-wb-option-panel="nurbs" hidden>

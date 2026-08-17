@@ -4445,6 +4445,81 @@ impl RetainedEditorCoordinator {
             .is_some_and(|sample| matches!(sample, CurveControlAcceptedSample::Changed(_)))
     }
 
+    /// Retains the authenticated pointer-down origin on an exact prepared
+    /// curve-control candidate scene.
+    ///
+    /// Candidate geometry keeps its own advanced design and accepted revision;
+    /// this gesture-local origin only allows the already-live pointer sequence
+    /// to sample and release that candidate. It grants no drafting-inference or
+    /// detached mutation authority.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a scene that is not the exact visible prepared candidate, whose
+    /// computed provenance is stale, whose selected control layer was altered,
+    /// or whose pointer-down base is no longer current.
+    pub fn retain_curve_control_preview_interaction_origin(
+        &self,
+        scene: &mut EditorScene,
+    ) -> Result<(), CoordinatorError> {
+        let gesture = self
+            .current_curve_control_continuation()
+            .filter(|gesture| {
+                gesture.expected == self.session.design_identity()
+                    && gesture.base == self.session.prepared_input()
+            })
+            .ok_or(crate::EditorError::StalePreparedSketchInput)?;
+        let CurveControlAcceptedSample::Changed(preview) = gesture
+            .last_accepted
+            .as_ref()
+            .ok_or(crate::EditorError::StalePreparedSketchInput)?
+        else {
+            return Err(crate::EditorError::StalePreparedSketchInput.into());
+        };
+        let candidate = preview
+            .patch
+            .preview()
+            .accepted_session()
+            .ok_or(crate::EditorError::StalePreparedSketchInput)?;
+        let candidate_input = candidate
+            .accepted_prepared_input()
+            .ok_or(crate::EditorError::StalePreparedSketchInput)?;
+        let candidate_accepted = candidate
+            .accepted_state_for_current_input()
+            .ok_or(crate::EditorError::StalePreparedSketchInput)?;
+        let origin_accepted = gesture
+            .base
+            .accepted_state_identity()
+            .ok_or(crate::EditorError::StalePreparedSketchInput)?;
+        if scene.authenticated_prepared_input().is_some()
+            || scene.accepted_revision != candidate_accepted.identity().revision().get()
+            || scene.design_identity != candidate.design_identity()
+            || scene.accepted_document != *candidate_accepted.document()
+            || candidate_input != preview.computed_snapshot.input().sketch
+            || scene.computed_input != Some(preview.computed_snapshot.input())
+            || scene.feature_identity != Some(preview.computed_snapshot.input().features)
+        {
+            return Err(crate::EditorError::StalePreparedSketchInput.into());
+        }
+        let controls = scene.curve_controls.clone();
+        let guides = scene.curve_control_guides.clone();
+        let mut rebuilt = scene.clone();
+        self.editor.populate_curve_controls(&mut rebuilt)?;
+        if rebuilt.curve_controls != controls
+            || rebuilt.curve_control_guides != guides
+            || !curve_control_point_aliases_match_scene(scene)
+        {
+            return Err(crate::EditorError::StalePreparedSketchInput.into());
+        }
+        scene.set_curve_control_interaction_origin(
+            origin_accepted.revision().get(),
+            gesture.expected,
+            preview.request_id,
+            preview.model_position,
+        );
+        Ok(())
+    }
+
     /// Resolves a pointer press and captures any point gesture's locality plan from
     /// the exact accepted state visible at press time.
     pub fn pointer_down(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
