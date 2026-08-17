@@ -84,6 +84,223 @@ fn circle_document() -> (SketchDocument, CurveId, geosolve_sketch::DesignPointId
     (document, circle, center)
 }
 
+fn assert_point_alias_owns_direct_guide_origin(
+    scene: &geosolve_constraint_editor::EditorScene,
+    guide_kind: SceneCurveControlGuideKind,
+    alias_kind: DocumentCurveControlKind,
+    label: &str,
+) {
+    let guide = scene
+        .curve_control_guides
+        .iter()
+        .find(|guide| guide.kind == guide_kind && guide.control.is_some())
+        .copied()
+        .unwrap_or_else(|| panic!("{label}: owned guide"));
+    let direct_control = guide.control.expect("filtered owned guide");
+    let alias = scene
+        .curve_controls
+        .iter()
+        .find(|control| {
+            control.id.kind == alias_kind
+                && control.screen_position == guide.screen_start
+                && matches!(
+                    control.interaction,
+                    SceneCurveControlInteraction::PointAlias(_)
+                )
+        })
+        .unwrap_or_else(|| panic!("{label}: point alias at guide origin"));
+    let SceneCurveControlInteraction::PointAlias(alias_point) = alias.interaction else {
+        unreachable!("filtered point alias")
+    };
+    let delta = [
+        guide.screen_end.x - guide.screen_start.x,
+        guide.screen_end.y - guide.screen_start.y,
+    ];
+    let length = delta[0].hypot(delta[1]);
+    let tolerance = PickTolerance::default();
+    let beyond_point_acquisition = tolerance.point_pixels + 2.0;
+    assert!(
+        length > beyond_point_acquisition,
+        "{label}: guide must extend beyond point acquisition"
+    );
+    let direction = [delta[0] / length, delta[1] / length];
+    let sample = |distance: f64| ScreenPoint {
+        x: distance.mul_add(direction[0], guide.screen_start.x),
+        y: distance.mul_add(direction[1], guide.screen_start.y),
+    };
+
+    assert!(
+        matches!(
+            scene.curve_control_hit_test(sample(2.0), tolerance),
+            Some(SceneCurveControlHit::PointAlias {
+                control,
+                point,
+                ..
+            }) if control == alias.id && point == alias_point
+        ),
+        "{label}: the editable stored-point grip must own its painted interior"
+    );
+    assert!(
+        matches!(
+            scene.curve_control_hit_test(sample(beyond_point_acquisition), tolerance),
+            Some(SceneCurveControlHit::Direct { control, .. }) if control == direct_control
+        ),
+        "{label}: the direct guide must remain hittable beyond point acquisition"
+    );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exact overlap matrix keeps all four direct-guide origins in one regression"
+)]
+fn m77_f008_point_alias_grips_outrank_guide_derived_direct_hits() {
+    let mut document = SketchDocument::new(25.0).expect("document");
+
+    let circle_center = document.add_point("circle center", [0.0, 0.0]).unwrap();
+    let circle_radius = document
+        .add_scalar(
+            "circle radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let circle = document
+        .add_curve(
+            "circle",
+            CurveDefinition::Circle {
+                center: circle_center,
+                radius: circle_radius,
+            },
+        )
+        .unwrap();
+
+    let ellipse_center = document.add_point("ellipse center", [5.0, 0.0]).unwrap();
+    let ellipse_axis = document.add_point("ellipse axis", [8.0, 0.0]).unwrap();
+    let ratio_domain = ScalarDomain::Bounded {
+        lower: f64::from_bits(1),
+        upper: 1.0,
+    };
+    let ellipse_ratio = document
+        .add_scalar("ellipse ratio", 0.5, ScalarUnit::Parameter, ratio_domain)
+        .unwrap();
+    let ellipse = document
+        .add_curve(
+            "ellipse",
+            CurveDefinition::Ellipse {
+                center: ellipse_center,
+                major_axis_point: ellipse_axis,
+                minor_axis_ratio: ellipse_ratio,
+            },
+        )
+        .unwrap();
+
+    let hyperbola_center = document.add_point("hyperbola center", [12.0, 0.0]).unwrap();
+    let hyperbola_axis = document.add_point("hyperbola axis", [14.0, 0.0]).unwrap();
+    let hyperbola_conjugate = document
+        .add_scalar(
+            "hyperbola conjugate",
+            1.5,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let hyperbola_start = document
+        .add_scalar(
+            "hyperbola start",
+            -0.8,
+            ScalarUnit::Parameter,
+            ScalarDomain::Finite,
+        )
+        .unwrap();
+    let hyperbola_end = document
+        .add_scalar(
+            "hyperbola end",
+            0.9,
+            ScalarUnit::Parameter,
+            ScalarDomain::Finite,
+        )
+        .unwrap();
+    let hyperbola = document
+        .add_curve(
+            "hyperbola",
+            CurveDefinition::HyperbolaSegment {
+                center: hyperbola_center,
+                transverse_axis_point: hyperbola_axis,
+                semi_conjugate: hyperbola_conjugate,
+                branch: DocumentHyperbolaBranch::Positive,
+                trim_start: hyperbola_start,
+                trim_end: hyperbola_end,
+            },
+        )
+        .unwrap();
+
+    let rational_start = document.add_point("rational start", [18.0, 0.0]).unwrap();
+    let rational_end = document.add_point("rational end", [22.0, 0.0]).unwrap();
+    let rational_weight = document
+        .add_scalar(
+            "rational weight",
+            0.0,
+            ScalarUnit::Parameter,
+            ScalarDomain::Bounded {
+                lower: geosolve_sketch::MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+                upper: f64::MAX,
+            },
+        )
+        .unwrap();
+    let rational = document
+        .add_curve(
+            "projective rational",
+            CurveDefinition::RationalQuadraticConic {
+                start: rational_start,
+                weighted_middle: [20.0, 2.0],
+                middle_weight: rational_weight,
+                end: rational_end,
+            },
+        )
+        .unwrap();
+    document.validate().expect("valid guide matrix");
+
+    let mut scene = accepted_scene_with_viewport(
+        &document,
+        Viewport::new([1000.0, 700.0], [11.0, 1.0], 20.0).expect("viewport"),
+    );
+    let mut editor = ConstraintEditor::default();
+    for (curve, guide, alias, label) in [
+        (
+            circle,
+            SceneCurveControlGuideKind::RadiusSpoke,
+            DocumentCurveControlKind::Center,
+            "radius spoke at center",
+        ),
+        (
+            ellipse,
+            SceneCurveControlGuideKind::MinorAxisSpoke,
+            DocumentCurveControlKind::Center,
+            "minor-axis spoke at center",
+        ),
+        (
+            hyperbola,
+            SceneCurveControlGuideKind::ConjugateAxisSpoke,
+            DocumentCurveControlKind::Center,
+            "conjugate-axis spoke at center",
+        ),
+        (
+            rational,
+            SceneCurveControlGuideKind::ProjectiveVector,
+            DocumentCurveControlKind::StartPoint,
+            "projective vector at start",
+        ),
+    ] {
+        editor.set_selection([SelectionItem::Curve(CurveSpan::line(curve))]);
+        editor
+            .populate_curve_controls(&mut scene)
+            .unwrap_or_else(|error| panic!("{label}: {error}"));
+        assert_point_alias_owns_direct_guide_origin(&scene, guide, alias, label);
+    }
+}
+
 #[test]
 fn selected_only_circle_cage_owns_exact_hover_click_and_point_alias() {
     let (document, circle, center) = circle_document();

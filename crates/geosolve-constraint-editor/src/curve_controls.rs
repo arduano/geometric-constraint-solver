@@ -649,7 +649,7 @@ pub(crate) fn curve_control_hit_test(
                 .into_iter()
                 .chain(guide_distance)
                 .min_by(f64::total_cmp)?;
-            Some(match control.interaction {
+            let hit = match control.interaction {
                 SceneCurveControlInteraction::PointAlias(point) => {
                     SceneCurveControlHit::PointAlias {
                         control: control.id,
@@ -663,12 +663,18 @@ pub(crate) fn curve_control_hit_test(
                     owner: control.owner,
                     distance_pixels: distance,
                 },
-            })
+            };
+            // Painted/acquired grips precede guide-only hits before distance
+            // comparison. A direct spoke therefore cannot steal its stored-point
+            // origin with a zero segment distance, while direct grips and the
+            // guide beyond point acquisition remain unchanged.
+            Some((u8::from(!grip_hit), hit))
         })
-        .min_by(|first, second| {
-            first
-                .distance_pixels()
-                .total_cmp(&second.distance_pixels())
+        .min_by(|(first_priority, first), (second_priority, second)| {
+            first_priority
+                .cmp(second_priority)
+                .then_with(|| first.distance_pixels().total_cmp(&second.distance_pixels()))
                 .then_with(|| first.control().cmp(&second.control()))
         })
+        .map(|(_, hit)| hit)
 }
