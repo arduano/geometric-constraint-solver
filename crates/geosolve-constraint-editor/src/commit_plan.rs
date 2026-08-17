@@ -987,6 +987,7 @@ mod tests {
         assert_eq!(result.constraints.len(), 1);
         let contact_id = result.contacts[0].contact;
         let contact = document.contact(contact_id).expect("contact");
+        assert_eq!(contact.label, "auto point-on-curve contact 1");
         assert_eq!(contact.curve, target);
         assert_eq!(
             contact.domain,
