@@ -11,6 +11,7 @@ mod annotations;
 mod authoring;
 mod commit_plan;
 mod coordinator;
+mod curve_controls;
 mod feature_authoring;
 mod inference;
 
@@ -34,6 +35,7 @@ pub use coordinator::{
     ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
     ComputedFeatureMutation, ComputedFeatureProblemMetadata, ComputedProfileBoundary,
     ComputedSceneState, ContactBranchAction, CoordinatorActionKind, CoordinatorError,
+    CurveNumericPropertyKind, CurveNumericPropertyMetadata, CurvePropertyFamily,
     DimensionTargetDisplayUnit, DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget,
     EditorMutation, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
     EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome,
@@ -41,7 +43,12 @@ pub use coordinator::{
     FeatureAuthoringTransaction, GeometryRoleSelectionState, LifecycleDto, LifecycleStatus,
     MeasurementPublication, MutationOutcome, ProblemsDto, ProjectedDragRejectionStage,
     ProjectedDragWorkEvidence, RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator, display_dimension_target,
+    RetainedEditorCoordinator, SelectedCurvePropertyMetadata, display_dimension_target,
+};
+pub use curve_controls::{
+    SceneCurveControl, SceneCurveControlGripGeometry, SceneCurveControlGuide,
+    SceneCurveControlGuideKind, SceneCurveControlHit, SceneCurveControlInteraction,
+    SceneCurveControlRail, SceneCurveControlRole,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -70,7 +77,7 @@ use std::cmp::Ordering;
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm,
-    DocumentCenterRef, DocumentConstraintId, DocumentCurveContinuity,
+    DocumentCenterRef, DocumentConstraintId, DocumentCurveContinuity, DocumentCurveControlId,
     DocumentCurveCurvatureRelation, DocumentCurveNormalSide, DocumentCurveSpanRef,
     DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense, DocumentHyperbolaBranch,
     DocumentObjectId, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput,
@@ -112,6 +119,10 @@ impl ScreenPoint {
 fn screen_unit(x: f64, y: f64) -> Option<[f64; 2]> {
     let length = x.hypot(y);
     (length.is_finite() && length > 1.0e-9).then_some([x / length, y / length])
+}
+
+fn model_positions_bit_equal(first: [f64; 2], second: [f64; 2]) -> bool {
+    first[0].to_bits() == second[0].to_bits() && first[1].to_bits() == second[1].to_bits()
 }
 
 /// Model-to-screen mapping supplied by the presentation layer.
@@ -911,6 +922,14 @@ pub struct EditorScene {
     /// Generated Fillet arcs. Source replacement fragments remain native
     /// [`SceneCurve`] values so native span selection and dragging stay intact.
     pub computed_curves: Vec<SceneComputedCurve>,
+    /// Selected-only transient grips owned by one native curve.
+    ///
+    /// These are recomputed from accepted geometry and editor selection. They
+    /// are never persistent points, constraint operands, or snapping anchors.
+    pub curve_controls: Vec<SceneCurveControl>,
+    /// Exact control polygon, size rail, spoke and axis paint geometry paired
+    /// with [`Self::curve_controls`].
+    pub curve_control_guides: Vec<SceneCurveControlGuide>,
     pub feature_identity: Option<geosolve_sketch_features::ComputedFeatureDocumentIdentity>,
     pub computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
     fillet_interaction_origin: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
@@ -994,6 +1013,73 @@ impl EditorScene {
     pub fn set_show_all_constraint_annotations(&mut self, show: bool) {
         self.show_all_constraint_annotations = show;
     }
+
+    fn set_selected_curve_controls(&mut self, owner: Option<CurveSpan>) -> Result<(), EditorError> {
+        self.curve_controls.clear();
+        self.curve_control_guides.clear();
+        let Some(owner) = owner else {
+            return Ok(());
+        };
+        if !self
+            .accepted_document
+            .curve_spans(owner.curve)?
+            .contains(&owner)
+        {
+            return Ok(());
+        }
+        if !self.curves.iter().any(|curve| {
+            curve.span == owner
+                && curve.authoring_eligible
+                && matches!(
+                    curve.origin,
+                    SceneCurveOrigin::Native | SceneCurveOrigin::FilletDiscarded { .. }
+                )
+        }) {
+            return Ok(());
+        }
+        let (controls, guides) = curve_controls::build_selected_curve_controls(
+            &self.accepted_document,
+            owner,
+            self.viewport,
+        )?;
+        self.curve_controls = controls;
+        self.curve_control_guides = guides;
+        Ok(())
+    }
+
+    /// Resolves a visible selected-curve grip or its owned rail/spoke through
+    /// the same finite geometry published for rendering.
+    #[must_use]
+    pub fn curve_control_hit_test(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+    ) -> Option<SceneCurveControlHit> {
+        self.curve_control_hit_test_with_policy(
+            position,
+            tolerance,
+            GeometryInteractionPolicy::default(),
+        )
+    }
+
+    /// Policy-aware counterpart of [`Self::curve_control_hit_test`].
+    #[must_use]
+    pub fn curve_control_hit_test_with_policy(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Option<SceneCurveControlHit> {
+        curve_controls::curve_control_hit_test(
+            &self.curve_controls,
+            &self.curve_control_guides,
+            &self.curves,
+            position,
+            tolerance,
+            policy,
+        )
+    }
+
     /// Builds screen-space primitives only through public immutable sketch evaluation.
     ///
     /// # Errors
@@ -1101,6 +1187,8 @@ impl EditorScene {
             curves,
             datums: scene_datums(viewport),
             computed_curves: Vec::new(),
+            curve_controls: Vec::new(),
+            curve_control_guides: Vec::new(),
             feature_identity: None,
             computed_input: None,
             fillet_interaction_origin: None,
@@ -2697,6 +2785,12 @@ pub struct SceneAnnotationOccurrence {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EditorHoverTarget {
     Geometry(SelectionItem),
+    /// One transient selected-curve grip. `owner` remains the persistent
+    /// selection; `control` identifies the exact visible affordance.
+    CurveControl {
+        control: DocumentCurveControlId,
+        owner: CurveSpan,
+    },
     Annotation(SceneAnnotationOccurrence),
 }
 
@@ -2706,6 +2800,7 @@ impl EditorHoverTarget {
     pub const fn item(self) -> SelectionItem {
         match self {
             Self::Geometry(item) => item,
+            Self::CurveControl { owner, .. } => SelectionItem::Curve(owner),
             Self::Annotation(occurrence) => occurrence.item,
         }
     }
@@ -2750,6 +2845,7 @@ pub struct PointerInput {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ActivePointerGestureKind {
     Point,
+    CurveControl,
     Annotation,
     FilletRadius,
     FilletContact,
@@ -2790,6 +2886,32 @@ pub enum EditorEffect {
         model_position: [f64; 2],
     },
     ClearPointPreview,
+    /// Requests one accepted-domain inverse curve-control preview from the
+    /// exact scene/design captured at pointer-down.
+    RequestCurveControlPreview {
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        model_position: [f64; 2],
+    },
+    /// Confirms that the exact request produced a finite independently accepted
+    /// prepared candidate. Hosts render the candidate scene, while this signal
+    /// preserves presentation-adapter parity with point previews.
+    PreviewCurveControl {
+        control: DocumentCurveControlId,
+        model_position: [f64; 2],
+    },
+    /// Publishes the exact last accepted prepared request. The host must commit
+    /// the retained candidate rather than reapplying `model_position`.
+    CommitCurveControl {
+        expected: SketchDesignIdentity,
+        pointer_id: u64,
+        request_id: u64,
+        control: DocumentCurveControlId,
+    },
+    /// Clears any non-authoritative prepared curve-control preview.
+    ClearCurveControlPreview,
     /// Shared-radius preview for one computed Fillet set. Native sketch points
     /// and equations are never part of this gesture.
     PreviewComputedFeatureRadius {
@@ -3612,6 +3734,25 @@ struct PointGesture {
     latest_request: Option<u64>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct CurveControlGesture {
+    pointer_id: u64,
+    control: DocumentCurveControlId,
+    owner: CurveSpan,
+    expected: SketchDesignIdentity,
+    accepted_revision: u64,
+    viewport: Viewport,
+    origin: ScreenPoint,
+    origin_model: [f64; 2],
+    model_position: [f64; 2],
+    model_offset: [f64; 2],
+    rail: Option<SceneCurveControlRail>,
+    moved: bool,
+    last_sampled_position: Option<[f64; 2]>,
+    latest_request: Option<u64>,
+    last_valid_request: Option<(u64, [f64; 2])>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct AnnotationGesture {
     pointer_id: u64,
@@ -3663,6 +3804,13 @@ struct FeatureContactGesture {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ProjectedDragRequestDisposition {
     Current { gesture_epoch: u64 },
+    Stale,
+    Untracked,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CurveControlPreviewRequestDisposition {
+    Current,
     Stale,
     Untracked,
 }
@@ -3744,6 +3892,7 @@ struct AnnotationHoverContext {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum ResolvedSelectPointerTarget {
     FilletRadius(Hit),
+    CurveControl(SceneCurveControlHit),
     Geometry(Hit),
     Annotation {
         occurrence: SceneAnnotationOccurrence,
@@ -3755,6 +3904,12 @@ impl ResolvedSelectPointerTarget {
     const fn hit(self) -> Hit {
         match self {
             Self::FilletRadius(hit) | Self::Geometry(hit) => hit,
+            Self::CurveControl(hit) => Hit {
+                item: SelectionItem::Curve(hit.owner()),
+                distance_pixels: hit.distance_pixels(),
+                curve_parameter: None,
+                geometry: None,
+            },
             Self::Annotation {
                 occurrence,
                 distance_pixels,
@@ -3770,6 +3925,12 @@ impl ResolvedSelectPointerTarget {
     const fn hover_target(self) -> EditorHoverTarget {
         match self {
             Self::FilletRadius(hit) | Self::Geometry(hit) => EditorHoverTarget::Geometry(hit.item),
+            Self::CurveControl(SceneCurveControlHit::PointAlias { point, .. }) => {
+                EditorHoverTarget::Geometry(SelectionItem::Point(point))
+            }
+            Self::CurveControl(SceneCurveControlHit::Direct { control, owner, .. }) => {
+                EditorHoverTarget::CurveControl { control, owner }
+            }
             Self::Annotation { occurrence, .. } => EditorHoverTarget::Annotation(occurrence),
         }
     }
@@ -3788,6 +3949,7 @@ pub struct ConstraintEditor {
     pick_tolerance: PickTolerance,
     drag_threshold_pixels: f64,
     point_gesture: Option<PointGesture>,
+    curve_control_gesture: Option<CurveControlGesture>,
     annotation_gesture: Option<AnnotationGesture>,
     annotation_layout: AnnotationLayoutState,
     feature_radius_gesture: Option<FeatureRadiusGesture>,
@@ -3820,6 +3982,7 @@ impl Default for ConstraintEditor {
             pick_tolerance: PickTolerance::default(),
             drag_threshold_pixels: 3.0,
             point_gesture: None,
+            curve_control_gesture: None,
             annotation_gesture: None,
             annotation_layout: AnnotationLayoutState::default(),
             feature_radius_gesture: None,
@@ -3876,6 +4039,7 @@ impl ConstraintEditor {
         self.tool = tool;
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_curve_control_gesture());
         effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
@@ -3937,6 +4101,7 @@ impl ConstraintEditor {
     fn cancel_interaction_for_geometry_policy_change(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_curve_control_gesture());
         effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
@@ -4003,7 +4168,8 @@ impl ConstraintEditor {
         if let Some(pending) = self.pending_construction_commit.as_mut() {
             pending.recovery_inference_engine.clear_session();
         }
-        let mut effects = self.cancel_annotation_gesture();
+        let mut effects = self.cancel_curve_control_gesture();
+        effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.invalidate_pointer_context());
         effects.extend(self.clear_draft_inference_publication());
         effects
@@ -4077,6 +4243,27 @@ impl ConstraintEditor {
         &self.selection
     }
 
+    /// Recomputes the selected-only native curve cage on one accepted scene.
+    ///
+    /// The scene remains empty outside Select mode, for zero/multiple selections,
+    /// for non-curve owners, and for stale or wholly non-editable native curves.
+    /// Presentation adapters call this after composing the accepted scene and do
+    /// not reconstruct family controls from SVG geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed accepted-domain control-enumeration failure without
+    /// publishing a partial cage.
+    pub fn populate_curve_controls(&self, scene: &mut EditorScene) -> Result<(), EditorError> {
+        let owner = (self.tool == EditorTool::Select && self.selection.len() == 1)
+            .then(|| match self.selection[0] {
+                SelectionItem::Curve(span) => Some(span),
+                _ => None,
+            })
+            .flatten();
+        scene.set_selected_curve_controls(owner)
+    }
+
     /// Returns presentation-only manual annotation placement.
     #[must_use]
     pub const fn annotation_layout(&self) -> &AnnotationLayoutState {
@@ -4144,6 +4331,12 @@ impl ConstraintEditor {
             return Some(ActivePointerGesture {
                 pointer_id: gesture.pointer_id,
                 kind: ActivePointerGestureKind::FilletRadius,
+            });
+        }
+        if let Some(gesture) = self.curve_control_gesture {
+            return Some(ActivePointerGesture {
+                pointer_id: gesture.pointer_id,
+                kind: ActivePointerGestureKind::CurveControl,
             });
         }
         if let Some(gesture) = &self.annotation_gesture {
@@ -4317,6 +4510,7 @@ impl ConstraintEditor {
             }
         }
         if self.selection != previous {
+            self.curve_control_gesture = None;
             // This setter predates effect-returning interaction transitions. Keep
             // its unit API while revoking the cached prediction whose annotation
             // visibility was evaluated against the previous selection. Hosts
@@ -4397,6 +4591,7 @@ impl ConstraintEditor {
             self.selection.push(item);
         }
         if self.selection != previous {
+            self.curve_control_gesture = None;
             // Preserve the established unit-returning API. Direct callers and
             // pointer-down both rerender through their selection mutation path,
             // so clearing the authoritative state is sufficient and avoids a
@@ -4431,6 +4626,16 @@ impl ConstraintEditor {
                 curve_parameter: None,
                 geometry: None,
             }));
+        }
+        if let [SelectionItem::Curve(selected)] = self.selection.as_slice()
+            && let Some(hit) = scene.curve_control_hit_test_with_policy(
+                position,
+                self.pick_tolerance,
+                self.geometry_policy,
+            )
+            && hit.owner() == *selected
+        {
+            return Some(ResolvedSelectPointerTarget::CurveControl(hit));
         }
         if let Some(hit) = scene.draggable_geometry_hit_test_with_policy(
             position,
@@ -4491,6 +4696,27 @@ impl ConstraintEditor {
             .or_else(|| datum_hit.map(ResolvedSelectPointerTarget::Geometry))
     }
 
+    /// Preflights the exact shared Select resolver for a curve-control-owned press.
+    ///
+    /// The retained coordinator uses this before forwarding pointer-down so it can
+    /// authenticate the accepted scene and complete selected-curve catalog for both
+    /// direct controls and stored-point aliases. Ordinary point presses deliberately
+    /// remain outside that additional curve-control provenance check.
+    pub(crate) fn curve_control_press_target(
+        &self,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        problem_items: &[SelectionItem],
+    ) -> Option<SceneCurveControlHit> {
+        if self.tool != EditorTool::Select || !position.is_finite() {
+            return None;
+        }
+        match self.resolve_select_pointer_target(scene, position, problem_items) {
+            Some(ResolvedSelectPointerTarget::CurveControl(hit)) => Some(hit),
+            _ => None,
+        }
+    }
+
     /// Resolves a pointer press and changes selection immediately.
     pub fn pointer_down(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
         self.pointer_down_with_draft_inference(scene, input, DraftInferenceInput::default())
@@ -4539,14 +4765,20 @@ impl ConstraintEditor {
             return effects;
         }
         if self.annotation_gesture.is_some()
+            || self.curve_control_gesture.is_some()
             || self.feature_radius_gesture.is_some()
             || self.feature_contact_gesture.is_some()
         {
             return effects;
         }
         let target = self.resolve_select_pointer_target(scene, input.position, problem_items);
-        let resolved_input = if matches!(target, Some(ResolvedSelectPointerTarget::FilletRadius(_)))
-        {
+        let resolved_input = if matches!(
+            target,
+            Some(
+                ResolvedSelectPointerTarget::FilletRadius(_)
+                    | ResolvedSelectPointerTarget::CurveControl(_)
+            )
+        ) {
             PointerInput {
                 modifiers: Modifiers::default(),
                 ..input
@@ -4554,11 +4786,16 @@ impl ConstraintEditor {
         } else {
             input
         };
-        effects.extend(self.pointer_down_resolved_hit(
-            scene,
-            resolved_input,
-            target.map(ResolvedSelectPointerTarget::hit),
-        ));
+        match target {
+            Some(ResolvedSelectPointerTarget::CurveControl(hit)) => {
+                effects.extend(self.pointer_down_curve_control(scene, resolved_input, hit));
+            }
+            target => effects.extend(self.pointer_down_resolved_hit(
+                scene,
+                resolved_input,
+                target.map(ResolvedSelectPointerTarget::hit),
+            )),
+        }
         if let Some(ResolvedSelectPointerTarget::Annotation { occurrence, .. }) = target
             && scene
                 .annotations
@@ -4588,6 +4825,86 @@ impl ConstraintEditor {
             });
         }
         effects
+    }
+
+    fn pointer_down_curve_control(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        hit: SceneCurveControlHit,
+    ) -> Vec<EditorEffect> {
+        if self.tool != EditorTool::Select
+            || !input.position.is_finite()
+            || self.selection.as_slice() != [SelectionItem::Curve(hit.owner())]
+        {
+            return Vec::new();
+        }
+        let Some(control) = scene.curve_controls.iter().find(|candidate| {
+            candidate.id == hit.control()
+                && candidate.owner == hit.owner()
+                && candidate.is_editable()
+        }) else {
+            return Vec::new();
+        };
+        match hit {
+            SceneCurveControlHit::PointAlias { point, .. } => {
+                let effects = self.cancel_point_gesture();
+                self.curve_control_gesture = None;
+                let Some(point_position) = scene
+                    .points
+                    .iter()
+                    .find(|candidate| candidate.id == point)
+                    .map(|candidate| candidate.model_position)
+                else {
+                    return effects;
+                };
+                let pointer_position = scene.viewport.screen_to_model(input.position);
+                if let Some(epoch) = self.next_point_gesture_epoch.checked_add(1) {
+                    self.next_point_gesture_epoch = epoch;
+                    self.point_gesture = Some(PointGesture {
+                        epoch,
+                        pointer_id: input.pointer_id,
+                        point,
+                        origin: input.position,
+                        model_offset: [
+                            point_position[0] - pointer_position[0],
+                            point_position[1] - pointer_position[1],
+                        ],
+                        moved: false,
+                        latest_request: None,
+                    });
+                    self.last_valid_drag_preview = None;
+                }
+                effects
+            }
+            SceneCurveControlHit::Direct { .. } => {
+                let mut effects = self.cancel_point_gesture();
+                effects.extend(self.cancel_curve_control_gesture());
+                let pointer_position = scene.viewport.screen_to_model(input.position);
+                self.curve_control_gesture = Some(CurveControlGesture {
+                    pointer_id: input.pointer_id,
+                    control: control.id,
+                    owner: control.owner,
+                    expected: scene.design_identity,
+                    accepted_revision: scene.accepted_revision,
+                    viewport: scene.viewport,
+                    origin: input.position,
+                    origin_model: pointer_position,
+                    model_position: control.model_position,
+                    model_offset: [
+                        control.model_position[0] - pointer_position[0],
+                        control.model_position[1] - pointer_position[1],
+                    ],
+                    rail: control.rail,
+                    moved: false,
+                    last_sampled_position: Some(control.model_position),
+                    latest_request: None,
+                    last_valid_request: None,
+                });
+                self.last_valid_drag_preview = None;
+                effects
+            }
+        }
     }
 
     /// Starts a computed-Fillet gesture for one explicitly painted preview arc.
@@ -4872,6 +5189,10 @@ impl ConstraintEditor {
             effects.extend(self.move_feature_radius_gesture(scene, input));
             return effects;
         }
+        if self.curve_control_gesture.is_some() {
+            effects.extend(self.move_curve_control_gesture(scene, input));
+            return effects;
+        }
         if self.point_gesture.is_none() {
             if self.annotation_gesture.is_some() {
                 self.move_annotation_gesture(scene, input);
@@ -4984,6 +5305,100 @@ impl ConstraintEditor {
         };
         gesture.preview = Some(placement);
         self.annotation_gesture = Some(gesture);
+    }
+
+    fn move_curve_control_gesture(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Vec<EditorEffect> {
+        let Some(mut gesture) = self.curve_control_gesture else {
+            return Vec::new();
+        };
+        if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+            return Vec::new();
+        }
+        if scene.accepted_revision != gesture.accepted_revision
+            || scene.design_identity != gesture.expected
+            || scene.viewport != gesture.viewport
+            || !scene.curve_controls.iter().any(|control| {
+                control.id == gesture.control
+                    && control.owner == gesture.owner
+                    && control.is_editable()
+            })
+        {
+            return self.cancel_curve_control_gesture();
+        }
+        gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
+        if !gesture.moved {
+            self.curve_control_gesture = Some(gesture);
+            return Vec::new();
+        }
+        let Some(model_position) = Self::curve_control_sample(scene, &gesture, input.position)
+        else {
+            self.curve_control_gesture = Some(gesture);
+            return Vec::new();
+        };
+        if gesture
+            .last_sampled_position
+            .is_some_and(|sampled| model_positions_bit_equal(sampled, model_position))
+        {
+            self.curve_control_gesture = Some(gesture);
+            return Vec::new();
+        }
+        let request_id = self.next_projection_request;
+        let Some(next_request) = request_id.checked_add(1) else {
+            self.curve_control_gesture = Some(gesture);
+            return Vec::new();
+        };
+        self.next_projection_request = next_request;
+        gesture.last_sampled_position = Some(model_position);
+        gesture.latest_request = Some(request_id);
+        self.curve_control_gesture = Some(gesture);
+        vec![EditorEffect::RequestCurveControlPreview {
+            pointer_id: gesture.pointer_id,
+            request_id,
+            expected: gesture.expected,
+            control: gesture.control,
+            model_position,
+        }]
+    }
+
+    fn curve_control_sample(
+        scene: &EditorScene,
+        gesture: &CurveControlGesture,
+        position: ScreenPoint,
+    ) -> Option<[f64; 2]> {
+        if !position.is_finite() || scene.viewport != gesture.viewport {
+            return None;
+        }
+        let pointer = scene.viewport.screen_to_model(position);
+        let model_position = if let Some(rail) = gesture.rail {
+            let delta = [
+                pointer[0] - gesture.origin_model[0],
+                pointer[1] - gesture.origin_model[1],
+            ];
+            let along =
+                delta[0].mul_add(rail.model_direction[0], delta[1] * rail.model_direction[1]);
+            let target = [
+                along.mul_add(rail.model_direction[0], gesture.model_position[0]),
+                along.mul_add(rail.model_direction[1], gesture.model_position[1]),
+            ];
+            let signed = (target[0] - rail.model_zero[0]).mul_add(
+                rail.model_direction[0],
+                (target[1] - rail.model_zero[1]) * rail.model_direction[1],
+            );
+            (signed.is_finite() && signed > 0.0).then_some(target)?
+        } else {
+            [
+                pointer[0] + gesture.model_offset[0],
+                pointer[1] + gesture.model_offset[1],
+            ]
+        };
+        model_position
+            .into_iter()
+            .all(f64::is_finite)
+            .then_some(model_position)
     }
 
     fn move_feature_contact_gesture(
@@ -5136,6 +5551,7 @@ impl ConstraintEditor {
         let (target, context) = match resolved {
             Some(
                 target @ (ResolvedSelectPointerTarget::FilletRadius(_)
+                | ResolvedSelectPointerTarget::CurveControl(_)
                 | ResolvedSelectPointerTarget::Geometry(_)),
             ) => {
                 let item = target.hit().item;
@@ -5433,6 +5849,38 @@ impl ConstraintEditor {
             }
             return Vec::new();
         }
+        if let Some(gesture) = self.curve_control_gesture {
+            if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+                return Vec::new();
+            }
+            self.curve_control_gesture = None;
+            let current = expected == gesture.expected
+                && scene.design_identity == gesture.expected
+                && scene.accepted_revision == gesture.accepted_revision
+                && scene.viewport == gesture.viewport
+                && scene.curve_controls.iter().any(|control| {
+                    control.id == gesture.control
+                        && control.owner == gesture.owner
+                        && control.is_editable()
+                });
+            return if !gesture.moved {
+                Vec::new()
+            } else if current {
+                gesture.last_valid_request.map_or_else(
+                    || vec![EditorEffect::ClearCurveControlPreview],
+                    |(request_id, _)| {
+                        vec![EditorEffect::CommitCurveControl {
+                            expected: gesture.expected,
+                            pointer_id: gesture.pointer_id,
+                            request_id,
+                            control: gesture.control,
+                        }]
+                    },
+                )
+            } else {
+                vec![EditorEffect::ClearCurveControlPreview]
+            };
+        }
         if let Some(gesture) = self.feature_contact_gesture {
             if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
                 return Vec::new();
@@ -5522,6 +5970,7 @@ impl ConstraintEditor {
     pub fn cancel(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_curve_control_gesture());
         effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
@@ -5533,6 +5982,15 @@ impl ConstraintEditor {
     fn cancel_annotation_gesture(&mut self) -> Vec<EditorEffect> {
         self.annotation_gesture = None;
         Vec::new()
+    }
+
+    fn cancel_curve_control_gesture(&mut self) -> Vec<EditorEffect> {
+        self.curve_control_gesture
+            .take()
+            .filter(|gesture| gesture.moved || gesture.last_valid_request.is_some())
+            .map(|_| EditorEffect::ClearCurveControlPreview)
+            .into_iter()
+            .collect()
     }
 
     fn cancel_feature_radius_gesture(&mut self) -> Vec<EditorEffect> {
@@ -5597,6 +6055,43 @@ impl ConstraintEditor {
         }]
     }
 
+    /// Supplies the result of one exact curve-control preview request.
+    ///
+    /// A rejected, stale, foreign, out-of-order, or non-finite result leaves the
+    /// previous valid candidate untouched. Pointer release can therefore name
+    /// only a request that the host independently accepted and retained.
+    pub fn curve_control_preview_result(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        accepted_model_position: Option<[f64; 2]>,
+    ) -> Vec<EditorEffect> {
+        let Some(mut gesture) = self.curve_control_gesture else {
+            return Vec::new();
+        };
+        if gesture.pointer_id != pointer_id
+            || gesture.expected != expected
+            || gesture.control != control
+            || gesture.latest_request != Some(request_id)
+            || !gesture.moved
+        {
+            return Vec::new();
+        }
+        let Some(position) = accepted_model_position
+            .filter(|position| position.iter().all(|value| value.is_finite()))
+        else {
+            return Vec::new();
+        };
+        gesture.last_valid_request = Some((request_id, position));
+        self.curve_control_gesture = Some(gesture);
+        vec![EditorEffect::PreviewCurveControl {
+            control,
+            model_position: position,
+        }]
+    }
+
     pub(crate) fn projected_drag_request_disposition(
         &self,
         pointer_id: u64,
@@ -5619,6 +6114,29 @@ impl ConstraintEditor {
             // Preserve the coordinator's direct synchronous API for native hosts
             // that do not route pointer input through this state machine.
             ProjectedDragRequestDisposition::Untracked
+        }
+    }
+
+    pub(crate) fn curve_control_preview_request_disposition(
+        &self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+    ) -> CurveControlPreviewRequestDisposition {
+        if let Some(gesture) = self.curve_control_gesture
+            && gesture.pointer_id == pointer_id
+            && gesture.expected == expected
+            && gesture.control == control
+            && gesture.latest_request == Some(request_id)
+            && gesture.moved
+        {
+            return CurveControlPreviewRequestDisposition::Current;
+        }
+        if request_id < self.next_projection_request {
+            CurveControlPreviewRequestDisposition::Stale
+        } else {
+            CurveControlPreviewRequestDisposition::Untracked
         }
     }
 
@@ -6213,6 +6731,7 @@ impl ConstraintEditor {
 
     pub(crate) fn invalidate_for_retained_state_change(&mut self, force: bool) {
         let _ = self.invalidate_pointer_context();
+        self.curve_control_gesture = None;
         let preserve_pending_ack = !force && self.pending_construction_commit.is_some();
         if force {
             self.pending_construction_commit = None;
@@ -6908,6 +7427,8 @@ pub enum EditorError {
     Document(#[from] geosolve_sketch::DocumentError),
     #[error(transparent)]
     Curve(#[from] geosolve_sketch::DocumentCurveEvaluationError),
+    #[error(transparent)]
+    CurveControl(#[from] geosolve_sketch::DocumentCurveControlError),
 }
 
 fn build_native_scene_curves(
@@ -7877,6 +8398,29 @@ fn nonzero_segment(segment: &[[f64; 2]]) -> bool {
     length.is_finite() && length > 0.0
 }
 
+fn rational_conic_weighted_middle(
+    start: [f64; 2],
+    middle: [f64; 2],
+    weight: f64,
+) -> Option<[f64; 2]> {
+    if !weight.is_finite()
+        || !start.into_iter().all(f64::is_finite)
+        || !middle.into_iter().all(f64::is_finite)
+    {
+        return None;
+    }
+    // A nonzero construction click has the same ordinary P1 meaning as the
+    // later selected-curve control. At the valid zero-weight mode no finite P1
+    // exists, so the click is the tip of the explicitly projective Qh vector
+    // anchored at Start, matching its later selected-curve presentation.
+    let weighted = if weight == 0.0 {
+        [middle[0] - start[0], middle[1] - start[1]]
+    } else {
+        [weight * middle[0], weight * middle[1]]
+    };
+    weighted.into_iter().all(f64::is_finite).then_some(weighted)
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "one exhaustive table keeps every tool-to-proposal completion rule auditable"
@@ -7975,9 +8519,14 @@ fn draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
             if draft.points.len() == 3
                 && nonzero_segment(&[draft.positions[0], draft.positions[2]]) =>
         {
+            let weighted_middle = rational_conic_weighted_middle(
+                draft.positions[0],
+                draft.positions[1],
+                draft.conic_options.middle_weight,
+            )?;
             Some(ConstructionProposal::RationalQuadraticConic {
                 start: draft.points[0],
-                weighted_middle: draft.positions[1],
+                weighted_middle,
                 middle_weight: draft.conic_options.middle_weight,
                 end: draft.points[2],
             })
@@ -8174,7 +8723,11 @@ fn localize_proposal(
         ConstructionProposal::RationalQuadraticConic { middle_weight, .. } => {
             ConstructionProposal::RationalQuadraticConic {
                 start: point(0)?,
-                weighted_middle: *positions.get(1)?,
+                weighted_middle: rational_conic_weighted_middle(
+                    *positions.first()?,
+                    *positions.get(1)?,
+                    *middle_weight,
+                )?,
                 middle_weight: *middle_weight,
                 end: point(2)?,
             }

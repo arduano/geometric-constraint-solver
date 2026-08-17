@@ -6,16 +6,20 @@ use std::collections::{BTreeSet, HashSet};
 
 use geosolve_sketch::{
     ContactBranchEdit, ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveId,
-    CurveSpan, DesignPointId, DocumentAngleOrientation, DocumentCommandEffect,
-    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
-    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
-    DocumentDragLocalityPlan, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
-    DocumentFilletTrimEndpoint, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
-    DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap, DocumentSessionError,
-    DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1,
-    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, GeometryRoleEdit,
-    OperationCheckpoint, OperationControl, OperationController, OperationLimits, OperationOutcome,
-    OperationReport, OperationWork, ParameterBatch, PreparedSketchInput,
+    CurveSpan, DesignPointId, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
+    DocumentCommandEffect, DocumentConstraintDefinition, DocumentCurveContinuity,
+    DocumentCurveControlAvailability, DocumentCurveControlError, DocumentCurveControlId,
+    DocumentCurveControlProjection, DocumentCurveControlWithholdingReason,
+    DocumentCurveCurvatureRelation, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentDragLocalityPlan, DocumentEdit, DocumentElementId,
+    DocumentExternalBindingId, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch,
+    DocumentMeasurementCatalog, DocumentMeasurementProvenance, DocumentMeasurementValue,
+    DocumentObjectId, DocumentParameterTarget, DocumentRationalConicControl, DocumentRuntimeMap,
+    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
+    ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
+    GeometryRoleEdit, OperationCheckpoint, OperationControl, OperationController, OperationLimits,
+    OperationOutcome, OperationReport, OperationWork, ParameterBatch, PreparedSketchInput,
+    PreparedSketchOperation, PreparedSketchPatch, PreparedSketchSnapshot,
     RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
     SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDatum,
@@ -45,13 +49,13 @@ use crate::{
     ComputedFilletContinuationStatus, ComputedFilletInteractionSample, ConstraintActionRequest,
     ConstraintEditor, ConstraintIntent, ConstraintRelationChoice, ConstructionCommitPlan,
     ConstructionCommitResult, ConstructionCommitToken, ConstructionProposal, ConstructionResult,
-    DimensionActionRequest, DimensionKind, DraftInferenceInput, EditorEffect, EditorScene,
-    FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-    FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
-    GeometryInteractionPolicy, PickTolerance, PointGestureSnapshot, PointerInput,
-    ProjectedDragRequestDisposition, ResolvedConstraintKind, SceneFilletAction,
-    SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
-    ScreenPoint, SelectionItem,
+    CurveControlPreviewRequestDisposition, DimensionActionRequest, DimensionKind,
+    DraftInferenceInput, EditorEffect, EditorScene, FeatureAuthoringCandidate,
+    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringState,
+    FeatureAuthoringTool, FeatureAuthoringWarningKind, GeometryInteractionPolicy, PickTolerance,
+    PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind,
+    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionControlGeometry,
+    SceneFilletActionId, ScreenPoint, SelectionItem,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -1333,6 +1337,7 @@ pub struct MutationOutcome<T> {
 #[derive(Clone, Debug)]
 pub enum EditorMutation {
     PointMove(DocumentCommandEffect),
+    CurveControl(DocumentCommandEffect),
     Construction(ConstructionResult),
     InferredConstruction(ConstructionCommitResult),
 }
@@ -1504,6 +1509,106 @@ pub struct DimensionTargetMetadata {
     pub display_value: f64,
     pub display_unit: DimensionTargetDisplayUnit,
     pub mode: DocumentDimensionMode,
+}
+
+/// Stable selected-curve family used by presentation-neutral inspectors.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CurvePropertyFamily {
+    Line,
+    Polyline,
+    Circle,
+    CircularArc,
+    QuadraticBezier,
+    CubicBezier,
+    Ellipse,
+    EllipticalArc,
+    RationalQuadraticConic,
+    Parabola,
+    Hyperbola,
+    BSpline,
+    Nurbs,
+}
+
+impl CurvePropertyFamily {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Line => "Line",
+            Self::Polyline => "Polyline",
+            Self::Circle => "Circle",
+            Self::CircularArc => "Circular arc",
+            Self::QuadraticBezier => "Quadratic Bezier",
+            Self::CubicBezier => "Cubic Bezier",
+            Self::Ellipse => "Ellipse",
+            Self::EllipticalArc => "Elliptical arc",
+            Self::RationalQuadraticConic => "Rational quadratic conic",
+            Self::Parabola => "Parabola segment",
+            Self::Hyperbola => "Hyperbola segment",
+            Self::BSpline => "B-spline",
+            Self::Nurbs => "NURBS",
+        }
+    }
+}
+
+/// Semantic role of one exact numeric selected-curve property.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CurveNumericPropertyKind {
+    Radius,
+    MinorAxisRatio,
+    TrimStart,
+    TrimEnd,
+    SemiConjugate,
+    RationalWeight,
+    NurbsWeight { ordinal: u32 },
+}
+
+impl CurveNumericPropertyKind {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Radius => "Radius",
+            Self::MinorAxisRatio => "Minor axis ratio",
+            Self::TrimStart => "Start trim",
+            Self::TrimEnd => "End trim",
+            Self::SemiConjugate => "Conjugate size",
+            Self::RationalWeight => "Middle weight",
+            Self::NurbsWeight { .. } => "Control weight",
+        }
+    }
+}
+
+/// Exact persisted scalar exposed by the selected-curve inspector.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CurveNumericPropertyMetadata {
+    pub kind: CurveNumericPropertyKind,
+    pub scalar: DesignScalarId,
+    pub value: f64,
+    pub unit: ScalarUnit,
+    pub domain: ScalarDomain,
+    /// Exact current ownership of this scalar mutation.
+    pub availability: DocumentCurveControlAvailability,
+}
+
+/// Complete exact property surface for one selected native curve.
+///
+/// Canvas controls remain transient. This DTO exposes only existing persistent parameters and
+/// explicit discrete branch state, so a presentation adapter never needs to inspect curve
+/// definitions or infer which scalar a field edits.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SelectedCurvePropertyMetadata {
+    pub curve: CurveId,
+    pub label: String,
+    pub family: CurvePropertyFamily,
+    /// Curve-wide ownership used by rational-middle and discrete branch edits.
+    pub direct_edit_availability: DocumentCurveControlAvailability,
+    pub numeric: Vec<CurveNumericPropertyMetadata>,
+    pub sweep: Option<DocumentArcSweep>,
+    pub hyperbola_branch: Option<DocumentHyperbolaBranch>,
+    pub rational_control: Option<DocumentRationalConicControl>,
+    pub nurbs_gauge: Option<DesignScalarId>,
+    /// Whether changing the NURBS gauge may rescale every owned weight now.
+    pub nurbs_gauge_availability: Option<DocumentCurveControlAvailability>,
+    pub degree: Option<u32>,
 }
 
 /// Presentation unit for an editable dimension target.
@@ -1701,6 +1806,8 @@ pub enum CoordinatorError {
     #[error(transparent)]
     Document(#[from] geosolve_sketch::DocumentError),
     #[error(transparent)]
+    CurveControl(#[from] DocumentCurveControlError),
+    #[error(transparent)]
     Editor(#[from] crate::EditorError),
     #[error(transparent)]
     ComputedFeatureDocument(#[from] ComputedFeatureDocumentError),
@@ -1716,6 +1823,10 @@ pub enum CoordinatorError {
     IncompatibleDimension,
     #[error("invalid typed action input: {0}")]
     InvalidActionInput(&'static str),
+    #[error("curve property action does not match the exact current curve selection")]
+    CurvePropertySelectionMismatch,
+    #[error("selected curve property is unavailable: {0:?}")]
+    CurvePropertyUnavailable(DocumentCurveControlWithholdingReason),
     #[error("action is unavailable: {0:?}")]
     ActionUnavailable(DisabledReason),
     #[error("preview session belongs to a different document")]
@@ -1786,6 +1897,7 @@ pub struct RetainedEditorCoordinator {
     transient: Option<TransientLifecycle>,
     solved_preview: Option<RetainedSketchDocumentSession>,
     drag_continuation: Option<ProjectedDragContinuation>,
+    curve_control_continuation: Option<CurveControlContinuation>,
     projected_drag_work: Option<ProjectedDragWorkEvidence>,
     feature_authoring_preview: Option<FeatureAuthoringPreview>,
     next_feature_authoring_preview_token: u64,
@@ -1849,6 +1961,73 @@ struct ProjectedDragContinuation {
     last_accepted_preview: Option<RetainedSketchDocumentSession>,
     last_valid_computed_snapshot: Option<ComputedFeatureSnapshot>,
     computed_problems: Vec<ComputedFeatureProblemMetadata>,
+}
+
+/// One exact independently accepted prepared candidate retained for pointer release.
+#[derive(Debug)]
+struct CurveControlPreparedPreview {
+    request_id: u64,
+    control: DocumentCurveControlId,
+    model_position: [f64; 2],
+    edit: DocumentEdit,
+    patch: PreparedSketchPatch,
+    computed_snapshot: ComputedFeatureSnapshot,
+    computed_allocator: ComputedEvaluationAllocator,
+}
+
+/// Latest independently accepted semantic result of one pointer sample.
+#[derive(Debug)]
+enum CurveControlAcceptedSample {
+    /// The pointer inverse-mapped exactly to the gesture's retained starting value.
+    Unchanged {
+        request_id: u64,
+        control: DocumentCurveControlId,
+        model_position: [f64; 2],
+    },
+    /// A changed retained input produced a complete independently accepted candidate.
+    Changed(Box<CurveControlPreparedPreview>),
+}
+
+impl CurveControlAcceptedSample {
+    const fn request_id(&self) -> u64 {
+        match self {
+            Self::Unchanged { request_id, .. } => *request_id,
+            Self::Changed(preview) => preview.request_id,
+        }
+    }
+
+    const fn control(&self) -> DocumentCurveControlId {
+        match self {
+            Self::Unchanged { control, .. } => *control,
+            Self::Changed(preview) => preview.control,
+        }
+    }
+
+    const fn model_position(&self) -> [f64; 2] {
+        match self {
+            Self::Unchanged { model_position, .. } => *model_position,
+            Self::Changed(preview) => preview.model_position,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum CurveControlPreparedSample {
+    Rejected,
+    Accepted(CurveControlAcceptedSample),
+}
+
+/// Gesture-local immutable base snapshot plus its latest accepted prepared patch.
+#[derive(Debug)]
+struct CurveControlContinuation {
+    pointer_id: u64,
+    control: DocumentCurveControlId,
+    expected: SketchDesignIdentity,
+    base: PreparedSketchInput,
+    snapshot: PreparedSketchSnapshot,
+    computed_allocator: ComputedEvaluationAllocator,
+    last_request_id: Option<u64>,
+    last_accepted: Option<CurveControlAcceptedSample>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1947,6 +2126,7 @@ impl RetainedEditorCoordinator {
             transient: None,
             solved_preview: None,
             drag_continuation: None,
+            curve_control_continuation: None,
             projected_drag_work: None,
             feature_authoring_preview: None,
             next_feature_authoring_preview_token: 1,
@@ -2313,6 +2493,26 @@ impl RetainedEditorCoordinator {
         &mut self.editor
     }
 
+    /// Replaces application selection and immediately revokes any prepared
+    /// curve-control candidate owned by the previous selection.
+    pub fn set_selection(&mut self, selection: impl IntoIterator<Item = SelectionItem>) {
+        let previous = self.editor.selection().to_vec();
+        self.editor.set_selection(selection);
+        if self.editor.selection() != previous {
+            self.clear_curve_control_preview();
+        }
+    }
+
+    /// Applies one selection click and immediately revokes any prepared
+    /// curve-control candidate whose owner was replaced or deselected.
+    pub fn select_item(&mut self, item: SelectionItem, modifiers: crate::Modifiers) {
+        let previous = self.editor.selection().to_vec();
+        self.editor.select_item(item, modifiers);
+        if self.editor.selection() != previous {
+            self.clear_curve_control_preview();
+        }
+    }
+
     /// Atomically replaces the editor's complete geometry interaction policy.
     ///
     /// A point press owns coordinator-local continuation state from pointer-down,
@@ -2388,10 +2588,33 @@ impl RetainedEditorCoordinator {
     /// The independently validated solved-preview session currently published for rendering.
     #[must_use]
     pub fn solved_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
+        if let Some(preview) = self
+            .current_curve_control_continuation()
+            .and_then(|gesture| gesture.last_accepted.as_ref())
+            .and_then(|sample| match sample {
+                CurveControlAcceptedSample::Changed(preview) => Some(preview),
+                CurveControlAcceptedSample::Unchanged { .. } => None,
+            })
+        {
+            return preview.patch.preview().accepted_session();
+        }
         self.drag_continuation
             .as_ref()
             .and_then(|gesture| gesture.last_accepted_preview.as_ref())
             .or(self.solved_preview.as_ref())
+    }
+
+    fn current_curve_control_continuation(&self) -> Option<&CurveControlContinuation> {
+        self.curve_control_continuation.as_ref().filter(|gesture| {
+            gesture.last_request_id.is_some_and(|request_id| {
+                self.editor.curve_control_preview_request_disposition(
+                    gesture.pointer_id,
+                    request_id,
+                    gesture.expected,
+                    gesture.control,
+                ) == CurveControlPreviewRequestDisposition::Current
+            })
+        })
     }
 
     /// Work evidence for the latest projected pointer sample, if one is active.
@@ -4209,6 +4432,18 @@ impl RetainedEditorCoordinator {
         self.solved_preview_session()
     }
 
+    /// Whether the visible preview is a non-authoritative prepared curve-control candidate.
+    ///
+    /// Presentation adapters retain the pointer-down scene stamp for this candidate while
+    /// rendering its independently accepted geometry; only compare-and-swap publication may
+    /// advance the authoritative design identity.
+    #[must_use]
+    pub fn curve_control_preview_active(&self) -> bool {
+        self.current_curve_control_continuation()
+            .and_then(|gesture| gesture.last_accepted.as_ref())
+            .is_some_and(|sample| matches!(sample, CurveControlAcceptedSample::Changed(_)))
+    }
+
     /// Resolves a pointer press and captures any point gesture's locality plan from
     /// the exact accepted state visible at press time.
     pub fn pointer_down(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
@@ -4236,6 +4471,14 @@ impl RetainedEditorCoordinator {
         problem_items: &[SelectionItem],
         inference: DraftInferenceInput,
     ) -> Vec<EditorEffect> {
+        if self
+            .editor
+            .curve_control_press_target(scene, input.position, problem_items)
+            .is_some()
+            && !self.curve_control_scene_is_authenticated(scene)
+        {
+            return Vec::new();
+        }
         let before = self.editor.point_gesture_snapshot();
         let effects = self
             .editor
@@ -4290,6 +4533,14 @@ impl RetainedEditorCoordinator {
         problem_items: &[SelectionItem],
         control: OperationControl,
     ) -> Vec<EditorEffect> {
+        if self
+            .editor
+            .curve_control_press_target(scene, input.position, problem_items)
+            .is_some()
+            && !self.curve_control_scene_is_authenticated(scene)
+        {
+            return Vec::new();
+        }
         let before = self.editor.point_gesture_snapshot();
         let effects = self
             .editor
@@ -4302,6 +4553,21 @@ impl RetainedEditorCoordinator {
             }
         }
         effects
+    }
+
+    fn curve_control_scene_is_authenticated(&self, scene: &EditorScene) -> bool {
+        let Some(current) = self.session.accepted_prepared_input() else {
+            return false;
+        };
+        if scene.authenticated_prepared_input() != Some(current) {
+            return false;
+        }
+        let mut expected = scene.clone();
+        if self.editor.populate_curve_controls(&mut expected).is_err() {
+            return false;
+        }
+        expected.curve_controls == scene.curve_controls
+            && expected.curve_control_guides == scene.curve_control_guides
     }
 
     fn plan_projected_drag_start(
@@ -4617,11 +4883,234 @@ impl RetainedEditorCoordinator {
             .projected_drag_result(pointer_id, request_id, point, accepted_position)
     }
 
+    /// Executes one inverse selected-curve control sample from a frozen prepared snapshot.
+    ///
+    /// Every sample in the gesture starts from the same exact accepted input. Only a finite,
+    /// independently accepted sketch plus complete computed-feature scene replaces the retained
+    /// preview. Rejection therefore leaves the prior valid patch available for release.
+    pub fn resolve_curve_control_preview(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        expected: SketchDesignIdentity,
+        control: DocumentCurveControlId,
+        model_position: [f64; 2],
+    ) -> Vec<EditorEffect> {
+        match self
+            .editor
+            .curve_control_preview_request_disposition(pointer_id, request_id, expected, control)
+        {
+            CurveControlPreviewRequestDisposition::Current => {}
+            CurveControlPreviewRequestDisposition::Stale
+            | CurveControlPreviewRequestDisposition::Untracked => return Vec::new(),
+        }
+        if expected != self.session.design_identity()
+            || !model_position.iter().all(|value| value.is_finite())
+            || self.session.accepted_state_for_current_input().is_none()
+        {
+            return self
+                .editor
+                .curve_control_preview_result(pointer_id, request_id, expected, control, None);
+        }
+        let current = self.session.prepared_input();
+        let same_gesture = self
+            .curve_control_continuation
+            .as_ref()
+            .is_some_and(|gesture| {
+                gesture.pointer_id == pointer_id
+                    && gesture.control == control
+                    && gesture.expected == expected
+                    && gesture.base == current
+            });
+        if !same_gesture {
+            self.transient = None;
+            self.solved_preview = None;
+            self.drag_continuation = None;
+            self.projected_drag_work = None;
+            self.computed_preview_snapshot = None;
+            self.computed_preview_input = None;
+            self.computed_preview_evaluation_problem = None;
+            let snapshot = self.session.prepared_snapshot();
+            self.curve_control_continuation = Some(CurveControlContinuation {
+                pointer_id,
+                control,
+                expected,
+                base: snapshot.input(),
+                snapshot,
+                computed_allocator: self.computed_evaluation_allocator.clone(),
+                last_request_id: None,
+                last_accepted: None,
+            });
+        }
+        let Some(mut gesture) = self.curve_control_continuation.take() else {
+            return Vec::new();
+        };
+        if gesture
+            .last_request_id
+            .is_some_and(|last_request_id| request_id <= last_request_id)
+        {
+            self.curve_control_continuation = Some(gesture);
+            return Vec::new();
+        }
+        gesture.last_request_id = Some(request_id);
+
+        let accepted = self.prepare_curve_control_sample(
+            &gesture.snapshot,
+            &gesture.computed_allocator,
+            request_id,
+            control,
+            model_position,
+        );
+        let accepted_position = match accepted {
+            Ok(CurveControlPreparedSample::Accepted(sample)) => {
+                let position = sample.model_position();
+                match &sample {
+                    CurveControlAcceptedSample::Changed(preview) => {
+                        let proposed = preview.patch.preview().proposed_commit();
+                        self.computed_preview_input = Some(preview.computed_snapshot.input());
+                        self.computed_preview_snapshot = Some(preview.computed_snapshot.clone());
+                        self.computed_preview_evaluation_problem = None;
+                        self.transient = proposed.accepted_state_identity().map(|accepted| {
+                            TransientLifecycle::SolvedPreview {
+                                attempt: proposed.attempt_identity(),
+                                accepted,
+                            }
+                        });
+                    }
+                    CurveControlAcceptedSample::Unchanged { .. } => {
+                        self.transient = None;
+                        self.computed_preview_snapshot = None;
+                        self.computed_preview_input = None;
+                        self.computed_preview_evaluation_problem = None;
+                    }
+                }
+                gesture.last_accepted = Some(sample);
+                Some(position)
+            }
+            Ok(CurveControlPreparedSample::Rejected) | Err(_) => None,
+        };
+        self.curve_control_continuation = Some(gesture);
+        self.editor.curve_control_preview_result(
+            pointer_id,
+            request_id,
+            expected,
+            control,
+            accepted_position,
+        )
+    }
+
+    fn prepare_curve_control_sample(
+        &mut self,
+        snapshot: &PreparedSketchSnapshot,
+        base_computed_allocator: &ComputedEvaluationAllocator,
+        request_id: u64,
+        control: DocumentCurveControlId,
+        model_position: [f64; 2],
+    ) -> Result<CurveControlPreparedSample, CoordinatorError> {
+        let accepted_document = snapshot
+            .accepted_state()
+            .filter(|accepted| {
+                snapshot.input().accepted_state_identity() == Some(accepted.identity())
+            })
+            .map(geosolve_sketch::SketchAcceptedDocumentState::document)
+            .ok_or(CoordinatorError::PreviewNotAccepted)?;
+        let projection = accepted_document.project_curve_control(control, model_position)?;
+        let edit = match projection {
+            DocumentCurveControlProjection::Point { point, position } => {
+                DocumentEdit::SetPointPosition { point, position }
+            }
+            DocumentCurveControlProjection::Scalar { scalar, value } => {
+                DocumentEdit::SetScalarValue { scalar, value }
+            }
+            DocumentCurveControlProjection::RationalMiddle { curve, control } => {
+                DocumentEdit::SetRationalConicControl { curve, control }
+            }
+            _ => return Ok(CurveControlPreparedSample::Rejected),
+        };
+        let retained_position = accepted_document
+            .curve_controls(control.curve)?
+            .into_iter()
+            .find(|candidate| candidate.id == control)
+            .map(|candidate| candidate.position)
+            .filter(|position| position.iter().all(|value| value.is_finite()))
+            .ok_or(CoordinatorError::PreviewNotAccepted)?;
+        if curve_control_edit_is_noop(snapshot.design_document(), &edit) {
+            return Ok(CurveControlPreparedSample::Accepted(
+                CurveControlAcceptedSample::Unchanged {
+                    request_id,
+                    control,
+                    model_position: retained_position,
+                },
+            ));
+        }
+        let outcome = snapshot
+            .clone()
+            .prepare(PreparedSketchOperation::Apply(edit.clone()))
+            .execute(bounded_geometry_control())?;
+        let OperationOutcome::Completed { value: patch, .. } = outcome else {
+            return Ok(CurveControlPreparedSample::Rejected);
+        };
+        if patch.proposed_commit().accepted_state_identity().is_none() {
+            return Ok(CurveControlPreparedSample::Rejected);
+        }
+        let patch_preview = patch.preview();
+        let candidate_session = patch_preview
+            .accepted_session()
+            .ok_or(CoordinatorError::PreviewNotAccepted)?;
+        let previous = self
+            .computed_snapshot
+            .as_ref()
+            .filter(|snapshot| snapshot.input().features == self.features.identity());
+        let mut computed_allocator = base_computed_allocator.clone();
+        let evaluated = evaluate_computed_features_continuing(
+            candidate_session,
+            &self.features,
+            &mut computed_allocator,
+            bounded_geometry_control(),
+            previous,
+        )?;
+        let OperationOutcome::Completed {
+            value: computed_snapshot,
+            ..
+        } = evaluated
+        else {
+            return Ok(CurveControlPreparedSample::Rejected);
+        };
+        if previous.is_some_and(|previous| {
+            !computed_feature_preview_invalidations(&self.features, previous, &computed_snapshot)
+                .is_empty()
+        }) {
+            return Ok(CurveControlPreparedSample::Rejected);
+        }
+        let accepted_document = patch_preview
+            .accepted_document()
+            .ok_or(CoordinatorError::PreviewNotAccepted)?;
+        let accepted_position = accepted_document
+            .curve_controls(control.curve)?
+            .into_iter()
+            .find(|candidate| candidate.id == control)
+            .map(|candidate| candidate.position)
+            .filter(|position| position.iter().all(|value| value.is_finite()))
+            .ok_or(CoordinatorError::PreviewNotAccepted)?;
+        Ok(CurveControlPreparedSample::Accepted(
+            CurveControlAcceptedSample::Changed(Box::new(CurveControlPreparedPreview {
+                request_id,
+                control,
+                model_position: accepted_position,
+                edit,
+                patch,
+                computed_snapshot,
+                computed_allocator,
+            })),
+        ))
+    }
+
     /// Explicitly marks an outstanding solve. It does not mutate lifecycle history.
     pub fn mark_solving(&mut self) {
         self.transient = Some(TransientLifecycle::Solving);
         self.solved_preview = None;
         self.drag_continuation = None;
+        self.curve_control_continuation = None;
         self.projected_drag_work = None;
     }
 
@@ -4762,6 +5251,7 @@ impl RetainedEditorCoordinator {
         self.transient = None;
         self.solved_preview = None;
         self.drag_continuation = None;
+        self.curve_control_continuation = None;
         self.projected_drag_work = None;
         self.clear_feature_authoring_preview();
         self.computed_preview_snapshot = None;
@@ -5449,6 +5939,488 @@ impl RetainedEditorCoordinator {
         } else {
             Some(GeometryRoleSelectionState::Mixed)
         }
+    }
+
+    /// Returns exact persistent properties for exactly one selected native curve.
+    #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive family match keeps the inspector catalog aligned with every native curve definition"
+    )]
+    pub fn curve_property_metadata_for(
+        &self,
+        selection: &[SelectionItem],
+    ) -> Option<SelectedCurvePropertyMetadata> {
+        let [SelectionItem::Curve(span)] = selection else {
+            return None;
+        };
+        let document = self.session.design_document();
+        if !document.curve_spans(span.curve).ok()?.contains(span) {
+            return None;
+        }
+        let curve = document.curve(span.curve)?;
+        let accepted = self.session.accepted_state_for_current_input()?;
+        let direct_edit_availability = curve_direct_edit_availability(
+            accepted.document(),
+            span.curve,
+            accepted.effective_activity(),
+        );
+        let mut numeric = Vec::new();
+        let mut push_scalar =
+            |kind: CurveNumericPropertyKind, scalar: DesignScalarId, gauge_owned: bool| {
+                let value = document.scalar(scalar)?;
+                numeric.push(CurveNumericPropertyMetadata {
+                    kind,
+                    scalar,
+                    value: value.value,
+                    unit: value.unit,
+                    domain: value.domain,
+                    availability: curve_numeric_property_availability(
+                        accepted.document(),
+                        span.curve,
+                        scalar,
+                        direct_edit_availability,
+                        gauge_owned,
+                    ),
+                });
+                Some(())
+            };
+        let (family, sweep, hyperbola_branch, rational_control, nurbs_gauge, degree) =
+            match &curve.definition {
+                CurveDefinition::Line { .. } => {
+                    (CurvePropertyFamily::Line, None, None, None, None, None)
+                }
+                CurveDefinition::Polyline { .. } => {
+                    (CurvePropertyFamily::Polyline, None, None, None, None, None)
+                }
+                CurveDefinition::Circle { radius, .. } => {
+                    push_scalar(CurveNumericPropertyKind::Radius, *radius, false)?;
+                    (CurvePropertyFamily::Circle, None, None, None, None, None)
+                }
+                CurveDefinition::CircularArc {
+                    radius,
+                    start_angle,
+                    end_angle,
+                    sweep,
+                    ..
+                } => {
+                    push_scalar(CurveNumericPropertyKind::Radius, *radius, false)?;
+                    push_scalar(CurveNumericPropertyKind::TrimStart, *start_angle, false)?;
+                    push_scalar(CurveNumericPropertyKind::TrimEnd, *end_angle, false)?;
+                    (
+                        CurvePropertyFamily::CircularArc,
+                        Some(*sweep),
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                }
+                CurveDefinition::QuadraticBezier { .. } => (
+                    CurvePropertyFamily::QuadraticBezier,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(2),
+                ),
+                CurveDefinition::CubicBezier { .. } => (
+                    CurvePropertyFamily::CubicBezier,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(3),
+                ),
+                CurveDefinition::Ellipse {
+                    minor_axis_ratio, ..
+                } => {
+                    push_scalar(
+                        CurveNumericPropertyKind::MinorAxisRatio,
+                        *minor_axis_ratio,
+                        false,
+                    )?;
+                    (CurvePropertyFamily::Ellipse, None, None, None, None, None)
+                }
+                CurveDefinition::EllipticalArc {
+                    minor_axis_ratio,
+                    start_angle,
+                    end_angle,
+                    sweep,
+                    ..
+                } => {
+                    push_scalar(
+                        CurveNumericPropertyKind::MinorAxisRatio,
+                        *minor_axis_ratio,
+                        false,
+                    )?;
+                    push_scalar(CurveNumericPropertyKind::TrimStart, *start_angle, false)?;
+                    push_scalar(CurveNumericPropertyKind::TrimEnd, *end_angle, false)?;
+                    (
+                        CurvePropertyFamily::EllipticalArc,
+                        Some(*sweep),
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                }
+                CurveDefinition::RationalQuadraticConic { middle_weight, .. } => {
+                    push_scalar(
+                        CurveNumericPropertyKind::RationalWeight,
+                        *middle_weight,
+                        false,
+                    )?;
+                    (
+                        CurvePropertyFamily::RationalQuadraticConic,
+                        None,
+                        None,
+                        Some(document.rational_conic_control(span.curve).ok()?),
+                        None,
+                        Some(2),
+                    )
+                }
+                CurveDefinition::ParabolaSegment {
+                    trim_start,
+                    trim_end,
+                    ..
+                } => {
+                    push_scalar(CurveNumericPropertyKind::TrimStart, *trim_start, false)?;
+                    push_scalar(CurveNumericPropertyKind::TrimEnd, *trim_end, false)?;
+                    (CurvePropertyFamily::Parabola, None, None, None, None, None)
+                }
+                CurveDefinition::HyperbolaSegment {
+                    semi_conjugate,
+                    branch,
+                    trim_start,
+                    trim_end,
+                    ..
+                } => {
+                    push_scalar(
+                        CurveNumericPropertyKind::SemiConjugate,
+                        *semi_conjugate,
+                        false,
+                    )?;
+                    push_scalar(CurveNumericPropertyKind::TrimStart, *trim_start, false)?;
+                    push_scalar(CurveNumericPropertyKind::TrimEnd, *trim_end, false)?;
+                    (
+                        CurvePropertyFamily::Hyperbola,
+                        None,
+                        Some(*branch),
+                        None,
+                        None,
+                        None,
+                    )
+                }
+                CurveDefinition::BSpline { degree, .. } => (
+                    CurvePropertyFamily::BSpline,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(*degree),
+                ),
+                CurveDefinition::Nurbs {
+                    degree,
+                    weights,
+                    gauge_weight,
+                    ..
+                } => {
+                    for (ordinal, scalar) in weights.iter().copied().enumerate() {
+                        push_scalar(
+                            CurveNumericPropertyKind::NurbsWeight {
+                                ordinal: u32::try_from(ordinal).ok()?,
+                            },
+                            scalar,
+                            scalar == *gauge_weight,
+                        )?;
+                    }
+                    (
+                        CurvePropertyFamily::Nurbs,
+                        None,
+                        None,
+                        None,
+                        Some(*gauge_weight),
+                        Some(*degree),
+                    )
+                }
+            };
+        let nurbs_gauge_availability = nurbs_gauge.map(|_| {
+            if direct_edit_availability != DocumentCurveControlAvailability::Editable {
+                direct_edit_availability
+            } else if numeric.iter().any(|property| {
+                property.availability
+                    == DocumentCurveControlAvailability::ReadOnly(
+                        DocumentCurveControlWithholdingReason::HostParameterOwned,
+                    )
+            }) {
+                DocumentCurveControlAvailability::ReadOnly(
+                    DocumentCurveControlWithholdingReason::HostParameterOwned,
+                )
+            } else {
+                DocumentCurveControlAvailability::Editable
+            }
+        });
+        Some(SelectedCurvePropertyMetadata {
+            curve: span.curve,
+            label: curve.label.clone(),
+            family,
+            direct_edit_availability,
+            numeric,
+            sweep,
+            hyperbola_branch,
+            rational_control,
+            nurbs_gauge,
+            nurbs_gauge_availability,
+            degree,
+        })
+    }
+
+    /// Returns exact properties for the current application selection.
+    #[must_use]
+    pub fn selected_curve_property_metadata(&self) -> Option<SelectedCurvePropertyMetadata> {
+        self.curve_property_metadata_for(self.editor.selection())
+    }
+
+    fn selected_curve_property_for_action(
+        &self,
+        curve: CurveId,
+    ) -> Result<SelectedCurvePropertyMetadata, CoordinatorError> {
+        let metadata = self
+            .selected_curve_property_metadata()
+            .ok_or(CoordinatorError::CurvePropertySelectionMismatch)?;
+        if metadata.curve != curve {
+            return Err(CoordinatorError::CurvePropertySelectionMismatch);
+        }
+        Ok(metadata)
+    }
+
+    /// Retains one exact selected-curve numeric property through ordinary document history.
+    ///
+    /// Rational nonzero-weight edits preserve the visible Euclidean middle control atomically.
+    /// Entering or leaving the exact zero-weight projective mode retains the stored `Qh` vector
+    /// explicitly, so no division-by-zero or fictitious point is introduced.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale design, missing/mismatched property, invalid scalar domain or solve.
+    pub fn set_curve_numeric_property(
+        &mut self,
+        expected: SketchDesignIdentity,
+        curve: CurveId,
+        kind: CurveNumericPropertyKind,
+        value: f64,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let metadata = self.selected_curve_property_for_action(curve)?;
+        let property = metadata
+            .numeric
+            .iter()
+            .find(|property| property.kind == kind)
+            .ok_or(CoordinatorError::InvalidActionInput(
+                "numeric property does not belong to the selected curve",
+            ))?;
+        ensure_curve_property_available(property.availability)?;
+        let edit = if kind == CurveNumericPropertyKind::RationalWeight {
+            let document = self.session.design_document();
+            let control = document.rational_conic_control(curve).map_err(|_| {
+                CoordinatorError::InvalidActionInput("curve has no rational middle control")
+            })?;
+            let next = match control {
+                DocumentRationalConicControl::Euclidean { middle, .. } if value != 0.0 => {
+                    DocumentRationalConicControl::Euclidean {
+                        middle,
+                        weight: value,
+                    }
+                }
+                DocumentRationalConicControl::Euclidean { .. } => {
+                    let CurveDefinition::RationalQuadraticConic {
+                        weighted_middle, ..
+                    } = &document
+                        .curve(curve)
+                        .ok_or(CoordinatorError::ActionUnavailable(
+                            DisabledReason::MissingObject,
+                        ))?
+                        .definition
+                    else {
+                        return Err(CoordinatorError::InvalidActionInput(
+                            "curve has no rational middle control",
+                        ));
+                    };
+                    DocumentRationalConicControl::Projective {
+                        weighted_middle: *weighted_middle,
+                        weight: 0.0,
+                    }
+                }
+                DocumentRationalConicControl::Projective {
+                    weighted_middle, ..
+                } if value == 0.0 => DocumentRationalConicControl::Projective {
+                    weighted_middle,
+                    weight: 0.0,
+                },
+                DocumentRationalConicControl::Projective {
+                    weighted_middle, ..
+                } => DocumentRationalConicControl::Euclidean {
+                    middle: [weighted_middle[0] / value, weighted_middle[1] / value],
+                    weight: value,
+                },
+                _ => {
+                    return Err(CoordinatorError::InvalidActionInput(
+                        "unsupported rational middle control mode",
+                    ));
+                }
+            };
+            DocumentEdit::SetRationalConicControl {
+                curve,
+                control: next,
+            }
+        } else {
+            DocumentEdit::SetScalarValue {
+                scalar: property.scalar,
+                value,
+            }
+        };
+        self.apply_edit(expected, edit)
+    }
+
+    /// Retains the exact visible middle coordinate of one rational quadratic conic.
+    ///
+    /// `middle` is the ordinary Euclidean `P1` while the curve has nonzero weight and the
+    /// projective `Qh` vector while its weight is exactly zero. The current weight and control
+    /// mode are preserved, so a presentation adapter never needs to reconstruct homogeneous
+    /// storage or choose a zero-weight transition.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale design, non-rational owner, invalid coordinate or failed retained edit.
+    pub fn set_curve_rational_middle(
+        &mut self,
+        expected: SketchDesignIdentity,
+        curve: CurveId,
+        middle: [f64; 2],
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let metadata = self.selected_curve_property_for_action(curve)?;
+        if metadata.rational_control.is_none() {
+            return Err(CoordinatorError::InvalidActionInput(
+                "curve has no rational middle control",
+            ));
+        }
+        ensure_curve_property_available(metadata.direct_edit_availability)?;
+        let current = self
+            .session
+            .design_document()
+            .rational_conic_control(curve)
+            .map_err(|_| {
+                CoordinatorError::InvalidActionInput("curve has no rational middle control")
+            })?;
+        let control = match current {
+            DocumentRationalConicControl::Euclidean { weight, .. } => {
+                DocumentRationalConicControl::Euclidean { middle, weight }
+            }
+            DocumentRationalConicControl::Projective { weight, .. } => {
+                DocumentRationalConicControl::Projective {
+                    weighted_middle: middle,
+                    weight,
+                }
+            }
+            _ => {
+                return Err(CoordinatorError::InvalidActionInput(
+                    "unsupported rational middle control mode",
+                ));
+            }
+        };
+        self.apply_edit(
+            expected,
+            DocumentEdit::SetRationalConicControl { curve, control },
+        )
+    }
+
+    /// Retains one explicit selected arc traversal choice.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale design, incompatible curve or failed retained edit.
+    pub fn set_curve_sweep(
+        &mut self,
+        expected: SketchDesignIdentity,
+        curve: CurveId,
+        sweep: DocumentArcSweep,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let metadata = self.selected_curve_property_for_action(curve)?;
+        if metadata.sweep.is_none() {
+            return Err(CoordinatorError::InvalidActionInput(
+                "curve has no explicit arc sweep",
+            ));
+        }
+        ensure_curve_property_available(metadata.direct_edit_availability)?;
+        self.apply_edit(expected, DocumentEdit::SetArcSweep { curve, sweep })
+    }
+
+    /// Retains one explicit selected hyperbola branch choice.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale design, incompatible curve or failed retained edit.
+    pub fn set_curve_hyperbola_branch(
+        &mut self,
+        expected: SketchDesignIdentity,
+        curve: CurveId,
+        branch: DocumentHyperbolaBranch,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let metadata = self.selected_curve_property_for_action(curve)?;
+        if metadata.hyperbola_branch.is_none() {
+            return Err(CoordinatorError::InvalidActionInput(
+                "curve has no explicit hyperbola branch",
+            ));
+        }
+        ensure_curve_property_available(metadata.direct_edit_availability)?;
+        self.apply_edit(expected, DocumentEdit::SetHyperbolaBranch { curve, branch })
+    }
+
+    /// Makes one existing selected NURBS weight the explicit gauge without moving the curve.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale design, incompatible curve/weight or failed retained edit.
+    pub fn set_curve_nurbs_gauge(
+        &mut self,
+        expected: SketchDesignIdentity,
+        curve: CurveId,
+        gauge_weight: DesignScalarId,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let metadata = self.selected_curve_property_for_action(curve)?;
+        let availability =
+            metadata
+                .nurbs_gauge_availability
+                .ok_or(CoordinatorError::InvalidActionInput(
+                    "curve has no NURBS gauge",
+                ))?;
+        if metadata.nurbs_gauge == Some(gauge_weight) {
+            return Err(CoordinatorError::CurvePropertyUnavailable(
+                DocumentCurveControlWithholdingReason::GaugeOwned,
+            ));
+        }
+        if !metadata
+            .numeric
+            .iter()
+            .any(|property| property.scalar == gauge_weight)
+        {
+            return Err(CoordinatorError::InvalidActionInput(
+                "gauge weight does not belong to the selected curve",
+            ));
+        }
+        ensure_curve_property_available(availability)?;
+        self.apply_edit(
+            expected,
+            DocumentEdit::SetNurbsWeightGauge {
+                curve,
+                gauge_weight,
+            },
+        )
     }
 
     /// Atomically toggles every selected complete native curve. An all-
@@ -7119,6 +8091,161 @@ impl RetainedEditorCoordinator {
         })
     }
 
+    fn commit_curve_control_preview(
+        &mut self,
+        expected: SketchDesignIdentity,
+        pointer_id: u64,
+        request_id: u64,
+        control: DocumentCurveControlId,
+    ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
+        let outcome =
+            self.commit_curve_control_preview_inner(expected, pointer_id, request_id, control);
+        if outcome.is_err() {
+            self.clear_curve_control_preview();
+        }
+        outcome
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "exact patch authentication, computed-feature re-anchor and atomic history publication form one transaction boundary"
+    )]
+    fn commit_curve_control_preview_inner(
+        &mut self,
+        expected: SketchDesignIdentity,
+        pointer_id: u64,
+        request_id: u64,
+        control: DocumentCurveControlId,
+    ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let Some(gesture) = self.curve_control_continuation.as_ref() else {
+            return Err(CoordinatorError::MissingSolvedPreview);
+        };
+        if gesture.pointer_id != pointer_id
+            || gesture.control != control
+            || gesture.expected != expected
+            || gesture.base != self.session.prepared_input()
+        {
+            return Err(CoordinatorError::SolvedPreviewMismatch);
+        }
+        let Some(sample) = gesture.last_accepted.as_ref() else {
+            return Err(CoordinatorError::MissingSolvedPreview);
+        };
+        if sample.request_id() != request_id || sample.control() != control {
+            return Err(CoordinatorError::SolvedPreviewMismatch);
+        }
+        let CurveControlAcceptedSample::Changed(preview) = sample else {
+            self.clear_curve_control_preview();
+            return Ok(None);
+        };
+
+        let before_sketch = self
+            .session
+            .accepted_prepared_input()
+            .ok_or(ComputedFeatureSnapshotError::CurrentAcceptedStateRequired)?;
+        let before_features = self.features.identity();
+        let proposed = preview.patch.proposed_commit();
+        let patch_preview = preview.patch.preview();
+        let candidate_session = patch_preview
+            .accepted_session()
+            .ok_or(CoordinatorError::PreviewNotAccepted)?;
+        let after_sketch = candidate_session
+            .accepted_prepared_input()
+            .filter(|input| {
+                input.design_identity() == proposed.design_identity()
+                    && input.latest_attempt_identity() == proposed.attempt_identity()
+                    && input.accepted_state_identity() == proposed.accepted_state_identity()
+            })
+            .ok_or(CoordinatorError::SolvedPreviewMismatch)?;
+        if preview.computed_snapshot.input().sketch != after_sketch
+            || preview.computed_snapshot.input().features != before_features
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+
+        let mut candidate_allocator = preview.computed_allocator.clone();
+        let (candidate_features, cold) = evaluate_durable_computed_reanchor(
+            candidate_session,
+            &self.features,
+            &mut candidate_allocator,
+            &preview.computed_snapshot,
+        )?;
+        if cold.input().sketch != after_sketch
+            || cold.input().features != candidate_features.identity()
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let computed_features = (candidate_features.identity() != before_features)
+            .then(|| {
+                if !recorded_transition_is_reanchor_only(&self.features, &candidate_features) {
+                    return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+                }
+                Ok(Box::new(RecordedComputedFeatureTransition {
+                    edit: preview.edit.clone(),
+                    before_sketch,
+                    after_sketch,
+                    before: before_features,
+                    after: candidate_features.clone(),
+                    dispositions: recorded_computed_feature_dispositions(&cold),
+                }))
+            })
+            .transpose()?;
+        let replay = ReplayAction::Edit {
+            expected,
+            edit: preview.edit.clone(),
+            computed_features,
+        };
+        let next = checkpoint(candidate_session, &candidate_features, &candidate_allocator)?;
+        let effect = curve_control_command_effect(&preview.edit)?;
+
+        let mut gesture = self
+            .curve_control_continuation
+            .take()
+            .ok_or(CoordinatorError::MissingSolvedPreview)?;
+        let sample = gesture
+            .last_accepted
+            .take()
+            .ok_or(CoordinatorError::MissingSolvedPreview)?;
+        let CurveControlAcceptedSample::Changed(preview) = sample else {
+            return Err(CoordinatorError::SolvedPreviewMismatch);
+        };
+
+        let committed = match self.session.commit_prepared_patch(preview.patch) {
+            Ok(committed) => committed,
+            Err(error) => {
+                // A stale compare-and-swap patch cannot be reconstructed after consumption. The
+                // live session remains unchanged and the editor will revoke the gesture through
+                // its retained-state invalidation path.
+                return Err(error.into());
+            }
+        };
+        if committed != proposed {
+            return Err(CoordinatorError::SolvedPreviewMismatch);
+        }
+        self.features = candidate_features;
+        self.computed_evaluation_allocator = candidate_allocator;
+        self.computed_input = Some(cold.input());
+        self.computed_snapshot = Some(cold);
+        self.computed_evaluation_problem = None;
+        self.record_feature_mutation(next, replay);
+        Ok(Some(MutationOutcome {
+            value: EditorMutation::CurveControl(effect),
+            design: committed.design_identity(),
+            attempt: committed.attempt_identity(),
+            published_accepted: committed.accepted_state_identity(),
+        }))
+    }
+
+    fn clear_curve_control_preview(&mut self) {
+        if self.curve_control_continuation.take().is_none() {
+            return;
+        }
+        self.transient = None;
+        self.computed_preview_snapshot = None;
+        self.computed_preview_input = None;
+        self.computed_preview_evaluation_problem = None;
+    }
+
     #[allow(
         clippy::too_many_lines,
         reason = "one closed effect dispatcher keeps all editor preview/commit/rollback variants exhaustive"
@@ -7136,6 +8263,16 @@ impl RetainedEditorCoordinator {
             } => self
                 .commit_solved_point_move(*expected, *point, *model_position, release_control)
                 .map(Some),
+            EditorEffect::CommitCurveControl {
+                expected,
+                pointer_id,
+                request_id,
+                control,
+            } => self.commit_curve_control_preview(*expected, *pointer_id, *request_id, *control),
+            EditorEffect::ClearCurveControlPreview => {
+                self.clear_curve_control_preview();
+                Ok(None)
+            }
             EditorEffect::PreviewComputedFeatureRadius {
                 expected,
                 feature,
@@ -7316,6 +8453,8 @@ impl RetainedEditorCoordinator {
             | EditorEffect::PreviewPointMove { .. }
             | EditorEffect::RequestProjectedPointMove { .. }
             | EditorEffect::ClearPointPreview
+            | EditorEffect::RequestCurveControlPreview { .. }
+            | EditorEffect::PreviewCurveControl { .. }
             | EditorEffect::PreviewConstruction(_)
             | EditorEffect::ClearConstructionPreview
             | EditorEffect::DraftInferenceChanged(_) => Ok(None),
@@ -9071,6 +10210,156 @@ const fn dimension_target_scalar(
         | DocumentDimensionDefinition::OrientedAngle { target, .. }
         | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
         | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
+    }
+}
+
+fn curve_control_command_effect(
+    edit: &DocumentEdit,
+) -> Result<DocumentCommandEffect, CoordinatorError> {
+    match edit {
+        DocumentEdit::SetPointPosition { point, .. } => {
+            Ok(DocumentCommandEffect::UpdatedPoint(*point))
+        }
+        DocumentEdit::SetScalarValue { scalar, .. } => {
+            Ok(DocumentCommandEffect::UpdatedScalar(*scalar))
+        }
+        DocumentEdit::SetRationalConicControl { curve, .. } => {
+            Ok(DocumentCommandEffect::UpdatedRationalConicControl(*curve))
+        }
+        _ => Err(CoordinatorError::InvalidActionInput(
+            "prepared curve-control patch carries an unsupported edit",
+        )),
+    }
+}
+
+fn curve_direct_edit_availability(
+    document: &SketchDocument,
+    curve: CurveId,
+    activity: &geosolve_sketch::EffectiveActivity,
+) -> DocumentCurveControlAvailability {
+    if !activity.is_active(curve) {
+        return DocumentCurveControlAvailability::ReadOnly(
+            DocumentCurveControlWithholdingReason::InactiveCurve,
+        );
+    }
+    if document.constraints().iter().any(|constraint| {
+        activity.is_active(constraint.id)
+            && matches!(
+                constraint.definition,
+                DocumentConstraintDefinition::LineLineFillet { arc, .. }
+                    | DocumentConstraintDefinition::CurveCurveFillet { arc, .. }
+                    if arc == curve
+            )
+    }) {
+        DocumentCurveControlAvailability::ReadOnly(
+            DocumentCurveControlWithholdingReason::AssociativeFilletOutput,
+        )
+    } else {
+        DocumentCurveControlAvailability::Editable
+    }
+}
+
+fn ensure_curve_property_available(
+    availability: DocumentCurveControlAvailability,
+) -> Result<(), CoordinatorError> {
+    match availability {
+        DocumentCurveControlAvailability::Editable => Ok(()),
+        DocumentCurveControlAvailability::ReadOnly(reason) => {
+            Err(CoordinatorError::CurvePropertyUnavailable(reason))
+        }
+    }
+}
+
+fn curve_numeric_property_availability(
+    document: &SketchDocument,
+    curve: CurveId,
+    scalar: DesignScalarId,
+    direct_edit_availability: DocumentCurveControlAvailability,
+    gauge_owned: bool,
+) -> DocumentCurveControlAvailability {
+    if direct_edit_availability != DocumentCurveControlAvailability::Editable {
+        return direct_edit_availability;
+    }
+    if document.parameter_bindings().iter().any(|binding| {
+        matches!(
+            binding.target,
+            DocumentParameterTarget::DimensionlessFixedScalar(property)
+                if property.scalar == scalar
+        )
+    }) {
+        return DocumentCurveControlAvailability::ReadOnly(
+            DocumentCurveControlWithholdingReason::HostParameterOwned,
+        );
+    }
+    if let Ok(controls) = document.curve_controls(curve)
+        && let Some(availability) = controls.iter().find_map(|control| {
+            matches!(
+                control.target,
+                geosolve_sketch::DocumentCurveControlTarget::Scalar(owner) if owner == scalar
+            )
+            .then_some(control.availability)
+        })
+        && availability != DocumentCurveControlAvailability::Editable
+    {
+        return availability;
+    }
+    if gauge_owned {
+        DocumentCurveControlAvailability::ReadOnly(
+            DocumentCurveControlWithholdingReason::GaugeOwned,
+        )
+    } else {
+        DocumentCurveControlAvailability::Editable
+    }
+}
+
+fn curve_control_edit_is_noop(document: &SketchDocument, edit: &DocumentEdit) -> bool {
+    match edit {
+        DocumentEdit::SetPointPosition { point, position } => document
+            .point(*point)
+            .is_some_and(|current| point_bits_equal(current.position, *position)),
+        DocumentEdit::SetScalarValue { scalar, value } => document
+            .scalar(*scalar)
+            .is_some_and(|current| current.value.to_bits() == value.to_bits()),
+        DocumentEdit::SetRationalConicControl { curve, control } => document
+            .rational_conic_control(*curve)
+            .is_ok_and(|current| rational_control_bits_equal(current, *control)),
+        _ => false,
+    }
+}
+
+fn point_bits_equal(first: [f64; 2], second: [f64; 2]) -> bool {
+    first.map(f64::to_bits) == second.map(f64::to_bits)
+}
+
+fn rational_control_bits_equal(
+    first: DocumentRationalConicControl,
+    second: DocumentRationalConicControl,
+) -> bool {
+    match (first, second) {
+        (
+            DocumentRationalConicControl::Euclidean {
+                middle: first_middle,
+                weight: first_weight,
+            },
+            DocumentRationalConicControl::Euclidean {
+                middle: second_middle,
+                weight: second_weight,
+            },
+        )
+        | (
+            DocumentRationalConicControl::Projective {
+                weighted_middle: first_middle,
+                weight: first_weight,
+            },
+            DocumentRationalConicControl::Projective {
+                weighted_middle: second_middle,
+                weight: second_weight,
+            },
+        ) => {
+            point_bits_equal(first_middle, second_middle)
+                && first_weight.to_bits() == second_weight.to_bits()
+        }
+        _ => false,
     }
 }
 
