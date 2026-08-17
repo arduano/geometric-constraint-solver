@@ -159,7 +159,7 @@ fn m71_f005_distinct_horizontal_and_vertical_point_axes_commit_one_intersection(
             && end.map(f64::to_bits) == [3.0, 4.0].map(f64::to_bits)
     ));
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [
             InferredRelation::HorizontalPoints {
                 first: DraftPointSlot::Created { point_index: 1 },
@@ -375,7 +375,7 @@ fn m71_f005_polyline_distinct_point_axes_commit_one_intersection() {
         unreachable!()
     };
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [
             InferredRelation::HorizontalPoints {
                 first: DraftPointSlot::Created { point_index: 1 },

@@ -217,8 +217,9 @@ pub(super) fn dispatch_construction_effect(
 mod tests {
     use geosolve_constraint_editor::{
         ConstraintEditor, ConstructionPoint, ConstructionPreview, ConstructionProposal,
-        DraftCurveSlot, EditorEffect, EditorScene, EditorTool, InferredRelation, Modifiers,
-        PointerInput, RetainedEditorCoordinator, ScreenPoint, Viewport,
+        ConstructionRelationDefinition, ConstructionRelationProvenance, DraftCurveSlot,
+        EditorEffect, EditorScene, EditorTool, InferredRelation, Modifiers, PointerInput,
+        RetainedEditorCoordinator, ScreenPoint, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -533,9 +534,12 @@ mod tests {
         ));
         assert!(matches!(
             plan.relations.as_slice(),
-            [InferredRelation::Concentric {
-                first: DraftCurveSlot::Created { curve_index: 0 },
-                second: DraftCurveSlot::Existing(existing),
+            [ConstructionRelationDefinition {
+                provenance: ConstructionRelationProvenance::AutoInference,
+                relation: InferredRelation::Concentric {
+                    first: DraftCurveSlot::Created { curve_index: 0 },
+                    second: DraftCurveSlot::Existing(existing),
+                },
             }] if *existing == reference
         ));
 
@@ -576,10 +580,12 @@ mod tests {
         let EditorEffect::CommitConstructionPlan { plan, token, .. } = &mut substituted else {
             unreachable!("fixture returns a construction plan")
         };
-        plan.role = match plan.role {
-            GeometryRole::Profile => GeometryRole::Construction,
-            GeometryRole::Construction => GeometryRole::Profile,
-        };
+        for role in &mut plan.curve_roles {
+            *role = match *role {
+                GeometryRole::Profile => GeometryRole::Construction,
+                GeometryRole::Construction => GeometryRole::Profile,
+            };
+        }
         let rejected_token = *token;
         let PlannedConstructionDispatch::Handled(rejected) =
             dispatch_planned_construction_effect(&mut coordinator, &substituted)

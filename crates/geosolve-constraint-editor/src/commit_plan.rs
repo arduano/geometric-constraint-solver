@@ -151,6 +151,51 @@ pub enum InferredRelation {
     },
 }
 
+/// Why a relation belongs to an atomic construction recipe.
+///
+/// Provenance is durable plan intent, not a label inferred after solving.  It
+/// determines deterministic lowering order and lets retained publication give
+/// recipe-owned relations precedence over ambient drafting suggestions.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum ConstructionRelationProvenance {
+    RecipeIntrinsic,
+    RecipeRegularization,
+    AutoInference,
+}
+
+/// One relation definition together with its construction-time provenance.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ConstructionRelationDefinition {
+    pub provenance: ConstructionRelationProvenance,
+    pub relation: InferredRelation,
+}
+
+impl ConstructionRelationDefinition {
+    #[must_use]
+    pub const fn recipe_intrinsic(relation: InferredRelation) -> Self {
+        Self {
+            provenance: ConstructionRelationProvenance::RecipeIntrinsic,
+            relation,
+        }
+    }
+
+    #[must_use]
+    pub const fn recipe_regularization(relation: InferredRelation) -> Self {
+        Self {
+            provenance: ConstructionRelationProvenance::RecipeRegularization,
+            relation,
+        }
+    }
+
+    #[must_use]
+    pub const fn auto_inference(relation: InferredRelation) -> Self {
+        Self {
+            provenance: ConstructionRelationProvenance::AutoInference,
+            relation,
+        }
+    }
+}
+
 /// One contact allocated for a named relation occurrence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ConstructionContactResult {
@@ -162,6 +207,7 @@ pub struct ConstructionContactResult {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ConstructionConstraintResult {
     pub relation_index: usize,
+    pub provenance: ConstructionRelationProvenance,
     pub constraint: DocumentConstraintId,
     pub source: DocumentSourceId,
 }
@@ -178,11 +224,21 @@ pub struct ConstructionCommitResult {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConstructionCommitPlan {
     pub proposal: ConstructionProposal,
-    pub role: GeometryRole,
-    pub relations: Vec<InferredRelation>,
+    /// Exact role for each created curve in allocation order.
+    pub curve_roles: Vec<GeometryRole>,
+    pub relations: Vec<ConstructionRelationDefinition>,
 }
 
 impl ConstructionCommitPlan {
+    /// Returns relation payloads in the plan's declared order.
+    #[must_use]
+    pub fn relation_payloads(&self) -> Vec<InferredRelation> {
+        self.relations
+            .iter()
+            .map(|definition| definition.relation)
+            .collect()
+    }
+
     /// Applies geometry, contact metadata, and inferred sources as one document mutation.
     ///
     /// This is document-level atomicity only.  Retained-session callers must still solve and
@@ -227,17 +283,35 @@ impl ConstructionCommitPlan {
         self.validate_relation_count()?;
         if controller.as_deref_mut().is_some_and(|controller| {
             controller
-                .checkpoint(OperationCheckpoint::DocumentValidation)
+                .charge(
+                    OperationWorkCounter::DocumentValidationItems,
+                    1,
+                    OperationCheckpoint::DocumentValidation,
+                )
+                .is_err()
+        }) {
+            return Ok(None);
+        }
+        if controller.as_deref_mut().is_some_and(|controller| {
+            controller
+                .charge(
+                    OperationWorkCounter::DocumentLoweringItems,
+                    proposal_lowering_items(&self.proposal),
+                    OperationCheckpoint::DocumentLowering,
+                )
                 .is_err()
         }) {
             return Ok(None);
         }
         let mut candidate = document.clone();
-        let construction = self.proposal.apply_with_role(&mut candidate, self.role)?;
+        let construction = self
+            .proposal
+            .apply_with_curve_roles(&mut candidate, &self.curve_roles)?;
+        let relations = self.ordered_effective_relations();
         let mut contacts = Vec::new();
-        let mut constraints = Vec::with_capacity(self.relations.len());
+        let mut constraints = Vec::with_capacity(relations.len());
 
-        for (relation_index, relation) in self.relations.iter().copied().enumerate() {
+        for (relation_index, relation) in relations {
             if controller.as_deref_mut().is_some_and(|controller| {
                 controller
                     .charge(
@@ -264,6 +338,7 @@ impl ConstructionCommitPlan {
                 .source_id;
             constraints.push(ConstructionConstraintResult {
                 relation_index,
+                provenance: relation.provenance,
                 constraint,
                 source,
             });
@@ -285,15 +360,132 @@ impl ConstructionCommitPlan {
         }))
     }
 
+    /// Returns the relations in deterministic provenance order, omitting
+    /// ambient suggestions whose subject is already owned by recipe intent.
+    /// Stable sorting retains authoring-stage order within each provenance.
+    fn ordered_effective_relations(&self) -> Vec<(usize, ConstructionRelationDefinition)> {
+        let recipe_relations = self
+            .relations
+            .iter()
+            .filter(|relation| relation.provenance != ConstructionRelationProvenance::AutoInference)
+            .copied()
+            .collect::<Vec<_>>();
+        let mut relations = self
+            .relations
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, relation)| {
+                relation.provenance != ConstructionRelationProvenance::AutoInference
+                    || !recipe_relations
+                        .iter()
+                        .any(|recipe| recipe.shadows_ambient(*relation))
+            })
+            .collect::<Vec<_>>();
+        relations.sort_by_key(|(_, relation)| relation.provenance);
+        relations
+    }
+
     pub(crate) fn validate_relation_count(&self) -> Result<(), DocumentError> {
         if self.relations.len() > MAX_CONSTRUCTION_PLAN_RELATIONS {
             return Err(DocumentError::ResourceLimit {
-                resource: "construction plan inferred relations",
+                resource: "construction plan relations",
                 actual: self.relations.len(),
                 limit: MAX_CONSTRUCTION_PLAN_RELATIONS,
             });
         }
         Ok(())
+    }
+}
+
+/// Deterministic work authorization for proposal-specific lowering performed
+/// before the candidate document can be cloned or any persistent identity can
+/// be allocated. Variable-length recipes scale with their operand/topology
+/// counts; fixed recipes pay one bounded family-specific amount.
+fn proposal_lowering_items(proposal: &ConstructionProposal) -> usize {
+    match proposal {
+        ConstructionProposal::Point { .. } => 1,
+        ConstructionProposal::Line { .. } | ConstructionProposal::Circle { .. } => 3,
+        ConstructionProposal::Polyline { points } => {
+            points.len().saturating_mul(2).saturating_add(1)
+        }
+        ConstructionProposal::PolylinePath { points, .. } => {
+            points.len().saturating_mul(3).saturating_add(1)
+        }
+        ConstructionProposal::Rectangle { .. } => 8,
+        ConstructionProposal::RectangleLoop { points, center, .. } => points
+            .len()
+            .saturating_add(4)
+            .saturating_add(usize::from(center.is_some())),
+        ConstructionProposal::MidpointLine { .. }
+        | ConstructionProposal::CounterClockwiseArc { .. }
+        | ConstructionProposal::CircularArc { .. }
+        | ConstructionProposal::QuadraticBezier { .. }
+        | ConstructionProposal::Ellipse { .. }
+        | ConstructionProposal::AxisEndpointEllipse { .. } => 4,
+        ConstructionProposal::CubicBezier { .. }
+        | ConstructionProposal::RationalQuadraticConic { .. }
+        | ConstructionProposal::Parabola { .. } => 5,
+        ConstructionProposal::EllipticalArc { .. }
+        | ConstructionProposal::AxisEndpointEllipticalArc { .. }
+        | ConstructionProposal::Hyperbola { .. } => 6,
+        ConstructionProposal::Nurbs { controls, options } => controls
+            .len()
+            .saturating_mul(4)
+            .saturating_add(options.degree as usize)
+            .saturating_add(1),
+    }
+}
+
+impl ConstructionRelationDefinition {
+    fn shadows_ambient(self, ambient: Self) -> bool {
+        debug_assert_ne!(
+            self.provenance,
+            ConstructionRelationProvenance::AutoInference
+        );
+        debug_assert_eq!(
+            ambient.provenance,
+            ConstructionRelationProvenance::AutoInference
+        );
+        if self.relation == ambient.relation {
+            return true;
+        }
+        match (
+            self.relation.absolute_direction_span(),
+            ambient.relation.absolute_direction_span(),
+        ) {
+            (Some(recipe), Some(candidate)) => recipe == candidate,
+            _ => match (
+                self.relation.relative_direction_pair(),
+                ambient.relation.relative_direction_pair(),
+            ) {
+                (Some(recipe), Some(candidate)) => unordered_span_pairs_match(recipe, candidate),
+                _ => false,
+            },
+        }
+    }
+
+    fn resolve(
+        self,
+        document: &mut SketchDocument,
+        construction: &ConstructionResult,
+        relation_index: usize,
+    ) -> Result<(DocumentConstraintDefinition, Vec<ContactId>), DocumentError> {
+        self.relation.resolve(
+            document,
+            construction,
+            relation_index,
+            self.label().as_str(),
+        )
+    }
+
+    fn label(self) -> String {
+        let prefix = match self.provenance {
+            ConstructionRelationProvenance::RecipeIntrinsic => "recipe intrinsic",
+            ConstructionRelationProvenance::RecipeRegularization => "recipe regularization",
+            ConstructionRelationProvenance::AutoInference => "auto",
+        };
+        format!("{prefix} {}", self.relation.kind_label())
     }
 }
 
@@ -307,8 +499,8 @@ impl InferredRelation {
         document: &mut SketchDocument,
         construction: &ConstructionResult,
         relation_index: usize,
+        label: &str,
     ) -> Result<(DocumentConstraintDefinition, Vec<ContactId>), DocumentError> {
-        let label = || format!("auto point-on-curve contact {}", relation_index + 1);
         Ok(match self {
             Self::CoincidentWithOrigin { point } => (
                 DocumentConstraintDefinition::CoincidentWithOrigin {
@@ -323,9 +515,13 @@ impl InferredRelation {
                 },
                 Vec::new(),
             ),
-            Self::PointOnCurve { point, contact } => {
-                resolve_point_on_curve(document, construction, point, contact, label())?
-            }
+            Self::PointOnCurve { point, contact } => resolve_point_on_curve(
+                document,
+                construction,
+                point,
+                contact,
+                format!("{label} contact {}", relation_index + 1),
+            )?,
             Self::Midpoint { point, line } => (
                 DocumentConstraintDefinition::Midpoint {
                     point: point.resolve(document, construction)?,
@@ -423,30 +619,80 @@ impl InferredRelation {
                 second,
                 orientation,
                 relation_index,
+                label,
             )?,
         })
     }
 
-    const fn label(self) -> &'static str {
+    const fn kind_label(self) -> &'static str {
         match self {
-            Self::CoincidentWithOrigin { .. } => "auto coincident with origin",
-            Self::PointOnDatumAxis { .. } => "auto point on datum axis",
-            Self::PointOnCurve { .. } => "auto point on curve",
-            Self::Midpoint { .. } => "auto midpoint",
-            Self::Horizontal { .. } => "auto horizontal",
-            Self::Vertical { .. } => "auto vertical",
-            Self::HorizontalPoints { .. } => "auto horizontal points",
-            Self::VerticalPoints { .. } => "auto vertical points",
-            Self::HorizontalPointToMidpoint { .. } => "auto horizontal to midpoint",
-            Self::VerticalPointToMidpoint { .. } => "auto vertical to midpoint",
-            Self::Concentric { .. } => "auto concentric",
-            Self::Collinear { .. } => "auto collinear",
-            Self::Parallel { .. } => "auto parallel",
-            Self::Perpendicular { .. } => "auto perpendicular",
-            Self::EqualLength { .. } => "recipe equal length",
-            Self::CurveCurveTangency { .. } => "recipe tangent arc",
+            Self::CoincidentWithOrigin { .. } => "coincident with origin",
+            Self::PointOnDatumAxis { .. } => "point on datum axis",
+            // Preserve the established legacy auto-contact label while the
+            // provenance prefix distinguishes recipe-owned occurrences.
+            Self::PointOnCurve { .. } => "point-on-curve",
+            Self::Midpoint { .. } => "midpoint",
+            Self::Horizontal { .. } => "horizontal",
+            Self::Vertical { .. } => "vertical",
+            Self::HorizontalPoints { .. } => "horizontal points",
+            Self::VerticalPoints { .. } => "vertical points",
+            Self::HorizontalPointToMidpoint { .. } => "horizontal to midpoint",
+            Self::VerticalPointToMidpoint { .. } => "vertical to midpoint",
+            Self::Concentric { .. } => "concentric",
+            Self::Collinear { .. } => "collinear",
+            Self::Parallel { .. } => "parallel",
+            Self::Perpendicular { .. } => "perpendicular",
+            Self::EqualLength { .. } => "equal length",
+            Self::CurveCurveTangency { .. } => "tangent arc",
         }
     }
+
+    const fn absolute_direction_span(self) -> Option<DraftSpanSlot> {
+        match self {
+            Self::Horizontal { line } | Self::Vertical { line } => Some(line),
+            Self::CoincidentWithOrigin { .. }
+            | Self::PointOnDatumAxis { .. }
+            | Self::PointOnCurve { .. }
+            | Self::Midpoint { .. }
+            | Self::HorizontalPoints { .. }
+            | Self::VerticalPoints { .. }
+            | Self::HorizontalPointToMidpoint { .. }
+            | Self::VerticalPointToMidpoint { .. }
+            | Self::Concentric { .. }
+            | Self::Collinear { .. }
+            | Self::Parallel { .. }
+            | Self::Perpendicular { .. }
+            | Self::EqualLength { .. }
+            | Self::CurveCurveTangency { .. } => None,
+        }
+    }
+
+    const fn relative_direction_pair(self) -> Option<[DraftSpanSlot; 2]> {
+        match self {
+            Self::Parallel { first, second } | Self::Perpendicular { first, second } => {
+                Some([first, second])
+            }
+            Self::Collinear { first, second } => Some([first.span, second.span]),
+            Self::CoincidentWithOrigin { .. }
+            | Self::PointOnDatumAxis { .. }
+            | Self::PointOnCurve { .. }
+            | Self::Midpoint { .. }
+            | Self::Horizontal { .. }
+            | Self::Vertical { .. }
+            | Self::HorizontalPoints { .. }
+            | Self::VerticalPoints { .. }
+            | Self::HorizontalPointToMidpoint { .. }
+            | Self::VerticalPointToMidpoint { .. }
+            | Self::Concentric { .. }
+            | Self::EqualLength { .. }
+            | Self::CurveCurveTangency { .. } => None,
+        }
+    }
+}
+
+fn unordered_span_pairs_match(first: [DraftSpanSlot; 2], second: [DraftSpanSlot; 2]) -> bool {
+    (first[0] == second[0] && first[1] == second[1])
+        || (first[0] == second[1] && first[1] == second[0])
 }
 
 fn resolve_point_on_curve(
@@ -480,10 +726,11 @@ fn resolve_curve_curve_tangency(
     second: DraftContactDescriptor,
     orientation: TangentOrientation,
     relation_index: usize,
+    label: &str,
 ) -> Result<(DocumentConstraintDefinition, Vec<ContactId>), DocumentError> {
     let first_span = first.span.resolve(document, construction)?;
     let first_contact = document.add_curve_contact_with_domain(
-        format!("recipe tangent arc contact {}.1", relation_index + 1),
+        format!("{label} contact {}.1", relation_index + 1),
         first_span,
         first.domain,
         first.parameter,
@@ -493,7 +740,7 @@ fn resolve_curve_curve_tangency(
     )?;
     let second_span = second.span.resolve(document, construction)?;
     let second_contact = document.add_curve_contact_with_domain(
-        format!("recipe tangent arc contact {}.2", relation_index + 1),
+        format!("{label} contact {}.2", relation_index + 1),
         second_span,
         second.domain,
         second.parameter,
@@ -630,6 +877,15 @@ mod tests {
     use super::*;
     use crate::ConstructionPoint;
 
+    macro_rules! auto_relations {
+        ($relation:expr; $count:expr) => {
+            vec![ConstructionRelationDefinition::auto_inference($relation); $count]
+        };
+        ($($relation:expr),* $(,)?) => {
+            vec![$(ConstructionRelationDefinition::auto_inference($relation)),*]
+        };
+    }
+
     fn add_line(document: &mut SketchDocument, start: [f64; 2], end: [f64; 2]) -> CurveSpan {
         let delta = [end[0] - start[0], end[1] - start[1]];
         let length = delta[0].hypot(delta[1]);
@@ -667,8 +923,8 @@ mod tests {
                 start: ConstructionPoint::New([0.0, 0.0]),
                 end: ConstructionPoint::New([3.0, 0.0]),
             },
-            role: GeometryRole::Construction,
-            relations: vec![InferredRelation::Horizontal {
+            curve_roles: vec![GeometryRole::Construction],
+            relations: auto_relations![InferredRelation::Horizontal {
                 line: DraftSpanSlot::Created {
                     curve_index: 0,
                     segment: 0,
@@ -711,8 +967,8 @@ mod tests {
             proposal: ConstructionProposal::Point {
                 point: ConstructionPoint::New([1.0, 0.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![InferredRelation::PointOnCurve {
+            curve_roles: Vec::new(),
+            relations: auto_relations![InferredRelation::PointOnCurve {
                 point: DraftPointSlot::Created { point_index: 0 },
                 contact: DraftContactDescriptor {
                     span: DraftSpanSlot::Existing(target),
@@ -769,8 +1025,8 @@ mod tests {
                 center: ConstructionPoint::New([0.0, 0.0]),
                 radius: 2.0,
             },
-            role: GeometryRole::Profile,
-            relations: vec![InferredRelation::PointOnCurve {
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![InferredRelation::PointOnCurve {
                 point: DraftPointSlot::Existing(point),
                 contact: DraftContactDescriptor {
                     span: DraftSpanSlot::Created {
@@ -844,8 +1100,8 @@ mod tests {
                 center: ConstructionPoint::New([0.3, -0.2]),
                 radius: 2.0,
             },
-            role: GeometryRole::Profile,
-            relations: vec![InferredRelation::Concentric {
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![InferredRelation::Concentric {
                 first: DraftCurveSlot::Created { curve_index: 0 },
                 second: DraftCurveSlot::Existing(existing),
             }],
@@ -872,8 +1128,8 @@ mod tests {
                 start: ConstructionPoint::New([1.0, 0.0]),
                 end: ConstructionPoint::New([3.0, 0.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![InferredRelation::Collinear {
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![InferredRelation::Collinear {
                 first: DraftLineSupportSlot {
                     span: DraftSpanSlot::Created {
                         curve_index: 0,
@@ -913,8 +1169,8 @@ mod tests {
                 center: ConstructionPoint::New([0.3, -0.2]),
                 radius: 2.0,
             },
-            role: GeometryRole::Profile,
-            relations: vec![InferredRelation::Concentric {
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![InferredRelation::Concentric {
                 first: DraftCurveSlot::Created { curve_index: 9 },
                 second: DraftCurveSlot::Existing(existing),
             }],
@@ -933,8 +1189,8 @@ mod tests {
                 start: ConstructionPoint::New([0.0, 0.0]),
                 end: ConstructionPoint::New([3.0, 1.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![
                 InferredRelation::Horizontal {
                     line: DraftSpanSlot::Created {
                         curve_index: 0,
@@ -968,7 +1224,7 @@ mod tests {
                 },
                 end: ConstructionPoint::New([2.0, 0.0]),
             },
-            role: GeometryRole::Profile,
+            curve_roles: vec![GeometryRole::Profile],
             relations: Vec::new(),
         };
 
@@ -998,8 +1254,8 @@ mod tests {
                 start: ConstructionPoint::New([0.5, 0.0]),
                 end: ConstructionPoint::New([0.5, 2.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![
                 InferredRelation::Midpoint {
                     point: DraftPointSlot::Existing(midpoint),
                     line: DraftSpanSlot::Existing(reference),
@@ -1054,14 +1310,14 @@ mod tests {
                 start: ConstructionPoint::New([0.0, 0.0]),
                 end: ConstructionPoint::New([2.0, 0.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![relation; MAX_CONSTRUCTION_PLAN_RELATIONS + 1],
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![relation; MAX_CONSTRUCTION_PLAN_RELATIONS + 1],
         };
 
         assert!(matches!(
             plan.apply(&mut document),
             Err(DocumentError::ResourceLimit {
-                resource: "construction plan inferred relations",
+                resource: "construction plan relations",
                 actual,
                 limit: MAX_CONSTRUCTION_PLAN_RELATIONS,
             }) if actual == MAX_CONSTRUCTION_PLAN_RELATIONS + 1
@@ -1082,8 +1338,8 @@ mod tests {
                 start: ConstructionPoint::New([0.0, 0.0]),
                 end: ConstructionPoint::New([2.0, 1.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![
                 InferredRelation::Horizontal { line: created },
                 InferredRelation::Vertical { line: created },
             ],
@@ -1113,6 +1369,6 @@ mod tests {
                 }
             }
         ));
-        assert_eq!(controller.report().consumed.document_validation_items, 1);
+        assert_eq!(controller.report().consumed.document_validation_items, 2);
     }
 }

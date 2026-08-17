@@ -164,7 +164,7 @@ fn m71_f004_vertical_line_and_horizontal_point_axis_commit_as_one_bundle() {
             && end.map(f64::to_bits) == [0.0, 4.0].map(f64::to_bits)
     ));
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [
             InferredRelation::HorizontalPoints {
                 first: DraftPointSlot::Created { point_index: 1 },
@@ -336,7 +336,7 @@ fn m71_f004_polyline_horizontal_span_and_vertical_point_axis_share_one_segment()
         unreachable!()
     };
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [
             InferredRelation::VerticalPoints {
                 first: DraftPointSlot::Created { point_index: 1 },

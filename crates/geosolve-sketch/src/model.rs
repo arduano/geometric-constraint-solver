@@ -1935,7 +1935,13 @@ impl Sketch {
         for (segment_id, segment) in self.segments.iter() {
             let start = self.point_position(segment.start)?;
             let end = self.point_position(segment.end)?;
-            let length = (end - start).norm();
+            let delta = end - start;
+            // `nalgebra::norm` squares both coordinates before taking the
+            // root, so a representable finite segment near `f64::MAX` can be
+            // misclassified when that intermediate square overflows.  The
+            // branch constructor and the public geometry validators already
+            // use the overflow-safe Euclidean norm.
+            let length = delta.x.hypot(delta.y);
             if !length.is_finite() || length == 0.0 {
                 return Err(SketchError::InvalidSegmentEntity(segment_id));
             }

@@ -3,12 +3,13 @@
 use std::fmt::Write as _;
 
 use geosolve_constraint_editor::{
-    ConstructionCommitPlan, ConstructionPoint, DraftCurveBranchCandidate, DraftCurveContact,
-    DraftGuideClassification, DraftGuideGeometry, DraftInferenceBehavior, DraftInferenceCandidate,
-    DraftInferenceCompleteness, DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput,
-    DraftInferencePolicy, DraftInferenceRelation, DraftInferenceResolution, DraftInferenceSample,
-    DraftInferenceStatus, DraftInferenceSubject, DraftPointSlot, DraftReferenceAnchor,
-    DraftReferenceOrigin, DraftSpanSlot, EditorEffect, EditorMutation, EditorScene, EditorTool,
+    ConstructionCommitPlan, ConstructionPoint, ConstructionRelationDefinition,
+    DraftCurveBranchCandidate, DraftCurveContact, DraftGuideClassification, DraftGuideGeometry,
+    DraftInferenceBehavior, DraftInferenceCandidate, DraftInferenceCompleteness,
+    DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy,
+    DraftInferenceRelation, DraftInferenceResolution, DraftInferenceSample, DraftInferenceStatus,
+    DraftInferenceSubject, DraftPointSlot, DraftReferenceAnchor, DraftReferenceOrigin,
+    DraftSpanSlot, EditorEffect, EditorMutation, EditorScene, EditorTool,
     GeometryInteractionPolicy, InferredRelation, Modifiers, PointerInput,
     RetainedEditorCoordinator, ScenePointRoleIncidence, ScreenPoint, Viewport,
 };
@@ -672,7 +673,7 @@ fn transition_transcript() -> Vec<u8> {
         })
         .expect("midpoint-normal plan");
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [
             InferredRelation::Midpoint {
                 point: DraftPointSlot::Created { point_index: 0 },
@@ -784,13 +785,15 @@ fn transition_transcript() -> Vec<u8> {
             start: ConstructionPoint::New([0.0, 5.0]),
             end: ConstructionPoint::New([2.0, 5.0]),
         },
-        role: GeometryRole::Profile,
+        curve_roles: vec![GeometryRole::Profile],
         relations: vec![
-            InferredRelation::Horizontal { line: created },
-            InferredRelation::Parallel {
+            ConstructionRelationDefinition::auto_inference(InferredRelation::Horizontal {
+                line: created,
+            }),
+            ConstructionRelationDefinition::auto_inference(InferredRelation::Parallel {
                 first: created,
                 second: DraftSpanSlot::Existing(reference),
-            },
+            }),
         ],
     };
     let expected = reloaded

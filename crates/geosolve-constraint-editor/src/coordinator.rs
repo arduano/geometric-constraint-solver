@@ -49,14 +49,15 @@ use crate::{
     AuthoringTool, ComputedFilletContinuationLimit, ComputedFilletContinuationLimitKind,
     ComputedFilletContinuationStatus, ComputedFilletInteractionSample, ConstraintActionRequest,
     ConstraintEditor, ConstraintIntent, ConstraintRelationChoice, ConstructionCommitPlan,
-    ConstructionCommitResult, ConstructionCommitToken, ConstructionProposal, ConstructionResult,
-    CurveControlPreviewRequestDisposition, DimensionActionRequest, DimensionKind,
-    DraftAuthoringInput, DraftInferenceInput, EditorEffect, EditorScene, FeatureAuthoringCandidate,
-    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringState,
-    FeatureAuthoringTool, FeatureAuthoringWarningKind, GeometryInteractionPolicy, PickTolerance,
-    PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind,
-    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionControlGeometry,
-    SceneFilletActionId, ScreenPoint, SelectionItem,
+    ConstructionCommitResult, ConstructionCommitToken, ConstructionProposal,
+    ConstructionRelationProvenance, ConstructionResult, CurveControlPreviewRequestDisposition,
+    DimensionActionRequest, DimensionKind, DraftAuthoringInput, DraftInferenceInput, EditorEffect,
+    EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+    FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
+    GeometryInteractionPolicy, PickTolerance, PointGestureSnapshot, PointerInput,
+    ProjectedDragRequestDisposition, ResolvedConstraintKind, SceneFilletAction,
+    SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
+    ScreenPoint, SelectionItem,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -4614,7 +4615,13 @@ impl RetainedEditorCoordinator {
         token: ConstructionCommitToken,
         accepted: bool,
     ) -> Vec<EditorEffect> {
-        self.editor.acknowledge_construction_commit(token, accepted)
+        let prepared_input = self.session.accepted_prepared_input();
+        self.editor.acknowledge_construction_commit_for_input(
+            token,
+            accepted,
+            prepared_input.as_ref(),
+            true,
+        )
     }
 
     /// Resolves a pointer press with diagnostically forced annotations and captures
@@ -6820,6 +6827,9 @@ impl RetainedEditorCoordinator {
             .value()
             .constraints
             .iter()
+            .filter(|constraint| {
+                constraint.provenance == ConstructionRelationProvenance::AutoInference
+            })
             .map(|constraint| constraint.source)
             .find(|source| {
                 redundancy.fully_redundant_sources().contains(source)
@@ -6935,6 +6945,10 @@ impl RetainedEditorCoordinator {
         staged: StagedConstructionPublication,
         replay: ReplayAction,
     ) {
+        let published_plan = match &replay {
+            ReplayAction::ConstructionPlan { expected, plan } => Some((expected.as_ref(), plan)),
+            _ => None,
+        };
         self.session = staged.session;
         self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
         self.computed_input = staged.computed_input;
@@ -6943,6 +6957,11 @@ impl RetainedEditorCoordinator {
         self.history.truncate(self.history_cursor + 1);
         self.history.push(staged.checkpoint);
         self.history_cursor += 1;
+        if let Some((expected, plan)) = published_plan {
+            let _ = self
+                .editor
+                .mark_construction_commit_published(expected, plan);
+        }
         self.transcript.push(replay);
         self.editor.invalidate_for_retained_state_change(false);
         self.clear_transient();
@@ -8903,8 +8922,9 @@ impl RetainedEditorCoordinator {
         self.history.push(next);
         self.history_cursor += 1;
         self.transcript.push(replay);
+        let preserve_pending_ack = self.editor.pending_construction_commit_token().is_some();
         self.editor
-            .invalidate_for_retained_state_change(!preserve_pending_plan);
+            .invalidate_for_retained_state_change(!preserve_pending_plan && !preserve_pending_ack);
         self.clear_transient();
         self.reconcile_selection();
         Ok(())
@@ -11519,6 +11539,15 @@ mod tests {
         ComputedFilletCornerAuthoringRequest, ComputedFilletCurvePick,
     };
 
+    macro_rules! auto_relations {
+        ($relation:expr; $count:expr) => {
+            vec![crate::ConstructionRelationDefinition::auto_inference($relation); $count]
+        };
+        ($($relation:expr),* $(,)?) => {
+            vec![$(crate::ConstructionRelationDefinition::auto_inference($relation)),*]
+        };
+    }
+
     #[test]
     fn projected_drag_envelope_pins_every_m65_limit() {
         let limits = projected_drag_control().limits;
@@ -11796,8 +11825,8 @@ mod tests {
                 start: ConstructionPoint::New([0.5, 0.0]),
                 end: ConstructionPoint::New([0.5, 2.5]),
             },
-            role: GeometryRole::Construction,
-            relations: vec![
+            curve_roles: vec![GeometryRole::Construction],
+            relations: auto_relations![
                 crate::InferredRelation::PointOnCurve {
                     point: crate::DraftPointSlot::Created { point_index: 0 },
                     contact: crate::DraftContactDescriptor {
@@ -11832,8 +11861,8 @@ mod tests {
                 start: ConstructionPoint::New([0.0, 1.0]),
                 end: ConstructionPoint::New([2.0, 1.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![
                 crate::InferredRelation::Horizontal { line: created },
                 crate::InferredRelation::Parallel {
                     first: created,
@@ -12059,8 +12088,8 @@ mod tests {
                 center: ConstructionPoint::New([0.25, 0.0]),
                 radius: 1.75,
             },
-            role: GeometryRole::Profile,
-            relations: vec![crate::InferredRelation::PointOnCurve {
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![crate::InferredRelation::PointOnCurve {
                 point: crate::DraftPointSlot::Existing(fixed_rim_point),
                 contact: crate::DraftContactDescriptor {
                     span: crate::DraftSpanSlot::Created {
@@ -12384,8 +12413,8 @@ mod tests {
             proposal: ConstructionProposal::Point {
                 point: ConstructionPoint::New([1.0, 0.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![
+            curve_roles: Vec::new(),
+            relations: auto_relations![
                 crate::InferredRelation::Midpoint {
                     point: crate::DraftPointSlot::Created { point_index: 0 },
                     line: crate::DraftSpanSlot::Existing(reference),
@@ -12437,8 +12466,8 @@ mod tests {
                 start: ConstructionPoint::New([0.0, 1.0]),
                 end: ConstructionPoint::New([2.0, 1.0]),
             },
-            role: GeometryRole::Profile,
-            relations: vec![
+            curve_roles: vec![GeometryRole::Profile],
+            relations: auto_relations![
                 crate::InferredRelation::Horizontal { line: created };
                 crate::MAX_CONSTRUCTION_PLAN_RELATIONS + 1
             ],
@@ -12452,7 +12481,7 @@ mod tests {
             ),
             Err(CoordinatorError::Document(
                 geosolve_sketch::DocumentError::ResourceLimit {
-                    resource: "construction plan inferred relations",
+                    resource: "construction plan relations",
                     actual,
                     limit: crate::MAX_CONSTRUCTION_PLAN_RELATIONS,
                 }
@@ -12614,7 +12643,7 @@ mod tests {
             proposal: ConstructionProposal::Point {
                 point: ConstructionPoint::New([10.0, 10.0]),
             },
-            role: GeometryRole::Profile,
+            curve_roles: Vec::new(),
             relations: Vec::new(),
         };
         let expected = fixture

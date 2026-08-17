@@ -2190,7 +2190,8 @@ mod tests {
     use std::collections::{BTreeSet, HashSet};
 
     use geosolve_constraint_editor::{
-        ComputedFilletContinuationLimitKind, CoordinatorError, EditorEffect, EditorHoverState,
+        ComputedFilletContinuationLimitKind, ConstructionRelationDefinition,
+        ConstructionRelationProvenance, CoordinatorError, EditorEffect, EditorHoverState,
         EditorScene, EditorTool, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
         GeometryInteractionPolicy, GeometryPickScope, InferredRelation, Modifiers, PickTolerance,
@@ -3017,7 +3018,10 @@ mod tests {
                 EditorEffect::CommitConstructionPlan { token, plan, .. }
                     if matches!(
                         plan.relations.as_slice(),
-                        [InferredRelation::Horizontal { .. }]
+                        [ConstructionRelationDefinition {
+                            provenance: ConstructionRelationProvenance::AutoInference,
+                            relation: InferredRelation::Horizontal { .. },
+                        }]
                     ) =>
                 {
                     Some((*token, effect))

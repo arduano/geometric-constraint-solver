@@ -192,7 +192,7 @@ fn m73_f004_line_started_at_existing_point_keeps_only_its_horizontal_relation() 
         } if id == fixture.start && end.map(f64::to_bits) == [4.0, 0.0].map(f64::to_bits)
     ));
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [InferredRelation::Horizontal { .. }]
     ));
 

@@ -769,7 +769,7 @@ pub(crate) fn conic_geometry_from_kind(
             let center = point(center)?;
             let axis_point = point(major_axis_point)?;
             let axis = axis_point - center;
-            let semi_major = axis.norm();
+            let semi_major = axis.x.hypot(axis.y);
             let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
             let ellipse =
                 Ellipse2::try_new(center, direction, semi_major, semi_major * minor_axis_ratio)
@@ -787,7 +787,7 @@ pub(crate) fn conic_geometry_from_kind(
             let center = point(center)?;
             let axis_point = point(major_axis_point)?;
             let axis = axis_point - center;
-            let semi_major = axis.norm();
+            let semi_major = axis.x.hypot(axis.y);
             let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
             let ellipse =
                 Ellipse2::try_new(center, direction, semi_major, semi_major * minor_axis_ratio)
@@ -819,7 +819,7 @@ pub(crate) fn conic_geometry_from_kind(
             let vertex = point(vertex)?;
             let focus = point(focus)?;
             let axis = focus - vertex;
-            let focal_length = axis.norm();
+            let focal_length = axis.x.hypot(axis.y);
             let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
             Ok(ConicGeometry::ParabolaSegment(
                 ParabolaSegment2::try_new(vertex, direction, focal_length, trim)
@@ -837,7 +837,7 @@ pub(crate) fn conic_geometry_from_kind(
             let center = point(center)?;
             let axis_point = point(transverse_axis_point)?;
             let axis = axis_point - center;
-            let semi_transverse = axis.norm();
+            let semi_transverse = axis.x.hypot(axis.y);
             let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
             Ok(ConicGeometry::HyperbolaSegment(
                 HyperbolaSegment2::try_new(

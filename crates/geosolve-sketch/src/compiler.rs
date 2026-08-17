@@ -2681,7 +2681,10 @@ impl Sketch {
                     "segment end point is missing from candidate geometry".into(),
                 )
             })?;
-            let length = (end - start).norm();
+            let delta = end - start;
+            // Avoid overflowing a squared intermediate for representable
+            // finite segments near the limits of `f64`.
+            let length = delta.x.hypot(delta.y);
             if !length.is_finite() || length == 0.0 {
                 return Err(SolveRejection::DegenerateSegment(segment_id));
             }
@@ -8096,7 +8099,7 @@ fn solved_conic_geometry(kind: SolvedConicKind) -> Result<crate::ConicGeometry, 
         } => {
             crate::conics::validate_minor_axis_ratio(minor_axis_ratio)?;
             let axis = major_axis_point - center;
-            let semi_major = axis.norm();
+            let semi_major = axis.x.hypot(axis.y);
             let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
             Ok(crate::ConicGeometry::Ellipse(
                 Ellipse2::try_new(center, direction, semi_major, semi_major * minor_axis_ratio)
@@ -8112,7 +8115,7 @@ fn solved_conic_geometry(kind: SolvedConicKind) -> Result<crate::ConicGeometry, 
         } => {
             crate::conics::validate_minor_axis_ratio(minor_axis_ratio)?;
             let axis = major_axis_point - center;
-            let semi_major = axis.norm();
+            let semi_major = axis.x.hypot(axis.y);
             let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
             let ellipse =
                 Ellipse2::try_new(center, direction, semi_major, semi_major * minor_axis_ratio)
@@ -8137,7 +8140,7 @@ fn solved_conic_geometry(kind: SolvedConicKind) -> Result<crate::ConicGeometry, 
             trim,
         } => {
             let axis = focus - vertex;
-            let focal_length = axis.norm();
+            let focal_length = axis.x.hypot(axis.y);
             let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
             Ok(crate::ConicGeometry::ParabolaSegment(
                 ParabolaSegment2::try_new(vertex, direction, focal_length, trim)
@@ -8153,7 +8156,7 @@ fn solved_conic_geometry(kind: SolvedConicKind) -> Result<crate::ConicGeometry, 
         } => {
             crate::conics::validate_positive_conic_scalar(semi_conjugate)?;
             let axis = transverse_axis_point - center;
-            let semi_transverse = axis.norm();
+            let semi_transverse = axis.x.hypot(axis.y);
             let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
             Ok(crate::ConicGeometry::HyperbolaSegment(
                 HyperbolaSegment2::try_new(

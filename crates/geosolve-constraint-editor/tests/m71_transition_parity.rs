@@ -4,13 +4,14 @@ use std::fmt::Write as _;
 
 use geosolve_constraint_editor::{
     AuthoringMutation, AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool,
-    ConstraintIntent, ConstructionCommitPlan, ConstructionPoint, DraftCurveSlot,
-    DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput, DraftInferenceLimits,
-    DraftInferenceRelation, DraftInferenceSample, DraftInferenceSceneInputCollection,
-    DraftInferenceStatus, DraftInferenceSubject, DraftLineSupportSlot, DraftPointSlot,
-    DraftReferenceAnchor, DraftReferenceOrigin, DraftSpanSlot, EditorScene,
-    GeometryInteractionPolicy, InferredRelation, ResolvedConstraintKind, RetainedEditorCoordinator,
-    ScenePointRoleIncidence, SelectionItem, Viewport,
+    ConstraintIntent, ConstructionCommitPlan, ConstructionPoint, ConstructionRelationDefinition,
+    DraftCurveSlot, DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput,
+    DraftInferenceLimits, DraftInferenceRelation, DraftInferenceSample,
+    DraftInferenceSceneInputCollection, DraftInferenceStatus, DraftInferenceSubject,
+    DraftLineSupportSlot, DraftPointSlot, DraftReferenceAnchor, DraftReferenceOrigin,
+    DraftSpanSlot, EditorScene, GeometryInteractionPolicy, InferredRelation,
+    ResolvedConstraintKind, RetainedEditorCoordinator, ScenePointRoleIncidence, SelectionItem,
+    Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition,
@@ -539,16 +540,16 @@ fn transition_transcript() -> Vec<u8> {
         proposal: geosolve_constraint_editor::ConstructionProposal::Point {
             point: ConstructionPoint::New([-1.0, 0.2]),
         },
-        role: GeometryRole::Profile,
+        curve_roles: Vec::new(),
         relations: vec![
-            InferredRelation::HorizontalPoints {
+            ConstructionRelationDefinition::auto_inference(InferredRelation::HorizontalPoints {
                 first: DraftPointSlot::Created { point_index: 0 },
                 second: DraftPointSlot::Existing(points[0]),
-            },
-            InferredRelation::VerticalPoints {
+            }),
+            ConstructionRelationDefinition::auto_inference(InferredRelation::VerticalPoints {
                 first: DraftPointSlot::Created { point_index: 0 },
                 second: DraftPointSlot::Existing(points[0]),
-            },
+            }),
         ],
     };
     let committed = coordinator
@@ -593,16 +594,20 @@ fn transition_transcript() -> Vec<u8> {
         proposal: geosolve_constraint_editor::ConstructionProposal::Point {
             point: ConstructionPoint::New([-2.8, 0.2]),
         },
-        role: GeometryRole::Profile,
+        curve_roles: Vec::new(),
         relations: vec![
-            InferredRelation::HorizontalPointToMidpoint {
-                point: DraftPointSlot::Created { point_index: 0 },
-                line: DraftSpanSlot::Existing(lines[0]),
-            },
-            InferredRelation::VerticalPointToMidpoint {
-                point: DraftPointSlot::Created { point_index: 0 },
-                line: DraftSpanSlot::Existing(lines[0]),
-            },
+            ConstructionRelationDefinition::auto_inference(
+                InferredRelation::HorizontalPointToMidpoint {
+                    point: DraftPointSlot::Created { point_index: 0 },
+                    line: DraftSpanSlot::Existing(lines[0]),
+                },
+            ),
+            ConstructionRelationDefinition::auto_inference(
+                InferredRelation::VerticalPointToMidpoint {
+                    point: DraftPointSlot::Created { point_index: 0 },
+                    line: DraftSpanSlot::Existing(lines[0]),
+                },
+            ),
         ],
     };
     let midpoint_committed = coordinator
@@ -644,11 +649,13 @@ fn transition_transcript() -> Vec<u8> {
             center: ConstructionPoint::New([-3.0, 3.0]),
             radius: 0.5,
         },
-        role: GeometryRole::Profile,
-        relations: vec![InferredRelation::Concentric {
-            first: DraftCurveSlot::Created { curve_index: 0 },
-            second: DraftCurveSlot::Existing(circles[0].curve),
-        }],
+        curve_roles: vec![GeometryRole::Profile],
+        relations: vec![ConstructionRelationDefinition::auto_inference(
+            InferredRelation::Concentric {
+                first: DraftCurveSlot::Created { curve_index: 0 },
+                second: DraftCurveSlot::Existing(circles[0].curve),
+            },
+        )],
     };
     let expected = coordinator
         .session()
@@ -671,20 +678,22 @@ fn transition_transcript() -> Vec<u8> {
             start: ConstructionPoint::New([6.0, 0.0]),
             end: ConstructionPoint::New([8.0, 0.0]),
         },
-        role: GeometryRole::Profile,
-        relations: vec![InferredRelation::Collinear {
-            first: DraftLineSupportSlot {
-                span: DraftSpanSlot::Created {
-                    curve_index: 0,
-                    segment: 0,
+        curve_roles: vec![GeometryRole::Profile],
+        relations: vec![ConstructionRelationDefinition::auto_inference(
+            InferredRelation::Collinear {
+                first: DraftLineSupportSlot {
+                    span: DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0,
+                    },
+                    direction: DocumentDirectionSense::Reverse,
                 },
-                direction: DocumentDirectionSense::Reverse,
+                second: DraftLineSupportSlot {
+                    span: DraftSpanSlot::Existing(lines[0]),
+                    direction: DocumentDirectionSense::Forward,
+                },
             },
-            second: DraftLineSupportSlot {
-                span: DraftSpanSlot::Existing(lines[0]),
-                direction: DocumentDirectionSense::Forward,
-            },
-        }],
+        )],
     };
     let expected = coordinator
         .session()

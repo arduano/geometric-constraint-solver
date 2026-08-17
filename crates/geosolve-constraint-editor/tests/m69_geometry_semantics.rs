@@ -1107,7 +1107,7 @@ fn drawing_role_is_frozen_into_the_commit_effect() {
         .iter()
         .find_map(|effect| match effect {
             EditorEffect::CommitConstructionPlan { token, plan, .. }
-                if plan.role == GeometryRole::Construction =>
+                if plan.curve_roles == [GeometryRole::Construction] =>
             {
                 Some(*token)
             }

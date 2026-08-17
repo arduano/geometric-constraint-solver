@@ -3,13 +3,13 @@
 use geosolve_constraint_editor::{
     AuthoringMutation, AuthoringOperand, AuthoringOperandKind, AuthoringOutcome, AuthoringState,
     AuthoringTool, AuthoringWarning, ConstraintIntent, ConstructionCommitPlan, ConstructionPoint,
-    ConstructionProposal, DisabledReason, DraftInferenceEngine, DraftInferenceFrame,
-    DraftInferenceInput, DraftInferenceLimits, DraftInferenceRelation, DraftInferenceSample,
-    DraftInferenceSceneInputCollection, DraftInferenceStatus, DraftInferenceSubject,
-    DraftPointSlot, DraftSpanSlot, EditorScene, GeometryInteractionPolicy, GeometryVisibility,
-    InferredRelation, PickTolerance, ResolvedConstraintKind, RetainedEditorCoordinator,
-    SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph, ScreenPoint, SelectionItem,
-    Viewport,
+    ConstructionProposal, ConstructionRelationDefinition, DisabledReason, DraftInferenceEngine,
+    DraftInferenceFrame, DraftInferenceInput, DraftInferenceLimits, DraftInferenceRelation,
+    DraftInferenceSample, DraftInferenceSceneInputCollection, DraftInferenceStatus,
+    DraftInferenceSubject, DraftPointSlot, DraftSpanSlot, EditorScene, GeometryInteractionPolicy,
+    GeometryVisibility, InferredRelation, PickTolerance, ResolvedConstraintKind,
+    RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph,
+    ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentCoordinateAxis,
@@ -705,10 +705,12 @@ fn datum_inference_and_atomic_publication_match_on_native_and_wasm() {
                 proposal: ConstructionProposal::Point {
                     point: ConstructionPoint::New([0.06, 0.06]),
                 },
-                role: GeometryRole::Profile,
-                relations: vec![InferredRelation::CoincidentWithOrigin {
-                    point: DraftPointSlot::Created { point_index: 0 },
-                }],
+                curve_roles: Vec::new(),
+                relations: vec![ConstructionRelationDefinition::auto_inference(
+                    InferredRelation::CoincidentWithOrigin {
+                        point: DraftPointSlot::Created { point_index: 0 },
+                    },
+                )],
             },
         )
         .expect("atomic Origin commit");
@@ -735,18 +737,20 @@ fn datum_inference_and_atomic_publication_match_on_native_and_wasm() {
                     start: ConstructionPoint::New([2.0, -4.0]),
                     end: ConstructionPoint::New([2.04, 0.04]),
                 },
-                role: GeometryRole::Profile,
+                curve_roles: vec![GeometryRole::Profile],
                 relations: vec![
-                    InferredRelation::PointOnDatumAxis {
-                        point: DraftPointSlot::Created { point_index: 1 },
-                        axis: DocumentCoordinateAxis::X,
-                    },
-                    InferredRelation::Vertical {
+                    ConstructionRelationDefinition::auto_inference(
+                        InferredRelation::PointOnDatumAxis {
+                            point: DraftPointSlot::Created { point_index: 1 },
+                            axis: DocumentCoordinateAxis::X,
+                        },
+                    ),
+                    ConstructionRelationDefinition::auto_inference(InferredRelation::Vertical {
                         line: DraftSpanSlot::Created {
                             curve_index: 0,
                             segment: 0,
                         },
-                    },
+                    }),
                 ],
             },
         )

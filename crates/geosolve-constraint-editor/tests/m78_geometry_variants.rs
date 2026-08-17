@@ -2,16 +2,19 @@
 
 use geosolve_constraint_editor::{
     ConstraintEditor, ConstructionCommitPlan, ConstructionCommitToken, ConstructionPoint,
-    ConstructionProposal, DraftAuthoringInput, DraftInferenceInput, DraftPointSlot, DraftSpanSlot,
+    ConstructionProposal, ConstructionRelationDefinition, ConstructionRelationProvenance,
+    CoordinatorError, DraftAuthoringInput, DraftInferenceInput, DraftPointSlot, DraftSpanSlot,
     EditorEffect, EditorMutation, EditorScene, GeometryDraftIssue, GeometryDraftMeasurement,
     GeometryDraftStage, GeometryToolVariant, InferredRelation, Modifiers, PointerInput,
     RetainedEditorCoordinator, Viewport,
 };
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentArcSweep,
-    DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveTrimView, DocumentEndpointRef,
-    DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter, FeatureEndpoint,
-    RetainedSketchDocumentSession, SketchDocument, SolverConfig, TangentOrientation,
+    DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveTrimView, DocumentEdit,
+    DocumentEndpointRef, DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary,
+    DocumentTrimParameter, FeatureEndpoint, GeometryRole, OperationControl, OperationOutcome,
+    OperationStopReason, OperationWorkCounter, RetainedSketchDocumentSession, SketchDocument,
+    SolverConfig, TangentOrientation,
 };
 
 const POINTER_ID: u64 = 0x7800;
@@ -109,6 +112,194 @@ fn coordinator_press(
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
+fn m78_plan_provenance_orders_recipe_intent_and_shadows_ambient_direction() {
+    let created = |curve_index| DraftSpanSlot::Created {
+        curve_index,
+        segment: 0,
+    };
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let plan = ConstructionCommitPlan {
+        proposal: ConstructionProposal::RectangleLoop {
+            points: vec![
+                ConstructionPoint::New([0.0, 0.0]),
+                ConstructionPoint::New([2.0, 0.0]),
+                ConstructionPoint::New([2.0, 2.0]),
+                ConstructionPoint::New([0.0, 2.0]),
+                ConstructionPoint::New([1.0, 1.0]),
+            ],
+            corners: [0, 1, 2, 3],
+            center: Some(4),
+        },
+        curve_roles: vec![
+            GeometryRole::Profile,
+            GeometryRole::Profile,
+            GeometryRole::Profile,
+            GeometryRole::Profile,
+            GeometryRole::Construction,
+        ],
+        // Deliberately declare these out of lowering order. The ambient
+        // Vertical targets a span whose direction is recipe-owned and must not
+        // survive as duplicate/conflicting intent.
+        relations: vec![
+            ConstructionRelationDefinition::auto_inference(InferredRelation::Vertical {
+                line: created(0),
+            }),
+            ConstructionRelationDefinition::recipe_regularization(InferredRelation::EqualLength {
+                first: created(0),
+                second: created(1),
+            }),
+            ConstructionRelationDefinition::recipe_intrinsic(InferredRelation::Horizontal {
+                line: created(0),
+            }),
+        ],
+    };
+
+    let result = plan.apply(&mut document).expect("ordered recipe plan");
+    assert_eq!(
+        result
+            .construction
+            .curves
+            .iter()
+            .map(|curve| document.geometry_role(*curve).expect("created role"))
+            .collect::<Vec<_>>(),
+        plan.curve_roles
+    );
+    assert_eq!(
+        result
+            .constraints
+            .iter()
+            .map(|constraint| (constraint.relation_index, constraint.provenance))
+            .collect::<Vec<_>>(),
+        [
+            (2, ConstructionRelationProvenance::RecipeIntrinsic),
+            (1, ConstructionRelationProvenance::RecipeRegularization),
+        ]
+    );
+    let labels = result
+        .constraints
+        .iter()
+        .map(|constraint| {
+            document
+                .constraint(constraint.constraint)
+                .expect("created constraint")
+                .label
+                .as_str()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        labels,
+        [
+            "recipe intrinsic horizontal",
+            "recipe regularization equal length",
+        ]
+    );
+    assert!(labels.iter().all(|label| !label.contains("auto")));
+
+    let session = RetainedSketchDocumentSession::new(
+        SketchDocument::new(10.0).expect("retained document"),
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("retained session");
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let expected = coordinator
+        .session()
+        .accepted_prepared_input()
+        .expect("accepted prepared input");
+    let precedence_plan = ConstructionCommitPlan {
+        proposal: ConstructionProposal::Line {
+            start: ConstructionPoint::New([0.0, 0.0]),
+            end: ConstructionPoint::New([2.0, 0.0]),
+        },
+        curve_roles: vec![GeometryRole::Profile],
+        relations: vec![
+            ConstructionRelationDefinition::auto_inference(InferredRelation::Vertical {
+                line: created(0),
+            }),
+            ConstructionRelationDefinition::recipe_intrinsic(InferredRelation::Horizontal {
+                line: created(0),
+            }),
+        ],
+    };
+    let committed = coordinator
+        .apply_construction_plan(&expected, &precedence_plan)
+        .expect("recipe precedence must publish");
+    assert!(committed.published_accepted.is_some());
+    assert_eq!(committed.value.constraints.len(), 1);
+    assert_eq!(
+        committed.value.constraints[0].provenance,
+        ConstructionRelationProvenance::RecipeIntrinsic
+    );
+}
+
+#[test]
+fn m78_oriented_rectangle_keeps_compatible_ambient_baseline_orientation() {
+    let created = |curve_index| DraftSpanSlot::Created {
+        curve_index,
+        segment: 0,
+    };
+    let plan = ConstructionCommitPlan {
+        proposal: ConstructionProposal::RectangleLoop {
+            points: vec![
+                ConstructionPoint::New([0.0, 0.0]),
+                ConstructionPoint::New([2.0, 0.0]),
+                ConstructionPoint::New([2.0, 1.0]),
+                ConstructionPoint::New([0.0, 1.0]),
+            ],
+            corners: [0, 1, 2, 3],
+            center: None,
+        },
+        curve_roles: vec![GeometryRole::Profile; 4],
+        relations: vec![
+            ConstructionRelationDefinition::recipe_intrinsic(InferredRelation::Perpendicular {
+                first: created(0),
+                second: created(1),
+            }),
+            ConstructionRelationDefinition::recipe_intrinsic(InferredRelation::Parallel {
+                first: created(0),
+                second: created(2),
+            }),
+            ConstructionRelationDefinition::recipe_intrinsic(InferredRelation::Parallel {
+                first: created(1),
+                second: created(3),
+            }),
+            ConstructionRelationDefinition::auto_inference(InferredRelation::Horizontal {
+                line: created(0),
+            }),
+        ],
+    };
+    let session = RetainedSketchDocumentSession::new(
+        SketchDocument::new(10.0).expect("document"),
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("session");
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let expected = coordinator
+        .session()
+        .accepted_prepared_input()
+        .expect("accepted prepared input");
+
+    let committed = coordinator
+        .apply_construction_plan(&expected, &plan)
+        .expect("compatible oriented rectangle plan must publish");
+    assert!(committed.published_accepted.is_some());
+    assert_eq!(committed.value.constraints.len(), 4);
+    assert_eq!(
+        committed
+            .value
+            .constraints
+            .iter()
+            .filter(|constraint| {
+                constraint.provenance == ConstructionRelationProvenance::AutoInference
+            })
+            .count(),
+        1
+    );
+}
+
+#[test]
 #[allow(
     clippy::too_many_lines,
     reason = "one end-to-end Tangent Arc contract test audits source and created contact metadata together"
@@ -157,6 +348,10 @@ fn m78_tangent_arc_requires_a_native_open_endpoint_and_commits_generic_tangency(
     let plan = terminal
         .plan
         .expect("Tangent Arc owns an atomic relation plan");
+    assert_eq!(
+        plan.relations[0].provenance,
+        ConstructionRelationProvenance::RecipeIntrinsic
+    );
     let ConstructionProposal::CircularArc {
         center,
         start: arc_start,
@@ -171,7 +366,7 @@ fn m78_tangent_arc_requires_a_native_open_endpoint_and_commits_generic_tangency(
     assert_point_close(*arc_end, [3.0, 1.0]);
     assert_eq!(*sweep, DocumentArcSweep::CounterClockwise);
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [InferredRelation::CurveCurveTangency {
             first,
             second,
@@ -345,7 +540,8 @@ fn m78_tangent_arc_is_one_retained_history_step_and_round_trips_checkpoint() {
 }
 
 #[test]
-fn m78_tangent_arc_stale_plan_cannot_publish_after_an_unrelated_edit() {
+#[allow(clippy::too_many_lines)]
+fn m78_tangent_arc_stale_plan_reauthenticates_a_moved_source_for_correction() {
     let (mut coordinator, scene) = tangent_coordinator_fixture();
     let _ = coordinator_press(&mut coordinator, &scene, [2.0, 0.0]);
     let effects = coordinator_press(&mut coordinator, &scene, [3.0, 1.0]);
@@ -354,27 +550,450 @@ fn m78_tangent_arc_stale_plan_cannot_publish_after_an_unrelated_edit() {
         .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
         .expect("Tangent Arc commit effect")
         .clone();
+    let token = match &commit {
+        EditorEffect::CommitConstructionPlan { token, .. } => *token,
+        _ => unreachable!("filtered construction-plan effect"),
+    };
     let expected = coordinator.session().design_identity();
+    let source_curve = coordinator.session().design_document().curves()[0].id;
+    let moved_endpoint = coordinator.session().design_document().points()[1].id;
     coordinator
-        .apply_construction(
+        .apply_edit(
             expected,
-            &ConstructionProposal::Point {
-                point: ConstructionPoint::New([4.0, 4.0]),
+            DocumentEdit::SetPointPosition {
+                point: moved_endpoint,
+                position: [2.0, 1.0],
             },
         )
-        .expect("unrelated accepted edit");
-    let before = coordinator
+        .expect("accepted source-endpoint edit");
+    assert_eq!(
+        coordinator.editor().pending_construction_commit_token(),
+        Some(token),
+        "the host must still be able to reject the now-stale publication"
+    );
+    let before_document = coordinator.session().design_document().clone();
+    let before_design = coordinator.session().design_identity();
+    let before_attempt = coordinator.session().last_attempt().identity();
+    let before_accepted = coordinator.session().accepted_prepared_input();
+    let before_history = (coordinator.history_len(), coordinator.history_cursor());
+    let before_transcript = coordinator.transcript().len();
+    let before_high_water = coordinator
+        .session()
+        .persistent_identity_high_water()
+        .clone();
+    let before_checkpoint = coordinator
         .persistence_checkpoint()
         .expect("checkpoint before stale attempt")
-        .design_json()
-        .to_owned();
-    assert!(coordinator.apply_editor_effect(&commit).is_err());
+        .clone();
+    assert!(matches!(
+        coordinator.apply_editor_effect(&commit),
+        Err(CoordinatorError::StaleInferredConstructionInput)
+    ));
+    assert!(
+        coordinator
+            .acknowledge_construction_commit(token, false)
+            .is_empty(),
+        "rejection keeps the terminal preview visible for correction"
+    );
+    assert!(
+        coordinator
+            .editor()
+            .pending_construction_commit_token()
+            .is_none()
+    );
+    let status = coordinator
+        .editor()
+        .geometry_draft_status()
+        .expect("stale rejection retains the Tangent Arc draft");
+    assert_eq!(status.completed_stages, 1);
+    assert_eq!(status.issue, Some(GeometryDraftIssue::ConstructionRejected));
+    assert!(coordinator.current_problem_metadata().is_none());
+    assert_eq!(coordinator.session().design_document(), &before_document);
+    assert_eq!(coordinator.session().design_identity(), before_design);
+    assert_eq!(
+        coordinator.session().last_attempt().identity(),
+        before_attempt
+    );
+    assert_eq!(
+        coordinator.session().accepted_prepared_input(),
+        before_accepted
+    );
+    assert_eq!(
+        (coordinator.history_len(), coordinator.history_cursor()),
+        before_history
+    );
+    assert_eq!(coordinator.transcript().len(), before_transcript);
+    assert_eq!(
+        coordinator.session().persistent_identity_high_water(),
+        &before_high_water
+    );
+    let after_checkpoint = coordinator
+        .persistence_checkpoint()
+        .expect("checkpoint after stale attempt");
+    assert_eq!(
+        after_checkpoint.sketch_identity_high_water(),
+        before_checkpoint.sketch_identity_high_water()
+    );
+    assert_eq!(
+        after_checkpoint.computed_evaluation_high_water(),
+        before_checkpoint.computed_evaluation_high_water()
+    );
+
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("current accepted scene");
+    let current_scene = EditorScene::from_accepted_for_design(
+        accepted.identity().revision().get(),
+        accepted.design_identity(),
+        accepted.document(),
+        coordinator.session().design_document(),
+        scene.viewport,
+        0.25,
+    )
+    .expect("rebased scene")
+    .with_retained_session(coordinator.session())
+    .expect("authenticated rebased scene");
+    let corrected = [3.0, 2.0];
+    assert!(
+        coordinator
+            .editor_mut()
+            .pointer_move(
+                &current_scene,
+                PointerInput {
+                    pointer_id: POINTER_ID,
+                    position: current_scene.viewport.model_to_screen(corrected),
+                    modifiers: Modifiers::default(),
+                },
+            )
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::PreviewConstruction(_)))
+    );
+    let corrected_effects = coordinator_press(&mut coordinator, &current_scene, corrected);
+    let corrected_plan = corrected_effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::CommitConstructionPlan { plan, .. } => Some(plan),
+            _ => None,
+        })
+        .expect("corrected Tangent Arc plan");
+    let ConstructionProposal::CircularArc {
+        center,
+        start,
+        end,
+        sweep,
+    } = &corrected_plan.proposal
+    else {
+        panic!("wrong corrected Tangent Arc proposal");
+    };
+    assert_point_close(construction_point_position(center), [1.0, 3.0]);
+    assert_point_close(*start, [2.0, 1.0]);
+    assert_point_close(*end, corrected);
+    assert_eq!(*sweep, DocumentArcSweep::CounterClockwise);
+    assert!(matches!(
+        corrected_plan.relation_payloads().as_slice(),
+        [InferredRelation::CurveCurveTangency {
+            first,
+            second,
+            orientation: TangentOrientation::Aligned,
+        }] if first.span == DraftSpanSlot::Existing(CurveSpan {
+                curve: source_curve,
+                segment: 0,
+            })
+            && first.parameter.to_bits() == 1.0_f64.to_bits()
+            && first.neighborhood == ContactNeighborhood::End
+            && second.span == DraftSpanSlot::Created {
+                curve_index: 0,
+                segment: 0,
+            }
+            && second.parameter.to_bits() == 0.0_f64.to_bits()
+            && second.neighborhood == ContactNeighborhood::Start
+    ));
+}
+
+#[test]
+fn m78_deleted_stale_dependency_stays_local_and_can_be_stepped_back() {
+    let (mut coordinator, scene) = tangent_coordinator_fixture();
+    let source_curve = coordinator.session().design_document().curves()[0].id;
+    let _ = coordinator_press(&mut coordinator, &scene, [2.0, 0.0]);
+    let effects = coordinator_press(&mut coordinator, &scene, [3.0, 1.0]);
+    let commit = effects
+        .iter()
+        .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+        .expect("pending Tangent Arc plan")
+        .clone();
+    let token = match &commit {
+        EditorEffect::CommitConstructionPlan { token, .. } => *token,
+        _ => unreachable!("filtered construction-plan effect"),
+    };
+    coordinator
+        .apply_edit(
+            coordinator.session().design_identity(),
+            DocumentEdit::Delete {
+                object: DocumentObjectId::Curve(source_curve),
+            },
+        )
+        .expect("delete stale Tangent Arc dependency");
+    assert!(matches!(
+        coordinator.apply_editor_effect(&commit),
+        Err(CoordinatorError::StaleInferredConstructionInput)
+    ));
+    assert!(
+        coordinator
+            .acknowledge_construction_commit(token, false)
+            .is_empty()
+    );
+
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted state after source deletion");
+    let current_scene = EditorScene::from_accepted_for_design(
+        accepted.identity().revision().get(),
+        accepted.design_identity(),
+        accepted.document(),
+        coordinator.session().design_document(),
+        scene.viewport,
+        0.25,
+    )
+    .expect("scene after source deletion")
+    .with_retained_session(coordinator.session())
+    .expect("authenticated scene after source deletion");
+    assert!(
+        coordinator
+            .editor_mut()
+            .pointer_move(
+                &current_scene,
+                PointerInput {
+                    pointer_id: POINTER_ID,
+                    position: current_scene.viewport.model_to_screen([3.0, 2.0]),
+                    modifiers: Modifiers::default(),
+                },
+            )
+            .iter()
+            .all(|effect| !matches!(
+                effect,
+                EditorEffect::CommitConstructionPlan { .. } | EditorEffect::PreviewConstruction(_)
+            ))
+    );
     assert_eq!(
         coordinator
-            .persistence_checkpoint()
-            .expect("checkpoint after stale attempt")
-            .design_json(),
-        before
+            .editor()
+            .geometry_draft_status()
+            .expect("local rejected draft")
+            .issue,
+        Some(GeometryDraftIssue::ConstructionRejected)
+    );
+    let stepped_back = coordinator.editor_mut().step_back_draft();
+    assert!(
+        stepped_back
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+    );
+    let reset = coordinator
+        .editor()
+        .geometry_draft_status()
+        .expect("active Tangent Arc status after step-back");
+    assert_eq!(reset.completed_stages, 0);
+    assert_eq!(reset.issue, None);
+    assert!(coordinator.current_problem_metadata().is_none());
+}
+
+#[test]
+fn m78_positive_acknowledgement_requires_exact_retained_publication() {
+    let (mut coordinator, scene) = tangent_coordinator_fixture();
+    let original_document = coordinator.session().design_document().clone();
+    let original_history = (coordinator.history_len(), coordinator.history_cursor());
+    let _ = coordinator_press(&mut coordinator, &scene, [2.0, 0.0]);
+    let effects = coordinator_press(&mut coordinator, &scene, [3.0, 1.0]);
+    let token = effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::CommitConstructionPlan { token, .. } => Some(*token),
+            _ => None,
+        })
+        .expect("pending Tangent Arc token");
+
+    assert!(
+        coordinator
+            .acknowledge_construction_commit(token, true)
+            .is_empty(),
+        "an unbacked positive acknowledgement must behave as rejection"
+    );
+    assert!(
+        coordinator
+            .editor()
+            .pending_construction_commit_token()
+            .is_none()
+    );
+    assert_eq!(
+        coordinator
+            .editor()
+            .geometry_draft_status()
+            .expect("correction-ready draft")
+            .issue,
+        Some(GeometryDraftIssue::ConstructionRejected)
+    );
+    assert_eq!(coordinator.session().design_document(), &original_document);
+    assert_eq!(
+        (coordinator.history_len(), coordinator.history_cursor()),
+        original_history
+    );
+
+    assert!(
+        coordinator
+            .editor_mut()
+            .pointer_move(
+                &scene,
+                PointerInput {
+                    pointer_id: POINTER_ID,
+                    position: scene.viewport.model_to_screen([3.5, 1.5]),
+                    modifiers: Modifiers::default(),
+                },
+            )
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::PreviewConstruction(_)))
+    );
+}
+
+#[test]
+fn m78_controlled_publication_supplies_positive_acknowledgement_evidence() {
+    let (mut coordinator, scene) = tangent_coordinator_fixture();
+    let original_curves = coordinator.session().design_document().curves().len();
+    let original_history = coordinator.history_len();
+    let _ = coordinator_press(&mut coordinator, &scene, [2.0, 0.0]);
+    let effects = coordinator_press(&mut coordinator, &scene, [3.0, 1.0]);
+    let (expected, token, plan) = effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::CommitConstructionPlan {
+                expected,
+                token,
+                plan,
+            } => Some((**expected, *token, plan.clone())),
+            _ => None,
+        })
+        .expect("pending Tangent Arc plan");
+
+    assert!(matches!(
+        coordinator
+            .apply_construction_plan_controlled(&expected, &plan, OperationControl::unlimited())
+            .expect("controlled Tangent Arc publication"),
+        OperationOutcome::Completed { .. }
+    ));
+    assert_eq!(
+        coordinator.session().design_document().curves().len(),
+        original_curves + 1
+    );
+    assert_eq!(coordinator.history_len(), original_history + 1);
+    assert!(
+        coordinator
+            .acknowledge_construction_commit(token, true)
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+    );
+    assert!(
+        coordinator
+            .editor()
+            .pending_construction_commit_token()
+            .is_none()
+    );
+}
+
+#[test]
+fn m78_zero_budget_stops_large_proposal_before_transactional_lowering() {
+    let session = RetainedSketchDocumentSession::new(
+        SketchDocument::new(10.0).expect("document"),
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("session");
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let expected = coordinator
+        .session()
+        .accepted_prepared_input()
+        .expect("accepted input");
+    let plan = ConstructionCommitPlan {
+        proposal: ConstructionProposal::Polyline {
+            points: (0..10_000)
+                .map(|index| ConstructionPoint::New([f64::from(index), 0.0]))
+                .collect(),
+        },
+        curve_roles: vec![GeometryRole::Profile],
+        relations: Vec::new(),
+    };
+    let before_document = coordinator.session().design_document().clone();
+    let before_input = coordinator.session().accepted_prepared_input();
+    let before_history = (coordinator.history_len(), coordinator.history_cursor());
+    let before_transcript = coordinator.transcript().len();
+    let before_high_water = coordinator
+        .session()
+        .persistent_identity_high_water()
+        .clone();
+    let before_checkpoint = coordinator
+        .persistence_checkpoint()
+        .expect("checkpoint")
+        .clone();
+    let mut control = OperationControl::unlimited();
+    control.limits.document_validation_items = 0;
+
+    let OperationOutcome::WorkExhausted { report } = coordinator
+        .apply_construction_plan_controlled(&expected, &plan, control)
+        .expect("controlled proposal")
+    else {
+        panic!("zero document-validation budget must stop proposal lowering");
+    };
+    assert_eq!(report.consumed.document_validation_items, 0);
+    assert_eq!(
+        report.stopping_reason,
+        Some(OperationStopReason::WorkExhausted {
+            counter: OperationWorkCounter::DocumentValidationItems,
+            checkpoint: geosolve_sketch::OperationCheckpoint::DocumentValidation,
+        })
+    );
+
+    let mut lowering_control = OperationControl::unlimited();
+    lowering_control.limits.document_validation_items = 1;
+    lowering_control.limits.document_lowering_items = 0;
+    let OperationOutcome::WorkExhausted { report } = coordinator
+        .apply_construction_plan_controlled(&expected, &plan, lowering_control)
+        .expect("lowering-controlled proposal")
+    else {
+        panic!("zero proposal-lowering budget must stop before candidate allocation");
+    };
+    assert_eq!(report.consumed.document_validation_items, 1);
+    assert_eq!(report.consumed.document_lowering_items, 0);
+    assert_eq!(
+        report.stopping_reason,
+        Some(OperationStopReason::WorkExhausted {
+            counter: OperationWorkCounter::DocumentLoweringItems,
+            checkpoint: geosolve_sketch::OperationCheckpoint::DocumentLowering,
+        })
+    );
+    assert_eq!(coordinator.session().design_document(), &before_document);
+    assert_eq!(
+        coordinator.session().accepted_prepared_input(),
+        before_input
+    );
+    assert_eq!(
+        (coordinator.history_len(), coordinator.history_cursor()),
+        before_history
+    );
+    assert_eq!(coordinator.transcript().len(), before_transcript);
+    assert_eq!(
+        coordinator.session().persistent_identity_high_water(),
+        &before_high_water
+    );
+    let after_checkpoint = coordinator
+        .persistence_checkpoint()
+        .expect("checkpoint after stopped proposal");
+    assert_eq!(
+        after_checkpoint.sketch_identity_high_water(),
+        before_checkpoint.sketch_identity_high_water()
+    );
+    assert_eq!(
+        after_checkpoint.computed_evaluation_high_water(),
+        before_checkpoint.computed_evaluation_high_water()
     );
 }
 
@@ -427,7 +1046,7 @@ fn m78_tangent_arc_resolves_whole_curve_start_and_multispan_end_orientation() {
         assert_point_close(construction_point_position(center), expected_center);
         assert_eq!(*sweep, expected_sweep);
         assert!(matches!(
-            plan.relations.as_slice(),
+            plan.relation_payloads().as_slice(),
             [InferredRelation::CurveCurveTangency {
                 first,
                 orientation: actual,
@@ -485,7 +1104,7 @@ fn m78_tangent_arc_uses_the_last_semantic_span_of_an_open_nonlinear_curve() {
     let terminal = terminal_construction(&press(&mut editor, &scene, target, false));
     let plan = terminal.plan.expect("nonlinear Tangent Arc plan");
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [InferredRelation::CurveCurveTangency {
             first,
             orientation: TangentOrientation::Aligned,
@@ -541,7 +1160,7 @@ fn m78_tangent_arc_skips_ineligible_topology_and_rejects_shared_endpoint_ambigui
         .plan
         .expect("valid endpoint survives rejected closed topology");
     assert!(matches!(
-        plan.relations.as_slice(),
+        plan.relation_payloads().as_slice(),
         [InferredRelation::CurveCurveTangency { first, .. }]
             if first.span == DraftSpanSlot::Existing(CurveSpan { curve: line, segment: 0 })
     ));
@@ -873,16 +1492,17 @@ fn assert_created_incidence_plan(
         .relations
         .iter()
         .filter(|relation| {
-            matches!(
-                relation,
-                InferredRelation::PointOnCurve {
-                    point: DraftPointSlot::Existing(_),
-                    contact
-                } if contact.span == DraftSpanSlot::Created {
-                    curve_index: 0,
-                    segment: 0,
-                }
-            )
+            relation.provenance == ConstructionRelationProvenance::AutoInference
+                && matches!(
+                    relation.relation,
+                    InferredRelation::PointOnCurve {
+                        point: DraftPointSlot::Existing(_),
+                        contact
+                    } if contact.span == DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0,
+                    }
+                )
         })
         .count();
     assert_eq!(incidence, expected_incidence, "variant {variant:?}");
@@ -1081,13 +1701,15 @@ fn m78_midpoint_line_is_one_line_with_an_atomic_midpoint_recipe() {
     let plan = terminal.plan.expect("midpoint relation is atomic");
     assert_eq!(
         plan.relations,
-        [InferredRelation::Midpoint {
-            point: DraftPointSlot::Created { point_index: 0 },
-            line: DraftSpanSlot::Created {
-                curve_index: 0,
-                segment: 0,
+        [ConstructionRelationDefinition::recipe_intrinsic(
+            InferredRelation::Midpoint {
+                point: DraftPointSlot::Created { point_index: 0 },
+                line: DraftSpanSlot::Created {
+                    curve_index: 0,
+                    segment: 0,
+                },
             },
-        }]
+        )]
     );
     assert_plan_solves_with_finite_geometry(&plan);
 }
@@ -1273,14 +1895,34 @@ fn assert_rectangle_case(case: RectangleCase, regularized: bool) {
     }
 
     let plan = terminal.plan.expect("rectangle relations are atomic");
+    let mut expected_roles = vec![GeometryRole::Profile; 4];
+    if center.is_some() {
+        expected_roles.push(GeometryRole::Construction);
+    }
+    assert_eq!(plan.curve_roles, expected_roles);
     assert_eq!(
         plan.relations.len(),
         case.ordinary_relation_count + usize::from(regularized)
     );
+    assert!(
+        plan.relations[..case.ordinary_relation_count]
+            .iter()
+            .all(|relation| relation.provenance == ConstructionRelationProvenance::RecipeIntrinsic)
+    );
     assert_eq!(
         plan.relations
             .iter()
-            .filter(|relation| matches!(relation, InferredRelation::EqualLength { .. }))
+            .filter(|relation| {
+                matches!(relation.relation, InferredRelation::EqualLength { .. })
+            })
+            .count(),
+        usize::from(regularized)
+    );
+    assert_eq!(
+        plan.relations
+            .iter()
+            .filter(|relation| relation.provenance
+                == ConstructionRelationProvenance::RecipeRegularization)
             .count(),
         usize::from(regularized)
     );
@@ -1423,7 +2065,9 @@ fn m78_created_curve_incidence_rejects_projected_off_support_points() {
     assert_eq!(
         plan.relations
             .iter()
-            .filter(|relation| matches!(relation, InferredRelation::PointOnCurve { .. }))
+            .filter(|relation| {
+                matches!(relation.relation, InferredRelation::PointOnCurve { .. })
+            })
             .count(),
         1,
         "only the exact snapped Start remains associative"

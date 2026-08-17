@@ -2648,13 +2648,25 @@ pub(crate) struct AxisMidpointResidual {
     pub(crate) coordinate: usize,
 }
 
+/// Computes one finite midpoint coordinate without forming an overflowing
+/// endpoint sum or discarding like-signed subnormal detail.
+fn midpoint_coordinate(first: f64, second: f64) -> f64 {
+    debug_assert!(first.is_finite() && second.is_finite());
+    if first.is_sign_negative() == second.is_sign_negative() {
+        (second - first).mul_add(0.5, first)
+    } else {
+        first.mul_add(0.5, 0.5 * second)
+    }
+}
+
 impl ResidualEvaluator for AxisMidpointResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
         let point = point_at(variables, self.point, "axis midpoint")?;
         let start = point_at(variables, self.start, "axis midpoint")?;
         let end = point_at(variables, self.end, "axis midpoint")?;
         Ok(vec![
-            point[self.coordinate] - 0.5 * (start[self.coordinate] + end[self.coordinate]),
+            point[self.coordinate]
+                - midpoint_coordinate(start[self.coordinate], end[self.coordinate]),
         ])
     }
 
@@ -2684,8 +2696,8 @@ impl ResidualEvaluator for MidpointResidual {
         let start = point_at(variables, self.start, "midpoint")?;
         let end = point_at(variables, self.end, "midpoint")?;
         Ok(vec![
-            point[0] - 0.5 * (start[0] + end[0]),
-            point[1] - 0.5 * (start[1] + end[1]),
+            point[0] - midpoint_coordinate(start[0], end[0]),
+            point[1] - midpoint_coordinate(start[1], end[1]),
         ])
     }
 
@@ -2727,7 +2739,7 @@ impl ResidualEvaluator for DatumAxisSymmetryResidual {
         let (first, second) = two_points(variables, "datum-axis symmetry")?;
         let (normal_coordinate, tangent_coordinate) = self.coordinates();
         Ok(vec![
-            0.5 * (first[normal_coordinate] + second[normal_coordinate]),
+            midpoint_coordinate(first[normal_coordinate], second[normal_coordinate]),
             second[tangent_coordinate] - first[tangent_coordinate],
         ])
     }
@@ -2809,8 +2821,8 @@ impl SymmetryResidual {
         let end = point_at(variables, self.line_end, "symmetry")?;
         let direction = subtract(end, start);
         let midpoint_offset = [
-            0.5 * (first[0] + second[0]) - start[0],
-            0.5 * (first[1] + second[1]) - start[1],
+            midpoint_coordinate(first[0], second[0]) - start[0],
+            midpoint_coordinate(first[1], second[1]) - start[1],
         ];
         Ok(SymmetryValues {
             first,
@@ -3535,6 +3547,90 @@ mod tests {
                     "scale={scale:e}, coordinate={coordinate}: {report:#?}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn midpoint_keeps_representable_extreme_coordinates_finite() {
+        let start = [8.0e307, -1.2e308];
+        let end = [1.2e308, -8.0e307];
+        let midpoint = [
+            midpoint_coordinate(start[0], end[0]),
+            midpoint_coordinate(start[1], end[1]),
+        ];
+        assert!(midpoint.into_iter().all(f64::is_finite));
+        assert!((midpoint[0] / 1.0e308 - 1.0).abs() <= 4.0 * f64::EPSILON);
+        assert!((midpoint[1] / -1.0e308 - 1.0).abs() <= 4.0 * f64::EPSILON);
+
+        let variables = [
+            VariableValue::Vec2(midpoint),
+            VariableValue::Vec2(start),
+            VariableValue::Vec2(end),
+        ];
+        let residual = MidpointResidual {
+            point: 0,
+            start: 1,
+            end: 2,
+        };
+        assert_eq!(residual.evaluate(&variables).unwrap(), [0.0, 0.0]);
+        assert!(
+            residual
+                .jacobian(&variables)
+                .unwrap()
+                .iter()
+                .flat_map(|block| block.values())
+                .all(|value| value.is_finite())
+        );
+    }
+
+    #[test]
+    fn midpoint_has_a_finite_difference_checked_jacobian_at_all_supported_scales() {
+        for scale in [1.0e-6, 1.0, 1.0e6] {
+            let translation = [17.0 * scale, -23.0 * scale];
+            let mut problem = Problem::new();
+            let point = problem.add_variable(
+                VariableBlock::vec2(
+                    [translation[0] + 2.0 * scale, translation[1] - scale],
+                    [scale, scale],
+                )
+                .unwrap(),
+            );
+            let start = problem.add_variable(
+                VariableBlock::vec2(
+                    [translation[0] - 4.0 * scale, translation[1] + 5.0 * scale],
+                    [scale, scale],
+                )
+                .unwrap(),
+            );
+            let end = problem.add_variable(
+                VariableBlock::vec2(
+                    [translation[0] + 8.0 * scale, translation[1] - 7.0 * scale],
+                    [scale, scale],
+                )
+                .unwrap(),
+            );
+            let source = problem.add_source(SourceConstraint::new("midpoint").unwrap());
+            problem
+                .add_residual(
+                    ResidualBlock::new(
+                        source,
+                        ResidualCategory::Hard,
+                        vec![point, start, end],
+                        2,
+                        vec![scale, scale],
+                        vec![row("midpoint x"), row("midpoint y")],
+                        MidpointResidual {
+                            point: 0,
+                            start: 1,
+                            end: 2,
+                        },
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+
+            let report = problem.check_jacobians(1.0e-6).unwrap();
+            assert!(report.all_within(1.0e-8), "scale={scale:e}: {report:#?}");
         }
     }
 
