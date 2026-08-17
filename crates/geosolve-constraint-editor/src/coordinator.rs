@@ -9,12 +9,13 @@ use geosolve_sketch::{
     CurveSpan, DesignPointId, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
     DocumentCommandEffect, DocumentConstraintDefinition, DocumentCurveContinuity,
     DocumentCurveControlAvailability, DocumentCurveControlError, DocumentCurveControlId,
-    DocumentCurveControlProjection, DocumentCurveControlWithholdingReason,
-    DocumentCurveCurvatureRelation, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentDragLocalityPlan, DocumentEdit, DocumentElementId,
-    DocumentExternalBindingId, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch,
-    DocumentMeasurementCatalog, DocumentMeasurementProvenance, DocumentMeasurementValue,
-    DocumentObjectId, DocumentParameterTarget, DocumentRationalConicControl, DocumentRuntimeMap,
+    DocumentCurveControlProjection, DocumentCurveControlTarget,
+    DocumentCurveControlWithholdingReason, DocumentCurveCurvatureRelation,
+    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
+    DocumentDragLocalityPlan, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
+    DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentMeasurementCatalog,
+    DocumentMeasurementProvenance, DocumentMeasurementValue, DocumentObjectId,
+    DocumentParameterTarget, DocumentRationalConicControl, DocumentRuntimeMap,
     DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
     ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
     GeometryRoleEdit, OperationCheckpoint, OperationControl, OperationController, OperationLimits,
@@ -4568,6 +4569,7 @@ impl RetainedEditorCoordinator {
         }
         expected.curve_controls == scene.curve_controls
             && expected.curve_control_guides == scene.curve_control_guides
+            && curve_control_point_aliases_match_scene(scene)
     }
 
     fn plan_projected_drag_start(
@@ -10211,6 +10213,20 @@ const fn dimension_target_scalar(
         | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
         | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
     }
+}
+
+fn curve_control_point_aliases_match_scene(scene: &EditorScene) -> bool {
+    scene.curve_controls.iter().all(|control| {
+        let DocumentCurveControlTarget::Point(point_id) = control.target else {
+            return true;
+        };
+        let mut matches = scene.points.iter().filter(|point| point.id == point_id);
+        matches.next().is_some_and(|point| {
+            point.model_position.map(f64::to_bits) == control.model_position.map(f64::to_bits)
+                && point.screen_position.x.to_bits() == control.screen_position.x.to_bits()
+                && point.screen_position.y.to_bits() == control.screen_position.y.to_bits()
+        }) && matches.next().is_none()
+    })
 }
 
 fn curve_control_command_effect(

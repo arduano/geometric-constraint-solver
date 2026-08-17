@@ -318,6 +318,22 @@ fn detached_or_mutated_same_design_scene_cannot_start_a_curve_point_alias_gestur
     assert!(coordinator.editor().active_pointer_gesture().is_none());
     assert_eq!(coordinator.history_len(), before_history);
 
+    let mut mutated_screen_point = scene.clone();
+    mutated_screen_point
+        .points
+        .iter_mut()
+        .find(|candidate| candidate.id == alias_point)
+        .unwrap()
+        .screen_position
+        .x += 1.0;
+    assert!(
+        coordinator
+            .pointer_down(&mutated_screen_point, pointer(7_023, alias.screen_position),)
+            .is_empty()
+    );
+    assert!(coordinator.editor().active_pointer_gesture().is_none());
+    assert_eq!(coordinator.history_len(), before_history);
+
     let mut mutated = scene.clone();
     mutated
         .curve_controls
@@ -328,7 +344,7 @@ fn detached_or_mutated_same_design_scene_cannot_start_a_curve_point_alias_gestur
         .push_str(" forged");
     assert!(
         coordinator
-            .pointer_down(&mutated, pointer(7_023, alias.screen_position))
+            .pointer_down(&mutated, pointer(7_024, alias.screen_position))
             .is_empty()
     );
     assert!(coordinator.editor().active_pointer_gesture().is_none());
@@ -337,13 +353,13 @@ fn detached_or_mutated_same_design_scene_cannot_start_a_curve_point_alias_gestur
 
     assert!(
         coordinator
-            .pointer_down(&scene, pointer(7_024, alias.screen_position))
+            .pointer_down(&scene, pointer(7_025, alias.screen_position))
             .is_empty()
     );
     assert_eq!(
         coordinator.editor().active_pointer_gesture(),
         Some(geosolve_constraint_editor::ActivePointerGesture {
-            pointer_id: 7_024,
+            pointer_id: 7_025,
             kind: geosolve_constraint_editor::ActivePointerGestureKind::Point,
         })
     );
