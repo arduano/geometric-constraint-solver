@@ -163,7 +163,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96` at expected media types.
   The caller accepted U1-U4 for scoped closure without claiming or requiring a separately logged
   post-refinement replay. M76 is complete.
-- The closeout-approved M77 CAD curve-control cut. `geosolve-sketch` now publishes typed
+- The completed M77 CAD curve-control cut. `geosolve-sketch` now publishes typed
   selected-curve control catalogs, inverse trim/size/rational projections, atomic ordinary/projective rational
   control edits and an immutable accepted prepared-preview view. `geosolve-constraint-editor`
   publishes selected-only handles, control cages, rails and shared finite paint/hit geometry,
@@ -180,8 +180,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its immutable
   no-rebuild snapshot `/tmp/geosolve-m77-uat.ARrQFw` is byte-verified at aggregate
   `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94` and remains live for
-  review. The supervising caller accepts U1-U6 and requests closure; final Pages verification
-  remains open.
+  review. The supervising caller accepts U1-U6 and requests closure. Approval descendant
+  `66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`;
+  root plus all seven hosted paths byte-match aggregate
+  `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Follow-up `62d9d26`
+  makes Pages publication-only, retaining the locked Trunk build and seven-file validation while
+  removing the duplicated complete integration gate. M77 is complete.
 
 ### Changed
 

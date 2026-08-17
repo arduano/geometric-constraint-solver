@@ -67,7 +67,7 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M76 are complete, and M77 awaits final Pages closeout. M76's
+of every prepared UAT step. M71-M77 are complete. M76's
 implementation,
 feature refinements,
 clean qualification, immutable Tailscale nomination, scoped human acceptance and exact public
@@ -80,8 +80,8 @@ gate and immutable freeze, but focused browser qualification found M75-F002 wher
 above a computed Fillet radius affordance hid that owner from both hover and pointer-down. The F002
 adapter correction passes the complete clean replacement gate and immutable Tailscale nomination;
 the supervising caller accepted the qualified interaction scope, and exact GitHub Pages
-publication now passes. M77 subsequently opens the selected-curve control-handle cut without
-changing any completed M76 evidence. M66's
+publication now passes. M77 subsequently completed the selected-curve control-handle cut, scoped
+human acceptance and exact Pages publication without changing any completed M76 evidence. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4949,10 +4949,10 @@ historical evidence only; its PID `1077092` was retired.
 
 ### M77: CAD curve handles and implicit-parameter editing
 
-Status: **closeout approved (2026-08-17); the replacement is clean-qualified, immutably frozen and
-byte-verified on Tailscale, and the supervising caller accepts U1-U6. GitHub Pages publication and
-hosted-byte verification remain the final open step**. M77 gives selected advanced curves a compact,
-headless-owned control presentation for parameters that previously had no spatial editing surface.
+Status: **complete (2026-08-17); the replacement is clean-qualified, immutably frozen,
+scope-approved and exact-verified on both Tailscale and GitHub Pages**. M77 gives selected advanced
+curves a compact, headless-owned control presentation for parameters that previously had no
+spatial editing surface.
 `docs/M77_GOALS.md` owns the approved scope and `docs/M77_UAT.md` owns the accepted human scorecard.
 
 - [x] Publish transient typed handles, family-specific guides and exact paint/hit geometry for
@@ -4989,7 +4989,7 @@ headless-owned control presentation for parameters that previously had no spatia
 - [x] Pass the replacement clean gate, freeze and byte-verify its immutable Tailscale candidate,
   then retire the superseded server only after the new snapshot is ready.
 - [x] Complete the focused human UAT under `docs/M77_UAT.md` and receive explicit approval.
-- [ ] Publish the exact accepted source through GitHub Pages, verify hosted bytes and close M77.
+- [x] Publish the exact accepted source through GitHub Pages, verify hosted bytes and close M77.
 
 Gate: every approved curve family exposes a truthful, selected-only spatial control surface;
 rendering, hover and pointer-down consume the same headless primitives and owner; invalid or stale
@@ -5039,8 +5039,32 @@ snapshot `/tmp/geosolve-m77-uat.ARrQFw` is read-only, has ordered-manifest aggre
 `/tmp/geosolve-m77-replacement-http-verify.yxgjkL`. PID `3912158` remained live until the
 replacement freeze was ready, then was retired. On 2026-08-17 the supervising caller explicitly
 approved the current replacement and requested milestone closure; U1-U6 therefore pass under that
-scoped disposition without inventing a separate row-by-row replay. Pages publication remains open;
-this later evidence ledger does not replace `cc99b11` as product source.
+scoped disposition without inventing a separate row-by-row replay. This later evidence ledger does
+not replace `cc99b11` as product source.
+
+Final public publication and closeout record (2026-08-17): documentation-only approval descendant
+`66a89b7e3e0c39d50407f2a540517e6a7facdc77`, tree
+`21cf7b619f9d8c9aeb16a989d516f35730a0d3a3`, passes GitHub Pages push run `32012819635` attempt 1.
+Assembly job `95335868643` passes in 35m43s, deploy job `95344916232` passes in 30s, and deployment
+`5942438795` reaches `success` at `https://arduano.github.io/geometric-constraint-solver/`.
+Artifact `9283439225` is 2,225,707 bytes with ZIP/API SHA-256
+`97f842a402df255391ed096bae4b04067e55f4eb617c9840d3d2ba607e2abb08`; its 6,594,560-byte inner
+tar has SHA-256 `f0d712123c7266ff9b504aa11abf000603b56b315eeaa9a229078aa1ca12b8ff`.
+Exactly seven regular files have ordered-manifest aggregate
+`872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Root and all seven public
+paths return HTTP 200 with zero redirects or encoding and byte-match the artifact at exact lengths
+and expected media types; root equals artifact `index.html`. Evidence is
+`/tmp/geosolve-m77-pages-verify.EhNzhE`, with the complete repeat in `public-complete`. Pages is
+public-byte authority; the separate Tailscale freeze remains exact UAT-candidate evidence. An
+M77-adapted M72 public Chromium check passes at both desktop sizes after replacing only its
+superseded numeric elliptical-arc Start assertion, while the retained M74 two-size and M75 6/6
+checks also pass; exact hashes are recorded in `docs/M77_IMPLEMENTATION.md`.
+
+Closeout-speed follow-up `62d9d26` removes dependency prefetch and the duplicate complete release
+gate from Pages while retaining the locked repository-prefixed Trunk build, seven-file validation,
+artifact upload and deployment. The clean local release gate remains qualification authority and
+Pages remains push-to-`main`/manual only, with no PR trigger. Actionlint and an exact publication-
+only build/validation pass; `[skip ci]` avoids a redundant post-close deployment. M77 is complete.
 
 Superseded initial nomination record (2026-08-17): exact source
 `51a3b95d04f27216c164febf0808a180b6775537`, tree

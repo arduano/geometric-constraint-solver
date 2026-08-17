@@ -100,15 +100,17 @@ passes. Exact replacement source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tre
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its immutable snapshot
 `/tmp/geosolve-m77-uat.ARrQFw` is byte-verified at ordered aggregate
 `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94` and remains live on the
-Tailscale endpoint. The supervising caller accepts U1-U6 and requests closure; Pages publication
-and hosted-byte verification remain open.
+Tailscale endpoint. The supervising caller accepts U1-U6 and requests closure. Approval descendant
+`66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`; all
+hosted bytes exact-verify at ordered aggregate
+`872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is complete.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74-M76 closed and M77 awaiting final Pages publication.
+3. `PLAN.md` — authoritative roadmap, with M74-M77 closed.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -121,8 +123,8 @@ Physics, collision and a production rendering system remain out of scope.
     and publicly verified hover/click ownership milestone.
 12. `docs/M76_GOALS.md`, `docs/M76_IMPLEMENTATION.md` and `docs/M76_UAT.md` — feature-refined,
     scoped-approved annotation milestone and exact closure evidence.
-13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — closeout-approved
-    selected-curve control contract, implementation ledger and accepted human scorecard.
+13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — completed and
+    publicly verified selected-curve control contract, implementation ledger and scorecard.
 
 ## Workspace
 

@@ -189,7 +189,7 @@ The F002 correction passes the complete clean replacement gate, immutable freeze
 Tailscale verification. The supervising caller accepted the qualified interaction scope, and
 exact final public publication passes. M76 implementation, clean qualification, immutable
 byte-verified Tailscale nomination, scoped human acceptance and exact final public publication all
-pass. M77 is active subsequently and does not change any completed M76 evidence.
+pass. M77 subsequently completes without changing any completed M76 evidence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2111,7 +2111,7 @@ M72/M74 two-size and M75 6/6 Chromium checks pass. Every M75 acceptance gate is 
 
 Status: **complete (2026-08-17); implementation, final clean release qualification, frozen
 byte-verified Tailscale nomination, scoped human approval and exact GitHub Pages publication pass.
-M77 is active subsequently and does not change this evidence**.
+M77 subsequently completes without changing this evidence**.
 
 - Every accepted dimension family has truthful geometry: point distance, affine line/polyline-span
   length, radius, diameter, oriented angle, supporting-line offset and exact translated-segment
@@ -2321,8 +2321,19 @@ session `5213` serves it at `http://100.94.63.83:8080/`; root plus every file re
 zero redirects or content encoding, exact expected media types/lengths and byte equality, and the
 fetched aggregate matches. On 2026-08-17 the supervising caller explicitly approved this current
 replacement and requested milestone closure. U1-U6 pass under that scoped disposition without a
-claim of a separately logged row-by-row replay. GitHub Pages publication and hosted-byte
-verification remain open.
+claim of a separately logged row-by-row replay.
+
+Final publication evidence (2026-08-17): approval descendant
+`66a89b7e3e0c39d50407f2a540517e6a7facdc77`, tree
+`21cf7b619f9d8c9aeb16a989d516f35730a0d3a3`, passes Pages run `32012819635`, assembly job
+`95335868643`, deploy job `95344916232` and deployment `5942438795`. Artifact `9283439225` is
+2,225,707 bytes, has ZIP/API SHA-256
+`97f842a402df255391ed096bae4b04067e55f4eb617c9840d3d2ba607e2abb08`, inner-tar SHA-256
+`f0d712123c7266ff9b504aa11abf000603b56b315eeaa9a229078aa1ca12b8ff` and exact seven-file
+aggregate `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Root plus all seven
+public paths return HTTP 200 and byte-match the artifact at their exact lengths and media types;
+root equals artifact `index.html`. Product-source qualification, scoped approval, publication and
+hosted-byte verification all pass. M77 is complete.
 
 The `51a3b95` source, `/tmp/geosolve-m77-uat.1mDjQv` snapshot and retired PID `3912158` record above
 are superseded historical evidence only after M77-F012/F013, not current UAT authority. The later

@@ -2,11 +2,10 @@
 
 # M77 — CAD curve handles and implicit-parameter editing
 
-Status: **closeout approved (2026-08-17); the replacement is clean-qualified, immutably frozen and
-byte-verified on Tailscale, and the supervising caller accepts U1-U6. GitHub Pages publication and
-hosted-byte verification remain the final open step**. M77 makes advanced curve parameters directly
-manipulable in the polished demo while preserving the existing document model, equations and
-explicit branch state.
+Status: **complete (2026-08-17); the replacement is clean-qualified, immutably frozen,
+scope-approved and exact-verified on both Tailscale and GitHub Pages**. M77 makes advanced curve
+parameters directly manipulable in the polished demo while preserving the existing document
+model, equations and explicit branch state.
 
 ## Product contract
 
@@ -115,8 +114,10 @@ superseded historical evidence after replacement UAT findings. Exact replacement
 without rebuilding at `/tmp/geosolve-m77-uat.ARrQFw`; its seven served files byte-match aggregate
 `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`. The supervising caller
 explicitly approved the current replacement and requested closure on 2026-08-17; U1-U6 pass under
-that scoped disposition. GitHub Pages publication and hosted-byte verification remain required
-before M77 closes.
+that scoped disposition. Publication descendant `66a89b7e3e0c39d50407f2a540517e6a7facdc77`
+passes GitHub Pages run `32012819635`; artifact `9283439225` and deployment `5942438795` succeed,
+and root plus all seven public files byte-match ordered-manifest aggregate
+`872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is closed.
 
 ## Non-goals
 

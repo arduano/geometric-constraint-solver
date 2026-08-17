@@ -2,9 +2,8 @@
 
 # M77 implementation — CAD curve handles and implicit parameters
 
-Status: **closeout approved (2026-08-17); the replacement is clean-qualified, immutably frozen and
-byte-verified on Tailscale, and the supervising caller accepts U1-U6. GitHub Pages publication and
-hosted-byte verification remain the final open step.**
+Status: **complete (2026-08-17); the replacement is clean-qualified, immutably frozen,
+scope-approved and exact-verified on both Tailscale and GitHub Pages.**
 
 ## Approved architecture
 
@@ -245,10 +244,67 @@ targets, automatic trim/branch changes and mobile layout remain deliberate non-g
 Replacement mechanical nomination is complete. On 2026-08-17 the supervising caller explicitly
 approved the current candidate and requested milestone closure. U1-U6 pass under that scoped
 disposition; this does not invent a separate row-by-row replay beyond the reported focused checks.
-GitHub Pages publication and hosted-byte verification remain the final closeout step.
+The exact GitHub Pages publication and hosted-byte verification below complete the final closeout
+step.
 
 ## Closeout evidence
 
-Pending accepted-source GitHub Pages publication, hosted-byte verification and the final closeout
-ledger. The evidence-recording descendant must retain a clean worktree and does not replace the
-exact qualified Tailscale product source above.
+The documentation-only approval descendant
+`66a89b7e3e0c39d50407f2a540517e6a7facdc77`, tree
+`21cf7b619f9d8c9aeb16a989d516f35730a0d3a3`, triggered push run `32012819635` (attempt 1).
+Qualification/assembly job `95335868643` passed in 35m43s and deploy job `95344916232` passed in
+30s. Deployment `5942438795` reached `success` at
+`https://arduano.github.io/geometric-constraint-solver/`. This publication descendant records the
+approved scorecard; exact clean product source `cc99b11` remains the release-qualified product
+authority, and no byte identity with the separately built Tailscale snapshot is claimed.
+
+Actions artifact `9283439225` is 2,225,707 bytes. Its ZIP/API SHA-256 is
+`97f842a402df255391ed096bae4b04067e55f4eb617c9840d3d2ba607e2abb08`; its sole inner
+`artifact.tar` is 6,594,560 bytes with SHA-256
+`f0d712123c7266ff9b504aa11abf000603b56b315eeaa9a229078aa1ca12b8ff`. The extracted artifact
+contains exactly seven regular non-symlink files:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 23,275 | `5b130ea27e2897f1c38d1947d9116debe429a2708e389ee68f49a6f63f9959b9` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-f1feb79aac4ed84c.js` | 33,221 | `9f28eed1331a570a1fa894f16834a40be0593ef9bd673ca80db8fbea4017eef1` |
+| `geosolve-demo-web-f1feb79aac4ed84c_bg.wasm` | 6,426,433 | `e74a07d0466fc4a5bfad9e8e63977bf9d5c70351b065aa7b3ff9272dd25ddfd0` |
+| `index.html` | 29,080 | `1dde6ab75395787cc8a290a3ec03fdddab5869066dfed4fd2094737c3070576b` |
+| `styles-d7435a6d60dc3430.css` | 34,689 | `870bde7d758fe95f4323bedc6588ff2cffaf3c826549e684718ebfd818eebcd6` |
+
+The C-locale ordered-manifest aggregate is
+`872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Proxy-disabled,
+cache-bypassed identity requests for `/`, `/index.html` and all six other paths returned HTTP 200
+with zero redirects, no `Location` or `Content-Encoding`, exact lengths/media types and
+artifact-identical bytes; `/` equals `index.html`. Complete artifact and public evidence is in
+`/tmp/geosolve-m77-pages-verify.EhNzhE`, with the authoritative repeat under `public-complete`.
+The downloaded 745,242-byte workflow log has SHA-256
+`96f655e32fac6131df1c480395e22a4bdb56ea27271bae8e2bda04fcce997d32`.
+
+Retained public Chromium smokes also pass. M77-adapted M72 check
+`/tmp/m77_adapted_m72_browser_check.mjs`, SHA-256
+`f9be8940470055d9079de651250aea1acb70ef6e68383957fa819adc2b1b4c2b`, replaces only the obsolete
+numeric elliptical-arc Start-field assertions with M77's approved hidden-numeric/spatial-help
+contract and passes at `1440x900` and `1024x720`. The M76-adapted M74 check, SHA-256
+`4aff982c6a9e10702d7b0179c17682c6904bb6c28362ebefe967705a984c3355`, passes both sizes; the M75
+check, SHA-256 `161e96d541dbcc189dbbc23c47da672e3080b7c7646e45c11ef458a5e521a067`, passes 6/6. The unchanged
+M72 artifact correctly stops on its superseded numeric-Start expectation and is not cited as a
+post-M77 gate.
+
+### Future closeout optimization
+
+The final hosted run showed that dependency prefetch plus the duplicated complete release gate
+occupied 35m04s of the 35m43s assembly job; the repository-prefixed Pages build itself occupied
+30s. Commit `62d9d26d0a53d5e9956c4e1d94f4e81c1171715c` therefore keeps Pages publication-only: immutable
+checkout and Nix inputs, one locked repository-prefixed Trunk/WASM build, the exact seven-file
+shape/prefix validation, artifact upload and deploy. The required clean local release gate remains
+qualification authority, and the workflow still has no `pull_request` trigger.
+
+`nix-shell -p actionlint --run 'actionlint .github/workflows/pages.yml'` passes. The exact retained
+publication command plus seven-file validation also passes locally in 14.13s with warm build
+products. This is not a hosted-duration claim; the next hosted publication should be measured
+before considering a remote build cache. Both the workflow optimization and this final ledger use
+`[skip ci]`, so they do not enqueue a redundant second deployment of the already verified M77
+candidate.

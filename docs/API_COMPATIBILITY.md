@@ -209,8 +209,11 @@ disposition, workspace/reproduction schema or annotation cache. Curve-control ca
 from accepted geometry and selection. Exact source
 `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate and immutable Tailscale
-nomination. The supervising caller accepts U1-U6 and requests closure; final Pages publication and
-hosted-byte verification remain open. This approval changes no compatibility boundary.
+nomination. The supervising caller accepts U1-U6 and requests closure. Publication descendant
+`66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`; root
+plus all seven hosted paths exact-verify at aggregate
+`872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is complete. This
+approval and publication change no compatibility boundary.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

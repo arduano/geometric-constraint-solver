@@ -2,11 +2,11 @@
 
 # M77 focused UAT — CAD curve handles and implicit parameters
 
-Status: **replacement accepted for closeout (2026-08-17)**. UAT findings M77-F012 and M77-F013
+Status: **complete and publicly verified (2026-08-17)**. UAT findings M77-F012 and M77-F013
 supersede the initial candidate. Their corrections and review follow-ups pass the complete clean
 gate, immutable freeze and served-byte verification below. The supervising caller explicitly
-approved the current replacement and requested milestone closure; GitHub Pages publication and
-hosted-byte verification remain pending.
+approved the current replacement and requested milestone closure; exact GitHub Pages publication
+and hosted-byte verification now pass.
 
 ## Current replacement candidate
 
@@ -52,6 +52,25 @@ redirects, no content encoding, exact expected media types/lengths and snapshot-
 `/tmp/geosolve-m77-replacement-http-verify.yxgjkL`. Withdrawn PID `3912158` stayed live until the
 replacement snapshot was ready and is now retired. The evidence-ledger commit is a documentation
 descendant; exact source `cc99b11` remains the mechanically qualified product authority.
+
+## Final GitHub Pages publication
+
+Approval descendant `66a89b7e3e0c39d50407f2a540517e6a7facdc77`, tree
+`21cf7b619f9d8c9aeb16a989d516f35730a0d3a3`, passed push run `32012819635` (attempt 1).
+Assembly job `95335868643` passed in 35m43s; deploy job `95344916232` passed in 30s and deployment
+`5942438795` reached `success` at `https://arduano.github.io/geometric-constraint-solver/`.
+Artifact `9283439225` is 2,225,707 bytes with Actions/ZIP digest
+`97f842a402df255391ed096bae4b04067e55f4eb617c9840d3d2ba607e2abb08`; its 6,594,560-byte
+inner tar has SHA-256 `f0d712123c7266ff9b504aa11abf000603b56b315eeaa9a229078aa1ca12b8ff`.
+
+The seven-file ordered manifest is recorded in `docs/M77_IMPLEMENTATION.md` and has aggregate
+`872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Proxy-disabled,
+cache-bypassed identity requests for root plus every artifact path returned HTTP 200 with zero
+redirects, exact expected media types/lengths, no `Location` or `Content-Encoding`, and exact byte
+equality; root also equals artifact `index.html`. Complete evidence is
+`/tmp/geosolve-m77-pages-verify.EhNzhE`, with the authoritative eight-request repeat under
+`public-complete`. Pages is final public-byte authority; the separately built immutable Tailscale
+snapshot remains candidate evidence and is intentionally not compared across builds.
 
 ## Superseded initial candidate
 
@@ -223,7 +242,8 @@ and canvas hover must not steal focus.
 - U6 — persistence and desktop polish: accepted under the supervising caller's scoped approval
 - Final supervising approval: passed on 2026-08-17; the caller approved the current replacement and
   requested closure
-- GitHub Pages publication and hosted-byte verification: pending
+- GitHub Pages publication and hosted-byte verification: passed in run `32012819635`, artifact
+  `9283439225` and deployment `5942438795`
 
 This is an explicit milestone-level acceptance of the current replacement. It does not claim a
 separately logged row-by-row replay beyond the focused defects and interaction checks reported by

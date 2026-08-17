@@ -1355,8 +1355,8 @@ feature refinements pass complete clean qualification and immutable byte-verifie
 replacement publication. The caller accepts U1-U4 for scoped closure and explicitly waives a
 separate post-refinement replay; that disposition does not invent individual observations. Exact
 GitHub Pages publication, the unchanged retained M72 browser verification and M76-adapted retained
-M74/M75 browser verification now pass, completing M76. M77 is active subsequently and does not
-change any completed M76 evidence.
+M74/M75 browser verification now pass, completing M76. M77 subsequently completes without changing
+any completed M76 evidence.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -2215,8 +2215,10 @@ byte-verified on Tailscale. Exact source `51a3b95`, tree `8d154a1`, snapshot
 `/tmp/geosolve-m77-uat.1mDjQv` and aggregate
 `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b` are superseded historical
 evidence only. On 2026-08-17 the supervising caller explicitly approved the current replacement and
-requested closure; U1-U6 pass under that scoped disposition. Pages publication and hosted-byte
-verification remain the final open step.
+requested closure; U1-U6 pass under that scoped disposition. Approval descendant `66a89b7` passes
+Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`. Root plus all seven
+hosted paths byte-match exact ordered-manifest aggregate
+`872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is complete.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
