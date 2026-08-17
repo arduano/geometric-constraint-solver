@@ -921,6 +921,16 @@ fn positive_negative_and_projective_rational_middle_gestures_commit_one_exact_hi
         let before_history = coordinator.history_len();
         coordinator.apply_editor_effect(commit).unwrap().unwrap();
         assert_eq!(coordinator.history_len(), before_history + 1, "{case}");
+        assert!(matches!(
+            coordinator.transcript(),
+            [ReplayAction::Edit {
+                edit: DocumentEdit::SetConicWeightedMiddle {
+                    curve: edited_curve,
+                    ..
+                },
+                ..
+            }] if *edited_curve == curve
+        ));
         assert_eq!(
             coordinator
                 .session()
