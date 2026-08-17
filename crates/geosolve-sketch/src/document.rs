@@ -411,6 +411,8 @@ pub enum DocumentCurveControlWithholdingReason {
     AssociativeFilletOutput,
     HostParameterOwned,
     GaugeOwned,
+    DrivingDimensionOwned,
+    EqualRadiusOwned,
 }
 
 /// Editability of one visible selected-curve control.
@@ -4921,7 +4923,7 @@ impl SketchDocument {
                     DocumentCurveControlKind::Radius,
                     [center_position[0] + radius_value, center_position[1]],
                     DocumentCurveControlTarget::Scalar(*radius),
-                    self.scalar_control_availability(*radius, base_availability),
+                    self.radial_control_availability(curve, *radius, base_availability, &activity),
                 )?;
             }
             CurveDefinition::CircularArc { center, radius, .. } => {
@@ -4942,9 +4944,10 @@ impl SketchDocument {
                     DocumentCurveControlKind::Radius,
                     [midpoint.x, midpoint.y],
                     DocumentCurveControlTarget::Scalar(*radius),
-                    self.scalar_control_availability(*radius, base_availability),
+                    self.radial_control_availability(curve, *radius, base_availability, &activity),
                 )?;
                 push_trim_controls(
+                    self,
                     &mut controls,
                     curve,
                     endpoint_position(FeatureEndpoint::Start)?,
@@ -5020,6 +5023,7 @@ impl SketchDocument {
                     base_availability,
                 )?;
                 push_trim_controls(
+                    self,
                     &mut controls,
                     curve,
                     endpoint_position(FeatureEndpoint::Start)?,
@@ -5093,6 +5097,7 @@ impl SketchDocument {
                     base_availability,
                 )?;
                 push_trim_controls(
+                    self,
                     &mut controls,
                     curve,
                     endpoint_position(FeatureEndpoint::Start)?,
@@ -5141,6 +5146,7 @@ impl SketchDocument {
                     self.scalar_control_availability(*semi_conjugate, base_availability),
                 )?;
                 push_trim_controls(
+                    self,
                     &mut controls,
                     curve,
                     endpoint_position(FeatureEndpoint::Start)?,
@@ -5327,6 +5333,51 @@ impl SketchDocument {
             )
         } else {
             fallback
+        }
+    }
+
+    fn radial_control_availability(
+        &self,
+        curve: CurveId,
+        scalar: DesignScalarId,
+        fallback: DocumentCurveControlAvailability,
+        activity: &EffectiveActivity,
+    ) -> DocumentCurveControlAvailability {
+        let scalar_availability = self.scalar_control_availability(scalar, fallback);
+        if scalar_availability != DocumentCurveControlAvailability::Editable {
+            return scalar_availability;
+        }
+        if self.dimensions.iter().any(|dimension| {
+            activity.is_active(dimension.id)
+                && dimension.mode == DocumentDimensionMode::Driving
+                && matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::Radius {
+                        curve: dimension_curve,
+                        ..
+                    } | DocumentDimensionDefinition::Diameter {
+                        curve: dimension_curve,
+                        ..
+                    } if dimension_curve == curve
+                )
+        }) {
+            return DocumentCurveControlAvailability::ReadOnly(
+                DocumentCurveControlWithholdingReason::DrivingDimensionOwned,
+            );
+        }
+        if self.constraints.iter().any(|constraint| {
+            activity.is_active(constraint.id)
+                && matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::EqualRadius { first, second }
+                        if first == curve || second == curve
+                )
+        }) {
+            DocumentCurveControlAvailability::ReadOnly(
+                DocumentCurveControlWithholdingReason::EqualRadiusOwned,
+            )
+        } else {
+            DocumentCurveControlAvailability::Editable
         }
     }
 
@@ -12553,6 +12604,7 @@ fn push_curve_control(
 }
 
 fn push_trim_controls(
+    document: &SketchDocument,
     controls: &mut Vec<DocumentCurveControl>,
     curve: CurveId,
     start_position: [f64; 2],
@@ -12594,7 +12646,7 @@ fn push_trim_controls(
         DocumentCurveControlKind::TrimStart,
         start_position,
         DocumentCurveControlTarget::Scalar(start),
-        availability,
+        document.scalar_control_availability(start, availability),
     )?;
     push_curve_control(
         controls,
@@ -12602,7 +12654,7 @@ fn push_trim_controls(
         DocumentCurveControlKind::TrimEnd,
         end_position,
         DocumentCurveControlTarget::Scalar(end),
-        availability,
+        document.scalar_control_availability(end, availability),
     )
 }
 

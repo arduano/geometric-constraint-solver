@@ -2514,7 +2514,7 @@ pub struct PreparedSketchPreview<'a> {
     patch: &'a PreparedSketchPatch,
 }
 
-impl PreparedSketchPreview<'_> {
+impl<'a> PreparedSketchPreview<'a> {
     /// Exact live-session input from which this candidate was prepared.
     #[must_use]
     pub const fn base_input(&self) -> PreparedSketchInput {
@@ -2550,6 +2550,20 @@ impl PreparedSketchPreview<'_> {
     pub fn accepted_document(&self) -> Option<&SketchDocument> {
         self.accepted_state()
             .map(SketchAcceptedDocumentState::document)
+    }
+
+    /// Exact immutable candidate session when this patch owns a current accepted state.
+    ///
+    /// This narrow publication seam lets read-only companion evaluators consume the same
+    /// independently accepted candidate that will later be compare-and-swap committed. The
+    /// returned session cannot be mutated through this view, and a rejected candidate exposes no
+    /// session at all.
+    #[must_use]
+    pub fn accepted_session(self) -> Option<&'a RetainedSketchDocumentSession> {
+        self.patch
+            .candidate
+            .accepted_state_for_current_input()
+            .map(|_| &self.patch.candidate)
     }
 }
 

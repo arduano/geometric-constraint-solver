@@ -2,9 +2,11 @@
 
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
-    CurveDefinition, CurveId, DocumentArcSweep, DocumentCommand, DocumentCommandEffect,
+    CurveDefinition, CurveId, DocumentArcSweep, DocumentBSplineForm, DocumentCommand,
+    DocumentCommandEffect, DocumentConstraintDefinition, DocumentCurveControlAvailability,
     DocumentCurveControlId, DocumentCurveControlKind, DocumentCurveControlProjection,
-    DocumentCurveControlTarget, DocumentEdit, DocumentHyperbolaBranch,
+    DocumentCurveControlTarget, DocumentCurveControlWithholdingReason, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentEdit, DocumentElementId, DocumentHyperbolaBranch,
     DocumentRationalConicControl, DocumentRationalConicControlMode, DocumentSolveRequest,
     MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl, OperationOutcome,
     PreparedSketchOperation, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
@@ -235,6 +237,16 @@ fn pair_bits(value: [f64; 2]) -> [u64; 2] {
     value.map(f64::to_bits)
 }
 
+fn add_control_points(
+    document: &mut SketchDocument,
+    positions: &[[f64; 2]],
+) -> Vec<geosolve_sketch::DesignPointId> {
+    positions
+        .iter()
+        .map(|position| document.add_point("control", *position).unwrap())
+        .collect()
+}
+
 #[test]
 fn catalog_exposes_persistent_aliases_and_derived_controls_without_schema_state() {
     let (document, ids) = gallery();
@@ -321,6 +333,221 @@ fn catalog_exposes_persistent_aliases_and_derived_controls_without_schema_state(
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one catalog matrix keeps every remaining M77 point-control family explicit"
+)]
+fn point_defined_and_elliptical_arc_catalog_is_complete_and_finite() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+
+    let line_points = add_control_points(&mut document, &[[0.0, 0.0], [2.0, 0.5]]);
+    let line = document
+        .add_curve(
+            "line",
+            CurveDefinition::Line {
+                start: line_points[0],
+                end: line_points[1],
+                branch_direction: [2.0 / 2.0_f64.hypot(0.5), 0.5 / 2.0_f64.hypot(0.5)],
+            },
+        )
+        .unwrap();
+
+    let polyline_points = add_control_points(&mut document, &[[3.0, 0.0], [4.0, 1.0], [5.0, 0.0]]);
+    let polyline = document
+        .add_curve(
+            "polyline",
+            CurveDefinition::Polyline {
+                points: polyline_points,
+                closed: false,
+                branch_directions: vec![
+                    [std::f64::consts::FRAC_1_SQRT_2; 2],
+                    [
+                        std::f64::consts::FRAC_1_SQRT_2,
+                        -std::f64::consts::FRAC_1_SQRT_2,
+                    ],
+                ],
+            },
+        )
+        .unwrap();
+
+    let quadratic_points = add_control_points(&mut document, &[[6.0, 0.0], [7.0, 2.0], [8.0, 0.0]]);
+    let quadratic = document
+        .add_curve(
+            "quadratic",
+            CurveDefinition::QuadraticBezier {
+                controls: quadratic_points.try_into().unwrap(),
+            },
+        )
+        .unwrap();
+    let cubic_points = add_control_points(
+        &mut document,
+        &[[9.0, 0.0], [10.0, 2.0], [11.0, 2.0], [12.0, 0.0]],
+    );
+    let cubic = document
+        .add_curve(
+            "cubic",
+            CurveDefinition::CubicBezier {
+                controls: cubic_points.try_into().unwrap(),
+            },
+        )
+        .unwrap();
+
+    let ellipse_points = add_control_points(&mut document, &[[14.0, 0.0], [17.0, 0.0]]);
+    let ratio = document
+        .add_scalar("ratio", 0.5, ScalarUnit::Parameter, ratio_domain())
+        .unwrap();
+    let ellipse_start = document
+        .add_scalar("start", 0.2, ScalarUnit::Angle, ScalarDomain::Finite)
+        .unwrap();
+    let ellipse_end = document
+        .add_scalar("end", 1.4, ScalarUnit::Angle, ScalarDomain::Finite)
+        .unwrap();
+    let elliptical_arc = document
+        .add_curve(
+            "elliptical arc",
+            CurveDefinition::EllipticalArc {
+                center: ellipse_points[0],
+                major_axis_point: ellipse_points[1],
+                minor_axis_ratio: ratio,
+                start_angle: ellipse_start,
+                end_angle: ellipse_end,
+                sweep: DocumentArcSweep::CounterClockwise,
+            },
+        )
+        .unwrap();
+
+    let spline_points = add_control_points(
+        &mut document,
+        &[[18.0, 0.0], [19.0, 2.0], [21.0, 2.0], [22.0, 0.0]],
+    );
+    let knots = vec![0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0];
+    let bspline = document
+        .add_curve(
+            "B-spline",
+            CurveDefinition::BSpline {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: spline_points.clone(),
+                knots: knots.clone(),
+                span_ids: vec![7, 11],
+                next_span_id: 12,
+            },
+        )
+        .unwrap();
+    let weights = [1.0, 0.8, 1.2, 1.0]
+        .map(|value| {
+            document
+                .add_scalar(
+                    "weight",
+                    value,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Positive,
+                )
+                .unwrap()
+        })
+        .to_vec();
+    let nurbs = document
+        .add_curve(
+            "NURBS",
+            CurveDefinition::Nurbs {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: spline_points,
+                gauge_weight: weights[0],
+                weights,
+                knots,
+                span_ids: vec![19, 23],
+                next_span_id: 24,
+            },
+        )
+        .unwrap();
+    document.validate().unwrap();
+
+    let expected = [
+        (
+            line,
+            vec![
+                DocumentCurveControlKind::StartPoint,
+                DocumentCurveControlKind::EndPoint,
+            ],
+        ),
+        (
+            polyline,
+            vec![
+                DocumentCurveControlKind::StartPoint,
+                DocumentCurveControlKind::ControlPoint { ordinal: 1 },
+                DocumentCurveControlKind::EndPoint,
+            ],
+        ),
+        (
+            quadratic,
+            (0..3)
+                .map(|ordinal| DocumentCurveControlKind::ControlPoint { ordinal })
+                .collect(),
+        ),
+        (
+            cubic,
+            (0..4)
+                .map(|ordinal| DocumentCurveControlKind::ControlPoint { ordinal })
+                .collect(),
+        ),
+        (
+            elliptical_arc,
+            vec![
+                DocumentCurveControlKind::Center,
+                DocumentCurveControlKind::MajorAxisPoint,
+                DocumentCurveControlKind::MinorAxis,
+                DocumentCurveControlKind::TrimStart,
+                DocumentCurveControlKind::TrimEnd,
+            ],
+        ),
+        (
+            bspline,
+            (0..4)
+                .map(|ordinal| DocumentCurveControlKind::ControlPoint { ordinal })
+                .collect(),
+        ),
+        (
+            nurbs,
+            (0..4)
+                .map(|ordinal| DocumentCurveControlKind::ControlPoint { ordinal })
+                .collect(),
+        ),
+    ];
+    for (curve, expected_kinds) in expected {
+        let controls = document.curve_controls(curve).unwrap();
+        assert_eq!(
+            controls
+                .iter()
+                .map(|control| control.id.kind)
+                .collect::<Vec<_>>(),
+            expected_kinds,
+            "curve {curve}"
+        );
+        assert!(controls.iter().all(|control| {
+            control.position.into_iter().all(f64::is_finite)
+                && matches!(
+                    control.availability,
+                    geosolve_sketch::DocumentCurveControlAvailability::Editable
+                )
+        }));
+    }
+    let ellipse_controls = document.curve_controls(elliptical_arc).unwrap();
+    assert_eq!(
+        ellipse_controls[2].target,
+        DocumentCurveControlTarget::Scalar(ratio)
+    );
+    assert_eq!(
+        ellipse_controls[3].target,
+        DocumentCurveControlTarget::Scalar(ellipse_start)
+    );
+    assert_eq!(
+        ellipse_controls[4].target,
+        DocumentCurveControlTarget::Scalar(ellipse_end)
+    );
+}
+
+#[test]
 fn radius_minor_and_conjugate_grips_inverse_project_in_rotated_frames() {
     let (document, ids) = gallery();
 
@@ -368,6 +595,136 @@ fn radius_minor_and_conjugate_grips_inverse_project_in_rotated_frames() {
     };
     assert_eq!(scalar, ids.hyperbola_conjugate);
     assert!((value - 3.0).abs() <= 1.0e-12, "semi-conjugate={value}");
+}
+
+#[test]
+fn trim_controls_round_trip_start_and_end_without_changing_sweep_or_hyperbola_branch() {
+    let (document, ids) = gallery();
+    let arc_definition = document.curve(ids.arc).unwrap().definition.clone();
+    let hyperbola_definition = document.curve(ids.hyperbola).unwrap().definition.clone();
+    for curve in [ids.arc, ids.parabola, ids.hyperbola] {
+        for kind in [
+            DocumentCurveControlKind::TrimStart,
+            DocumentCurveControlKind::TrimEnd,
+        ] {
+            let control = control(&document, curve, kind);
+            let DocumentCurveControlTarget::Scalar(expected_scalar) = control.target else {
+                panic!("{kind:?} on {curve} did not retain its scalar identity")
+            };
+            let DocumentCurveControlProjection::Scalar { scalar, value } = document
+                .project_curve_control(control.id, control.position)
+                .unwrap()
+            else {
+                panic!("{kind:?} on {curve} did not inverse-project to its scalar")
+            };
+            assert_eq!(scalar, expected_scalar);
+            let current = document.scalar(scalar).unwrap().value;
+            assert!(
+                (value - current).abs() <= 1.0e-10,
+                "{kind:?} on {curve}: projected {value}, current {current}"
+            );
+        }
+    }
+    assert_eq!(document.curve(ids.arc).unwrap().definition, arc_definition);
+    assert_eq!(
+        document.curve(ids.hyperbola).unwrap().definition,
+        hyperbola_definition
+    );
+}
+
+#[test]
+fn radial_handle_reports_driving_dimension_and_equal_radius_ownership() {
+    let (mut dimensioned, ids) = gallery();
+    let target = dimensioned
+        .add_scalar(
+            "display radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    dimensioned
+        .add_dimension(
+            "reference radius",
+            DocumentDimensionDefinition::Radius {
+                curve: ids.circle,
+                target,
+            },
+            DocumentDimensionMode::Reference,
+        )
+        .unwrap();
+    assert_eq!(
+        control(&dimensioned, ids.circle, DocumentCurveControlKind::Radius).availability,
+        DocumentCurveControlAvailability::Editable,
+    );
+    let driving_target = dimensioned
+        .add_scalar(
+            "driving radius target",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let driving = dimensioned
+        .add_dimension(
+            "driving radius",
+            DocumentDimensionDefinition::Radius {
+                curve: ids.circle,
+                target: driving_target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .unwrap();
+    assert_eq!(
+        control(&dimensioned, ids.circle, DocumentCurveControlKind::Radius).availability,
+        DocumentCurveControlAvailability::ReadOnly(
+            DocumentCurveControlWithholdingReason::DrivingDimensionOwned,
+        ),
+    );
+    dimensioned
+        .set_element_user_suppressed(DocumentElementId::Dimension(driving), true)
+        .unwrap();
+    assert_eq!(
+        control(&dimensioned, ids.circle, DocumentCurveControlKind::Radius).availability,
+        DocumentCurveControlAvailability::Editable,
+    );
+
+    let (mut related, ids) = gallery();
+    let second_center = related.add_point("peer center", [5.0, 2.0]).unwrap();
+    let second_radius = related
+        .add_scalar(
+            "peer radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let second = related
+        .add_curve(
+            "peer circle",
+            CurveDefinition::Circle {
+                center: second_center,
+                radius: second_radius,
+            },
+        )
+        .unwrap();
+    related
+        .add_constraint(
+            "equal radii",
+            DocumentConstraintDefinition::EqualRadius {
+                first: ids.circle,
+                second,
+            },
+        )
+        .unwrap();
+    for curve in [ids.circle, second] {
+        assert_eq!(
+            control(&related, curve, DocumentCurveControlKind::Radius).availability,
+            DocumentCurveControlAvailability::ReadOnly(
+                DocumentCurveControlWithholdingReason::EqualRadiusOwned,
+            ),
+        );
+    }
 }
 
 #[test]
@@ -540,6 +897,15 @@ fn prepared_preview_is_read_only_exact_and_commits_the_visible_rational_candidat
             middle: [31.25, 2.75],
             weight: 0.8,
         }
+    );
+    assert_eq!(
+        preview
+            .accepted_session()
+            .unwrap()
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document(),
+        preview.accepted_document().unwrap()
     );
     let preview_json = preview
         .accepted_document()
