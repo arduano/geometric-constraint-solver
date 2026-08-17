@@ -48,6 +48,7 @@ characterized_enum!(CurrentDocumentCommandKind {
     SetLineLineFilletBranch => "set_line_line_fillet_branch",
     SetCurveCurveFilletBranch => "set_curve_curve_fillet_branch",
     SetConicWeightedMiddle => "set_conic_weighted_middle",
+    SetRationalConicControl => "set_rational_conic_control",
     SetHyperbolaBranch => "set_hyperbola_branch",
     InsertBSplineKnot => "insert_b_spline_knot",
     InsertMirroredBSplineKnot => "insert_mirrored_b_spline_knot",
@@ -88,6 +89,7 @@ characterized_enum!(CurrentDocumentEffectKind {
     UpdatedScalar => "updated_scalar",
     UpdatedCurve => "updated_curve",
     UpdatedConicWeightedMiddle => "updated_conic_weighted_middle",
+    UpdatedRationalConicControl => "updated_rational_conic_control",
     UpdatedHyperbolaBranch => "updated_hyperbola_branch",
     InsertedBSplineKnot => "inserted_b_spline_knot",
     InsertedMirroredBSplineKnot => "inserted_mirrored_b_spline_knot",
@@ -164,6 +166,9 @@ impl DocumentEdit {
             Self::SetConicWeightedMiddle { .. } => {
                 CurrentDocumentCommandKind::SetConicWeightedMiddle
             }
+            Self::SetRationalConicControl { .. } => {
+                CurrentDocumentCommandKind::SetRationalConicControl
+            }
             Self::SetHyperbolaBranch { .. } => CurrentDocumentCommandKind::SetHyperbolaBranch,
             Self::InsertBSplineKnot { .. } => CurrentDocumentCommandKind::InsertBSplineKnot,
             Self::InsertMirroredBSplineKnot { .. } => {
@@ -229,6 +234,9 @@ impl DocumentCommandEffect {
             Self::UpdatedCurve(_) => CurrentDocumentEffectKind::UpdatedCurve,
             Self::UpdatedConicWeightedMiddle(_) => {
                 CurrentDocumentEffectKind::UpdatedConicWeightedMiddle
+            }
+            Self::UpdatedRationalConicControl(_) => {
+                CurrentDocumentEffectKind::UpdatedRationalConicControl
             }
             Self::UpdatedHyperbolaBranch(_) => CurrentDocumentEffectKind::UpdatedHyperbolaBranch,
             Self::InsertedBSplineKnot(_) => CurrentDocumentEffectKind::InsertedBSplineKnot,

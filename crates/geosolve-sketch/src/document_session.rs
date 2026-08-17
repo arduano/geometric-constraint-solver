@@ -21,10 +21,10 @@ use crate::document::{
     DocumentError, DocumentExternalBindingId, DocumentFilletEndpointOrder,
     DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentMirroredBSplineInsertion,
     DocumentNurbsInsertion, DocumentObjectId, DocumentParameterId, DocumentParameterKind,
-    DocumentParameterTarget, DocumentSourceId, ExternalFeatureKindV1, ExternalTopologyDigest,
-    GeometryRole, GeometryRoleEdit, HostConfigurationActivation, LineLineFilletIds,
-    LineLineFilletRequest, MirroredCurveIds, PersistentId, RectangleIds, ScalarDomain, ScalarUnit,
-    SketchDocument, SketchPersistentIdentityHighWater,
+    DocumentParameterTarget, DocumentRationalConicControl, DocumentSourceId, ExternalFeatureKindV1,
+    ExternalTopologyDigest, GeometryRole, GeometryRoleEdit, HostConfigurationActivation,
+    LineLineFilletIds, LineLineFilletRequest, MirroredCurveIds, PersistentId, RectangleIds,
+    ScalarDomain, ScalarUnit, SketchDocument, SketchPersistentIdentityHighWater,
 };
 use crate::document_lowering::{
     DocumentRuntimeMap, ResolvedDocumentParameters, ResolvedParameterBinding, RuntimeSource,
@@ -1854,6 +1854,11 @@ pub enum DocumentEdit {
         curve: CurveId,
         weighted_middle: [f64; 2],
     },
+    /// Atomically updates the ordinary/projective middle control and weight of one rational conic.
+    SetRationalConicControl {
+        curve: CurveId,
+        control: DocumentRationalConicControl,
+    },
     SetHyperbolaBranch {
         curve: CurveId,
         branch: DocumentHyperbolaBranch,
@@ -1987,6 +1992,7 @@ pub enum DocumentCommandEffect {
     UpdatedScalar(DesignScalarId),
     UpdatedCurve(CurveId),
     UpdatedConicWeightedMiddle(CurveId),
+    UpdatedRationalConicControl(CurveId),
     UpdatedHyperbolaBranch(CurveId),
     InsertedBSplineKnot(DocumentBSplineInsertion),
     InsertedMirroredBSplineKnot(Box<DocumentMirroredBSplineInsertion>),
@@ -2490,6 +2496,60 @@ impl PreparedSketchPatch {
     #[must_use]
     pub const fn proposed_commit(&self) -> PreparedSketchCommit {
         self.commit
+    }
+
+    /// Returns a narrow immutable view of the exact candidate carried by this patch.
+    ///
+    /// No mutable session, solver cache, or publication shortcut is exposed. The patch remains
+    /// the sole value that can be consumed by `commit_prepared_patch`.
+    #[must_use]
+    pub const fn preview(&self) -> PreparedSketchPreview<'_> {
+        PreparedSketchPreview { patch: self }
+    }
+}
+
+/// Read-only candidate geometry and provenance from one prepared patch.
+#[derive(Clone, Copy, Debug)]
+pub struct PreparedSketchPreview<'a> {
+    patch: &'a PreparedSketchPatch,
+}
+
+impl PreparedSketchPreview<'_> {
+    /// Exact live-session input from which this candidate was prepared.
+    #[must_use]
+    pub const fn base_input(&self) -> PreparedSketchInput {
+        self.patch.base
+    }
+
+    /// Exact complete input stamp of the candidate session.
+    #[must_use]
+    pub fn candidate_input(&self) -> PreparedSketchInput {
+        self.patch.candidate.current_prepared_input()
+    }
+
+    /// Proposed identities that an exact compare-and-swap commit will publish.
+    #[must_use]
+    pub const fn proposed_commit(&self) -> PreparedSketchCommit {
+        self.patch.commit
+    }
+
+    /// Retained candidate design, including a valid rejected design when no accepted preview exists.
+    #[must_use]
+    pub const fn design_document(&self) -> &SketchDocument {
+        self.patch.candidate.design_document()
+    }
+
+    /// Independently accepted candidate state only when it is current for every candidate input.
+    #[must_use]
+    pub fn accepted_state(&self) -> Option<&SketchAcceptedDocumentState> {
+        self.patch.candidate.accepted_state_for_current_input()
+    }
+
+    /// Exact independently accepted candidate document, if this patch has one.
+    #[must_use]
+    pub fn accepted_document(&self) -> Option<&SketchDocument> {
+        self.accepted_state()
+            .map(SketchAcceptedDocumentState::document)
     }
 }
 
@@ -7822,6 +7882,10 @@ fn apply_edit(
         } => {
             document.set_conic_weighted_middle(curve, weighted_middle)?;
             DocumentCommandEffect::UpdatedConicWeightedMiddle(curve)
+        }
+        DocumentEdit::SetRationalConicControl { curve, control } => {
+            document.set_rational_conic_control(curve, control)?;
+            DocumentCommandEffect::UpdatedRationalConicControl(curve)
         }
         DocumentEdit::SetHyperbolaBranch { curve, branch } => {
             document.set_hyperbola_branch(curve, branch)?;

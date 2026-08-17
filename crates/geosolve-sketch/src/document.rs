@@ -318,6 +318,163 @@ pub struct DocumentTrimProjection {
     pub value: f64,
 }
 
+/// Stable identity of one selected-curve configuration control.
+///
+/// Controls are transient interaction affordances. They do not add persistent points,
+/// constraint operands, snapping anchors, or serialized document state.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DocumentCurveControlId {
+    pub curve: CurveId,
+    pub kind: DocumentCurveControlKind,
+}
+
+/// Family-local role of one selected-curve configuration control.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[non_exhaustive]
+pub enum DocumentCurveControlKind {
+    Center,
+    StartPoint,
+    EndPoint,
+    ControlPoint { ordinal: u32 },
+    Radius,
+    TrimStart,
+    TrimEnd,
+    MajorAxisPoint,
+    MinorAxis,
+    RationalMiddle,
+    Vertex,
+    Focus,
+    TransverseAxisPoint,
+    ConjugateAxis,
+}
+
+/// Coordinate interpretation of the middle control of a rational quadratic conic.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum DocumentRationalConicControlMode {
+    /// Conventional Euclidean control `P1 = Qh / w`, valid only when `w != 0`.
+    Euclidean,
+    /// Raw homogeneous vector `Qh`, used explicitly when `w == 0`.
+    Projective,
+}
+
+/// One complete atomic rational-quadratic middle-control configuration.
+///
+/// The persistent definition continues to store `(Qh, w)`. Euclidean input is converted to
+/// `Qh = w * P1`; projective input is deliberately restricted to the zero-weight mode.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum DocumentRationalConicControl {
+    Euclidean {
+        middle: [f64; 2],
+        weight: f64,
+    },
+    Projective {
+        weighted_middle: [f64; 2],
+        weight: f64,
+    },
+}
+
+impl DocumentRationalConicControl {
+    #[must_use]
+    pub const fn mode(self) -> DocumentRationalConicControlMode {
+        match self {
+            Self::Euclidean { .. } => DocumentRationalConicControlMode::Euclidean,
+            Self::Projective { .. } => DocumentRationalConicControlMode::Projective,
+        }
+    }
+
+    #[must_use]
+    pub const fn weight(self) -> f64 {
+        match self {
+            Self::Euclidean { weight, .. } | Self::Projective { weight, .. } => weight,
+        }
+    }
+}
+
+/// Persistent target owned by one transient curve control.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum DocumentCurveControlTarget {
+    Point(DesignPointId),
+    Scalar(DesignScalarId),
+    RationalMiddle {
+        weight: DesignScalarId,
+        mode: DocumentRationalConicControlMode,
+    },
+}
+
+/// Typed reason that a visible curve control cannot accept direct manipulation.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum DocumentCurveControlWithholdingReason {
+    InactiveCurve,
+    AssociativeFilletOutput,
+    HostParameterOwned,
+    GaugeOwned,
+}
+
+/// Editability of one visible selected-curve control.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum DocumentCurveControlAvailability {
+    Editable,
+    ReadOnly(DocumentCurveControlWithholdingReason),
+}
+
+/// One transient, finite selected-curve control from accepted document geometry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DocumentCurveControl {
+    pub id: DocumentCurveControlId,
+    pub position: [f64; 2],
+    pub target: DocumentCurveControlTarget,
+    pub availability: DocumentCurveControlAvailability,
+}
+
+/// Inverse-mapped configuration edit produced from one curve-control target.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum DocumentCurveControlProjection {
+    Point {
+        point: DesignPointId,
+        position: [f64; 2],
+    },
+    Scalar {
+        scalar: DesignScalarId,
+        value: f64,
+    },
+    RationalMiddle {
+        curve: CurveId,
+        control: DocumentRationalConicControl,
+    },
+}
+
+/// Typed failure to enumerate or inverse-project selected-curve controls.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DocumentCurveControlError {
+    #[error(transparent)]
+    Document(#[from] DocumentError),
+    #[error(transparent)]
+    Evaluation(#[from] DocumentCurveEvaluationError),
+    #[error(transparent)]
+    ConicQuery(#[from] DocumentConicQueryError),
+    #[error(transparent)]
+    TrimProjection(#[from] DocumentTrimProjectionError),
+    #[error("curve-control target for {control:?} must be finite")]
+    NonFiniteTarget { control: DocumentCurveControlId },
+    #[error("curve-control geometry for {control:?} is not finitely representable")]
+    NonFiniteResult { control: DocumentCurveControlId },
+    #[error("curve {curve} has no configuration control {kind:?}")]
+    UnknownControl {
+        curve: CurveId,
+        kind: DocumentCurveControlKind,
+    },
+    #[error("curve control {control:?} is read-only: {reason:?}")]
+    ReadOnly {
+        control: DocumentCurveControlId,
+        reason: DocumentCurveControlWithholdingReason,
+    },
+}
+
 /// Persistent identities changed by one accepted B-spline knot insertion.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DocumentBSplineInsertion {
@@ -4628,6 +4785,657 @@ impl SketchDocument {
             })
     }
 
+    /// Returns the conventional or projective middle-control view of one rational conic.
+    ///
+    /// Nonzero weights expose the Euclidean control `P1 = Qh / w`. A zero weight has no finite
+    /// Euclidean control and therefore exposes the raw homogeneous vector `Qh` explicitly.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed failure for a missing/wrong-family curve or an unrepresentable quotient.
+    pub fn rational_conic_control(
+        &self,
+        curve: CurveId,
+    ) -> Result<DocumentRationalConicControl, DocumentCurveControlError> {
+        let id = DocumentCurveControlId {
+            curve,
+            kind: DocumentCurveControlKind::RationalMiddle,
+        };
+        let CurveDefinition::RationalQuadraticConic {
+            weighted_middle,
+            middle_weight,
+            ..
+        } = &self
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition
+        else {
+            return Err(DocumentCurveControlError::UnknownControl {
+                curve,
+                kind: id.kind,
+            });
+        };
+        let weight = self.require_scalar(*middle_weight)?.value;
+        if weight == 0.0 {
+            return Ok(DocumentRationalConicControl::Projective {
+                weighted_middle: *weighted_middle,
+                weight: 0.0,
+            });
+        }
+        let middle = [weighted_middle[0] / weight, weighted_middle[1] / weight];
+        if !middle.iter().all(|value| value.is_finite()) {
+            return Err(DocumentCurveControlError::NonFiniteResult { control: id });
+        }
+        Ok(DocumentRationalConicControl::Euclidean { middle, weight })
+    }
+
+    /// Enumerates the finite transient controls owned by one native curve.
+    ///
+    /// Point-backed controls retain their persistent point aliases. Derived endpoints and size
+    /// grips retain only stable curve-local identities and scalar targets; they never become
+    /// document points or snapping/constraint operands.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error for a missing curve or invalid/unrepresentable accepted geometry.
+    #[allow(clippy::too_many_lines)]
+    pub fn curve_controls(
+        &self,
+        curve: CurveId,
+    ) -> Result<Vec<DocumentCurveControl>, DocumentCurveControlError> {
+        let value = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
+        let activity = self.compute_effective_activity();
+        let base_availability = self.curve_control_availability(curve, &activity);
+        let point_position = |point: DesignPointId| -> Result<[f64; 2], DocumentError> {
+            Ok(self.require_point(point)?.position)
+        };
+        let endpoint_position = |endpoint: FeatureEndpoint| {
+            let parameter = match endpoint {
+                FeatureEndpoint::Start => 0.0,
+                FeatureEndpoint::End => 1.0,
+            };
+            let point = self
+                .evaluate_curve_jet(CurveSpan::line(curve), parameter)?
+                .position;
+            Ok::<_, DocumentCurveControlError>([point.x, point.y])
+        };
+        let mut controls = Vec::new();
+        match &value.definition {
+            CurveDefinition::Line { start, end, .. } => {
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::StartPoint,
+                    point_position(*start)?,
+                    DocumentCurveControlTarget::Point(*start),
+                    base_availability,
+                )?;
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::EndPoint,
+                    point_position(*end)?,
+                    DocumentCurveControlTarget::Point(*end),
+                    base_availability,
+                )?;
+            }
+            CurveDefinition::Polyline { points, closed, .. } => {
+                for (index, point) in points.iter().copied().enumerate() {
+                    let ordinal =
+                        u32::try_from(index).map_err(|_| DocumentError::ResourceLimit {
+                            resource: "curve control ordinal",
+                            actual: index,
+                            limit: u32::MAX as usize,
+                        })?;
+                    let kind = if !closed && index == 0 {
+                        DocumentCurveControlKind::StartPoint
+                    } else if !closed && index + 1 == points.len() {
+                        DocumentCurveControlKind::EndPoint
+                    } else {
+                        DocumentCurveControlKind::ControlPoint { ordinal }
+                    };
+                    push_curve_control(
+                        &mut controls,
+                        curve,
+                        kind,
+                        point_position(point)?,
+                        DocumentCurveControlTarget::Point(point),
+                        base_availability,
+                    )?;
+                }
+            }
+            CurveDefinition::Circle { center, radius } => {
+                let center_position = point_position(*center)?;
+                let radius_value = self.require_scalar(*radius)?.value;
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::Center,
+                    center_position,
+                    DocumentCurveControlTarget::Point(*center),
+                    base_availability,
+                )?;
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::Radius,
+                    [center_position[0] + radius_value, center_position[1]],
+                    DocumentCurveControlTarget::Scalar(*radius),
+                    self.scalar_control_availability(*radius, base_availability),
+                )?;
+            }
+            CurveDefinition::CircularArc { center, radius, .. } => {
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::Center,
+                    point_position(*center)?,
+                    DocumentCurveControlTarget::Point(*center),
+                    base_availability,
+                )?;
+                let midpoint = self
+                    .evaluate_curve_jet(CurveSpan::line(curve), 0.5)?
+                    .position;
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::Radius,
+                    [midpoint.x, midpoint.y],
+                    DocumentCurveControlTarget::Scalar(*radius),
+                    self.scalar_control_availability(*radius, base_availability),
+                )?;
+                push_trim_controls(
+                    &mut controls,
+                    curve,
+                    endpoint_position(FeatureEndpoint::Start)?,
+                    endpoint_position(FeatureEndpoint::End)?,
+                    &value.definition,
+                    base_availability,
+                )?;
+            }
+            CurveDefinition::QuadraticBezier { controls: points } => {
+                for (index, point) in points.iter().copied().enumerate() {
+                    let ordinal =
+                        u32::try_from(index).map_err(|_| DocumentError::ResourceLimit {
+                            resource: "curve control ordinal",
+                            actual: index,
+                            limit: u32::MAX as usize,
+                        })?;
+                    push_curve_control(
+                        &mut controls,
+                        curve,
+                        DocumentCurveControlKind::ControlPoint { ordinal },
+                        point_position(point)?,
+                        DocumentCurveControlTarget::Point(point),
+                        base_availability,
+                    )?;
+                }
+            }
+            CurveDefinition::CubicBezier { controls: points } => {
+                for (index, point) in points.iter().copied().enumerate() {
+                    let ordinal =
+                        u32::try_from(index).map_err(|_| DocumentError::ResourceLimit {
+                            resource: "curve control ordinal",
+                            actual: index,
+                            limit: u32::MAX as usize,
+                        })?;
+                    push_curve_control(
+                        &mut controls,
+                        curve,
+                        DocumentCurveControlKind::ControlPoint { ordinal },
+                        point_position(point)?,
+                        DocumentCurveControlTarget::Point(point),
+                        base_availability,
+                    )?;
+                }
+            }
+            CurveDefinition::Ellipse {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+            } => {
+                push_axis_controls(
+                    self,
+                    &mut controls,
+                    curve,
+                    *center,
+                    *major_axis_point,
+                    *minor_axis_ratio,
+                    base_availability,
+                )?;
+            }
+            CurveDefinition::EllipticalArc {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+                ..
+            } => {
+                push_axis_controls(
+                    self,
+                    &mut controls,
+                    curve,
+                    *center,
+                    *major_axis_point,
+                    *minor_axis_ratio,
+                    base_availability,
+                )?;
+                push_trim_controls(
+                    &mut controls,
+                    curve,
+                    endpoint_position(FeatureEndpoint::Start)?,
+                    endpoint_position(FeatureEndpoint::End)?,
+                    &value.definition,
+                    base_availability,
+                )?;
+            }
+            CurveDefinition::RationalQuadraticConic {
+                start,
+                middle_weight,
+                end,
+                ..
+            } => {
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::StartPoint,
+                    point_position(*start)?,
+                    DocumentCurveControlTarget::Point(*start),
+                    base_availability,
+                )?;
+                let rational = self.rational_conic_control(curve)?;
+                let middle_position = match rational {
+                    DocumentRationalConicControl::Euclidean { middle, .. } => middle,
+                    DocumentRationalConicControl::Projective {
+                        weighted_middle, ..
+                    } => {
+                        let anchor = point_position(*start)?;
+                        [
+                            anchor[0] + weighted_middle[0],
+                            anchor[1] + weighted_middle[1],
+                        ]
+                    }
+                };
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::RationalMiddle,
+                    middle_position,
+                    DocumentCurveControlTarget::RationalMiddle {
+                        weight: *middle_weight,
+                        mode: rational.mode(),
+                    },
+                    base_availability,
+                )?;
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::EndPoint,
+                    point_position(*end)?,
+                    DocumentCurveControlTarget::Point(*end),
+                    base_availability,
+                )?;
+            }
+            CurveDefinition::ParabolaSegment { vertex, focus, .. } => {
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::Vertex,
+                    point_position(*vertex)?,
+                    DocumentCurveControlTarget::Point(*vertex),
+                    base_availability,
+                )?;
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::Focus,
+                    point_position(*focus)?,
+                    DocumentCurveControlTarget::Point(*focus),
+                    base_availability,
+                )?;
+                push_trim_controls(
+                    &mut controls,
+                    curve,
+                    endpoint_position(FeatureEndpoint::Start)?,
+                    endpoint_position(FeatureEndpoint::End)?,
+                    &value.definition,
+                    base_availability,
+                )?;
+            }
+            CurveDefinition::HyperbolaSegment {
+                center,
+                transverse_axis_point,
+                semi_conjugate,
+                ..
+            } => {
+                let center_position = point_position(*center)?;
+                let transverse_position = point_position(*transverse_axis_point)?;
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::Center,
+                    center_position,
+                    DocumentCurveControlTarget::Point(*center),
+                    base_availability,
+                )?;
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::TransverseAxisPoint,
+                    transverse_position,
+                    DocumentCurveControlTarget::Point(*transverse_axis_point),
+                    base_availability,
+                )?;
+                let transverse = point_difference(center_position, transverse_position);
+                let length = transverse[0].hypot(transverse[1]);
+                let conjugate = self.require_scalar(*semi_conjugate)?.value;
+                let conjugate_position = [
+                    center_position[0] - transverse[1] * conjugate / length,
+                    center_position[1] + transverse[0] * conjugate / length,
+                ];
+                push_curve_control(
+                    &mut controls,
+                    curve,
+                    DocumentCurveControlKind::ConjugateAxis,
+                    conjugate_position,
+                    DocumentCurveControlTarget::Scalar(*semi_conjugate),
+                    self.scalar_control_availability(*semi_conjugate, base_availability),
+                )?;
+                push_trim_controls(
+                    &mut controls,
+                    curve,
+                    endpoint_position(FeatureEndpoint::Start)?,
+                    endpoint_position(FeatureEndpoint::End)?,
+                    &value.definition,
+                    base_availability,
+                )?;
+            }
+            CurveDefinition::BSpline {
+                controls: points, ..
+            }
+            | CurveDefinition::Nurbs {
+                controls: points, ..
+            } => {
+                for (index, point) in points.iter().copied().enumerate() {
+                    let ordinal =
+                        u32::try_from(index).map_err(|_| DocumentError::ResourceLimit {
+                            resource: "curve control ordinal",
+                            actual: index,
+                            limit: u32::MAX as usize,
+                        })?;
+                    push_curve_control(
+                        &mut controls,
+                        curve,
+                        DocumentCurveControlKind::ControlPoint { ordinal },
+                        point_position(point)?,
+                        DocumentCurveControlTarget::Point(point),
+                        base_availability,
+                    )?;
+                }
+            }
+        }
+        Ok(controls)
+    }
+
+    /// Inverse-projects one transient curve control onto its persistent document target.
+    ///
+    /// This performs no mutation. Applying the returned point/scalar/rational edit through an
+    /// ordinary session still performs complete solve and independent residual validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error for a stale/foreign/read-only control, non-finite target, or an
+    /// invalid/unrepresentable inverse mapping.
+    pub fn project_curve_control(
+        &self,
+        control: DocumentCurveControlId,
+        target: [f64; 2],
+    ) -> Result<DocumentCurveControlProjection, DocumentCurveControlError> {
+        if !target.iter().all(|value| value.is_finite()) {
+            return Err(DocumentCurveControlError::NonFiniteTarget { control });
+        }
+        let view = self
+            .curve_controls(control.curve)?
+            .into_iter()
+            .find(|candidate| candidate.id == control)
+            .ok_or(DocumentCurveControlError::UnknownControl {
+                curve: control.curve,
+                kind: control.kind,
+            })?;
+        if let DocumentCurveControlAvailability::ReadOnly(reason) = view.availability {
+            return Err(DocumentCurveControlError::ReadOnly { control, reason });
+        }
+        match view.target {
+            DocumentCurveControlTarget::Point(point) => Ok(DocumentCurveControlProjection::Point {
+                point,
+                position: target,
+            }),
+            DocumentCurveControlTarget::Scalar(scalar) => {
+                let value = match control.kind {
+                    DocumentCurveControlKind::TrimStart | DocumentCurveControlKind::TrimEnd => {
+                        let endpoint = if control.kind == DocumentCurveControlKind::TrimStart {
+                            FeatureEndpoint::Start
+                        } else {
+                            FeatureEndpoint::End
+                        };
+                        let projection =
+                            self.project_curve_trim_endpoint(control.curve, endpoint, target)?;
+                        debug_assert_eq!(projection.scalar, scalar);
+                        projection.value
+                    }
+                    DocumentCurveControlKind::Radius => {
+                        self.project_radius_control(control, target)?
+                    }
+                    DocumentCurveControlKind::MinorAxis => {
+                        self.project_minor_axis_control(control, target)?
+                    }
+                    DocumentCurveControlKind::ConjugateAxis => {
+                        self.project_conjugate_axis_control(control, target)?
+                    }
+                    _ => {
+                        return Err(DocumentCurveControlError::UnknownControl {
+                            curve: control.curve,
+                            kind: control.kind,
+                        });
+                    }
+                };
+                if !value.is_finite() {
+                    return Err(DocumentCurveControlError::NonFiniteResult { control });
+                }
+                Ok(DocumentCurveControlProjection::Scalar { scalar, value })
+            }
+            DocumentCurveControlTarget::RationalMiddle { mode, .. } => {
+                let current = self.rational_conic_control(control.curve)?;
+                let rational = match (mode, current) {
+                    (
+                        DocumentRationalConicControlMode::Euclidean,
+                        DocumentRationalConicControl::Euclidean { weight, .. },
+                    ) => DocumentRationalConicControl::Euclidean {
+                        middle: target,
+                        weight,
+                    },
+                    (
+                        DocumentRationalConicControlMode::Projective,
+                        DocumentRationalConicControl::Projective { weight, .. },
+                    ) => {
+                        let CurveDefinition::RationalQuadraticConic { start, .. } = &self
+                            .curve(control.curve)
+                            .ok_or_else(|| unknown("curve", control.curve.0))?
+                            .definition
+                        else {
+                            unreachable!("rational control target came from another family")
+                        };
+                        let anchor = self.require_point(*start)?.position;
+                        let weighted_middle = [target[0] - anchor[0], target[1] - anchor[1]];
+                        if !weighted_middle.iter().all(|value| value.is_finite()) {
+                            return Err(DocumentCurveControlError::NonFiniteResult { control });
+                        }
+                        DocumentRationalConicControl::Projective {
+                            weighted_middle,
+                            weight,
+                        }
+                    }
+                    _ => {
+                        return Err(DocumentCurveControlError::UnknownControl {
+                            curve: control.curve,
+                            kind: control.kind,
+                        });
+                    }
+                };
+                Ok(DocumentCurveControlProjection::RationalMiddle {
+                    curve: control.curve,
+                    control: rational,
+                })
+            }
+        }
+    }
+
+    fn curve_control_availability(
+        &self,
+        curve: CurveId,
+        activity: &EffectiveActivity,
+    ) -> DocumentCurveControlAvailability {
+        if self.curve_is_active_fillet_output(curve, activity) {
+            DocumentCurveControlAvailability::ReadOnly(
+                DocumentCurveControlWithholdingReason::AssociativeFilletOutput,
+            )
+        } else if !activity.is_active(curve) {
+            DocumentCurveControlAvailability::ReadOnly(
+                DocumentCurveControlWithholdingReason::InactiveCurve,
+            )
+        } else {
+            DocumentCurveControlAvailability::Editable
+        }
+    }
+
+    fn scalar_control_availability(
+        &self,
+        scalar: DesignScalarId,
+        fallback: DocumentCurveControlAvailability,
+    ) -> DocumentCurveControlAvailability {
+        if fallback != DocumentCurveControlAvailability::Editable {
+            return fallback;
+        }
+        if self.parameter_bindings.iter().any(|binding| {
+            matches!(
+                binding.target,
+                DocumentParameterTarget::DimensionlessFixedScalar(property)
+                    if property.scalar == scalar
+            )
+        }) {
+            DocumentCurveControlAvailability::ReadOnly(
+                DocumentCurveControlWithholdingReason::HostParameterOwned,
+            )
+        } else {
+            fallback
+        }
+    }
+
+    fn curve_is_active_fillet_output(&self, curve: CurveId, activity: &EffectiveActivity) -> bool {
+        self.constraints.iter().any(|constraint| {
+            activity.is_active(constraint.id)
+                && matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::LineLineFillet { arc, .. }
+                        | DocumentConstraintDefinition::CurveCurveFillet { arc, .. }
+                        if arc == curve
+                )
+        })
+    }
+
+    fn project_radius_control(
+        &self,
+        control: DocumentCurveControlId,
+        target: [f64; 2],
+    ) -> Result<f64, DocumentCurveControlError> {
+        let definition = &self
+            .curve(control.curve)
+            .ok_or_else(|| unknown("curve", control.curve.0))?
+            .definition;
+        let center = match definition {
+            CurveDefinition::Circle { center, .. }
+            | CurveDefinition::CircularArc { center, .. } => self.require_point(*center)?.position,
+            _ => {
+                return Err(DocumentCurveControlError::UnknownControl {
+                    curve: control.curve,
+                    kind: control.kind,
+                });
+            }
+        };
+        Ok((target[0] - center[0]).hypot(target[1] - center[1]))
+    }
+
+    fn project_minor_axis_control(
+        &self,
+        control: DocumentCurveControlId,
+        target: [f64; 2],
+    ) -> Result<f64, DocumentCurveControlError> {
+        let definition = &self
+            .curve(control.curve)
+            .ok_or_else(|| unknown("curve", control.curve.0))?
+            .definition;
+        let (center, major_axis_point) = match definition {
+            CurveDefinition::Ellipse {
+                center,
+                major_axis_point,
+                ..
+            }
+            | CurveDefinition::EllipticalArc {
+                center,
+                major_axis_point,
+                ..
+            } => (
+                self.require_point(*center)?.position,
+                self.require_point(*major_axis_point)?.position,
+            ),
+            _ => {
+                return Err(DocumentCurveControlError::UnknownControl {
+                    curve: control.curve,
+                    kind: control.kind,
+                });
+            }
+        };
+        let major = point_difference(center, major_axis_point);
+        let semi_major = major[0].hypot(major[1]);
+        let target_vector = point_difference(center, target);
+        let semi_minor =
+            (-target_vector[0] * major[1] + target_vector[1] * major[0]).abs() / semi_major;
+        Ok(semi_minor / semi_major)
+    }
+
+    fn project_conjugate_axis_control(
+        &self,
+        control: DocumentCurveControlId,
+        target: [f64; 2],
+    ) -> Result<f64, DocumentCurveControlError> {
+        let definition = &self
+            .curve(control.curve)
+            .ok_or_else(|| unknown("curve", control.curve.0))?
+            .definition;
+        let (center, transverse_axis_point) = match definition {
+            CurveDefinition::HyperbolaSegment {
+                center,
+                transverse_axis_point,
+                ..
+            } => (
+                self.require_point(*center)?.position,
+                self.require_point(*transverse_axis_point)?.position,
+            ),
+            _ => {
+                return Err(DocumentCurveControlError::UnknownControl {
+                    curve: control.curve,
+                    kind: control.kind,
+                });
+            }
+        };
+        let transverse = point_difference(center, transverse_axis_point);
+        let semi_transverse = transverse[0].hypot(transverse[1]);
+        let target_vector = point_difference(center, target);
+        Ok(
+            (-target_vector[0] * transverse[1] + target_vector[1] * transverse[0]).abs()
+                / semi_transverse,
+        )
+    }
+
     /// Projects a world target onto one curve's existing start/end trim scalar.
     ///
     /// Angular results are unwrapped near the selected endpoint's current scalar. The method does
@@ -7691,6 +8499,84 @@ impl SketchDocument {
                 "curve",
                 "weighted-middle edit requires a rational quadratic conic",
             );
+        };
+        *current = weighted_middle;
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Atomically replaces a rational conic's middle control and weight.
+    ///
+    /// Euclidean input preserves the conventional control by storing `Qh = w * P1` and requires
+    /// a nonzero weight. Projective input is explicit zero-weight state and stores the supplied
+    /// raw homogeneous vector unchanged. The persistent curve definition and schema remain
+    /// `(weighted_middle, middle_weight)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing/wrong-family curve, a non-finite control, a weight outside
+    /// the existing conic domain, a mode/weight mismatch, or invalid resulting conic geometry.
+    pub fn set_rational_conic_control(
+        &mut self,
+        curve: CurveId,
+        control: DocumentRationalConicControl,
+    ) -> Result<(), DocumentError> {
+        let (weighted_middle, weight) = match control {
+            DocumentRationalConicControl::Euclidean { middle, weight } => {
+                finite_pair(middle, "rational Euclidean middle")?;
+                if weight == 0.0 {
+                    return invalid(
+                        "rational control mode",
+                        "Euclidean middle control requires a nonzero weight",
+                    );
+                }
+                let weighted_middle = [middle[0] * weight, middle[1] * weight];
+                finite_pair(weighted_middle, "rational homogeneous middle")?;
+                (weighted_middle, weight)
+            }
+            DocumentRationalConicControl::Projective {
+                weighted_middle,
+                weight,
+            } => {
+                finite_pair(weighted_middle, "rational homogeneous middle")?;
+                if weight != 0.0 {
+                    return invalid(
+                        "rational control mode",
+                        "projective middle control requires an exact zero weight",
+                    );
+                }
+                (weighted_middle, 0.0)
+            }
+        };
+        let mut candidate = self.clone();
+        let middle_weight = {
+            let value = candidate
+                .curve(curve)
+                .ok_or_else(|| unknown("curve", curve.0))?;
+            let CurveDefinition::RationalQuadraticConic { middle_weight, .. } = &value.definition
+            else {
+                return invalid(
+                    "curve",
+                    "rational-control edit requires a rational quadratic conic",
+                );
+            };
+            *middle_weight
+        };
+        let scalar = candidate
+            .scalar_mut(middle_weight)
+            .ok_or_else(|| unknown("scalar", middle_weight.0))?;
+        validate_scalar_value(weight, scalar.domain)?;
+        scalar.value = weight;
+        let CurveDefinition::RationalQuadraticConic {
+            weighted_middle: current,
+            ..
+        } = &mut candidate
+            .curve_mut(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition
+        else {
+            unreachable!("rational curve family changed inside one atomic edit")
         };
         *current = weighted_middle;
         candidate.validate_after_mutation()?;
@@ -11643,6 +12529,121 @@ impl SketchDocument {
             self.require_point(end)?.position,
         ))
     }
+}
+
+fn push_curve_control(
+    controls: &mut Vec<DocumentCurveControl>,
+    curve: CurveId,
+    kind: DocumentCurveControlKind,
+    position: [f64; 2],
+    target: DocumentCurveControlTarget,
+    availability: DocumentCurveControlAvailability,
+) -> Result<(), DocumentCurveControlError> {
+    let id = DocumentCurveControlId { curve, kind };
+    if !position.iter().all(|value| value.is_finite()) {
+        return Err(DocumentCurveControlError::NonFiniteResult { control: id });
+    }
+    controls.push(DocumentCurveControl {
+        id,
+        position,
+        target,
+        availability,
+    });
+    Ok(())
+}
+
+fn push_trim_controls(
+    controls: &mut Vec<DocumentCurveControl>,
+    curve: CurveId,
+    start_position: [f64; 2],
+    end_position: [f64; 2],
+    definition: &CurveDefinition,
+    availability: DocumentCurveControlAvailability,
+) -> Result<(), DocumentCurveControlError> {
+    let (start, end) = match definition {
+        CurveDefinition::CircularArc {
+            start_angle,
+            end_angle,
+            ..
+        }
+        | CurveDefinition::EllipticalArc {
+            start_angle,
+            end_angle,
+            ..
+        } => (*start_angle, *end_angle),
+        CurveDefinition::ParabolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        }
+        | CurveDefinition::HyperbolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        } => (*trim_start, *trim_end),
+        _ => {
+            return Err(DocumentCurveControlError::UnknownControl {
+                curve,
+                kind: DocumentCurveControlKind::TrimStart,
+            });
+        }
+    };
+    push_curve_control(
+        controls,
+        curve,
+        DocumentCurveControlKind::TrimStart,
+        start_position,
+        DocumentCurveControlTarget::Scalar(start),
+        availability,
+    )?;
+    push_curve_control(
+        controls,
+        curve,
+        DocumentCurveControlKind::TrimEnd,
+        end_position,
+        DocumentCurveControlTarget::Scalar(end),
+        availability,
+    )
+}
+
+fn push_axis_controls(
+    document: &SketchDocument,
+    controls: &mut Vec<DocumentCurveControl>,
+    curve: CurveId,
+    center: DesignPointId,
+    major_axis_point: DesignPointId,
+    minor_axis_ratio: DesignScalarId,
+    availability: DocumentCurveControlAvailability,
+) -> Result<(), DocumentCurveControlError> {
+    push_curve_control(
+        controls,
+        curve,
+        DocumentCurveControlKind::Center,
+        document.require_point(center)?.position,
+        DocumentCurveControlTarget::Point(center),
+        availability,
+    )?;
+    push_curve_control(
+        controls,
+        curve,
+        DocumentCurveControlKind::MajorAxisPoint,
+        document.require_point(major_axis_point)?.position,
+        DocumentCurveControlTarget::Point(major_axis_point),
+        availability,
+    )?;
+    push_curve_control(
+        controls,
+        curve,
+        DocumentCurveControlKind::MinorAxis,
+        document.evaluate_conic_feature(
+            curve,
+            DocumentConicFeature::MinorAxisEndpoint {
+                endpoint: FeatureEndpoint::End,
+            },
+        )?,
+        DocumentCurveControlTarget::Scalar(minor_axis_ratio),
+        document.scalar_control_availability(minor_axis_ratio, availability),
+    )
 }
 
 fn curve_owned_scalars(definition: &CurveDefinition) -> Vec<DesignScalarId> {
