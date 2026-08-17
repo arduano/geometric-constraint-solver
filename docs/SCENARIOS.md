@@ -2139,6 +2139,10 @@ stored points keep point ownership, visible selected-curve handles outrank under
 annotation paint, and active Fillet output arcs expose only their Fillet-owned affordances. At a
 radius, minor/conjugate-axis or projective guide origin shared with a stored point alias, the point
 owns its acquisition region and the guide remains directly hittable beyond that region.
+At an elliptical arc's major pole, the stored axis point owns the physical pole and a coincident
+derived trim receives a zoom-independent tangential presentation offset. When trims occupy either
+or both minor poles, the size grip chooses the clearer signed rail or shifts outward while all
+semantic controls and the size rail remain independently hittable.
 
 ### M77-A2 - Inverse trim endpoints preserve discrete state
 
@@ -2186,12 +2190,27 @@ Undo/Redo step regardless of pointer-sample count. Save/reload and reproduction 
 only existing scalar or weighted-middle data, then recompute selected handles from accepted
 geometry. Native/WASM semantics, thin demo mapping and the two-size/zoom UAT matrix must pass.
 
-M77 is active. Implementation and direct coverage for every A1-A5 contract pass; resolved findings
-`M77-F008` through `M77-F011` add no golden row. Exact source `51a3b95`, tree `8d154a1`, passes the
-complete clean gate, including the post-`20ae036` workspace matrix, unchanged 270/270 golden and
-native/WASM M77 4/4. Its no-rebuild snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
-`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, is immutable and
-byte-verified at `http://100.94.63.83:8080/`. Human UAT, Pages publication and closeout remain open.
+Candidate render scenes retain their own truthful design, accepted revision and computed input.
+The private pointer-down origin binds the exact accepted preview request and model position without
+granting drafting authority. A prior sealed generation may not sample or release a newer unseen
+candidate; rejection clears transient work and preserves the durable document, transcript and
+history.
+
+### M77-A6 - Spatial circular and elliptical arc authoring parity
+
+Author a circular arc through Centre, Start and End clicks. Author an elliptical arc through
+Centre, Major axis, Start and End clicks. After the elliptical axis click, publish a finite
+headless-evaluated support ellipse; inverse-project both later spatial clicks radially in normalized
+ellipse space and retain explicit sweep. The final projected endpoints lie on the support curve,
+numeric Start/End construction fields are absent, and the browser renders only supplied preview
+points and role markers without reconstructing an ellipse equation.
+
+M77 is active. Implementation and direct coverage for every A1-A6 contract pass; resolved findings
+`M77-F008` through `M77-F016` add no golden row. Source `f53934f` contains the replacement
+corrections and passes the focused native/WASM matrix. Exact source `51a3b95`, tree `8d154a1`, its
+clean gate and no-rebuild snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, are superseded historical
+evidence only. Replacement clean nomination, human UAT, Pages publication and closeout remain open.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

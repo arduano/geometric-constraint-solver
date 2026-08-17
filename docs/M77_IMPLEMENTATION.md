@@ -2,9 +2,9 @@
 
 # M77 implementation — CAD curve handles and implicit parameters
 
-Status: **active (2026-08-17); implementation, owner regressions, clean release qualification and
-immutable Tailscale nomination pass. Human UAT, GitHub Pages publication and closeout remain
-open.**
+Status: **active (2026-08-17); the initial nomination is superseded by M77-F012/F013. The
+corrections, review follow-ups and owner regressions pass direct qualification; replacement clean
+nomination, human UAT, GitHub Pages publication and closeout remain open.**
 
 ## Approved architecture
 
@@ -12,6 +12,9 @@ open.**
   rational ordinary/projective conversion and independently validated document edits.
 - Prepared work exposes only an immutable accepted preview view. The live retained session changes
   solely when an exact patch wins compare-and-swap publication.
+- A prepared curve-control scene keeps truthful candidate design/revision/computed provenance. A
+  private gesture-local seal separately binds the pointer-down origin to the exact accepted preview
+  request and control surface; older candidate generations cannot publish newer unseen geometry.
 - `geosolve-constraint-editor` owns selected-only control identities, guides, paint/hit geometry,
   hover/click priority, pointer gestures, last-valid preview and exact property metadata.
 - `geosolve-demo-web` renders headless DTOs and forwards typed inputs. It contains no curve
@@ -31,8 +34,10 @@ open.**
   scene population; one hover/pointer gesture; and retained-coordinator preview/commit plus exact
   numeric property setters.
 - `geosolve-demo-web` renders the published cage, handles, rails, hover state, property inspector
-  and pointer lifecycle. It forwards typed requests and contains no curve equation, inverse
-  projection, branch choice or competing hit policy.
+  and pointer lifecycle. Circular and elliptical arcs share spatial Start/End construction, with
+  the headless editor supplying projected support-curve previews. The adapter forwards typed
+  requests and contains no curve equation, inverse projection, branch choice or competing hit
+  policy.
 
 The principal implementation and owning regressions are in:
 
@@ -48,6 +53,9 @@ The principal implementation and owning regressions are in:
   own accepted seeds. Parabola and hyperbola inverse projections retain the sign of
   `trim_end - trim_start`; equality or a crossing is rejected rather than swapping endpoints or
   reversing orientation. Hyperbola branch remains separate explicit state.
+- Circular-arc authoring remains Centre, Start, End. Elliptical-arc authoring is Centre, Major axis,
+  Start, End; both trim clicks are radially projected in normalized ellipse space and incomplete
+  stages consume a headless-evaluated support ellipse.
 - Circle/arc radius and hyperbola semi-conjugate size project on positive scalar rails. Ellipse
   minor size projects to the existing finite ratio domain `0 < ratio <= 1`, without swapping axes
   or changing family.
@@ -59,7 +67,9 @@ The principal implementation and owning regressions are in:
 - Point-backed cage controls remain aliases of their stored point owner and use ordinary point
   dragging. Derived direct grips own the selected curve. Inside the acquisition region a stored
   point alias outranks a guide originating at the same coordinate; the guide remains hittable
-  beyond it.
+  beyond it. Elliptical-arc minor-size grips choose the clearer signed pole, and crowded derived
+  grips shift by a zoom-independent 16 screen pixels while retaining their exact model target and
+  one-dimensional rail.
 - Every sample starts from exact accepted authority. Only a finite independently accepted prepared
   candidate may preview; an invalid later sample retains the last valid preview. Release consumes
   that exact patch as one history step. Cancellation, rejection, staleness and no-op gestures
@@ -80,6 +90,22 @@ annotation-cache field changed.
   retained publication.
 - `M77-F011` — a finite nonzero weight could underflow `Qh` and lose material `P1` information.
   Precision-preserving homogeneous representability is now validated before any atomic edit.
+- `M77-F012` — dragging a curve control composed candidate geometry with pointer-down revision and
+  design stamps, so the scene disappeared during movement and release committed nothing. Candidate
+  scenes now keep truthful candidate provenance while a private origin authenticates the live
+  gesture; point-alias and direct-trim transactions for both arc families remain visible and commit
+  exactly one history step.
+- `M77-F013` — approved parity enhancement: elliptical-arc construction now uses four spatial
+  stages (Centre, Major axis, Start, End) with exact radial trim projection, matching the circular
+  arc's spatial trim language without pretending the two families have the same axis inputs.
+- `M77-F014` — a trim at an elliptical arc's stored major-axis pole could win the coincident hit.
+  The stored point now owns the physical pole and the derived trim moves tangentially 16 screen
+  pixels while remaining independently hittable.
+- `M77-F015` — at exactly 16 px per model unit, shifting a crowded minor-size grip could cancel its
+  rail direction. Rail direction now derives from the unshifted model projection.
+- `M77-F016` — an older privately authenticated candidate scene could release a newer unseen
+  request. The seal now binds the accepted request ID and model position; stale generations cancel
+  without geometry, transcript or history publication.
 
 These are isolated owner defects, so no golden-oracle expansion was warranted. Qualification also
 found one stale M19 expectation: endpoint equality is now rejected during projection rather than
@@ -89,13 +115,14 @@ finding ID.
 
 ## Focused and pre-nomination qualification
 
-- Sketch control suite: 10/10 passed.
-- Editor scene/control suite: 8/8 passed.
+- Sketch control suite: 11/11 passed.
+- Editor scene/control suite: 11/11 passed.
 - Exact curve-property suite: 6/6 passed.
-- Retained coordinator suite: 14/14 passed.
-- Native and WASM curve-control parity: 4/4 passed in each target.
+- Retained coordinator suite: 16/16 passed.
+- Native and WASM curve-control parity: 5/5 passed in each target.
 - Rational replay: 1/1 passed.
-- Demo-web library: 127/127 passed.
+- Demo-web library: 131/131 passed.
+- Editor library: 353/353 passed.
 - Full M19 compatibility suite after `20ae036`: 24/24 passed.
 - Demo WASM check, warnings-denied Rustdoc and Trunk 0.21.14 release assembly pass.
 - Golden survey, check and require-clean each pass the unchanged 270/270-`PASS` inventory.
@@ -122,11 +149,11 @@ cargo test --locked --workspace --all-features
 
 The WASM parity command requires the project `shell.nix` in the current ambient environment so
 `wasm-bindgen-test-runner` is available. A direct ambient invocation failed only for that missing
-runner; the exact project-shell invocation passed 4/4 and is the recorded result.
+runner; the exact project-shell invocation passes 5/5.
 
-## Clean qualification and immutable candidate
+## Superseded initial qualification and replacement preparation
 
-Exact source `51a3b95d04f27216c164febf0808a180b6775537`, tree
+Initial source `51a3b95d04f27216c164febf0808a180b6775537`, tree
 `8d154a147a08c7d6bc79008f19b74311cd60905a`, passed:
 
 ```text
@@ -147,13 +174,21 @@ Without rebuilding, the exact seven regular gate-output files were byte-compared
 manifest is recorded in `docs/M77_UAT.md`; aggregate:
 `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`.
 
-PID `3912158`, command-runner session `12828`, serves only that snapshot at
+PID `3912158`, command-runner session `12828`, temporarily continues to serve only that snapshot at
 `http://100.94.63.83:8080/`. Proxy-disabled, cache-bypassed identity requests for `/` and every
 file return HTTP 200 with zero redirects, no content encoding, expected media types/lengths and
 exact bytes; `/` equals `index.html` and the fetched aggregate matches. Freeze evidence is
 `/tmp/geosolve-m77-freeze-evidence.qbBmc5`; HTTP evidence is
 `/tmp/geosolve-m77-http-verify.eu1KMY`. The previous M76 PID `1780608` was retired only after the
-new snapshot was ready.
+new snapshot was ready. M77-F012/F013 supersede those product bytes for UAT; this is historical
+evidence only and must be retired after the replacement snapshot is ready.
+
+Corrected implementation source `f53934f` passes formatting, diff hygiene, warnings-denied
+workspace Clippy, locked all-feature workspace tests, focused sketch 11/11, controls 11/11,
+coordinator 16/16, native/WASM parity 5/5, demo 131/131 and unchanged golden survey/check/clean
+270/270. A clean documentation descendant, complete release gate, no-rebuild immutable freeze and
+served-byte verification remain the replacement nomination authority and are intentionally not
+claimed yet.
 
 ## Acceptance and known limits
 
@@ -162,8 +197,9 @@ properties, preview/cancellation/staleness, one-step history and persistence con
 native evidence. Weight rails, knot/degree/topology editing, generalized derived-point constraint
 targets, automatic trim/branch changes and mobile layout remain deliberate non-goals.
 
-Mechanical nomination is complete. U1-U6 remain genuine human UAT; no item is accepted by
-automation alone. GitHub Pages publication is intentionally withheld until explicit approval.
+Replacement mechanical nomination remains open. U1-U6 remain genuine human UAT; no item is
+accepted by automation alone. GitHub Pages publication is intentionally withheld until explicit
+approval.
 
 ## Closeout evidence
 

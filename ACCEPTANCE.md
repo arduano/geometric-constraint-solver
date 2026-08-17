@@ -2206,13 +2206,17 @@ historical evidence only; its PID `1077092` was retired.
 
 ## M77 acceptance: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); implementation, clean committed-source qualification and immutable
-candidate nomination pass. Human UAT, publication and closeout remain open**.
+Status: **active (2026-08-17); the initial candidate is superseded by M77-F012/F013. Corrections
+and review follow-ups pass direct qualification; replacement clean nomination, human UAT,
+publication and closeout remain open**.
 
 - A selected editable curve exposes only its applicable finite typed controls. Circular and
   elliptical arcs, parabola segments and hyperbola segments expose derived Start/End trim handles;
   rational quadratics expose a middle-control handle; circles/arcs expose radius, ellipses/arcs
   expose minor-axis size and hyperbolas expose semi-conjugate size.
+- Circular-arc construction remains Centre, Start, End. Elliptical-arc construction is Centre,
+  Major axis, Start, End; Start/End clicks project exactly onto a headless-evaluated support ellipse
+  and sweep remains explicit. Numeric Start/End construction inputs are absent.
 - Stored centres, endpoints, vertices, foci, axis points and Bezier/B-spline/NURBS controls remain
   ordinary persistent points on the existing point-drag path. The selected control cage makes
   their relationship legible. A derived handle owns and selects its curve and never appears as a
@@ -2228,6 +2232,9 @@ candidate nomination pass. Human UAT, publication and closeout remain open**.
   loss, tool/camera/input-owner change and accepted-scene invalidation cancel and restore the exact
   pre-gesture state. Hover/click parity and deterministic overlap ordering hold at every zoom and
   supported desktop size.
+- A prepared curve-control scene retains truthful candidate design, accepted revision and computed
+  provenance. Private gesture authority binds its exact accepted preview request and control
+  surface; an older sealed candidate cannot sample or release a newer unseen patch.
 - A derived trim handle changes only its existing Start/End scalar through the accepted inverse
   projection. Endpoint identity, directed trim, circular/elliptical sweep and hyperbola branch are
   retained; crossing an invalid order, wrap or branch boundary does not silently swap or flip
@@ -2241,6 +2248,9 @@ candidate nomination pass. Human UAT, publication and closeout remain open**.
 - Radius and semi-conjugate controls remain finite and positive. Minor-axis ratio remains finite,
   positive and at most one. Each size handle follows a deterministic family rail and cannot
   silently swap ellipse axes or change curve family.
+- When an elliptical trim crowds a stored major-axis point or both signed minor poles, stored point
+  ownership and every derived trim/size control remain independently hittable. Presentation-only
+  separation is zoom-independent and cannot erase the size rail at the exact shift zoom.
 - Preview work starts from an exact accepted-session clone. Only independently accepted finite
   candidates become visible; an invalid later sample retains the last valid preview. Release
   publishes that exact candidate through stale-safe compare-and-swap as one Undo/Redo step. No
@@ -2262,10 +2272,10 @@ candidate nomination pass. Human UAT, publication and closeout remain open**.
 Implementation evidence (2026-08-17): the public sketch control catalog and inverse projections,
 immutable prepared-preview view, headless selected-curve cage/paint/hit DTOs, unified direct
 gesture, exact property metadata/setters and thin workbench adapter are implemented. Focused
-owners pass at sketch 10/10, editor controls 8/8, properties 6/6, retained coordinator 14/14,
-native/WASM parity 4/4 each, rational replay 1/1 and demo-web 127/127. Demo WASM,
-warnings-denied Rustdoc, Trunk 0.21.14 and the unchanged 270/270 golden survey/check/clean modes
-also pass.
+post-correction owners pass at sketch 11/11, editor controls 11/11, properties 6/6, retained
+coordinator 16/16, native/WASM parity 5/5 each, rational replay 1/1 and demo-web 131/131. The
+superseded initial candidate also passed demo WASM, warnings-denied Rustdoc, Trunk 0.21.14 and the
+unchanged 270/270 golden survey/check/clean modes; the replacement clean gate remains open.
 
 Review findings `M77-F008` through `M77-F011` are resolved at their owners. Stored point aliases
 win inside a guide's shared-origin point-acquisition region; spatial rational-middle edits use the
@@ -2275,7 +2285,7 @@ controls must survive a finite precision-preserving `P1 -> Qh -> P1` round trip 
 storage. No solver equation or golden row changed. The first broad run stopped at one stale M19
 assertion that expected endpoint equality to reach the setter; compatibility-only commit
 `20ae036` now checks typed projection rejection and the unchanged byte-identical setter rejection.
-The post-commit locked all-feature workspace rerun passes. Exact source
+The post-commit locked all-feature workspace rerun passes. Superseded initial source
 `51a3b95d04f27216c164febf0808a180b6775537`, tree
 `8d154a147a08c7d6bc79008f19b74311cd60905a`, then passes
 `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` completely. This includes
@@ -2290,6 +2300,17 @@ ordered-manifest aggregate
 redirects or content encoding, exact expected media types and byte equality, and the fetched
 aggregate matches. This satisfies objective mechanical nomination only. U1-U6, explicit human
 approval, GitHub Pages publication and milestone closure remain open.
+
+Replacement findings (2026-08-17): `M77-F012` fixes blank/no-op curve-control dragging by keeping
+candidate provenance truthful and attaching pointer-down authority separately. `M77-F013` is the
+approved four-stage spatial elliptical-arc authoring feature. `M77-F014` through `M77-F016` preserve
+stored major-axis ownership at a coincident trim, signed/both-pole minor-size acquisition and its
+rail, and exact candidate-generation authority. Their focused regressions pass; no solver equation
+or golden row changes. Source `f53934f` contains the corrections. A clean documentation descendant,
+replacement freeze and served-byte verification remain required before human UAT resumes.
+
+The `51a3b95` source, `/tmp/geosolve-m77-uat.1mDjQv` snapshot and PID `3912158` record above are
+superseded historical evidence only after M77-F012/F013, not current UAT authority.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

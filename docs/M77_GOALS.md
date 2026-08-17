@@ -2,10 +2,11 @@
 
 # M77 — CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); implementation, clean release qualification and immutable
-Tailscale nomination complete; human UAT, publication and closeout remain open**. M77 makes
-advanced curve parameters directly manipulable in the polished demo while preserving the
-existing document model, equations and explicit branch state.
+Status: **active (2026-08-17); the initial candidate is superseded by UAT findings M77-F012 and
+M77-F013. Their corrections and review follow-ups pass direct qualification; replacement clean
+nomination, human UAT, publication and closeout remain open**. M77 makes advanced curve parameters
+directly manipulable in the polished demo while preserving the existing document model, equations
+and explicit branch state.
 
 ## Product contract
 
@@ -25,6 +26,12 @@ constrainable or serialized sketch point, and it does not change the curve's top
 | Parabola segment | Existing vertex/focus points plus derived Start/End trim handles |
 | Hyperbola segment | Existing centre/transverse-axis points, derived Start/End trim handles and a semi-conjugate handle |
 | Quadratic/cubic Bezier, B-spline and NURBS | Existing stored control points and control polygon; NURBS weights remain numeric |
+
+Arc construction uses the same spatial trim language as later editing. A circular arc is authored
+as Centre, Start, End. An elliptical arc is authored as Centre, Major axis, Start, End; the two trim
+clicks are radially inverse-projected in normalized ellipse space and the explicit sweep option is
+retained. Incomplete elliptical-arc stages render a headless-evaluated support ellipse rather than
+asking the browser to reconstruct conic equations.
 
 Active computed Fillet output arcs do not expose generic arc handles while their Fillet owner is
 authoritative. Inactive, protected, external or otherwise non-editable owners expose truthful
@@ -47,6 +54,9 @@ Pointer-down captures the pointer and preserves the cursor-to-handle grab offset
 only after the existing 3 px threshold. Before threshold, the action is selection-only. Hover and
 pointer-down identify the same curve and handle under the same scene/viewport input, and Escape,
 capture loss, tool/camera change or stale owner cancellation restores the pre-gesture scene.
+Prepared candidate scenes keep their truthful candidate design, accepted revision and computed
+provenance. A private gesture-local seal separately authenticates the exact pointer-down origin and
+accepted preview request; an older sealed candidate cannot sample or release a newer unseen patch.
 
 ## Typed edits and preview lifecycle
 
@@ -98,11 +108,12 @@ retention, cancellation, staleness, branch preservation, one-step Undo/Redo and 
 demo tests own only event mapping, capture and headless rendering. Existing golden authoring/scene
 coverage must remain clean unless a reviewed M77 row is deliberately added.
 
-The complete release gate, relevant WASM checks and Trunk release build pass at exact source
-`51a3b95d04f27216c164febf0808a180b6775537`. Its exact no-rebuild candidate is frozen and
-byte-verified on the retained Tailscale endpoint as recorded in `docs/M77_IMPLEMENTATION.md` and
-`docs/M77_UAT.md`. Human UAT remains open until explicitly approved. GitHub Pages publication and
-hosted-byte verification occur only after that approval and are required before M77 closes.
+The initial source `51a3b95d04f27216c164febf0808a180b6775537` and its immutable snapshot are
+superseded historical evidence after replacement UAT findings. The corrected source must pass the
+complete clean release gate, relevant WASM checks and Trunk release build, then be frozen and
+byte-verified on the retained Tailscale endpoint before UAT resumes. Human UAT remains open until
+explicitly approved. GitHub Pages publication and hosted-byte verification occur only after that
+approval and are required before M77 closes.
 
 ## Non-goals
 

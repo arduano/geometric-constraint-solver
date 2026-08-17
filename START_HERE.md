@@ -164,10 +164,14 @@ native/WASM, property, coordinator, replay, demo, golden, Rustdoc and Trunk qual
 Review findings `M77-F008` through `M77-F011` preserve stored-point ownership at shared guide
 origins, host-owned rational fallback weights, non-periodic trim orientation and precision-
 preserving homogeneous control storage. Exact source `51a3b95`, tree `8d154a1`, passes the clean
-gate; its immutable no-rebuild snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
-`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, is byte-verified and live
-at `http://100.94.63.83:8080/`. Human UAT and Pages publication remain open; no solver equation or
-canonical persistence changed.
+gate, but replacement findings `M77-F012` through `M77-F016` now supersede it: candidate scenes
+retain truthful visible/committing control drags, elliptical-arc authoring uses spatial Centre,
+Major axis, Start and End stages, crowded elliptical controls remain independently acquirable, and
+private authority binds the exact candidate generation. Their direct matrix passes at correction
+source `f53934f`. The immutable `/tmp/geosolve-m77-uat.1mDjQv` snapshot is historical evidence; the
+shared endpoint serves it only until the replacement clean snapshot is ready. Replacement
+nomination, human UAT and Pages publication remain open; no solver equation or canonical
+persistence changed.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -524,11 +528,11 @@ files byte-match that Pages artifact at the expected media types; evidence is re
 `/tmp/geosolve-m76-pages-verify.ijOz7p`. This does not assert byte identity with the separately
 built Tailscale snapshot. The caller accepted U1-U4 for scoped closure without claiming a
 separately logged post-refinement replay. M76 is complete; the `37eade50` and `9b4e7f7`
-nominations are superseded historical evidence only. M77 implementation, complete clean gate and
-immutable served nomination now pass at source `51a3b95`, snapshot
-`/tmp/geosolve-m77-uat.1mDjQv` and aggregate
-`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`. U1-U6 human UAT and final
-Pages publication remain the active work.
+nominations are superseded historical evidence only. M77's initial clean gate and immutable served
+nomination at source `51a3b95`, snapshot `/tmp/geosolve-m77-uat.1mDjQv` and aggregate
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b` are superseded by
+M77-F012/F013. Correction source `f53934f` and its focused native/WASM matrix pass; replacement
+clean nomination, U1-U6 human UAT and final Pages publication remain the active work.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

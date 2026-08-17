@@ -4948,11 +4948,11 @@ historical evidence only; its PID `1077092` was retired.
 
 ### M77: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); implementation, clean release qualification and immutable
-Tailscale nomination complete; human UAT, publication and closeout remain open**. M77 gives
-selected advanced curves a compact, headless-owned control presentation for parameters that
-previously had no spatial editing surface. `docs/M77_GOALS.md` owns the approved scope and
-`docs/M77_UAT.md` owns the pending human scorecard.
+Status: **active (2026-08-17); the initial candidate is superseded by M77-F012/F013. Corrections
+and review follow-ups pass direct qualification; replacement clean nomination, human UAT,
+publication and closeout remain open**. M77 gives selected advanced curves a compact,
+headless-owned control presentation for parameters that previously had no spatial editing surface.
+`docs/M77_GOALS.md` owns the approved scope and `docs/M77_UAT.md` owns the pending human scorecard.
 
 - [x] Publish transient typed handles, family-specific guides and exact paint/hit geometry for
   selected editable curves; handles own their curve rather than inventing persistent sketch points.
@@ -4967,6 +4967,9 @@ previously had no spatial editing surface. `docs/M77_GOALS.md` owns the approved
 - [x] Make rational construction use the same ordinary-control meaning for nonzero weights, and
   present selected control cages plus exact numeric inspector fallback without adding spatial
   weight, knot, degree or topology editing; rational and NURBS weights remain explicit controls.
+- [x] Retain circular-arc Centre, Start, End authoring and make elliptical-arc authoring spatially
+  consistent as Centre, Major axis, Start, End, with exact radial trim projection and a headless
+  support-ellipse preview.
 - [x] Reuse one headless hover/pointer owner, existing tolerance policy, 3 px movement threshold,
   pointer capture and grab-offset preservation; revoke handles and gestures on owner/tool/scene or
   camera invalidation.
@@ -4980,8 +4983,10 @@ previously had no spatial editing surface. `docs/M77_GOALS.md` owns the approved
   branch, history and save/reload regressions plus thin demo rendering/input tests.
 - [x] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
   golden-oracle cleanliness, Rustdoc and Trunk release assembly.
-- [x] Freeze and byte-verify an immutable Tailscale candidate and keep it available for follow-up
-  fixes until explicit approval.
+- [x] Freeze and byte-verify the initial immutable Tailscale candidate; retain it as superseded
+  historical evidence after M77-F012/F013.
+- [ ] Pass the replacement clean gate, freeze and byte-verify its immutable Tailscale candidate,
+  then retire the superseded server only after the new snapshot is ready.
 - [ ] Complete the focused human UAT under `docs/M77_UAT.md` and receive explicit approval.
 - [ ] Publish the exact accepted source through GitHub Pages, verify hosted bytes and close M77.
 
@@ -4993,10 +4998,11 @@ clean release, frozen-candidate UAT and exact public publication all pass.
 
 Implementation notes (2026-08-17): public sketch control/projection and immutable prepared-preview
 APIs, headless selected-curve cages and direct gestures, exact property metadata/setters, and the
-thin workbench surface are implemented. Focused suites pass at sketch 10/10, editor controls 8/8,
-properties 6/6, coordinator 14/14, native/WASM parity 4/4 each, rational replay 1/1 and demo-web
-127/127. The unchanged golden survey/check/clean modes pass 270/270, as do demo WASM, warnings-
-denied Rustdoc and Trunk 0.21.14 release assembly. Review findings `M77-F008` through `M77-F011`
+thin workbench surface are implemented. Post-correction focused suites pass at sketch 11/11,
+editor controls 11/11, properties 6/6, coordinator 16/16, native/WASM parity 5/5 each, rational
+replay 1/1 and demo-web 131/131. The unchanged golden survey/check/clean modes pass 270/270, as do
+demo WASM, warnings-denied Rustdoc and Trunk 0.21.14 release assembly. Review findings `M77-F008`
+through `M77-F011`
 now preserve point-alias ownership at guide origins, host-owned rational fallback weights,
 directed non-periodic trim orientation and precision-preserving rational homogeneous storage. They
 remain focused owner regressions; no golden expansion was warranted. Test-only commit `20ae036`
@@ -5005,7 +5011,16 @@ retaining transactional setter coverage. The post-`20ae036` locked all-feature w
 passes; the exact clean committed-source release gate remains final mechanical nomination
 authority.
 
-Nomination record (2026-08-17): exact source
+Replacement-UAT correction record (2026-08-17): `M77-F012` reproduced candidate geometry combined
+with pointer-down stamps, which blanked the scene during control dragging and made release a no-op.
+Candidate scenes now keep truthful candidate design/revision/computed provenance while a private
+origin authenticates the pointer-down gesture. `M77-F013` is the approved four-stage spatial
+elliptical-arc authoring feature. Review findings `M77-F014` through `M77-F016` preserve stored
+major-axis ownership at coincident trims, signed/both-pole minor-size acquisition and exact-shift
+rails, and reject an older sealed candidate generation before it can sample or release newer unseen
+geometry. The corrections are committed at `f53934f`; replacement clean nomination remains open.
+
+Superseded initial nomination record (2026-08-17): exact source
 `51a3b95d04f27216c164febf0808a180b6775537`, tree
 `8d154a147a08c7d6bc79008f19b74311cd60905a`, passes the complete clean gate from 15:48:17 through
 16:00:06 AEST. It includes the unchanged 270/270 clean golden, every carried native/WASM parity
@@ -5014,8 +5029,9 @@ licensing/package contents, the 150.55-second sparse crossover and Trunk 0.21.14
 no-rebuild seven-file snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
 `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, is read-only and
 byte-verified at `http://100.94.63.83:8080/` under PID `3912158` / session `12828`.
-`docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` contain the file, log and HTTP evidence. U1-U6,
-explicit approval and Pages publication remain deliberately open.
+`docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` contain the file, log and HTTP evidence. These
+bytes are historical only after M77-F012/F013 and must not be used for current UAT. Replacement
+nomination, U1-U6, explicit approval and Pages publication remain deliberately open.
 
 ## Explicit non-goals
 

@@ -2,15 +2,25 @@
 
 # M77 focused UAT — CAD curve handles and implicit parameters
 
-Status: **candidate nominated and UAT open (2026-08-17)**. Mechanical qualification, immutable
-freeze and exact served-byte verification pass. U1-U6, explicit supervising-human approval,
-GitHub Pages publication and closeout remain pending; no scorecard item is accepted by automation.
+Status: **replacement candidate preparation in progress (2026-08-17)**. UAT findings M77-F012 and
+M77-F013 supersede the initial candidate. Their corrections and review follow-ups pass direct
+qualification; the replacement clean gate, immutable freeze and served-byte verification remain
+open. U1-U6, explicit supervising-human approval, GitHub Pages publication and closeout remain
+pending; no scorecard item is accepted by automation.
 
-Candidate source: `51a3b95d04f27216c164febf0808a180b6775537`
+Replacement candidate source, tree, snapshot, manifest and server identity: **pending clean
+nomination**.
+
+## Superseded initial candidate
+
+Historical source: `51a3b95d04f27216c164febf0808a180b6775537`
 
 Candidate tree: `8d154a147a08c7d6bc79008f19b74311cd60905a`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
+The shared Tailscale endpoint may continue serving these withdrawn bytes only until the replacement
+is ready. Do not use them for current UAT.
+
+Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Server PID/session: `3912158` / command-runner session `12828`
 
@@ -48,6 +58,12 @@ content encoding, exact expected media types/lengths and snapshot-identical byte
 `/tmp/geosolve-m77-http-verify.eu1KMY`. Superseded M76 PID `1780608` exited before this listener
 started; its immutable snapshot remains unchanged historical evidence.
 
+M77-F012 reproduced the reported blank/no-op drag at the ordinary retained browser-composition
+boundary. M77-F013 records the approved spatial elliptical-arc authoring enhancement. Review then
+resolved signed/both-pole minor-axis crowding, stored-major-axis ownership, exact-shift rail loss
+and stale candidate-generation authority as M77-F014 through M77-F016. None changes a solver
+equation or expands the golden inventory.
+
 Run the scorecard in the ordinary editable workbench at `1440x900` and approximately `1024x720`,
 at coarse and fine zoom. Use a mouse or equivalent precise pointer. Repeat crowded targets on both
 sides of their hit fringe; direct tests, not human judgment, own exact boundary equality.
@@ -67,12 +83,19 @@ quadratic conic, parabola, hyperbola, Bezier, B-spline and NURBS.
   In particular, acquire a stored centre/start point exactly where a radius, axis or projective
   guide begins: the point must own the inner grip region, while the guide remains selectable just
   beyond that region.
+- In separate elliptical-arc examples, put Start or End at the positive major pole. The stored
+  major-axis point must own the physical pole, while the offset trim square remains independently
+  hoverable/clickable with matching role feedback.
 - Selecting a derived endpoint or size handle must select its curve and must not create a point in
   the tree, persistence payload or constraint operand list.
 - An active Fillet-owned output arc must keep its Fillet affordance and expose no competing generic
   radius/endpoint handles.
 
 ## U2 — trim endpoints
+
+Create a circular arc as Centre, Start, End. Create an elliptical arc as Centre, Major axis, Start,
+End. The latter must show a support ellipse after the axis click, project both spatial trim clicks
+onto it, keep the selected sweep direction explicit and finish without numeric Start/End inputs.
 
 For a circular arc, elliptical arc, parabola segment and hyperbola segment, drag Start and End
 independently. Begin off-centre inside each handle to check that it preserves the grab offset and
@@ -115,6 +138,10 @@ should resume normally. Releasing while invalid should publish only the exact la
 or no edit if no changed valid candidate ever existed. Existing driving/locked ownership should be
 reported honestly rather than accepting a contradictory handle move.
 
+Create a half ellipse whose trims occupy both minor poles. The Start, End and shifted minor-size
+controls must all remain separately hoverable/clickable, and the shifted size grip must keep its
+rail at coarse, fine and approximately 16 px/model-unit zoom.
+
 ## U5 — cancellation, stale work and history
 
 For endpoint, middle and size gestures, cancel independently with Escape, pointer-capture loss,
@@ -126,6 +153,11 @@ Commit one valid gesture. It must add exactly one Undo step regardless of previe
 Undo must restore the complete pre-drag curve and Redo the exact final candidate, including trim,
 sweep/branch and control values. A rejected or unchanged gesture must add none. Problems text,
 selection and hover must describe the current scene rather than a stale preview.
+
+For circular and elliptical arcs, drag centre, stored axis, trim and size controls. The scene must
+never blank during movement; every visible release must persist, then Undo and Redo exactly once.
+Move through at least two accepted preview positions before release: an older rendered candidate
+must never commit the newer unseen position.
 
 ## U6 — persistence and desktop polish
 
