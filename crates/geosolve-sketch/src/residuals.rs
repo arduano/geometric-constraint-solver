@@ -3578,7 +3578,7 @@ mod tests {
                 .jacobian(&variables)
                 .unwrap()
                 .iter()
-                .flat_map(|block| block.values())
+                .flat_map(geosolve_core::LocalJacobian::values)
                 .all(|value| value.is_finite())
         );
     }
