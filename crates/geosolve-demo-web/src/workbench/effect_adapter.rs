@@ -156,7 +156,7 @@ pub(super) enum PlannedConstructionDispatch {
 #[must_use]
 pub(super) const fn planned_construction_notice(accepted: bool) -> Option<&'static str> {
     if accepted {
-        Some("Auto-constrained construction retained")
+        Some("Construction retained")
     } else {
         None
     }
@@ -313,10 +313,10 @@ mod tests {
     }
 
     #[test]
-    fn planned_rejection_uses_only_the_draft_local_status_issue() {
+    fn planned_notice_is_truthful_for_geometry_only_success_and_local_for_rejection() {
         assert_eq!(
             planned_construction_notice(true),
-            Some("Auto-constrained construction retained")
+            Some("Construction retained")
         );
         assert_eq!(planned_construction_notice(false), None);
     }
