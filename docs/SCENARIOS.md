@@ -2205,16 +2205,18 @@ ellipse space and retain explicit sweep. The final projected endpoints lie on th
 numeric Start/End construction fields are absent, and the browser renders only supplied preview
 points and role markers without reconstructing an ellipse equation.
 
-M77 is active. Implementation and direct coverage for every A1-A6 contract pass; resolved findings
-`M77-F008` through `M77-F016` add no golden row. Source `f53934f` contains the replacement
-corrections. Exact product source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
+M77 is approved for closeout. Implementation and direct coverage for every A1-A6 contract pass;
+resolved findings `M77-F008` through `M77-F016` add no golden row. Source `f53934f` contains the
+replacement corrections. Exact product source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its no-rebuild snapshot
 `/tmp/geosolve-m77-uat.ARrQFw`, aggregate
 `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`, is immutably frozen and
 byte-verified on Tailscale. Exact source `51a3b95`, tree `8d154a1`, snapshot
 `/tmp/geosolve-m77-uat.1mDjQv` and aggregate
 `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b` are superseded historical
-evidence only. Human UAT, Pages publication and closeout remain open.
+evidence only. On 2026-08-17 the supervising caller explicitly approved the current replacement and
+requested closure; U1-U6 pass under that scoped disposition. Pages publication and hosted-byte
+verification remain the final open step.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

@@ -163,21 +163,25 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96` at expected media types.
   The caller accepted U1-U4 for scoped closure without claiming or requiring a separately logged
   post-refinement replay. M76 is complete.
-- The active M77 CAD curve-control cut. `geosolve-sketch` now publishes typed selected-curve
-  control catalogs, inverse trim/size/rational projections, atomic ordinary/projective rational
+- The closeout-approved M77 CAD curve-control cut. `geosolve-sketch` now publishes typed
+  selected-curve control catalogs, inverse trim/size/rational projections, atomic ordinary/projective rational
   control edits and an immutable accepted prepared-preview view. `geosolve-constraint-editor`
   publishes selected-only handles, control cages, rails and shared finite paint/hit geometry,
   exact curve-property metadata/setters, one hover/click owner and stale-safe prepared-patch
   gestures; the WASM workbench is a thin renderer/input adapter. Nonzero rational middle control
   has one `P1 = Qh / w` meaning, zero weight remains explicit projective `Qh`, non-periodic trim
   crossings reject rather than reverse, and no solver equation or canonical persistence changes.
-  Review findings F008-F011 retain stored-point ownership at guide origins, host-owned rational
-  fallback weights, directed trim orientation and precision-preserving homogeneous storage.
+  Review findings F008-F016 retain stored-point ownership at guide origins, host-owned rational
+  fallback weights, directed trim orientation, precision-preserving homogeneous storage, truthful
+  candidate-scene provenance, spatial elliptical-arc authoring, crowded-control acquisition and
+  exact candidate-generation authority.
   Focused native/WASM, coordinator, replay, demo and unchanged 270/270 golden evidence passes.
-  Exact source `51a3b95`, tree `8d154a1`, passes the complete clean gate; its immutable no-rebuild
-  snapshot `/tmp/geosolve-m77-uat.1mDjQv` is byte-verified at aggregate
-  `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b` and remains live for
-  review. Human UAT and public closeout remain open.
+  Exact source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
+  `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its immutable
+  no-rebuild snapshot `/tmp/geosolve-m77-uat.ARrQFw` is byte-verified at aggregate
+  `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94` and remains live for
+  review. The supervising caller accepts U1-U6 and requests closure; final Pages verification
+  remains open.
 
 ### Changed
 

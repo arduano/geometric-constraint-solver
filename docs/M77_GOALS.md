@@ -2,10 +2,11 @@
 
 # M77 — CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); the M77-F012/F013 replacement is clean-qualified, immutably frozen
-and byte-verified on Tailscale. Human UAT, GitHub Pages publication and closeout remain open**. M77
-makes advanced curve parameters directly manipulable in the polished demo while preserving the
-existing document model, equations and explicit branch state.
+Status: **closeout approved (2026-08-17); the replacement is clean-qualified, immutably frozen and
+byte-verified on Tailscale, and the supervising caller accepts U1-U6. GitHub Pages publication and
+hosted-byte verification remain the final open step**. M77 makes advanced curve parameters directly
+manipulable in the polished demo while preserving the existing document model, equations and
+explicit branch state.
 
 ## Product contract
 
@@ -112,9 +113,10 @@ superseded historical evidence after replacement UAT findings. Exact replacement
 `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean release gate and is frozen
 without rebuilding at `/tmp/geosolve-m77-uat.ARrQFw`; its seven served files byte-match aggregate
-`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`. Human UAT remains open until
-explicitly approved. GitHub Pages publication and hosted-byte verification occur only after that
-approval and are required before M77 closes.
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`. The supervising caller
+explicitly approved the current replacement and requested closure on 2026-08-17; U1-U6 pass under
+that scoped disposition. GitHub Pages publication and hosted-byte verification remain required
+before M77 closes.
 
 ## Non-goals
 

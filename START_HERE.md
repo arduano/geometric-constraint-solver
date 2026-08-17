@@ -157,8 +157,8 @@ production-quality annotations and final feature refinements are scoped-approved
 and publicly deployed from final source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
 `248cba4509a992aeff7a02dd6d57a1a2481380a4`. Pages run `31961652265`, artifact `9267811418` and
 deployment `5933831093` pass exact public-byte verification. The caller explicitly waived a
-separate post-refinement UAT replay; M76 is complete. M77 is now active and implemented: selected
-curves publish truthful trim, size, ordinary/projective rational-middle and stored-control
+separate post-refinement UAT replay; M76 is complete. M77 is implemented and approved for closeout:
+selected curves publish truthful trim, size, ordinary/projective rational-middle and stored-control
 affordances through accepted-domain projections and exact prepared-patch publication. Focused
 native/WASM, property, coordinator, replay, demo, golden, Rustdoc and Trunk qualification pass.
 Review findings `M77-F008` through `M77-F016` preserve stored-point ownership at shared guide
@@ -171,8 +171,9 @@ candidate-generation authority. Initial source `51a3b95` and snapshot
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the clean gate and its immutable no-rebuild
 snapshot `/tmp/geosolve-m77-uat.ARrQFw`, aggregate
 `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`, is byte-verified at the
-shared Tailscale endpoint. Human UAT and Pages publication remain open; no solver equation or
-canonical persistence changed.
+shared Tailscale endpoint. The supervising caller explicitly accepted U1-U6 and requested closure
+on 2026-08-17; Pages publication and hosted-byte verification remain the final open step. No solver
+equation or canonical persistence changed.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -193,8 +194,8 @@ support and physics remain outside future acceptance.
     and publicly verified hover/click ownership milestone.
 12. `docs/M76_GOALS.md`, `docs/M76_IMPLEMENTATION.md` and `docs/M76_UAT.md` — completed,
     scoped-approved and publicly verified feature-refined annotation milestone.
-13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — active CAD-ready
-    curve-control, exact-property and focused desktop-UAT milestone.
+13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — closeout-approved
+    CAD-ready curve-control, exact-property and focused desktop-UAT milestone.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -536,8 +537,9 @@ M77-F012/F013. Correction source `f53934f` and its focused native/WASM matrix pa
 source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate. Its immutable
 `/tmp/geosolve-m77-uat.ARrQFw` snapshot is current, served and byte-verified at aggregate
-`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`; U1-U6 human UAT and final
-Pages publication remain the active work.
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`. The supervising caller
+accepts U1-U6 and requests closure; final Pages publication and hosted-byte verification remain the
+active work.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -617,9 +619,9 @@ Durable milestone and cleanup records:
 - `docs/M76_GOALS.md` (scoped-approved production-quality annotation scope)
 - `docs/M76_IMPLEMENTATION.md` (feature-refined implementation and final qualification ledger)
 - `docs/M76_UAT.md` (scoped closure decision and exact accepted-candidate evidence)
-- `docs/M77_GOALS.md` (active selected-curve control and exact-property contract)
+- `docs/M77_GOALS.md` (closeout-approved selected-curve control and exact-property contract)
 - `docs/M77_IMPLEMENTATION.md` (implementation, review-finding and qualification ledger)
-- `docs/M77_UAT.md` (nominated candidate record and pending focused curve-control scorecard)
+- `docs/M77_UAT.md` (accepted focused scorecard, immutable candidate and pending Pages closeout)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

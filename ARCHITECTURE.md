@@ -27,9 +27,9 @@ construction/NURBS UAT and certified all-family visual profiles.
 - **Baseline:** implemented and accepted behavior through M76. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers its hands-on scorecard into M75; M75 completes hover/click ownership parity under scoped approval and exact public verification; M76 completes production-quality annotation geometry, placement, persistence and final presentation refinements under explicit scoped approval. M1-M7 remain the frozen regression baseline.
 - **Active target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
-  prepared-patch previews. Clean release qualification and immutable served nomination pass;
-  human UAT and publication remain open. It changes no solver equation, branch heuristic or
-  persistence schema. `docs/M77_GOALS.md` owns the contract.
+  prepared-patch previews. Clean release qualification, immutable served nomination and scoped
+  human UAT approval pass; final Pages publication remains open. It changes no solver equation,
+  branch heuristic or persistence schema. `docs/M77_GOALS.md` owns the contract.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1299,12 +1299,16 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   files byte-match that Pages artifact at the expected media types; this makes no byte-identity
   claim against the separately built Tailscale snapshot. The caller accepted U1-U4 for scoped
   closure and explicitly waived a separate post-refinement replay. M76 is complete. M77 is
-  clean-qualified and immutably nominated, with human UAT and public closeout still active.
+  clean-qualified, immutably nominated and explicitly accepted for closure; public Pages
+  verification remains active.
 - M77: implemented selected-curve control cages, exact trim/size/rational projections, immutable
   prepared previews, unified headless direct manipulation and exact property metadata. Focused
   native/WASM, retained-coordinator, replay, demo and unchanged-golden evidence passes. Resolved
-  findings F008-F011 retain point-alias ownership, stored rational fallback, directed trim
-  orientation and precision-preserving homogeneous controls. Exact source `51a3b95`, tree
-  `8d154a1`, passes the clean gate; snapshot `/tmp/geosolve-m77-uat.1mDjQv` is read-only,
-  byte-verified and live for review. Human/public acceptance remains open, so M77 is not part of
-  the accepted baseline yet.
+  findings F008-F016 retain point-alias ownership, stored rational fallback, directed trim
+  orientation, precision-preserving homogeneous controls, truthful candidate-scene provenance,
+  spatial elliptical-arc authoring, crowded-control acquisition and exact candidate-generation
+  authority. Exact source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
+  `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the clean gate; snapshot
+  `/tmp/geosolve-m77-uat.ARrQFw` is read-only, byte-verified and live for review. The supervising
+  caller accepts U1-U6 and requests closure; final Pages verification remains open, so M77 is not
+  part of the accepted baseline yet.

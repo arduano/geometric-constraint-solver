@@ -2,11 +2,11 @@
 
 # M77 focused UAT — CAD curve handles and implicit parameters
 
-Status: **replacement candidate nominated (2026-08-17)**. UAT findings M77-F012 and M77-F013
+Status: **replacement accepted for closeout (2026-08-17)**. UAT findings M77-F012 and M77-F013
 supersede the initial candidate. Their corrections and review follow-ups pass the complete clean
-gate, immutable freeze and served-byte verification below. U1-U6, explicit supervising-human
-approval, GitHub Pages publication and closeout remain pending; no scorecard item is accepted by
-automation.
+gate, immutable freeze and served-byte verification below. The supervising caller explicitly
+approved the current replacement and requested milestone closure; GitHub Pages publication and
+hosted-byte verification remain pending.
 
 ## Current replacement candidate
 
@@ -214,11 +214,18 @@ and canvas hover must not steal focus.
 
 ## Acceptance record
 
-- U1 — visibility, ownership and visual language: pending
-- U2 — trim endpoints: pending
-- U3 — rational and stored control cages: pending
-- U4 — size handles and domains: pending
-- U5 — cancellation, stale work and history: pending
-- U6 — persistence and desktop polish: pending
-- Final supervising approval: pending
+- U1 — visibility, ownership and visual language: accepted under the supervising caller's scoped
+  approval
+- U2 — trim endpoints: accepted under the supervising caller's scoped approval
+- U3 — rational and stored control cages: accepted under the supervising caller's scoped approval
+- U4 — size handles and domains: accepted under the supervising caller's scoped approval
+- U5 — cancellation, stale work and history: accepted under the supervising caller's scoped approval
+- U6 — persistence and desktop polish: accepted under the supervising caller's scoped approval
+- Final supervising approval: passed on 2026-08-17; the caller approved the current replacement and
+  requested closure
 - GitHub Pages publication and hosted-byte verification: pending
+
+This is an explicit milestone-level acceptance of the current replacement. It does not claim a
+separately logged row-by-row replay beyond the focused defects and interaction checks reported by
+the supervising caller; exact boundary, lifecycle and stale-authority behavior remains owned by the
+qualified native/WASM regressions above.

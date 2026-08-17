@@ -67,7 +67,8 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M76 are complete, and M77 is active. M76's implementation,
+of every prepared UAT step. M71-M76 are complete, and M77 awaits final Pages closeout. M76's
+implementation,
 feature refinements,
 clean qualification, immutable Tailscale nomination, scoped human acceptance and exact public
 publication all pass. M74
@@ -4948,11 +4949,11 @@ historical evidence only; its PID `1077092` was retired.
 
 ### M77: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); the M77-F012/F013 replacement is clean-qualified, immutably frozen
-and byte-verified on Tailscale. Human UAT, GitHub Pages publication and closeout remain open**. M77
-gives selected advanced curves a compact, headless-owned control presentation for parameters that
-previously had no spatial editing surface.
-`docs/M77_GOALS.md` owns the approved scope and `docs/M77_UAT.md` owns the pending human scorecard.
+Status: **closeout approved (2026-08-17); the replacement is clean-qualified, immutably frozen and
+byte-verified on Tailscale, and the supervising caller accepts U1-U6. GitHub Pages publication and
+hosted-byte verification remain the final open step**. M77 gives selected advanced curves a compact,
+headless-owned control presentation for parameters that previously had no spatial editing surface.
+`docs/M77_GOALS.md` owns the approved scope and `docs/M77_UAT.md` owns the accepted human scorecard.
 
 - [x] Publish transient typed handles, family-specific guides and exact paint/hit geometry for
   selected editable curves; handles own their curve rather than inventing persistent sketch points.
@@ -4987,7 +4988,7 @@ previously had no spatial editing surface.
   historical evidence after M77-F012/F013.
 - [x] Pass the replacement clean gate, freeze and byte-verify its immutable Tailscale candidate,
   then retire the superseded server only after the new snapshot is ready.
-- [ ] Complete the focused human UAT under `docs/M77_UAT.md` and receive explicit approval.
+- [x] Complete the focused human UAT under `docs/M77_UAT.md` and receive explicit approval.
 - [ ] Publish the exact accepted source through GitHub Pages, verify hosted bytes and close M77.
 
 Gate: every approved curve family exposes a truthful, selected-only spatial control surface;
@@ -5036,8 +5037,10 @@ snapshot `/tmp/geosolve-m77-uat.ARrQFw` is read-only, has ordered-manifest aggre
 `http://100.94.63.83:8080/` under PID `284248` / retained session `5213`. Freeze evidence is
 `/tmp/geosolve-m77-replacement-freeze-evidence.2kfhjk`; HTTP evidence is
 `/tmp/geosolve-m77-replacement-http-verify.yxgjkL`. PID `3912158` remained live until the
-replacement freeze was ready, then was retired. U1-U6, explicit approval and Pages publication
-remain deliberately open; this later evidence ledger does not replace `cc99b11` as product source.
+replacement freeze was ready, then was retired. On 2026-08-17 the supervising caller explicitly
+approved the current replacement and requested milestone closure; U1-U6 therefore pass under that
+scoped disposition without inventing a separate row-by-row replay. Pages publication remains open;
+this later evidence ledger does not replace `cc99b11` as product source.
 
 Superseded initial nomination record (2026-08-17): exact source
 `51a3b95d04f27216c164febf0808a180b6775537`, tree

@@ -2,8 +2,9 @@
 
 # M77 implementation — CAD curve handles and implicit parameters
 
-Status: **active (2026-08-17); the M77-F012/F013 replacement is clean-qualified, immutably frozen
-and byte-verified on Tailscale. Human UAT, GitHub Pages publication and closeout remain open.**
+Status: **closeout approved (2026-08-17); the replacement is clean-qualified, immutably frozen and
+byte-verified on Tailscale, and the supervising caller accepts U1-U6. GitHub Pages publication and
+hosted-byte verification remain the final open step.**
 
 ## Approved architecture
 
@@ -241,11 +242,13 @@ properties, preview/cancellation/staleness, one-step history and persistence con
 native evidence. Weight rails, knot/degree/topology editing, generalized derived-point constraint
 targets, automatic trim/branch changes and mobile layout remain deliberate non-goals.
 
-Replacement mechanical nomination is complete. U1-U6 remain genuine human UAT; no item is accepted
-by automation alone. GitHub Pages publication is intentionally withheld until explicit approval.
+Replacement mechanical nomination is complete. On 2026-08-17 the supervising caller explicitly
+approved the current candidate and requested milestone closure. U1-U6 pass under that scoped
+disposition; this does not invent a separate row-by-row replay beyond the reported focused checks.
+GitHub Pages publication and hosted-byte verification remain the final closeout step.
 
 ## Closeout evidence
 
-Pending explicit human UAT disposition, accepted-source GitHub Pages publication, hosted-byte
-verification and milestone closure. The evidence-recording descendant must retain a clean
-worktree and does not replace the exact qualified product source above.
+Pending accepted-source GitHub Pages publication, hosted-byte verification and the final closeout
+ledger. The evidence-recording descendant must retain a clean worktree and does not replace the
+exact qualified Tailscale product source above.

@@ -2206,8 +2206,9 @@ historical evidence only; its PID `1077092` was retired.
 
 ## M77 acceptance: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); the M77-F012/F013 replacement is clean-qualified, immutably frozen
-and byte-verified on Tailscale. Human UAT, GitHub Pages publication and closeout remain open**.
+Status: **closeout approved (2026-08-17); the replacement is clean-qualified, immutably frozen and
+byte-verified on Tailscale, and the supervising caller accepts U1-U6. Exact GitHub Pages publication
+and hosted-byte verification remain the final open acceptance step**.
 
 - A selected editable curve exposes only its applicable finite typed controls. Circular and
   elliptical arcs, parabola segments and hyperbola segments expose derived Start/End trim handles;
@@ -2318,8 +2319,10 @@ licence/package checks and Trunk 0.21.14. Its exact no-rebuild snapshot
 `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`. PID `284248` / retained
 session `5213` serves it at `http://100.94.63.83:8080/`; root plus every file return HTTP 200 with
 zero redirects or content encoding, exact expected media types/lengths and byte equality, and the
-fetched aggregate matches. This completes objective mechanical nomination only. U1-U6, explicit
-human approval, GitHub Pages publication and milestone closure remain open.
+fetched aggregate matches. On 2026-08-17 the supervising caller explicitly approved this current
+replacement and requested milestone closure. U1-U6 pass under that scoped disposition without a
+claim of a separately logged row-by-row replay. GitHub Pages publication and hosted-byte
+verification remain open.
 
 The `51a3b95` source, `/tmp/geosolve-m77-uat.1mDjQv` snapshot and retired PID `3912158` record above
 are superseded historical evidence only after M77-F012/F013, not current UAT authority. The later

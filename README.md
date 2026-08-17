@@ -96,17 +96,19 @@ byte-match it at the expected media types. No Tailscale/Pages byte identity is c
 complete. M77 now implements selected-only CAD curve cages, derived trim and size grips,
 ordinary/projective rational-middle editing, exact property controls and stale-safe prepared-patch
 publication. Focused native/WASM, coordinator, replay, demo and unchanged-golden qualification
-passes. Exact source `51a3b95`, tree `8d154a1`, passes the complete clean gate; its immutable
-snapshot `/tmp/geosolve-m77-uat.1mDjQv` is byte-verified at ordered aggregate
-`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b` and remains live on the
-Tailscale endpoint. Human UAT and public closeout remain open.
+passes. Exact replacement source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
+`3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its immutable snapshot
+`/tmp/geosolve-m77-uat.ARrQFw` is byte-verified at ordered aggregate
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94` and remains live on the
+Tailscale endpoint. The supervising caller accepts U1-U6 and requests closure; Pages publication
+and hosted-byte verification remain open.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74-M76 closed and M77 active.
+3. `PLAN.md` — authoritative roadmap, with M74-M76 closed and M77 awaiting final Pages publication.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -119,8 +121,8 @@ Physics, collision and a production rendering system remain out of scope.
     and publicly verified hover/click ownership milestone.
 12. `docs/M76_GOALS.md`, `docs/M76_IMPLEMENTATION.md` and `docs/M76_UAT.md` — feature-refined,
     scoped-approved annotation milestone and exact closure evidence.
-13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — active selected-curve
-    control contract, implementation ledger and pending human scorecard.
+13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — closeout-approved
+    selected-curve control contract, implementation ledger and accepted human scorecard.
 
 ## Workspace
 

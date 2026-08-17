@@ -206,10 +206,11 @@ must handle the additive variants under the documented minor-release policy.
 M77 changes no solver equation, residual, constraint or dimension kind, hard/soft priority,
 rank/DOF rule, automatic branch policy, canonical sketch v1-v4 bytes, unsupported draft-v5
 disposition, workspace/reproduction schema or annotation cache. Curve-control cages are recomputed
-from accepted geometry and selection. Exact source `51a3b95d04f27216c164febf0808a180b6775537`,
-tree `8d154a147a08c7d6bc79008f19b74311cd60905a`, passes the complete clean gate and immutable
-Tailscale nomination. Supervising-human UAT and final publication remain open; this paragraph does
-not claim M77 acceptance or closeout.
+from accepted geometry and selection. Exact source
+`cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
+`3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate and immutable Tailscale
+nomination. The supervising caller accepts U1-U6 and requests closure; final Pages publication and
+hosted-byte verification remain open. This approval changes no compatibility boundary.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
