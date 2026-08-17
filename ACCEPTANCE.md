@@ -2166,7 +2166,8 @@ workspace tests, benchmarks, licensing/package contents and Trunk 0.21.14 assemb
 no-rebuild seven-file snapshot `/tmp/geosolve-m76-final-uat.65Y8J1` is read-only (directory `0555`,
 all seven regular non-symlink files `0444`) and has ordered-manifest aggregate
 `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`. PID `1780608`, retained
-command-runner session `30164`, serves it at `http://100.94.63.83:8080/`;
+command-runner session `30164`, served it at `http://100.94.63.83:8080/` and was retired only after
+the M77 snapshot was ready;
 `/tmp/geosolve-m76-final-http-verify.UwoaMK` proves root plus every file returns HTTP 200 with
 exact media/length/bytes, no redirects or content encoding, root equality and the same fetched
 aggregate. The supervising user reviewed the initial candidate, requested the two final feature
@@ -2205,9 +2206,8 @@ historical evidence only; its PID `1077092` was retired.
 
 ## M77 acceptance: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); implementation and pre-nomination automated acceptance pass. Clean
-committed-source qualification, immutable candidate nomination, human UAT, publication and
-closeout remain open**.
+Status: **active (2026-08-17); implementation, clean committed-source qualification and immutable
+candidate nomination pass. Human UAT, publication and closeout remain open**.
 
 - A selected editable curve exposes only its applicable finite typed controls. Circular and
   elliptical arcs, parabola segments and hyperbola segments expose derived Start/End trim handles;
@@ -2275,8 +2275,21 @@ controls must survive a finite precision-preserving `P1 -> Qh -> P1` round trip 
 storage. No solver equation or golden row changed. The first broad run stopped at one stale M19
 assertion that expected endpoint equality to reach the setter; compatibility-only commit
 `20ae036` now checks typed projection rejection and the unchanged byte-identical setter rejection.
-The post-commit locked all-feature workspace rerun passes. The exact clean release gate remains
-final nomination authority, so no candidate or human item is accepted by this paragraph.
+The post-commit locked all-feature workspace rerun passes. Exact source
+`51a3b95d04f27216c164febf0808a180b6775537`, tree
+`8d154a147a08c7d6bc79008f19b74311cd60905a`, then passes
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` completely. This includes
+the unchanged 270/270 clean golden, native/WASM M77 4/4, all carried parity, demo WASM,
+warnings-denied Clippy/Rustdoc, all workspace tests, benchmarks, M14/M32, licence/package checks,
+the 150.55-second 256-body sparse crossover and Trunk 0.21.14.
+
+The exact no-rebuild seven-file snapshot `/tmp/geosolve-m77-uat.1mDjQv` is read-only and has
+ordered-manifest aggregate
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`. PID `3912158` / session
+`12828` serves it at `http://100.94.63.83:8080/`; `/` and every asset return HTTP 200 with zero
+redirects or content encoding, exact expected media types and byte equality, and the fetched
+aggregate matches. This satisfies objective mechanical nomination only. U1-U6, explicit human
+approval, GitHub Pages publication and milestone closure remain open.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

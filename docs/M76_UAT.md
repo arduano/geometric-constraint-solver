@@ -16,9 +16,10 @@ M76 feature-refinement commit: `a9fd6f6a71edf5be9d9fb5856074d291192a898d`
 
 M76 feature-refinement tree: `2627e1d0ffdc500166bbcee50626fc9d65e05b67`
 
-Current endpoint: `http://100.94.63.83:8080/`
+Historical M76 endpoint at acceptance: `http://100.94.63.83:8080/`
 
-Current server PID: `1780608` (retained command-runner session `30164`)
+Retired server PID: `1780608` (retained command-runner session `30164`; retired only after the M77
+snapshot was ready)
 
 Immutable snapshot: `/tmp/geosolve-m76-final-uat.65Y8J1` (directory `0555`, files `0444`)
 
@@ -147,5 +148,5 @@ deterministic automatic layout.
 - GitHub Pages publication: Passed and exact-verified at source `a7769e4` through run
   `31961652265`, artifact `9267811418` and deployment `5933831093`.
 
-GitHub Pages now serves the accepted M76 candidate and exact public bytes are verified. No later
-milestone is active.
+GitHub Pages now serves the accepted M76 candidate and exact public bytes are verified. M77 is
+active subsequently and does not change this completed evidence.

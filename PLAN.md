@@ -4907,7 +4907,8 @@ workspace tests, benchmarks, licensing/package contents and Trunk 0.21.14 assemb
 no-rebuild seven-file snapshot `/tmp/geosolve-m76-final-uat.65Y8J1` is read-only (directory `0555`,
 regular non-symlink files `0444`) with ordered-manifest aggregate
 `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`. PID `1780608`, retained
-command-runner session `30164`, serves it at `http://100.94.63.83:8080/`;
+command-runner session `30164`, served it at `http://100.94.63.83:8080/` and was retired only after
+the M77 snapshot was ready;
 `/tmp/geosolve-m76-final-http-verify.UwoaMK` proves root plus every file returns HTTP 200 with exact
 media/length/bytes, no redirects or encoding, root equality and the same fetched aggregate. The
 user reviewed the initial candidate, requested the two final feature refinements, and explicitly
@@ -4947,8 +4948,8 @@ historical evidence only; its PID `1077092` was retired.
 
 ### M77: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); implementation and pre-nomination qualification complete; clean
-release nomination, frozen-candidate UAT, publication and closeout remain open**. M77 gives
+Status: **active (2026-08-17); implementation, clean release qualification and immutable
+Tailscale nomination complete; human UAT, publication and closeout remain open**. M77 gives
 selected advanced curves a compact, headless-owned control presentation for parameters that
 previously had no spatial editing surface. `docs/M77_GOALS.md` owns the approved scope and
 `docs/M77_UAT.md` owns the pending human scorecard.
@@ -4977,9 +4978,9 @@ previously had no spatial editing surface. `docs/M77_GOALS.md` owns the approved
   not expose conflicting generic handles.
 - [x] Add native/WASM family, geometry/hit parity, preview, cancellation, staleness, domain,
   branch, history and save/reload regressions plus thin demo rendering/input tests.
-- [ ] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
+- [x] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
   golden-oracle cleanliness, Rustdoc and Trunk release assembly.
-- [ ] Freeze and byte-verify an immutable Tailscale candidate and keep it available for follow-up
+- [x] Freeze and byte-verify an immutable Tailscale candidate and keep it available for follow-up
   fixes until explicit approval.
 - [ ] Complete the focused human UAT under `docs/M77_UAT.md` and receive explicit approval.
 - [ ] Publish the exact accepted source through GitHub Pages, verify hosted bytes and close M77.
@@ -5003,6 +5004,18 @@ aligns one old M19 equality expectation with the stronger projection-time crossi
 retaining transactional setter coverage. The post-`20ae036` locked all-feature workspace rerun
 passes; the exact clean committed-source release gate remains final mechanical nomination
 authority.
+
+Nomination record (2026-08-17): exact source
+`51a3b95d04f27216c164febf0808a180b6775537`, tree
+`8d154a147a08c7d6bc79008f19b74311cd60905a`, passes the complete clean gate from 15:48:17 through
+16:00:06 AEST. It includes the unchanged 270/270 clean golden, every carried native/WASM parity
+target, demo WASM, warnings-denied Clippy/Rustdoc, all workspace tests, benchmarks, M14/M32,
+licensing/package contents, the 150.55-second sparse crossover and Trunk 0.21.14. The exact
+no-rebuild seven-file snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, is read-only and
+byte-verified at `http://100.94.63.83:8080/` under PID `3912158` / session `12828`.
+`docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` contain the file, log and HTTP evidence. U1-U6,
+explicit approval and Pages publication remain deliberately open.
 
 ## Explicit non-goals
 

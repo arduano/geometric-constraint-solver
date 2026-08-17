@@ -2,9 +2,9 @@
 
 # M77 implementation — CAD curve handles and implicit parameters
 
-Status: **active (2026-08-17); implementation, owner regressions and pre-nomination qualification
-pass. The clean committed-source gate, immutable Tailscale candidate, human UAT, GitHub Pages
-publication and closeout remain open.**
+Status: **active (2026-08-17); implementation, owner regressions, clean release qualification and
+immutable Tailscale nomination pass. Human UAT, GitHub Pages publication and closeout remain
+open.**
 
 ## Approved architecture
 
@@ -100,8 +100,8 @@ finding ID.
 - Demo WASM check, warnings-denied Rustdoc and Trunk 0.21.14 release assembly pass.
 - Golden survey, check and require-clean each pass the unchanged 270/270-`PASS` inventory.
 - The post-`20ae036` locked all-feature workspace suite passes. Formatting, diff hygiene and
-  focused warnings-denied Clippy pass. One clean committed-source release gate remains nomination
-  authority.
+  focused warnings-denied Clippy pass. The exact clean committed-source release gate below is
+  nomination authority.
 
 Exact notable commands already run successfully include:
 
@@ -124,6 +124,37 @@ The WASM parity command requires the project `shell.nix` in the current ambient 
 `wasm-bindgen-test-runner` is available. A direct ambient invocation failed only for that missing
 runner; the exact project-shell invocation passed 4/4 and is the recorded result.
 
+## Clean qualification and immutable candidate
+
+Exact source `51a3b95d04f27216c164febf0808a180b6775537`, tree
+`8d154a147a08c7d6bc79008f19b74311cd60905a`, passed:
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The clean worktree, HEAD and tree were unchanged from 15:48:17 through 16:00:06 AEST. The retained
+241,980-byte log is `/tmp/geosolve-m77-clean-gate.51a3b95.log`, SHA-256
+`e28c50101df3b9c447ccf1a392f0e3e5644068e8abc460be389aaf3cff1984ed`. It passes formatting/diff,
+warnings-denied workspace Clippy and Rustdoc, all locked all-feature tests, unchanged 270/270 clean
+golden authority, every carried native/WASM parity target through M77, demo WASM, benchmark
+compilation, M14/M32 workloads, the 150.55-second 256-body sparse crossover, licensing/package
+contents and Trunk 0.21.14 release assembly. The only diagnostics are the longstanding non-failing
+Cargo advisories for packages declaring both `license` and `license-file`.
+
+Without rebuilding, the exact seven regular gate-output files were byte-compared and frozen at
+`/tmp/geosolve-m77-uat.1mDjQv`, directory mode `0555`, file mode `0444`, no symlinks. Its ordered
+manifest is recorded in `docs/M77_UAT.md`; aggregate:
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`.
+
+PID `3912158`, command-runner session `12828`, serves only that snapshot at
+`http://100.94.63.83:8080/`. Proxy-disabled, cache-bypassed identity requests for `/` and every
+file return HTTP 200 with zero redirects, no content encoding, expected media types/lengths and
+exact bytes; `/` equals `index.html` and the fetched aggregate matches. Freeze evidence is
+`/tmp/geosolve-m77-freeze-evidence.qbBmc5`; HTTP evidence is
+`/tmp/geosolve-m77-http-verify.eu1KMY`. The previous M76 PID `1780608` was retired only after the
+new snapshot was ready.
+
 ## Acceptance and known limits
 
 The approved family inventory, selected-only ownership, exact projection, rational semantics,
@@ -131,11 +162,11 @@ properties, preview/cancellation/staleness, one-step history and persistence con
 native evidence. Weight rails, knot/degree/topology editing, generalized derived-point constraint
 targets, automatic trim/branch changes and mobile layout remain deliberate non-goals.
 
-Mechanical nomination still requires one clean committed-source `scripts/release-gate.sh` pass,
-then a no-rebuild seven-file freeze and served-byte verification. U1-U6 remain genuine human UAT;
-no item is accepted by automation alone.
+Mechanical nomination is complete. U1-U6 remain genuine human UAT; no item is accepted by
+automation alone. GitHub Pages publication is intentionally withheld until explicit approval.
 
 ## Closeout evidence
 
-Pending clean release nomination, immutable candidate identity, explicit human UAT disposition,
-accepted-source GitHub Pages publication, hosted-byte verification and a clean final worktree.
+Pending explicit human UAT disposition, accepted-source GitHub Pages publication, hosted-byte
+verification and milestone closure. The evidence-recording descendant must retain a clean
+worktree and does not replace the exact qualified product source above.

@@ -173,8 +173,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   crossings reject rather than reverse, and no solver equation or canonical persistence changes.
   Review findings F008-F011 retain stored-point ownership at guide origins, host-owned rational
   fallback weights, directed trim orientation and precision-preserving homogeneous storage.
-  Focused native/WASM, coordinator, replay, demo and unchanged 270/270 golden evidence passes;
-  clean release nomination, human UAT and public closeout remain open.
+  Focused native/WASM, coordinator, replay, demo and unchanged 270/270 golden evidence passes.
+  Exact source `51a3b95`, tree `8d154a1`, passes the complete clean gate; its immutable no-rebuild
+  snapshot `/tmp/geosolve-m77-uat.1mDjQv` is byte-verified at aggregate
+  `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b` and remains live for
+  review. Human UAT and public closeout remain open.
 
 ### Changed
 

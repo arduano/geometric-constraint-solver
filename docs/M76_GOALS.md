@@ -4,8 +4,9 @@
 
 Status: complete (2026-08-17). Implementation, final clean qualification, immutable Tailscale
 nomination, scoped human approval, exact GitHub Pages publication and public browser verification
-all pass. No later milestone is active. This milestone turns the workbench annotations into a
-polished CAD demonstration without changing solver, sketch or branch semantics.
+all pass. M77 is active subsequently and does not change this completed evidence. This milestone
+turns the workbench annotations into a polished CAD demonstration without changing solver, sketch
+or branch semantics.
 
 ## Scope
 
@@ -67,7 +68,8 @@ workspace tests, benchmarks, licensing/package contents and Trunk 0.21.14 assemb
 The exact no-rebuild seven-file snapshot `/tmp/geosolve-m76-final-uat.65Y8J1` is read-only
 (directory `0555`, regular non-symlink files `0444`) with ordered-manifest aggregate
 `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`. PID `1780608`, retained
-command-runner session `30164`, serves it at `http://100.94.63.83:8080/`;
+command-runner session `30164`, served it at `http://100.94.63.83:8080/` and was retired only after
+the M77 snapshot was ready;
 `/tmp/geosolve-m76-final-http-verify.UwoaMK` proves root plus all files return HTTP 200 with exact
 media/length/bytes, no redirects or encoding, root equality and the same fetched aggregate. The
 user reviewed the initial candidate, requested the two final feature refinements, and explicitly

@@ -2186,10 +2186,12 @@ Undo/Redo step regardless of pointer-sample count. Save/reload and reproduction 
 only existing scalar or weighted-middle data, then recompute selected handles from accepted
 geometry. Native/WASM semantics, thin demo mapping and the two-size/zoom UAT matrix must pass.
 
-M77 is active. Implementation and focused pre-nomination qualification pass, including direct
-coverage for every A1-A5 contract and resolved findings `M77-F008` through `M77-F011`; no golden
-row changed. The post-`20ae036` locked workspace rerun passes; the clean committed-source release
-gate, immutable candidate, human UAT, Pages publication and closeout remain open.
+M77 is active. Implementation and direct coverage for every A1-A5 contract pass; resolved findings
+`M77-F008` through `M77-F011` add no golden row. Exact source `51a3b95`, tree `8d154a1`, passes the
+complete clean gate, including the post-`20ae036` workspace matrix, unchanged 270/270 golden and
+native/WASM M77 4/4. Its no-rebuild snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, is immutable and
+byte-verified at `http://100.94.63.83:8080/`. Human UAT, Pages publication and closeout remain open.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

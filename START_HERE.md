@@ -163,8 +163,11 @@ affordances through accepted-domain projections and exact prepared-patch publica
 native/WASM, property, coordinator, replay, demo, golden, Rustdoc and Trunk qualification pass.
 Review findings `M77-F008` through `M77-F011` preserve stored-point ownership at shared guide
 origins, host-owned rational fallback weights, non-periodic trim orientation and precision-
-preserving homogeneous control storage. Clean release nomination, frozen-candidate human UAT and
-Pages publication remain open; no solver equation or canonical persistence changed.
+preserving homogeneous control storage. Exact source `51a3b95`, tree `8d154a1`, passes the clean
+gate; its immutable no-rebuild snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, is byte-verified and live
+at `http://100.94.63.83:8080/`. Human UAT and Pages publication remain open; no solver equation or
+canonical persistence changed.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -502,8 +505,9 @@ passes, including editor 353/353, demo-web 122/122, M76 native/WASM 5/5 each, ca
 M74 5/5 in both environments, unchanged golden 270/270 and the 151.76-second sparse crossover.
 Its exact no-rebuild read-only seven-file Tailscale snapshot
 `/tmp/geosolve-m76-final-uat.65Y8J1`, aggregate
-`967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`, remains live and
-byte-verified at `http://100.94.63.83:8080/` under PID `1780608`/session `30164`; HTTP evidence is
+`967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`, remains immutable
+historical candidate evidence. Its former PID `1780608` was retired only after the M77 snapshot
+was ready; M77 now owns the shared Tailscale endpoint. M76 HTTP evidence remains at
 `/tmp/geosolve-m76-final-http-verify.UwoaMK`.
 
 The same final source passes Pages run `31961652265` and qualification job `95200423007`; its
@@ -520,8 +524,10 @@ files byte-match that Pages artifact at the expected media types; evidence is re
 `/tmp/geosolve-m76-pages-verify.ijOz7p`. This does not assert byte identity with the separately
 built Tailscale snapshot. The caller accepted U1-U4 for scoped closure without claiming a
 separately logged post-refinement replay. M76 is complete; the `37eade50` and `9b4e7f7`
-nominations are superseded historical evidence only. M77 implementation and focused qualification
-now pass; its clean release nomination, frozen Tailscale candidate, U1-U6 human scorecard and final
+nominations are superseded historical evidence only. M77 implementation, complete clean gate and
+immutable served nomination now pass at source `51a3b95`, snapshot
+`/tmp/geosolve-m77-uat.1mDjQv` and aggregate
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`. U1-U6 human UAT and final
 Pages publication remain the active work.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
@@ -604,7 +610,7 @@ Durable milestone and cleanup records:
 - `docs/M76_UAT.md` (scoped closure decision and exact accepted-candidate evidence)
 - `docs/M77_GOALS.md` (active selected-curve control and exact-property contract)
 - `docs/M77_IMPLEMENTATION.md` (implementation, review-finding and qualification ledger)
-- `docs/M77_UAT.md` (pending focused curve-control scorecard and candidate record)
+- `docs/M77_UAT.md` (nominated candidate record and pending focused curve-control scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

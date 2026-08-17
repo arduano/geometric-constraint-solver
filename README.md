@@ -96,7 +96,10 @@ byte-match it at the expected media types. No Tailscale/Pages byte identity is c
 complete. M77 now implements selected-only CAD curve cages, derived trim and size grips,
 ordinary/projective rational-middle editing, exact property controls and stale-safe prepared-patch
 publication. Focused native/WASM, coordinator, replay, demo and unchanged-golden qualification
-passes; clean release nomination, frozen-candidate UAT and public closeout remain open.
+passes. Exact source `51a3b95`, tree `8d154a1`, passes the complete clean gate; its immutable
+snapshot `/tmp/geosolve-m77-uat.1mDjQv` is byte-verified at ordered aggregate
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b` and remains live on the
+Tailscale endpoint. Human UAT and public closeout remain open.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here

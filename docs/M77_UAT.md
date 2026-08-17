@@ -2,17 +2,51 @@
 
 # M77 focused UAT — CAD curve handles and implicit parameters
 
-Status: **planned and open**. No candidate is nominated and no scorecard item is accepted. Record
-the exact clean source, tree, immutable snapshot, manifest, endpoint and browser-check evidence
-here only after the complete release gate passes.
+Status: **candidate nominated and UAT open (2026-08-17)**. Mechanical qualification, immutable
+freeze and exact served-byte verification pass. U1-U6, explicit supervising-human approval,
+GitHub Pages publication and closeout remain pending; no scorecard item is accepted by automation.
 
-Candidate source: pending
+Candidate source: `51a3b95d04f27216c164febf0808a180b6775537`
 
-Candidate tree: pending
+Candidate tree: `8d154a147a08c7d6bc79008f19b74311cd60905a`
 
-Tailscale endpoint: pending
+Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Immutable snapshot and ordered-manifest aggregate: pending
+Server PID/session: `3912158` / command-runner session `12828`
+
+Immutable snapshot: `/tmp/geosolve-m77-uat.1mDjQv` (directory `0555`, seven regular non-symlink
+files `0444`)
+
+Ordered-manifest aggregate:
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 23,124 | `f72319b7b0b0364c5ebcf3921e34d0a706f459771a182ce65b16918a805ea07e` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-be28d696c867467c.js` | 33,221 | `d5fe43e24f03ebc2301c9d560520220b4d6d1f5a43ee75400c640da8dba9cb6f` |
+| `geosolve-demo-web-be28d696c867467c_bg.wasm` | 6,412,353 | `943a8bb78cc6d6d0883c9628e537b143c7703c409e975c4ce8af343391823bc1` |
+| `index.html` | 29,020 | `071852cb148efae46d4ace99a83ed2595e55f4677a0407765572b1685b7dd070` |
+| `styles-d7435a6d60dc3430.css` | 34,689 | `870bde7d758fe95f4323bedc6588ff2cffaf3c826549e684718ebfd818eebcd6` |
+
+The exact clean command
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` ran from 15:48:17 to
+16:00:06 AEST and exited successfully without changing HEAD, tree or worktree. Its log is
+`/tmp/geosolve-m77-clean-gate.51a3b95.log`, SHA-256
+`e28c50101df3b9c447ccf1a392f0e3e5644068e8abc460be389aaf3cff1984ed`. The gate includes formatting
+and diff hygiene, warnings-denied workspace Clippy/Rustdoc, every locked all-feature workspace
+test, unchanged 270/270 clean golden, native/WASM M70/M71/M74/M75/M76/M77 parity, demo WASM,
+benchmark compilation, M14/M32 workloads, the 150.55-second 256-body sparse crossover,
+licence/package checks and Trunk 0.21.14 release assembly.
+
+The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
+Freeze evidence is `/tmp/geosolve-m77-freeze-evidence.qbBmc5`. Proxy-disabled, cache-bypassed,
+identity-encoded requests for `/` and all seven files return HTTP 200 with zero redirects, no
+content encoding, exact expected media types/lengths and snapshot-identical bytes. `/` equals
+`index.html`, and the fetched manifest has the same aggregate. HTTP evidence is
+`/tmp/geosolve-m77-http-verify.eu1KMY`. Superseded M76 PID `1780608` exited before this listener
+started; its immutable snapshot remains unchanged historical evidence.
 
 Run the scorecard in the ordinary editable workbench at `1440x900` and approximately `1024x720`,
 at coarse and fine zoom. Use a mouse or equivalent precise pointer. Repeat crowded targets on both

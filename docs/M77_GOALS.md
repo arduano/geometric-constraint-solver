@@ -2,10 +2,10 @@
 
 # M77 — CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); implementation and focused qualification complete; clean release
-nomination, frozen-candidate UAT, publication and closeout remain open**. M77 makes advanced curve
-parameters directly manipulable in the polished demo while preserving the existing document
-model, equations and explicit branch state.
+Status: **active (2026-08-17); implementation, clean release qualification and immutable
+Tailscale nomination complete; human UAT, publication and closeout remain open**. M77 makes
+advanced curve parameters directly manipulable in the polished demo while preserving the
+existing document model, equations and explicit branch state.
 
 ## Product contract
 
@@ -53,10 +53,12 @@ capture loss, tool/camera change or stale owner cancellation restores the pre-ge
 Derived arc, parabola and hyperbola endpoints use
 `SketchDocument::project_curve_trim_endpoint` and the returned durable `SetScalarValue` edit.
 Projection unwraps near the current scalar where applicable and retains Start/End identity. For
-`w != 0`, the rational middle handle presents `P1 = Qh / w` and an atomic rational-control edit
-writes `Qh = w·P1`; exact nonzero weight changes preserve `P1`. At `w == 0`, the same typed edit
-uses explicit projective `Qh` vector state, never division by zero. New nonzero-weight canvas
-construction interprets its middle click as `P1`, matching later editing. Radius,
+`w != 0`, the rational middle handle presents `P1 = Qh / w`; a spatial edit uses the accepted
+host-effective weight to write `Qh = w·P1` through durable `SetConicWeightedMiddle` while
+preserving the stored fallback weight. At `w == 0`, the same weighted-middle edit uses explicit
+projective `Qh` vector state, never division by zero. Explicit numeric weight/mode edits retain
+atomic `SetRationalConicControl`, and exact nonzero weight changes preserve `P1`. New nonzero-weight
+canvas construction interprets its middle click as `P1`, matching later editing. Radius,
 minor-axis-ratio and semi-conjugate handles project onto deterministic family-specific rails and
 publish `SetScalarValue` for their existing owned scalar.
 
@@ -96,10 +98,11 @@ retention, cancellation, staleness, branch preservation, one-step Undo/Redo and 
 demo tests own only event mapping, capture and headless rendering. Existing golden authoring/scene
 coverage must remain clean unless a reviewed M77 row is deliberately added.
 
-The complete release gate, relevant WASM checks and Trunk release build must pass before an exact
-no-rebuild candidate is frozen and byte-verified on the retained Tailscale endpoint. Human UAT in
-`docs/M77_UAT.md` remains open until explicitly approved. GitHub Pages publication and hosted-byte
-verification occur only after that approval and are required before M77 closes.
+The complete release gate, relevant WASM checks and Trunk release build pass at exact source
+`51a3b95d04f27216c164febf0808a180b6775537`. Its exact no-rebuild candidate is frozen and
+byte-verified on the retained Tailscale endpoint as recorded in `docs/M77_IMPLEMENTATION.md` and
+`docs/M77_UAT.md`. Human UAT remains open until explicitly approved. GitHub Pages publication and
+hosted-byte verification occur only after that approval and are required before M77 closes.
 
 ## Non-goals
 

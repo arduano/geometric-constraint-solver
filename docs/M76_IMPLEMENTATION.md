@@ -6,8 +6,8 @@ Status: **complete (2026-08-17); final clean-qualified candidate frozen and byte
 Tailscale, scoped human approval recorded, and exact GitHub Pages publication verified**. The
 caller reviewed the initial candidate, requested two final feature refinements and explicitly
 authorized closure without a separate post-refinement UAT. U1-U4 are accepted under that scoped
-approval; this record does not invent individually replayed observations. No later milestone is
-active.
+approval; this record does not invent individually replayed observations. M77 is active
+subsequently and does not change this completed evidence.
 
 ## Implementation ledger
 
@@ -107,7 +107,8 @@ non-symlink files are mode `0444`:
 
 Its C-locale ordered-manifest aggregate is
 `967f0c1943c16b9c4a9975aeb973ad0cfe2c6e3dbfab45f414d0dac1bb9088f3`. PID `1780608`, retained
-command-runner session `30164`, serves the exact snapshot at `http://100.94.63.83:8080/`.
+command-runner session `30164`, served the exact snapshot at `http://100.94.63.83:8080/` and was
+retired only after the M77 snapshot was ready.
 
 Proxy/cache-bypassed identity requests for `/` and all seven files return HTTP 200 with exact media
 types, lengths and bytes, no redirects or content encoding; `/` equals `index.html`, and the fetched
