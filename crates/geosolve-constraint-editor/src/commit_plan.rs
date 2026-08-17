@@ -13,6 +13,7 @@ use geosolve_sketch::{
     DocumentCenterRef, DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
     DocumentDirectionSense, DocumentError, DocumentLineSupportRef, DocumentSourceId, GeometryRole,
     OperationCheckpoint, OperationController, OperationWorkCounter, SketchDocument,
+    TangentOrientation,
 };
 
 use crate::{ConstructionProposal, ConstructionResult};
@@ -131,6 +132,23 @@ pub enum InferredRelation {
         first: DraftSpanSlot,
         second: DraftSpanSlot,
     },
+    /// Recipe-owned equality between two created or existing affine spans.
+    ///
+    /// This is deliberately part of the same atomic construction plan as the
+    /// geometry.  In particular, holding the regularization modifier while
+    /// authoring a rectangle cannot publish a transient rectangle and add its
+    /// square relation in a second history step.
+    EqualLength {
+        first: DraftSpanSlot,
+        second: DraftSpanSlot,
+    },
+    /// Recipe-owned generic tangency between an accepted native contact and a
+    /// curve allocated by the same construction transaction.
+    CurveCurveTangency {
+        first: DraftContactDescriptor,
+        second: DraftContactDescriptor,
+        orientation: TangentOrientation,
+    },
 }
 
 /// One contact allocated for a named relation occurrence.
@@ -231,9 +249,9 @@ impl ConstructionCommitPlan {
             }) {
                 return Ok(None);
             }
-            let (definition, contact) =
+            let (definition, relation_contacts) =
                 relation.resolve(&mut candidate, &construction, relation_index)?;
-            if let Some(contact) = contact {
+            for contact in relation_contacts {
                 contacts.push(ConstructionContactResult {
                     relation_index,
                     contact,
@@ -280,26 +298,30 @@ impl ConstructionCommitPlan {
 }
 
 impl InferredRelation {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive relation-to-document lowering keeps slot resolution auditable"
+    )]
     fn resolve(
         self,
         document: &mut SketchDocument,
         construction: &ConstructionResult,
         relation_index: usize,
-    ) -> Result<(DocumentConstraintDefinition, Option<ContactId>), DocumentError> {
+    ) -> Result<(DocumentConstraintDefinition, Vec<ContactId>), DocumentError> {
         let label = || format!("auto point-on-curve contact {}", relation_index + 1);
         Ok(match self {
             Self::CoincidentWithOrigin { point } => (
                 DocumentConstraintDefinition::CoincidentWithOrigin {
                     point: point.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::PointOnDatumAxis { point, axis } => (
                 DocumentConstraintDefinition::PointOnDatumAxis {
                     point: point.resolve(document, construction)?,
                     axis,
                 },
-                None,
+                Vec::new(),
             ),
             Self::PointOnCurve { point, contact } => {
                 resolve_point_on_curve(document, construction, point, contact, label())?
@@ -309,47 +331,47 @@ impl InferredRelation {
                     point: point.resolve(document, construction)?,
                     line: line.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::Horizontal { line } => (
                 DocumentConstraintDefinition::Horizontal {
                     line: line.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::Vertical { line } => (
                 DocumentConstraintDefinition::Vertical {
                     line: line.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::HorizontalPoints { first, second } => (
                 DocumentConstraintDefinition::HorizontalPoints {
                     first: first.resolve(document, construction)?,
                     second: second.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::VerticalPoints { first, second } => (
                 DocumentConstraintDefinition::VerticalPoints {
                     first: first.resolve(document, construction)?,
                     second: second.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::HorizontalPointToMidpoint { point, line } => (
                 DocumentConstraintDefinition::HorizontalPointToMidpoint {
                     point: point.resolve(document, construction)?,
                     line: line.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::VerticalPointToMidpoint { point, line } => (
                 DocumentConstraintDefinition::VerticalPointToMidpoint {
                     point: point.resolve(document, construction)?,
                     line: line.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::Concentric { first, second } => (
                 DocumentConstraintDefinition::Concentric {
@@ -360,29 +382,48 @@ impl InferredRelation {
                         curve: second.resolve(document, construction)?,
                     },
                 },
-                None,
+                Vec::new(),
             ),
             Self::Collinear { first, second } => (
                 DocumentConstraintDefinition::Collinear {
                     first: first.resolve(document, construction)?,
                     second: second.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::Parallel { first, second } => (
                 DocumentConstraintDefinition::Parallel {
                     first: first.resolve(document, construction)?,
                     second: second.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
             Self::Perpendicular { first, second } => (
                 DocumentConstraintDefinition::Perpendicular {
                     first: first.resolve(document, construction)?,
                     second: second.resolve(document, construction)?,
                 },
-                None,
+                Vec::new(),
             ),
+            Self::EqualLength { first, second } => (
+                DocumentConstraintDefinition::EqualLength {
+                    first: first.resolve(document, construction)?,
+                    second: second.resolve(document, construction)?,
+                },
+                Vec::new(),
+            ),
+            Self::CurveCurveTangency {
+                first,
+                second,
+                orientation,
+            } => resolve_curve_curve_tangency(
+                document,
+                construction,
+                first,
+                second,
+                orientation,
+                relation_index,
+            )?,
         })
     }
 
@@ -402,6 +443,8 @@ impl InferredRelation {
             Self::Collinear { .. } => "auto collinear",
             Self::Parallel { .. } => "auto parallel",
             Self::Perpendicular { .. } => "auto perpendicular",
+            Self::EqualLength { .. } => "recipe equal length",
+            Self::CurveCurveTangency { .. } => "recipe tangent arc",
         }
     }
 }
@@ -412,7 +455,7 @@ fn resolve_point_on_curve(
     point: DraftPointSlot,
     contact: DraftContactDescriptor,
     label: String,
-) -> Result<(DocumentConstraintDefinition, Option<ContactId>), DocumentError> {
+) -> Result<(DocumentConstraintDefinition, Vec<ContactId>), DocumentError> {
     let point = point.resolve(document, construction)?;
     let span = contact.span.resolve(document, construction)?;
     let contact = document.add_curve_contact_with_domain(
@@ -426,7 +469,44 @@ fn resolve_point_on_curve(
     )?;
     Ok((
         DocumentConstraintDefinition::PointOnCurve { point, contact },
-        Some(contact),
+        vec![contact],
+    ))
+}
+
+fn resolve_curve_curve_tangency(
+    document: &mut SketchDocument,
+    construction: &ConstructionResult,
+    first: DraftContactDescriptor,
+    second: DraftContactDescriptor,
+    orientation: TangentOrientation,
+    relation_index: usize,
+) -> Result<(DocumentConstraintDefinition, Vec<ContactId>), DocumentError> {
+    let first_span = first.span.resolve(document, construction)?;
+    let first_contact = document.add_curve_contact_with_domain(
+        format!("recipe tangent arc contact {}.1", relation_index + 1),
+        first_span,
+        first.domain,
+        first.parameter,
+        first.winding,
+        first.neighborhood,
+        Some(orientation),
+    )?;
+    let second_span = second.span.resolve(document, construction)?;
+    let second_contact = document.add_curve_contact_with_domain(
+        format!("recipe tangent arc contact {}.2", relation_index + 1),
+        second_span,
+        second.domain,
+        second.parameter,
+        second.winding,
+        second.neighborhood,
+        Some(orientation),
+    )?;
+    Ok((
+        DocumentConstraintDefinition::CurveCurveTangency {
+            first_contact,
+            second_contact,
+        },
+        vec![first_contact, second_contact],
     ))
 }
 

@@ -148,6 +148,20 @@ pub(super) enum PlannedConstructionDispatch {
     Handled(PlannedConstructionOutcome),
 }
 
+/// Global notice policy for one planned construction result.
+///
+/// A rejection is explained by `GeometryDraftStatus::issue` beside the active
+/// recipe. Returning no notice here prevents a retained solver/CAS error from
+/// outliving the disposable draft after correction or Undo.
+#[must_use]
+pub(super) const fn planned_construction_notice(accepted: bool) -> Option<&'static str> {
+    if accepted {
+        Some("Auto-constrained construction retained")
+    } else {
+        None
+    }
+}
+
 /// Applies and acknowledges one tokenized inferred construction without any
 /// browser or DOM state. Keeping this transition in the native adapter makes
 /// accepted, rejected and stale-token behavior directly testable.
@@ -216,7 +230,7 @@ mod tests {
         ClientRect, ConstructionDispatch, PlannedConstructionDispatch, UnmappedCanvasPointerAction,
         dispatch_construction_effect, dispatch_planned_construction_effect, draft_authoring_input,
         draft_authoring_input_for_state, normalize_captured_client_point, normalize_client_point,
-        unmapped_canvas_pointer_action,
+        planned_construction_notice, unmapped_canvas_pointer_action,
     };
 
     fn input(pointer_id: u64, position: [f64; 2]) -> PointerInput {
@@ -296,6 +310,15 @@ mod tests {
                 None
             );
         }
+    }
+
+    #[test]
+    fn planned_rejection_uses_only_the_draft_local_status_issue() {
+        assert_eq!(
+            planned_construction_notice(true),
+            Some("Auto-constrained construction retained")
+        );
+        assert_eq!(planned_construction_notice(false), None);
     }
 
     #[test]

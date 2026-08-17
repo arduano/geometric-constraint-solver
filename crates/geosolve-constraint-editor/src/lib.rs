@@ -79,12 +79,13 @@ use std::cmp::Ordering;
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm,
-    DocumentCenterRef, DocumentConstraintId, DocumentCurveContinuity, DocumentCurveControlId,
-    DocumentCurveCurvatureRelation, DocumentCurveNormalSide, DocumentCurveSpanRef,
-    DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense, DocumentHyperbolaBranch,
-    DocumentObjectId, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDatum, SketchDesignIdentity,
-    SketchDocument, TangentOrientation,
+    DocumentCenterRef, DocumentConstraintId, DocumentContactSeed, DocumentCurveContinuity,
+    DocumentCurveControlId, DocumentCurveCurvatureRelation, DocumentCurveNormalSide,
+    DocumentCurveSpanRef, DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense,
+    DocumentEndpointRef, DocumentHyperbolaBranch, DocumentObjectId, FeatureEndpoint, GeometryRole,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchDatum, SketchDesignIdentity, SketchDocument,
+    TangentOrientation,
 };
 use thiserror::Error;
 
@@ -3160,9 +3161,32 @@ pub enum ConstructionProposal {
     Polyline {
         points: Vec<ConstructionPoint>,
     },
+    /// Geometry-only open or closed polyline recipe. A closed path reuses its
+    /// first stored point and never appends a duplicate terminal control.
+    PolylinePath {
+        points: Vec<ConstructionPoint>,
+        closed: bool,
+    },
+    /// One ordinary line authored symmetrically about a stored centre.
+    MidpointLine {
+        center: ConstructionPoint,
+        endpoint: ConstructionPoint,
+        opposite: ConstructionPoint,
+    },
     Rectangle {
         first: [f64; 2],
         second: [f64; 2],
+    },
+    /// Four explicit shared-corner lines, optionally followed by one visible
+    /// Construction diagonal whose midpoint is `center`.
+    ///
+    /// `points` is allocation order; `corners` indexes it in loop order. This
+    /// keeps clicked operands first and derived corners later, so same-plan
+    /// point slots remain deterministic even when a clicked point is reused.
+    RectangleLoop {
+        points: Vec<ConstructionPoint>,
+        corners: [usize; 4],
+        center: Option<usize>,
     },
     Circle {
         center: ConstructionPoint,
@@ -3172,6 +3196,13 @@ pub enum ConstructionProposal {
         center: ConstructionPoint,
         start: [f64; 2],
         end: [f64; 2],
+    },
+    /// Circular arc with explicit durable traversal branch.
+    CircularArc {
+        center: ConstructionPoint,
+        start: [f64; 2],
+        end: [f64; 2],
+        sweep: DocumentArcSweep,
     },
     QuadraticBezier {
         controls: [ConstructionPoint; 3],
@@ -3184,9 +3215,25 @@ pub enum ConstructionProposal {
         major_axis_point: ConstructionPoint,
         minor_axis_ratio: f64,
     },
+    /// Full ellipse whose first sampled pole remains the stored major-axis
+    /// point while the centre is analytically derived from the diameter pair.
+    AxisEndpointEllipse {
+        major_axis_point: ConstructionPoint,
+        center: ConstructionPoint,
+        minor_axis_ratio: f64,
+    },
     EllipticalArc {
         center: ConstructionPoint,
         major_axis_point: ConstructionPoint,
+        minor_axis_ratio: f64,
+        start_angle: f64,
+        end_angle: f64,
+        sweep: DocumentArcSweep,
+    },
+    /// Elliptical arc counterpart of [`Self::AxisEndpointEllipse`].
+    AxisEndpointEllipticalArc {
+        major_axis_point: ConstructionPoint,
+        center: ConstructionPoint,
         minor_axis_ratio: f64,
         start_angle: f64,
         end_angle: f64,
@@ -3297,6 +3344,12 @@ pub enum ConstructionPreview {
         center: [f64; 2],
         start: [f64; 2],
     },
+    /// Equation-free staged recipe guide for diameter chords, three-point
+    /// circles/arcs and rotated rectangle baselines.
+    GuidePolyline {
+        points: Vec<[f64; 2]>,
+        closed: bool,
+    },
     /// Support ellipse established by the first two elliptical-arc clicks.
     /// Once present, `trim_start` is the radial inverse projection of the
     /// third spatial click rather than an independently persisted point.
@@ -3352,6 +3405,15 @@ pub enum ConstructionPreviewGeometry {
         sweep_radians: f64,
         large_arc: bool,
     },
+    CircularArc {
+        center: [f64; 2],
+        start: [f64; 2],
+        end: [f64; 2],
+        radius: f64,
+        sweep_radians: f64,
+        large_arc: bool,
+        sweep: DocumentArcSweep,
+    },
     AdvancedCurve {
         kind: AdvancedConstructionKind,
         control_points: Vec<[f64; 2]>,
@@ -3397,12 +3459,31 @@ impl ConstructionProposal {
     ) -> Result<ConstructionResult, geosolve_sketch::DocumentError> {
         let mut candidate = document.clone();
         let result = self.apply_to(&mut candidate)?;
-        if role == GeometryRole::Construction && !result.curves.is_empty() {
+        let helper_curve = matches!(
+            self,
+            Self::RectangleLoop {
+                center: Some(_),
+                ..
+            }
+        )
+        .then(|| result.curves.last().copied())
+        .flatten();
+        if (role == GeometryRole::Construction && !result.curves.is_empty())
+            || helper_curve.is_some()
+        {
             let edits = result
                 .curves
                 .iter()
                 .copied()
-                .map(|curve| geosolve_sketch::GeometryRoleEdit::new(curve, role))
+                .filter_map(|curve| {
+                    let curve_role =
+                        if role == GeometryRole::Construction || helper_curve == Some(curve) {
+                            GeometryRole::Construction
+                        } else {
+                            return None;
+                        };
+                    Some(geosolve_sketch::GeometryRoleEdit::new(curve, curve_role))
+                })
                 .collect::<Vec<_>>();
             candidate.set_geometry_roles(&edits)?;
         }
@@ -3474,6 +3555,67 @@ impl ConstructionProposal {
                     },
                 )?);
             }
+            Self::PolylinePath {
+                points: operands,
+                closed,
+            } => {
+                let segment_pairs = if *closed {
+                    operands
+                        .iter()
+                        .copied()
+                        .zip(operands.iter().copied().cycle().skip(1))
+                        .take(operands.len())
+                        .collect::<Vec<_>>()
+                } else {
+                    operands
+                        .windows(2)
+                        .map(|pair| (pair[0], pair[1]))
+                        .collect::<Vec<_>>()
+                };
+                let directions = segment_pairs
+                    .iter()
+                    .map(|(start, end)| {
+                        construction_branch_direction(start.position(), end.position())
+                    })
+                    .collect::<Result<Vec<_>, geosolve_sketch::DocumentError>>()?;
+                let points = operands
+                    .iter()
+                    .copied()
+                    .map(&mut point)
+                    .collect::<Result<Vec<_>, _>>()?;
+                result.curves.push(document.add_curve(
+                    if *closed {
+                        "closed polyline"
+                    } else {
+                        "polyline"
+                    },
+                    CurveDefinition::Polyline {
+                        points,
+                        closed: *closed,
+                        branch_directions: directions,
+                    },
+                )?);
+            }
+            Self::MidpointLine {
+                center,
+                endpoint,
+                opposite,
+            } => {
+                let branch_direction =
+                    construction_branch_direction(opposite.position(), endpoint.position())?;
+                let center = point(*center)?;
+                let endpoint = point(*endpoint)?;
+                let opposite = point(*opposite)?;
+                result.curves.push(document.add_curve(
+                    "midpoint line",
+                    CurveDefinition::Line {
+                        start: opposite,
+                        end: endpoint,
+                        branch_direction,
+                    },
+                )?);
+                let _ = center;
+            }
             Self::Rectangle { first, second } => {
                 let origin = [first[0].min(second[0]), first[1].min(second[1])];
                 let width = (second[0] - first[0]).abs();
@@ -3485,6 +3627,58 @@ impl ConstructionProposal {
                 }
                 result.points.extend(ids.points);
                 result.curves.extend(ids.curves);
+            }
+            Self::RectangleLoop {
+                points: operands,
+                corners,
+                center,
+            } => {
+                if operands.len() > 8
+                    || corners.iter().any(|index| *index >= operands.len())
+                    || center.is_some_and(|index| index >= operands.len())
+                {
+                    return Err(geosolve_sketch::DocumentError::InvalidField {
+                        field: "rectangle loop points",
+                        message: "corner or centre occurrence is outside the point list".into(),
+                    });
+                }
+                let point_ids = operands
+                    .iter()
+                    .copied()
+                    .map(&mut point)
+                    .collect::<Result<Vec<_>, _>>()?;
+                for edge in 0..4 {
+                    let start = point_ids[corners[edge]];
+                    let end = point_ids[corners[(edge + 1) % 4]];
+                    let branch_direction = construction_branch_direction(
+                        operands[corners[edge]].position(),
+                        operands[corners[(edge + 1) % 4]].position(),
+                    )?;
+                    result.curves.push(document.add_curve(
+                        format!("rectangle edge {}", edge + 1),
+                        CurveDefinition::Line {
+                            start,
+                            end,
+                            branch_direction,
+                        },
+                    )?);
+                }
+                if center.is_some() {
+                    let start = point_ids[corners[0]];
+                    let end = point_ids[corners[2]];
+                    let branch_direction = construction_branch_direction(
+                        operands[corners[0]].position(),
+                        operands[corners[2]].position(),
+                    )?;
+                    result.curves.push(document.add_curve(
+                        "rectangle centre helper",
+                        CurveDefinition::Line {
+                            start,
+                            end,
+                            branch_direction,
+                        },
+                    )?);
+                }
             }
             Self::Circle { center, radius } => {
                 let center = point(*center)?;
@@ -3532,6 +3726,47 @@ impl ConstructionProposal {
                         start_angle,
                         end_angle,
                         sweep: DocumentArcSweep::CounterClockwise,
+                    },
+                )?);
+            }
+            Self::CircularArc {
+                center,
+                start,
+                end,
+                sweep,
+            } => {
+                let center_position = center.position();
+                let center = point(*center)?;
+                let dx = start[0] - center_position[0];
+                let dy = start[1] - center_position[1];
+                let radius_value = dx.hypot(dy);
+                let radius = document.add_scalar(
+                    "arc radius",
+                    radius_value,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )?;
+                let start_angle = document.add_scalar(
+                    "arc start",
+                    dy.atan2(dx),
+                    ScalarUnit::Angle,
+                    ScalarDomain::Finite,
+                )?;
+                let end_angle = document.add_scalar(
+                    "arc end",
+                    (end[1] - center_position[1]).atan2(end[0] - center_position[0]),
+                    ScalarUnit::Angle,
+                    ScalarDomain::Finite,
+                )?;
+                result.scalars.extend([radius, start_angle, end_angle]);
+                result.curves.push(document.add_curve(
+                    "arc",
+                    CurveDefinition::CircularArc {
+                        center,
+                        radius,
+                        start_angle,
+                        end_angle,
+                        sweep: *sweep,
                     },
                 )?);
             }
@@ -3584,6 +3819,32 @@ impl ConstructionProposal {
                     },
                 )?);
             }
+            Self::AxisEndpointEllipse {
+                major_axis_point,
+                center,
+                minor_axis_ratio,
+            } => {
+                let major_axis_point = point(*major_axis_point)?;
+                let center = point(*center)?;
+                let minor_axis_ratio = document.add_scalar(
+                    "ellipse minor-axis ratio",
+                    *minor_axis_ratio,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Bounded {
+                        lower: f64::from_bits(1),
+                        upper: 1.0,
+                    },
+                )?;
+                result.scalars.push(minor_axis_ratio);
+                result.curves.push(document.add_curve(
+                    "axis-endpoint ellipse",
+                    CurveDefinition::Ellipse {
+                        center,
+                        major_axis_point,
+                        minor_axis_ratio,
+                    },
+                )?);
+            }
             Self::EllipticalArc {
                 center,
                 major_axis_point,
@@ -3620,6 +3881,52 @@ impl ConstructionProposal {
                     .extend([minor_axis_ratio, start_angle, end_angle]);
                 result.curves.push(document.add_curve(
                     "elliptical arc",
+                    CurveDefinition::EllipticalArc {
+                        center,
+                        major_axis_point,
+                        minor_axis_ratio,
+                        start_angle,
+                        end_angle,
+                        sweep: *sweep,
+                    },
+                )?);
+            }
+            Self::AxisEndpointEllipticalArc {
+                major_axis_point,
+                center,
+                minor_axis_ratio,
+                start_angle,
+                end_angle,
+                sweep,
+            } => {
+                let major_axis_point = point(*major_axis_point)?;
+                let center = point(*center)?;
+                let minor_axis_ratio = document.add_scalar(
+                    "elliptical arc minor-axis ratio",
+                    *minor_axis_ratio,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Bounded {
+                        lower: f64::from_bits(1),
+                        upper: 1.0,
+                    },
+                )?;
+                let start_angle = document.add_scalar(
+                    "elliptical arc start",
+                    *start_angle,
+                    ScalarUnit::Angle,
+                    ScalarDomain::Finite,
+                )?;
+                let end_angle = document.add_scalar(
+                    "elliptical arc end",
+                    *end_angle,
+                    ScalarUnit::Angle,
+                    ScalarDomain::Finite,
+                )?;
+                result
+                    .scalars
+                    .extend([minor_axis_ratio, start_angle, end_angle]);
+                result.curves.push(document.add_curve(
+                    "axis-endpoint elliptical arc",
                     CurveDefinition::EllipticalArc {
                         center,
                         major_axis_point,
@@ -3987,17 +4294,125 @@ pub enum EditorTool {
     Nurbs,
 }
 
+/// Semantic operand currently requested by an exact geometry recipe.
+///
+/// Hosts use this vocabulary for prompts and accessibility.  It deliberately
+/// describes authoring intent rather than exposing the draft's private storage
+/// layout or asking a renderer to infer meaning from a coordinate count.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum GeometryDraftStage {
+    Point,
+    Start,
+    End,
+    Center,
+    Corner,
+    AdjacentCorner,
+    OppositeCorner,
+    SideMidpoint,
+    DiameterStart,
+    DiameterEnd,
+    ThroughPoint,
+    SourceEndpoint,
+    MajorAxisEndpoint,
+    OppositeAxisEndpoint,
+    MinorExtent,
+    ControlPoint,
+    Vertex,
+    Focus,
+    TransverseAxisEndpoint,
+    ConjugateExtent,
+    TrimStart,
+    TrimEnd,
+}
+
+/// Typed live quantity published by a geometry draft.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum GeometryDraftMeasurement {
+    Length(f64),
+    Radius(f64),
+    Diameter(f64),
+    AngleRadians(f64),
+    Ratio(f64),
+    WidthHeight { width: f64, height: f64 },
+    ControlCount(usize),
+}
+
+/// Explicit discrete branch state retained by a draft.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct GeometryDraftBranch {
+    pub sweep: Option<DocumentArcSweep>,
+    pub hyperbola: Option<DocumentHyperbolaBranch>,
+}
+
+/// Draft-local reason that the current recipe cannot advance or publish.
+///
+/// These issues describe only the disposable authoring draft. They never
+/// replace the accepted document's retained problem state, and disappear as
+/// soon as the user corrects, steps back, cancels, or completes the draft.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum GeometryDraftIssue {
+    /// The latest terminal sample would create coincident, collinear,
+    /// zero-length, zero-sweep, or otherwise non-finite geometry.
+    InvalidTerminalGeometry,
+    /// A snapped operand cannot be represented by the completed recipe's
+    /// ordinary durable relations.
+    IncompatibleConstraintIntent,
+    /// An explicit Finish action needs additional controls or corrected
+    /// variant options before it can publish.
+    CannotFinish,
+    /// The complete atomic plan was rejected by retained solve/validation or
+    /// compare-and-swap publication.
+    ConstructionRejected,
+}
+
+/// Read-only semantic state for the active exact geometry recipe.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GeometryDraftStatus {
+    pub variant: GeometryToolVariant,
+    pub stage: GeometryDraftStage,
+    pub completed_stages: usize,
+    /// Fixed total stage count, or `None` for variable-length recipes.
+    pub required_stages: Option<usize>,
+    pub can_finish: bool,
+    pub regularized: bool,
+    pub branch: GeometryDraftBranch,
+    pub measurements: Vec<GeometryDraftMeasurement>,
+    /// A recoverable issue owned by this disposable draft, never by the
+    /// accepted document's global Problems state.
+    pub issue: Option<GeometryDraftIssue>,
+}
+
 #[derive(Clone, Debug)]
 struct Draft {
     tool: EditorTool,
+    variant: GeometryToolVariant,
+    /// `false` preserves the legacy `EditorTool` gesture contract for hosts
+    /// that have not opted into the exact M78 recipe API.
+    exact_variant: bool,
     geometry_role: GeometryRole,
     prepared_input: Option<PreparedSketchInput>,
     pointer_id: u64,
     points: Vec<ConstructionPoint>,
     positions: Vec<[f64; 2]>,
     confirmed_inference: Vec<ConfirmedDraftInference>,
+    regularized: bool,
+    closed: bool,
+    tangent_source: Option<TangentArcSource>,
     conic_options: ConicConstructionOptions,
     nurbs_options: NurbsConstructionOptions,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TangentArcSource {
+    endpoint: DocumentEndpointRef,
+    contact: DocumentContactSeed,
+    domain: ContactDomain,
+    position: [f64; 2],
+    outgoing_tangent: [f64; 2],
+    orientation: TangentOrientation,
 }
 
 #[derive(Clone, Debug)]
@@ -4099,9 +4514,11 @@ pub struct ConstraintEditor {
     fillet_branch_preview: Option<SceneFilletActionTarget>,
     tool: EditorTool,
     geometry_tool_variant: Option<GeometryToolVariant>,
+    exact_geometry_tool: bool,
     conic_options: ConicConstructionOptions,
     nurbs_options: NurbsConstructionOptions,
     draft: Option<Draft>,
+    draft_issue: Option<GeometryDraftIssue>,
     last_valid_drag_preview: Option<(u64, u64, u64, DesignPointId, [f64; 2])>,
     next_point_gesture_epoch: u64,
     next_projection_request: u64,
@@ -4133,9 +4550,11 @@ impl Default for ConstraintEditor {
             fillet_branch_preview: None,
             tool: EditorTool::Select,
             geometry_tool_variant: None,
+            exact_geometry_tool: false,
             conic_options: ConicConstructionOptions::default(),
             nurbs_options: NurbsConstructionOptions::default(),
             draft: None,
+            draft_issue: None,
             last_valid_drag_preview: None,
             next_point_gesture_epoch: 0,
             next_projection_request: 0,
@@ -4175,19 +4594,24 @@ impl ConstraintEditor {
     /// A moved gesture emits [`EditorEffect::ClearPointPreview`] even when every
     /// projection was rejected, so hosts also close retained continuation state.
     pub fn activate_tool(&mut self, tool: EditorTool) -> Vec<EditorEffect> {
-        self.activate_projected_tool(tool, GeometryToolVariant::default_for_editor_tool(tool))
+        self.activate_projected_tool(
+            tool,
+            GeometryToolVariant::default_for_editor_tool(tool),
+            false,
+        )
     }
 
     /// Selects an exact geometry-authoring recipe while retaining its coarse
     /// [`EditorTool`] compatibility projection.
     pub fn activate_geometry_tool(&mut self, variant: GeometryToolVariant) -> Vec<EditorEffect> {
-        self.activate_projected_tool(variant.editor_tool(), Some(variant))
+        self.activate_projected_tool(variant.editor_tool(), Some(variant), true)
     }
 
     fn activate_projected_tool(
         &mut self,
         tool: EditorTool,
         geometry_tool_variant: Option<GeometryToolVariant>,
+        exact_geometry_tool: bool,
     ) -> Vec<EditorEffect> {
         if self.pending_construction_commit.is_some() {
             return Vec::new();
@@ -4195,6 +4619,7 @@ impl ConstraintEditor {
         let leaving_select = self.tool == EditorTool::Select && tool != EditorTool::Select;
         self.tool = tool;
         self.geometry_tool_variant = geometry_tool_variant;
+        self.exact_geometry_tool = exact_geometry_tool;
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
         effects.extend(self.cancel_curve_control_gesture());
@@ -4365,6 +4790,7 @@ impl ConstraintEditor {
             && is_conic_tool(draft.tool)
         {
             draft.conic_options = options;
+            self.draft_issue = None;
         }
         Ok(())
     }
@@ -4393,6 +4819,7 @@ impl ConstraintEditor {
             && draft.tool == EditorTool::Nurbs
         {
             draft.nurbs_options = options;
+            self.draft_issue = None;
         }
         Ok(())
     }
@@ -4893,7 +5320,25 @@ impl ConstraintEditor {
         input: PointerInput,
         inference: DraftInferenceInput,
     ) -> Vec<EditorEffect> {
-        self.pointer_down_with_problem_items_and_draft_inference(scene, input, &[], inference)
+        self.pointer_down_with_draft_authoring(
+            scene,
+            input,
+            DraftAuthoringInput {
+                inference,
+                regularized: false,
+            },
+        )
+    }
+
+    /// Resolves a pointer press with independent ambient-inference and recipe
+    /// regularization intent.
+    pub fn pointer_down_with_draft_authoring(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        authoring: DraftAuthoringInput,
+    ) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items_and_draft_authoring(scene, input, &[], authoring)
     }
 
     /// Resolves a pointer press while including diagnostically forced annotations.
@@ -4920,12 +5365,32 @@ impl ConstraintEditor {
         problem_items: &[SelectionItem],
         inference: DraftInferenceInput,
     ) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items_and_draft_authoring(
+            scene,
+            input,
+            problem_items,
+            DraftAuthoringInput {
+                inference,
+                regularized: false,
+            },
+        )
+    }
+
+    /// Resolves a pointer press with problem-aware annotation visibility and
+    /// complete semantic geometry-authoring input.
+    pub fn pointer_down_with_problem_items_and_draft_authoring(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+        authoring: DraftAuthoringInput,
+    ) -> Vec<EditorEffect> {
         if !input.position.is_finite() {
             return Vec::new();
         }
         let mut effects = self.clear_fillet_branch_preview();
         if self.tool != EditorTool::Select {
-            effects.extend(self.draft_down(scene, input, inference));
+            effects.extend(self.draft_down(scene, input, authoring));
             return effects;
         }
         if self.annotation_gesture.is_some()
@@ -5320,7 +5785,25 @@ impl ConstraintEditor {
         input: PointerInput,
         inference: DraftInferenceInput,
     ) -> Vec<EditorEffect> {
-        self.pointer_move_with_problem_items_and_draft_inference(scene, input, &[], inference)
+        self.pointer_move_with_draft_authoring(
+            scene,
+            input,
+            DraftAuthoringInput {
+                inference,
+                regularized: false,
+            },
+        )
+    }
+
+    /// Advances a pointer sample with independent ambient-inference and recipe
+    /// regularization intent.
+    pub fn pointer_move_with_draft_authoring(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        authoring: DraftAuthoringInput,
+    ) -> Vec<EditorEffect> {
+        self.pointer_move_with_problem_items_and_draft_authoring(scene, input, &[], authoring)
     }
 
     /// Advances a pointer sample while including diagnostically forced annotations.
@@ -5347,9 +5830,29 @@ impl ConstraintEditor {
         problem_items: &[SelectionItem],
         inference: DraftInferenceInput,
     ) -> Vec<EditorEffect> {
+        self.pointer_move_with_problem_items_and_draft_authoring(
+            scene,
+            input,
+            problem_items,
+            DraftAuthoringInput {
+                inference,
+                regularized: false,
+            },
+        )
+    }
+
+    /// Advances a pointer sample with problem-aware annotation visibility and
+    /// complete semantic geometry-authoring input.
+    pub fn pointer_move_with_problem_items_and_draft_authoring(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+        authoring: DraftAuthoringInput,
+    ) -> Vec<EditorEffect> {
         let mut effects = self.clear_fillet_branch_preview();
         if self.tool != EditorTool::Select {
-            effects.extend(self.draft_move(scene, input, inference));
+            effects.extend(self.draft_move(scene, input, authoring));
             return effects;
         }
         if self.feature_contact_gesture.is_some() {
@@ -6327,14 +6830,14 @@ impl ConstraintEditor {
             return Vec::new();
         };
         let proposal = match draft.tool {
-            EditorTool::Polyline => polyline_proposal(&draft),
-            EditorTool::Nurbs => nurbs_proposal(&draft),
+            EditorTool::Polyline | EditorTool::Nurbs => draft_proposal(&draft),
             _ => None,
         };
         let Some(proposal) = proposal else {
+            self.draft_issue = Some(GeometryDraftIssue::CannotFinish);
             return Vec::new();
         };
-        if draft.confirmed_inference.is_empty() {
+        if !Self::draft_requires_construction_plan(&draft) {
             self.draft = None;
             self.draft_inference_engine.clear_session();
             let mut effects = self.clear_draft_inference_publication();
@@ -6348,21 +6851,144 @@ impl ConstraintEditor {
     #[must_use]
     pub fn can_complete_draft(&self) -> bool {
         self.draft.as_ref().is_some_and(|draft| match draft.tool {
-            EditorTool::Polyline => polyline_proposal(draft).is_some(),
-            EditorTool::Nurbs => nurbs_proposal(draft).is_some(),
+            EditorTool::Polyline | EditorTool::Nurbs => draft_proposal(draft).is_some(),
             _ => false,
         })
+    }
+
+    /// Returns semantic progress for the exact active geometry recipe.
+    #[must_use]
+    pub fn geometry_draft_status(&self) -> Option<GeometryDraftStatus> {
+        let variant = self.geometry_tool_variant?;
+        let completed_stages = self
+            .draft
+            .as_ref()
+            .filter(|draft| draft.variant == variant)
+            .map_or(0, |draft| draft.positions.len());
+        let draft = self.draft.as_ref().filter(|draft| draft.variant == variant);
+        Some(GeometryDraftStatus {
+            variant,
+            stage: geometry_draft_stage(variant, completed_stages)?,
+            completed_stages,
+            required_stages: geometry_variant_required_stages(variant),
+            can_finish: self.can_complete_draft(),
+            regularized: draft.is_some_and(|draft| draft.regularized),
+            branch: GeometryDraftBranch {
+                sweep: matches!(
+                    variant,
+                    GeometryToolVariant::CenterArc
+                        | GeometryToolVariant::CenterAxesEllipticalArc
+                        | GeometryToolVariant::AxisEndpointsEllipticalArc
+                )
+                .then_some(draft.map_or(self.conic_options.arc_sweep, |draft| {
+                    draft.conic_options.arc_sweep
+                })),
+                hyperbola: (variant == GeometryToolVariant::Hyperbola).then_some(
+                    draft.map_or(self.conic_options.hyperbola_branch, |draft| {
+                        draft.conic_options.hyperbola_branch
+                    }),
+                ),
+            },
+            measurements: draft.map_or_else(Vec::new, geometry_draft_measurements),
+            issue: self.draft_issue,
+        })
+    }
+
+    /// Removes the most recent unfinished recipe operand without touching
+    /// accepted document history.
+    pub fn step_back_draft(&mut self) -> Vec<EditorEffect> {
+        if self.pending_construction_commit.is_some() {
+            return Vec::new();
+        }
+        let had_issue = self.draft_issue.take().is_some();
+        let Some(mut draft) = self.draft.take() else {
+            return had_issue
+                .then_some(EditorEffect::ClearConstructionPreview)
+                .into_iter()
+                .collect();
+        };
+        if draft.positions.pop().is_none() {
+            return Vec::new();
+        }
+        let _ = draft.points.pop();
+        draft.closed = false;
+        if draft.positions.is_empty() {
+            draft.tangent_source = None;
+        }
+        let retained_stages = draft.positions.len();
+        draft
+            .confirmed_inference
+            .retain(|confirmed| confirmed.stage_index < retained_stages);
+        self.draft_inference_engine.clear_stage();
+        let mut effects = self.clear_draft_inference_publication();
+        if draft.positions.is_empty() {
+            effects.push(EditorEffect::ClearConstructionPreview);
+        } else {
+            effects.extend(draft_preview(&draft).map(EditorEffect::PreviewConstruction));
+            self.draft = Some(draft);
+            self.prepare_next_draft_stage();
+        }
+        effects
+    }
+
+    /// Flips the complementary sweep owned by Center Arc or either
+    /// elliptical-arc recipe without relying on pointer history.
+    pub fn flip_geometry_draft_branch(&mut self) -> Vec<EditorEffect> {
+        if self.pending_construction_commit.is_some() {
+            return Vec::new();
+        }
+        let Some(draft) = self.draft.as_mut() else {
+            return Vec::new();
+        };
+        if !matches!(
+            draft.variant,
+            GeometryToolVariant::CenterArc
+                | GeometryToolVariant::CenterAxesEllipticalArc
+                | GeometryToolVariant::AxisEndpointsEllipticalArc
+        ) {
+            return Vec::new();
+        }
+        draft.conic_options.arc_sweep = match draft.conic_options.arc_sweep {
+            DocumentArcSweep::CounterClockwise => DocumentArcSweep::Clockwise,
+            DocumentArcSweep::Clockwise => DocumentArcSweep::CounterClockwise,
+        };
+        self.draft_issue = None;
+        self.conic_options.arc_sweep = draft.conic_options.arc_sweep;
+        draft_preview(draft)
+            .map(EditorEffect::PreviewConstruction)
+            .into_iter()
+            .collect()
+    }
+
+    /// First Escape cancels the current shape while retaining the exact tool;
+    /// a draft-free second Escape activates Select.
+    pub fn escape_geometry_tool(&mut self) -> Vec<EditorEffect> {
+        if self.draft.is_some()
+            || self.draft_issue.is_some()
+            || self.point_gesture.is_some()
+            || self.curve_control_gesture.is_some()
+            || self.annotation_gesture.is_some()
+            || self.feature_radius_gesture.is_some()
+            || self.feature_contact_gesture.is_some()
+        {
+            self.cancel()
+        } else if self.tool != EditorTool::Select {
+            self.activate_tool(EditorTool::Select)
+        } else {
+            self.cancel()
+        }
     }
 
     fn cancel_draft(&mut self) -> Vec<EditorEffect> {
         if self.pending_construction_commit.is_some() {
             return Vec::new();
         }
-        let mut effects = self
-            .draft
-            .take()
-            .map(|_| vec![EditorEffect::ClearConstructionPreview])
-            .unwrap_or_default();
+        let had_draft = self.draft.take().is_some();
+        let had_issue = self.draft_issue.take().is_some();
+        let mut effects = (had_draft || had_issue)
+            .then_some(EditorEffect::ClearConstructionPreview)
+            .into_iter()
+            .collect::<Vec<_>>();
         self.draft_inference_engine.clear_session();
         effects.extend(self.clear_draft_inference_publication());
         effects
@@ -6388,7 +7014,7 @@ impl ConstraintEditor {
         &mut self,
         scene: &EditorScene,
         input: PointerInput,
-        inference: DraftInferenceInput,
+        authoring: DraftAuthoringInput,
     ) -> Vec<EditorEffect> {
         if !input.position.is_finite() || self.pending_construction_commit.is_some() {
             return Vec::new();
@@ -6410,14 +7036,39 @@ impl ConstraintEditor {
         let prior_draft = self.draft.clone();
         let recovery_inference_engine = self.draft_inference_engine.clone();
         let stage_index = prior_draft.as_ref().map_or(0, |draft| draft.points.len());
-        let stage = match self.resolve_draft_stage(
-            scene,
-            input.position,
-            inference,
-            self.tool,
-            stage_index,
-            prior_draft.as_ref(),
-        ) {
+        let active_variant = prior_draft
+            .as_ref()
+            .map(|draft| draft.variant)
+            .or(self.geometry_tool_variant)
+            .or_else(|| GeometryToolVariant::default_for_editor_tool(self.tool));
+        let tangent_source = (active_variant == Some(GeometryToolVariant::TangentArc)
+            && stage_index == 0)
+            .then(|| self.resolve_tangent_arc_source(scene, input.position))
+            .flatten();
+        if active_variant == Some(GeometryToolVariant::TangentArc)
+            && stage_index == 0
+            && tangent_source.is_none()
+        {
+            return Vec::new();
+        }
+        let stage_result = if let Some(source) = tangent_source {
+            Ok(Some(ResolvedDraftStage {
+                operand: ConstructionPoint::New(source.position),
+                position: source.position,
+                confirmed: None,
+                resolution: None,
+            }))
+        } else {
+            self.resolve_draft_stage(
+                scene,
+                input.position,
+                authoring.inference,
+                self.tool,
+                stage_index,
+                prior_draft.as_ref(),
+            )
+        };
+        let stage = match stage_result {
             Ok(Some(stage)) => stage,
             Ok(None) => return Vec::new(),
             Err(_) => {
@@ -6439,12 +7090,20 @@ impl ConstraintEditor {
         }
         let mut draft = prior_draft.clone().unwrap_or(Draft {
             tool: self.tool,
+            variant: self
+                .geometry_tool_variant
+                .or_else(|| GeometryToolVariant::default_for_editor_tool(self.tool))
+                .expect("every non-Select editor tool has an exact geometry variant"),
+            exact_variant: self.exact_geometry_tool,
             geometry_role: self.authoring_geometry_role,
             prepared_input: scene.authenticated_prepared_input(),
             pointer_id: input.pointer_id,
             points: Vec::new(),
             positions: Vec::new(),
             confirmed_inference: Vec::new(),
+            regularized: authoring.regularized,
+            closed: false,
+            tangent_source: None,
             conic_options: self.conic_options,
             nurbs_options: self.nurbs_options.clone(),
         });
@@ -6452,13 +7111,30 @@ impl ConstraintEditor {
             self.draft_inference_engine = recovery_inference_engine;
             return Vec::new();
         }
-        draft.points.push(operand);
-        draft.positions.push(position);
-        if let Some(confirmed) = confirmed {
-            draft.confirmed_inference.push(confirmed);
+        self.draft_issue = None;
+        draft.regularized = authoring.regularized;
+        if tangent_source.is_some() {
+            draft.tangent_source = tangent_source;
+        }
+        let closes_polyline = draft.variant == GeometryToolVariant::Polyline
+            && draft.positions.len() >= 3
+            && scene
+                .viewport
+                .model_to_screen(draft.positions[0])
+                .distance(input.position)
+                <= self.pick_tolerance.point_pixels;
+        if closes_polyline {
+            draft.closed = true;
+        } else {
+            draft.points.push(operand);
+            draft.positions.push(position);
+            if let Some(confirmed) = confirmed {
+                draft.confirmed_inference.push(confirmed);
+            }
         }
         if !valid_draft_stage(&draft) {
             self.draft_inference_engine = recovery_inference_engine;
+            self.draft_issue = Some(GeometryDraftIssue::InvalidTerminalGeometry);
             return Vec::new();
         }
         let proposal = draft_proposal(&draft);
@@ -6476,7 +7152,7 @@ impl ConstraintEditor {
                 | EditorTool::Parabola
                 | EditorTool::Hyperbola
         ) && proposal.is_none()
-            || matches!(draft.tool, EditorTool::Polyline | EditorTool::Nurbs);
+            || (matches!(draft.tool, EditorTool::Polyline | EditorTool::Nurbs) && !draft.closed);
         if keep {
             let preview = draft_preview(&draft);
             self.draft = Some(draft);
@@ -6504,7 +7180,16 @@ impl ConstraintEditor {
                 self.draft_inference_engine.clear_session();
                 return self.clear_draft_inference_publication();
             }
-            if draft.confirmed_inference.is_empty() {
+            if Self::draft_requires_construction_plan(&draft) {
+                self.draft = prior_draft;
+                self.begin_construction_plan_with_recovery(
+                    scene.design_identity,
+                    &draft,
+                    proposal,
+                    recovery_inference_engine,
+                    resolution,
+                )
+            } else {
                 self.draft = None;
                 self.draft_inference_engine.clear_session();
                 let mut effects = self.clear_draft_inference_publication();
@@ -6514,34 +7199,62 @@ impl ConstraintEditor {
                     draft.geometry_role,
                 ));
                 effects
-            } else {
-                self.draft = prior_draft;
-                self.begin_construction_plan_with_recovery(
-                    scene.design_identity,
-                    &draft,
-                    proposal,
-                    recovery_inference_engine,
-                    resolution,
-                )
             }
         }
+    }
+
+    fn draft_requires_construction_plan(draft: &Draft) -> bool {
+        draft.exact_variant
+            || !draft.confirmed_inference.is_empty()
+            || recipe_relations(draft).is_some_and(|relations| !relations.is_empty())
     }
 
     fn draft_move(
         &mut self,
         scene: &EditorScene,
         input: PointerInput,
-        inference: DraftInferenceInput,
+        authoring: DraftAuthoringInput,
     ) -> Vec<EditorEffect> {
         if self.pending_construction_commit.is_some() {
             return Vec::new();
         }
         let Some(draft) = self.draft.as_ref() else {
-            if draft_inference_subject(self.tool, 0).is_none() {
+            let Some(variant) = self
+                .geometry_tool_variant
+                .or_else(|| GeometryToolVariant::default_for_editor_tool(self.tool))
+            else {
+                return self.clear_draft_inference_publication();
+            };
+            if variant == GeometryToolVariant::TangentArc {
+                let preview =
+                    self.resolve_tangent_arc_source(scene, input.position)
+                        .map(|source| {
+                            EditorEffect::PreviewConstruction(ConstructionPreview::Anchor {
+                                position: source.position,
+                            })
+                        });
+                let mut effects = self.clear_draft_inference_publication();
+                if let Some(preview) = preview {
+                    effects.push(preview);
+                } else {
+                    effects.push(EditorEffect::ClearConstructionPreview);
+                }
+                return effects;
+            }
+            if construction_stage_semantics_for(self.exact_geometry_tool, self.tool, variant, 0)
+                .and_then(|semantics| semantics.coordinate_role.inference_subject())
+                .is_none()
+            {
                 return self.clear_draft_inference_publication();
             }
-            let resolution =
-                self.resolve_draft_inference(scene, input.position, inference, self.tool, 0, None);
+            let resolution = self.resolve_draft_inference(
+                scene,
+                input.position,
+                authoring.inference,
+                self.tool,
+                0,
+                None,
+            );
             return if let Ok(resolution) = resolution {
                 self.publish_draft_inference(resolution)
             } else {
@@ -6561,7 +7274,7 @@ impl ConstraintEditor {
         let stage = match self.resolve_draft_stage(
             scene,
             input.position,
-            inference,
+            authoring.inference,
             draft.tool,
             stage_index,
             Some(&draft),
@@ -6574,8 +7287,21 @@ impl ConstraintEditor {
             }
         };
         let mut preview = draft;
+        preview.regularized = authoring.regularized;
         preview.points.push(stage.operand);
         preview.positions.push(stage.position);
+        if let Some(confirmed) = stage.confirmed {
+            preview.confirmed_inference.push(confirmed);
+        }
+        let correction_is_valid = draft_proposal(&preview)
+            .and_then(|proposal| construction_commit_plan(&preview, proposal).ok())
+            .is_some();
+        if let Some(retained) = self.draft.as_mut() {
+            retained.regularized = authoring.regularized;
+            if correction_is_valid {
+                self.draft_issue = None;
+            }
+        }
         let mut effects = self.publish_draft_inference(stage.resolution);
         effects.extend(
             draft_preview(&preview)
@@ -6599,7 +7325,16 @@ impl ConstraintEditor {
         if !raw_position.into_iter().all(f64::is_finite) {
             return Ok(None);
         }
-        let Some(subject) = draft_inference_subject(tool, stage_index) else {
+        let variant = draft
+            .map(|draft| draft.variant)
+            .or(self.geometry_tool_variant)
+            .or_else(|| GeometryToolVariant::default_for_editor_tool(tool))
+            .ok_or(DraftInferenceError::InvalidFrame)?;
+        let exact_variant = draft.map_or(self.exact_geometry_tool, |draft| draft.exact_variant);
+        let Some(subject) =
+            construction_stage_semantics_for(exact_variant, tool, variant, stage_index)
+                .and_then(|semantics| semantics.coordinate_role.inference_subject())
+        else {
             return Ok(Some(ResolvedDraftStage {
                 operand: ConstructionPoint::New(raw_position),
                 position: raw_position,
@@ -6681,6 +7416,19 @@ impl ConstraintEditor {
         }))
     }
 
+    fn resolve_tangent_arc_source(
+        &self,
+        scene: &EditorScene,
+        pointer: ScreenPoint,
+    ) -> Option<TangentArcSource> {
+        tangent_arc_source_at(
+            scene,
+            pointer,
+            self.pick_tolerance.point_pixels,
+            self.geometry_policy,
+        )
+    }
+
     fn resolve_draft_inference(
         &mut self,
         scene: &EditorScene,
@@ -6690,7 +7438,15 @@ impl ConstraintEditor {
         stage_index: usize,
         draft: Option<&Draft>,
     ) -> Result<Option<DraftInferenceResolution>, DraftInferenceError> {
-        let Some(semantics) = construction_stage_semantics(tool, stage_index) else {
+        let variant = draft
+            .map(|draft| draft.variant)
+            .or(self.geometry_tool_variant)
+            .or_else(|| GeometryToolVariant::default_for_editor_tool(tool))
+            .ok_or(DraftInferenceError::InvalidFrame)?;
+        let exact_variant = draft.map_or(self.exact_geometry_tool, |draft| draft.exact_variant);
+        let Some(semantics) =
+            construction_stage_semantics_for(exact_variant, tool, variant, stage_index)
+        else {
             return Ok(None);
         };
         let Some(subject) = semantics.coordinate_role.inference_subject() else {
@@ -6766,7 +7522,14 @@ impl ConstraintEditor {
                     .points
                     .len()
                     .checked_sub(1)
-                    .and_then(|stage_index| construction_stage_semantics(draft.tool, stage_index))
+                    .and_then(|stage_index| {
+                        construction_stage_semantics_for(
+                            draft.exact_variant,
+                            draft.tool,
+                            draft.variant,
+                            stage_index,
+                        )
+                    })
                     .is_some_and(|semantics| semantics.reference_handoff)
             })
             .and_then(|draft| draft.confirmed_inference.last())
@@ -6801,9 +7564,20 @@ impl ConstraintEditor {
         recovery_inference_engine: DraftInferenceEngine,
         resolution: Option<DraftInferenceResolution>,
     ) -> Vec<EditorEffect> {
-        let Some(plan) = construction_commit_plan(draft, proposal) else {
-            self.draft_inference_engine = recovery_inference_engine;
-            return Vec::new();
+        let plan = match construction_commit_plan(draft, proposal) {
+            Ok(plan) => plan,
+            Err(error) => {
+                self.draft_inference_engine = recovery_inference_engine;
+                self.draft_issue = Some(match error {
+                    ConstructionPlanError::IncompatibleConstraintIntent => {
+                        GeometryDraftIssue::IncompatibleConstraintIntent
+                    }
+                    ConstructionPlanError::InvalidDraftState => {
+                        GeometryDraftIssue::ConstructionRejected
+                    }
+                });
+                return Vec::new();
+            }
         };
         let Some(prepared_input) = draft
             .prepared_input
@@ -6824,6 +7598,7 @@ impl ConstraintEditor {
             plan: plan.clone(),
             recovery_inference_engine,
         });
+        self.draft_issue = None;
         let mut effects = self.publish_draft_inference(resolution);
         effects.extend(draft_preview(draft).map(EditorEffect::PreviewConstruction));
         effects.push(EditorEffect::CommitConstructionPlan {
@@ -6890,9 +7665,11 @@ impl ConstraintEditor {
         };
         if !accepted {
             self.draft_inference_engine = pending.recovery_inference_engine;
+            self.draft_issue = Some(GeometryDraftIssue::ConstructionRejected);
             return Vec::new();
         }
         self.draft = None;
+        self.draft_issue = None;
         self.draft_inference_engine.clear_session();
         let mut effects = vec![EditorEffect::ClearConstructionPreview];
         effects.extend(self.clear_draft_inference_publication());
@@ -6906,6 +7683,7 @@ impl ConstraintEditor {
         if force {
             self.pending_construction_commit = None;
         }
+        self.draft_issue = None;
         if !preserve_pending_ack {
             self.draft = None;
         }
@@ -7073,6 +7851,152 @@ impl ConstructionStageSemantics {
 
 #[allow(
     clippy::too_many_lines,
+    reason = "the exact M78 recipe table is intentionally exhaustive and auditable"
+)]
+fn geometry_variant_stage_semantics(
+    variant: GeometryToolVariant,
+    stage_index: usize,
+) -> Option<ConstructionStageSemantics> {
+    use GeometryToolVariant as V;
+
+    let point = ConstructionStageSemantics::point_operand;
+    let prospective = || {
+        ConstructionStageSemantics::coordinate_only(ConstructionCoordinateRole::CircleCircumference)
+    };
+    match variant {
+        V::SketchPoint => (stage_index == 0).then(|| point(0)),
+        V::Segment | V::MidpointLine => match stage_index {
+            0 => Some(ConstructionStageSemantics {
+                reference_handoff: true,
+                ..point(0)
+            }),
+            1 => Some(ConstructionStageSemantics {
+                directional_span: true,
+                completed_span: Some(DraftSpanSlot::Created {
+                    curve_index: 0,
+                    segment: 0,
+                }),
+                ..point(1)
+            }),
+            _ => None,
+        },
+        V::Polyline => {
+            let mut semantics = ConstructionStageSemantics {
+                reference_handoff: true,
+                ..point(stage_index)
+            };
+            if stage_index > 0 {
+                semantics.directional_span = true;
+                semantics.completed_span =
+                    u32::try_from(stage_index - 1)
+                        .ok()
+                        .map(|segment| DraftSpanSlot::Created {
+                            curve_index: 0,
+                            segment,
+                        });
+            }
+            Some(semantics)
+        }
+        V::TwoPointAlignedRectangle => (stage_index < 2).then(|| point(stage_index)),
+        V::ThreePointCornerRectangle => (stage_index < 3).then(|| point(stage_index)),
+        V::CenterRectangle => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 => Some(point(1)),
+            _ => None,
+        },
+        V::ThreePointCenterRectangle => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            2 => Some(point(1)),
+            _ => None,
+        },
+        V::CenterRadiusCircle => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 => Some(prospective()),
+            _ => None,
+        },
+        V::TwoPointDiameterCircle => (stage_index < 2).then(prospective),
+        V::ThreePointCircle | V::ThreePointArc => (stage_index < 3).then(prospective),
+        V::CenterArc => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 | 2 => Some(prospective()),
+            _ => None,
+        },
+        V::TangentArc => match stage_index {
+            0 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            1 => Some(prospective()),
+            _ => None,
+        },
+        V::CenterAxesEllipse => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 => Some(point(1)),
+            2 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            _ => None,
+        },
+        V::AxisEndpointsEllipse => match stage_index {
+            0 => Some(point(0)),
+            1 => Some(prospective()),
+            2 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            _ => None,
+        },
+        V::CenterAxesEllipticalArc => match stage_index {
+            0 => Some(ConstructionStageSemantics::centered_point_operand(0, 0)),
+            1 => Some(point(1)),
+            2 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            3 | 4 => Some(prospective()),
+            _ => None,
+        },
+        V::AxisEndpointsEllipticalArc => match stage_index {
+            0 => Some(point(0)),
+            // The opposite major-axis pole need not belong to the bounded arc.
+            // Keep this construction sample coordinate-only until the recipe can
+            // model associativity against the untrimmed support ellipse.
+            1 | 2 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            3 | 4 => Some(prospective()),
+            _ => None,
+        },
+        V::QuadraticBezier => (stage_index < 3).then(|| point(stage_index)),
+        V::CubicBezier => (stage_index < 4).then(|| point(stage_index)),
+        V::RationalQuadraticConic => match stage_index {
+            0 => Some(point(0)),
+            1 => Some(ConstructionStageSemantics::coordinate_only(
+                ConstructionCoordinateRole::CoordinateOnly,
+            )),
+            2 => Some(point(1)),
+            _ => None,
+        },
+        V::Parabola | V::Hyperbola => (stage_index < 2).then(|| point(stage_index)),
+        V::OpenControlNurbs | V::PeriodicControlNurbs => Some(point(stage_index)),
+    }
+}
+
+fn construction_stage_semantics_for(
+    exact_variant: bool,
+    tool: EditorTool,
+    variant: GeometryToolVariant,
+    stage_index: usize,
+) -> Option<ConstructionStageSemantics> {
+    if exact_variant {
+        geometry_variant_stage_semantics(variant, stage_index)
+    } else {
+        construction_stage_semantics(tool, stage_index)
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
     reason = "one exhaustive table keeps construction-coordinate semantics auditable"
 )]
 fn construction_stage_semantics(
@@ -7167,16 +8091,10 @@ fn construction_stage_semantics(
     }
 }
 
-/// Classifies construction coordinates that participate in draft inference.
-///
-/// Most inferred coordinates are persistent point operands. The circle radius
-/// stage is deliberately different: its coordinate only chooses a radius, so a
-/// point anchor means that the existing point lies on the prospective circle.
-/// No rim point is allocated or silently reused.
-fn draft_inference_subject(tool: EditorTool, stage_index: usize) -> Option<DraftInferenceSubject> {
-    construction_stage_semantics(tool, stage_index)?
-        .coordinate_role
-        .inference_subject()
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConstructionPlanError {
+    InvalidDraftState,
+    IncompatibleConstraintIntent,
 }
 
 #[allow(
@@ -7186,34 +8104,46 @@ fn draft_inference_subject(tool: EditorTool, stage_index: usize) -> Option<Draft
 fn construction_commit_plan(
     draft: &Draft,
     proposal: ConstructionProposal,
-) -> Option<ConstructionCommitPlan> {
-    let mut relations = Vec::new();
+) -> Result<ConstructionCommitPlan, ConstructionPlanError> {
+    let mut relations = recipe_relations(draft).ok_or(ConstructionPlanError::InvalidDraftState)?;
     for confirmed in &draft.confirmed_inference {
         if confirmed.candidate_id.get() == 0 {
-            return None;
+            return Err(ConstructionPlanError::InvalidDraftState);
         }
-        let stage_semantics = construction_stage_semantics(draft.tool, confirmed.stage_index);
+        if !recipe_preserves_stage_point_identity(draft, &proposal, confirmed.stage_index) {
+            continue;
+        }
+        let stage_semantics = construction_stage_semantics_for(
+            draft.exact_variant,
+            draft.tool,
+            draft.variant,
+            confirmed.stage_index,
+        );
         for relation in confirmed.relations.iter().copied() {
             match relation {
                 DraftInferenceRelation::PointIdentity { point: expected } => {
-                    let point = draft_point_slot(draft, confirmed.stage_index)?;
+                    let point = draft_point_slot(draft, confirmed.stage_index)
+                        .ok_or(ConstructionPlanError::InvalidDraftState)?;
                     if point != DraftPointSlot::Existing(expected) {
-                        return None;
+                        return Err(ConstructionPlanError::InvalidDraftState);
                     }
                 }
                 DraftInferenceRelation::CoincidentWithOrigin => {
                     relations.push(InferredRelation::CoincidentWithOrigin {
-                        point: draft_point_slot(draft, confirmed.stage_index)?,
+                        point: draft_point_slot(draft, confirmed.stage_index)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                     });
                 }
                 DraftInferenceRelation::PointOnDatumAxis { axis } => {
                     relations.push(InferredRelation::PointOnDatumAxis {
-                        point: draft_point_slot(draft, confirmed.stage_index)?,
+                        point: draft_point_slot(draft, confirmed.stage_index)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                         axis,
                     });
                 }
                 DraftInferenceRelation::PointOnCurve { contact } => {
-                    let point = draft_point_slot(draft, confirmed.stage_index)?;
+                    let point = draft_point_slot(draft, confirmed.stage_index)
+                        .ok_or(ConstructionPlanError::InvalidDraftState)?;
                     relations.push(InferredRelation::PointOnCurve {
                         point,
                         contact: DraftContactDescriptor {
@@ -7226,13 +8156,18 @@ fn construction_commit_plan(
                     });
                 }
                 DraftInferenceRelation::PointOnCreatedCurve { point } => {
-                    relations.push(InferredRelation::PointOnCurve {
-                        point: DraftPointSlot::Existing(point),
-                        contact: created_circle_contact(&proposal, confirmed, point)?,
-                    });
+                    if let Some(contact) = created_curve_contact(&proposal, confirmed, point) {
+                        relations.push(InferredRelation::PointOnCurve {
+                            point: DraftPointSlot::Existing(point),
+                            contact,
+                        });
+                    } else {
+                        return Err(ConstructionPlanError::IncompatibleConstraintIntent);
+                    }
                 }
                 DraftInferenceRelation::Midpoint { span } => {
-                    let point = draft_point_slot(draft, confirmed.stage_index)?;
+                    let point = draft_point_slot(draft, confirmed.stage_index)
+                        .ok_or(ConstructionPlanError::InvalidDraftState)?;
                     relations.push(InferredRelation::Midpoint {
                         point,
                         line: DraftSpanSlot::Existing(span),
@@ -7240,47 +8175,59 @@ fn construction_commit_plan(
                 }
                 DraftInferenceRelation::Horizontal => {
                     relations.push(InferredRelation::Horizontal {
-                        line: stage_semantics.and_then(|semantics| semantics.completed_span)?,
+                        line: stage_semantics
+                            .and_then(|semantics| semantics.completed_span)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                     });
                 }
                 DraftInferenceRelation::Vertical => {
                     relations.push(InferredRelation::Vertical {
-                        line: stage_semantics.and_then(|semantics| semantics.completed_span)?,
+                        line: stage_semantics
+                            .and_then(|semantics| semantics.completed_span)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                     });
                 }
                 DraftInferenceRelation::Parallel { reference } => {
                     relations.push(InferredRelation::Parallel {
-                        first: stage_semantics.and_then(|semantics| semantics.completed_span)?,
+                        first: stage_semantics
+                            .and_then(|semantics| semantics.completed_span)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                         second: DraftSpanSlot::Existing(reference),
                     });
                 }
                 DraftInferenceRelation::Perpendicular { reference } => {
                     relations.push(InferredRelation::Perpendicular {
-                        first: stage_semantics.and_then(|semantics| semantics.completed_span)?,
+                        first: stage_semantics
+                            .and_then(|semantics| semantics.completed_span)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                         second: DraftSpanSlot::Existing(reference),
                     });
                 }
                 DraftInferenceRelation::HorizontalPoints { reference } => {
                     relations.push(InferredRelation::HorizontalPoints {
-                        first: draft_point_slot(draft, confirmed.stage_index)?,
+                        first: draft_point_slot(draft, confirmed.stage_index)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                         second: DraftPointSlot::Existing(reference),
                     });
                 }
                 DraftInferenceRelation::VerticalPoints { reference } => {
                     relations.push(InferredRelation::VerticalPoints {
-                        first: draft_point_slot(draft, confirmed.stage_index)?,
+                        first: draft_point_slot(draft, confirmed.stage_index)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                         second: DraftPointSlot::Existing(reference),
                     });
                 }
                 DraftInferenceRelation::HorizontalPointToMidpoint { reference } => {
                     relations.push(InferredRelation::HorizontalPointToMidpoint {
-                        point: draft_point_slot(draft, confirmed.stage_index)?,
+                        point: draft_point_slot(draft, confirmed.stage_index)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                         line: DraftSpanSlot::Existing(reference),
                     });
                 }
                 DraftInferenceRelation::VerticalPointToMidpoint { reference } => {
                     relations.push(InferredRelation::VerticalPointToMidpoint {
-                        point: draft_point_slot(draft, confirmed.stage_index)?,
+                        point: draft_point_slot(draft, confirmed.stage_index)
+                            .ok_or(ConstructionPlanError::InvalidDraftState)?,
                         line: DraftSpanSlot::Existing(reference),
                     });
                 }
@@ -7298,7 +8245,9 @@ fn construction_commit_plan(
                 DraftInferenceRelation::Collinear { reference } => {
                     relations.push(InferredRelation::Collinear {
                         first: DraftLineSupportSlot {
-                            span: stage_semantics.and_then(|semantics| semantics.completed_span)?,
+                            span: stage_semantics
+                                .and_then(|semantics| semantics.completed_span)
+                                .ok_or(ConstructionPlanError::InvalidDraftState)?,
                             direction: DocumentDirectionSense::Forward,
                         },
                         second: DraftLineSupportSlot {
@@ -7310,25 +8259,157 @@ fn construction_commit_plan(
             }
         }
     }
-    Some(ConstructionCommitPlan {
+    Ok(ConstructionCommitPlan {
         proposal,
         role: draft.geometry_role,
         relations,
     })
 }
 
-fn created_circle_contact(
+fn created_span(curve_index: usize) -> DraftSpanSlot {
+    DraftSpanSlot::Created {
+        curve_index,
+        segment: 0,
+    }
+}
+
+fn recipe_relations(draft: &Draft) -> Option<Vec<InferredRelation>> {
+    use GeometryToolVariant as V;
+
+    let mut relations = Vec::new();
+    if !draft.exact_variant {
+        return Some(relations);
+    }
+    match draft.variant {
+        V::MidpointLine => relations.push(InferredRelation::Midpoint {
+            point: draft_point_slot(draft, 0)?,
+            line: created_span(0),
+        }),
+        V::TangentArc => {
+            let source = draft.tangent_source?;
+            relations.push(InferredRelation::CurveCurveTangency {
+                first: DraftContactDescriptor {
+                    span: DraftSpanSlot::Existing(source.contact.support.span),
+                    domain: source.domain,
+                    parameter: source.contact.parameter,
+                    winding: source.contact.support.winding,
+                    neighborhood: source.contact.neighborhood,
+                },
+                second: DraftContactDescriptor {
+                    span: created_span(0),
+                    domain: ContactDomain::Bounded {
+                        lower: 0.0,
+                        upper: 1.0,
+                    },
+                    parameter: 0.0,
+                    winding: 0,
+                    neighborhood: ContactNeighborhood::Start,
+                },
+                orientation: source.orientation,
+            });
+        }
+        V::TwoPointAlignedRectangle | V::CenterRectangle => {
+            relations.extend([
+                InferredRelation::Horizontal {
+                    line: created_span(0),
+                },
+                InferredRelation::Vertical {
+                    line: created_span(1),
+                },
+                InferredRelation::Horizontal {
+                    line: created_span(2),
+                },
+                InferredRelation::Vertical {
+                    line: created_span(3),
+                },
+            ]);
+        }
+        V::ThreePointCornerRectangle | V::ThreePointCenterRectangle => {
+            relations.extend([
+                InferredRelation::Perpendicular {
+                    first: created_span(0),
+                    second: created_span(1),
+                },
+                InferredRelation::Parallel {
+                    first: created_span(0),
+                    second: created_span(2),
+                },
+                InferredRelation::Parallel {
+                    first: created_span(1),
+                    second: created_span(3),
+                },
+            ]);
+        }
+        _ => {}
+    }
+    if matches!(
+        draft.variant,
+        V::CenterRectangle | V::ThreePointCenterRectangle
+    ) {
+        relations.push(InferredRelation::Midpoint {
+            point: draft_point_slot(draft, 0)?,
+            line: created_span(4),
+        });
+    }
+    if draft.regularized
+        && matches!(
+            draft.variant,
+            V::TwoPointAlignedRectangle
+                | V::ThreePointCornerRectangle
+                | V::CenterRectangle
+                | V::ThreePointCenterRectangle
+        )
+    {
+        relations.push(InferredRelation::EqualLength {
+            first: created_span(0),
+            second: created_span(1),
+        });
+    }
+    Some(relations)
+}
+
+fn recipe_preserves_stage_point_identity(
+    draft: &Draft,
+    proposal: &ConstructionProposal,
+    stage_index: usize,
+) -> bool {
+    let Some(ConstructionPoint::Existing { id: expected, .. }) = draft.points.get(stage_index)
+    else {
+        return true;
+    };
+    let proposal_point = match proposal {
+        ConstructionProposal::RectangleLoop { points, .. } => match draft.variant {
+            GeometryToolVariant::TwoPointAlignedRectangle
+            | GeometryToolVariant::ThreePointCornerRectangle
+            | GeometryToolVariant::CenterRectangle => points.get(stage_index),
+            GeometryToolVariant::ThreePointCenterRectangle => match stage_index {
+                0 => points.first(),
+                2 => points.get(1),
+                _ => None,
+            },
+            _ => None,
+        },
+        ConstructionProposal::MidpointLine {
+            center, endpoint, ..
+        } => match stage_index {
+            0 => Some(center),
+            1 => Some(endpoint),
+            _ => None,
+        },
+        _ => return true,
+    };
+    matches!(proposal_point, Some(ConstructionPoint::Existing { id, .. }) if id == expected)
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive created-family contact authenticator keeps incidence admission auditable"
+)]
+fn created_curve_contact(
     proposal: &ConstructionProposal,
     confirmed: &ConfirmedDraftInference,
     point: DesignPointId,
 ) -> Option<DraftContactDescriptor> {
-    let ConstructionProposal::Circle { center, radius } = proposal else {
-        return None;
-    };
-    if confirmed.stage_index != 1 {
-        return None;
-    }
-    let center = center.position();
     let target = confirmed
         .references
         .iter()
@@ -7340,30 +8421,227 @@ fn created_circle_contact(
             } if *candidate == point => Some(*model_position),
             _ => None,
         })?;
-    let delta = [target[0] - center[0], target[1] - center[1]];
-    let target_radius = delta[0].hypot(delta[1]);
-    let parameter = delta[1].atan2(delta[0]).rem_euclid(std::f64::consts::TAU);
-    if !center.into_iter().all(f64::is_finite)
-        || !target.into_iter().all(f64::is_finite)
-        || !target_radius.is_finite()
-        || target_radius <= 0.0
-        || target_radius.to_bits() != radius.to_bits()
-        || !parameter.is_finite()
-    {
+    if !target.into_iter().all(f64::is_finite) {
         return None;
     }
+    let (domain, parameter, neighborhood) = match proposal {
+        ConstructionProposal::Circle { center, radius } => {
+            let center = center.position();
+            let delta = [target[0] - center[0], target[1] - center[1]];
+            let target_radius = delta[0].hypot(delta[1]);
+            let parameter = delta[1].atan2(delta[0]).rem_euclid(std::f64::consts::TAU);
+            if !center.into_iter().all(f64::is_finite)
+                || !radius.is_finite()
+                || *radius <= 0.0
+                || !target_radius.is_finite()
+                || target_radius <= 0.0
+                || !parameter.is_finite()
+                || !positive_lengths_match(*radius, target_radius)
+            {
+                return None;
+            }
+            (
+                ContactDomain::Periodic {
+                    period: std::f64::consts::TAU,
+                },
+                parameter,
+                ContactNeighborhood::Interior,
+            )
+        }
+        ConstructionProposal::CounterClockwiseArc { center, start, end } => {
+            bounded_circular_arc_contact(
+                center.position(),
+                *start,
+                *end,
+                DocumentArcSweep::CounterClockwise,
+                target,
+            )?
+        }
+        ConstructionProposal::CircularArc {
+            center,
+            start,
+            end,
+            sweep,
+        } => bounded_circular_arc_contact(center.position(), *start, *end, *sweep, target)?,
+        ConstructionProposal::Ellipse {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+        }
+        | ConstructionProposal::AxisEndpointEllipse {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+        } => {
+            let parameter = ellipse_support_parameter(
+                center.position(),
+                major_axis_point.position(),
+                *minor_axis_ratio,
+                target,
+            )?;
+            (
+                ContactDomain::Periodic {
+                    period: std::f64::consts::TAU,
+                },
+                parameter,
+                ContactNeighborhood::Interior,
+            )
+        }
+        ConstructionProposal::EllipticalArc {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            start_angle,
+            end_angle,
+            sweep,
+        }
+        | ConstructionProposal::AxisEndpointEllipticalArc {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            start_angle,
+            end_angle,
+            sweep,
+        } => {
+            let target_angle = ellipse_support_parameter(
+                center.position(),
+                major_axis_point.position(),
+                *minor_axis_ratio,
+                target,
+            )?;
+            bounded_sweep_contact(*start_angle, *end_angle, *sweep, target_angle)?
+        }
+        _ => return None,
+    };
     Some(DraftContactDescriptor {
         span: DraftSpanSlot::Created {
             curve_index: 0,
             segment: 0,
         },
-        domain: ContactDomain::Periodic {
-            period: std::f64::consts::TAU,
-        },
+        domain,
         parameter,
         winding: 0,
-        neighborhood: ContactNeighborhood::Interior,
+        neighborhood,
     })
+}
+
+fn bounded_circular_arc_contact(
+    center: [f64; 2],
+    start: [f64; 2],
+    end: [f64; 2],
+    sweep: DocumentArcSweep,
+    target: [f64; 2],
+) -> Option<(ContactDomain, f64, ContactNeighborhood)> {
+    if !center.into_iter().all(f64::is_finite)
+        || !start.into_iter().all(f64::is_finite)
+        || !end.into_iter().all(f64::is_finite)
+        || !target.into_iter().all(f64::is_finite)
+    {
+        return None;
+    }
+    let start_radius = (start[0] - center[0]).hypot(start[1] - center[1]);
+    let end_radius = (end[0] - center[0]).hypot(end[1] - center[1]);
+    let target_radius = (target[0] - center[0]).hypot(target[1] - center[1]);
+    if !positive_lengths_match(start_radius, end_radius)
+        || !positive_lengths_match(start_radius, target_radius)
+    {
+        return None;
+    }
+    let start_angle = (start[1] - center[1]).atan2(start[0] - center[0]);
+    let end_angle = (end[1] - center[1]).atan2(end[0] - center[0]);
+    let target_angle = (target[1] - center[1]).atan2(target[0] - center[0]);
+    bounded_sweep_contact(start_angle, end_angle, sweep, target_angle)
+}
+
+fn positive_lengths_match(first: f64, second: f64) -> bool {
+    const RELATIVE_TOLERANCE: f64 = 1.0e-9;
+    first.is_finite()
+        && second.is_finite()
+        && first > 0.0
+        && second > 0.0
+        && (first - second).abs() <= RELATIVE_TOLERANCE * first.max(second)
+}
+
+fn bounded_sweep_contact(
+    start: f64,
+    end: f64,
+    sweep: DocumentArcSweep,
+    target: f64,
+) -> Option<(ContactDomain, f64, ContactNeighborhood)> {
+    if ![start, end, target].into_iter().all(f64::is_finite) {
+        return None;
+    }
+    let (total, offset) = match sweep {
+        DocumentArcSweep::CounterClockwise => (
+            (end - start).rem_euclid(std::f64::consts::TAU),
+            (target - start).rem_euclid(std::f64::consts::TAU),
+        ),
+        DocumentArcSweep::Clockwise => (
+            (start - end).rem_euclid(std::f64::consts::TAU),
+            (start - target).rem_euclid(std::f64::consts::TAU),
+        ),
+    };
+    if !(total.is_finite() && total > 0.0 && offset.is_finite()) {
+        return None;
+    }
+    let tolerance = 1.0e-10 * total.max(1.0);
+    if offset > total + tolerance {
+        return None;
+    }
+    let parameter = (offset / total).clamp(0.0, 1.0);
+    let neighborhood = if parameter <= 1.0e-10 {
+        ContactNeighborhood::Start
+    } else if parameter >= 1.0 - 1.0e-10 {
+        ContactNeighborhood::End
+    } else {
+        ContactNeighborhood::Interior
+    };
+    Some((
+        ContactDomain::Bounded {
+            lower: 0.0,
+            upper: 1.0,
+        },
+        parameter,
+        neighborhood,
+    ))
+}
+
+fn ellipse_support_parameter(
+    center: [f64; 2],
+    major_axis_point: [f64; 2],
+    minor_axis_ratio: f64,
+    target: [f64; 2],
+) -> Option<f64> {
+    if !center.into_iter().all(f64::is_finite)
+        || !major_axis_point.into_iter().all(f64::is_finite)
+        || !target.into_iter().all(f64::is_finite)
+        || !minor_axis_ratio.is_finite()
+        || minor_axis_ratio <= 0.0
+    {
+        return None;
+    }
+    let axis = [
+        major_axis_point[0] - center[0],
+        major_axis_point[1] - center[1],
+    ];
+    let major = axis[0].hypot(axis[1]);
+    if !(major.is_finite() && major > 0.0) {
+        return None;
+    }
+    let unit = [axis[0] / major, axis[1] / major];
+    let normal = [-unit[1], unit[0]];
+    let delta = [target[0] - center[0], target[1] - center[1]];
+    let x = delta[0].mul_add(unit[0], delta[1] * unit[1]) / major;
+    let y = delta[0].mul_add(normal[0], delta[1] * normal[1]) / (major * minor_axis_ratio);
+    let support_residual = x.mul_add(x, y * y) - 1.0;
+    if !x.is_finite()
+        || !y.is_finite()
+        || !support_residual.is_finite()
+        || support_residual.abs() > 1.0e-9
+    {
+        return None;
+    }
+    Some(y.atan2(x).rem_euclid(std::f64::consts::TAU))
 }
 
 fn confirmed_positional_references(
@@ -7414,16 +8692,165 @@ fn confirmed_positional_references(
     references
 }
 
+fn tangent_arc_source_at(
+    scene: &EditorScene,
+    pointer: ScreenPoint,
+    tolerance_pixels: f64,
+    policy: GeometryInteractionPolicy,
+) -> Option<TangentArcSource> {
+    const SHARED_ENDPOINT_TOLERANCE_PIXELS: f64 = 1.0e-6;
+
+    if !pointer.is_finite() || !tolerance_pixels.is_finite() || tolerance_pixels < 0.0 {
+        return None;
+    }
+    let mut candidates = Vec::<(f64, TangentArcSource)>::new();
+    for curve in scene.accepted_document.curves() {
+        for endpoint in [FeatureEndpoint::Start, FeatureEndpoint::End] {
+            let endpoint = DocumentEndpointRef {
+                curve: curve.id,
+                endpoint,
+            };
+            let Some(source) = tangent_arc_source_candidate(scene, endpoint, policy) else {
+                continue;
+            };
+            let distance = scene
+                .viewport
+                .model_to_screen(source.position)
+                .distance(pointer);
+            if distance.is_finite() && distance <= tolerance_pixels {
+                candidates.push((distance, source));
+            }
+        }
+    }
+    candidates.sort_by(|(first_distance, first), (second_distance, second)| {
+        first_distance
+            .total_cmp(second_distance)
+            .then_with(|| first.contact.support.span.cmp(&second.contact.support.span))
+            .then_with(|| {
+                tangent_endpoint_order(first.endpoint.endpoint)
+                    .cmp(&tangent_endpoint_order(second.endpoint.endpoint))
+            })
+    });
+    let (_, best) = candidates.first().copied()?;
+    let best_screen = scene.viewport.model_to_screen(best.position);
+    // A geometrically shared endpoint has no unique support under a point-only
+    // gesture. Do not let persistent ID ordering silently choose the tangency
+    // parent; a future explicit support picker can broaden this contract.
+    if candidates.iter().skip(1).any(|(_, candidate)| {
+        best_screen.distance(scene.viewport.model_to_screen(candidate.position))
+            <= SHARED_ENDPOINT_TOLERANCE_PIXELS
+    }) {
+        return None;
+    }
+    Some(best)
+}
+
+fn tangent_arc_source_candidate(
+    scene: &EditorScene,
+    endpoint: DocumentEndpointRef,
+    policy: GeometryInteractionPolicy,
+) -> Option<TangentArcSource> {
+    let contact = scene
+        .accepted_document
+        .curve_endpoint_contact_seed(endpoint)
+        .ok()?;
+    let (domain, painted_endpoint) = scene.curves.iter().find_map(|curve| {
+        if curve.span != contact.support.span
+            || !curve.authoring_eligible
+            || !curve.is_interactive(policy)
+            || !matches!(curve.origin, SceneCurveOrigin::Native)
+            || curve.screen_parameters.len() != curve.screen_polyline.len()
+        {
+            return None;
+        }
+        let ContactDomain::Bounded { lower, upper } = curve.contact_domain else {
+            return None;
+        };
+        if !lower.is_finite()
+            || !upper.is_finite()
+            || lower > contact.parameter
+            || contact.parameter > upper
+        {
+            return None;
+        }
+        let painted = match endpoint.endpoint {
+            FeatureEndpoint::Start => curve
+                .screen_parameters
+                .first()
+                .zip(curve.screen_polyline.first()),
+            FeatureEndpoint::End => curve
+                .screen_parameters
+                .last()
+                .zip(curve.screen_polyline.last()),
+        }?;
+        (painted.0.to_bits() == contact.parameter.to_bits() && painted.1.is_finite())
+            .then_some((curve.contact_domain, *painted.1))
+    })?;
+    let jet = scene
+        .accepted_document
+        .evaluate_curve_jet(contact.support.span, contact.parameter)
+        .ok()?;
+    let differential = jet.differential().ok()?;
+    let position = [jet.position.x, jet.position.y];
+    let parameter_tangent = [differential.unit_tangent.x, differential.unit_tangent.y];
+    if !position.into_iter().all(f64::is_finite)
+        || !parameter_tangent.into_iter().all(f64::is_finite)
+        || scene
+            .viewport
+            .model_to_screen(position)
+            .distance(painted_endpoint)
+            > 1.0e-6
+    {
+        return None;
+    }
+    let (outgoing_tangent, orientation, expected_neighborhood) = match endpoint.endpoint {
+        FeatureEndpoint::Start => (
+            [-parameter_tangent[0], -parameter_tangent[1]],
+            TangentOrientation::Opposed,
+            ContactNeighborhood::Start,
+        ),
+        FeatureEndpoint::End => (
+            parameter_tangent,
+            TangentOrientation::Aligned,
+            ContactNeighborhood::End,
+        ),
+    };
+    if contact.neighborhood != expected_neighborhood {
+        return None;
+    }
+    Some(TangentArcSource {
+        endpoint,
+        contact,
+        domain,
+        position,
+        outgoing_tangent,
+        orientation,
+    })
+}
+
+const fn tangent_endpoint_order(endpoint: FeatureEndpoint) -> u8 {
+    match endpoint {
+        FeatureEndpoint::Start => 0,
+        FeatureEndpoint::End => 1,
+    }
+}
+
 fn draft_point_slot(draft: &Draft, stage_index: usize) -> Option<DraftPointSlot> {
-    construction_stage_semantics(draft.tool, stage_index)?.point_operand_ordinal?;
+    construction_stage_semantics_for(draft.exact_variant, draft.tool, draft.variant, stage_index)?
+        .point_operand_ordinal?;
     match *draft.points.get(stage_index)? {
         ConstructionPoint::Existing { id, .. } => Some(DraftPointSlot::Existing(id)),
         ConstructionPoint::New(_) => {
             let point_index = (0..stage_index)
                 .filter(|index| {
-                    construction_stage_semantics(draft.tool, *index)
-                        .and_then(|semantics| semantics.point_operand_ordinal)
-                        .is_some()
+                    construction_stage_semantics_for(
+                        draft.exact_variant,
+                        draft.tool,
+                        draft.variant,
+                        *index,
+                    )
+                    .and_then(|semantics| semantics.point_operand_ordinal)
+                    .is_some()
                 })
                 .filter(|index| matches!(draft.points.get(*index), Some(ConstructionPoint::New(_))))
                 .count();
@@ -8523,22 +9950,34 @@ const fn fillet_normal_side_order(side: DocumentCurveNormalSide) -> u8 {
 
 fn polyline_proposal(draft: &Draft) -> Option<ConstructionProposal> {
     (draft.points.len() >= 2 && draft.positions.windows(2).all(nonzero_segment)).then(|| {
-        ConstructionProposal::Polyline {
-            points: draft.points.clone(),
+        if draft.exact_variant {
+            ConstructionProposal::PolylinePath {
+                points: draft.points.clone(),
+                closed: draft.closed,
+            }
+        } else {
+            ConstructionProposal::Polyline {
+                points: draft.points.clone(),
+            }
         }
     })
 }
 
 fn nurbs_proposal(draft: &Draft) -> Option<ConstructionProposal> {
-    let minimum = usize::try_from(draft.nurbs_options.degree)
-        .ok()?
-        .checked_add(1)?;
+    let mut options = draft.nurbs_options.clone();
+    if draft.exact_variant {
+        options.form = match draft.variant {
+            GeometryToolVariant::PeriodicControlNurbs => DocumentBSplineForm::Periodic,
+            _ => DocumentBSplineForm::Clamped,
+        };
+    }
+    let minimum = usize::try_from(options.degree).ok()?.checked_add(1)?;
     (draft.points.len() >= minimum
         && draft.positions.windows(2).all(nonzero_segment)
-        && validate_nurbs_for_controls(&draft.nurbs_options, draft.points.len()).is_ok())
+        && validate_nurbs_for_controls(&options, draft.points.len()).is_ok())
     .then(|| ConstructionProposal::Nurbs {
         controls: draft.points.clone(),
-        options: draft.nurbs_options.clone(),
+        options,
     })
 }
 
@@ -8625,7 +10064,7 @@ fn elliptical_arc_click_projection(
     )
 }
 
-fn elliptical_arc_preview_positions(draft: &Draft) -> Option<Vec<[f64; 2]>> {
+fn legacy_elliptical_arc_preview_positions(draft: &Draft) -> Option<Vec<[f64; 2]>> {
     if draft.tool != EditorTool::EllipticalArc || draft.positions.len() > 4 {
         return None;
     }
@@ -8636,11 +10075,11 @@ fn elliptical_arc_preview_positions(draft: &Draft) -> Option<Vec<[f64; 2]>> {
     Some(positions)
 }
 
-fn elliptical_arc_support_preview(draft: &Draft) -> Option<ConstructionPreview> {
+fn legacy_elliptical_arc_support_preview(draft: &Draft) -> Option<ConstructionPreview> {
     let [center, major_axis_point, ..] = draft.positions.as_slice() else {
         return None;
     };
-    let positions = elliptical_arc_preview_positions(draft)?;
+    let positions = legacy_elliptical_arc_preview_positions(draft)?;
     let proposal = ConstructionProposal::Ellipse {
         center: draft.points[0],
         major_axis_point: draft.points[1],
@@ -8659,6 +10098,58 @@ fn elliptical_arc_support_preview(draft: &Draft) -> Option<ConstructionPreview> 
     })
 }
 
+fn elliptical_arc_preview_positions(draft: &Draft) -> Option<Vec<[f64; 2]>> {
+    if !matches!(
+        draft.variant,
+        GeometryToolVariant::CenterAxesEllipticalArc
+            | GeometryToolVariant::AxisEndpointsEllipticalArc
+    ) || draft.positions.len() > 5
+    {
+        return None;
+    }
+    let frame = ellipse_recipe_frame(draft)?;
+    let mut positions = draft.positions.clone();
+    for position in positions.iter_mut().skip(frame.trim_start_stage) {
+        *position = ellipse_project_sample(frame, *position)?.1;
+    }
+    Some(positions)
+}
+
+fn elliptical_arc_support_preview(draft: &Draft) -> Option<ConstructionPreview> {
+    let frame = ellipse_recipe_frame(draft)?;
+    let positions = elliptical_arc_preview_positions(draft)?;
+    let (proposal, controls) = match draft.variant {
+        GeometryToolVariant::CenterAxesEllipticalArc => (
+            ConstructionProposal::Ellipse {
+                center: draft.points[0],
+                major_axis_point: draft.points[1],
+                minor_axis_ratio: frame.ratio,
+            },
+            vec![frame.center, frame.major_axis_point],
+        ),
+        GeometryToolVariant::AxisEndpointsEllipticalArc => (
+            ConstructionProposal::AxisEndpointEllipse {
+                major_axis_point: draft.points[0],
+                center: ConstructionPoint::New(frame.center),
+                minor_axis_ratio: frame.ratio,
+            },
+            vec![frame.major_axis_point, frame.center],
+        ),
+        _ => return None,
+    };
+    let ConstructionPreviewGeometry::AdvancedCurve { curve_points, .. } =
+        advanced_curve_preview(&proposal, &controls, EditorTool::Ellipse)?
+    else {
+        return None;
+    };
+    Some(ConstructionPreview::EllipticalArcSupport {
+        center: frame.center,
+        major_axis_point: frame.major_axis_point,
+        support_points: curve_points,
+        trim_start: positions.get(frame.trim_start_stage).copied(),
+    })
+}
+
 fn elliptical_arc_sweep_is_nonzero(start: f64, end: f64, sweep: DocumentArcSweep) -> bool {
     let magnitude = match sweep {
         DocumentArcSweep::CounterClockwise => (end - start).rem_euclid(std::f64::consts::TAU),
@@ -8668,6 +10159,23 @@ fn elliptical_arc_sweep_is_nonzero(start: f64, end: f64, sweep: DocumentArcSweep
 }
 
 fn valid_draft_stage(draft: &Draft) -> bool {
+    if !draft.exact_variant {
+        return legacy_valid_draft_stage(draft);
+    }
+    match draft.variant {
+        GeometryToolVariant::Polyline
+        | GeometryToolVariant::OpenControlNurbs
+        | GeometryToolVariant::PeriodicControlNurbs => {
+            draft.positions.windows(2).all(nonzero_segment)
+        }
+        variant => geometry_variant_required_stages(variant).is_some_and(|required| {
+            draft.positions.len() < required
+                || (draft.positions.len() == required && draft_proposal(draft).is_some())
+        }),
+    }
+}
+
+fn legacy_valid_draft_stage(draft: &Draft) -> bool {
     match draft.tool {
         EditorTool::Point => draft.positions.len() == 1,
         EditorTool::Line
@@ -8698,12 +10206,506 @@ fn valid_draft_stage(draft: &Draft) -> bool {
     }
 }
 
+const fn geometry_variant_required_stages(variant: GeometryToolVariant) -> Option<usize> {
+    use GeometryToolVariant as V;
+    Some(match variant {
+        V::SketchPoint => 1,
+        V::Segment
+        | V::MidpointLine
+        | V::TwoPointAlignedRectangle
+        | V::CenterRectangle
+        | V::CenterRadiusCircle
+        | V::TwoPointDiameterCircle
+        | V::TangentArc
+        | V::Parabola
+        | V::Hyperbola => 2,
+        V::ThreePointCornerRectangle
+        | V::ThreePointCenterRectangle
+        | V::ThreePointCircle
+        | V::CenterArc
+        | V::ThreePointArc
+        | V::CenterAxesEllipse
+        | V::AxisEndpointsEllipse
+        | V::QuadraticBezier
+        | V::RationalQuadraticConic => 3,
+        V::CubicBezier => 4,
+        V::CenterAxesEllipticalArc | V::AxisEndpointsEllipticalArc => 5,
+        V::Polyline | V::OpenControlNurbs | V::PeriodicControlNurbs => return None,
+    })
+}
+
+fn geometry_draft_stage(
+    variant: GeometryToolVariant,
+    completed: usize,
+) -> Option<GeometryDraftStage> {
+    use GeometryDraftStage as S;
+    use GeometryToolVariant as V;
+
+    Some(match variant {
+        V::SketchPoint => (completed == 0).then_some(S::Point)?,
+        V::Segment => [S::Start, S::End].get(completed).copied()?,
+        V::Polyline => {
+            if completed == 0 {
+                S::Start
+            } else {
+                S::End
+            }
+        }
+        V::MidpointLine | V::CenterRadiusCircle => [S::Center, S::End].get(completed).copied()?,
+        V::TwoPointAlignedRectangle => [S::Corner, S::OppositeCorner].get(completed).copied()?,
+        V::ThreePointCornerRectangle => [S::Corner, S::AdjacentCorner, S::AdjacentCorner]
+            .get(completed)
+            .copied()?,
+        V::CenterRectangle => [S::Center, S::Corner].get(completed).copied()?,
+        V::ThreePointCenterRectangle => [S::Center, S::SideMidpoint, S::Corner]
+            .get(completed)
+            .copied()?,
+        V::TwoPointDiameterCircle => [S::DiameterStart, S::DiameterEnd].get(completed).copied()?,
+        V::ThreePointCircle | V::ThreePointArc => [S::Start, S::End, S::ThroughPoint]
+            .get(completed)
+            .copied()?,
+        V::CenterArc => [S::Center, S::Start, S::End].get(completed).copied()?,
+        V::TangentArc => [S::SourceEndpoint, S::End].get(completed).copied()?,
+        V::CenterAxesEllipse => [S::Center, S::MajorAxisEndpoint, S::MinorExtent]
+            .get(completed)
+            .copied()?,
+        V::AxisEndpointsEllipse => [
+            S::MajorAxisEndpoint,
+            S::OppositeAxisEndpoint,
+            S::MinorExtent,
+        ]
+        .get(completed)
+        .copied()?,
+        V::CenterAxesEllipticalArc => [
+            S::Center,
+            S::MajorAxisEndpoint,
+            S::MinorExtent,
+            S::TrimStart,
+            S::TrimEnd,
+        ]
+        .get(completed)
+        .copied()?,
+        V::AxisEndpointsEllipticalArc => [
+            S::MajorAxisEndpoint,
+            S::OppositeAxisEndpoint,
+            S::MinorExtent,
+            S::TrimStart,
+            S::TrimEnd,
+        ]
+        .get(completed)
+        .copied()?,
+        V::QuadraticBezier | V::RationalQuadraticConic => [S::Start, S::ControlPoint, S::End]
+            .get(completed)
+            .copied()?,
+        V::CubicBezier => [S::Start, S::ControlPoint, S::ControlPoint, S::End]
+            .get(completed)
+            .copied()?,
+        V::Parabola => [S::Vertex, S::Focus].get(completed).copied()?,
+        V::Hyperbola => [S::Center, S::TransverseAxisEndpoint]
+            .get(completed)
+            .copied()?,
+        V::OpenControlNurbs | V::PeriodicControlNurbs => S::ControlPoint,
+    })
+}
+
+fn geometry_draft_measurements(draft: &Draft) -> Vec<GeometryDraftMeasurement> {
+    let mut measurements = Vec::new();
+    if let Some([start, end]) = draft
+        .positions
+        .windows(2)
+        .last()
+        .map(|pair| [pair[0], pair[1]])
+    {
+        let delta = [end[0] - start[0], end[1] - start[1]];
+        let length = delta[0].hypot(delta[1]);
+        if length.is_finite() {
+            measurements.push(GeometryDraftMeasurement::Length(length));
+            measurements.push(GeometryDraftMeasurement::AngleRadians(
+                delta[1].atan2(delta[0]),
+            ));
+        }
+    }
+    if let Some(proposal) = draft_proposal(draft) {
+        match proposal {
+            ConstructionProposal::Circle { radius, .. } => {
+                measurements.push(GeometryDraftMeasurement::Radius(radius));
+                measurements.push(GeometryDraftMeasurement::Diameter(2.0 * radius));
+            }
+            ConstructionProposal::CircularArc {
+                center,
+                start,
+                end,
+                sweep,
+            } => {
+                let center = center.position();
+                let radius = (start[0] - center[0]).hypot(start[1] - center[1]);
+                let start_angle = (start[1] - center[1]).atan2(start[0] - center[0]);
+                let end_angle = (end[1] - center[1]).atan2(end[0] - center[0]);
+                let angle = match sweep {
+                    DocumentArcSweep::CounterClockwise => {
+                        (end_angle - start_angle).rem_euclid(std::f64::consts::TAU)
+                    }
+                    DocumentArcSweep::Clockwise => {
+                        (start_angle - end_angle).rem_euclid(std::f64::consts::TAU)
+                    }
+                };
+                measurements.push(GeometryDraftMeasurement::Radius(radius));
+                measurements.push(GeometryDraftMeasurement::AngleRadians(angle));
+            }
+            ConstructionProposal::CounterClockwiseArc { center, start, end } => {
+                let center = center.position();
+                let radius = (start[0] - center[0]).hypot(start[1] - center[1]);
+                let start_angle = (start[1] - center[1]).atan2(start[0] - center[0]);
+                let end_angle = (end[1] - center[1]).atan2(end[0] - center[0]);
+                let angle = (end_angle - start_angle).rem_euclid(std::f64::consts::TAU);
+                measurements.push(GeometryDraftMeasurement::Radius(radius));
+                measurements.push(GeometryDraftMeasurement::AngleRadians(angle));
+            }
+            ConstructionProposal::RectangleLoop {
+                ref points,
+                corners,
+                ..
+            } => {
+                let first = points[corners[0]].position();
+                let second = points[corners[1]].position();
+                let third = points[corners[2]].position();
+                measurements.push(GeometryDraftMeasurement::WidthHeight {
+                    width: (second[0] - first[0]).hypot(second[1] - first[1]),
+                    height: (third[0] - second[0]).hypot(third[1] - second[1]),
+                });
+            }
+            ConstructionProposal::Ellipse {
+                minor_axis_ratio, ..
+            }
+            | ConstructionProposal::AxisEndpointEllipse {
+                minor_axis_ratio, ..
+            }
+            | ConstructionProposal::EllipticalArc {
+                minor_axis_ratio, ..
+            }
+            | ConstructionProposal::AxisEndpointEllipticalArc {
+                minor_axis_ratio, ..
+            } => measurements.push(GeometryDraftMeasurement::Ratio(minor_axis_ratio)),
+            _ => {}
+        }
+    }
+    if matches!(
+        draft.variant,
+        GeometryToolVariant::Polyline
+            | GeometryToolVariant::OpenControlNurbs
+            | GeometryToolVariant::PeriodicControlNurbs
+    ) {
+        measurements.push(GeometryDraftMeasurement::ControlCount(draft.points.len()));
+    }
+    measurements
+}
+
 fn nonzero_segment(segment: &[[f64; 2]]) -> bool {
     let [start, end] = segment else {
         return false;
     };
     let length = (end[0] - start[0]).hypot(end[1] - start[1]);
     length.is_finite() && length > 0.0
+}
+
+fn construction_point_at(original: ConstructionPoint, position: [f64; 2]) -> ConstructionPoint {
+    match original {
+        ConstructionPoint::Existing {
+            id,
+            position: existing,
+        } if model_positions_bit_equal(existing, position) => ConstructionPoint::Existing {
+            id,
+            position: existing,
+        },
+        ConstructionPoint::Existing { .. } | ConstructionPoint::New(_) => {
+            ConstructionPoint::New(position)
+        }
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive rectangle recipe table keeps derived corners and stored identity auditable"
+)]
+fn rectangle_loop_proposal(draft: &Draft) -> Option<ConstructionProposal> {
+    use GeometryToolVariant as V;
+
+    match draft.variant {
+        V::TwoPointAlignedRectangle if draft.positions.len() == 2 => {
+            let first = draft.positions[0];
+            let mut opposite = draft.positions[1];
+            let delta = [opposite[0] - first[0], opposite[1] - first[1]];
+            if draft.regularized {
+                let side = delta[0].abs().max(delta[1].abs());
+                if !(side.is_finite() && side > 0.0) {
+                    return None;
+                }
+                opposite = [
+                    first[0] + side.copysign(delta[0]),
+                    first[1] + side.copysign(delta[1]),
+                ];
+            }
+            if !nonzero_segment(&[first, [opposite[0], first[1]]])
+                || !nonzero_segment(&[[opposite[0], first[1]], opposite])
+            {
+                return None;
+            }
+            let first_operand = construction_point_at(draft.points[0], first);
+            let opposite_operand = construction_point_at(draft.points[1], opposite);
+            Some(ConstructionProposal::RectangleLoop {
+                points: vec![
+                    first_operand,
+                    opposite_operand,
+                    ConstructionPoint::New([opposite[0], first[1]]),
+                    ConstructionPoint::New([first[0], opposite[1]]),
+                ],
+                corners: [0, 2, 1, 3],
+                center: None,
+            })
+        }
+        V::ThreePointCornerRectangle if draft.positions.len() == 3 => {
+            let first = draft.positions[0];
+            let adjacent = draft.positions[1];
+            let axis = [adjacent[0] - first[0], adjacent[1] - first[1]];
+            let length = axis[0].hypot(axis[1]);
+            if !(length.is_finite() && length > 0.0) {
+                return None;
+            }
+            let normal = [-axis[1] / length, axis[0] / length];
+            let raw = draft.positions[2];
+            let mut height =
+                (raw[0] - adjacent[0]).mul_add(normal[0], (raw[1] - adjacent[1]) * normal[1]);
+            if draft.regularized {
+                let sign = if height.is_sign_negative() { -1.0 } else { 1.0 };
+                height = sign * length;
+            }
+            if !height.is_finite() || height == 0.0 {
+                return None;
+            }
+            let third = [
+                adjacent[0] + normal[0] * height,
+                adjacent[1] + normal[1] * height,
+            ];
+            let fourth = [first[0] + normal[0] * height, first[1] + normal[1] * height];
+            Some(ConstructionProposal::RectangleLoop {
+                points: vec![
+                    construction_point_at(draft.points[0], first),
+                    construction_point_at(draft.points[1], adjacent),
+                    construction_point_at(draft.points[2], third),
+                    ConstructionPoint::New(fourth),
+                ],
+                corners: [0, 1, 2, 3],
+                center: None,
+            })
+        }
+        V::CenterRectangle if draft.positions.len() == 2 => {
+            let center = draft.positions[0];
+            let mut corner = draft.positions[1];
+            let delta = [corner[0] - center[0], corner[1] - center[1]];
+            if draft.regularized {
+                let half = delta[0].abs().max(delta[1].abs());
+                if !(half.is_finite() && half > 0.0) {
+                    return None;
+                }
+                corner = [
+                    center[0] + half.copysign(delta[0]),
+                    center[1] + half.copysign(delta[1]),
+                ];
+            }
+            let opposite = [2.0 * center[0] - corner[0], 2.0 * center[1] - corner[1]];
+            let second = [opposite[0], corner[1]];
+            let fourth = [corner[0], opposite[1]];
+            if !nonzero_segment(&[corner, second]) || !nonzero_segment(&[second, opposite]) {
+                return None;
+            }
+            Some(ConstructionProposal::RectangleLoop {
+                points: vec![
+                    construction_point_at(draft.points[0], center),
+                    construction_point_at(draft.points[1], corner),
+                    ConstructionPoint::New(second),
+                    ConstructionPoint::New(opposite),
+                    ConstructionPoint::New(fourth),
+                ],
+                corners: [1, 2, 3, 4],
+                center: Some(0),
+            })
+        }
+        V::ThreePointCenterRectangle if draft.positions.len() == 3 => {
+            let center = draft.positions[0];
+            let side_midpoint = draft.positions[1];
+            let half_height = [side_midpoint[0] - center[0], side_midpoint[1] - center[1]];
+            let height = half_height[0].hypot(half_height[1]);
+            if !(height.is_finite() && height > 0.0) {
+                return None;
+            }
+            let tangent = [-half_height[1] / height, half_height[0] / height];
+            let raw = draft.positions[2];
+            let mut half_width = (raw[0] - side_midpoint[0])
+                .mul_add(tangent[0], (raw[1] - side_midpoint[1]) * tangent[1]);
+            if draft.regularized {
+                let sign = if half_width.is_sign_negative() {
+                    -1.0
+                } else {
+                    1.0
+                };
+                half_width = sign * height;
+            }
+            if !half_width.is_finite() || half_width == 0.0 {
+                return None;
+            }
+            let opposite_midpoint = [
+                2.0 * center[0] - side_midpoint[0],
+                2.0 * center[1] - side_midpoint[1],
+            ];
+            let first = [
+                side_midpoint[0] + tangent[0] * half_width,
+                side_midpoint[1] + tangent[1] * half_width,
+            ];
+            let second = [
+                side_midpoint[0] - tangent[0] * half_width,
+                side_midpoint[1] - tangent[1] * half_width,
+            ];
+            let third = [
+                opposite_midpoint[0] - tangent[0] * half_width,
+                opposite_midpoint[1] - tangent[1] * half_width,
+            ];
+            let fourth = [
+                opposite_midpoint[0] + tangent[0] * half_width,
+                opposite_midpoint[1] + tangent[1] * half_width,
+            ];
+            Some(ConstructionProposal::RectangleLoop {
+                points: vec![
+                    construction_point_at(draft.points[0], center),
+                    construction_point_at(draft.points[2], first),
+                    ConstructionPoint::New(second),
+                    ConstructionPoint::New(third),
+                    ConstructionPoint::New(fourth),
+                ],
+                corners: [1, 2, 3, 4],
+                center: Some(0),
+            })
+        }
+        _ => None,
+    }
+}
+
+fn circumcircle(first: [f64; 2], second: [f64; 2], third: [f64; 2]) -> Option<([f64; 2], f64)> {
+    if !first.into_iter().all(f64::is_finite)
+        || !second.into_iter().all(f64::is_finite)
+        || !third.into_iter().all(f64::is_finite)
+    {
+        return None;
+    }
+    let ab = [second[0] - first[0], second[1] - first[1]];
+    let ac = [third[0] - first[0], third[1] - first[1]];
+    let bc = [third[0] - second[0], third[1] - second[1]];
+    let scale = ab[0]
+        .hypot(ab[1])
+        .max(ac[0].hypot(ac[1]))
+        .max(bc[0].hypot(bc[1]));
+    let cross = ab[0].mul_add(ac[1], -ab[1] * ac[0]);
+    if !(scale.is_finite() && scale > 0.0 && cross.is_finite())
+        || cross.abs() <= 1.0e-10 * scale * scale
+    {
+        return None;
+    }
+    let a2 = first[0].mul_add(first[0], first[1] * first[1]);
+    let b2 = second[0].mul_add(second[0], second[1] * second[1]);
+    let c2 = third[0].mul_add(third[0], third[1] * third[1]);
+    let denominator = 2.0 * cross;
+    let center = [
+        (a2 * (second[1] - third[1]) + b2 * (third[1] - first[1]) + c2 * (first[1] - second[1]))
+            / denominator,
+        (a2 * (third[0] - second[0]) + b2 * (first[0] - third[0]) + c2 * (second[0] - first[0]))
+            / denominator,
+    ];
+    let radius = (first[0] - center[0]).hypot(first[1] - center[1]);
+    (center.into_iter().all(f64::is_finite) && radius.is_finite() && radius > 0.0)
+        .then_some((center, radius))
+}
+
+#[derive(Clone, Copy, Debug)]
+struct EllipseRecipeFrame {
+    center: [f64; 2],
+    major_axis_point: [f64; 2],
+    ratio: f64,
+    trim_start_stage: usize,
+}
+
+fn ellipse_recipe_frame(draft: &Draft) -> Option<EllipseRecipeFrame> {
+    use GeometryToolVariant as V;
+
+    let (center, major_axis_point, minor_sample, trim_start_stage) = match draft.variant {
+        V::CenterAxesEllipse | V::CenterAxesEllipticalArc => (
+            *draft.positions.first()?,
+            *draft.positions.get(1)?,
+            *draft.positions.get(2)?,
+            3,
+        ),
+        V::AxisEndpointsEllipse | V::AxisEndpointsEllipticalArc => {
+            let first = *draft.positions.first()?;
+            let opposite = *draft.positions.get(1)?;
+            (
+                [
+                    0.5 * (first[0] + opposite[0]),
+                    0.5 * (first[1] + opposite[1]),
+                ],
+                first,
+                *draft.positions.get(2)?,
+                3,
+            )
+        }
+        _ => return None,
+    };
+    let axis = [
+        major_axis_point[0] - center[0],
+        major_axis_point[1] - center[1],
+    ];
+    let major = axis[0].hypot(axis[1]);
+    if !(major.is_finite() && major > 0.0) {
+        return None;
+    }
+    let normal = [-axis[1] / major, axis[0] / major];
+    let minor = ((minor_sample[0] - center[0])
+        .mul_add(normal[0], (minor_sample[1] - center[1]) * normal[1]))
+    .abs();
+    let ratio = minor / major;
+    if !(ratio.is_finite() && ratio > 0.0 && ratio <= 1.0) {
+        return None;
+    }
+    Some(EllipseRecipeFrame {
+        center,
+        major_axis_point,
+        ratio,
+        trim_start_stage,
+    })
+}
+
+fn ellipse_project_sample(frame: EllipseRecipeFrame, sample: [f64; 2]) -> Option<(f64, [f64; 2])> {
+    let axis = [
+        frame.major_axis_point[0] - frame.center[0],
+        frame.major_axis_point[1] - frame.center[1],
+    ];
+    let major = axis[0].hypot(axis[1]);
+    let unit = [axis[0] / major, axis[1] / major];
+    let normal = [-unit[1], unit[0]];
+    let delta = [sample[0] - frame.center[0], sample[1] - frame.center[1]];
+    let x = delta[0].mul_add(unit[0], delta[1] * unit[1]) / major;
+    let y = delta[0].mul_add(normal[0], delta[1] * normal[1]) / (major * frame.ratio);
+    if !x.is_finite() || !y.is_finite() || (x == 0.0 && y == 0.0) {
+        return None;
+    }
+    let parameter = y.atan2(x);
+    let projected = [
+        frame.center[0]
+            + major * parameter.cos() * unit[0]
+            + major * frame.ratio * parameter.sin() * normal[0],
+        frame.center[1]
+            + major * parameter.cos() * unit[1]
+            + major * frame.ratio * parameter.sin() * normal[1],
+    ];
+    (parameter.is_finite() && projected.into_iter().all(f64::is_finite))
+        .then_some((parameter, projected))
 }
 
 fn rational_conic_weighted_middle(
@@ -8729,11 +10731,75 @@ fn rational_conic_weighted_middle(
     weighted.into_iter().all(f64::is_finite).then_some(weighted)
 }
 
+fn tangent_arc_proposal(draft: &Draft) -> Option<ConstructionProposal> {
+    let source = draft.tangent_source?;
+    let end = *draft.positions.get(1)?;
+    let (center, sweep) =
+        tangent_arc_center_and_sweep(source.position, source.outgoing_tangent, end)?;
+    let radial = [
+        source.position[0] - center[0],
+        source.position[1] - center[1],
+    ];
+    let start_angle = radial[1].atan2(radial[0]);
+    let end_angle = (end[1] - center[1]).atan2(end[0] - center[0]);
+    if !elliptical_arc_sweep_is_nonzero(start_angle, end_angle, sweep) {
+        return None;
+    }
+    Some(ConstructionProposal::CircularArc {
+        center: ConstructionPoint::New(center),
+        start: source.position,
+        end,
+        sweep,
+    })
+}
+
+fn tangent_arc_center_and_sweep(
+    source: [f64; 2],
+    outgoing: [f64; 2],
+    end: [f64; 2],
+) -> Option<([f64; 2], DocumentArcSweep)> {
+    if !source.into_iter().all(f64::is_finite)
+        || !outgoing.into_iter().all(f64::is_finite)
+        || !end.into_iter().all(f64::is_finite)
+    {
+        return None;
+    }
+    let chord = [end[0] - source[0], end[1] - source[1]];
+    let chord_length = chord[0].hypot(chord[1]);
+    if !(chord_length.is_finite() && chord_length > 0.0) {
+        return None;
+    }
+    let normal = [-outgoing[1], outgoing[0]];
+    let normal_chord = chord[0].mul_add(normal[0], chord[1] * normal[1]);
+    if !normal_chord.is_finite() || normal_chord.abs() <= 1.0e-8 * chord_length {
+        return None;
+    }
+    // Keep one chord factor scaled by the like-sized normal projection.
+    // Squaring first would underflow/overflow even when the resulting circle
+    // center is finite and representable.
+    let offset = 0.5 * chord_length * (chord_length / normal_chord);
+    let center = [
+        normal[0].mul_add(offset, source[0]),
+        normal[1].mul_add(offset, source[1]),
+    ];
+    let radial = [source[0] - center[0], source[1] - center[1]];
+    let radius = radial[0].hypot(radial[1]);
+    if !(center.into_iter().all(f64::is_finite) && radius.is_finite() && radius > 0.0) {
+        return None;
+    }
+    let sweep = if offset > 0.0 {
+        DocumentArcSweep::CounterClockwise
+    } else {
+        DocumentArcSweep::Clockwise
+    };
+    Some((center, sweep))
+}
+
 #[allow(
     clippy::too_many_lines,
-    reason = "one exhaustive table keeps every tool-to-proposal completion rule auditable"
+    reason = "the legacy EditorTool lowering remains explicit for source-compatible hosts"
 )]
-fn draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
+fn legacy_draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
     match draft.tool {
         EditorTool::Point => draft
             .points
@@ -8875,7 +10941,287 @@ fn draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive table keeps every tool-to-proposal completion rule auditable"
+)]
+fn draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
+    use GeometryToolVariant as V;
+
+    if !draft.exact_variant {
+        return legacy_draft_proposal(draft);
+    }
+
+    match draft.variant {
+        V::SketchPoint => draft
+            .points
+            .first()
+            .copied()
+            .map(|point| ConstructionProposal::Point { point }),
+        V::Segment if draft.points.len() == 2 => {
+            let delta = [
+                draft.positions[1][0] - draft.positions[0][0],
+                draft.positions[1][1] - draft.positions[0][1],
+            ];
+            (delta[0].hypot(delta[1]) > 0.0).then(|| ConstructionProposal::Line {
+                start: draft.points[0],
+                end: draft.points[1],
+            })
+        }
+        V::Polyline => polyline_proposal(draft),
+        V::MidpointLine if draft.points.len() == 2 => {
+            let center = draft.positions[0];
+            let endpoint = draft.positions[1];
+            nonzero_segment(&[center, endpoint]).then(|| ConstructionProposal::MidpointLine {
+                center: draft.points[0],
+                endpoint: draft.points[1],
+                opposite: ConstructionPoint::New([
+                    2.0 * center[0] - endpoint[0],
+                    2.0 * center[1] - endpoint[1],
+                ]),
+            })
+        }
+        V::TwoPointAlignedRectangle
+        | V::ThreePointCornerRectangle
+        | V::CenterRectangle
+        | V::ThreePointCenterRectangle => rectangle_loop_proposal(draft),
+        V::CenterRadiusCircle if draft.points.len() == 2 => {
+            let radius = (draft.positions[1][0] - draft.positions[0][0])
+                .hypot(draft.positions[1][1] - draft.positions[0][1]);
+            (radius.is_finite() && radius > 0.0).then(|| ConstructionProposal::Circle {
+                center: draft.points[0],
+                radius,
+            })
+        }
+        V::TwoPointDiameterCircle if draft.positions.len() == 2 => {
+            let first = draft.positions[0];
+            let second = draft.positions[1];
+            let radius = 0.5 * (second[0] - first[0]).hypot(second[1] - first[1]);
+            (radius.is_finite() && radius > 0.0).then(|| ConstructionProposal::Circle {
+                center: ConstructionPoint::New([
+                    0.5 * (first[0] + second[0]),
+                    0.5 * (first[1] + second[1]),
+                ]),
+                radius,
+            })
+        }
+        V::ThreePointCircle if draft.positions.len() == 3 => {
+            let (center, radius) =
+                circumcircle(draft.positions[0], draft.positions[1], draft.positions[2])?;
+            Some(ConstructionProposal::Circle {
+                center: ConstructionPoint::New(center),
+                radius,
+            })
+        }
+        V::CenterArc if draft.positions.len() == 3 => {
+            let center = draft.positions[0];
+            let start = draft.positions[1];
+            let end = draft.positions[2];
+            let radius = (start[0] - center[0]).hypot(start[1] - center[1]);
+            let end_radius = (end[0] - center[0]).hypot(end[1] - center[1]);
+            if !(radius.is_finite() && radius > 0.0 && end_radius.is_finite() && end_radius > 0.0) {
+                return None;
+            }
+            let scale = radius / end_radius;
+            let end = [
+                center[0] + (end[0] - center[0]) * scale,
+                center[1] + (end[1] - center[1]) * scale,
+            ];
+            (end.into_iter().all(f64::is_finite) && nonzero_segment(&[start, end])).then_some(
+                ConstructionProposal::CircularArc {
+                    center: draft.points[0],
+                    start,
+                    end,
+                    sweep: draft.conic_options.arc_sweep,
+                },
+            )
+        }
+        V::ThreePointArc if draft.positions.len() == 3 => {
+            let start = draft.positions[0];
+            let end = draft.positions[1];
+            let through = draft.positions[2];
+            let (center, _) = circumcircle(start, end, through)?;
+            let start_angle = (start[1] - center[1]).atan2(start[0] - center[0]);
+            let end_angle = (end[1] - center[1]).atan2(end[0] - center[0]);
+            let through_angle = (through[1] - center[1]).atan2(through[0] - center[0]);
+            let ccw_end = (end_angle - start_angle).rem_euclid(std::f64::consts::TAU);
+            let ccw_through = (through_angle - start_angle).rem_euclid(std::f64::consts::TAU);
+            let sweep = if ccw_through <= ccw_end {
+                DocumentArcSweep::CounterClockwise
+            } else {
+                DocumentArcSweep::Clockwise
+            };
+            Some(ConstructionProposal::CircularArc {
+                center: ConstructionPoint::New(center),
+                start,
+                end,
+                sweep,
+            })
+        }
+        V::TangentArc if draft.positions.len() == 2 => tangent_arc_proposal(draft),
+        V::QuadraticBezier if draft.points.len() == 3 => {
+            Some(ConstructionProposal::QuadraticBezier {
+                controls: [draft.points[0], draft.points[1], draft.points[2]],
+            })
+        }
+        V::CubicBezier if draft.points.len() == 4 => Some(ConstructionProposal::CubicBezier {
+            controls: [
+                draft.points[0],
+                draft.points[1],
+                draft.points[2],
+                draft.points[3],
+            ],
+        }),
+        V::CenterAxesEllipse if draft.positions.len() == 3 => {
+            let frame = ellipse_recipe_frame(draft)?;
+            Some(ConstructionProposal::Ellipse {
+                center: draft.points[0],
+                major_axis_point: draft.points[1],
+                minor_axis_ratio: frame.ratio,
+            })
+        }
+        V::AxisEndpointsEllipse if draft.positions.len() == 3 => {
+            let frame = ellipse_recipe_frame(draft)?;
+            Some(ConstructionProposal::AxisEndpointEllipse {
+                major_axis_point: draft.points[0],
+                center: ConstructionPoint::New(frame.center),
+                minor_axis_ratio: frame.ratio,
+            })
+        }
+        V::CenterAxesEllipticalArc if draft.positions.len() == 5 => {
+            let frame = ellipse_recipe_frame(draft)?;
+            let (start, _) = ellipse_project_sample(frame, draft.positions[3])?;
+            let (end, _) = ellipse_project_sample(frame, draft.positions[4])?;
+            if !elliptical_arc_sweep_is_nonzero(start, end, draft.conic_options.arc_sweep) {
+                return None;
+            }
+            Some(ConstructionProposal::EllipticalArc {
+                center: draft.points[0],
+                major_axis_point: draft.points[1],
+                minor_axis_ratio: frame.ratio,
+                start_angle: start,
+                end_angle: end,
+                sweep: draft.conic_options.arc_sweep,
+            })
+        }
+        V::AxisEndpointsEllipticalArc if draft.positions.len() == 5 => {
+            let frame = ellipse_recipe_frame(draft)?;
+            let (start, _) = ellipse_project_sample(frame, draft.positions[3])?;
+            let (end, _) = ellipse_project_sample(frame, draft.positions[4])?;
+            if !elliptical_arc_sweep_is_nonzero(start, end, draft.conic_options.arc_sweep) {
+                return None;
+            }
+            Some(ConstructionProposal::AxisEndpointEllipticalArc {
+                major_axis_point: draft.points[0],
+                center: ConstructionPoint::New(frame.center),
+                minor_axis_ratio: frame.ratio,
+                start_angle: start,
+                end_angle: end,
+                sweep: draft.conic_options.arc_sweep,
+            })
+        }
+        V::RationalQuadraticConic
+            if draft.points.len() == 3
+                && nonzero_segment(&[draft.positions[0], draft.positions[2]]) =>
+        {
+            let weighted_middle = rational_conic_weighted_middle(
+                draft.positions[0],
+                draft.positions[1],
+                draft.conic_options.middle_weight,
+            )?;
+            Some(ConstructionProposal::RationalQuadraticConic {
+                start: draft.points[0],
+                weighted_middle,
+                middle_weight: draft.conic_options.middle_weight,
+                end: draft.points[2],
+            })
+        }
+        V::Parabola if draft.points.len() == 2 && nonzero_segment(&draft.positions[..2]) => {
+            Some(ConstructionProposal::Parabola {
+                vertex: draft.points[0],
+                focus: draft.points[1],
+                trim_start: draft.conic_options.trim_start,
+                trim_end: draft.conic_options.trim_end,
+            })
+        }
+        V::Hyperbola if draft.points.len() == 2 && nonzero_segment(&draft.positions[..2]) => {
+            Some(ConstructionProposal::Hyperbola {
+                center: draft.points[0],
+                transverse_axis_point: draft.points[1],
+                semi_conjugate: draft.conic_options.semi_conjugate,
+                branch: draft.conic_options.hyperbola_branch,
+                trim_start: draft.conic_options.trim_start,
+                trim_end: draft.conic_options.trim_end,
+            })
+        }
+        V::OpenControlNurbs | V::PeriodicControlNurbs => nurbs_proposal(draft),
+        _ => None,
+    }
+}
+
 fn draft_preview(draft: &Draft) -> Option<ConstructionPreview> {
+    use GeometryToolVariant as V;
+
+    if !draft.exact_variant {
+        return legacy_draft_preview(draft);
+    }
+
+    if draft_proposal(draft).is_some() {
+        return complete_preview(draft);
+    }
+    match draft.variant {
+        V::CenterRadiusCircle | V::MidpointLine if draft.positions.len() == 1 => {
+            Some(ConstructionPreview::Anchor {
+                position: draft.positions[0],
+            })
+        }
+        V::TwoPointDiameterCircle | V::ThreePointCircle | V::ThreePointArc => {
+            Some(ConstructionPreview::GuidePolyline {
+                points: draft.positions.clone(),
+                closed: false,
+            })
+        }
+        V::CenterArc => match draft.positions.as_slice() {
+            [center] => Some(ConstructionPreview::Anchor { position: *center }),
+            [center, start] => Some(ConstructionPreview::ArcRadiusGuide {
+                center: *center,
+                start: *start,
+            }),
+            _ => None,
+        },
+        V::TangentArc
+        | V::TwoPointAlignedRectangle
+        | V::ThreePointCornerRectangle
+        | V::CenterRectangle
+        | V::ThreePointCenterRectangle
+        | V::CenterAxesEllipse
+        | V::AxisEndpointsEllipse => Some(ConstructionPreview::GuidePolyline {
+            points: draft.positions.clone(),
+            closed: false,
+        }),
+        V::CenterAxesEllipticalArc | V::AxisEndpointsEllipticalArc => {
+            if draft.positions.len() >= 3 {
+                elliptical_arc_support_preview(draft)
+            } else {
+                Some(ConstructionPreview::GuidePolyline {
+                    points: draft.positions.clone(),
+                    closed: false,
+                })
+            }
+        }
+        _ if advanced_kind(draft.tool).is_some() => Some(ConstructionPreview::ControlPolygon {
+            kind: advanced_kind(draft.tool).expect("guarded advanced tool"),
+            points: draft.positions.clone(),
+        }),
+        _ => draft
+            .positions
+            .first()
+            .copied()
+            .map(|position| ConstructionPreview::Anchor { position }),
+    }
+}
+
+fn legacy_draft_preview(draft: &Draft) -> Option<ConstructionPreview> {
     match draft.tool {
         EditorTool::Circle if draft.points.len() == 1 => Some(ConstructionPreview::Anchor {
             position: draft.positions[0],
@@ -8893,7 +11239,7 @@ fn draft_preview(draft: &Draft) -> Option<ConstructionPreview> {
         EditorTool::EllipticalArc if draft_proposal(draft).is_none() => {
             match draft.positions.as_slice() {
                 [center] => Some(ConstructionPreview::Anchor { position: *center }),
-                [_, _] | [_, _, _] => elliptical_arc_support_preview(draft),
+                [_, _] | [_, _, _] => legacy_elliptical_arc_support_preview(draft),
                 _ => None,
             }
         }
@@ -8907,25 +11253,55 @@ fn draft_preview(draft: &Draft) -> Option<ConstructionPreview> {
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive proposal-to-preview lowering prevents a second recipe authority"
+)]
 fn complete_preview(draft: &Draft) -> Option<ConstructionPreview> {
     let proposal = draft_proposal(draft)?;
     let geometry = match &proposal {
         ConstructionProposal::Point { point } => ConstructionPreviewGeometry::Point {
             position: point.position(),
         },
-        ConstructionProposal::Line { .. } | ConstructionProposal::Polyline { .. } => {
-            ConstructionPreviewGeometry::Polyline {
-                points: draft.positions.clone(),
-            }
-        }
+        ConstructionProposal::Line { .. }
+        | ConstructionProposal::Polyline { .. }
+        | ConstructionProposal::PolylinePath { .. }
+        | ConstructionProposal::MidpointLine { .. } => ConstructionPreviewGeometry::Polyline {
+            points: match &proposal {
+                ConstructionProposal::MidpointLine {
+                    endpoint, opposite, ..
+                } => vec![opposite.position(), endpoint.position()],
+                ConstructionProposal::PolylinePath {
+                    points,
+                    closed: true,
+                } => points
+                    .iter()
+                    .chain(points.first())
+                    .map(|point| point.position())
+                    .collect(),
+                _ => draft.positions.clone(),
+            },
+        },
         ConstructionProposal::Rectangle { first, second } => {
             ConstructionPreviewGeometry::Rectangle {
                 first: *first,
                 second: *second,
             }
         }
+        ConstructionProposal::RectangleLoop {
+            points, corners, ..
+        } => ConstructionPreviewGeometry::Polyline {
+            points: corners
+                .iter()
+                .chain(corners.first())
+                .map(|index| points[*index].position())
+                .collect(),
+        },
         ConstructionProposal::Circle { radius, .. } => ConstructionPreviewGeometry::Circle {
-            center: draft.positions[0],
+            center: match &proposal {
+                ConstructionProposal::Circle { center, .. } => center.position(),
+                _ => unreachable!("guarded circle proposal"),
+            },
             radius: *radius,
         },
         ConstructionProposal::CounterClockwiseArc { start, end, .. } => {
@@ -8945,16 +11321,52 @@ fn complete_preview(draft: &Draft) -> Option<ConstructionPreview> {
                 large_arc: sweep_radians > std::f64::consts::PI,
             }
         }
+        ConstructionProposal::CircularArc {
+            center,
+            start,
+            end,
+            sweep,
+        } => {
+            let center = center.position();
+            let start_angle = (start[1] - center[1]).atan2(start[0] - center[0]);
+            let end_angle = (end[1] - center[1]).atan2(end[0] - center[0]);
+            let sweep_radians = match sweep {
+                DocumentArcSweep::CounterClockwise => {
+                    (end_angle - start_angle).rem_euclid(std::f64::consts::TAU)
+                }
+                DocumentArcSweep::Clockwise => {
+                    (start_angle - end_angle).rem_euclid(std::f64::consts::TAU)
+                }
+            };
+            if !sweep_radians.is_finite() || sweep_radians <= 0.0 {
+                return None;
+            }
+            ConstructionPreviewGeometry::CircularArc {
+                center,
+                start: *start,
+                end: *end,
+                radius: (start[0] - center[0]).hypot(start[1] - center[1]),
+                sweep_radians,
+                large_arc: sweep_radians > std::f64::consts::PI,
+                sweep: *sweep,
+            }
+        }
         ConstructionProposal::QuadraticBezier { .. }
         | ConstructionProposal::CubicBezier { .. }
         | ConstructionProposal::Ellipse { .. }
+        | ConstructionProposal::AxisEndpointEllipse { .. }
         | ConstructionProposal::EllipticalArc { .. }
+        | ConstructionProposal::AxisEndpointEllipticalArc { .. }
         | ConstructionProposal::RationalQuadraticConic { .. }
         | ConstructionProposal::Parabola { .. }
         | ConstructionProposal::Hyperbola { .. }
         | ConstructionProposal::Nurbs { .. } => {
             let projected_positions = if draft.tool == EditorTool::EllipticalArc {
-                Some(elliptical_arc_preview_positions(draft)?)
+                if draft.exact_variant {
+                    Some(elliptical_arc_preview_positions(draft)?)
+                } else {
+                    Some(legacy_elliptical_arc_preview_positions(draft)?)
+                }
             } else {
                 None
             };
@@ -9038,6 +11450,15 @@ fn localize_proposal(
             major_axis_point: point(1)?,
             minor_axis_ratio: *minor_axis_ratio,
         },
+        ConstructionProposal::AxisEndpointEllipse {
+            major_axis_point,
+            center,
+            minor_axis_ratio,
+        } => ConstructionProposal::AxisEndpointEllipse {
+            major_axis_point: ConstructionPoint::New(major_axis_point.position()),
+            center: ConstructionPoint::New(center.position()),
+            minor_axis_ratio: *minor_axis_ratio,
+        },
         ConstructionProposal::EllipticalArc {
             minor_axis_ratio,
             start_angle,
@@ -9047,6 +11468,21 @@ fn localize_proposal(
         } => ConstructionProposal::EllipticalArc {
             center: point(0)?,
             major_axis_point: point(1)?,
+            minor_axis_ratio: *minor_axis_ratio,
+            start_angle: *start_angle,
+            end_angle: *end_angle,
+            sweep: *sweep,
+        },
+        ConstructionProposal::AxisEndpointEllipticalArc {
+            major_axis_point,
+            center,
+            minor_axis_ratio,
+            start_angle,
+            end_angle,
+            sweep,
+        } => ConstructionProposal::AxisEndpointEllipticalArc {
+            major_axis_point: ConstructionPoint::New(major_axis_point.position()),
+            center: ConstructionPoint::New(center.position()),
             minor_axis_ratio: *minor_axis_ratio,
             start_angle: *start_angle,
             end_angle: *end_angle,
@@ -9324,6 +11760,18 @@ mod tests {
                 ..GeometryVisibility::default()
             },
             ..GeometryInteractionPolicy::default()
+        }
+    }
+
+    #[test]
+    fn tangent_arc_center_is_finite_at_representable_extreme_scales() {
+        for scale in [1.0e-200, 1.0e200] {
+            let (center, sweep) =
+                tangent_arc_center_and_sweep([0.0, 0.0], [1.0, 0.0], [scale, scale])
+                    .expect("finite scaled tangent circle");
+            assert_eq!(center[0].to_bits(), 0.0f64.to_bits());
+            assert!((center[1] / scale - 1.0).abs() <= 1.0e-12);
+            assert_eq!(sweep, DocumentArcSweep::CounterClockwise);
         }
     }
 
@@ -9861,7 +12309,10 @@ mod tests {
                 "unexpected derived inference subject for {tool:?} stage {stage_index}"
             );
             assert_eq!(
-                draft_inference_subject(tool, stage_index),
+                GeometryToolVariant::default_for_editor_tool(tool).and_then(|variant| {
+                    construction_stage_semantics_for(false, tool, variant, stage_index)
+                        .and_then(|semantics| semantics.coordinate_role.inference_subject())
+                }),
                 expected_subject,
                 "unexpected inference lookup for {tool:?} stage {stage_index}"
             );

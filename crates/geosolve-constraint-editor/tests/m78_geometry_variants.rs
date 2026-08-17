@@ -3,20 +3,34 @@
 use geosolve_constraint_editor::{
     ConstraintEditor, ConstructionCommitPlan, ConstructionCommitToken, ConstructionPoint,
     ConstructionProposal, DraftAuthoringInput, DraftInferenceInput, DraftPointSlot, DraftSpanSlot,
-    EditorEffect, EditorScene, GeometryDraftStage, GeometryToolVariant, InferredRelation,
-    Modifiers, PointerInput, Viewport,
+    EditorEffect, EditorMutation, EditorScene, GeometryDraftIssue, GeometryDraftStage,
+    GeometryToolVariant, InferredRelation, Modifiers, PointerInput, RetainedEditorCoordinator,
+    Viewport,
 };
 use geosolve_sketch::{
-    DocumentArcSweep, DocumentBSplineForm, DocumentSolveRequest, RetainedSketchDocumentSession,
-    SketchDocument, SolverConfig,
+    ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentArcSweep,
+    DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveTrimView, DocumentEndpointRef,
+    DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter, FeatureEndpoint,
+    RetainedSketchDocumentSession, SketchDocument, SolverConfig, TangentOrientation,
 };
 
 const POINTER_ID: u64 = 0x7800;
 const EPSILON: f64 = 1.0e-9;
 
 fn authenticated_empty_scene() -> EditorScene {
+    authenticated_scene(SketchDocument::new(10.0).expect("document"))
+}
+
+fn authenticated_scene(document: SketchDocument) -> EditorScene {
+    authenticated_scene_with_viewport(
+        document,
+        Viewport::new([1_000.0, 800.0], [0.0, 0.0], 50.0).expect("viewport"),
+    )
+}
+
+fn authenticated_scene_with_viewport(document: SketchDocument, viewport: Viewport) -> EditorScene {
     let session = RetainedSketchDocumentSession::new(
-        SketchDocument::new(10.0).expect("document"),
+        document,
         DocumentSolveRequest::default(),
         SolverConfig::default(),
     )
@@ -29,12 +43,593 @@ fn authenticated_empty_scene() -> EditorScene {
         accepted.design_identity(),
         accepted.document(),
         session.design_document(),
-        Viewport::new([1_000.0, 800.0], [0.0, 0.0], 50.0).expect("viewport"),
+        viewport,
         0.25,
     )
     .expect("empty editor scene")
     .with_retained_session(&session)
     .expect("authenticated empty editor scene")
+}
+
+fn tangent_coordinator_fixture() -> (RetainedEditorCoordinator, EditorScene) {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let start = document.add_point("start", [0.0, 0.0]).expect("start");
+    let end = document.add_point("end", [2.0, 0.0]).expect("end");
+    document
+        .add_curve(
+            "source line",
+            CurveDefinition::Line {
+                start,
+                end,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .expect("source line");
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("session");
+    let accepted = session
+        .accepted_state_for_current_input()
+        .expect("accepted state");
+    let scene = EditorScene::from_accepted_for_design(
+        accepted.identity().revision().get(),
+        accepted.design_identity(),
+        accepted.document(),
+        session.design_document(),
+        Viewport::new([1_000.0, 800.0], [0.0, 0.0], 50.0).expect("viewport"),
+        0.25,
+    )
+    .expect("scene")
+    .with_retained_session(&session)
+    .expect("authenticated scene");
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let _ = coordinator
+        .editor_mut()
+        .activate_geometry_tool(GeometryToolVariant::TangentArc);
+    (coordinator, scene)
+}
+
+fn coordinator_press(
+    coordinator: &mut RetainedEditorCoordinator,
+    scene: &EditorScene,
+    position: [f64; 2],
+) -> Vec<EditorEffect> {
+    coordinator.pointer_down_with_draft_authoring(
+        scene,
+        PointerInput {
+            pointer_id: POINTER_ID,
+            position: scene.viewport.model_to_screen(position),
+            modifiers: Modifiers::default(),
+        },
+        authoring(false),
+    )
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one end-to-end Tangent Arc contract test audits source and created contact metadata together"
+)]
+fn m78_tangent_arc_requires_a_native_open_endpoint_and_commits_generic_tangency() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let start = document.add_point("start", [0.0, 0.0]).expect("start");
+    let end = document.add_point("end", [2.0, 0.0]).expect("end");
+    let line = document
+        .add_curve(
+            "source line",
+            CurveDefinition::Line {
+                start,
+                end,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .expect("source line");
+    let scene = authenticated_scene(document.clone());
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::TangentArc);
+
+    assert!(
+        press(&mut editor, &scene, [1.0, 0.0], false).is_empty(),
+        "an interior source point must not begin Tangent Arc"
+    );
+    assert!(
+        press(&mut editor, &scene, [2.0, 0.0], false)
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::PreviewConstruction(_)))
+    );
+    assert!(
+        press(&mut editor, &scene, [2.0, 0.0], false)
+            .iter()
+            .all(|effect| !matches!(effect, EditorEffect::CommitConstructionPlan { .. })),
+        "a zero chord must stay correction-ready"
+    );
+    assert!(
+        press(&mut editor, &scene, [3.0, 1.0e-9], false)
+            .iter()
+            .all(|effect| !matches!(effect, EditorEffect::CommitConstructionPlan { .. })),
+        "the tangent-line/infinite-radius limit must stay correction-ready"
+    );
+
+    let terminal = terminal_construction(&press(&mut editor, &scene, [3.0, 1.0], false));
+    let plan = terminal
+        .plan
+        .expect("Tangent Arc owns an atomic relation plan");
+    let ConstructionProposal::CircularArc {
+        center,
+        start: arc_start,
+        end: arc_end,
+        sweep,
+    } = &plan.proposal
+    else {
+        panic!("unexpected Tangent Arc proposal: {:?}", plan.proposal);
+    };
+    assert_point_close(construction_point_position(center), [2.0, 1.0]);
+    assert_point_close(*arc_start, [2.0, 0.0]);
+    assert_point_close(*arc_end, [3.0, 1.0]);
+    assert_eq!(*sweep, DocumentArcSweep::CounterClockwise);
+    assert!(matches!(
+        plan.relations.as_slice(),
+        [InferredRelation::CurveCurveTangency {
+            first,
+            second,
+            orientation: TangentOrientation::Aligned,
+        }] if *first == geosolve_constraint_editor::DraftContactDescriptor {
+                span: DraftSpanSlot::Existing(CurveSpan { curve: line, segment: 0 }),
+                domain: ContactDomain::Bounded { lower: 0.0, upper: 1.0 },
+                parameter: 1.0,
+                winding: 0,
+                neighborhood: ContactNeighborhood::End,
+            }
+            && second.span == DraftSpanSlot::Created { curve_index: 0, segment: 0 }
+            && second.domain == ContactDomain::Bounded { lower: 0.0, upper: 1.0 }
+            && second.parameter.to_bits() == 0.0f64.to_bits()
+            && second.winding == 0
+            && second.neighborhood == ContactNeighborhood::Start
+    ));
+
+    let result = plan.apply(&mut document).expect("atomic tangent arc plan");
+    assert_eq!(result.contacts.len(), 2);
+    assert!(
+        result
+            .contacts
+            .iter()
+            .all(|contact| contact.relation_index == 0)
+    );
+    let created_arc = result.construction.curves[0];
+    assert_eq!(
+        document
+            .contact(result.contacts[0].contact)
+            .expect("source contact")
+            .curve,
+        CurveSpan::line(line)
+    );
+    assert_eq!(
+        document
+            .contact(result.contacts[1].contact)
+            .expect("created contact")
+            .curve,
+        CurveSpan::line(created_arc)
+    );
+    assert_eq!(result.constraints.len(), 1);
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("tangent arc session");
+    assert!(
+        session
+            .accepted_state_for_current_input()
+            .expect("accepted tangent arc")
+            .solve_result()
+            .acceptance_hard_residual_max
+            .is_some_and(|residual| residual.is_finite() && residual <= EPSILON)
+    );
+}
+
+#[test]
+fn m78_tangent_arc_analytic_construction_is_scale_safe() {
+    for scale in [1.0e-6, 1.0, 1.0e6] {
+        let mut document = SketchDocument::new(scale).expect("scaled document");
+        let start = document
+            .add_point("scaled start", [0.0, 0.0])
+            .expect("start");
+        let end = document
+            .add_point("scaled end", [2.0 * scale, 0.0])
+            .expect("end");
+        document
+            .add_curve(
+                "scaled source",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        let scene = authenticated_scene_with_viewport(
+            document,
+            Viewport::new([1_000.0, 800.0], [scale, 0.0], 50.0 / scale).expect("scaled viewport"),
+        );
+        let mut editor = ConstraintEditor::default();
+        let _ = editor.activate_geometry_tool(GeometryToolVariant::TangentArc);
+        let _ = press(&mut editor, &scene, [2.0 * scale, 0.0], false);
+        let terminal =
+            terminal_construction(&press(&mut editor, &scene, [3.0 * scale, scale], false));
+        let ConstructionProposal::CircularArc { center, .. } = terminal.proposal else {
+            panic!("unexpected scaled Tangent Arc proposal");
+        };
+        let center = construction_point_position(&center);
+        assert_scalar_close(center[0] / scale, 2.0);
+        assert_scalar_close(center[1] / scale, 1.0);
+    }
+}
+
+#[test]
+fn m78_tangent_arc_is_one_retained_history_step_and_round_trips_checkpoint() {
+    let (mut coordinator, scene) = tangent_coordinator_fixture();
+    let original_curves = coordinator.session().design_document().curves().len();
+    let original_history = coordinator.history_len();
+    let _ = coordinator_press(&mut coordinator, &scene, [2.0, 0.0]);
+    let effects = coordinator_press(&mut coordinator, &scene, [3.0, 1.0]);
+    let commit = effects
+        .iter()
+        .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+        .expect("Tangent Arc commit effect");
+    let token = match commit {
+        EditorEffect::CommitConstructionPlan { token, .. } => *token,
+        _ => unreachable!("filtered commit effect"),
+    };
+    let outcome = coordinator
+        .apply_editor_effect(commit)
+        .expect("atomic coordinator publication")
+        .expect("retained mutation");
+    let EditorMutation::InferredConstruction(result) = outcome.value else {
+        panic!("expected inferred Tangent Arc construction");
+    };
+    assert_eq!(result.construction.curves.len(), 1);
+    assert_eq!(result.contacts.len(), 2);
+    assert_eq!(result.constraints.len(), 1);
+    assert_eq!(coordinator.history_len(), original_history + 1);
+    assert_eq!(
+        coordinator.session().design_document().curves().len(),
+        original_curves + 1
+    );
+    assert!(matches!(
+        coordinator
+            .session()
+            .design_document()
+            .constraint(result.constraints[0].constraint)
+            .expect("tangency constraint")
+            .definition,
+        DocumentConstraintDefinition::CurveCurveTangency { .. }
+    ));
+    assert!(
+        coordinator
+            .acknowledge_construction_commit(token, true)
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+    );
+
+    let saved = coordinator
+        .persistence_checkpoint()
+        .expect("Tangent Arc checkpoint");
+    let saved_design = saved.design_json().to_owned();
+    coordinator.undo().expect("single-step Undo");
+    assert_eq!(
+        coordinator.session().design_document().curves().len(),
+        original_curves
+    );
+    coordinator.redo().expect("single-step Redo");
+    assert_eq!(
+        coordinator.session().design_document().curves().len(),
+        original_curves + 1
+    );
+    coordinator.undo().expect("Undo before reload");
+    coordinator.reload(&saved).expect("checkpoint reload");
+    assert_eq!(coordinator.history_len(), 1);
+    assert_eq!(
+        coordinator
+            .persistence_checkpoint()
+            .expect("restored checkpoint")
+            .design_json(),
+        saved_design
+    );
+    assert_eq!(
+        coordinator.session().design_document().curves().len(),
+        original_curves + 1
+    );
+}
+
+#[test]
+fn m78_tangent_arc_stale_plan_cannot_publish_after_an_unrelated_edit() {
+    let (mut coordinator, scene) = tangent_coordinator_fixture();
+    let _ = coordinator_press(&mut coordinator, &scene, [2.0, 0.0]);
+    let effects = coordinator_press(&mut coordinator, &scene, [3.0, 1.0]);
+    let commit = effects
+        .iter()
+        .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+        .expect("Tangent Arc commit effect")
+        .clone();
+    let expected = coordinator.session().design_identity();
+    coordinator
+        .apply_construction(
+            expected,
+            &ConstructionProposal::Point {
+                point: ConstructionPoint::New([4.0, 4.0]),
+            },
+        )
+        .expect("unrelated accepted edit");
+    let before = coordinator
+        .persistence_checkpoint()
+        .expect("checkpoint before stale attempt")
+        .design_json()
+        .to_owned();
+    assert!(coordinator.apply_editor_effect(&commit).is_err());
+    assert_eq!(
+        coordinator
+            .persistence_checkpoint()
+            .expect("checkpoint after stale attempt")
+            .design_json(),
+        before
+    );
+}
+
+#[test]
+fn m78_tangent_arc_resolves_whole_curve_start_and_multispan_end_orientation() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let points = [[-2.0, 0.0], [0.0, 0.0], [0.0, 2.0]].map(|position| {
+        document
+            .add_point("polyline point", position)
+            .expect("point")
+    });
+    let polyline = document
+        .add_curve(
+            "source polyline",
+            CurveDefinition::Polyline {
+                points: points.to_vec(),
+                closed: false,
+                branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+            },
+        )
+        .expect("polyline");
+    let scene = authenticated_scene(document.clone());
+    let cases = [
+        (
+            [-2.0, 0.0],
+            [-3.0, 1.0],
+            0,
+            TangentOrientation::Opposed,
+            [-2.0, 1.0],
+            DocumentArcSweep::Clockwise,
+        ),
+        (
+            [0.0, 2.0],
+            [-1.0, 3.0],
+            1,
+            TangentOrientation::Aligned,
+            [-1.0, 2.0],
+            DocumentArcSweep::CounterClockwise,
+        ),
+    ];
+    for (source, end, segment, orientation, expected_center, expected_sweep) in cases {
+        let mut editor = ConstraintEditor::default();
+        let _ = editor.activate_geometry_tool(GeometryToolVariant::TangentArc);
+        let _ = press(&mut editor, &scene, source, false);
+        let terminal = terminal_construction(&press(&mut editor, &scene, end, false));
+        let plan = terminal.plan.expect("atomic Tangent Arc plan");
+        let ConstructionProposal::CircularArc { center, sweep, .. } = &plan.proposal else {
+            panic!("unexpected Tangent Arc proposal: {:?}", plan.proposal);
+        };
+        assert_point_close(construction_point_position(center), expected_center);
+        assert_eq!(*sweep, expected_sweep);
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [InferredRelation::CurveCurveTangency {
+                first,
+                orientation: actual,
+                ..
+            }] if first.span == DraftSpanSlot::Existing(CurveSpan { curve: polyline, segment })
+                && *actual == orientation
+        ));
+        assert_plan_solves_on_document(&plan, document.clone());
+    }
+}
+
+#[test]
+fn m78_tangent_arc_uses_the_last_semantic_span_of_an_open_nonlinear_curve() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let controls = [[-1.0, 0.0], [0.0, 2.0], [1.0, -1.0], [2.0, 2.0], [3.0, 0.0]].map(|position| {
+        document
+            .add_point("spline control", position)
+            .expect("control")
+    });
+    let spline = document
+        .add_curve(
+            "open spline",
+            CurveDefinition::BSpline {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: controls.to_vec(),
+                knots: vec![0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 3.0, 3.0],
+                span_ids: vec![11, 17, 29],
+                next_span_id: 30,
+            },
+        )
+        .expect("spline");
+    let endpoint = DocumentEndpointRef {
+        curve: spline,
+        endpoint: FeatureEndpoint::End,
+    };
+    let seed = document
+        .curve_endpoint_contact_seed(endpoint)
+        .expect("semantic End seed");
+    let jet = document
+        .evaluate_curve_jet(seed.support.span, seed.parameter)
+        .expect("endpoint jet");
+    let differential = jet.differential().expect("regular endpoint");
+    let source = [jet.position.x, jet.position.y];
+    let tangent = [differential.unit_tangent.x, differential.unit_tangent.y];
+    let normal = [-tangent[1], tangent[0]];
+    let target = [
+        source[0] + tangent[0] + normal[0],
+        source[1] + tangent[1] + normal[1],
+    ];
+    let scene = authenticated_scene(document.clone());
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::TangentArc);
+    let _ = press(&mut editor, &scene, source, false);
+    let terminal = terminal_construction(&press(&mut editor, &scene, target, false));
+    let plan = terminal.plan.expect("nonlinear Tangent Arc plan");
+    assert!(matches!(
+        plan.relations.as_slice(),
+        [InferredRelation::CurveCurveTangency {
+            first,
+            orientation: TangentOrientation::Aligned,
+            ..
+        }] if first.span == DraftSpanSlot::Existing(CurveSpan { curve: spline, segment: 29 })
+            && first.parameter.to_bits() == 1.0f64.to_bits()
+            && first.neighborhood == ContactNeighborhood::End
+    ));
+    assert_plan_solves_on_document(&plan, document);
+}
+
+#[test]
+fn m78_tangent_arc_skips_ineligible_topology_and_rejects_shared_endpoint_ambiguity() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let closed_points = [[-4.0, -4.0], [-2.0, -4.0], [-3.0, -2.0]]
+        .map(|position| document.add_point("closed point", position).expect("point"));
+    let _closed = document
+        .add_curve(
+            "closed source",
+            CurveDefinition::Polyline {
+                points: closed_points.to_vec(),
+                closed: true,
+                branch_directions: vec![
+                    [1.0, 0.0],
+                    [-0.447_213_595_499_957_9, 0.894_427_190_999_915_9],
+                    [-0.447_213_595_499_957_9, -0.894_427_190_999_915_9],
+                ],
+            },
+        )
+        .expect("closed polyline");
+    let line_start = document
+        .add_point("nearby line start", [0.05, 0.0])
+        .expect("line start");
+    let line_end = document
+        .add_point("nearby line end", [2.05, 0.0])
+        .expect("line end");
+    let line = document
+        .add_curve(
+            "eligible line",
+            CurveDefinition::Line {
+                start: line_start,
+                end: line_end,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .expect("line");
+    let scene = authenticated_scene(document);
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::TangentArc);
+    let _ = press(&mut editor, &scene, [0.05, 0.0], false);
+    let terminal = terminal_construction(&press(&mut editor, &scene, [-0.95, 1.0], false));
+    let plan = terminal
+        .plan
+        .expect("valid endpoint survives rejected closed topology");
+    assert!(matches!(
+        plan.relations.as_slice(),
+        [InferredRelation::CurveCurveTangency { first, .. }]
+            if first.span == DraftSpanSlot::Existing(CurveSpan { curve: line, segment: 0 })
+    ));
+
+    let mut shared = SketchDocument::new(10.0).expect("shared document");
+    let first = shared.add_point("first", [0.0, 0.0]).expect("first");
+    let junction = shared
+        .add_point("shared junction", [2.0, 0.0])
+        .expect("junction");
+    let last = shared.add_point("last", [2.0, 2.0]).expect("last");
+    shared
+        .add_curve(
+            "first line",
+            CurveDefinition::Line {
+                start: first,
+                end: junction,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .expect("first line");
+    shared
+        .add_curve(
+            "second line",
+            CurveDefinition::Line {
+                start: junction,
+                end: last,
+                branch_direction: [0.0, 1.0],
+            },
+        )
+        .expect("second line");
+    let scene = authenticated_scene(shared);
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::TangentArc);
+    assert!(
+        press(&mut editor, &scene, [2.0, 0.0], false).is_empty(),
+        "a shared endpoint must not choose its support from persistent ID order"
+    );
+}
+
+#[test]
+fn m78_tangent_arc_requires_the_semantic_endpoint_to_be_visibly_untrimmed() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let start = document.add_point("start", [0.0, 0.0]).expect("start");
+    let end = document.add_point("end", [2.0, 0.0]).expect("end");
+    let line = document
+        .add_curve(
+            "trimmed line",
+            CurveDefinition::Line {
+                start,
+                end,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .expect("line");
+    let span = CurveSpan::line(line);
+    document
+        .replace_trim_views(
+            span,
+            vec![DocumentCurveTrimView {
+                support: span,
+                start: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                    parameter: 0.25,
+                    winding: 0,
+                }),
+                end: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                    parameter: 1.0,
+                    winding: 0,
+                }),
+            }],
+        )
+        .expect("trimmed visible interval");
+    let scene = authenticated_scene(document);
+
+    let mut hidden_start = ConstraintEditor::default();
+    let _ = hidden_start.activate_geometry_tool(GeometryToolVariant::TangentArc);
+    assert!(
+        press(&mut hidden_start, &scene, [0.0, 0.0], false).is_empty(),
+        "a support endpoint outside every painted interval is unavailable"
+    );
+
+    let mut visible_end = ConstraintEditor::default();
+    let _ = visible_end.activate_geometry_tool(GeometryToolVariant::TangentArc);
+    assert!(
+        press(&mut visible_end, &scene, [2.0, 0.0], false)
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::PreviewConstruction(_))),
+        "the untrimmed semantic End remains eligible"
+    );
 }
 
 fn authoring(regularized: bool) -> DraftAuthoringInput {
@@ -61,6 +656,28 @@ fn press(
             modifiers: Modifiers::default(),
         },
         authoring(regularized),
+    )
+}
+
+fn press_with_inference(
+    editor: &mut ConstraintEditor,
+    scene: &EditorScene,
+    model_position: [f64; 2],
+) -> Vec<EditorEffect> {
+    editor.pointer_down_with_draft_authoring(
+        scene,
+        PointerInput {
+            pointer_id: POINTER_ID,
+            position: scene.viewport.model_to_screen(model_position),
+            modifiers: Modifiers::default(),
+        },
+        DraftAuthoringInput {
+            inference: DraftInferenceInput {
+                suppressed: false,
+                preferred_candidate: None,
+            },
+            regularized: false,
+        },
     )
 }
 
@@ -169,7 +786,10 @@ fn assert_proposal_applies_with_finite_geometry(proposal: &ConstructionProposal)
 }
 
 fn assert_plan_solves_with_finite_geometry(plan: &ConstructionCommitPlan) {
-    let mut document = SketchDocument::new(10.0).expect("document");
+    assert_plan_solves_on_document(plan, SketchDocument::new(10.0).expect("document"));
+}
+
+fn assert_plan_solves_on_document(plan: &ConstructionCommitPlan, mut document: SketchDocument) {
     let result = plan.apply(&mut document).expect("valid construction plan");
     assert!(!result.construction.curves.is_empty());
     assert!(
@@ -202,6 +822,82 @@ fn assert_plan_solves_with_finite_geometry(plan: &ConstructionCommitPlan) {
     );
     assert!(
         accepted
+            .solve_result()
+            .acceptance_hard_residual_max
+            .is_some_and(|residual| residual.is_finite() && residual <= EPSILON)
+    );
+}
+
+fn authored_plan_with_existing_samples(
+    variant: GeometryToolVariant,
+    clicks: &[[f64; 2]],
+) -> (SketchDocument, ConstructionCommitPlan) {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let mut positions = Vec::<[f64; 2]>::new();
+    for &position in clicks {
+        if positions.iter().any(|existing| {
+            existing[0].to_bits() == position[0].to_bits()
+                && existing[1].to_bits() == position[1].to_bits()
+        }) {
+            continue;
+        }
+        document
+            .add_point("existing recipe sample", position)
+            .expect("sample point");
+        positions.push(position);
+    }
+    let scene = authenticated_scene(document.clone());
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(variant);
+    for &click in &clicks[..clicks.len() - 1] {
+        let _ = press_with_inference(&mut editor, &scene, click);
+    }
+    let terminal = terminal_construction(&press_with_inference(
+        &mut editor,
+        &scene,
+        *clicks.last().expect("terminal click"),
+    ));
+    (
+        document,
+        terminal.plan.expect("exact recipe owns atomic plan"),
+    )
+}
+
+fn assert_created_incidence_plan(
+    variant: GeometryToolVariant,
+    clicks: &[[f64; 2]],
+    expected_incidence: usize,
+) {
+    let (mut document, plan) = authored_plan_with_existing_samples(variant, clicks);
+    let incidence = plan
+        .relations
+        .iter()
+        .filter(|relation| {
+            matches!(
+                relation,
+                InferredRelation::PointOnCurve {
+                    point: DraftPointSlot::Existing(_),
+                    contact
+                } if contact.span == DraftSpanSlot::Created {
+                    curve_index: 0,
+                    segment: 0,
+                }
+            )
+        })
+        .count();
+    assert_eq!(incidence, expected_incidence, "variant {variant:?}");
+    let result = plan.apply(&mut document).expect("created-incidence plan");
+    assert_eq!(result.contacts.len(), expected_incidence);
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("created-incidence session");
+    assert!(
+        session
+            .accepted_state_for_current_input()
+            .expect("created-incidence accepted state")
             .solve_result()
             .acceptance_hard_residual_max
             .is_some_and(|residual| residual.is_finite() && residual <= EPSILON)
@@ -313,6 +1009,77 @@ fn m78_midpoint_line_is_one_line_with_an_atomic_midpoint_recipe() {
         }]
     );
     assert_plan_solves_with_finite_geometry(&plan);
+}
+
+#[test]
+fn m78_exact_single_curve_variants_all_lower_through_atomic_plans() {
+    let scene = authenticated_empty_scene();
+    let cases = [
+        (GeometryToolVariant::Segment, vec![[1.0, 1.0], [4.0, 2.0]]),
+        (
+            GeometryToolVariant::CenterRadiusCircle,
+            vec![[1.0, 1.0], [3.0, 1.0]],
+        ),
+        (
+            GeometryToolVariant::QuadraticBezier,
+            vec![[0.0, 0.0], [2.0, 3.0], [4.0, 0.0]],
+        ),
+        (
+            GeometryToolVariant::CubicBezier,
+            vec![[0.0, 0.0], [1.0, 3.0], [3.0, 3.0], [4.0, 0.0]],
+        ),
+        (
+            GeometryToolVariant::RationalQuadraticConic,
+            vec![[0.0, 0.0], [2.0, 3.0], [4.0, 0.0]],
+        ),
+        (GeometryToolVariant::Parabola, vec![[0.0, 0.0], [0.0, 2.0]]),
+        (GeometryToolVariant::Hyperbola, vec![[0.0, 0.0], [2.0, 0.0]]),
+    ];
+
+    for (variant, clicks) in cases {
+        let mut editor = ConstraintEditor::default();
+        let _ = editor.activate_geometry_tool(variant);
+        for &click in &clicks[..clicks.len() - 1] {
+            let _ = press(&mut editor, &scene, click, false);
+        }
+        let terminal = terminal_construction(&press(
+            &mut editor,
+            &scene,
+            *clicks.last().expect("terminal click"),
+            false,
+        ));
+        let proposal_matches_variant = matches!(
+            (variant, &terminal.proposal),
+            (
+                GeometryToolVariant::Segment,
+                ConstructionProposal::Line { .. }
+            ) | (
+                GeometryToolVariant::CenterRadiusCircle,
+                ConstructionProposal::Circle { .. }
+            ) | (
+                GeometryToolVariant::QuadraticBezier,
+                ConstructionProposal::QuadraticBezier { .. }
+            ) | (
+                GeometryToolVariant::CubicBezier,
+                ConstructionProposal::CubicBezier { .. }
+            ) | (
+                GeometryToolVariant::RationalQuadraticConic,
+                ConstructionProposal::RationalQuadraticConic { .. }
+            ) | (
+                GeometryToolVariant::Parabola,
+                ConstructionProposal::Parabola { .. }
+            ) | (
+                GeometryToolVariant::Hyperbola,
+                ConstructionProposal::Hyperbola { .. }
+            )
+        );
+        assert!(proposal_matches_variant, "wrong proposal for {variant:?}");
+        let plan = terminal
+            .plan
+            .as_ref()
+            .expect("exact recipe emits an atomic plan");
+        assert_plan_solves_with_finite_geometry(plan);
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -460,8 +1227,12 @@ fn m78_diameter_and_three_point_circles_have_analytic_centers() {
     };
     assert_point_close(construction_point_position(center), [3.0, 2.0]);
     assert_scalar_close(*radius, 2.0);
-    assert!(terminal.plan.is_none());
-    assert_proposal_applies_with_finite_geometry(&terminal.proposal);
+    let plan = terminal
+        .plan
+        .as_ref()
+        .expect("exact diameter recipe owns an atomic geometry-only plan");
+    assert!(plan.relations.is_empty());
+    assert_plan_solves_with_finite_geometry(plan);
 
     let mut three_point = ConstraintEditor::default();
     let _ = three_point.activate_geometry_tool(GeometryToolVariant::ThreePointCircle);
@@ -473,8 +1244,108 @@ fn m78_diameter_and_three_point_circles_have_analytic_centers() {
     };
     assert_point_close(construction_point_position(center), [1.0, 2.0]);
     assert_scalar_close(*radius, 2.0);
-    assert!(terminal.plan.is_none());
-    assert_proposal_applies_with_finite_geometry(&terminal.proposal);
+    let plan = terminal
+        .plan
+        .as_ref()
+        .expect("exact three-point recipe owns an atomic geometry-only plan");
+    assert!(plan.relations.is_empty());
+    assert_plan_solves_with_finite_geometry(plan);
+}
+
+#[test]
+fn m78_created_curve_incidence_is_atomic_across_round_and_elliptic_recipes() {
+    assert_created_incidence_plan(
+        GeometryToolVariant::ThreePointCircle,
+        &[[3.0, 1.0], [1.0, 3.0], [-1.0, 1.0]],
+        3,
+    );
+    assert_created_incidence_plan(
+        GeometryToolVariant::CenterArc,
+        &[[1.0, 1.0], [3.0, 1.0], [1.0, 3.0]],
+        2,
+    );
+    assert_created_incidence_plan(
+        GeometryToolVariant::AxisEndpointsEllipse,
+        &[[3.0, 1.0], [-1.0, 1.0], [1.0, 2.0]],
+        1,
+    );
+    assert_created_incidence_plan(
+        GeometryToolVariant::CenterAxesEllipticalArc,
+        &[[1.0, 1.0], [3.0, 1.0], [1.0, 2.0], [3.0, 1.0], [1.0, 2.0]],
+        2,
+    );
+}
+
+#[test]
+fn m78_created_curve_incidence_rejects_projected_off_support_points() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    for (label, position) in [
+        ("center", [1.0, 1.0]),
+        ("start", [3.0, 1.0]),
+        ("off-support end", [1.0, 3.05]),
+    ] {
+        document.add_point(label, position).expect("sample point");
+    }
+    let scene = authenticated_scene(document.clone());
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::CenterArc);
+    let _ = press_with_inference(&mut editor, &scene, [1.0, 1.0]);
+    let _ = press_with_inference(&mut editor, &scene, [3.0, 1.0]);
+    let rejected = press_with_inference(&mut editor, &scene, [1.0, 3.05]);
+    assert!(rejected.iter().all(|effect| !matches!(
+        effect,
+        EditorEffect::CommitConstruction { .. } | EditorEffect::CommitConstructionPlan { .. }
+    )));
+    let status = editor
+        .geometry_draft_status()
+        .expect("off-support rejection keeps draft");
+    assert_eq!(status.stage, GeometryDraftStage::End);
+    assert_eq!(status.completed_stages, 2);
+    assert_eq!(
+        status.issue,
+        Some(GeometryDraftIssue::IncompatibleConstraintIntent)
+    );
+
+    let corrected = terminal_construction(&press(&mut editor, &scene, [1.0, 3.0], false));
+    let plan = corrected.plan.expect("corrected Center Arc plan");
+    assert_eq!(
+        plan.relations
+            .iter()
+            .filter(|relation| matches!(relation, InferredRelation::PointOnCurve { .. }))
+            .count(),
+        1,
+        "only the exact snapped Start remains associative"
+    );
+    let result = plan.apply(&mut document).expect("corrected plan");
+    assert_eq!(result.contacts.len(), 1);
+}
+
+#[test]
+fn m78_axis_endpoint_elliptical_arc_does_not_promise_opposite_pole_incidence() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    document
+        .add_point("opposite major pole", [-1.0, 1.0])
+        .expect("opposite pole");
+    let scene = authenticated_scene(document);
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::AxisEndpointsEllipticalArc);
+    let _ = press(&mut editor, &scene, [3.0, 1.0], false);
+    let opposite_pole = press_with_inference(&mut editor, &scene, [-1.0, 1.0]);
+    assert!(
+        opposite_pole
+            .iter()
+            .all(|effect| !matches!(effect, EditorEffect::DraftInferenceChanged(Some(_))))
+    );
+    for click in [[1.0, 2.0], [3.0, 1.0]] {
+        let _ = press(&mut editor, &scene, click, false);
+    }
+    let terminal = terminal_construction(&press(&mut editor, &scene, [1.0, 2.0], false));
+    let plan = terminal.plan.expect("axis-endpoint arc plan");
+    assert!(matches!(
+        plan.proposal,
+        ConstructionProposal::AxisEndpointEllipticalArc { .. }
+    ));
+    assert!(plan.relations.is_empty());
 }
 
 #[test]
@@ -518,7 +1389,21 @@ fn m78_center_and_three_point_arcs_preserve_explicit_sweep_semantics() {
     let mut three_point_arc = ConstraintEditor::default();
     let _ = three_point_arc.activate_geometry_tool(GeometryToolVariant::ThreePointArc);
     let _ = press(&mut three_point_arc, &scene, [3.0, 2.0], false);
+    assert_eq!(
+        three_point_arc
+            .geometry_draft_status()
+            .expect("3-Point Arc End stage")
+            .stage,
+        GeometryDraftStage::End
+    );
     let _ = press(&mut three_point_arc, &scene, [-1.0, 2.0], false);
+    assert_eq!(
+        three_point_arc
+            .geometry_draft_status()
+            .expect("3-Point Arc Through stage")
+            .stage,
+        GeometryDraftStage::ThroughPoint
+    );
     let terminal = terminal_construction(&press(&mut three_point_arc, &scene, [1.0, 4.0], false));
     let ConstructionProposal::CircularArc {
         center,
@@ -768,6 +1653,10 @@ fn m78_invalid_terminal_sample_and_rejected_atomic_plan_remain_correction_ready(
         .expect("invalid terminal keeps prior valid draft");
     assert_eq!(status.stage, GeometryDraftStage::ThroughPoint);
     assert_eq!(status.completed_stages, 2);
+    assert_eq!(
+        status.issue,
+        Some(GeometryDraftIssue::InvalidTerminalGeometry)
+    );
     let corrected = terminal_construction(&press(&mut circle, &scene, [3.0, 3.0], false));
     assert!(matches!(
         corrected.proposal,
@@ -791,17 +1680,101 @@ fn m78_invalid_terminal_sample_and_rejected_atomic_plan_remain_correction_ready(
         .expect("rejected terminal keeps correction-ready prefix");
     assert_eq!(status.stage, GeometryDraftStage::End);
     assert_eq!(status.completed_stages, 1);
+    assert_eq!(status.issue, Some(GeometryDraftIssue::ConstructionRejected));
 
     let replacement = move_pointer(&mut midpoint, &scene, [5.0, 3.0], false);
-    assert!(replacement.iter().any(|effect| matches!(
-        effect,
+    let replacement_endpoint = replacement.iter().find_map(|effect| match effect {
         EditorEffect::PreviewConstruction(
             geosolve_constraint_editor::ConstructionPreview::Complete {
                 proposal: ConstructionProposal::MidpointLine { endpoint, .. },
                 ..
-            }
-        ) if construction_point_position(endpoint) == [5.0, 3.0]
-    )));
+            },
+        ) => Some(endpoint),
+        _ => None,
+    });
+    assert_point_close(
+        construction_point_position(replacement_endpoint.expect("replacement preview")),
+        [5.0, 3.0],
+    );
+    assert_eq!(
+        midpoint
+            .geometry_draft_status()
+            .expect("valid replacement preview")
+            .issue,
+        None
+    );
     let replacement = terminal_construction(&press(&mut midpoint, &scene, [5.0, 3.0], false));
     assert!(replacement.token.is_some());
+}
+
+#[test]
+fn m78_finish_issue_is_local_and_clears_on_step_back_or_correction() {
+    let scene = authenticated_empty_scene();
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::OpenControlNurbs);
+    for position in [[1.0, 1.0], [2.0, 3.0]] {
+        let _ = press(&mut editor, &scene, position, false);
+    }
+
+    assert!(editor.complete_draft(scene.design_identity).is_empty());
+    assert_eq!(
+        editor
+            .geometry_draft_status()
+            .expect("unfinished NURBS status")
+            .issue,
+        Some(GeometryDraftIssue::CannotFinish)
+    );
+    let _ = editor.step_back_draft();
+    assert_eq!(
+        editor
+            .geometry_draft_status()
+            .expect("stepped-back NURBS status")
+            .issue,
+        None
+    );
+
+    for position in [[2.0, 3.0], [4.0, 3.0], [5.0, 1.0]] {
+        let _ = press(&mut editor, &scene, position, false);
+    }
+    assert!(editor.can_complete_draft());
+    assert_eq!(
+        editor
+            .geometry_draft_status()
+            .expect("corrected NURBS status")
+            .issue,
+        None
+    );
+}
+
+#[test]
+fn m78_one_sample_rejection_remains_a_draft_local_recoverable_issue() {
+    let scene = authenticated_empty_scene();
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::SketchPoint);
+    let terminal = terminal_construction(&press(&mut editor, &scene, [2.0, 3.0], false));
+    let token = terminal.token.expect("point construction token");
+    assert!(
+        editor
+            .acknowledge_construction_commit(token, false)
+            .is_empty()
+    );
+    assert_eq!(
+        editor
+            .geometry_draft_status()
+            .expect("rejected point status")
+            .issue,
+        Some(GeometryDraftIssue::ConstructionRejected)
+    );
+
+    assert!(
+        editor
+            .escape_geometry_tool()
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+    );
+    let status = editor
+        .geometry_draft_status()
+        .expect("first Escape retains exact point tool");
+    assert_eq!(status.variant, GeometryToolVariant::SketchPoint);
+    assert_eq!(status.issue, None);
 }

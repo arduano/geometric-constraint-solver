@@ -260,6 +260,17 @@ pub struct DraftInferenceInput {
     pub preferred_candidate: Option<DraftInferenceCandidateId>,
 }
 
+/// Complete host-normalized semantic input for one geometry-authoring sample.
+///
+/// Ambient inference and recipe regularization are independent on purpose. A
+/// host can therefore suppress snapping while retaining an intrinsic square
+/// request, which is the desktop Shift+Ctrl/Cmd behavior used by the demo.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DraftAuthoringInput {
+    pub inference: DraftInferenceInput,
+    pub regularized: bool,
+}
+
 /// Exact contact metadata for a prospective point-on-curve relation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DraftCurveContact {

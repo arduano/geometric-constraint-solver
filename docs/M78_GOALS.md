@@ -19,7 +19,7 @@ variant changes the exact active recipe without creating geometry.
 | Lines | Segment; Polyline; Midpoint Line | Two-endpoint segment; open/closed connected chain; centre-to-end symmetric segment with an intrinsic midpoint. |
 | Rectangles | 2-Point Aligned; 3-Point Corner; Center Rectangle; 3-Point Center Rectangle | Axis-aligned diagonal; oriented corner/baseline/height; aligned centre/corner; oriented centre/half-width/half-height. |
 | Circles | Center–Radius; 2-Point Diameter; 3-Point Circle | Centre and rim; diameter endpoints; three non-collinear rim samples. |
-| Arcs | Center Arc; 3-Point Arc; Tangent Arc | Centre/Start/End; Start/Through/End; outgoing arc from an eligible native open-curve endpoint. |
+| Arcs | Center Arc; 3-Point Arc; Tangent Arc | Centre/Start/End; Start/End/Through; outgoing arc from an eligible native open-curve endpoint. |
 | Ellipses | Center–Axes Ellipse; Axis-Endpoints Ellipse; Center–Axes Elliptical Arc; Axis-Endpoints Elliptical Arc | Centre- or major-axis-endpoint construction, with full-ellipse or explicit Start/End trim output. |
 | Béziers | Quadratic; Cubic | Start/control/End and Start/control-1/control-2/End. |
 | Conics | Rational Quadratic; Parabola; Hyperbola | Existing ordinary-middle rational, vertex/focus parabola and centre/transverse-axis hyperbola recipes with their typed numeric options. |
@@ -68,7 +68,8 @@ Center–Radius and Center Arc retain the current spatial centre/rim and centre/
 Two-point diameter derives its centre and radius from the two diameter samples. Three-point circle
 and 3-Point Arc derive one finite circumcircle from three scale-aware non-collinear samples and
 reject coincident or near-collinear terminal input without replacing the last valid draft. The
-3-Point Arc retains the ordered Start/Through/End span explicitly. `F` flips the complementary
+3-Point Arc establishes endpoint identity first and then selects the intervening branch with the
+ordered Start/End/Through gesture. `F` flips the complementary
 Center Arc sweep before commit; the chosen sweep is durable branch state.
 
 Diameter and three-point rim samples are coordinates, not promises to create synthetic sketch

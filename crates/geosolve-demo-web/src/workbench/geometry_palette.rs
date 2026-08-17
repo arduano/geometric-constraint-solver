@@ -9,8 +9,8 @@
 use std::fmt::Write as _;
 
 use geosolve_constraint_editor::{
-    GeometryDraftMeasurement, GeometryDraftStage, GeometryDraftStatus, GeometryToolFamily,
-    GeometryToolVariant,
+    GeometryDraftIssue, GeometryDraftMeasurement, GeometryDraftStage, GeometryDraftStatus,
+    GeometryToolFamily, GeometryToolVariant,
 };
 use geosolve_sketch::DocumentArcSweep;
 
@@ -130,7 +130,7 @@ pub(super) const fn variant_description(variant: GeometryToolVariant) -> &'stati
         GeometryToolVariant::TwoPointDiameterCircle => "Two diameter endpoints.",
         GeometryToolVariant::ThreePointCircle => "Three non-collinear rim samples.",
         GeometryToolVariant::CenterArc => "Center, Start and End; F flips the sweep.",
-        GeometryToolVariant::ThreePointArc => "Start, Through and End samples.",
+        GeometryToolVariant::ThreePointArc => "Start, End and Through sample.",
         GeometryToolVariant::TangentArc => "Eligible open-curve endpoint, then End.",
         GeometryToolVariant::CenterAxesEllipse => "Center, major endpoint and minor extent.",
         GeometryToolVariant::AxisEndpointsEllipse => "Major endpoints, then minor extent.",
@@ -222,6 +222,9 @@ pub(super) fn status_text(status: &GeometryDraftStatus) -> String {
     if status.regularized {
         pieces.push("Square".to_owned());
     }
+    if let Some(issue) = status.issue {
+        pieces.push(issue_text(issue).to_owned());
+    }
     pieces.extend(status.measurements.iter().map(measurement_text));
     if status.can_finish {
         pieces.push("Enter finishes".to_owned());
@@ -236,6 +239,24 @@ pub(super) fn status_text(status: &GeometryDraftStatus) -> String {
         ));
     }
     pieces.join(" · ")
+}
+
+const fn issue_text(issue: GeometryDraftIssue) -> &'static str {
+    match issue {
+        GeometryDraftIssue::InvalidTerminalGeometry => {
+            "That sample cannot complete a finite shape; adjust the current point"
+        }
+        GeometryDraftIssue::IncompatibleConstraintIntent => {
+            "That snap is incompatible with this shape; choose another target or suppress snapping"
+        }
+        GeometryDraftIssue::CannotFinish => {
+            "This draft cannot finish yet; add controls or correct its options"
+        }
+        GeometryDraftIssue::ConstructionRejected => {
+            "The shape was not accepted; adjust the current point or options"
+        }
+        _ => "Correct the current draft before continuing",
+    }
 }
 
 fn measurement_text(measurement: &GeometryDraftMeasurement) -> String {
@@ -305,6 +326,10 @@ mod tests {
         assert_eq!(markup.matches("tabindex=\"0\"").count(), 1);
         assert_eq!(markup.matches("tabindex=\"-1\"").count(), 2);
         assert!(!markup.contains("center-radius-circle"));
+        assert_eq!(
+            variant_description(GeometryToolVariant::ThreePointArc),
+            "Start, End and Through sample."
+        );
     }
 
     #[test]
@@ -321,6 +346,7 @@ mod tests {
                 width: 4.0,
                 height: 3.0,
             }],
+            issue: None,
         };
         let copy = status_text(&status);
         assert!(copy.contains("2-Point Aligned"));
@@ -343,7 +369,26 @@ mod tests {
                 ..geosolve_constraint_editor::GeometryDraftBranch::default()
             },
             measurements: Vec::new(),
+            issue: None,
         };
         assert!(status_text(&status).contains("Clockwise sweep · F flips"));
+    }
+
+    #[test]
+    fn semantic_status_copy_keeps_recoverable_draft_issues_local_and_actionable() {
+        let status = GeometryDraftStatus {
+            variant: GeometryToolVariant::ThreePointCircle,
+            stage: GeometryDraftStage::ThroughPoint,
+            completed_stages: 2,
+            required_stages: Some(3),
+            can_finish: false,
+            regularized: false,
+            branch: geosolve_constraint_editor::GeometryDraftBranch::default(),
+            measurements: Vec::new(),
+            issue: Some(GeometryDraftIssue::InvalidTerminalGeometry),
+        };
+        let copy = status_text(&status);
+        assert!(copy.contains("cannot complete a finite shape"));
+        assert!(copy.contains("adjust the current point"));
     }
 }

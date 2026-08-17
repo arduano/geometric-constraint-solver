@@ -4077,7 +4077,7 @@ pub(crate) mod wasm {
     fn dispatch_effects(wb: &mut Workbench, effects: Vec<EditorEffect>) {
         use super::effect_adapter::{
             ConstructionDispatch, PlannedConstructionDispatch, dispatch_construction_effect,
-            dispatch_planned_construction_effect,
+            dispatch_planned_construction_effect, planned_construction_notice,
         };
 
         let mut pending = VecDeque::from(effects);
@@ -4109,12 +4109,10 @@ pub(crate) mod wasm {
             }
             match dispatch_planned_construction_effect(&mut wb.coordinator, &effect) {
                 PlannedConstructionDispatch::Handled(outcome) => {
-                    if outcome.accepted {
-                        wb.notice = "Auto-constrained construction retained".into();
-                    } else if let Some(error) = outcome.error {
-                        wb.notice = format!(
-                            "Auto-constrained placement was rejected; the draft is retained: {error}"
-                        );
+                    if let Some(notice) = planned_construction_notice(outcome.accepted) {
+                        wb.notice = notice.into();
+                    } else {
+                        wb.notice.clear();
                     }
                     pending.extend(outcome.acknowledgement);
                     continue;
@@ -9976,6 +9974,7 @@ mod tests {
                 ..GeometryDraftBranch::default()
             },
             measurements: Vec::new(),
+            issue: None,
         };
         let stage_zero = status(
             GeometryToolVariant::CenterArc,

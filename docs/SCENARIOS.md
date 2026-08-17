@@ -2258,7 +2258,7 @@ for each snapped existing point against the prospective created circle in the sa
 or scale-aware near-collinear samples reject with document, accepted scene, allocator, history and
 terminal draft unchanged; correcting the last stage succeeds without restarting.
 
-Repeat for Center Arc and ordered Start/Through/End 3-Point Arc. Require exact Start/End identity,
+Repeat for Center Arc and ordered Start/End/Through 3-Point Arc. Require exact Start/End identity,
 Through incidence, explicit sweep and no synthetic trim point. Flip Center Arc between
 complementary sweeps before commit and preserve the chosen branch through Undo/Redo and reload.
 

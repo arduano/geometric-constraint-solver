@@ -51,7 +51,7 @@ use crate::{
     ConstraintEditor, ConstraintIntent, ConstraintRelationChoice, ConstructionCommitPlan,
     ConstructionCommitResult, ConstructionCommitToken, ConstructionProposal, ConstructionResult,
     CurveControlPreviewRequestDisposition, DimensionActionRequest, DimensionKind,
-    DraftInferenceInput, EditorEffect, EditorScene, FeatureAuthoringCandidate,
+    DraftAuthoringInput, DraftInferenceInput, EditorEffect, EditorScene, FeatureAuthoringCandidate,
     FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringState,
     FeatureAuthoringTool, FeatureAuthoringWarningKind, GeometryInteractionPolicy, PickTolerance,
     PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind,
@@ -4537,6 +4537,17 @@ impl RetainedEditorCoordinator {
         self.pointer_down_with_problem_items_and_draft_inference(scene, input, &[], inference)
     }
 
+    /// Resolves a pointer press with independent ambient-inference and recipe
+    /// regularization intent while retaining point-drag locality ownership.
+    pub fn pointer_down_with_draft_authoring(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        authoring: DraftAuthoringInput,
+    ) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items_and_draft_authoring(scene, input, &[], authoring)
+    }
+
     /// Resolves a pointer press with diagnostic annotation forcing and explicit
     /// host-normalized drafting inference input while retaining point-drag
     /// locality ownership in the coordinator.
@@ -4546,6 +4557,27 @@ impl RetainedEditorCoordinator {
         input: PointerInput,
         problem_items: &[SelectionItem],
         inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items_and_draft_authoring(
+            scene,
+            input,
+            problem_items,
+            DraftAuthoringInput {
+                inference,
+                regularized: false,
+            },
+        )
+    }
+
+    /// Resolves a pointer press with diagnostic annotation forcing and the
+    /// complete semantic geometry-authoring input while retaining point-drag
+    /// locality ownership in the coordinator.
+    pub fn pointer_down_with_problem_items_and_draft_authoring(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+        authoring: DraftAuthoringInput,
     ) -> Vec<EditorEffect> {
         if self
             .editor
@@ -4558,11 +4590,11 @@ impl RetainedEditorCoordinator {
         let before = self.editor.point_gesture_snapshot();
         let effects = self
             .editor
-            .pointer_down_with_problem_items_and_draft_inference(
+            .pointer_down_with_problem_items_and_draft_authoring(
                 scene,
                 input,
                 problem_items,
-                inference,
+                authoring,
             );
         let after = self.editor.point_gesture_snapshot();
         if after != before {
