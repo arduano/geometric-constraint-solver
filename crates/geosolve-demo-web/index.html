@@ -39,32 +39,15 @@
           <strong>Geometry</strong>
           <div class="wb-palette-grid">
             <button id="wb-tool-select" type="button" data-wb-tool="select" aria-pressed="true"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Select</span></button>
-            <button type="button" data-wb-tool="point" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Point</span></button>
-            <button type="button" data-wb-tool="line" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Line</span></button>
-            <button type="button" data-wb-tool="polyline" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Polyline</span></button>
-            <button type="button" data-wb-tool="rectangle" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Rectangle</span></button>
-            <button type="button" data-wb-tool="circle" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Circle</span></button>
-            <button type="button" data-wb-tool="arc" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Arc</span></button>
-            <button type="button" data-wb-tool="quadratic-bezier" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Bezier²</span></button>
-            <button type="button" data-wb-tool="cubic-bezier" aria-pressed="false"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Bezier³</span></button>
-            <div class="wb-palette-option-tool">
-              <button id="wb-tool-ellipse" type="button" data-wb-tool="ellipse" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Ellipse</span></button>
-            </div>
-            <div class="wb-palette-option-tool">
-              <button id="wb-tool-elliptical-arc" type="button" data-wb-tool="elliptical-arc" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Ellipse arc</span></button>
-            </div>
-            <div class="wb-palette-option-tool">
-              <button id="wb-tool-rational-conic" type="button" data-wb-tool="rational-conic" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Rational</span></button>
-            </div>
-            <div class="wb-palette-option-tool">
-              <button id="wb-tool-parabola" type="button" data-wb-tool="parabola" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Parabola</span></button>
-            </div>
-            <div class="wb-palette-option-tool">
-              <button id="wb-tool-hyperbola" type="button" data-wb-tool="hyperbola" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>Hyperbola</span></button>
-            </div>
-            <div class="wb-palette-option-tool">
-              <button id="wb-tool-nurbs" type="button" data-wb-tool="nurbs" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span>NURBS</span></button>
-            </div>
+            <button id="wb-tool-family-point" type="button" data-wb-geometry-family="point" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Point</span><small class="wb-family-selection">Sketch Point</small></button>
+            <button id="wb-tool-family-lines" type="button" data-wb-geometry-family="lines" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Lines</span><small class="wb-family-selection">Segment</small></button>
+            <button id="wb-tool-family-rectangles" type="button" data-wb-geometry-family="rectangles" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Rectangles</span><small class="wb-family-selection">2-Point Aligned</small></button>
+            <button id="wb-tool-family-circles" type="button" data-wb-geometry-family="circles" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Circles</span><small class="wb-family-selection">Center–Radius</small></button>
+            <button id="wb-tool-family-arcs" type="button" data-wb-geometry-family="arcs" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Arcs</span><small class="wb-family-selection">Center Arc</small></button>
+            <button id="wb-tool-family-ellipses" type="button" data-wb-geometry-family="ellipses" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Ellipses</span><small class="wb-family-selection">Center–Axes</small></button>
+            <button id="wb-tool-family-beziers" type="button" data-wb-geometry-family="beziers" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Béziers</span><small class="wb-family-selection">Quadratic</small></button>
+            <button id="wb-tool-family-conics" type="button" data-wb-geometry-family="conics" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Conics</span><small class="wb-family-selection">Rational Quadratic</small></button>
+            <button id="wb-tool-family-splines" type="button" data-wb-geometry-family="splines" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-geometry-icon" aria-hidden="true"></span><span class="wb-family-label">Splines</span><small class="wb-family-selection">Open Control NURBS</small></button>
             <button id="wb-geometry-role" type="button" data-wb-action="geometry-role" aria-pressed="false" title="With curves selected, toggle their complete persistent curve role. Otherwise choose the role for newly drawn curves."><span class="wb-role-icon" aria-hidden="true"></span><span>Construction</span></button>
           </div>
         </section>
@@ -158,6 +141,10 @@
         <div id="wb-canvas-overlay-stack" class="wb-canvas-overlay-stack">
           <section id="wb-tool-options-overlay" class="wb-tool-options-overlay" role="dialog" aria-modal="false" aria-labelledby="wb-tool-options-title" hidden>
             <div class="wb-overlay-title"><strong id="wb-tool-options-title">Tool options</strong><button type="button" data-wb-action="options-close" aria-label="Close tool options">×</button></div>
+            <div id="wb-option-panel-geometry-family" class="wb-option-panel wb-geometry-family-panel" data-wb-option-panel="geometry-family" hidden>
+              <div id="wb-geometry-variant-list" class="wb-geometry-variant-list" role="radiogroup" aria-label="Geometry variants"></div>
+              <p class="wb-option-help">Ctrl/Cmd suppresses ambient snapping. Shift regularizes rectangle recipes to a persistent square.</p>
+            </div>
             <div id="wb-option-panel-equal" class="wb-option-panel" data-wb-option-panel="equal" hidden>
               <label>Curvature<select id="wb-authoring-curvature"><option value="signed">Signed</option><option value="same-sign">Magnitude, same sign</option><option value="opposite-sign">Magnitude, opposite sign</option></select></label>
             </div>
@@ -190,7 +177,6 @@
               <p id="wb-conic-rational-help" class="wb-option-help">Click Start, then the ordinary middle control P1, then End. The curve usually does not pass through P1; weight controls its influence and must be greater than −1.</p>
             </div>
             <div id="wb-option-panel-nurbs" class="wb-option-panel" data-wb-option-panel="nurbs" hidden>
-              <label>Form<select id="wb-nurbs-form"><option value="clamped">Clamped</option><option value="periodic">Periodic</option></select></label>
               <label>Degree<input id="wb-nurbs-degree" type="number" min="1" step="1" value="3" /></label>
               <label>Weights<input id="wb-nurbs-weights" type="text" placeholder="empty = unit; or 1, 0.8, 1, 1" /></label>
               <label>Gauge index<input id="wb-nurbs-gauge" type="number" min="0" step="1" value="0" /></label>

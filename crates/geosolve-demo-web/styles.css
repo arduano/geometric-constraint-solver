@@ -33,7 +33,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .workbench button { min-height: 2rem; padding: 0.35rem 0.6rem; cursor: pointer; }
 .workbench button:hover,
-.workbench button[aria-pressed="true"] { border-color: #d29a45; background: #34302a; }
+.workbench button[aria-pressed="true"],
+.workbench button[aria-checked="true"] { border-color: #d29a45; background: #34302a; }
 .workbench button:disabled { cursor: not-allowed; opacity: 0.45; }
 .workbench :focus-visible { outline: 2px solid #79bfc4; outline-offset: 2px; }
 
@@ -233,6 +234,17 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   border-color: transparent;
   font-size: 0.65rem;
 }
+.wb-tool-palette .wb-family-selection {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #7f8a88;
+  font-size: 0.52rem;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-tool-palette button[aria-pressed="true"] .wb-family-selection { color: #d7bd82; }
 .wb-tool-palette button > *,
 .wb-tree-row > * { pointer-events: none; }
 .wb-tool-palette kbd { color: #d6b16f; background: transparent; font: 1rem ui-monospace, monospace; }
@@ -489,6 +501,9 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   box-shadow: 0 10px 28px rgb(0 0 0 / 48%);
   pointer-events: auto;
 }
+.workbench[data-option-overlay^="geometry-"] .wb-tool-options-overlay {
+  width: min(22rem, 100%);
+}
 .wb-overlay-title {
   display: flex;
   align-items: center;
@@ -507,6 +522,32 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   display: grid;
   gap: 0.5rem;
 }
+.wb-geometry-family-panel { gap: 0.6rem; }
+.wb-geometry-variant-list {
+  display: grid;
+  gap: 0.35rem;
+}
+.wb-geometry-variant-list button {
+  display: grid;
+  min-height: 2.7rem;
+  align-content: center;
+  gap: 0.14rem;
+  padding: 0.42rem 0.55rem;
+  border-color: #353d3d;
+  background: #202626;
+  text-align: left;
+}
+.wb-geometry-variant-list button strong {
+  color: #dde3df;
+  font-size: 0.71rem;
+  font-weight: 650;
+}
+.wb-geometry-variant-list button span {
+  color: #8f9b99;
+  font-size: 0.61rem;
+  line-height: 1.3;
+}
+.wb-geometry-variant-list button[aria-checked="true"] strong { color: #f0d59b; }
 .wb-option-panel label {
   display: grid;
   gap: 0.2rem;

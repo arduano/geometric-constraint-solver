@@ -5,6 +5,8 @@ mod action_surface;
 #[cfg(any(target_arch = "wasm32", test))]
 mod effect_adapter;
 #[cfg(any(target_arch = "wasm32", test))]
+mod geometry_palette;
+#[cfg(any(target_arch = "wasm32", test))]
 mod icons;
 #[cfg(any(target_arch = "wasm32", test))]
 mod panels;
@@ -197,7 +199,7 @@ const fn canvas_pointer_capture_kind(
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DraftingPointerSample {
     input: geosolve_constraint_editor::PointerInput,
-    inference: geosolve_constraint_editor::DraftInferenceInput,
+    authoring: geosolve_constraint_editor::DraftAuthoringInput,
     painted_item: Option<geosolve_constraint_editor::SelectionItem>,
 }
 
@@ -206,7 +208,7 @@ impl DraftingPointerSample {
     #[cfg(test)]
     const fn from_input(input: geosolve_constraint_editor::PointerInput) -> Self {
         Self {
-            inference: effect_adapter::draft_inference_input(input.modifiers),
+            authoring: effect_adapter::draft_authoring_input(input.modifiers, None),
             input,
             painted_item: None,
         }
@@ -215,21 +217,28 @@ impl DraftingPointerSample {
     const fn with_painted_item(
         input: geosolve_constraint_editor::PointerInput,
         painted_item: Option<geosolve_constraint_editor::SelectionItem>,
+        preferred_candidate: Option<geosolve_constraint_editor::DraftInferenceCandidateId>,
     ) -> Self {
         Self {
-            inference: effect_adapter::draft_inference_input(input.modifiers),
+            authoring: effect_adapter::draft_authoring_input(input.modifiers, preferred_candidate),
             input,
             painted_item,
         }
     }
 
-    const fn with_suppression(
+    const fn with_state(
         input: geosolve_constraint_editor::PointerInput,
         suppressed: bool,
+        regularized: bool,
+        preferred_candidate: Option<geosolve_constraint_editor::DraftInferenceCandidateId>,
     ) -> Self {
         Self {
             input,
-            inference: effect_adapter::draft_inference_input_for_suppression(suppressed),
+            authoring: effect_adapter::draft_authoring_input_for_state(
+                suppressed,
+                regularized,
+                preferred_candidate,
+            ),
             painted_item: None,
         }
     }
@@ -241,6 +250,8 @@ struct PointerMoveQueue {
     pending: Option<DraftingPointerSample>,
     last_input: Option<geosolve_constraint_editor::PointerInput>,
     suppressed: bool,
+    regularized: bool,
+    preferred_candidate: Option<geosolve_constraint_editor::DraftInferenceCandidateId>,
     next_generation: u64,
     scheduled_generation: Option<u64>,
 }
@@ -285,38 +296,75 @@ impl PointerMoveQueue {
         painted_item: Option<geosolve_constraint_editor::SelectionItem>,
     ) -> DraftingPointerSample {
         self.last_input = Some(input);
-        self.suppressed = input.modifiers.shift;
-        DraftingPointerSample::with_painted_item(input, painted_item)
+        self.suppressed = input.modifiers.control || input.modifiers.command;
+        self.regularized = input.modifiers.shift;
+        DraftingPointerSample::with_painted_item(input, painted_item, self.preferred_candidate)
     }
 
-    fn stationary_suppression(
+    fn stationary_authoring_state(
         &mut self,
         suppressed: bool,
+        regularized: bool,
         owns_queued_sample: bool,
     ) -> Option<DraftingPointerSample> {
-        if self.suppressed == suppressed {
+        if self.suppressed == suppressed && self.regularized == regularized {
             return None;
         }
         self.suppressed = suppressed;
+        self.regularized = regularized;
         if !owns_queued_sample {
             // Select drags, Fillet gestures, authoring overlays, and pan share
-            // this RAF queue but do not consume drafting suppression. Keep their
+            // this RAF queue but do not consume geometry recipe intent. Keep their
             // exact queued movement while still tracking the browser modifier.
             return None;
         }
         self.scheduled_generation = None;
         self.pending = None;
-        self.last_input
-            .map(|input| DraftingPointerSample::with_suppression(input, suppressed))
+        self.last_input.map(|input| {
+            DraftingPointerSample::with_state(
+                input,
+                suppressed,
+                regularized,
+                self.preferred_candidate,
+            )
+        })
+    }
+
+    #[cfg_attr(test, allow(dead_code))]
+    fn stationary_candidate(
+        &mut self,
+        preferred_candidate: geosolve_constraint_editor::DraftInferenceCandidateId,
+        owns_queued_sample: bool,
+    ) -> Option<DraftingPointerSample> {
+        self.preferred_candidate = Some(preferred_candidate);
+        if !owns_queued_sample {
+            return None;
+        }
+        self.scheduled_generation = None;
+        self.pending = None;
+        self.last_input.map(|input| {
+            DraftingPointerSample::with_state(
+                input,
+                self.suppressed,
+                self.regularized,
+                self.preferred_candidate,
+            )
+        })
+    }
+
+    fn clear_candidate_preference(&mut self) {
+        self.preferred_candidate = None;
     }
 
     fn window_blur(&mut self, owns_queued_sample: bool) -> Option<DraftingPointerSample> {
-        self.stationary_suppression(false, owns_queued_sample)
+        self.stationary_authoring_state(false, false, owns_queued_sample)
     }
 
     fn clear_stationary_sample(&mut self) -> bool {
         let cleared = self.last_input.take().is_some();
         self.suppressed = false;
+        self.regularized = false;
+        self.preferred_candidate = None;
         self.invalidate_before_immediate_action();
         cleared
     }
@@ -350,6 +398,118 @@ impl PointerMoveQueue {
         self.scheduled_generation = None;
         self.pending = None;
     }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn cycle_candidate_index<T: PartialEq>(candidates: &[T], current: Option<&T>) -> Option<usize> {
+    if candidates.len() < 2 {
+        return None;
+    }
+    let next = current
+        .and_then(|current| candidates.iter().position(|candidate| candidate == current))
+        .map_or(0, |index| (index + 1) % candidates.len());
+    Some(next)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(test, allow(dead_code))]
+fn next_draft_inference_candidate(
+    resolution: &geosolve_constraint_editor::DraftInferenceResolution,
+) -> Option<geosolve_constraint_editor::DraftInferenceCandidateId> {
+    use geosolve_constraint_editor::DraftInferenceStatus;
+
+    let candidates = resolution
+        .candidates
+        .iter()
+        .map(|candidate| candidate.id)
+        .collect::<Vec<_>>();
+    let current = match &resolution.status {
+        DraftInferenceStatus::Resolved { candidate } => Some(*candidate),
+        DraftInferenceStatus::StalePreferredCandidate { preferred } => Some(*preferred),
+        DraftInferenceStatus::Ambiguous { .. } => None,
+        DraftInferenceStatus::None
+        | DraftInferenceStatus::Suppressed
+        | DraftInferenceStatus::ResourceLimited => return None,
+    };
+    cycle_candidate_index(&candidates, current.as_ref())
+        .and_then(|index| candidates.get(index).copied())
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn geometry_variant_keyboard_target(
+    current: geosolve_constraint_editor::GeometryToolVariant,
+    key: &str,
+) -> Option<geosolve_constraint_editor::GeometryToolVariant> {
+    let variants = current.family().variants();
+    let index = variants.iter().position(|variant| *variant == current)?;
+    let target = match key {
+        "ArrowRight" | "ArrowDown" => (index + 1) % variants.len(),
+        "ArrowLeft" | "ArrowUp" => (index + variants.len() - 1) % variants.len(),
+        "Home" => 0,
+        "End" => variants.len() - 1,
+        _ => return None,
+    };
+    variants.get(target).copied()
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn geometry_sweep_flip_available(
+    status: Option<&geosolve_constraint_editor::GeometryDraftStatus>,
+    repeated: bool,
+    modified: bool,
+) -> bool {
+    !repeated
+        && !modified
+        && status.is_some_and(|status| status.completed_stages > 0 && status.branch.sweep.is_some())
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Default)]
+struct FinishDoubleClickTracker {
+    first_click: Option<(geosolve_constraint_editor::GeometryToolVariant, usize)>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl FinishDoubleClickTracker {
+    fn observe_click(
+        &mut self,
+        click_detail: i32,
+        status: Option<&geosolve_constraint_editor::GeometryDraftStatus>,
+    ) -> bool {
+        let eligible = status.filter(|status| finish_double_click_eligible(status));
+        match click_detail {
+            1 => {
+                self.first_click = eligible.map(|status| (status.variant, status.completed_stages));
+                false
+            }
+            2 => {
+                let first = self.first_click.take();
+                first
+                    .zip(eligible)
+                    .is_some_and(|((variant, stages), status)| {
+                        status.variant == variant
+                            && stages
+                                .checked_add(1)
+                                .is_some_and(|next| status.completed_stages == next)
+                    })
+            }
+            _ => {
+                self.first_click = None;
+                false
+            }
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn finish_double_click_eligible(status: &geosolve_constraint_editor::GeometryDraftStatus) -> bool {
+    status.can_finish
+        && matches!(
+            status.variant,
+            geosolve_constraint_editor::GeometryToolVariant::Polyline
+                | geosolve_constraint_editor::GeometryToolVariant::OpenControlNurbs
+                | geosolve_constraint_editor::GeometryToolVariant::PeriodicControlNurbs
+        )
 }
 
 /// Browser input-ownership transitions that retire a canvas pointer sample.
@@ -1097,32 +1257,17 @@ const fn annotation_family_name(
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum OptionOverlayKind {
+    GeometryFamily(geosolve_constraint_editor::GeometryToolFamily),
     Equal,
     Tangent,
     Continuity,
     Dimension(geosolve_constraint_editor::DimensionKind),
     Fillet,
-    Conic(geosolve_constraint_editor::EditorTool),
-    Nurbs,
     ConstructionDisplay,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
 impl OptionOverlayKind {
-    fn for_geometry_tool(tool: geosolve_constraint_editor::EditorTool) -> Option<Self> {
-        use geosolve_constraint_editor::EditorTool;
-
-        match tool {
-            EditorTool::Ellipse
-            | EditorTool::EllipticalArc
-            | EditorTool::RationalQuadraticConic
-            | EditorTool::Parabola
-            | EditorTool::Hyperbola => Some(Self::Conic(tool)),
-            EditorTool::Nurbs => Some(Self::Nurbs),
-            _ => None,
-        }
-    }
-
     const fn for_authoring_tool(tool: geosolve_constraint_editor::AuthoringTool) -> Option<Self> {
         use geosolve_constraint_editor::{AuthoringTool, ConstraintIntent};
 
@@ -1136,9 +1281,21 @@ impl OptionOverlayKind {
     }
 
     const fn key(self) -> &'static str {
-        use geosolve_constraint_editor::{DimensionKind, EditorTool};
+        use geosolve_constraint_editor::DimensionKind;
 
         match self {
+            Self::GeometryFamily(family) => match family {
+                geosolve_constraint_editor::GeometryToolFamily::Point => "geometry-point",
+                geosolve_constraint_editor::GeometryToolFamily::Lines => "geometry-lines",
+                geosolve_constraint_editor::GeometryToolFamily::Rectangles => "geometry-rectangles",
+                geosolve_constraint_editor::GeometryToolFamily::Circles => "geometry-circles",
+                geosolve_constraint_editor::GeometryToolFamily::Arcs => "geometry-arcs",
+                geosolve_constraint_editor::GeometryToolFamily::Ellipses => "geometry-ellipses",
+                geosolve_constraint_editor::GeometryToolFamily::Beziers => "geometry-beziers",
+                geosolve_constraint_editor::GeometryToolFamily::Conics => "geometry-conics",
+                geosolve_constraint_editor::GeometryToolFamily::Splines => "geometry-splines",
+                _ => "geometry",
+            },
             Self::Equal => "equal",
             Self::Tangent => "tangent",
             Self::Continuity => "continuity",
@@ -1148,19 +1305,12 @@ impl OptionOverlayKind {
             Self::Dimension(DimensionKind::Diameter) => "dimension-diameter",
             Self::Dimension(DimensionKind::OrientedAngle) => "dimension-oriented-angle",
             Self::Fillet => "fillet",
-            Self::Conic(EditorTool::Ellipse) => "conic-ellipse",
-            Self::Conic(EditorTool::EllipticalArc) => "conic-elliptical-arc",
-            Self::Conic(EditorTool::RationalQuadraticConic) => "conic-rational-conic",
-            Self::Conic(EditorTool::Parabola) => "conic-parabola",
-            Self::Conic(EditorTool::Hyperbola) => "conic-hyperbola",
-            Self::Nurbs => "nurbs",
             Self::ConstructionDisplay => "construction-display",
-            Self::Conic(_) => "conic-unsupported",
         }
     }
 
     fn from_key(key: &str) -> Option<Self> {
-        use geosolve_constraint_editor::{DimensionKind, EditorTool};
+        use geosolve_constraint_editor::DimensionKind;
 
         Some(match key {
             "equal" => Self::Equal,
@@ -1172,21 +1322,16 @@ impl OptionOverlayKind {
             "dimension-diameter" => Self::Dimension(DimensionKind::Diameter),
             "dimension-oriented-angle" => Self::Dimension(DimensionKind::OrientedAngle),
             "fillet" => Self::Fillet,
-            "conic-ellipse" => Self::Conic(EditorTool::Ellipse),
-            "conic-elliptical-arc" => Self::Conic(EditorTool::EllipticalArc),
-            "conic-rational-conic" => Self::Conic(EditorTool::RationalQuadraticConic),
-            "conic-parabola" => Self::Conic(EditorTool::Parabola),
-            "conic-hyperbola" => Self::Conic(EditorTool::Hyperbola),
-            "nurbs" => Self::Nurbs,
             "construction-display" => Self::ConstructionDisplay,
             _ => return None,
         })
     }
 
     const fn title(self) -> &'static str {
-        use geosolve_constraint_editor::{DimensionKind, EditorTool};
+        use geosolve_constraint_editor::DimensionKind;
 
         match self {
+            Self::GeometryFamily(family) => geometry_palette::family_label(family),
             Self::Equal => "Equal options",
             Self::Tangent => "Tangent options",
             Self::Continuity => "Continuity options",
@@ -1196,32 +1341,19 @@ impl OptionOverlayKind {
             Self::Dimension(DimensionKind::Diameter) => "Diameter options",
             Self::Dimension(DimensionKind::OrientedAngle) => "Oriented angle options",
             Self::Fillet => "Fillet options",
-            Self::Conic(EditorTool::Ellipse) => "Ellipse options",
-            Self::Conic(EditorTool::EllipticalArc) => "Elliptical arc options",
-            Self::Conic(EditorTool::RationalQuadraticConic) => "Rational conic options",
-            Self::Conic(EditorTool::Parabola) => "Parabola options",
-            Self::Conic(EditorTool::Hyperbola) => "Hyperbola options",
-            Self::Nurbs => "NURBS options",
             Self::ConstructionDisplay => "Canvas display",
-            Self::Conic(_) => "Conic options",
         }
     }
 
     const fn first_control_id(self) -> &'static str {
-        use geosolve_constraint_editor::EditorTool;
-
         match self {
+            Self::GeometryFamily(_) => "wb-geometry-variant-list",
             Self::Equal => "wb-authoring-curvature",
             Self::Tangent => "wb-authoring-tangent-orientation",
             Self::Continuity => "wb-authoring-continuity",
             Self::Dimension(_) => "wb-authoring-dimension-mode",
             Self::Fillet => "wb-feature-fillet-radius",
-            Self::Conic(EditorTool::RationalQuadraticConic) => "wb-conic-weight",
-            Self::Conic(EditorTool::Parabola) => "wb-conic-trim-start",
-            Self::Conic(EditorTool::Hyperbola) => "wb-conic-semi-conjugate",
-            Self::Nurbs => "wb-nurbs-form",
             Self::ConstructionDisplay => "wb-geometry-pick-scope",
-            Self::Conic(_) => "wb-conic-ratio",
         }
     }
 }
@@ -1636,14 +1768,15 @@ pub(crate) mod wasm {
     use geosolve_constraint_editor::{
         ActionState, AuthoringApplication, AuthoringOperand, AuthoringOutcome, AuthoringState,
         AuthoringTool, BranchAction, ConstraintIntent, ConstructionPreview, CoordinatorActionKind,
-        DimensionKind, DimensionTargetDisplayUnit, DisabledReason, DraftInferenceInput,
+        DimensionKind, DimensionTargetDisplayUnit, DisabledReason, DraftAuthoringInput,
         EditorEffect, EditorScene, EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions,
         FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringPointerDownOutcome,
         FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
         FeatureAuthoringTransaction, GeometryInteractionPolicy, GeometryPickScope,
-        GeometryRoleSelectionState, GeometryVisibility, Modifiers, NurbsConstructionOptions,
-        PickTolerance, PointerInput, RetainedEditorCoordinator, SceneCurveOrigin,
-        SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint, SelectionItem,
+        GeometryRoleSelectionState, GeometryToolVariant, GeometryVisibility, Modifiers,
+        NurbsConstructionOptions, PickTolerance, PointerInput, RetainedEditorCoordinator,
+        SceneCurveOrigin, SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint,
+        SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1685,6 +1818,7 @@ pub(crate) mod wasm {
         pointer_captures: super::CanvasPointerCaptures,
         pointer_moves: Rc<RefCell<super::PointerMoveQueue>>,
         fillet_action_render: super::FilletActionRenderAuthority,
+        geometry_palette: super::geometry_palette::GeometryPaletteState,
         option_overlay: super::OptionOverlayState,
         reproduction_overlay_open: bool,
         reproduction_focus_return: super::ReproductionFocusReturn,
@@ -1757,6 +1891,7 @@ pub(crate) mod wasm {
             pointer_captures: super::CanvasPointerCaptures::default(),
             pointer_moves: Rc::new(RefCell::new(super::PointerMoveQueue::default())),
             fillet_action_render: super::FilletActionRenderAuthority::default(),
+            geometry_palette: super::geometry_palette::GeometryPaletteState::default(),
             option_overlay: super::OptionOverlayState::default(),
             reproduction_overlay_open: false,
             reproduction_focus_return: super::ReproductionFocusReturn::default(),
@@ -1776,15 +1911,19 @@ pub(crate) mod wasm {
     }
 
     fn install_palette_icons(document: &Document) -> Result<(), JsValue> {
-        for (key, tool) in super::icons::GEOMETRY_TOOLS {
-            let Some(button) = document.query_selector(&format!("[data-wb-tool=\"{key}\"]"))?
-            else {
-                continue;
-            };
+        if let Some(icon) =
+            required(document, "wb-tool-select")?.query_selector(".wb-geometry-icon")?
+        {
+            icon.set_inner_html(&super::icons::geometry_tool_icon_markup(EditorTool::Select));
+        }
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
+            let button = required(document, &format!("wb-tool-family-{}", family.key()))?;
             let Some(icon) = button.query_selector(".wb-geometry-icon")? else {
                 continue;
             };
-            icon.set_inner_html(&super::icons::geometry_tool_icon_markup(tool));
+            icon.set_inner_html(&super::icons::geometry_variant_icon_markup(
+                family.default_variant(),
+            ));
         }
         if let Some(icon) =
             required(document, "wb-geometry-role")?.query_selector(".wb-role-icon")?
@@ -1930,7 +2069,8 @@ pub(crate) mod wasm {
             }
             let target = origin
                 .closest(concat!(
-                    "[data-wb-tool], [data-wb-authoring], [data-wb-feature], [data-wb-option], ",
+                    "[data-wb-tool], [data-wb-geometry-family], [data-wb-geometry-variant], ",
+                    "[data-wb-authoring], [data-wb-feature], [data-wb-option], ",
                     "[data-fillet-action], [data-editor-item], [data-wb-action], [data-sample-id], ",
                     "[data-sample-group-trigger]"
                 ))
@@ -1940,7 +2080,7 @@ pub(crate) mod wasm {
             let mut selected_sample = false;
             let mut focus_reproduction_text = false;
             let mut focus_reproduction_return = None;
-            let mut focus_option_control = None;
+            let mut focus_option_control: Option<String> = None;
             let mut focus_select = false;
             if target.has_attribute("data-sample-group-trigger") {
                 return;
@@ -1950,13 +2090,7 @@ pub(crate) mod wasm {
             {
                 let mut wb = callback_workbench.borrow_mut();
                 clear_canvas_pointer_ownership(&mut wb);
-                let option_kind = super::OptionOverlayKind::for_geometry_tool(tool);
-                if let Some(kind) = option_kind {
-                    wb.option_overlay.open(kind);
-                    focus_option_control = Some(kind.first_control_id());
-                } else {
-                    wb.option_overlay.close();
-                }
+                wb.option_overlay.close();
                 if let Err(error) = update_construction_options_for_tool(
                     &callback_document,
                     wb.coordinator.editor_mut(),
@@ -1966,7 +2100,7 @@ pub(crate) mod wasm {
                     drop(wb);
                     let _ = render(&callback_document, &callback_workbench);
                     if let Some(id) = focus_option_control {
-                        focus_by_id(&callback_document, id);
+                        focus_by_id(&callback_document, &id);
                     }
                     return;
                 }
@@ -1975,6 +2109,74 @@ pub(crate) mod wasm {
                 let effects = wb.coordinator.editor_mut().activate_tool(tool);
                 dispatch_effects(&mut wb, effects);
                 wb.notice = format!("{} tool active", super::icons::geometry_tool_key(tool));
+            } else if let Some(family) = target
+                .get_attribute("data-wb-geometry-family")
+                .as_deref()
+                .and_then(super::geometry_palette::family_from_key)
+            {
+                let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
+                let variant = wb.geometry_palette.selected(family);
+                let already_active = wb.authoring.active_tool().is_none()
+                    && wb.feature_authoring.active_tool().is_none()
+                    && wb.coordinator.editor().geometry_tool_variant() == Some(variant);
+                wb.option_overlay
+                    .open(super::OptionOverlayKind::GeometryFamily(family));
+                focus_option_control = Some(super::geometry_palette::variant_button_id(variant));
+                wb.authoring.deactivate();
+                clear_feature_authoring(&mut wb);
+                if !already_active {
+                    let effects = wb.coordinator.editor_mut().activate_geometry_tool(variant);
+                    dispatch_effects(&mut wb, effects);
+                }
+                match update_construction_options_for_variant(
+                    &callback_document,
+                    wb.coordinator.editor_mut(),
+                    variant,
+                ) {
+                    Ok(()) => {
+                        wb.notice = format!(
+                            "{} · {} active",
+                            super::geometry_palette::family_label(family),
+                            super::geometry_palette::variant_label(variant),
+                        );
+                    }
+                    Err(error) => wb.notice = error,
+                }
+            } else if let Some(variant) = target
+                .get_attribute("data-wb-geometry-variant")
+                .as_deref()
+                .and_then(super::geometry_palette::variant_from_key)
+            {
+                let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
+                let family = variant.family();
+                let already_active = wb.authoring.active_tool().is_none()
+                    && wb.feature_authoring.active_tool().is_none()
+                    && wb.coordinator.editor().geometry_tool_variant() == Some(variant);
+                wb.geometry_palette.remember(variant);
+                wb.option_overlay
+                    .open(super::OptionOverlayKind::GeometryFamily(family));
+                focus_option_control = Some(super::geometry_palette::variant_button_id(variant));
+                wb.authoring.deactivate();
+                clear_feature_authoring(&mut wb);
+                if !already_active {
+                    let effects = wb.coordinator.editor_mut().activate_geometry_tool(variant);
+                    dispatch_effects(&mut wb, effects);
+                }
+                match update_construction_options_for_variant(
+                    &callback_document,
+                    wb.coordinator.editor_mut(),
+                    variant,
+                ) {
+                    Ok(()) => {
+                        wb.notice = format!(
+                            "{} active · repeat after creation",
+                            super::geometry_palette::variant_label(variant),
+                        );
+                    }
+                    Err(error) => wb.notice = error,
+                }
             } else if let Some(tool) = target
                 .get_attribute("data-wb-authoring")
                 .and_then(|key| super::action_surface::authoring_tool_from_key(&key))
@@ -1983,7 +2185,7 @@ pub(crate) mod wasm {
                 clear_canvas_pointer_ownership(&mut wb);
                 if let Some(kind) = super::OptionOverlayKind::for_authoring_tool(tool) {
                     wb.option_overlay.open(kind);
-                    focus_option_control = Some(kind.first_control_id());
+                    focus_option_control = Some(kind.first_control_id().to_owned());
                 } else {
                     wb.option_overlay.close();
                 }
@@ -1996,7 +2198,11 @@ pub(crate) mod wasm {
                 let mut wb = callback_workbench.borrow_mut();
                 clear_canvas_pointer_ownership(&mut wb);
                 wb.option_overlay.open(super::OptionOverlayKind::Fillet);
-                focus_option_control = Some(super::OptionOverlayKind::Fillet.first_control_id());
+                focus_option_control = Some(
+                    super::OptionOverlayKind::Fillet
+                        .first_control_id()
+                        .to_owned(),
+                );
                 activate_feature_authoring(&callback_document, &mut wb, tool);
             } else if let Some(kind) = target
                 .get_attribute("data-wb-option")
@@ -2006,7 +2212,7 @@ pub(crate) mod wasm {
                 let mut wb = callback_workbench.borrow_mut();
                 clear_canvas_pointer_ownership(&mut wb);
                 wb.option_overlay.open(kind);
-                focus_option_control = Some(kind.first_control_id());
+                focus_option_control = Some(kind.first_control_id().to_owned());
             } else if target.has_attribute("data-fillet-action") {
                 let mut wb = callback_workbench.borrow_mut();
                 let Some(scene) = editor_scene(&wb) else {
@@ -2138,7 +2344,7 @@ pub(crate) mod wasm {
             } else if let Some(id) = focus_reproduction_return {
                 focus_by_id(&callback_document, id);
             } else if let Some(id) = focus_option_control {
-                focus_by_id(&callback_document, id);
+                focus_by_id(&callback_document, &id);
             } else if focus_select {
                 focus_by_id(&callback_document, "wb-tool-select");
             }
@@ -2169,6 +2375,20 @@ pub(crate) mod wasm {
                     let mut wb = change_workbench.borrow_mut();
                     clear_canvas_pointer_ownership(&mut wb);
                     let result = match wb.option_overlay.open {
+                        Some(super::OptionOverlayKind::GeometryFamily(family)) => {
+                            let variant = wb.geometry_palette.selected(family);
+                            update_construction_options_for_variant(
+                                &change_document,
+                                wb.coordinator.editor_mut(),
+                                variant,
+                            )
+                            .map(|()| {
+                                format!(
+                                    "{} options updated",
+                                    super::geometry_palette::variant_label(variant),
+                                )
+                            })
+                        }
                         Some(super::OptionOverlayKind::Equal) => update_authoring_options_for_tool(
                             &change_document,
                             &mut wb.authoring,
@@ -2208,22 +2428,6 @@ pub(crate) mod wasm {
                         Some(super::OptionOverlayKind::Fillet) => {
                             update_feature_options(&change_document, &mut wb)
                                 .map(|()| "Fillet options updated".to_owned())
-                        }
-                        Some(super::OptionOverlayKind::Conic(tool)) => {
-                            let result = update_construction_options_for_tool(
-                                &change_document,
-                                wb.coordinator.editor_mut(),
-                                tool,
-                            );
-                            result.map(|()| "Conic options updated".to_owned())
-                        }
-                        Some(super::OptionOverlayKind::Nurbs) => {
-                            let result = update_construction_options_for_tool(
-                                &change_document,
-                                wb.coordinator.editor_mut(),
-                                EditorTool::Nurbs,
-                            );
-                            result.map(|()| "NURBS options updated".to_owned())
                         }
                         Some(super::OptionOverlayKind::ConstructionDisplay) => {
                             update_geometry_interaction_policy(&change_document, &mut wb)
@@ -2368,13 +2572,24 @@ pub(crate) mod wasm {
             workbench,
             &viewport,
             "pointerdown",
-            |coordinator, scene, input, problem_items, inference| {
-                coordinator.pointer_down_with_problem_items_and_draft_inference(
-                    scene,
-                    input,
-                    problem_items,
-                    inference,
-                )
+            |coordinator, scene, input, problem_items, authoring| {
+                if coordinator.editor().tool() == EditorTool::Select {
+                    coordinator.pointer_down_with_problem_items_and_draft_inference(
+                        scene,
+                        input,
+                        problem_items,
+                        authoring.inference,
+                    )
+                } else {
+                    coordinator
+                        .editor_mut()
+                        .pointer_down_with_problem_items_and_draft_authoring(
+                            scene,
+                            input,
+                            problem_items,
+                            authoring,
+                        )
+                }
             },
         )?;
         install_pointer_move_listener(document, workbench, &viewport, &pointer_moves)?;
@@ -2457,42 +2672,64 @@ pub(crate) mod wasm {
             .add_event_listener_with_callback("pointerleave", leave.as_ref().unchecked_ref())?;
         leave.forget();
 
-        let double_document = document.clone();
-        let double_workbench = Rc::clone(workbench);
-        let double_viewport = viewport.clone();
-        let double = Closure::<dyn FnMut(MouseEvent)>::new(move |event: MouseEvent| {
+        let finish_click_tracker =
+            Rc::new(RefCell::new(super::FinishDoubleClickTracker::default()));
+        let click_document = document.clone();
+        let click_workbench = Rc::clone(workbench);
+        let click_viewport = viewport.clone();
+        let click_tracker = Rc::clone(&finish_click_tracker);
+        let click = Closure::<dyn FnMut(MouseEvent)>::new(move |event: MouseEvent| {
             if event
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
                 .and_then(|target| target.closest("[data-problem-marker]").ok().flatten())
                 .is_some()
             {
+                click_tracker.borrow_mut().first_click = None;
                 return;
             }
-            let inside_view_box = {
-                let wb = double_workbench.borrow();
-                client_screen_point(
-                    &double_viewport,
+            let (step_back, finish) = {
+                let wb = click_workbench.borrow();
+                if client_screen_point(
+                    &click_viewport,
                     wb.camera.viewport(),
                     f64::from(event.client_x()),
                     f64::from(event.client_y()),
                 )
-                .is_some()
+                .is_none()
+                {
+                    click_tracker.borrow_mut().first_click = None;
+                    return;
+                }
+                let status = wb.coordinator.editor().geometry_draft_status();
+                let finish = event.detail() == 2
+                    && status
+                        .as_ref()
+                        .is_some_and(super::finish_double_click_eligible);
+                let step_back = click_tracker
+                    .borrow_mut()
+                    .observe_click(event.detail(), status.as_ref());
+                (step_back, finish)
             };
-            if !inside_view_box {
+            if !finish {
                 return;
             }
             event.prevent_default();
-            let mut wb = double_workbench.borrow_mut();
+            event.stop_propagation();
+            let mut wb = click_workbench.borrow_mut();
+            if step_back {
+                let effects = wb.coordinator.editor_mut().step_back_draft();
+                dispatch_effects(&mut wb, effects);
+            }
             let expected = wb.coordinator.session().design_identity();
             let effects = wb.coordinator.editor_mut().complete_draft(expected);
             dispatch_effects(&mut wb, effects);
             save(&wb);
             drop(wb);
-            let _ = render(&double_document, &double_workbench);
+            let _ = render(&click_document, &click_workbench);
         });
-        viewport.add_event_listener_with_callback("dblclick", double.as_ref().unchecked_ref())?;
-        double.forget();
+        viewport.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
+        click.forget();
         install_wheel_zoom(document, workbench, &viewport)?;
         Ok(())
     }
@@ -2643,11 +2880,11 @@ pub(crate) mod wasm {
                     let problem_items = current_problem_items(&wb.coordinator, &scene);
                     wb.coordinator
                         .editor_mut()
-                        .pointer_move_with_problem_items_and_draft_inference(
+                        .pointer_move_with_problem_items_and_draft_authoring(
                             &scene,
                             sample.input,
                             &problem_items,
-                            sample.inference,
+                            sample.authoring,
                         )
                 }
                 super::CanvasPointerMoveOwner::OrdinaryAuthoring => {
@@ -2899,11 +3136,11 @@ pub(crate) mod wasm {
                 let effects = wb
                     .coordinator
                     .editor_mut()
-                    .pointer_move_with_problem_items_and_draft_inference(
+                    .pointer_move_with_problem_items_and_draft_authoring(
                         &scene,
                         pending.input,
                         &problem_items,
-                        pending.inference,
+                        pending.authoring,
                     );
                 dispatch_effects(&mut wb, effects);
             }
@@ -3161,7 +3398,7 @@ pub(crate) mod wasm {
             &EditorScene,
             PointerInput,
             &[SelectionItem],
-            DraftInferenceInput,
+            DraftAuthoringInput,
         ) -> Vec<EditorEffect>,
     ) -> Result<(), JsValue> {
         let callback_document = document.clone();
@@ -3290,9 +3527,10 @@ pub(crate) mod wasm {
                     &scene,
                     input,
                     &problem_items,
-                    drafting_sample.inference,
+                    drafting_sample.authoring,
                 )
             };
+            wb.pointer_moves.borrow_mut().clear_candidate_preference();
             dispatch_effects(&mut wb, effects);
             if capture_active_editor_pointer(&callback_viewport, &mut wb, event.pointer_id())
                 .is_err()
@@ -3319,16 +3557,18 @@ pub(crate) mod wasm {
         let down_workbench = Rc::clone(workbench);
         let down_pointer_moves = Rc::clone(&pointer_moves);
         let keydown = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
-            if event.key() != "Shift" || event.repeat() {
+            if !matches!(event.key().as_str(), "Shift" | "Control" | "Meta") || event.repeat() {
                 return;
             }
             let owns_queued_sample = {
                 let wb = down_workbench.borrow();
                 owns_stationary_draft_inference(&wb)
             };
-            let sample = down_pointer_moves
-                .borrow_mut()
-                .stationary_suppression(true, owns_queued_sample);
+            let sample = down_pointer_moves.borrow_mut().stationary_authoring_state(
+                event.ctrl_key() || event.meta_key(),
+                event.shift_key(),
+                owns_queued_sample,
+            );
             if let Some(sample) = sample {
                 dispatch_stationary_draft_inference(&down_document, &down_workbench, sample);
             }
@@ -3340,16 +3580,18 @@ pub(crate) mod wasm {
         let up_workbench = Rc::clone(workbench);
         let up_pointer_moves = Rc::clone(&pointer_moves);
         let keyup = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
-            if event.key() != "Shift" {
+            if !matches!(event.key().as_str(), "Shift" | "Control" | "Meta") {
                 return;
             }
             let owns_queued_sample = {
                 let wb = up_workbench.borrow();
                 owns_stationary_draft_inference(&wb)
             };
-            let sample = up_pointer_moves
-                .borrow_mut()
-                .stationary_suppression(false, owns_queued_sample);
+            let sample = up_pointer_moves.borrow_mut().stationary_authoring_state(
+                event.ctrl_key() || event.meta_key(),
+                event.shift_key(),
+                owns_queued_sample,
+            );
             if let Some(sample) = sample {
                 dispatch_stationary_draft_inference(&up_document, &up_workbench, sample);
             }
@@ -3404,11 +3646,11 @@ pub(crate) mod wasm {
         let effects = wb
             .coordinator
             .editor_mut()
-            .pointer_move_with_problem_items_and_draft_inference(
+            .pointer_move_with_problem_items_and_draft_authoring(
                 &scene,
                 sample.input,
                 &problem_items,
-                sample.inference,
+                sample.authoring,
             );
         if effects.is_empty() {
             return;
@@ -3444,6 +3686,10 @@ pub(crate) mod wasm {
         let callback_document = document.clone();
         let callback_workbench = Rc::clone(workbench);
         let callback = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            if event.key() == "Escape" && event.repeat() {
+                event.prevent_default();
+                return;
+            }
             let escape_owner = if event.key() == "Escape" {
                 super::foreground_overlay_escape_owner(
                     callback_workbench.borrow().reproduction_overlay_open,
@@ -3473,6 +3719,28 @@ pub(crate) mod wasm {
             {
                 // Text editing and native button activation inside this dialog
                 // must never fall through to any sketch keyboard behavior.
+                return;
+            }
+            if !event.ctrl_key()
+                && !event.meta_key()
+                && !event.alt_key()
+                && let Some(current) = event
+                    .target()
+                    .and_then(|target| target.dyn_into::<Element>().ok())
+                    .and_then(|target| target.closest("[data-wb-geometry-variant]").ok().flatten())
+                    .and_then(|target| target.get_attribute("data-wb-geometry-variant"))
+                    .as_deref()
+                    .and_then(super::geometry_palette::variant_from_key)
+                && let Some(next) = super::geometry_variant_keyboard_target(current, &event.key())
+            {
+                event.prevent_default();
+                if let Ok(element) = required(
+                    &callback_document,
+                    &super::geometry_palette::variant_button_id(next),
+                ) && let Ok(button) = element.dyn_into::<HtmlElement>()
+                {
+                    button.click();
+                }
                 return;
             }
             if !keyboard_target_is_editable_or_dialog(&event)
@@ -3548,6 +3816,34 @@ pub(crate) mod wasm {
                 focus_by_id(&callback_document, "wb-sample-trigger");
                 return;
             }
+            if event.key() == "Escape"
+                && matches!(
+                    callback_workbench.borrow().option_overlay.open,
+                    Some(super::OptionOverlayKind::GeometryFamily(_))
+                )
+            {
+                event.prevent_default();
+                let selected = {
+                    let mut wb = callback_workbench.borrow_mut();
+                    let effects = wb.coordinator.editor_mut().escape_geometry_tool();
+                    dispatch_effects(&mut wb, effects);
+                    let selected = wb.coordinator.editor().tool() == EditorTool::Select;
+                    if selected {
+                        wb.option_overlay.close();
+                        wb.notice = "Select active".into();
+                    } else {
+                        wb.notice =
+                            "Current shape canceled; exact geometry variant remains active".into();
+                    }
+                    save(&wb);
+                    selected
+                };
+                let _ = render(&callback_document, &callback_workbench);
+                if selected {
+                    focus_by_id(&callback_document, "wb-tool-select");
+                }
+                return;
+            }
             if event.key() == "Escape" && callback_workbench.borrow().option_overlay.open.is_some()
             {
                 event.prevent_default();
@@ -3558,6 +3854,69 @@ pub(crate) mod wasm {
                 }
                 let _ = render(&callback_document, &callback_workbench);
                 focus_by_id(&callback_document, "wb-tool-select");
+                return;
+            }
+            if event.key() == "Tab" && !keyboard_target_is_editable_or_dialog(&event) {
+                let next = callback_workbench
+                    .borrow()
+                    .coordinator
+                    .editor()
+                    .draft_inference_resolution()
+                    .and_then(super::next_draft_inference_candidate);
+                if let Some(next) = next {
+                    event.prevent_default();
+                    let sample = {
+                        let wb = callback_workbench.borrow();
+                        let owns = owns_stationary_draft_inference(&wb);
+                        wb.pointer_moves
+                            .borrow_mut()
+                            .stationary_candidate(next, owns)
+                    };
+                    if let Some(sample) = sample {
+                        dispatch_stationary_draft_inference(
+                            &callback_document,
+                            &callback_workbench,
+                            sample,
+                        );
+                    }
+                    return;
+                }
+            }
+            let sweep_status = callback_workbench
+                .borrow()
+                .coordinator
+                .editor()
+                .geometry_draft_status();
+            if event.key().eq_ignore_ascii_case("f")
+                && !keyboard_target_is_editable_or_dialog(&event)
+                && super::geometry_sweep_flip_available(
+                    sweep_status.as_ref(),
+                    event.repeat(),
+                    event.shift_key() || event.ctrl_key() || event.meta_key() || event.alt_key(),
+                )
+            {
+                event.prevent_default();
+                let mut wb = callback_workbench.borrow_mut();
+                let effects = wb.coordinator.editor_mut().flip_geometry_draft_branch();
+                if effects.is_empty() {
+                    return;
+                }
+                dispatch_effects(&mut wb, effects);
+                wb.notice = match wb
+                    .coordinator
+                    .editor()
+                    .geometry_draft_status()
+                    .and_then(|status| status.branch.sweep)
+                {
+                    Some(DocumentArcSweep::CounterClockwise) => {
+                        "Counter-clockwise arc sweep selected".into()
+                    }
+                    Some(DocumentArcSweep::Clockwise) => "Clockwise arc sweep selected".into(),
+                    None => "Complementary arc sweep selected".into(),
+                };
+                save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
                 return;
             }
             if let Some(target) = event
@@ -3646,7 +4005,19 @@ pub(crate) mod wasm {
             let mut wb = callback_workbench.borrow_mut();
             if matches!(event.key().as_str(), "Delete" | "Backspace") {
                 event.prevent_default();
-                perform_action(&callback_document, &mut wb, "delete");
+                if event.key() == "Backspace"
+                    && wb.coordinator.editor().geometry_tool_variant().is_some()
+                {
+                    let effects = wb.coordinator.editor_mut().step_back_draft();
+                    if effects.is_empty() {
+                        wb.notice = "No unfinished geometry stage to remove".into();
+                    } else {
+                        dispatch_effects(&mut wb, effects);
+                        wb.notice = "Latest unfinished geometry stage removed".into();
+                    }
+                } else {
+                    perform_action(&callback_document, &mut wb, "delete");
+                }
                 save(&wb);
                 drop(wb);
                 let _ = render(&callback_document, &callback_workbench);
@@ -3681,7 +4052,7 @@ pub(crate) mod wasm {
                 return;
             }
             let effects = match event.key().as_str() {
-                "Escape" => wb.coordinator.editor_mut().cancel(),
+                "Escape" => wb.coordinator.editor_mut().escape_geometry_tool(),
                 "Enter" => {
                     let expected = wb.coordinator.session().design_identity();
                     wb.coordinator.editor_mut().complete_draft(expected)
@@ -3962,6 +4333,7 @@ pub(crate) mod wasm {
     )]
     fn perform_action(document: &Document, wb: &mut Workbench, action: &str) {
         clear_canvas_pointer_ownership(wb);
+        let mut stepped_geometry_draft = false;
         let result = match action {
             "new" => cancel_before_camera_change(document, wb).and_then(|()| {
                 let coordinator = empty_coordinator()?;
@@ -3976,7 +4348,17 @@ pub(crate) mod wasm {
                 wb.problems = super::DismissibleDisclosure::default();
                 Ok(())
             }),
-            "undo" => wb.coordinator.undo().map_err(|error| error.to_string()),
+            "undo" => {
+                let effects = wb.coordinator.editor_mut().step_back_draft();
+                if effects.is_empty() {
+                    wb.coordinator.undo().map_err(|error| error.to_string())
+                } else {
+                    dispatch_effects(wb, effects);
+                    stepped_geometry_draft = true;
+                    wb.notice = "Latest unfinished geometry stage removed".into();
+                    Ok(())
+                }
+            }
             "redo" => wb.coordinator.redo().map_err(|error| error.to_string()),
             "cancel" => cancel_before_camera_change(document, wb).map(|()| {
                 if wb.feature_authoring.active_tool().is_some() {
@@ -4146,6 +4528,7 @@ pub(crate) mod wasm {
                 | "reproduction-load"
                 | "zoom-fit"
                 | "zoom-origin" => wb.notice.clone(),
+                "undo" if stepped_geometry_draft => wb.notice.clone(),
                 action
                     if action.starts_with("curve-property-")
                         || action.starts_with("curve-nurbs-gauge-") =>
@@ -5433,8 +5816,7 @@ pub(crate) mod wasm {
         let guide = required(document, "wb-draft-guide")?;
         if wb.authoring.active_tool().is_some()
             || wb.feature_authoring.active_tool().is_some()
-            || coordinator.editor().can_complete_draft()
-            || wb.construction_preview.is_some()
+            || coordinator.editor().tool() != EditorTool::Select
         {
             guide.remove_attribute("hidden")?;
         } else {
@@ -5445,11 +5827,16 @@ pub(crate) mod wasm {
         } else {
             wb.authoring.active_tool().map_or_else(
                 || {
-                    draft_guide_text(
-                        coordinator.editor().tool(),
-                        coordinator.editor().conic_options().middle_weight,
+                    coordinator.editor().geometry_draft_status().map_or_else(
+                        || {
+                            draft_guide_text(
+                                coordinator.editor().tool(),
+                                coordinator.editor().conic_options().middle_weight,
+                            )
+                            .to_owned()
+                        },
+                        |status| super::geometry_palette::status_text(&status),
                     )
-                    .to_owned()
                 },
                 |tool| {
                     format!(
@@ -5461,7 +5848,10 @@ pub(crate) mod wasm {
             )
         };
         required(document, "wb-draft-guide-text")?.set_text_content(Some(&guide_text));
-        if wb.authoring.active_tool().is_some() || wb.feature_authoring.active_tool().is_some() {
+        if wb.authoring.active_tool().is_some()
+            || wb.feature_authoring.active_tool().is_some()
+            || !coordinator.editor().can_complete_draft()
+        {
             required(document, "wb-guide-finish")?.set_attribute("hidden", "")?;
         } else {
             required(document, "wb-guide-finish")?.remove_attribute("hidden")?;
@@ -5476,16 +5866,50 @@ pub(crate) mod wasm {
             apply.set_attribute("hidden", "")?;
             set_disabled(&apply, true)?;
         }
-        for (key, tool) in super::icons::GEOMETRY_TOOLS {
-            if let Some(button) = document.query_selector(&format!("[data-wb-tool=\"{key}\"]"))? {
-                button.set_attribute(
-                    "aria-pressed",
-                    if tool == coordinator.editor().tool() {
-                        "true"
-                    } else {
-                        "false"
-                    },
-                )?;
+        required(document, "wb-tool-select")?.set_attribute(
+            "aria-pressed",
+            if coordinator.editor().tool() == EditorTool::Select {
+                "true"
+            } else {
+                "false"
+            },
+        )?;
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
+            let selected = wb.geometry_palette.selected(family);
+            let button = required(document, &format!("wb-tool-family-{}", family.key()))?;
+            button.set_attribute(
+                "aria-pressed",
+                if coordinator
+                    .editor()
+                    .geometry_tool_variant()
+                    .is_some_and(|variant| variant.family() == family)
+                {
+                    "true"
+                } else {
+                    "false"
+                },
+            )?;
+            button.set_attribute(
+                "aria-label",
+                &format!(
+                    "{} family, {} selected",
+                    super::geometry_palette::family_label(family),
+                    super::geometry_palette::variant_label(selected),
+                ),
+            )?;
+            button.set_attribute(
+                "title",
+                &format!(
+                    "{} · {}",
+                    super::geometry_palette::family_label(family),
+                    super::geometry_palette::variant_label(selected),
+                ),
+            )?;
+            if let Some(label) = button.query_selector(".wb-family-selection")? {
+                label.set_text_content(Some(super::geometry_palette::variant_label(selected)));
+            }
+            if let Some(icon) = button.query_selector(".wb-geometry-icon")? {
+                icon.set_inner_html(&super::icons::geometry_variant_icon_markup(selected));
             }
         }
         render_geometry_controls(
@@ -5748,10 +6172,13 @@ pub(crate) mod wasm {
             open.map_or("Tool options", super::OptionOverlayKind::title),
         ));
 
-        for (key, tool) in super::icons::GEOMETRY_TOOLS {
-            if let Some(kind) = super::OptionOverlayKind::for_geometry_tool(tool) {
-                set_option_invoker_expanded(document, &format!("wb-tool-{key}"), kind, open)?;
-            }
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
+            set_option_invoker_expanded(
+                document,
+                &format!("wb-tool-family-{}", family.key()),
+                super::OptionOverlayKind::GeometryFamily(family),
+                open,
+            )?;
         }
         for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
             let tool = AuthoringTool::Constraint(intent);
@@ -5781,27 +6208,68 @@ pub(crate) mod wasm {
             open,
         )?;
 
-        let active_panel = open.map(|kind| match kind {
-            super::OptionOverlayKind::Equal => "wb-option-panel-equal",
-            super::OptionOverlayKind::Tangent => "wb-option-panel-tangent",
-            super::OptionOverlayKind::Continuity => "wb-option-panel-continuity",
-            super::OptionOverlayKind::Dimension(_) => "wb-option-panel-dimension",
-            super::OptionOverlayKind::Fillet => "wb-option-panel-fillet",
-            super::OptionOverlayKind::Conic(_) => "wb-option-panel-conic",
-            super::OptionOverlayKind::Nurbs => "wb-option-panel-nurbs",
-            super::OptionOverlayKind::ConstructionDisplay => "wb-option-panel-construction-display",
-        });
-        for id in [
-            "wb-option-panel-equal",
-            "wb-option-panel-tangent",
-            "wb-option-panel-continuity",
-            "wb-option-panel-dimension",
-            "wb-option-panel-fillet",
-            "wb-option-panel-conic",
-            "wb-option-panel-nurbs",
-            "wb-option-panel-construction-display",
+        let family_open = match open {
+            Some(super::OptionOverlayKind::GeometryFamily(family)) => Some(family),
+            _ => None,
+        };
+        let selected_geometry_variant =
+            family_open.map(|family| wb.geometry_palette.selected(family));
+        if let (Some(family), Some(selected)) = (family_open, selected_geometry_variant) {
+            let list = required(document, "wb-geometry-variant-list")?;
+            list.set_attribute(
+                "aria-label",
+                &format!(
+                    "{} geometry variants",
+                    super::geometry_palette::family_label(family)
+                ),
+            )?;
+            let family_key = family.key();
+            let selected_key = selected.key();
+            let menu_changed = list.get_attribute("data-geometry-family").as_deref()
+                != Some(family_key)
+                || list
+                    .get_attribute("data-selected-geometry-variant")
+                    .as_deref()
+                    != Some(selected_key);
+            if menu_changed {
+                list.set_inner_html(&super::geometry_palette::variant_menu_markup(
+                    family, selected,
+                ));
+                list.set_attribute("data-geometry-family", family_key)?;
+                list.set_attribute("data-selected-geometry-variant", selected_key)?;
+            }
+        }
+        set_hidden(
+            &required(document, "wb-option-panel-geometry-family")?,
+            family_open.is_none(),
+        )?;
+        for (id, visible) in [
+            (
+                "wb-option-panel-equal",
+                open == Some(super::OptionOverlayKind::Equal),
+            ),
+            (
+                "wb-option-panel-tangent",
+                open == Some(super::OptionOverlayKind::Tangent),
+            ),
+            (
+                "wb-option-panel-continuity",
+                open == Some(super::OptionOverlayKind::Continuity),
+            ),
+            (
+                "wb-option-panel-dimension",
+                matches!(open, Some(super::OptionOverlayKind::Dimension(_))),
+            ),
+            (
+                "wb-option-panel-fillet",
+                open == Some(super::OptionOverlayKind::Fillet),
+            ),
+            (
+                "wb-option-panel-construction-display",
+                open == Some(super::OptionOverlayKind::ConstructionDisplay),
+            ),
         ] {
-            set_hidden(&required(document, id)?, active_panel != Some(id))?;
+            set_hidden(&required(document, id)?, !visible)?;
         }
 
         let c2 = open == Some(super::OptionOverlayKind::Continuity)
@@ -5815,10 +6283,34 @@ pub(crate) mod wasm {
             )),
         )?;
 
-        let conic_tool = match open {
-            Some(super::OptionOverlayKind::Conic(tool)) => Some(tool),
-            _ => None,
-        };
+        let conic_tool = selected_geometry_variant
+            .map(GeometryToolVariant::editor_tool)
+            .filter(|tool| {
+                matches!(
+                    tool,
+                    EditorTool::Ellipse
+                        | EditorTool::EllipticalArc
+                        | EditorTool::RationalQuadraticConic
+                        | EditorTool::Parabola
+                        | EditorTool::Hyperbola
+                )
+            });
+        let nurbs_open = selected_geometry_variant
+            .is_some_and(|variant| variant.editor_tool() == EditorTool::Nurbs);
+        if conic_tool == Some(EditorTool::EllipticalArc)
+            && let Ok(select) =
+                required(document, "wb-conic-arc-sweep")?.dyn_into::<HtmlSelectElement>()
+        {
+            select.set_value(match wb.coordinator.editor().conic_options().arc_sweep {
+                DocumentArcSweep::CounterClockwise => "counter-clockwise",
+                DocumentArcSweep::Clockwise => "clockwise",
+            });
+        }
+        set_hidden(
+            &required(document, "wb-option-panel-conic")?,
+            conic_tool.is_none(),
+        )?;
+        set_hidden(&required(document, "wb-option-panel-nurbs")?, !nurbs_open)?;
         for (id, visible) in [
             (
                 "wb-conic-ratio-field",
@@ -5920,7 +6412,8 @@ pub(crate) mod wasm {
                     &button,
                     key == "finish"
                         && (authoring.active_tool().is_some()
-                            || feature_authoring.active_tool().is_some()),
+                            || feature_authoring.active_tool().is_some()
+                            || !coordinator.editor().can_complete_draft()),
                 )?;
             }
         }
@@ -5937,7 +6430,17 @@ pub(crate) mod wasm {
             ("delete", CoordinatorActionKind::Delete),
         ] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
-                set_action_state(&button, state(action))?;
+                let action_state = if action == CoordinatorActionKind::Undo
+                    && coordinator
+                        .editor()
+                        .geometry_draft_status()
+                        .is_some_and(|status| status.completed_stages > 0)
+                {
+                    ActionState::Enabled
+                } else {
+                    state(action)
+                };
+                set_action_state(&button, action_state)?;
             }
         }
         for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
@@ -6552,24 +7055,7 @@ pub(crate) mod wasm {
     }
 
     fn tool_from_key(key: &str) -> Option<EditorTool> {
-        Some(match key {
-            "select" => EditorTool::Select,
-            "point" => EditorTool::Point,
-            "line" => EditorTool::Line,
-            "polyline" => EditorTool::Polyline,
-            "rectangle" => EditorTool::Rectangle,
-            "circle" => EditorTool::Circle,
-            "arc" => EditorTool::CounterClockwiseArc,
-            "quadratic-bezier" => EditorTool::QuadraticBezier,
-            "cubic-bezier" => EditorTool::CubicBezier,
-            "ellipse" => EditorTool::Ellipse,
-            "elliptical-arc" => EditorTool::EllipticalArc,
-            "rational-conic" => EditorTool::RationalQuadraticConic,
-            "parabola" => EditorTool::Parabola,
-            "hyperbola" => EditorTool::Hyperbola,
-            "nurbs" => EditorTool::Nurbs,
-            _ => return None,
-        })
+        (key == "select").then_some(EditorTool::Select)
     }
 
     fn draft_guide_text(tool: EditorTool, rational_weight: f64) -> &'static str {
@@ -6726,8 +7212,8 @@ pub(crate) mod wasm {
                 };
                 editor
                     .set_nurbs_options(NurbsConstructionOptions {
-                        form: if select_value(document, "wb-nurbs-form").as_deref()
-                            == Some("periodic")
+                        form: if editor.geometry_tool_variant()
+                            == Some(GeometryToolVariant::PeriodicControlNurbs)
                         {
                             DocumentBSplineForm::Periodic
                         } else {
@@ -6741,6 +7227,14 @@ pub(crate) mod wasm {
             }
             _ => Ok(()),
         }
+    }
+
+    fn update_construction_options_for_variant(
+        document: &Document,
+        editor: &mut geosolve_constraint_editor::ConstraintEditor,
+        variant: GeometryToolVariant,
+    ) -> Result<(), String> {
+        update_construction_options_for_tool(document, editor, variant.editor_tool())
     }
     const fn contact_domain_key(domain: ContactDomain) -> &'static str {
         match domain {
@@ -6847,14 +7341,15 @@ mod tests {
         EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene, EditorTool,
         FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
-        GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility, Modifiers, PickTolerance,
+        GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus, GeometryInteractionPolicy,
+        GeometryPickScope, GeometryToolVariant, GeometryVisibility, Modifiers, PickTolerance,
         PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
         SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneConstraintGlyph,
         SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DesignPointId, DocumentBSplineForm,
+        CurveDefinition, CurveSpan, DesignPointId, DocumentArcSweep, DocumentBSplineForm,
         DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionDefinition,
         DocumentDimensionMode, DocumentEdit, DocumentSolveRequest, GeometryRole,
         MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, RetainedSketchDocumentSession, ScalarDomain,
@@ -6867,13 +7362,15 @@ mod tests {
         CanvasPointerCaptures, CanvasPointerContextRoute, CanvasPointerMoveOwner,
         CanvasPointerOwnership, CanvasPointerTerminal, CanvasPointerTerminalDisposition,
         CapturedCanvasPointer, DismissibleDisclosure, DraftingPointerSample,
-        FilletActionRenderAuthority, ForegroundOverlayEscapeOwner, HistoryShortcut,
-        OptionOverlayKind, OptionOverlayState, PointerMoveQueue, ReproductionFocusReturn,
-        annotation_family_name, annotation_inspector_presentation, apply_validated_reproduction,
-        canvas_cursor_key, canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
-        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
-        coordinate_hud, current_problem_items, curve_control_inspector_detail,
-        curve_control_inspector_markup, foreground_overlay_escape_owner, history_shortcut,
+        FilletActionRenderAuthority, FinishDoubleClickTracker, ForegroundOverlayEscapeOwner,
+        HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
+        ReproductionFocusReturn, annotation_family_name, annotation_inspector_presentation,
+        apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
+        canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
+        compose_editor_scene, coordinate_hud, current_problem_items,
+        curve_control_inspector_detail, curve_control_inspector_markup, cycle_candidate_index,
+        foreground_overlay_escape_owner, geometry_sweep_flip_available,
+        geometry_variant_keyboard_target, history_shortcut,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
         reproduction_focus_target_after_action, reproduction_overlay_presentation,
@@ -9392,9 +9889,11 @@ mod tests {
         let after_action = queue.push(input(7.0)).unwrap();
         assert_ne!(after_action, stale_before_action);
         assert_eq!(queue.take_for_frame(after_action), Some(sample(7.0)));
+        queue.clear_candidate_preference();
 
         let suppressed = PointerInput {
             modifiers: Modifiers {
+                control: true,
                 shift: true,
                 ..Modifiers::default()
             },
@@ -9404,7 +9903,8 @@ mod tests {
         let captured = queue
             .take_for_frame(suppression_frame)
             .expect("captured suppression sample");
-        assert!(captured.inference.suppressed);
+        assert!(captured.authoring.inference.suppressed);
+        assert!(captured.authoring.regularized);
         assert_eq!(captured.input, suppressed);
 
         let mut painted_queue = PointerMoveQueue::default();
@@ -9422,9 +9922,95 @@ mod tests {
             Some(DraftingPointerSample::with_painted_item(
                 input(10.0),
                 Some(latest_painted),
+                None,
             )),
             "RAF coalescing must keep the painted intent hint paired with the latest position",
         );
+    }
+
+    #[test]
+    fn tab_candidate_cycle_starts_at_ranked_first_and_wraps() {
+        let candidates = [11_u64, 22, 33];
+        assert_eq!(cycle_candidate_index(&candidates, None), Some(0));
+        assert_eq!(cycle_candidate_index(&candidates, Some(&11)), Some(1));
+        assert_eq!(cycle_candidate_index(&candidates, Some(&22)), Some(2));
+        assert_eq!(cycle_candidate_index(&candidates, Some(&33)), Some(0));
+        assert_eq!(cycle_candidate_index(&[11_u64], None), None);
+    }
+
+    #[test]
+    fn geometry_variant_radio_arrows_wrap_within_the_current_family() {
+        assert_eq!(
+            geometry_variant_keyboard_target(GeometryToolVariant::Segment, "ArrowRight"),
+            Some(GeometryToolVariant::Polyline),
+        );
+        assert_eq!(
+            geometry_variant_keyboard_target(GeometryToolVariant::Segment, "ArrowLeft"),
+            Some(GeometryToolVariant::MidpointLine),
+        );
+        assert_eq!(
+            geometry_variant_keyboard_target(GeometryToolVariant::Polyline, "End"),
+            Some(GeometryToolVariant::MidpointLine),
+        );
+        assert_eq!(
+            geometry_variant_keyboard_target(GeometryToolVariant::MidpointLine, "Home"),
+            Some(GeometryToolVariant::Segment),
+        );
+        assert_eq!(
+            geometry_variant_keyboard_target(GeometryToolVariant::Segment, "PageDown"),
+            None,
+        );
+    }
+
+    #[test]
+    fn sweep_flip_and_double_click_finish_require_a_live_eligible_draft() {
+        let status = |variant, completed_stages, can_finish, sweep| GeometryDraftStatus {
+            variant,
+            stage: GeometryDraftStage::End,
+            completed_stages,
+            required_stages: None,
+            can_finish,
+            regularized: false,
+            branch: GeometryDraftBranch {
+                sweep,
+                ..GeometryDraftBranch::default()
+            },
+            measurements: Vec::new(),
+        };
+        let stage_zero = status(
+            GeometryToolVariant::CenterArc,
+            0,
+            false,
+            Some(DocumentArcSweep::CounterClockwise),
+        );
+        assert!(!geometry_sweep_flip_available(
+            Some(&stage_zero),
+            false,
+            false
+        ));
+        let live_arc = status(
+            GeometryToolVariant::CenterArc,
+            1,
+            false,
+            Some(DocumentArcSweep::CounterClockwise),
+        );
+        assert!(geometry_sweep_flip_available(Some(&live_arc), false, false));
+        assert!(!geometry_sweep_flip_available(Some(&live_arc), true, false));
+        assert!(!geometry_sweep_flip_available(Some(&live_arc), false, true));
+
+        let polyline_first = status(GeometryToolVariant::Polyline, 3, true, None);
+        let polyline_second = status(GeometryToolVariant::Polyline, 4, true, None);
+        let mut tracker = FinishDoubleClickTracker::default();
+        assert!(!tracker.observe_click(1, Some(&polyline_first)));
+        assert!(tracker.observe_click(2, Some(&polyline_second)));
+
+        let mut rejected_second = FinishDoubleClickTracker::default();
+        assert!(!rejected_second.observe_click(1, Some(&polyline_first)));
+        assert!(!rejected_second.observe_click(2, Some(&polyline_first)));
+        let segment = status(GeometryToolVariant::Segment, 1, true, None);
+        let mut fixed_recipe = FinishDoubleClickTracker::default();
+        assert!(!fixed_recipe.observe_click(1, Some(&segment)));
+        assert!(!fixed_recipe.observe_click(2, Some(&segment)));
     }
 
     #[test]
@@ -9529,7 +10115,7 @@ mod tests {
     }
 
     #[test]
-    fn foreign_shift_transition_preserves_queued_projected_pointer_sample() {
+    fn foreign_regularization_transition_preserves_queued_projected_pointer_sample() {
         let input = |x, shift| PointerInput {
             pointer_id: 23,
             position: ScreenPoint { x, y: 19.0 },
@@ -9543,7 +10129,7 @@ mod tests {
         let press_frame = queue
             .push(input(40.0, false))
             .expect("projected drag frame before Shift press");
-        assert_eq!(queue.stationary_suppression(true, false), None);
+        assert_eq!(queue.stationary_authoring_state(false, true, false), None);
         assert_eq!(
             queue.drain_before_terminal(),
             Some(DraftingPointerSample::from_input(input(40.0, false)))
@@ -9553,7 +10139,7 @@ mod tests {
         let release_frame = queue
             .push(input(44.0, true))
             .expect("projected drag frame before Shift release");
-        assert_eq!(queue.stationary_suppression(false, false), None);
+        assert_eq!(queue.stationary_authoring_state(false, false, false), None);
         assert_eq!(
             queue.take_for_frame(release_frame),
             Some(DraftingPointerSample::from_input(input(44.0, true)))
@@ -9561,7 +10147,7 @@ mod tests {
     }
 
     #[test]
-    fn stationary_shift_press_release_and_blur_replay_the_exact_pointer_sample() {
+    fn stationary_modifier_transitions_replay_one_sample_with_independent_intent() {
         let input = PointerInput {
             pointer_id: 17,
             position: ScreenPoint { x: 412.5, y: 91.25 },
@@ -9574,30 +10160,33 @@ mod tests {
         let stale_frame = queue.push(input).expect("scheduled pointer frame");
 
         let pressed = queue
-            .stationary_suppression(true, true)
+            .stationary_authoring_state(true, true, true)
             .expect("stationary Shift press");
         assert_eq!(pressed.input, input);
-        assert!(pressed.inference.suppressed);
+        assert!(pressed.authoring.inference.suppressed);
+        assert!(pressed.authoring.regularized);
         assert_eq!(queue.take_for_frame(stale_frame), None);
-        assert_eq!(queue.stationary_suppression(true, true), None);
+        assert_eq!(queue.stationary_authoring_state(true, true, true), None);
 
         let released = queue
-            .stationary_suppression(false, true)
+            .stationary_authoring_state(true, false, true)
             .expect("stationary Shift release");
         assert_eq!(released.input, input);
-        assert!(!released.inference.suppressed);
+        assert!(released.authoring.inference.suppressed);
+        assert!(!released.authoring.regularized);
 
         queue
-            .stationary_suppression(true, true)
+            .stationary_authoring_state(true, true, true)
             .expect("second stationary Shift press");
         let blurred = queue.window_blur(true).expect("blur releases suppression");
         assert_eq!(blurred.input, input);
-        assert!(!blurred.inference.suppressed);
+        assert!(!blurred.authoring.inference.suppressed);
+        assert!(!blurred.authoring.regularized);
         assert_eq!(queue.window_blur(true), None);
 
         assert!(queue.clear_stationary_sample());
         assert!(!queue.clear_stationary_sample());
-        assert_eq!(queue.stationary_suppression(true, true), None);
+        assert_eq!(queue.stationary_authoring_state(true, true, true), None);
     }
 
     #[test]
@@ -9661,7 +10250,7 @@ mod tests {
 
     #[test]
     fn option_overlay_catalog_covers_only_option_bearing_tools() {
-        use geosolve_constraint_editor::{DimensionKind, EditorTool};
+        use geosolve_constraint_editor::DimensionKind;
 
         for (key, kind) in [
             ("equal", OptionOverlayKind::Equal),
@@ -9689,27 +10278,6 @@ mod tests {
             ),
             ("fillet", OptionOverlayKind::Fillet),
             (
-                "conic-ellipse",
-                OptionOverlayKind::Conic(EditorTool::Ellipse),
-            ),
-            (
-                "conic-elliptical-arc",
-                OptionOverlayKind::Conic(EditorTool::EllipticalArc),
-            ),
-            (
-                "conic-rational-conic",
-                OptionOverlayKind::Conic(EditorTool::RationalQuadraticConic),
-            ),
-            (
-                "conic-parabola",
-                OptionOverlayKind::Conic(EditorTool::Parabola),
-            ),
-            (
-                "conic-hyperbola",
-                OptionOverlayKind::Conic(EditorTool::Hyperbola),
-            ),
-            ("nurbs", OptionOverlayKind::Nurbs),
-            (
                 "construction-display",
                 OptionOverlayKind::ConstructionDisplay,
             ),
@@ -9719,8 +10287,13 @@ mod tests {
             assert!(!kind.title().is_empty());
             assert!(kind.first_control_id().starts_with("wb-"));
         }
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
+            let kind = OptionOverlayKind::GeometryFamily(family);
+            assert_eq!(kind.key(), format!("geometry-{}", family.key()));
+            assert!(!kind.title().is_empty());
+            assert_eq!(kind.first_control_id(), "wb-geometry-variant-list");
+        }
         assert_eq!(OptionOverlayKind::from_key("unknown"), None);
-        assert_eq!(OptionOverlayKind::for_geometry_tool(EditorTool::Line), None);
         assert_eq!(
             OptionOverlayKind::for_authoring_tool(AuthoringTool::Constraint(
                 ConstraintIntent::Horizontal,
@@ -9757,17 +10330,24 @@ mod tests {
             "role=\"dialog\" aria-modal=\"false\""
         )));
         assert!(html.contains("data-wb-action=\"options-close\""));
-        assert_eq!(html.matches("class=\"wb-palette-option-tool\"").count(), 15);
+        assert_eq!(html.matches("class=\"wb-palette-option-tool\"").count(), 9);
         assert!(!html.contains("wb-palette-option-trigger"));
         assert!(!html.contains("-options-trigger"));
         assert!(html.contains("id=\"wb-tool-select\""));
+        assert!(html.contains("id=\"wb-option-panel-geometry-family\""));
+        assert!(html.contains("id=\"wb-geometry-variant-list\""));
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
+            let id = format!("wb-tool-family-{}", family.key());
+            let button = html
+                .split(&format!("id=\"{id}\""))
+                .nth(1)
+                .and_then(|value| value.split("</button>").next())
+                .unwrap_or_else(|| panic!("missing geometry family invoker {id}"));
+            assert!(button.contains("aria-controls=\"wb-tool-options-overlay\""));
+            assert!(button.contains("aria-expanded=\"false\""));
+            assert!(button.contains("aria-haspopup=\"dialog\""));
+        }
         for id in [
-            "wb-tool-ellipse",
-            "wb-tool-elliptical-arc",
-            "wb-tool-rational-conic",
-            "wb-tool-parabola",
-            "wb-tool-hyperbola",
-            "wb-tool-nurbs",
             "wb-authoring-equal-tool",
             "wb-authoring-tangent-tool",
             "wb-authoring-continuity-tool",
@@ -9819,6 +10399,7 @@ mod tests {
         assert!(!css.contains(".wb-palette-option-trigger"));
         assert!(css.contains(".wb-canvas-overlay-stack {"));
         assert!(css.contains(".wb-tool-options-overlay {"));
+        assert!(css.contains(".wb-geometry-variant-list {"));
         assert!(css.contains("pointer-events: auto;"));
     }
 

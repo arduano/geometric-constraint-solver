@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ConstructionPreview, DraftInferenceInput, EditorEffect, Modifiers, RetainedEditorCoordinator,
-    ScreenPoint,
+    ConstructionPreview, DraftAuthoringInput, DraftInferenceCandidateId, DraftInferenceInput,
+    EditorEffect, Modifiers, RetainedEditorCoordinator, ScreenPoint,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -97,20 +97,34 @@ fn normalize_client_point_inner(
 }
 
 /// Translates one browser-captured modifier sample into semantic headless
-/// drafting input. The adapter chooses Shift as the demo personality; the
-/// editor remains keyboard-agnostic.
+/// authoring input. Ctrl/Cmd suppress ambient inference while Shift remains an
+/// independent recipe regularization request.
 #[must_use]
-pub(super) const fn draft_inference_input(modifiers: Modifiers) -> DraftInferenceInput {
-    draft_inference_input_for_suppression(modifiers.shift)
+pub(super) const fn draft_authoring_input(
+    modifiers: Modifiers,
+    preferred_candidate: Option<DraftInferenceCandidateId>,
+) -> DraftAuthoringInput {
+    draft_authoring_input_for_state(
+        modifiers.control || modifiers.command,
+        modifiers.shift,
+        preferred_candidate,
+    )
 }
 
-/// Builds semantic drafting input for a modifier-state transition that has no
+/// Builds semantic authoring input for a keyboard-state transition that has no
 /// newer pointer coordinates of its own.
 #[must_use]
-pub(super) const fn draft_inference_input_for_suppression(suppressed: bool) -> DraftInferenceInput {
-    DraftInferenceInput {
-        suppressed,
-        preferred_candidate: None,
+pub(super) const fn draft_authoring_input_for_state(
+    suppressed: bool,
+    regularized: bool,
+    preferred_candidate: Option<DraftInferenceCandidateId>,
+) -> DraftAuthoringInput {
+    DraftAuthoringInput {
+        inference: DraftInferenceInput {
+            suppressed,
+            preferred_candidate,
+        },
+        regularized,
     }
 }
 
@@ -200,9 +214,9 @@ mod tests {
 
     use super::{
         ClientRect, ConstructionDispatch, PlannedConstructionDispatch, UnmappedCanvasPointerAction,
-        dispatch_construction_effect, dispatch_planned_construction_effect, draft_inference_input,
-        draft_inference_input_for_suppression, normalize_captured_client_point,
-        normalize_client_point, unmapped_canvas_pointer_action,
+        dispatch_construction_effect, dispatch_planned_construction_effect, draft_authoring_input,
+        draft_authoring_input_for_state, normalize_captured_client_point, normalize_client_point,
+        unmapped_canvas_pointer_action,
     };
 
     fn input(pointer_id: u64, position: [f64; 2]) -> PointerInput {
@@ -358,25 +372,34 @@ mod tests {
     }
 
     #[test]
-    fn shift_is_translated_to_semantic_inference_suppression_only() {
+    fn modifiers_keep_ambient_suppression_and_recipe_regularization_independent() {
         assert_eq!(
-            draft_inference_input(Modifiers::default()),
-            geosolve_constraint_editor::DraftInferenceInput::default()
+            draft_authoring_input(Modifiers::default(), None),
+            geosolve_constraint_editor::DraftAuthoringInput::default()
         );
         assert_eq!(
-            draft_inference_input(Modifiers {
-                shift: true,
-                control: true,
-                command: true,
-            }),
-            geosolve_constraint_editor::DraftInferenceInput {
-                suppressed: true,
-                preferred_candidate: None,
+            draft_authoring_input(
+                Modifiers {
+                    shift: true,
+                    control: true,
+                    command: true,
+                },
+                None
+            ),
+            geosolve_constraint_editor::DraftAuthoringInput {
+                inference: geosolve_constraint_editor::DraftInferenceInput {
+                    suppressed: true,
+                    preferred_candidate: None,
+                },
+                regularized: true,
             }
         );
         assert_eq!(
-            draft_inference_input_for_suppression(false),
-            geosolve_constraint_editor::DraftInferenceInput::default()
+            draft_authoring_input_for_state(false, true, None),
+            geosolve_constraint_editor::DraftAuthoringInput {
+                inference: geosolve_constraint_editor::DraftInferenceInput::default(),
+                regularized: true,
+            }
         );
     }
 
@@ -456,20 +479,21 @@ mod tests {
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         coordinator.editor_mut().activate_tool(EditorTool::Circle);
 
-        let browser_input = draft_inference_input(Modifiers::default());
-        assert_eq!(browser_input.preferred_candidate, None);
+        let browser_input = draft_authoring_input(Modifiers::default(), None);
+        assert_eq!(browser_input.inference.preferred_candidate, None);
         let center = scene.viewport.model_to_screen([0.0, 0.0]);
-        coordinator.pointer_down_with_draft_inference(
+        coordinator.editor_mut().pointer_down_with_draft_authoring(
             &scene,
             input(71, [center.x, center.y]),
             browser_input,
         );
         let rim = scene.viewport.model_to_screen([1.5, 0.0]);
         let effect = coordinator
-            .pointer_down_with_draft_inference(
+            .editor_mut()
+            .pointer_down_with_draft_authoring(
                 &scene,
                 input(71, [rim.x, rim.y]),
-                draft_inference_input(Modifiers::default()),
+                draft_authoring_input(Modifiers::default(), None),
             )
             .into_iter()
             .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))

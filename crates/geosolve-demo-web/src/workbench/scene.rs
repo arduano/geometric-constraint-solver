@@ -18,7 +18,7 @@ use geosolve_constraint_editor::{
 #[cfg(test)]
 use geosolve_sketch::DocumentConstraintDefinition;
 use geosolve_sketch::{
-    DesignScalarId, DocumentCurveControlAvailability, DocumentCurveControlId,
+    DesignScalarId, DocumentArcSweep, DocumentCurveControlAvailability, DocumentCurveControlId,
     DocumentCurveControlKind, DocumentCurveControlWithholdingReason, DocumentCurveNormalSide,
     DocumentDimensionDefinition, DocumentDimensionMode, GeometryRole, ScalarUnit,
     SketchAcceptedDocumentState, SketchDatum,
@@ -2269,6 +2269,22 @@ fn construction_markup(preview: &ConstructionPreview, viewport: Viewport) -> Str
             marker(&mut output, viewport, *center, "wb-draft-center");
             marker(&mut output, viewport, *start, "wb-draft-start");
         }
+        ConstructionPreview::GuidePolyline { points, closed } => {
+            let mut display_points = points.clone();
+            if *closed && points.len() >= 3 {
+                display_points.push(points[0]);
+            }
+            let display_points = display_points
+                .into_iter()
+                .map(|point| viewport.model_to_screen(point))
+                .collect::<Vec<_>>();
+            if display_points.len() >= 2 {
+                let _ = write!(output, "<path d=\"{}\"/>", polyline_path(&display_points));
+            }
+            for &point in points {
+                marker(&mut output, viewport, point, "wb-draft-point");
+            }
+        }
         ConstructionPreview::EllipticalArcSupport {
             center,
             major_axis_point,
@@ -2566,9 +2582,11 @@ const fn inference_status_warning(
     match status {
         DraftInferenceStatus::Ambiguous { .. } => Some((
             "ambiguous",
-            "Ambiguous auto-constraint — move closer to one target",
+            "Ambiguous auto-constraint — press Tab to cycle or move closer",
         )),
-        DraftInferenceStatus::Suppressed => Some(("suppressed", "Auto-constraints suppressed")),
+        DraftInferenceStatus::Suppressed => {
+            Some(("suppressed", "Auto-constraints suppressed by Ctrl/Cmd"))
+        }
         DraftInferenceStatus::ResourceLimited => Some((
             "resource-limited",
             "Auto-constraints unavailable: inference resource limit reached",
@@ -2624,18 +2642,36 @@ fn construction_geometry_markup(
             large_arc,
             ..
         } => {
-            let start_screen = viewport.model_to_screen(*start);
-            let end_screen = viewport.model_to_screen(*end);
-            let radius = radius * viewport.pixels_per_model_unit;
-            let large = u8::from(*large_arc);
-            let _ = write!(
+            circular_arc_markup(
                 output,
-                "<path d=\"M {:.3} {:.3} A {radius:.3} {radius:.3} 0 {large} 0 {:.3} {:.3}\"/>",
-                start_screen.x, start_screen.y, end_screen.x, end_screen.y
+                viewport,
+                (*center, *start, *end),
+                *radius,
+                *large_arc,
+                0,
             );
-            marker(output, viewport, *center, "wb-draft-center");
-            marker(output, viewport, *start, "wb-draft-start");
-            marker(output, viewport, *end, "wb-draft-end");
+        }
+        ConstructionPreviewGeometry::CircularArc {
+            center,
+            start,
+            end,
+            radius,
+            large_arc,
+            sweep,
+            ..
+        } => {
+            let sweep_flag = match sweep {
+                DocumentArcSweep::CounterClockwise => 0,
+                DocumentArcSweep::Clockwise => 1,
+            };
+            circular_arc_markup(
+                output,
+                viewport,
+                (*center, *start, *end),
+                *radius,
+                *large_arc,
+                sweep_flag,
+            );
         }
         ConstructionPreviewGeometry::AdvancedCurve {
             kind,
@@ -2662,6 +2698,29 @@ fn construction_geometry_markup(
             }
         }
     }
+}
+
+fn circular_arc_markup(
+    output: &mut String,
+    viewport: Viewport,
+    points: ([f64; 2], [f64; 2], [f64; 2]),
+    radius: f64,
+    large_arc: bool,
+    sweep_flag: u8,
+) {
+    let (center, start, end) = points;
+    let start_screen = viewport.model_to_screen(start);
+    let end_screen = viewport.model_to_screen(end);
+    let radius = radius * viewport.pixels_per_model_unit;
+    let large = u8::from(large_arc);
+    let _ = write!(
+        output,
+        "<path d=\"M {:.3} {:.3} A {radius:.3} {radius:.3} 0 {large} {sweep_flag} {:.3} {:.3}\"/>",
+        start_screen.x, start_screen.y, end_screen.x, end_screen.y
+    );
+    marker(output, viewport, center, "wb-draft-center");
+    marker(output, viewport, start, "wb-draft-start");
+    marker(output, viewport, end, "wb-draft-end");
 }
 
 fn elliptical_arc_support_markup(
@@ -2822,13 +2881,14 @@ mod tests {
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
-        DocumentAngleOrientation, DocumentCenterRef, DocumentConstraintDefinition,
-        DocumentCoordinateAxis, DocumentCurveControlAvailability, DocumentCurveControlKind,
-        DocumentCurveControlWithholdingReason, DocumentDimensionDefinition, DocumentDimensionMode,
-        DocumentDirectionSense, DocumentEdit, DocumentLineSupportRef, DocumentObjectId,
-        DocumentParameterId, DocumentParameterKind, DocumentParameterTarget, DocumentSolveRequest,
-        GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ParameterBatch, ParameterBatchEntry,
-        ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+        DocumentAngleOrientation, DocumentArcSweep, DocumentCenterRef,
+        DocumentConstraintDefinition, DocumentCoordinateAxis, DocumentCurveControlAvailability,
+        DocumentCurveControlKind, DocumentCurveControlWithholdingReason,
+        DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
+        DocumentLineSupportRef, DocumentObjectId, DocumentParameterId, DocumentParameterKind,
+        DocumentParameterTarget, DocumentSolveRequest, GeometryRole,
+        MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ParameterBatch, ParameterBatchEntry, ParameterValue,
+        PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
         SketchDesignIdentity, SketchDocument,
     };
     use geosolve_sketch_features::{
@@ -3525,7 +3585,9 @@ mod tests {
             .expect("suppressed inference");
         let suppressed_markup = inference_markup(&suppressed, viewport);
         assert!(suppressed_markup.contains("data-inference-status=\"suppressed\""));
-        assert!(suppressed_markup.contains("aria-label=\"Auto-constraints suppressed\""));
+        assert!(
+            suppressed_markup.contains("aria-label=\"Auto-constraints suppressed by Ctrl/Cmd\"")
+        );
         assert!(!suppressed_markup.contains("wb-inference-glyph"));
 
         let mut resource_policy = DraftInferencePolicy::default();
@@ -3622,6 +3684,41 @@ mod tests {
         );
         assert!(minor.contains("A 50.000 50.000 0 0 0"));
         assert!(major.contains("A 50.000 50.000 0 1 0"));
+    }
+
+    #[test]
+    fn m78_preview_renders_explicit_clockwise_sweep_and_multistage_guides() {
+        let mut clockwise = String::new();
+        construction_geometry_markup(
+            &mut clockwise,
+            &ConstructionPreviewGeometry::CircularArc {
+                center: [0.0, 0.0],
+                start: [1.0, 0.0],
+                end: [0.0, 1.0],
+                radius: 1.0,
+                sweep_radians: 3.0 * std::f64::consts::FRAC_PI_2,
+                large_arc: true,
+                sweep: DocumentArcSweep::Clockwise,
+            },
+            viewport(),
+        );
+        assert!(clockwise.contains("A 50.000 50.000 0 1 1"));
+        assert!(clockwise.contains("wb-draft-start"));
+        assert!(clockwise.contains("wb-draft-end"));
+
+        let guide = construction_markup(
+            &ConstructionPreview::GuidePolyline {
+                points: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 1.0]],
+                closed: true,
+            },
+            viewport(),
+        );
+        assert_eq!(guide.matches("wb-draft-point").count(), 3);
+        assert!(
+            guide.contains(
+                "M 500.000 350.000 L 600.000 350.000 L 600.000 300.000 L 500.000 350.000"
+            )
+        );
     }
 
     #[test]

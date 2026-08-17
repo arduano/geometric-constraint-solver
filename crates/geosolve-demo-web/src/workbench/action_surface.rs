@@ -90,7 +90,6 @@ mod tests {
         CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, FEATURE_ACTIONS, authoring_tool_from_key,
         constraint_from_key, dimension_from_key, dimension_key, feature_tool_from_key,
     };
-    use crate::workbench::icons::GEOMETRY_TOOLS;
 
     #[test]
     fn wasm_action_identity_catalog_is_complete_unique_and_round_trips() {
@@ -230,13 +229,15 @@ mod tests {
         assert!(!html.contains("<kbd class=\"wb-authoring-icon\""));
         assert_eq!(
             html.matches("class=\"wb-geometry-icon\"").count(),
-            GEOMETRY_TOOLS.len(),
-            "every geometry tool needs exactly one shared vector-icon host"
+            1 + geosolve_constraint_editor::GeometryToolFamily::ALL.len(),
+            "Select and every geometry family need exactly one shared vector-icon host"
         );
-        for (key, _) in GEOMETRY_TOOLS {
+        assert!(html.contains("data-wb-tool=\"select\""));
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
             assert!(
-                html.contains(&format!("data-wb-tool=\"{key}\"")),
-                "missing geometry palette action {key}"
+                html.contains(&format!("data-wb-geometry-family=\"{}\"", family.key())),
+                "missing geometry family action {}",
+                family.key(),
             );
         }
         let geometry_markup = html

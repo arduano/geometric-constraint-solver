@@ -4,7 +4,7 @@
 
 use geosolve_constraint_editor::{
     AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, FeatureAuthoringTool,
-    SceneConstraintGlyph,
+    GeometryToolVariant, SceneConstraintGlyph,
 };
 
 const SELECT: &str = "<path d=\"M-7-8L6 1 0 3 3 9-1 10-4 4-8 8Z\"/><path d=\"M0 3l-4 1\"/>";
@@ -128,6 +128,7 @@ const ANGLE: &str = concat!(
     "<path d=\"M-8 6H7M-8 6L3-6M-3 6A5 5 0 0 1 0-1\"/>",
     "<path d=\"M-1-1H3v4\"/>",
 );
+#[cfg(test)]
 pub(crate) const GEOMETRY_TOOLS: [(&str, EditorTool); 15] = [
     ("select", EditorTool::Select),
     ("point", EditorTool::Point),
@@ -191,6 +192,38 @@ pub(crate) fn geometry_tool_icon_markup(tool: EditorTool) -> String {
     let fragment = geometry_tool_fragment(tool);
     format!(
         "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"geometry-{key}\">{fragment}</svg>"
+    )
+}
+
+pub(crate) fn geometry_variant_icon_markup(variant: GeometryToolVariant) -> String {
+    let fragment = geometry_tool_fragment(variant.editor_tool());
+    let accent = match variant {
+        GeometryToolVariant::MidpointLine => {
+            "<path d=\"M-2-2L2-2 0 2Z\"/><path d=\"M0-5V5\" stroke-dasharray=\"1.5 1.5\"/>"
+        }
+        GeometryToolVariant::ThreePointCornerRectangle
+        | GeometryToolVariant::ThreePointCenterRectangle
+        | GeometryToolVariant::ThreePointCircle
+        | GeometryToolVariant::ThreePointArc => {
+            "<circle cx=\"-7\" cy=\"-7\" r=\"1\"/><circle cy=\"-7\" r=\"1\"/><circle cx=\"7\" cy=\"-7\" r=\"1\"/>"
+        }
+        GeometryToolVariant::CenterRectangle => "<circle r=\"1.4\"/>",
+        GeometryToolVariant::TwoPointDiameterCircle => "<path d=\"M-5 5L5-5\"/>",
+        GeometryToolVariant::TangentArc => {
+            "<path d=\"M-8 6H-3\"/><circle cx=\"-3\" cy=\"6\" r=\"1\"/>"
+        }
+        GeometryToolVariant::AxisEndpointsEllipse
+        | GeometryToolVariant::AxisEndpointsEllipticalArc => {
+            "<circle cx=\"-8\" r=\"1\"/><circle cx=\"8\" r=\"1\"/>"
+        }
+        GeometryToolVariant::PeriodicControlNurbs => {
+            "<path d=\"M-6-7A8 8 0 0 1 6-7\"/><path d=\"M4-9L7-7 4-5\"/>"
+        }
+        _ => "",
+    };
+    format!(
+        "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"geometry-{}\">{fragment}{accent}</svg>",
+        variant.key(),
     )
 }
 
@@ -356,13 +389,14 @@ mod tests {
 
     use geosolve_constraint_editor::{
         AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, FeatureAuthoringTool,
-        SceneConstraintGlyph,
+        GeometryToolVariant, SceneConstraintGlyph,
     };
 
     use super::{
         GEOMETRY_TOOLS, TreeIconKind, authoring_icon_markup, constraint_icon_fragment,
         constraint_icon_key, construction_role_icon_markup, feature_icon_markup,
-        geometry_tool_icon_markup, geometry_tool_key, tree_icon_markup,
+        geometry_tool_icon_markup, geometry_tool_key, geometry_variant_icon_markup,
+        tree_icon_markup,
     };
 
     #[test]
@@ -392,6 +426,17 @@ mod tests {
             assert!(!icon.contains("<text"));
         }
         assert_eq!(geometry_tool_key(EditorTool::Nurbs), "nurbs");
+    }
+
+    #[test]
+    fn every_exact_geometry_variant_has_stable_text_free_icon_markup() {
+        let markup = GeometryToolVariant::ALL.map(geometry_variant_icon_markup);
+        assert_eq!(markup.iter().collect::<HashSet<_>>().len(), markup.len());
+        for (variant, icon) in GeometryToolVariant::ALL.into_iter().zip(markup) {
+            assert!(icon.contains(&format!("data-icon-key=\"geometry-{}\"", variant.key())));
+            assert!(icon.contains("aria-hidden=\"true\""));
+            assert!(!icon.contains("<text"));
+        }
     }
 
     #[test]
