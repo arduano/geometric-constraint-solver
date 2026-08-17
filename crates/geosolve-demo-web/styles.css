@@ -385,6 +385,10 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .workbench[data-canvas-cursor="fillet"] #wb-viewport * { cursor: crosshair !important; }
 .workbench[data-canvas-cursor="pan"] #wb-viewport,
 .workbench[data-canvas-cursor="pan"] #wb-viewport * { cursor: grabbing !important; }
+.workbench[data-canvas-cursor="curve-control"] #wb-viewport,
+.workbench[data-canvas-cursor="curve-control"] #wb-viewport * { cursor: grab !important; }
+.workbench[data-canvas-cursor="curve-control-active"] #wb-viewport,
+.workbench[data-canvas-cursor="curve-control-active"] #wb-viewport * { cursor: grabbing !important; }
 .wb-reproduction-overlay {
   position: absolute;
   z-index: 10;
@@ -735,6 +739,59 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   opacity: 1;
 }
 .wb-point { fill: #131718; stroke: #8fd2ca; stroke-width: 2; cursor: grab; }
+.wb-curve-control-guides,
+.wb-curve-control-guides *,
+.wb-curve-control-cage,
+.wb-curve-control-cage * { pointer-events: none; }
+.wb-curve-control-guide,
+.wb-curve-control-rail {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.wb-curve-control-guide {
+  stroke: #728486;
+  stroke-width: 1.15;
+  stroke-dasharray: 4 4;
+}
+.wb-curve-control-rail {
+  stroke: #b49b67;
+  stroke-width: 1.25;
+  stroke-dasharray: 2.5 3;
+}
+.wb-curve-control-hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+.wb-curve-control-mark {
+  fill: #151a1b;
+  stroke: #8fd2ca;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.wb-curve-control[data-control-role="trim-start"] .wb-curve-control-mark,
+.wb-curve-control[data-control-role="trim-end"] .wb-curve-control-mark { stroke: #e6c785; }
+.wb-curve-control[data-control-role="rational-middle"] .wb-curve-control-mark { stroke: #b7a0df; }
+.wb-curve-control.hovered .wb-curve-control-mark,
+.wb-curve-control.active .wb-curve-control-mark {
+  stroke: #ffd27d;
+  stroke-width: 2.4;
+  filter: drop-shadow(0 0 4px rgb(239 184 86 / 65%));
+}
+.wb-curve-control.read-only .wb-curve-control-mark {
+  stroke: #77817f;
+  stroke-dasharray: 2 2;
+}
+.wb-curve-control-tooltip {
+  fill: #e6ece9;
+  stroke: #151a1b;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+  font: 600 10px/1.2 Inter, system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
 .wb-curve[data-interactive="false"],
 .wb-point[data-interactive="false"] {
   pointer-events: none;
@@ -1090,6 +1147,35 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-construction-display-trigger[aria-expanded="true"] { color: #e6c785; border-color: #806b3f !important; }
 .wb-geometry-role-editor p { margin: 0; color: #899492; font-size: 0.67rem; line-height: 1.4; }
+.wb-curve-control-inspector p { margin: 0; color: #96a19f; font-size: 0.67rem; line-height: 1.45; }
+.wb-curve-control-values { display: grid; gap: 0.5rem; }
+.wb-curve-control-values fieldset {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.55rem;
+  border: 1px solid #3c4545;
+  border-radius: 4px;
+}
+.wb-curve-control-values legend,
+.wb-curve-control-values label { color: #9ba8a6; font-size: 0.67rem; }
+.wb-curve-control-summary,
+.wb-curve-property-row,
+.wb-curve-coordinate-row {
+  display: grid;
+  align-items: center;
+  gap: 0.35rem;
+}
+.wb-curve-control-summary { grid-template-columns: 1fr auto; }
+.wb-curve-property-row { grid-template-columns: minmax(0, 1fr) auto; }
+.wb-curve-property-row label { grid-column: 1 / -1; }
+.wb-curve-property-row input,
+.wb-curve-property-row select { min-width: 0; }
+.wb-curve-property-row button { white-space: nowrap; }
+.wb-curve-coordinate-row { grid-template-columns: auto minmax(0, 1fr); }
+.wb-curve-coordinate-row input { min-width: 0; }
+.wb-curve-control-values output { color: #c3cdca; font: 0.67rem ui-monospace, monospace; }
+.wb-curve-control-values .wb-read-only-note { color: #899492; font-size: 0.64rem; line-height: 1.4; }
 .wb-datum-inspector strong { color: #e0c586; }
 .wb-datum-inspector p { margin: 0; color: #96a19f; font-size: 0.67rem; line-height: 1.45; }
 .wb-protected-badge {

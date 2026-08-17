@@ -10,15 +10,18 @@ use geosolve_constraint_editor::{
     DraftInferenceResolution, DraftInferenceStatus, EditorHoverState, EditorHoverTarget,
     EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
     EditorScene, GeometryInteractionPolicy, SceneAnnotationGeometry, SceneAnnotationKind,
-    SceneConstraintGlyph, SceneCurveOrigin, SceneDatum, SceneFilletAction,
-    SceneFilletActionAvailability, SceneFilletActionId, SceneFilletActionTarget,
+    SceneConstraintGlyph, SceneCurveControl, SceneCurveControlGripGeometry,
+    SceneCurveControlGuideKind, SceneCurveControlInteraction, SceneCurveOrigin, SceneDatum,
+    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionId, SceneFilletActionTarget,
     SceneFilletCornerAffordances, ScreenPoint, SelectionItem, Viewport, display_dimension_target,
 };
 #[cfg(test)]
 use geosolve_sketch::DocumentConstraintDefinition;
 use geosolve_sketch::{
-    DesignScalarId, DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionMode,
-    GeometryRole, ScalarUnit, SketchAcceptedDocumentState, SketchDatum,
+    DesignScalarId, DocumentCurveControlAvailability, DocumentCurveControlId,
+    DocumentCurveControlKind, DocumentCurveControlWithholdingReason, DocumentCurveNormalSide,
+    DocumentDimensionDefinition, DocumentDimensionMode, GeometryRole, ScalarUnit,
+    SketchAcceptedDocumentState, SketchDatum,
 };
 use geosolve_sketch_features::NativeCurveSpanSource;
 
@@ -465,6 +468,7 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
             computed_problems,
             geometry_policy,
         );
+        render_curve_control_guides(&mut output, scene, hover);
         output.push_str("</g><g class=\"wb-points\">");
         for point in scene
             .points
@@ -516,7 +520,8 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
     } else {
         output.push_str("</g><g class=\"wb-points\">");
     }
-    output.push_str("</g><g class=\"wb-annotations\">");
+    output.push_str("</g>");
+    output.push_str("<g class=\"wb-annotations\">");
     if let (Some(scene), Some(accepted)) = (scene, accepted) {
         render_annotations(
             &mut output,
@@ -531,6 +536,9 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
         );
     }
     output.push_str("</g>");
+    if let Some(scene) = scene {
+        render_curve_controls(&mut output, scene, hover);
+    }
     if let Some(inference) = inference {
         render_inference_guides(&mut output, inference, viewport);
     }
@@ -675,6 +683,207 @@ fn render_datums(
 
 fn geometry_is_hovered(hover: EditorHoverState, item: SelectionItem) -> bool {
     matches!(hover.target, Some(EditorHoverTarget::Geometry(target)) if target == item)
+}
+
+fn curve_control_is_hovered(hover: EditorHoverState, control: DocumentCurveControlId) -> bool {
+    matches!(
+        hover.target,
+        Some(EditorHoverTarget::CurveControl { control: target, .. }) if target == control
+    )
+}
+
+fn render_curve_control_guides(output: &mut String, scene: &EditorScene, hover: EditorHoverState) {
+    if scene.curve_control_guides.is_empty() {
+        return;
+    }
+    output.push_str(
+        "<g class=\"wb-curve-control-guides\" aria-hidden=\"true\" pointer-events=\"none\">",
+    );
+    for guide in &scene.curve_control_guides {
+        let hovered = guide
+            .control
+            .is_some_and(|control| curve_control_is_hovered(hover, control));
+        let kind = curve_control_guide_key(guide.kind);
+        let class = if guide.kind == SceneCurveControlGuideKind::SizeRail {
+            "wb-curve-control-rail"
+        } else {
+            "wb-curve-control-guide"
+        };
+        let _ = write!(
+            output,
+            concat!(
+                "<path class=\"{}{}\" data-control-guide=\"{}\" data-curve-id=\"{}\" ",
+                "d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>"
+            ),
+            class,
+            if hovered { " hovered" } else { "" },
+            kind,
+            guide.owner,
+            guide.screen_start.x,
+            guide.screen_start.y,
+            guide.screen_end.x,
+            guide.screen_end.y,
+        );
+    }
+    output.push_str("</g>");
+}
+
+fn render_curve_controls(output: &mut String, scene: &EditorScene, hover: EditorHoverState) {
+    if scene.curve_controls.is_empty() {
+        return;
+    }
+    output.push_str("<g class=\"wb-curve-control-cage\">");
+    for control in &scene.curve_controls {
+        // Stored design-point aliases keep the ordinary point presentation and
+        // pointer owner. They remain in the headless catalog so guides can use
+        // their exact anchors, but painting a second grip would falsely imply a
+        // second selectable object over the same point.
+        if !matches!(control.interaction, SceneCurveControlInteraction::Direct) {
+            continue;
+        }
+        render_curve_control(output, control, hover);
+    }
+    output.push_str("</g>");
+}
+
+fn render_curve_control(output: &mut String, control: &SceneCurveControl, hover: EditorHoverState) {
+    let hovered = curve_control_is_hovered(hover, control.id);
+    let read_only = !control.is_editable();
+    let role = curve_control_kind_key(control.id.kind);
+    let label = match control.availability {
+        DocumentCurveControlAvailability::Editable => control.accessible_name.clone(),
+        DocumentCurveControlAvailability::ReadOnly(reason) => format!(
+            "{} · read-only: {}",
+            control.accessible_name,
+            curve_control_read_only_reason(reason),
+        ),
+    };
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-curve-control{}{}\" role=\"img\" aria-label=\"{}\" ",
+            "aria-disabled=\"{}\" data-control-role=\"{}\" data-curve-id=\"{}\" ",
+            "data-editor-segment=\"{}\" pointer-events=\"none\">"
+        ),
+        if hovered { " hovered" } else { "" },
+        if read_only { " read-only" } else { "" },
+        escape(&label),
+        read_only,
+        role,
+        control.id.curve,
+        control.owner.segment,
+    );
+    let _ = write!(output, "<title>{}</title>", escape(&label));
+    match control.grip {
+        SceneCurveControlGripGeometry::Circle {
+            center,
+            radius_pixels,
+        } => {
+            let _ = write!(
+                output,
+                "<circle class=\"wb-curve-control-mark\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"{:.3}\"/>",
+                center.x, center.y, radius_pixels,
+            );
+        }
+        SceneCurveControlGripGeometry::Square {
+            center,
+            half_extent_pixels,
+        } => {
+            let _ = write!(
+                output,
+                "<rect class=\"wb-curve-control-mark\" x=\"{:.3}\" y=\"{:.3}\" width=\"{:.3}\" height=\"{:.3}\"/>",
+                center.x - half_extent_pixels,
+                center.y - half_extent_pixels,
+                half_extent_pixels * 2.0,
+                half_extent_pixels * 2.0,
+            );
+        }
+        SceneCurveControlGripGeometry::Diamond {
+            center,
+            radius_pixels,
+        } => {
+            let _ = write!(
+                output,
+                concat!(
+                    "<path class=\"wb-curve-control-mark\" ",
+                    "d=\"M{:.3} {:.3}L{:.3} {:.3}L{:.3} {:.3}L{:.3} {:.3}Z\"/>"
+                ),
+                center.x,
+                center.y - radius_pixels,
+                center.x + radius_pixels,
+                center.y,
+                center.x,
+                center.y + radius_pixels,
+                center.x - radius_pixels,
+                center.y,
+            );
+        }
+    }
+    if hovered {
+        let _ = write!(
+            output,
+            "<text class=\"wb-curve-control-tooltip\" x=\"{:.3}\" y=\"{:.3}\" aria-hidden=\"true\">{}</text>",
+            control.screen_position.x + 10.0,
+            control.screen_position.y - 10.0,
+            escape(&label),
+        );
+    }
+    output.push_str("</g>");
+}
+
+const fn curve_control_guide_key(kind: SceneCurveControlGuideKind) -> &'static str {
+    match kind {
+        SceneCurveControlGuideKind::ControlPolygon => "control-polygon",
+        SceneCurveControlGuideKind::PrincipalAxis => "principal-axis",
+        SceneCurveControlGuideKind::FocusAxis => "focus-axis",
+        SceneCurveControlGuideKind::RadiusSpoke => "radius-spoke",
+        SceneCurveControlGuideKind::MinorAxisSpoke => "minor-axis-spoke",
+        SceneCurveControlGuideKind::ConjugateAxisSpoke => "conjugate-axis-spoke",
+        SceneCurveControlGuideKind::ProjectiveVector => "projective-vector",
+        SceneCurveControlGuideKind::SizeRail => "size-rail",
+    }
+}
+
+const fn curve_control_kind_key(kind: DocumentCurveControlKind) -> &'static str {
+    match kind {
+        DocumentCurveControlKind::Center => "center",
+        DocumentCurveControlKind::StartPoint => "start-point",
+        DocumentCurveControlKind::EndPoint => "end-point",
+        DocumentCurveControlKind::ControlPoint { .. } => "control-point",
+        DocumentCurveControlKind::Radius => "radius",
+        DocumentCurveControlKind::TrimStart => "trim-start",
+        DocumentCurveControlKind::TrimEnd => "trim-end",
+        DocumentCurveControlKind::MajorAxisPoint => "major-axis-point",
+        DocumentCurveControlKind::MinorAxis => "minor-axis",
+        DocumentCurveControlKind::RationalMiddle => "rational-middle",
+        DocumentCurveControlKind::Vertex => "vertex",
+        DocumentCurveControlKind::Focus => "focus",
+        DocumentCurveControlKind::TransverseAxisPoint => "transverse-axis-point",
+        DocumentCurveControlKind::ConjugateAxis => "conjugate-axis",
+        _ => "curve-control",
+    }
+}
+
+const fn curve_control_read_only_reason(
+    reason: DocumentCurveControlWithholdingReason,
+) -> &'static str {
+    match reason {
+        DocumentCurveControlWithholdingReason::InactiveCurve => "curve is inactive",
+        DocumentCurveControlWithholdingReason::AssociativeFilletOutput => {
+            "the associative Fillet owns this output"
+        }
+        DocumentCurveControlWithholdingReason::HostParameterOwned => {
+            "value is owned by a host parameter"
+        }
+        DocumentCurveControlWithholdingReason::GaugeOwned => "value is the active NURBS gauge",
+        DocumentCurveControlWithholdingReason::DrivingDimensionOwned => {
+            "an active driving radius or diameter dimension owns this size"
+        }
+        DocumentCurveControlWithholdingReason::EqualRadiusOwned => {
+            "an active equal-radius relation owns this size"
+        }
+        _ => "the curve owner does not expose a direct edit",
+    }
 }
 
 fn render_axis_datum(
@@ -1343,7 +1552,12 @@ fn render_annotations(
             {
                 Some(occurrence)
             }
-            Some(EditorHoverTarget::Geometry(_) | EditorHoverTarget::Annotation(_)) | None => None,
+            Some(
+                EditorHoverTarget::CurveControl { .. }
+                | EditorHoverTarget::Geometry(_)
+                | EditorHoverTarget::Annotation(_),
+            )
+            | None => None,
         };
         let is_hovered =
             hovered_occurrence.is_some_and(|occurrence| occurrence.marker_index.is_none());
@@ -2512,24 +2726,26 @@ fn escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        ComputedFeatureProblemMetadata, ConstructionPreviewGeometry, DraftInferenceBehavior,
-        DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy,
-        DraftInferenceResolution, DraftInferenceSample, DraftInferenceSubject,
-        DraftReferenceAnchor, DraftReferenceOrigin, EditorHoverState, EditorHoverTarget,
-        EditorProblemScope, EditorScene, GeometryInteractionPolicy, RetainedEditorCoordinator,
-        SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationLabelBounds,
-        SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
+        ComputedFeatureProblemMetadata, ConstraintEditor, ConstructionPreviewGeometry,
+        DraftInferenceBehavior, DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput,
+        DraftInferencePolicy, DraftInferenceResolution, DraftInferenceSample,
+        DraftInferenceSubject, DraftReferenceAnchor, DraftReferenceOrigin, EditorHoverState,
+        EditorHoverTarget, EditorProblemScope, EditorScene, GeometryInteractionPolicy,
+        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
+        SceneAnnotationLabelBounds, SceneAnnotationOccurrence, ScenePointRoleIncidence,
+        ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
         DocumentAngleOrientation, DocumentCenterRef, DocumentConstraintDefinition,
-        DocumentCoordinateAxis, DocumentDimensionDefinition, DocumentDimensionMode,
+        DocumentCoordinateAxis, DocumentCurveControlAvailability, DocumentCurveControlKind,
+        DocumentCurveControlWithholdingReason, DocumentDimensionDefinition, DocumentDimensionMode,
         DocumentDirectionSense, DocumentEdit, DocumentLineSupportRef, DocumentObjectId,
         DocumentParameterId, DocumentParameterKind, DocumentParameterTarget, DocumentSolveRequest,
-        GeometryRole, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
-        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDesignIdentity,
-        SketchDocument,
+        GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ParameterBatch, ParameterBatchEntry,
+        ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+        SketchDesignIdentity, SketchDocument,
     };
     use geosolve_sketch_features::{
         ComputedFeatureCornerId, ComputedFeatureId, NativeCurveSpanSource,
@@ -2537,8 +2753,8 @@ mod tests {
 
     use super::{
         CanvasCamera, CanvasDisplayOptions, adaptive_grid_spec, annotation_geometry,
-        constraint_glyph, construction_geometry_markup, dimension_kind, grid_path, svg_markup,
-        svg_markup_with_computed_context,
+        constraint_glyph, construction_geometry_markup, dimension_kind, grid_path,
+        render_curve_controls, svg_markup, svg_markup_with_computed_context,
         svg_markup_with_computed_context_action_stamp_and_display,
         svg_markup_with_computed_context_and_action_stamp, svg_markup_with_context, viewport,
     };
@@ -2973,6 +3189,134 @@ mod tests {
         let datum_markup = render(SelectionItem::Datum(geosolve_sketch::SketchDatum::YAxis));
         assert_eq!(datum_markup.matches(" geometry-hovered").count(), 1);
         assert!(datum_markup.contains("wb-datum-y-axis geometry-hovered"));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one renderer regression compares exact guide, grip, hover, paint-order and accessibility output"
+    )]
+    fn m77_curve_control_markup_uses_published_geometry_hover_and_accessibility() {
+        let mut document = SketchDocument::new(4.0).unwrap();
+        let start = document.add_point("start", [0.0, 0.0]).unwrap();
+        let end = document.add_point("end", [4.0, 0.0]).unwrap();
+        let weight = document
+            .add_scalar(
+                "weight",
+                0.5,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+                    upper: f64::MAX,
+                },
+            )
+            .unwrap();
+        let curve = document
+            .add_curve(
+                "rational demo",
+                CurveDefinition::RationalQuadraticConic {
+                    start,
+                    weighted_middle: [1.0, 1.5],
+                    middle_weight: weight,
+                    end,
+                },
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let accepted = session.accepted_state_for_current_input().unwrap();
+        let viewport = viewport();
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .unwrap();
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection([SelectionItem::Curve(CurveSpan::line(curve))]);
+        editor.populate_curve_controls(&mut scene).unwrap();
+        let middle = scene
+            .curve_controls
+            .iter()
+            .find(|control| control.id.kind == DocumentCurveControlKind::RationalMiddle)
+            .cloned()
+            .expect("middle control");
+        let hover = EditorHoverState {
+            target: Some(EditorHoverTarget::CurveControl {
+                control: middle.id,
+                owner: middle.owner,
+            }),
+            context_owner: Some(SelectionItem::Curve(middle.owner)),
+        };
+        let markup = svg_markup_with_computed_context_action_stamp_and_display(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[SelectionItem::Curve(CurveSpan::line(curve))],
+            &[],
+            hover,
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions {
+                grid_visible: false,
+            },
+            viewport,
+        );
+        assert_eq!(markup.matches("wb-curve-control hovered").count(), 1);
+        assert!(markup.contains("data-control-role=\"rational-middle\""));
+        assert!(markup.contains("aria-label=\"Middle control P1 — rational demo\""));
+        assert!(markup.contains("<title>Middle control P1 — rational demo</title>"));
+        assert!(markup.contains("class=\"wb-curve-control-tooltip\""));
+        assert!(markup.contains("pointer-events=\"none\""));
+        assert!(
+            markup.find("class=\"wb-annotations\"").unwrap()
+                < markup.find("class=\"wb-curve-control-cage\"").unwrap(),
+            "direct handles must paint above curve annotations while guides remain below points",
+        );
+        assert!(!markup.contains("data-control-role=\"start-point\""));
+        assert!(!markup.contains("data-control-role=\"end-point\""));
+        for guide in &scene.curve_control_guides {
+            assert!(markup.contains(&format!(
+                "d=\"M{:.3} {:.3}L{:.3} {:.3}\"",
+                guide.screen_start.x, guide.screen_start.y, guide.screen_end.x, guide.screen_end.y,
+            )));
+        }
+        let geosolve_constraint_editor::SceneCurveControlGripGeometry::Square {
+            center,
+            half_extent_pixels,
+        } = middle.grip
+        else {
+            panic!("rational P1 must use the published square grip");
+        };
+        assert!(markup.contains(&format!(
+            "x=\"{:.3}\" y=\"{:.3}\" width=\"{:.3}\" height=\"{:.3}\"",
+            center.x - half_extent_pixels,
+            center.y - half_extent_pixels,
+            half_extent_pixels * 2.0,
+            half_extent_pixels * 2.0,
+        )));
+
+        let mut read_only = middle;
+        read_only.availability = DocumentCurveControlAvailability::ReadOnly(
+            DocumentCurveControlWithholdingReason::HostParameterOwned,
+        );
+        scene.curve_controls = vec![read_only];
+        let mut read_only_markup = String::new();
+        render_curve_controls(&mut read_only_markup, &scene, EditorHoverState::default());
+        assert!(read_only_markup.contains("class=\"wb-curve-control read-only\""));
+        assert!(read_only_markup.contains("aria-disabled=\"true\""));
+        assert!(read_only_markup.contains("read-only: value is owned by a host parameter"));
     }
 
     #[test]

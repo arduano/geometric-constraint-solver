@@ -180,7 +180,7 @@
             </div>
             <div id="wb-option-panel-conic" class="wb-option-panel" data-wb-option-panel="conic" hidden>
               <label id="wb-conic-ratio-field">Minor-axis ratio<input id="wb-conic-ratio" type="number" min="0" max="1" step="any" value="0.5" /></label>
-              <label id="wb-conic-weight-field">Rational weight<input id="wb-conic-weight" type="number" min="0" step="any" value="1" /></label>
+              <label id="wb-conic-weight-field">Rational weight<input id="wb-conic-weight" type="number" min="-1" step="any" value="1" /></label>
               <label id="wb-conic-arc-start-field">Arc start (degrees)<input id="wb-conic-arc-start" type="number" step="any" value="0" /></label>
               <label id="wb-conic-arc-end-field">Arc end (degrees)<input id="wb-conic-arc-end" type="number" step="any" value="90" /></label>
               <label id="wb-conic-arc-sweep-field">Arc sweep<select id="wb-conic-arc-sweep"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label>
@@ -188,6 +188,7 @@
               <label id="wb-conic-trim-end-field">Trim end<input id="wb-conic-trim-end" type="number" step="any" value="1" /></label>
               <label id="wb-conic-semi-conjugate-field">Semi-conjugate<input id="wb-conic-semi-conjugate" type="number" min="0" step="any" value="1" /></label>
               <label id="wb-conic-hyperbola-branch-field">Hyperbola branch<select id="wb-conic-hyperbola-branch"><option value="positive">Positive</option><option value="negative">Negative</option></select></label>
+              <p id="wb-conic-rational-help" class="wb-option-help">Click Start, then the ordinary middle control P1, then End. The curve usually does not pass through P1; weight controls its influence and must be greater than −1.</p>
             </div>
             <div id="wb-option-panel-nurbs" class="wb-option-panel" data-wb-option-panel="nurbs" hidden>
               <label>Form<select id="wb-nurbs-form"><option value="clamped">Clamped</option><option value="periodic">Periodic</option></select></label>
@@ -246,6 +247,12 @@
           <p id="wb-geometry-role-detail">Role changes target complete persistent curves, including every span and any Fillet-hidden portion.</p>
           <button type="button" data-wb-action="geometry-role">Toggle Profile / Construction</button>
         </section>
+        <section id="wb-curve-control-inspector" class="wb-inspector-section wb-curve-control-inspector" aria-label="Selected curve controls" hidden>
+          <span class="wb-field-label">Curve controls</span>
+          <strong id="wb-curve-control-family">Selected curve</strong>
+          <p id="wb-curve-control-detail">Canvas handles are transient views of persistent curve parameters.</p>
+          <div id="wb-curve-control-values" class="wb-curve-control-values"></div>
+        </section>
         <section id="wb-datum-inspector" class="wb-inspector-section wb-datum-inspector" hidden>
           <span class="wb-field-label">Intrinsic reference</span>
           <strong id="wb-datum-name">Origin</strong>
@@ -276,7 +283,7 @@
           <div id="wb-fillet-actions" class="wb-fillet-actions"></div>
           <p>These actions preview and commit the same headless absolute branch choices shown on the canvas.</p>
         </section>
-        <p class="wb-inspector-note">Constraint glyphs and dimensions are persistent selectable objects. Values and equations come from the sketch domain.</p>
+        <p class="wb-inspector-note">Curve handles are transient views of sketch parameters. Constraint glyphs and dimensions remain persistent selectable objects; values and equations come from the sketch domain.</p>
       </aside>
 
       <footer class="wb-status-bar">

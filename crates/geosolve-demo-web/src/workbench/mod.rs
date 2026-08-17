@@ -34,6 +34,7 @@ const CANVAS_PAN_POINTER_EVENTS: [&str; 3] = ["pointerdown", "pointermove", "poi
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CanvasPointerCaptureKind {
     Point,
+    CurveControl,
     Annotation,
     Fillet,
     Pan,
@@ -178,6 +179,9 @@ const fn canvas_pointer_capture_kind(
     match kind {
         geosolve_constraint_editor::ActivePointerGestureKind::Point => {
             CanvasPointerCaptureKind::Point
+        }
+        geosolve_constraint_editor::ActivePointerGestureKind::CurveControl => {
+            CanvasPointerCaptureKind::CurveControl
         }
         geosolve_constraint_editor::ActivePointerGestureKind::Annotation => {
             CanvasPointerCaptureKind::Annotation
@@ -512,6 +516,36 @@ const fn canvas_cursor_key(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+fn canvas_cursor_key_with_curve_control(
+    tool: geosolve_constraint_editor::EditorTool,
+    authoring_active: bool,
+    feature_authoring_active: bool,
+    panning: bool,
+    hover: geosolve_constraint_editor::EditorHoverState,
+    active: Option<geosolve_constraint_editor::ActivePointerGesture>,
+) -> &'static str {
+    if panning
+        || authoring_active
+        || feature_authoring_active
+        || tool != geosolve_constraint_editor::EditorTool::Select
+    {
+        return canvas_cursor_key(tool, authoring_active, feature_authoring_active, panning);
+    }
+    if active.is_some_and(|gesture| {
+        gesture.kind == geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
+    }) {
+        "curve-control-active"
+    } else if matches!(
+        hover.target,
+        Some(geosolve_constraint_editor::EditorHoverTarget::CurveControl { .. })
+    ) {
+        "curve-control"
+    } else {
+        canvas_cursor_key(tool, authoring_active, feature_authoring_active, panning)
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CoordinateHud {
     text: String,
@@ -614,6 +648,386 @@ fn annotation_inspector_presentation(
         detail: annotation.accessible_label.clone(),
         meta,
     })
+}
+
+/// Browser-neutral markup for the exact selected-curve property fallback.
+///
+/// The metadata already identifies persistent scalar ownership and explicit
+/// branch state. Keeping this formatter outside the WASM module lets native
+/// adapter tests prove that the browser never inspects curve definitions or
+/// reconstructs homogeneous rational coordinates.
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one closed metadata formatter keeps every selected-curve property role and action auditable"
+)]
+fn curve_control_inspector_markup(
+    metadata: &geosolve_constraint_editor::SelectedCurvePropertyMetadata,
+) -> String {
+    use std::fmt::Write as _;
+
+    use geosolve_constraint_editor::CurveNumericPropertyKind;
+    use geosolve_sketch::{
+        DocumentArcSweep, DocumentCurveControlAvailability, DocumentHyperbolaBranch,
+    };
+
+    let mut output = String::new();
+    if let Some(reason) = curve_property_read_only_reason(metadata.direct_edit_availability) {
+        let _ = write!(
+            output,
+            "<p class=\"wb-read-only-note\" data-curve-properties-read-only>Read-only: {reason}.</p>",
+        );
+    }
+    if let Some(degree) = metadata.degree {
+        let _ = write!(
+            output,
+            "<div class=\"wb-curve-control-summary\"><span>Degree</span><output>{degree}</output></div>",
+        );
+    }
+    if let Some(control) = metadata.rational_control {
+        use geosolve_sketch::DocumentRationalConicControl;
+
+        let (label, coordinate, note) = match control {
+            DocumentRationalConicControl::Euclidean { middle, .. } => (
+                "Middle control P1",
+                middle,
+                "Euclidean control P1; the conic is not required to pass through this point.",
+            ),
+            DocumentRationalConicControl::Projective {
+                weighted_middle, ..
+            } => (
+                "Projective middle Qh",
+                weighted_middle,
+                "Zero-weight projective vector Qh; this is deliberately not an ordinary point.",
+            ),
+            _ => ("Middle control", [0.0, 0.0], "Unsupported control mode."),
+        };
+        let disabled = curve_property_disabled_attributes(metadata.direct_edit_availability);
+        let action = if disabled.is_empty() {
+            " data-wb-action=\"curve-rational-middle\""
+        } else {
+            ""
+        };
+        let _ = write!(
+            output,
+            concat!(
+                "<fieldset data-curve-rational-middle><legend>{label}</legend>",
+                "<div class=\"wb-curve-coordinate-row\">",
+                "<label for=\"wb-curve-rational-middle-x\">X</label>",
+                "<input id=\"wb-curve-rational-middle-x\" type=\"number\" step=\"any\" value=\"{}\"{disabled} />",
+                "<label for=\"wb-curve-rational-middle-y\">Y</label>",
+                "<input id=\"wb-curve-rational-middle-y\" type=\"number\" step=\"any\" value=\"{}\"{disabled} />",
+                "</div><button type=\"button\"{action}{disabled}>Apply exact coordinates</button>",
+                "<span class=\"wb-read-only-note\">{note}</span></fieldset>"
+            ),
+            coordinate[0],
+            coordinate[1],
+            label = label,
+            note = note,
+            action = action,
+            disabled = disabled,
+        );
+    }
+    for property in &metadata.numeric {
+        let key = curve_numeric_property_key(property.kind);
+        let id = format!("wb-curve-property-{key}");
+        let active_gauge = metadata.nurbs_gauge == Some(property.scalar);
+        let ordinal = match property.kind {
+            CurveNumericPropertyKind::NurbsWeight { ordinal } => Some(ordinal),
+            _ => None,
+        };
+        let limits = curve_numeric_input_limits(property.domain);
+        let disabled = curve_property_disabled_attributes(property.availability);
+        let _ = write!(
+            output,
+            concat!(
+                "<fieldset data-curve-property=\"{key}\"><legend>{}</legend>",
+                "<div class=\"wb-curve-property-row\"><label for=\"{id}\">Exact value</label>",
+                "<input id=\"{id}\" type=\"number\" step=\"any\" value=\"{}\"{limits}{disabled} />"
+            ),
+            curve_numeric_property_label(property.kind),
+            property.value,
+            key = key,
+            id = id,
+            limits = limits,
+            disabled = disabled,
+        );
+        if active_gauge {
+            output.push_str(
+                "<button type=\"button\" disabled aria-disabled=\"true\">Active gauge</button>",
+            );
+        } else if disabled.is_empty() {
+            let _ = write!(
+                output,
+                "<button type=\"button\" data-wb-action=\"curve-property-{key}\">Apply</button>",
+            );
+        } else {
+            output.push_str(
+                "<button type=\"button\" disabled aria-disabled=\"true\">Read-only</button>",
+            );
+        }
+        output.push_str("</div>");
+        let _ = write!(
+            output,
+            "<span class=\"wb-read-only-note\">{} · {}</span>",
+            curve_scalar_unit_label(property.unit),
+            curve_scalar_domain_label(property.domain),
+        );
+        if let Some(reason) = curve_property_read_only_reason(property.availability) {
+            let _ = write!(
+                output,
+                "<span class=\"wb-read-only-note\">Read-only: {reason}.</span>",
+            );
+        }
+        if let Some(ordinal) = ordinal
+            && !active_gauge
+        {
+            let gauge_availability = metadata
+                .nurbs_gauge_availability
+                .unwrap_or(DocumentCurveControlAvailability::Editable);
+            if gauge_availability == DocumentCurveControlAvailability::Editable {
+                let _ = write!(
+                    output,
+                    "<button type=\"button\" class=\"wb-secondary\" data-wb-action=\"curve-nurbs-gauge-{ordinal}\">Make gauge</button>",
+                );
+            } else {
+                let _ = write!(
+                    output,
+                    "<button type=\"button\" class=\"wb-secondary\" disabled aria-disabled=\"true\" title=\"{}\">Make gauge</button>",
+                    curve_property_read_only_reason(gauge_availability)
+                        .unwrap_or("gauge change is unavailable"),
+                );
+            }
+        }
+        output.push_str("</fieldset>");
+    }
+    if let Some(sweep) = metadata.sweep {
+        let disabled = curve_property_disabled_attributes(metadata.direct_edit_availability);
+        let action = if disabled.is_empty() {
+            " data-wb-action=\"curve-sweep\""
+        } else {
+            ""
+        };
+        let counter_clockwise = if sweep == DocumentArcSweep::CounterClockwise {
+            " selected"
+        } else {
+            ""
+        };
+        let clockwise = if sweep == DocumentArcSweep::Clockwise {
+            " selected"
+        } else {
+            ""
+        };
+        let _ = write!(
+            output,
+            concat!(
+                "<fieldset><legend>Arc sweep</legend><div class=\"wb-curve-property-row\">",
+                "<label for=\"wb-curve-sweep\">Explicit traversal</label>",
+                "<select id=\"wb-curve-sweep\"{disabled}><option value=\"counter-clockwise\"{counter_clockwise}>Counter-clockwise</option>",
+                "<option value=\"clockwise\"{clockwise}>Clockwise</option></select>",
+                "<button type=\"button\"{action}{disabled}>Apply</button></div></fieldset>"
+            ),
+            counter_clockwise = counter_clockwise,
+            clockwise = clockwise,
+            action = action,
+            disabled = disabled,
+        );
+    }
+    if let Some(branch) = metadata.hyperbola_branch {
+        let disabled = curve_property_disabled_attributes(metadata.direct_edit_availability);
+        let action = if disabled.is_empty() {
+            " data-wb-action=\"curve-hyperbola-branch\""
+        } else {
+            ""
+        };
+        let positive = if branch == DocumentHyperbolaBranch::Positive {
+            " selected"
+        } else {
+            ""
+        };
+        let negative = if branch == DocumentHyperbolaBranch::Negative {
+            " selected"
+        } else {
+            ""
+        };
+        let _ = write!(
+            output,
+            concat!(
+                "<fieldset><legend>Hyperbola branch</legend><div class=\"wb-curve-property-row\">",
+                "<label for=\"wb-curve-hyperbola-branch\">Explicit branch</label>",
+                "<select id=\"wb-curve-hyperbola-branch\"{disabled}><option value=\"positive\"{positive}>Positive</option>",
+                "<option value=\"negative\"{negative}>Negative</option></select>",
+                "<button type=\"button\"{action}{disabled}>Apply</button></div></fieldset>"
+            ),
+            positive = positive,
+            negative = negative,
+            action = action,
+            disabled = disabled,
+        );
+    }
+    if output.is_empty() {
+        output.push_str(
+            "<p class=\"wb-read-only-note\">This curve uses ordinary stored point controls; select and drag those points on the canvas.</p>",
+        );
+    }
+    output
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn curve_property_disabled_attributes(
+    availability: geosolve_sketch::DocumentCurveControlAvailability,
+) -> &'static str {
+    match availability {
+        geosolve_sketch::DocumentCurveControlAvailability::Editable => "",
+        geosolve_sketch::DocumentCurveControlAvailability::ReadOnly(_) => {
+            " disabled aria-disabled=\"true\""
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn curve_property_read_only_reason(
+    availability: geosolve_sketch::DocumentCurveControlAvailability,
+) -> Option<&'static str> {
+    use geosolve_sketch::{
+        DocumentCurveControlAvailability, DocumentCurveControlWithholdingReason,
+    };
+
+    match availability {
+        DocumentCurveControlAvailability::Editable => None,
+        DocumentCurveControlAvailability::ReadOnly(reason) => Some(match reason {
+            DocumentCurveControlWithholdingReason::InactiveCurve => "the curve is inactive",
+            DocumentCurveControlWithholdingReason::AssociativeFilletOutput => {
+                "the associative Fillet owns this output"
+            }
+            DocumentCurveControlWithholdingReason::HostParameterOwned => {
+                "the value is owned by a host parameter"
+            }
+            DocumentCurveControlWithholdingReason::GaugeOwned => {
+                "the value is the active NURBS gauge"
+            }
+            DocumentCurveControlWithholdingReason::DrivingDimensionOwned => {
+                "an active driving radius or diameter dimension owns this size"
+            }
+            DocumentCurveControlWithholdingReason::EqualRadiusOwned => {
+                "an active equal-radius relation owns this size"
+            }
+            _ => "the curve owner does not expose this direct edit",
+        }),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn curve_control_inspector_detail(
+    metadata: &geosolve_constraint_editor::SelectedCurvePropertyMetadata,
+) -> &'static str {
+    use geosolve_constraint_editor::CurvePropertyFamily;
+    use geosolve_sketch::DocumentRationalConicControl;
+
+    match metadata.family {
+        CurvePropertyFamily::RationalQuadraticConic => match metadata.rational_control {
+            Some(DocumentRationalConicControl::Euclidean { .. }) => {
+                "Canvas and numeric edits use the ordinary middle control P1; weight remains an exact scalar."
+            }
+            Some(DocumentRationalConicControl::Projective { .. }) => {
+                "At zero weight, the middle control is explicitly the projective Qh vector."
+            }
+            _ => "The selected rational control mode is unavailable.",
+        },
+        CurvePropertyFamily::Nurbs => {
+            "Stored controls remain ordinary points. Weights are exact numeric values; one read-only weight owns the gauge."
+        }
+        CurvePropertyFamily::QuadraticBezier
+        | CurvePropertyFamily::CubicBezier
+        | CurvePropertyFamily::BSpline
+        | CurvePropertyFamily::Line
+        | CurvePropertyFamily::Polyline => {
+            "Stored controls remain ordinary draggable points; the selected cage shows their curve relationship."
+        }
+        _ => {
+            "Canvas handles are transient views of persistent curve parameters; exact values remain available here."
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn rational_conic_construction_copy(weight: f64) -> (&'static str, &'static str) {
+    if weight == 0.0 {
+        (
+            "Click Start, then the projective vector tip Qh, then End",
+            "Click Start, then the tip of the projective middle vector Qh, then End. Qh is anchored at Start; zero weight has no ordinary middle point P1.",
+        )
+    } else {
+        (
+            "Click Start, then the ordinary middle control P1, then End",
+            "Click Start, then the ordinary middle control P1, then End. The curve usually does not pass through P1; weight controls its influence and must be greater than −1.",
+        )
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn curve_numeric_property_key(
+    kind: geosolve_constraint_editor::CurveNumericPropertyKind,
+) -> String {
+    use geosolve_constraint_editor::CurveNumericPropertyKind;
+
+    match kind {
+        CurveNumericPropertyKind::Radius => "radius".into(),
+        CurveNumericPropertyKind::MinorAxisRatio => "minor-axis-ratio".into(),
+        CurveNumericPropertyKind::TrimStart => "trim-start".into(),
+        CurveNumericPropertyKind::TrimEnd => "trim-end".into(),
+        CurveNumericPropertyKind::SemiConjugate => "semi-conjugate".into(),
+        CurveNumericPropertyKind::RationalWeight => "rational-weight".into(),
+        CurveNumericPropertyKind::NurbsWeight { ordinal } => format!("nurbs-weight-{ordinal}"),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn curve_numeric_property_label(
+    kind: geosolve_constraint_editor::CurveNumericPropertyKind,
+) -> &'static str {
+    use geosolve_constraint_editor::CurveNumericPropertyKind;
+
+    match kind {
+        CurveNumericPropertyKind::NurbsWeight { .. } => "Control weight",
+        _ => kind.label(),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn curve_numeric_input_limits(domain: geosolve_sketch::ScalarDomain) -> String {
+    use geosolve_sketch::ScalarDomain;
+
+    match domain {
+        ScalarDomain::Finite | ScalarDomain::Periodic { .. } => String::new(),
+        ScalarDomain::Positive => " min=\"0\"".into(),
+        ScalarDomain::Bounded { lower, upper } => {
+            format!(" min=\"{lower}\" max=\"{upper}\"")
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn curve_scalar_unit_label(unit: geosolve_sketch::ScalarUnit) -> &'static str {
+    use geosolve_sketch::ScalarUnit;
+
+    match unit {
+        ScalarUnit::Length => "model units",
+        ScalarUnit::Angle => "radians",
+        ScalarUnit::Parameter => "unitless parameter",
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn curve_scalar_domain_label(domain: geosolve_sketch::ScalarDomain) -> String {
+    use geosolve_sketch::ScalarDomain;
+
+    match domain {
+        ScalarDomain::Finite => "finite".into(),
+        ScalarDomain::Positive => "positive".into(),
+        ScalarDomain::Bounded { lower, upper } => format!("range {lower} to {upper}"),
+        ScalarDomain::Periodic { period } => format!("period {period}"),
+    }
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -1138,9 +1552,20 @@ fn compose_editor_scene(
         .unwrap_or(coordinator.session());
     let accepted = source.accepted_state()?;
     let current_accepted = source.accepted_state_for_current_input().is_some();
+    let prepared_curve_preview = coordinator.curve_control_preview_active();
+    let interaction_revision = if prepared_curve_preview {
+        coordinator
+            .session()
+            .accepted_state_for_current_input()?
+            .identity()
+            .revision()
+            .get()
+    } else {
+        accepted.identity().revision().get()
+    };
     let native_scene = || {
         EditorScene::from_accepted_for_design(
-            accepted.identity().revision().get(),
+            interaction_revision,
             coordinator.session().design_identity(),
             accepted.document(),
             coordinator.session().design_document(),
@@ -1156,7 +1581,7 @@ fn compose_editor_scene(
         ComputedSceneState::Current { expected, snapshot } => {
             let accepted_input = source.accepted_prepared_input()?;
             let mut scene = EditorScene::from_accepted_with_computed(
-                accepted.identity().revision().get(),
+                interaction_revision,
                 coordinator.session().design_identity(),
                 accepted.document(),
                 coordinator.session().design_document(),
@@ -1189,7 +1614,19 @@ fn compose_editor_scene(
         return None;
     }
     scene.apply_annotation_layout(&coordinator.editor().annotation_layout_for_scene());
-    scene.with_retained_session(source).ok()
+    // A prepared curve-control candidate deliberately retains the pointer-down design/revision
+    // stamp until compare-and-swap publication. It is an independently accepted render preview,
+    // not drafting authority for the candidate design, so keep that scene detached.
+    let mut scene = if prepared_curve_preview {
+        scene
+    } else {
+        scene.with_retained_session(source).ok()?
+    };
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .ok()?;
+    Some(scene)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1673,7 +2110,7 @@ pub(crate) mod wasm {
                             handle_authoring_outcome(&mut wb, outcome);
                         }
                     } else if !is_canvas_item || !is_pointer_click {
-                        wb.coordinator.editor_mut().select_item(item, modifiers);
+                        wb.coordinator.select_item(item, modifiers);
                     }
                 }
             } else if let Some(key) = target.get_attribute("data-sample-id") {
@@ -3185,7 +3622,7 @@ pub(crate) mod wasm {
                 if wb.feature_authoring.active_tool().is_some() {
                     handle_feature_item_pick(&mut wb, item, None);
                 } else {
-                    wb.coordinator.editor_mut().select_item(item, modifiers);
+                    wb.coordinator.select_item(item, modifiers);
                 }
                 save(&wb);
                 drop(wb);
@@ -3336,6 +3773,55 @@ pub(crate) mod wasm {
                 }
                 EditorEffect::ClearPointPreview => {
                     wb.coordinator.clear_transient();
+                }
+                EditorEffect::RequestCurveControlPreview {
+                    pointer_id,
+                    request_id,
+                    expected,
+                    control,
+                    model_position,
+                } => {
+                    let next = wb.coordinator.resolve_curve_control_preview(
+                        *pointer_id,
+                        *request_id,
+                        *expected,
+                        *control,
+                        *model_position,
+                    );
+                    if next.is_empty() {
+                        wb.notice =
+                            "Curve-control sample was rejected; the last valid preview is retained"
+                                .into();
+                    } else {
+                        pending.extend(next);
+                    }
+                }
+                EditorEffect::PreviewCurveControl { .. } => {
+                    wb.notice = "Curve-control preview".into();
+                }
+                EditorEffect::CommitCurveControl { .. } => {
+                    match wb.coordinator.apply_editor_effect(&effect) {
+                        Ok(Some(_)) => wb.notice = "Curve control retained".into(),
+                        Ok(None) => {}
+                        Err(error) => {
+                            wb.notice = format!(
+                                "Curve control was not retained; accepted geometry is unchanged: {error}"
+                            );
+                        }
+                    }
+                }
+                EditorEffect::ClearCurveControlPreview => {
+                    match wb.coordinator.apply_editor_effect(&effect) {
+                        Ok(_) => {
+                            wb.notice =
+                                "Curve-control preview cleared; accepted geometry is unchanged"
+                                    .into();
+                        }
+                        Err(error) => {
+                            wb.notice =
+                                format!("Curve-control preview could not be cleared: {error}");
+                        }
+                    }
                 }
                 EditorEffect::PreviewComputedFeatureRadius { radius, .. } => {
                     match apply_computed_feature_editor_effect(wb, &effect) {
@@ -3530,7 +4016,7 @@ pub(crate) mod wasm {
                 Ok(())
             }
             "clear-selection" => {
-                wb.coordinator.editor_mut().set_selection([]);
+                wb.coordinator.set_selection([]);
                 Ok(())
             }
             "annotation-reset-selected" => {
@@ -3559,6 +4045,9 @@ pub(crate) mod wasm {
             "feature-radius" => apply_selected_feature_radius(document, wb),
             "feature-suppression" => toggle_selected_feature_suppression(wb),
             "dimension-target" => apply_dimension_target(document, wb),
+            "curve-rational-middle" => apply_curve_rational_middle(document, wb),
+            "curve-sweep" => apply_curve_sweep(document, wb),
+            "curve-hyperbola-branch" => apply_curve_hyperbola_branch(document, wb),
             "contact-branches" => apply_contact_branches(document, wb),
             "angle-orientation" => apply_angle_orientation(document, wb),
             "options-close" => {
@@ -3620,6 +4109,12 @@ pub(crate) mod wasm {
                 wb.camera.center_origin();
                 wb.notice = "View centred on Origin".into();
             }),
+            _ if action.starts_with("curve-property-") => {
+                apply_curve_numeric_property(document, wb, &action["curve-property-".len()..])
+            }
+            _ if action.starts_with("curve-nurbs-gauge-") => {
+                apply_curve_nurbs_gauge(document, wb, &action["curve-nurbs-gauge-".len()..])
+            }
             _ => Ok(()),
         };
         if result.is_ok() && wb.authoring.active_tool().is_some() {
@@ -3645,15 +4140,154 @@ pub(crate) mod wasm {
                 | "geometry-role"
                 | "annotation-reset-selected"
                 | "annotation-reset-all"
+                | "curve-rational-middle"
+                | "curve-sweep"
+                | "curve-hyperbola-branch"
                 | "reproduction-open"
                 | "reproduction-select"
                 | "reproduction-close"
                 | "reproduction-load"
                 | "zoom-fit"
                 | "zoom-origin" => wb.notice.clone(),
+                action
+                    if action.starts_with("curve-property-")
+                        || action.starts_with("curve-nurbs-gauge-") =>
+                {
+                    wb.notice.clone()
+                }
                 _ => "Action retained".into(),
             },
         );
+    }
+
+    fn selected_curve_properties(
+        wb: &Workbench,
+    ) -> Result<geosolve_constraint_editor::SelectedCurvePropertyMetadata, String> {
+        wb.coordinator
+            .selected_curve_property_metadata()
+            .ok_or_else(|| "select exactly one native curve to edit its properties".to_owned())
+    }
+
+    fn apply_curve_numeric_property(
+        document: &Document,
+        wb: &mut Workbench,
+        key: &str,
+    ) -> Result<(), String> {
+        let metadata = selected_curve_properties(wb)?;
+        let property = metadata
+            .numeric
+            .iter()
+            .copied()
+            .find(|property| super::curve_numeric_property_key(property.kind) == key)
+            .ok_or_else(|| "the selected curve does not expose that numeric property".to_owned())?;
+        if metadata.nurbs_gauge == Some(property.scalar) {
+            return Err(
+                "the active NURBS gauge weight is read-only; make another weight the gauge first"
+                    .into(),
+            );
+        }
+        let value = input_value(document, &format!("wb-curve-property-{key}"))
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|value| value.is_finite())
+            .ok_or_else(|| "curve property must be a finite number".to_owned())?;
+        let expected = wb.coordinator.session().design_identity();
+        wb.coordinator
+            .set_curve_numeric_property(expected, metadata.curve, property.kind, value)
+            .map_err(|error| error.to_string())?;
+        wb.notice = format!(
+            "{} set to {}",
+            super::curve_numeric_property_label(property.kind),
+            value,
+        );
+        Ok(())
+    }
+
+    fn apply_curve_rational_middle(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        let metadata = selected_curve_properties(wb)?;
+        let coordinate = [
+            input_value(document, "wb-curve-rational-middle-x")
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| "rational middle X must be finite".to_owned())?,
+            input_value(document, "wb-curve-rational-middle-y")
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| "rational middle Y must be finite".to_owned())?,
+        ];
+        let expected = wb.coordinator.session().design_identity();
+        wb.coordinator
+            .set_curve_rational_middle(expected, metadata.curve, coordinate)
+            .map_err(|error| error.to_string())?;
+        wb.notice = format!(
+            "Rational middle control set to X {}, Y {}",
+            coordinate[0], coordinate[1],
+        );
+        Ok(())
+    }
+
+    fn apply_curve_sweep(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        let metadata = selected_curve_properties(wb)?;
+        if metadata.sweep.is_none() {
+            return Err("the selected curve does not expose an arc sweep".into());
+        }
+        let sweep = if select_value(document, "wb-curve-sweep").as_deref() == Some("clockwise") {
+            DocumentArcSweep::Clockwise
+        } else {
+            DocumentArcSweep::CounterClockwise
+        };
+        let expected = wb.coordinator.session().design_identity();
+        wb.coordinator
+            .set_curve_sweep(expected, metadata.curve, sweep)
+            .map_err(|error| error.to_string())?;
+        wb.notice = format!("Arc sweep set to {sweep:?}");
+        Ok(())
+    }
+
+    fn apply_curve_hyperbola_branch(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        let metadata = selected_curve_properties(wb)?;
+        if metadata.hyperbola_branch.is_none() {
+            return Err("the selected curve does not expose a hyperbola branch".into());
+        }
+        let branch =
+            if select_value(document, "wb-curve-hyperbola-branch").as_deref() == Some("negative") {
+                DocumentHyperbolaBranch::Negative
+            } else {
+                DocumentHyperbolaBranch::Positive
+            };
+        let expected = wb.coordinator.session().design_identity();
+        wb.coordinator
+            .set_curve_hyperbola_branch(expected, metadata.curve, branch)
+            .map_err(|error| error.to_string())?;
+        wb.notice = format!("Hyperbola branch set to {branch:?}");
+        Ok(())
+    }
+
+    fn apply_curve_nurbs_gauge(
+        _document: &Document,
+        wb: &mut Workbench,
+        ordinal: &str,
+    ) -> Result<(), String> {
+        let ordinal = ordinal
+            .parse::<u32>()
+            .map_err(|_| "NURBS gauge ordinal is invalid".to_owned())?;
+        let metadata = selected_curve_properties(wb)?;
+        let property = metadata
+            .numeric
+            .iter()
+            .find(|property| {
+                property.kind
+                    == geosolve_constraint_editor::CurveNumericPropertyKind::NurbsWeight { ordinal }
+            })
+            .ok_or_else(|| "the selected NURBS does not expose that gauge weight".to_owned())?;
+        if metadata.nurbs_gauge == Some(property.scalar) {
+            return Err("that weight already owns the NURBS gauge".into());
+        }
+        let expected = wb.coordinator.session().design_identity();
+        wb.coordinator
+            .set_curve_nurbs_gauge(expected, metadata.curve, property.scalar)
+            .map_err(|error| error.to_string())?;
+        wb.notice = format!("Control weight {} now owns the NURBS gauge", ordinal + 1);
+        Ok(())
     }
 
     fn copy_reproduction_payload(document: &Document, workbench: &Rc<RefCell<Workbench>>) {
@@ -4318,7 +4952,6 @@ pub(crate) mod wasm {
                 }) {
                     Ok(mutation) => {
                         wb.coordinator
-                            .editor_mut()
                             .set_selection([SelectionItem::Feature(mutation.value)]);
                         let _ = wb.feature_authoring.publication_succeeded();
                         wb.feature_candidate = None;
@@ -4814,7 +5447,13 @@ pub(crate) mod wasm {
             wb.feature_authoring.guidance().message.to_owned()
         } else {
             wb.authoring.active_tool().map_or_else(
-                || draft_guide_text(coordinator.editor().tool()).to_owned(),
+                || {
+                    draft_guide_text(
+                        coordinator.editor().tool(),
+                        coordinator.editor().conic_options().middle_weight,
+                    )
+                    .to_owned()
+                },
                 |tool| {
                     format!(
                         "{} · {} pending · Escape clears/exits",
@@ -4863,6 +5502,7 @@ pub(crate) mod wasm {
         render_reproduction_overlay(document, wb.reproduction_overlay_open, &wb.notice)?;
         render_tool_options_overlay(document, &wb)?;
         render_dimension_target_editor(document, coordinator)?;
+        render_curve_control_inspector(document, coordinator)?;
         render_datum_inspector(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
         render_feature_editor(document, coordinator)?;
@@ -4876,11 +5516,13 @@ pub(crate) mod wasm {
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
         required(document, "workbench-root")?.set_attribute(
             "data-canvas-cursor",
-            super::canvas_cursor_key(
+            super::canvas_cursor_key_with_curve_control(
                 coordinator.editor().tool(),
                 wb.authoring.active_tool().is_some(),
                 wb.feature_authoring.active_tool().is_some(),
                 wb.pan_gesture.is_some(),
+                coordinator.editor().hover_state(),
+                coordinator.editor().active_pointer_gesture(),
             ),
         )?;
         Ok(())
@@ -5045,6 +5687,41 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn render_curve_control_inspector(
+        document: &Document,
+        coordinator: &RetainedEditorCoordinator,
+    ) -> Result<(), JsValue> {
+        let inspector = required(document, "wb-curve-control-inspector")?;
+        let Some(metadata) = coordinator.selected_curve_property_metadata() else {
+            inspector.set_attribute("hidden", "")?;
+            inspector.remove_attribute("data-curve-id")?;
+            return Ok(());
+        };
+        let curve_id = metadata.curve.to_string();
+        let same_curve = inspector.get_attribute("data-curve-id").as_deref() == Some(&curve_id);
+        let editing = same_curve
+            && document.active_element().is_some_and(|element| {
+                matches!(element.tag_name().as_str(), "INPUT" | "SELECT")
+                    && element
+                        .closest("#wb-curve-control-inspector")
+                        .is_ok_and(|owner| owner.is_some())
+            });
+        inspector.set_attribute("data-curve-id", &curve_id)?;
+        required(document, "wb-curve-control-family")?.set_text_content(Some(&format!(
+            "{} · {}",
+            metadata.family.label(),
+            metadata.label,
+        )));
+        required(document, "wb-curve-control-detail")?
+            .set_text_content(Some(super::curve_control_inspector_detail(&metadata)));
+        if !editing {
+            required(document, "wb-curve-control-values")?
+                .set_inner_html(&super::curve_control_inspector_markup(&metadata));
+        }
+        inspector.remove_attribute("hidden")?;
+        Ok(())
+    }
+
     fn render_annotation_inspector(
         document: &Document,
         scene: Option<&EditorScene>,
@@ -5191,8 +5868,18 @@ pub(crate) mod wasm {
                 "wb-conic-hyperbola-branch-field",
                 conic_tool == Some(EditorTool::Hyperbola),
             ),
+            (
+                "wb-conic-rational-help",
+                conic_tool == Some(EditorTool::RationalQuadraticConic),
+            ),
         ] {
             set_hidden(&required(document, id)?, !visible)?;
+        }
+        if conic_tool == Some(EditorTool::RationalQuadraticConic) {
+            let (_, help) = super::rational_conic_construction_copy(
+                wb.coordinator.editor().conic_options().middle_weight,
+            );
+            required(document, "wb-conic-rational-help")?.set_text_content(Some(help));
         }
         Ok(())
     }
@@ -5892,10 +6579,13 @@ pub(crate) mod wasm {
         })
     }
 
-    const fn draft_guide_text(tool: EditorTool) -> &'static str {
+    fn draft_guide_text(tool: EditorTool, rational_weight: f64) -> &'static str {
         match tool {
             EditorTool::Polyline => "Add another vertex or Finish the polyline",
             EditorTool::Nurbs => "Add another control or Finish the NURBS",
+            EditorTool::RationalQuadraticConic => {
+                super::rational_conic_construction_copy(rational_weight).0
+            }
             _ => "Click to add the next control",
         }
     }
@@ -6158,10 +6848,11 @@ pub(crate) mod wasm {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ComputedSceneState,
-        ConstraintEditor, ConstraintIntent, DraftInferenceCompleteness, DraftInferenceResolution,
-        DraftInferenceStatus, EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene,
-        EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        ActivePointerGesture, ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome,
+        AuthoringState, AuthoringTool, ComputedSceneState, ConstraintEditor, ConstraintIntent,
+        DraftInferenceCompleteness, DraftInferenceResolution, DraftInferenceStatus,
+        EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene, EditorTool,
+        FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
         GeometryInteractionPolicy, GeometryPickScope, GeometryVisibility, Modifiers, PickTolerance,
         PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
@@ -6170,9 +6861,10 @@ mod tests {
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition,
-        DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit,
-        DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession, ScalarDomain,
+        CurveDefinition, CurveSpan, DesignPointId, DocumentBSplineForm,
+        DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionDefinition,
+        DocumentDimensionMode, DocumentEdit, DocumentSolveRequest, GeometryRole,
+        MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, RetainedSketchDocumentSession, ScalarDomain,
         ScalarUnit, SketchAcceptedStateIdentity, SketchDocument,
     };
 
@@ -6185,15 +6877,16 @@ mod tests {
         FilletActionRenderAuthority, ForegroundOverlayEscapeOwner, HistoryShortcut,
         OptionOverlayKind, OptionOverlayState, PointerMoveQueue, ReproductionFocusReturn,
         annotation_family_name, annotation_inspector_presentation, apply_validated_reproduction,
-        canvas_cursor_key, canvas_pointer_capture_kind, canvas_pointer_move_owner,
-        change_owns_option_control_click, compose_editor_scene, coordinate_hud,
-        current_problem_items, foreground_overlay_escape_owner, history_shortcut,
+        canvas_cursor_key, canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
+        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
+        coordinate_hud, current_problem_items, curve_control_inspector_detail,
+        curve_control_inspector_markup, foreground_overlay_escape_owner, history_shortcut,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
-        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
-        reproduction_overlay_presentation, reproduction_payload_size_label,
-        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
-        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
-        should_route_stationary_draft_inference,
+        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
+        reproduction_focus_target_after_action, reproduction_overlay_presentation,
+        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
+        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
+        route_canvas_pan_pointer_down, should_route_stationary_draft_inference,
     };
 
     fn rejected_constraint_fixture() -> (
@@ -7334,6 +8027,10 @@ mod tests {
             CanvasPointerCaptureKind::Point
         );
         assert_eq!(
+            canvas_pointer_capture_kind(ActivePointerGestureKind::CurveControl),
+            CanvasPointerCaptureKind::CurveControl
+        );
+        assert_eq!(
             canvas_pointer_capture_kind(ActivePointerGestureKind::Annotation),
             CanvasPointerCaptureKind::Annotation
         );
@@ -7382,6 +8079,7 @@ mod tests {
         ];
         for kind in [
             CanvasPointerCaptureKind::Point,
+            CanvasPointerCaptureKind::CurveControl,
             CanvasPointerCaptureKind::Annotation,
             CanvasPointerCaptureKind::Fillet,
             CanvasPointerCaptureKind::Pan,
@@ -7841,6 +8539,270 @@ mod tests {
         assert_eq!(canvas_cursor_key(EditorTool::Line, true, true, true), "pan");
     }
 
+    fn m77_rational_coordinator(weight: f64) -> (RetainedEditorCoordinator, CurveSpan) {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("start");
+        let end = document.add_point("end", [4.0, 0.0]).expect("end");
+        let middle_weight = document
+            .add_scalar(
+                "weight",
+                weight,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+                    upper: f64::MAX,
+                },
+            )
+            .expect("weight");
+        let curve = CurveSpan::line(
+            document
+                .add_curve(
+                    "rational demo",
+                    CurveDefinition::RationalQuadraticConic {
+                        start,
+                        weighted_middle: [weight * 2.0, weight * 3.0],
+                        middle_weight,
+                        end,
+                    },
+                )
+                .expect("rational curve"),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        (
+            RetainedEditorCoordinator::new(session).expect("coordinator"),
+            curve,
+        )
+    }
+
+    #[test]
+    fn m77_demo_composition_and_inspector_consume_selected_headless_curve_metadata() {
+        let (mut coordinator, curve) = m77_rational_coordinator(0.5);
+        let viewport = Viewport::new([1000.0, 700.0], [2.0, 1.0], 80.0).unwrap();
+        assert!(
+            compose_editor_scene(&coordinator, viewport, 0.25)
+                .unwrap()
+                .curve_controls
+                .is_empty(),
+            "an unselected curve must not acquire browser-created controls",
+        );
+
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Curve(curve)]);
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25).unwrap();
+        assert!(!scene.curve_controls.is_empty());
+        assert!(!scene.curve_control_guides.is_empty());
+        let middle = scene
+            .curve_controls
+            .iter()
+            .find(|control| {
+                control.id.kind == geosolve_sketch::DocumentCurveControlKind::RationalMiddle
+            })
+            .expect("headless rational middle control");
+        let hover = EditorHoverState {
+            target: Some(EditorHoverTarget::CurveControl {
+                control: middle.id,
+                owner: middle.owner,
+            }),
+            context_owner: Some(SelectionItem::Curve(middle.owner)),
+        };
+        assert_eq!(
+            canvas_cursor_key_with_curve_control(
+                EditorTool::Select,
+                false,
+                false,
+                false,
+                hover,
+                None,
+            ),
+            "curve-control",
+        );
+        assert_eq!(
+            canvas_cursor_key_with_curve_control(
+                EditorTool::Select,
+                false,
+                false,
+                false,
+                EditorHoverState::default(),
+                Some(ActivePointerGesture {
+                    pointer_id: 7,
+                    kind: ActivePointerGestureKind::CurveControl,
+                }),
+            ),
+            "curve-control-active",
+        );
+        assert_eq!(
+            canvas_cursor_key_with_curve_control(
+                EditorTool::Select,
+                false,
+                false,
+                true,
+                hover,
+                Some(ActivePointerGesture {
+                    pointer_id: 7,
+                    kind: ActivePointerGestureKind::CurveControl,
+                }),
+            ),
+            "pan",
+            "camera ownership must outrank any stale curve-control presentation",
+        );
+
+        let metadata = coordinator
+            .selected_curve_property_metadata()
+            .expect("selected curve metadata");
+        let markup = curve_control_inspector_markup(&metadata);
+        assert!(markup.contains("<legend>Middle control P1</legend>"));
+        assert!(markup.contains("value=\"2\""));
+        assert!(markup.contains("value=\"3\""));
+        assert!(markup.contains("data-wb-action=\"curve-rational-middle\""));
+        assert!(markup.contains("data-wb-action=\"curve-property-rational-weight\""));
+        assert!(curve_control_inspector_detail(&metadata).contains("ordinary middle control P1"));
+
+        coordinator.editor_mut().activate_tool(EditorTool::Line);
+        assert!(
+            compose_editor_scene(&coordinator, viewport, 0.25)
+                .unwrap()
+                .curve_controls
+                .is_empty(),
+            "non-Select tools must revoke the selected-curve handle layer",
+        );
+    }
+
+    #[test]
+    fn m77_inspector_disables_every_withheld_property_action_with_a_reason() {
+        let (mut coordinator, curve) = m77_rational_coordinator(0.5);
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Curve(curve)]);
+        let mut metadata = coordinator
+            .selected_curve_property_metadata()
+            .expect("selected curve metadata");
+        metadata.direct_edit_availability =
+            geosolve_sketch::DocumentCurveControlAvailability::ReadOnly(
+                geosolve_sketch::DocumentCurveControlWithholdingReason::AssociativeFilletOutput,
+            );
+        metadata.numeric[0].availability =
+            geosolve_sketch::DocumentCurveControlAvailability::ReadOnly(
+                geosolve_sketch::DocumentCurveControlWithholdingReason::HostParameterOwned,
+            );
+        metadata.sweep = Some(geosolve_sketch::DocumentArcSweep::CounterClockwise);
+        metadata.hyperbola_branch = Some(geosolve_sketch::DocumentHyperbolaBranch::Positive);
+
+        let markup = curve_control_inspector_markup(&metadata);
+        assert!(markup.contains(
+            "data-curve-properties-read-only>Read-only: the associative Fillet owns this output."
+        ));
+        assert!(markup.contains(
+            "id=\"wb-curve-rational-middle-x\" type=\"number\" step=\"any\" value=\"2\" disabled aria-disabled=\"true\""
+        ));
+        assert!(!markup.contains("data-wb-action=\"curve-rational-middle\""));
+        assert!(markup.contains("Read-only: the value is owned by a host parameter."));
+        assert!(!markup.contains("data-wb-action=\"curve-property-rational-weight\""));
+        assert!(markup.contains("id=\"wb-curve-sweep\" disabled aria-disabled=\"true\""));
+        assert!(!markup.contains("data-wb-action=\"curve-sweep\""));
+        assert!(
+            markup.contains("id=\"wb-curve-hyperbola-branch\" disabled aria-disabled=\"true\"")
+        );
+        assert!(!markup.contains("data-wb-action=\"curve-hyperbola-branch\""));
+
+        metadata.direct_edit_availability =
+            geosolve_sketch::DocumentCurveControlAvailability::Editable;
+        for (reason, copy) in [
+            (
+                geosolve_sketch::DocumentCurveControlWithholdingReason::DrivingDimensionOwned,
+                "an active driving radius or diameter dimension owns this size",
+            ),
+            (
+                geosolve_sketch::DocumentCurveControlWithholdingReason::EqualRadiusOwned,
+                "an active equal-radius relation owns this size",
+            ),
+        ] {
+            metadata.numeric[0].availability =
+                geosolve_sketch::DocumentCurveControlAvailability::ReadOnly(reason);
+            let markup = curve_control_inspector_markup(&metadata);
+            assert!(markup.contains(copy));
+            assert!(!markup.contains("data-wb-action=\"curve-property-rational-weight\""));
+            assert!(markup.contains("disabled aria-disabled=\"true\""));
+        }
+    }
+
+    #[test]
+    fn m77_nurbs_inspector_keeps_the_gauge_read_only_and_round_trips_numbers() {
+        let mut document = SketchDocument::new(3.0).unwrap();
+        let controls = [[0.0, 0.0], [3.0, 0.0]]
+            .map(|position| document.add_point("control", position).unwrap());
+        let weights = [1.0, 0.300_000_000_000_000_04].map(|value| {
+            document
+                .add_scalar(
+                    "weight",
+                    value,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Positive,
+                )
+                .unwrap()
+        });
+        let curve = document
+            .add_curve(
+                "gauge-aware NURBS",
+                CurveDefinition::Nurbs {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 1,
+                    controls: controls.to_vec(),
+                    weights: weights.to_vec(),
+                    gauge_weight: weights[0],
+                    knots: vec![0.0, 0.0, 1.0, 1.0],
+                    span_ids: vec![4],
+                    next_span_id: 5,
+                },
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let mut coordinator = RetainedEditorCoordinator::new(session).unwrap();
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Curve(CurveSpan { curve, segment: 4 })]);
+        let metadata = coordinator.selected_curve_property_metadata().unwrap();
+        let markup = curve_control_inspector_markup(&metadata);
+        assert!(markup.contains("<span>Degree</span><output>1</output>"));
+        assert!(markup.contains("id=\"wb-curve-property-nurbs-weight-0\""));
+        assert!(markup.contains("disabled aria-disabled=\"true\""));
+        assert!(markup.contains("Active gauge"));
+        assert!(!markup.contains("data-wb-action=\"curve-nurbs-gauge-0\""));
+        assert!(markup.contains("data-wb-action=\"curve-nurbs-gauge-1\""));
+        assert!(markup.contains("value=\"0.30000000000000004\""));
+    }
+
+    #[test]
+    fn m77_web_assets_keep_hit_and_rational_semantics_headless() {
+        let html = include_str!("../../index.html");
+        let css = include_str!("../../styles.css");
+        let source = include_str!("mod.rs");
+        assert!(html.contains("ordinary middle control P1"));
+        assert!(html.contains("weight controls its influence and must be greater than −1"));
+        assert!(html.contains("id=\"wb-conic-weight\" type=\"number\" min=\"-1\""));
+        let (ordinary_guide, ordinary_help) = rational_conic_construction_copy(0.5);
+        assert!(ordinary_guide.contains("ordinary middle control P1"));
+        assert!(ordinary_help.contains("usually does not pass through P1"));
+        let (projective_guide, projective_help) = rational_conic_construction_copy(0.0);
+        assert!(projective_guide.contains("projective vector tip Qh"));
+        assert!(projective_help.contains("Qh is anchored at Start"));
+        assert!(projective_help.contains("no ordinary middle point P1"));
+        assert!(css.contains(".wb-curve-control-cage * { pointer-events: none; }"));
+        assert!(!css.contains(".wb-curve-control:hover"));
+        let forbidden_conversion = ["fn rational_conic", "_weighted_middle"].concat();
+        assert!(!source.contains(&forbidden_conversion));
+    }
+
     #[test]
     fn canvas_pan_pointer_down_preserves_every_existing_capture() {
         let empty = CanvasPointerCaptures::default();
@@ -7851,6 +8813,8 @@ mod tests {
 
         for kind in [
             CanvasPointerCaptureKind::Point,
+            CanvasPointerCaptureKind::CurveControl,
+            CanvasPointerCaptureKind::Annotation,
             CanvasPointerCaptureKind::Fillet,
             CanvasPointerCaptureKind::Pan,
         ] {
