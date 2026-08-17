@@ -2,10 +2,10 @@
 
 # M78 — CAD geometry tool families and authoring variants
 
-Status: **active (2026-08-17); contract approved, implementation, qualification, UAT,
-publication and closeout remain open**. M78 turns the demo's flat collection of geometry buttons
-into a polished CAD-style family palette while keeping recipe meaning, inference, branch state and
-atomic publication in reusable headless Rust.
+Status: **active (opened 2026-08-17); hardened product implementation is committed through
+`4845df7`, while clean release nomination, UAT, publication and closeout remain open**. M78 turns
+the demo's flat collection of geometry buttons into a polished CAD-style family palette while
+keeping recipe meaning, inference, branch state and atomic publication in reusable headless Rust.
 
 ## Product contract
 
@@ -143,11 +143,25 @@ per-curve roles, explicit branch choices and ordered relation definitions with p
 
 Recipe-intrinsic and regularization relations are applied before compatible ambient inference.
 Conflicting or already-implied ambient candidates yield to the recipe instead of making a valid
-shape fail. Every accepted recipe solves once, independently validates finite geometry and hard
-residuals, publishes once through exact retained compare-and-swap and creates exactly one history
-entry. A rejection preserves the complete document, accepted scene, history, persistent allocator,
-preview and terminal draft. The visible problem is attached to the active draft/field; it does not
-become a stale global error after correction, cancellation or Undo.
+shape fail, while compatible ambient orientation remains ordinary durable intent. Controlled plans
+charge validation and proposal-specific lowering work before candidate allocation. Every accepted
+recipe solves once, independently validates finite geometry and hard residuals, publishes once
+through exact retained compare-and-swap and creates exactly one history entry. A coordinator may
+consume a positive acknowledgement only after it records publication of the exact expected plan.
+
+A rejection preserves the complete document, accepted scene, history, persistent allocator,
+preview and terminal draft. Stale semantic operands and references are reauthenticated from the
+next exact accepted scene before reuse, including a fresh Tangent Arc endpoint jet; a deleted
+dependency remains a local correction-ready issue recoverable through step-back or Escape. The
+visible problem is attached to the active draft/field and does not become a stale global error after
+correction, cancellation or Undo.
+
+Representable finite geometry cannot be rejected solely because a midpoint sum, Euclidean squared
+norm or translated/diagonal chord intermediate overflows. Midpoint/reflection, segment/conic,
+circumcircle, circle-projection and Tangent Arc arithmetic use scale-safe forms, then validate local
+incidence against the rounded output. Nonrepresentable geometry still fails closed. Draft status
+publishes only finite measurements, omitting a derived value such as diameter when the underlying
+radius is finite but doubling it is not.
 
 ## Qualification and closeout
 
@@ -157,6 +171,12 @@ redundancy precedence, invalid-terminal correction, one-step history and native/
 demo tests own family overlay persistence, event/modifier mapping, accessible labels and rendering
 of published previews. Any broad golden authoring/scene expansion must represent a reviewed
 systemic family or lifecycle dimension; isolated defects stay in focused owning-layer regressions.
+
+Latest post-hardening focused evidence at `4845df7` is 362/362 editor library tests, 32/32 geometry-
+variant cases, 7/7 editor extreme-finite cases and 1/1 sketch extreme-finite case, plus passing
+editor all-target/all-feature warnings-denied Clippy. The unchanged 270-case golden survey is all
+`PASS`, and its check/clean modes match. This is implementation evidence only; the clean workspace-
+wide, WASM, Rustdoc, Trunk and complete release gate still own nomination.
 
 Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant native and
 WASM parity, golden survey/check/require-clean, demo WASM and Trunk release assembly must pass

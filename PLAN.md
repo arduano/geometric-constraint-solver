@@ -68,8 +68,9 @@ the closing regressions were satisfactory. Clean closing source `48e3cc3` passes
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
 of every prepared UAT step. M71-M77 are complete. M78 is the active CAD geometry-tool family and
-authoring-variant cut under ADR 0036; implementation and every qualification/UAT/publication gate
-remain open. M76's
+authoring-variant cut under ADR 0036; hardened product implementation is committed through
+`4845df7` and the latest focused owner suites pass, while clean release/UAT/publication gates remain
+open. M76's
 implementation,
 feature refinements,
 clean qualification, immutable Tailscale nomination, scoped human acceptance and exact public
@@ -5082,42 +5083,43 @@ bytes are historical only after M77-F012/F013 and must not be used for current U
 
 ### M78: CAD geometry tool families and authoring variants
 
-Status: **active (2026-08-17); contract and ADR 0036 approved, implementation, qualification,
-UAT, publication and closeout remain open**. M78 groups the complete simple-geometry authoring
-surface into nine reusable headless families and exactly 25 CAD-style variants.
+Status: **active (opened 2026-08-17); hardened product implementation is committed through
+`4845df7`, while clean release nomination, UAT, publication and closeout remain open**. M78 groups
+the complete simple-geometry authoring surface into nine reusable headless families and exactly 25
+CAD-style variants.
 `docs/M78_GOALS.md` owns the exact recipe/modifier contract and `docs/M78_UAT.md` owns the pending
 human scorecard.
 
-- [ ] Add stable non-exhaustive `GeometryToolFamily` and `GeometryToolVariant` metadata, exact
+- [x] Add stable non-exhaustive `GeometryToolFamily` and `GeometryToolVariant` metadata, exact
   activation/inspection and a coarse compatibility projection that does not multiply
   `EditorTool` into one case per menu item.
-- [ ] Publish semantic draft stages, progress, finishability, explicit branch state and typed live
+- [x] Publish semantic draft stages, progress, finishability, explicit branch state and typed live
   measurements for all 25 variants; add typed finish, step-back and complementary-sweep actions.
-- [ ] Separate Shift recipe regularization from Ctrl/Cmd ambient-inference suppression, preserve
+- [x] Separate Shift recipe regularization from Ctrl/Cmd ambient-inference suppression, preserve
   Shift+Ctrl square intent and support bounded Tab cycling for ambiguous inference candidates.
-- [ ] Implement Segment, open/closed Polyline and Midpoint Line recipes, including first-vertex
+- [x] Implement Segment, open/closed Polyline and Midpoint Line recipes, including first-vertex
   closure without duplication and intrinsic stored-centre Midpoint.
-- [ ] Implement 2-Point Aligned, 3-Point Corner, Center and 3-Point Center rectangles as four
+- [x] Implement 2-Point Aligned, 3-Point Corner, Center and 3-Point Center rectangles as four
   explicit shared-corner lines with ordinary shape relations, no lock/dimension, visible centre
   helper geometry and persistent Shift-square EqualLength intent.
-- [ ] Implement Center–Radius, 2-Point Diameter and 3-Point circles plus Center, 3-Point and native-
+- [x] Implement Center–Radius, 2-Point Diameter and 3-Point circles plus Center, 3-Point and native-
   endpoint Tangent arcs with scale-aware degeneracy rejection, explicit sweep/contact/orientation
   and no synthetic rim points.
-- [ ] Implement Center–Axes and Axis-Endpoints full ellipses and elliptical arcs, with exact
+- [x] Implement Center–Axes and Axis-Endpoints full ellipses and elliptical arcs, with exact
   headless support projection and complementary-sweep control for arc forms.
-- [ ] Group existing Quadratic/Cubic Bézier, Rational Quadratic/Parabola/Hyperbola and Open/Periodic
+- [x] Group existing Quadratic/Cubic Bézier, Rational Quadratic/Parabola/Hyperbola and Open/Periodic
   Control NURBS construction under exact variants without changing their durable geometry,
   scalar-domain or explicit branch meaning.
-- [ ] Route every interactive recipe, including geometry-only output, through one authenticated
+- [x] Route every interactive recipe, including geometry-only output, through one authenticated
   `CommitConstructionPlan` with typed operands, per-curve roles and relation provenance; apply
   intrinsic and regularization sources before compatible ambient inference.
-- [ ] Solve and independently validate each complete plan once, publish once as one history step,
+- [x] Solve and independently validate each complete plan once, publish once as one history step,
   and preserve document, accepted scene, allocator, history, preview and terminal draft on
   rejection so correction does not leave a stale global problem.
-- [ ] Replace the flat workbench geometry palette with persistent bottom-left family overlays that
+- [x] Replace the flat workbench geometry palette with persistent bottom-left family overlays that
   remember session variants/options, remain open through blur/canvas navigation and close to
   Select; keep geometry, stage and branch intelligence out of the browser.
-- [ ] Add focused native/coordinator/WASM catalog, recipe, modifier, branch, contact, redundancy,
+- [x] Add focused native/coordinator/WASM catalog, recipe, modifier, branch, contact, redundancy,
   rejection, history and persistence coverage plus thin demo overlay/event/rendering tests.
 - [ ] Review any systemic golden authoring/scene expansion row by row; pass survey, check and
   require-clean together with formatting, warnings-denied Clippy/Rustdoc, locked all-feature
@@ -5127,6 +5129,18 @@ human scorecard.
   for correction until explicit human approval.
 - [ ] Complete `docs/M78_UAT.md`, receive explicit supervising-human approval, publish the exact
   accepted source through GitHub Pages, verify hosted bytes and close M78.
+
+Implementation note (2026-08-18): `4845df7` resolves M78-F001 through M78-F010. The hardening
+freezes typed relation provenance and recipe/ambient precedence, publication-authenticated positive
+acknowledgement, controlled proposal-lowering work, stale operand/reference/Tangent-Arc-jet
+reauthentication, overflow-safe finite geometry/residual evaluation, local circumcircle incidence
+and Tangent Arc endpoint validation, finite-only status measurements and legacy auto-contact label
+compatibility. Latest post-hardening focused evidence is 362 passing editor library tests, 32
+passing `m78_geometry_variants` cases, seven passing editor extreme-finite cases and one passing
+sketch extreme-finite case. The unchanged 270-case golden surveys as 270 `PASS`; `--check` and
+`--require-clean` match recorded SHA-256
+`7a4afd4fbd70d0ef6454e5f07f00fde7afb64eec59d329acfba7f761d986e343`. These results are
+implementation evidence, not the still-pending clean release nomination or human UAT disposition.
 
 Gate: all nine families expose exactly the approved 25 variants; each gesture has one headless
 stage/recipe/branch owner and one atomic independently validated transaction; intrinsic recipe

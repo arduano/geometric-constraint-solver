@@ -2,8 +2,8 @@
 
 # ADR 0036: Headless geometry variants and atomic construction recipes
 
-Status: accepted for active M78 on 2026-08-17; implementation, qualification, human UAT,
-publication and closeout remain pending.
+Status: accepted for active M78 on 2026-08-17; hardened product implementation is committed through
+`4845df7`; clean release nomination, human UAT, publication and closeout remain pending.
 
 ## Context
 
@@ -86,11 +86,19 @@ Each relation records one provenance:
 
 The trial applies intrinsic sources first, regularization second and compatible inference in stage
 order. An ambient source that conflicts with or is fully/partially implied by a recipe cannot make
-the recipe fail; recipe intent takes precedence and the redundant inference is not persisted.
+the recipe fail; recipe intent takes precedence and the redundant inference is not persisted. An
+ambient source that adds a compatible orientation remains ordinary durable intent. Controlled plans
+charge validation and deterministic proposal-specific lowering work before candidate cloning or
+allocation.
+
 Every accepted plan allocates on one cloned retained session, solves once, independently validates
 finite geometry/domains/hard residuals and publishes once through exact compare-and-swap as one
-history entry. Rejection preserves document, accepted scene, history, allocator high-water,
-preview and terminal draft.
+history entry. The coordinator records successful publication of the matching expected input/plan;
+only that evidence lets a positive acknowledgement consume the terminal draft. Rejection preserves
+document, accepted scene, history, allocator high-water, preview and terminal draft. After an
+intervening retained edit, typed point/contact/reference operands and Tangent Arc endpoint jets must
+reauthenticate from the next exact accepted scene before the prefix can be reused. A missing
+dependency stays a local recoverable draft issue.
 
 ### Express recipes through ordinary durable geometry and relations
 
@@ -104,6 +112,14 @@ recipes derive centre/radius analytically, reject scale-aware collinearity and c
 rim point. Existing snapped rim points receive created-curve PointOnCurve in the same plan. Arc and
 elliptical-arc sweeps remain explicit durable branch state.
 
+Representable midpoint/reflection and circle projection use finite algebra that avoids overflowing
+endpoint sums, doubled centres or radius ratios. Circumcircle derivation prefers translated
+normalized chords and falls back to normalized absolute coordinates when finite chord subtraction or
+length is not representable; the rounded result must still pass local point-to-centre incidence.
+Existing sketch midpoint/symmetry equations retain their Jacobians but use the same overflow-safe
+midpoint evaluation, while segment/conic validation uses overflow-safe Euclidean norms. This adds no
+residual or relaxed validity threshold.
+
 Tangent Arc is limited to finite jets at endpoints of native open curves. For source endpoint `S`,
 target `E` and the selected outgoing unit normal `n`, it computes
 
@@ -111,10 +127,12 @@ target `E` and the selected outgoing unit normal `n`, it computes
 center = S + n * |E-S|² / (2 * dot(E-S, n))
 ```
 
-and rejects zero chord, zero/invalid jet, zero denominator, non-finite radius or vanishing sweep.
-It persists the existing generic curve-tangency definition with explicit source contact,
-orientation, endpoint neighbourhood and created-arc sweep. No new tangency residual or browser
-branch heuristic is introduced.
+The implementation evaluates the equivalent scale-safe product in a translated or absolute-
+normalized frame and validates both requested endpoints against the rounded centre/radius. It
+rejects zero chord, zero/invalid jet, zero denominator, non-finite radius, failed endpoint incidence
+or vanishing sweep. It persists the existing generic curve-tangency definition with explicit source
+contact, orientation, endpoint neighbourhood and created-arc sweep. No new tangency residual or
+browser branch heuristic is introduced.
 
 ### Keep the workbench a thin family presenter
 
@@ -122,7 +140,8 @@ branch heuristic is introduced.
 remembers session-local variant/options, renders published stages/previews/status and forwards
 platform actions. It does not reconstruct a rectangle, circumcircle, ellipse projection, tangent
 arc, point/contact identity, relation order or failure policy. Invalid family-local inputs cannot
-block a different active variant.
+block a different active variant. Headless status omits any nonrepresentable derived measurement;
+the adapter cannot manufacture NaN/Inf copy or promote a local draft issue to global Problems state.
 
 ## Consequences
 
@@ -131,8 +150,14 @@ block a different active variant.
 - All multi-curve geometry and intrinsic/ambient relations share one independently validated
   retained transaction and one Undo/Redo step.
 - Recipe precedence is reviewable provenance rather than an accident of source insertion order.
+- Operation budgets and positive acknowledgement are authenticated before mutation/draft
+  consumption rather than inferred from a host boolean.
+- Correction-ready semantic operands survive intervening edits only after scene reauthentication;
+  deleted dependencies fail locally.
 - Coordinate-only samples no longer masquerade as stored points; snapped existing points remain
   associative through ordinary incidence.
+- Scale-safe arithmetic retains representable finite geometry and still fails closed when the
+  rounded derived result cannot satisfy local incidence.
 - Explicit stage/branch/status DTOs improve prompts, accessibility, native/WASM parity and invalid-
   terminal recovery.
 - The private draft and construction-plan refactor is larger than adding web buttons, but it
@@ -169,6 +194,10 @@ semantic stages, modifier separation, relation provenance/order, every recipe's 
 invalid/redundant/stale rollback, branch/contact identity, history and native/WASM parity. Thin demo
 tests own only event mapping, overlay lifecycle, accessibility and headless rendering. The stable
 golden authoring/scene matrix expands only for a reviewed systemic catalog or lifecycle dimension;
-isolated findings receive focused owner regressions first. Complete clean qualification, immutable
-Tailscale review, explicit human UAT, accepted-source Pages publication and hosted-byte
-verification are required before M78 closes.
+isolated findings receive focused owner regressions first. M78-F001 through M78-F010 are recorded in
+`docs/M78_IMPLEMENTATION.md` and `docs/SCENARIOS.md`. At product commit `4845df7`, focused evidence
+is 362/362 editor library tests, 32/32 geometry-variant cases, 7/7 editor extreme-finite cases and
+1/1 sketch extreme-finite case, plus passing editor warnings-denied Clippy. The unchanged 270-case
+golden survey/check/clean sequence also passes. Complete clean workspace/WASM/Rustdoc/Trunk/release
+qualification, immutable Tailscale review, explicit human UAT, accepted-source publication and
+hosted-byte verification remain required before M78 closes.

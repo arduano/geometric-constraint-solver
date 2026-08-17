@@ -2,9 +2,10 @@
 
 # M78 focused UAT — CAD geometry tool families and authoring variants
 
-Status: **planned and open**. No candidate is nominated and no scorecard item is accepted. Record
-the exact clean source, tree, immutable snapshot, manifest, endpoint and browser-check evidence
-here only after the complete release gate passes.
+Status: **open; hardened product implementation is committed through `4845df7`, candidate
+nomination pending**. No scorecard item is accepted. Record the exact clean source, tree, immutable
+snapshot, manifest, endpoint and browser-check evidence here only after the complete release gate
+passes.
 
 Candidate source: pending
 
@@ -13,6 +14,12 @@ Candidate tree: pending
 Tailscale endpoint: pending
 
 Immutable snapshot and ordered-manifest aggregate: pending
+
+Focused implementation preconditions at `4845df7`: 362/362 editor library tests, 32/32
+`m78_geometry_variants`, 7/7 editor `m78_extreme_finite`, 1/1 sketch `m78_extreme_finite`, and
+warnings-denied editor all-target/all-feature Clippy pass. The unchanged 270-case golden survey is
+all `PASS`, and check/clean modes match. Clean workspace/WASM/Rustdoc/Trunk/release-gate evidence is
+not yet recorded; these results do not nominate a candidate or accept any UAT row.
 
 Run the scorecard in the ordinary editable workbench at `1440x900` and approximately `1024x720`,
 at coarse and fine zoom, using both Profile and Construction roles. Direct tests, not visual
@@ -60,7 +67,9 @@ the tree and Problems/constraint presentation:
 
 Repeat one Shift rectangle while holding Ctrl/Cmd. Ambient snapping should be suppressed, but the
 intrinsic square and rectangle relations must remain. Approach conflicting ambient H/V guidance;
-the recipe's own alignment/shape must win without a failed placement or stale global problem.
+the recipe's own alignment/shape must win without a failed placement or stale global problem. On an
+oriented rectangle, deliberately accept a compatible horizontal/vertical baseline guide and confirm
+that this useful ambient orientation remains alongside the recipe's perpendicular/parallel intent.
 
 ## U4 — circles and arcs
 
@@ -78,7 +87,10 @@ Create Tangent Arcs from eligible endpoints of several native open families and 
 directions. The preview and committed arc should leave the source smoothly with a visible ordinary
 tangency relation. Try an interior point, periodic curve, zero-length chord and near-straight
 infinite-radius case; each should be unavailable or locally recoverable, never accepted as
-non-finite geometry or a stale global failure.
+non-finite geometry or a stale global failure. Move an eligible source endpoint between attempts and
+confirm the next preview follows its current position/tangent rather than a cached jet; deleting an
+attempted source should leave the draft recoverable through Backspace/Escape rather than blanking the
+scene.
 
 ## U5 — ellipses, Béziers and conics
 
@@ -119,6 +131,11 @@ rejected attempt may enter accepted history, reuse a retired persistent identity
 or leave a global error after correction/Undo. One successful complete recipe must be exactly one
 Undo/Redo step regardless of its stage count.
 
+The direct regressions own exact publication acknowledgement, proposal work counters, allocator
+high-water and legacy `auto point-on-curve contact N` bytes. Human review should still confirm their
+observable consequence: a rejected/exhausted attempt never reports success, clears a successful
+shape only after it is visibly published, and never leaves partial geometry or a stale notice.
+
 ## U8 — role, persistence and desktop polish
 
 Author representative variants with Profile active and with Construction active. Main curves
@@ -130,7 +147,9 @@ session-only last-used palette variant may reset without corrupting the scene.
 At both desktop sizes and zoom ranges, verify family overlays remain contained, stage prompts do
 not cover the active geometry, keyboard focus/accessibility names are meaningful, and hover/click
 feedback remains consistent with the exact next accepted operand. Tab focus must not synthesize
-canvas hover and canvas movement must not steal overlay focus.
+canvas hover and canvas movement must not steal overlay focus. Every visible live measurement must
+remain finite and truthful; a derived readout that cannot be represented should be absent rather than
+displaying NaN or infinity.
 
 ## Acceptance record
 

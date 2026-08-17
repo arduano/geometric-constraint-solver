@@ -1357,8 +1357,9 @@ separate post-refinement replay; that disposition does not invent individual obs
 GitHub Pages publication, the unchanged retained M72 browser verification and M76-adapted retained
 M74/M75 browser verification now pass, completing M76. M77 subsequently completes without changing
 any completed M76 evidence. M78 is active under ADR 0036 for an exact nine-family/25-variant
-headless geometry authoring catalog; all M78 implementation, qualification, UAT and publication
-evidence remains pending.
+headless geometry authoring catalog; hardened product implementation is committed through
+`4845df7` and the latest focused owner suites pass, while clean release nomination, UAT and
+publication evidence remain pending.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -2328,9 +2329,91 @@ relations, contacts, roles and branch state; overlay memory/drafts are not canon
 Thin demo tests prove event/modifier/action mapping and render parity without browser recipe
 geometry, inference precedence or branch choice.
 
-M78 is active. Every A1-A8 implementation, focused owner regression, reviewed golden disposition,
-clean release gate, immutable Tailscale nomination, human UAT, accepted-source Pages publication
-and hosted-byte verification remains pending.
+### M78-F001 - Representable Tangent Arc survives extreme scale
+
+Construct the same finite outgoing Tangent Arc at scales `1e-6`, `1` and `1e6`, then exercise an
+extreme finite chord whose squared length would overflow or underflow before division. The recipe
+uses the scale-safe equivalent offset, returns finite centre/radius/sweep and independently validates
+the ordinary generic-tangency result. Zero normal projection and genuinely nonrepresentable output
+still reject locally.
+
+### M78-F002 - Recipe provenance owns conflict while compatible ambient intent survives
+
+Declare one rectangle plan out of source order with ambient Vertical on a span, intrinsic Horizontal
+on that same span and regularizing EqualLength on an adjacent pair. Lowering publishes intrinsic then
+regularization, carries exact curve roles and omits the conflicting ambient source. In a separate
+oriented rectangle, retain a compatible ambient Horizontal baseline alongside intrinsic
+Perpendicular/Parallel intent. Both plans solve and publish exactly once.
+
+### M78-F003 - Positive acknowledgement requires exact retained publication
+
+Produce a tokenized Tangent Arc plan and acknowledge it as accepted without applying it through the
+coordinator. The token is consumed as a local rejection, accepted document/history remain exact and
+the terminal draft stays correction-ready. Repeat through ordinary and controlled coordinator
+publication: only the exact matching expected input/plan gains publication evidence, and the later
+positive acknowledgement clears the preview/draft once.
+
+### M78-F004 - Controlled proposal work stops before allocation
+
+Submit a 10,000-point Polyline plan through controlled publication. With zero
+`DocumentValidationItems`, stop at `DocumentValidation`; with one validation item and zero
+`DocumentLoweringItems`, stop at `DocumentLowering`. In both cases document, accepted prepared input,
+history/cursor, transcript, sketch identity high-water and computed-evaluation high-water are bit-
+exact. Unlimited control can continue through the normal atomic path.
+
+### M78-F005 - Stale operands and Tangent Arc jets reauthenticate or recover locally
+
+Leave a Tangent Arc plan awaiting acknowledgement, then move its source endpoint through a separate
+accepted edit and reject the now-stale plan. Against the next authenticated scene, require the
+preserved prefix to refresh source position, endpoint jet, centre, sweep, contact parameters/
+neighbourhoods and tangent orientation before correction. Repeat after deleting the source curve:
+publish no preview/commit, show only a draft-local rejection and allow step-back/Escape to recover
+without a global problem or allocator/history change.
+
+### M78-F006 - Extreme-finite midpoint, segment, conic and derived recipes remain representable
+
+Use like-signed endpoints around `8e307` and `1.2e308` for a Midpoint relation, diameter circle,
+Midpoint Line, axis-endpoint ellipse/elliptical arc and centre-based rectangle recipes. Use an
+extreme radius with a tiny Center Arc direction sample. Each mathematically representable result
+contains only finite points/scalars, solves and passes independent hard-residual validation. Check
+the unchanged midpoint Jacobian by finite differences at `1e-6`, `1` and `1e6`; genuinely
+nonrepresentable reflections/projections remain rejected.
+
+### M78-F007 - Circumcircles use normalized frames and local incidence
+
+Author 3-Point Circle and 3-Point Arc from opposite-extreme and diagonal-extreme finite samples whose
+raw chord `hypot` can overflow. Require a finite locally valid centre/radius and accepted solve.
+Translate a small triangle to a large world coordinate where centre rounding would miss a sample;
+validate the rounded circle by local point-to-centre distances rather than normalized absolute world
+coordinates. A false-incidence result emits no plan and stays `InvalidTerminalGeometry`.
+
+### M78-F008 - Tangent Arc validates both requested endpoints
+
+From a native open endpoint translated near `1e16`, request a moderate finite Tangent Arc target.
+After plan lowering, evaluate the created arc at its terminal parameter and require the requested
+target within focused tolerance while source incidence and tangency remain valid. A rounded centre/
+radius that cannot represent both source and target incidence emits no construction plan and remains
+a local draft issue.
+
+### M78-F009 - Draft status omits nonrepresentable derived measurements
+
+Create a Center-Radius Circle with finite radius `1e308`. The draft status includes exactly the
+finite radius, omits the overflowing `2 * radius` diameter and contains no NaN/Inf measurement. The
+underlying plan remains finite and independently accepted. Apply the same finite-only assertion to
+all extreme circle/arc length, angle, ratio and width/height status values.
+
+### M78-F010 - Ambient point-on-curve contact labels stay byte-compatible
+
+Lower an auto-inferred `PointOnCurve` occurrence before and after typed provenance routing. Its
+contact label remains exactly `auto point-on-curve contact N`, including one-based occurrence
+numbering. Recipe-owned relations/contacts may expose their provenance-specific audit labels, but
+legacy ambient contact bytes and identity ordering do not change.
+
+M78 is active. A1-A8 implementation and M78-F001 through M78-F010 focused owner regressions pass
+through product commit `4845df7`: 362/362 editor library tests, 32/32 geometry-variant cases, 7/7
+editor extreme-finite cases and 1/1 sketch extreme-finite case. The unchanged 270-case golden
+survey is all `PASS`, and check/clean modes match. Clean workspace/release qualification, immutable
+Tailscale nomination, human UAT and accepted-source publication remain pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

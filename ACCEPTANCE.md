@@ -191,8 +191,9 @@ exact final public publication passes. M76 implementation, clean qualification, 
 byte-verified Tailscale nomination, scoped human acceptance and exact final public publication all
 pass. M77's replacement clean qualification, immutable Tailscale review, scoped human acceptance
 and exact final Pages publication also pass without changing any completed M76 evidence. M78 is
-active under ADR 0036; no implementation, qualification, human-acceptance or publication result is
-claimed yet.
+active under ADR 0036; hardened product implementation is committed through `4845df7` and focused
+owner evidence passes, while clean release nomination, human acceptance and publication remain
+unclaimed and pending.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2344,17 +2345,20 @@ gate-qualified product source.
 
 ## M78 acceptance: CAD geometry tool families and authoring variants
 
-Status: **active (2026-08-17); contract and ADR 0036 approved, all implementation, mechanical
-qualification, frozen-candidate, human UAT, publication and closeout evidence remains pending**.
+Status: **active (2026-08-17); implementation and focused mechanical qualification pass;
+clean release-gate nomination, frozen-candidate verification, human UAT, publication and closeout
+remain pending**. Hardened product implementation is committed through `4845df7`; the final candidate
+source will be recorded only after the complete clean gate passes.
 
 - The exact public catalog contains nine families and 25 variants: Point 1; Lines 3; Rectangles 4;
   Circles 3; Arcs 3; Ellipses 4; Béziers 2; Conics 3; Splines 2. Stable keys, family membership,
   ordering/defaults and exact activation are headless metadata. Coarse `EditorTool` compatibility
   continues without becoming the exact recipe authority.
 - Each variant publishes a semantic stage, progress/finishability, explicit branch and typed live
-  measurements. The web does not infer progression from coordinate count or reconstruct preview
-  geometry. Enter/double-click finish eligible Polyline/NURBS drafts; first-vertex Polyline closure
-  reuses that identity without a duplicate point or zero-length edge.
+  measurements plus a typed draft-local issue when correction is required. The web does not infer
+  progression from coordinate count, reconstruct preview geometry or retain a rejected plan as a
+  global error. Enter/double-click finish eligible Polyline/NURBS drafts; first-vertex Polyline
+  closure reuses that identity without a duplicate point or zero-length edge.
 - Ctrl/Cmd suppresses ambient inference only. Shift regularizes every rectangle variant to a
   persistent square and commits ordinary EqualLength even when Ctrl/Cmd is also held. Tab cycles
   bounded ambiguous inference candidates; `F` flips only complementary Center/Elliptical Arc
@@ -2388,11 +2392,24 @@ qualification, frozen-candidate, human UAT, publication and closeout evidence re
   stored/coordinate/prospective-contact/existing-contact operands, per-created-curve roles and
   relation provenance. `RecipeIntrinsic` and `RecipeRegularization` precede compatible
   `AutoInference`; a redundant/conflicting ambient source cannot make valid intrinsic geometry
-  fail or become hidden duplicate intent.
+  fail or become hidden duplicate intent, while a compatible ambient orientation remains durable.
 - One cloned retained session allocates, solves and independently validates the complete plan
   before one exact publication and one history step. Rejection, cancellation, exhaustion and stale
   work retain document, accepted scene, allocator high-water, history, preview and terminal draft.
-  A corrected/cancelled/undone attempt leaves no stale global error.
+  Controlled plans charge validation and proposal-specific lowering before candidate allocation.
+  Positive coordinator acknowledgement succeeds only after the exact expected plan is actually
+  published. A corrected/cancelled/undone attempt leaves no stale global error.
+- A stale retained draft reauthenticates persistent point coordinates, prospective contacts,
+  midpoint/curve references and Tangent Arc endpoint jets from the next exact accepted scene.
+  Moved dependencies regenerate current geometry/contact/orientation state; deleted dependencies
+  remain a local correction-ready rejection recoverable through step-back or Escape.
+- All derived recipe arithmetic fails closed on nonrepresentable output while retaining finite
+  representable input. Midpoint/symmetry residual evaluation, segment/conic norms, midpoint and
+  reflection recipes, circle projection, circumcircles and Tangent Arc construction avoid
+  overflowing intermediate squares/sums. Circumcircle and Tangent Arc validation compare local
+  point-to-centre radii, including both requested Tangent Arc endpoints. Status publishes only
+  representable finite measurements; for example, a finite radius may omit an overflowing
+  diameter.
 - Main geometry follows the active Profile/Construction role, while centre-rectangle helpers are
   Construction. Save/reload and reproduction restore only ordinary durable geometry, relations,
   contacts, roles and branch state; palette memory and unfinished drafts are not canonical sketch
@@ -2405,6 +2422,12 @@ qualification, frozen-candidate, human UAT, publication and closeout evidence re
   branch/contact identity, precedence, invalid correction, atomic history and persistence. Thin
   demo tests cover only platform mapping, overlay lifecycle, accessibility and headless rendering.
   Golden expansion occurs only for a reviewed systemic dimension, never as blanket byte blessing.
+- Post-hardening focused evidence at `4845df7` is 362/362 editor library tests, 32/32
+  `m78_geometry_variants`, 7/7 editor `m78_extreme_finite` and 1/1 sketch
+  `m78_extreme_finite`. The editor all-target/all-feature warnings-denied Clippy command also
+  passes. The exact 270-case golden inventory survey is all `PASS`; `--check` and
+  `--require-clean` match the unchanged recorded bytes. This does not substitute for the pending
+  clean workspace, WASM, Trunk, Rustdoc and complete release-gate evidence.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant native/
   WASM parity, clean golden authority, demo WASM, Trunk and the complete clean release gate pass
   before an exact no-rebuild candidate is frozen and byte-verified over Tailscale.
