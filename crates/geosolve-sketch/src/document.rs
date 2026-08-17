@@ -514,6 +514,13 @@ pub enum DocumentTrimProjectionError {
     NonFiniteTarget { curve: CurveId },
     #[error("trim-endpoint projection target for curve {curve} is its ambiguous center")]
     AmbiguousCenterTarget { curve: CurveId },
+    #[error(
+        "trim-endpoint projection for curve {curve} would make {endpoint:?} cross the opposite endpoint"
+    )]
+    CrossesOppositeEndpoint {
+        curve: CurveId,
+        endpoint: FeatureEndpoint,
+    },
     #[error("trim-endpoint projection for curve {curve} produced a non-finite value")]
     NonFiniteResult { curve: CurveId },
 }
@@ -5255,10 +5262,13 @@ impl SketchDocument {
                     (
                         DocumentRationalConicControlMode::Euclidean,
                         DocumentRationalConicControl::Euclidean { weight, .. },
-                    ) => DocumentRationalConicControl::Euclidean {
-                        middle: target,
-                        weight,
-                    },
+                    ) => {
+                        rational_weighted_middle_preserving_control(target, weight)?;
+                        DocumentRationalConicControl::Euclidean {
+                            middle: target,
+                            weight,
+                        }
+                    }
                     (
                         DocumentRationalConicControlMode::Projective,
                         DocumentRationalConicControl::Projective { weight, .. },
@@ -5489,8 +5499,9 @@ impl SketchDocument {
 
     /// Projects a world target onto one curve's existing start/end trim scalar.
     ///
-    /// Angular results are unwrapped near the selected endpoint's current scalar. The method does
-    /// not clamp, reorder, swap, allocate, or change explicit sweep/branch state.
+    /// Angular results are unwrapped near the selected endpoint's current scalar. Non-periodic
+    /// trims reject an endpoint crossing that would reverse their existing direction. The method
+    /// does not clamp, reorder, swap, allocate, or change explicit sweep/branch state.
     ///
     /// # Errors
     ///
@@ -5625,6 +5636,36 @@ impl SketchDocument {
         };
         if !value.is_finite() {
             return Err(DocumentTrimProjectionError::NonFiniteResult { curve });
+        }
+        if let CurveDefinition::ParabolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        }
+        | CurveDefinition::HyperbolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        } = definition
+        {
+            let start = self.require_scalar(*trim_start)?.value;
+            let end = self.require_scalar(*trim_end)?.value;
+            let current_rate = end - start;
+            let candidate_rate = match endpoint {
+                FeatureEndpoint::Start => end - value,
+                FeatureEndpoint::End => value - start,
+            };
+            if !candidate_rate.is_finite() {
+                return Err(DocumentTrimProjectionError::NonFiniteResult { curve });
+            }
+            if candidate_rate == 0.0
+                || candidate_rate.is_sign_negative() != current_rate.is_sign_negative()
+            {
+                return Err(DocumentTrimProjectionError::CrossesOppositeEndpoint {
+                    curve,
+                    endpoint,
+                });
+            }
         }
         Ok(DocumentTrimProjection { scalar, value })
     }
@@ -8582,8 +8623,7 @@ impl SketchDocument {
                         "Euclidean middle control requires a nonzero weight",
                     );
                 }
-                let weighted_middle = [middle[0] * weight, middle[1] * weight];
-                finite_pair(weighted_middle, "rational homogeneous middle")?;
+                let weighted_middle = rational_weighted_middle_preserving_control(middle, weight)?;
                 (weighted_middle, weight)
             }
             DocumentRationalConicControl::Projective {
@@ -13972,6 +14012,26 @@ fn finite_positive(value: f64, field: &'static str) -> Result<(), DocumentError>
 fn finite_pair(value: [f64; 2], field: &'static str) -> Result<(), DocumentError> {
     finite(value[0], field)?;
     finite(value[1], field)
+}
+
+fn rational_weighted_middle_preserving_control(
+    middle: [f64; 2],
+    weight: f64,
+) -> Result<[f64; 2], DocumentError> {
+    let weighted_middle = [middle[0] * weight, middle[1] * weight];
+    finite_pair(weighted_middle, "rational homogeneous middle")?;
+    for (ordinary, weighted) in middle.into_iter().zip(weighted_middle) {
+        let recovered = weighted / weight;
+        let round_trip_error = (recovered - ordinary).abs();
+        let round_trip_tolerance = 64.0 * f64::EPSILON * ordinary.abs();
+        if !recovered.is_finite() || round_trip_error > round_trip_tolerance {
+            return invalid(
+                "rational homogeneous middle",
+                "requested Euclidean control loses material precision at this weight",
+            );
+        }
+    }
+    Ok(weighted_middle)
 }
 
 fn validate_direction(value: [f64; 2], field: &'static str) -> Result<(), DocumentError> {

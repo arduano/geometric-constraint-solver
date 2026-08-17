@@ -4,13 +4,14 @@ use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     CurveDefinition, CurveId, DocumentArcSweep, DocumentBSplineForm, DocumentCommand,
     DocumentCommandEffect, DocumentConstraintDefinition, DocumentCurveControlAvailability,
-    DocumentCurveControlId, DocumentCurveControlKind, DocumentCurveControlProjection,
-    DocumentCurveControlTarget, DocumentCurveControlWithholdingReason, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentEdit, DocumentElementId, DocumentHyperbolaBranch,
+    DocumentCurveControlError, DocumentCurveControlId, DocumentCurveControlKind,
+    DocumentCurveControlProjection, DocumentCurveControlTarget,
+    DocumentCurveControlWithholdingReason, DocumentDimensionDefinition, DocumentDimensionMode,
+    DocumentEdit, DocumentElementId, DocumentError, DocumentHyperbolaBranch,
     DocumentRationalConicControl, DocumentRationalConicControlMode, DocumentSolveRequest,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl, OperationOutcome,
-    PreparedSketchOperation, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-    SketchDocument, SketchDocumentSession,
+    DocumentTrimProjectionError, FeatureEndpoint, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+    OperationControl, OperationOutcome, PreparedSketchOperation, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchDocument, SketchDocumentSession,
 };
 
 #[derive(Clone, Copy)]
@@ -632,6 +633,116 @@ fn trim_controls_round_trip_start_and_end_without_changing_sweep_or_hyperbola_br
     );
 }
 
+fn trim_scalar_ids(
+    document: &SketchDocument,
+    curve: CurveId,
+) -> (
+    geosolve_sketch::DesignScalarId,
+    geosolve_sketch::DesignScalarId,
+) {
+    match document.curve(curve).unwrap().definition {
+        CurveDefinition::ParabolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        }
+        | CurveDefinition::HyperbolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        } => (trim_start, trim_end),
+        _ => panic!("expected a non-periodic trimmed conic"),
+    }
+}
+
+fn trim_target_at(
+    document: &SketchDocument,
+    curve: CurveId,
+    kind: DocumentCurveControlKind,
+    value: f64,
+) -> [f64; 2] {
+    let mut candidate = document.clone();
+    let (start, end) = trim_scalar_ids(&candidate, curve);
+    let scalar = match kind {
+        DocumentCurveControlKind::TrimStart => start,
+        DocumentCurveControlKind::TrimEnd => end,
+        _ => panic!("expected a trim control"),
+    };
+    candidate.set_scalar_value(scalar, value).unwrap();
+    control(&candidate, curve, kind).position
+}
+
+#[test]
+fn nonperiodic_trim_controls_reject_crossing_without_reversing_orientation() {
+    let (document, ids) = gallery();
+
+    for curve in [ids.parabola, ids.hyperbola] {
+        let before = document.to_canonical_json().unwrap();
+        for (kind, endpoint, crossing_value) in [
+            (
+                DocumentCurveControlKind::TrimStart,
+                FeatureEndpoint::Start,
+                2.0,
+            ),
+            (
+                DocumentCurveControlKind::TrimEnd,
+                FeatureEndpoint::End,
+                -2.0,
+            ),
+        ] {
+            let target = trim_target_at(&document, curve, kind, crossing_value);
+            assert!(
+                matches!(
+                    document.project_curve_control(
+                        DocumentCurveControlId { curve, kind },
+                        target,
+                    ),
+                    Err(DocumentCurveControlError::TrimProjection(
+                        DocumentTrimProjectionError::CrossesOppositeEndpoint {
+                            curve: rejected,
+                            endpoint: rejected_endpoint,
+                        }
+                    )) if rejected == curve && rejected_endpoint == endpoint
+                ),
+                "ascending {curve:?} {kind:?} accepted a crossing target"
+            );
+        }
+        assert_eq!(document.to_canonical_json().unwrap(), before);
+
+        let mut descending = document.clone();
+        let (start, end) = trim_scalar_ids(&descending, curve);
+        descending.set_scalar_value(start, 2.0).unwrap();
+        descending.set_scalar_value(end, -2.0).unwrap();
+        let before = descending.to_canonical_json().unwrap();
+        for (kind, endpoint, crossing_value) in [
+            (
+                DocumentCurveControlKind::TrimStart,
+                FeatureEndpoint::Start,
+                -3.0,
+            ),
+            (DocumentCurveControlKind::TrimEnd, FeatureEndpoint::End, 3.0),
+        ] {
+            let target = trim_target_at(&descending, curve, kind, crossing_value);
+            assert!(
+                matches!(
+                    descending.project_curve_control(
+                        DocumentCurveControlId { curve, kind },
+                        target,
+                    ),
+                    Err(DocumentCurveControlError::TrimProjection(
+                        DocumentTrimProjectionError::CrossesOppositeEndpoint {
+                            curve: rejected,
+                            endpoint: rejected_endpoint,
+                        }
+                    )) if rejected == curve && rejected_endpoint == endpoint
+                ),
+                "descending {curve:?} {kind:?} accepted a crossing target"
+            );
+        }
+        assert_eq!(descending.to_canonical_json().unwrap(), before);
+    }
+}
+
 #[test]
 fn radial_handle_reports_driving_dimension_and_equal_radius_ownership() {
     let (mut dimensioned, ids) = gallery();
@@ -826,6 +937,62 @@ fn rational_control_modes_are_explicit_atomic_and_round_trip_existing_storage() 
                 },
             )
             .is_err()
+    );
+    assert_eq!(document.to_canonical_json().unwrap(), before);
+}
+
+#[test]
+fn euclidean_rational_control_rejects_lossy_homogeneous_underflow_atomically() {
+    let mut document = SketchDocument::new(2.0).unwrap();
+    let start = document.add_point("start", [1.0, 0.0]).unwrap();
+    let end = document.add_point("end", [0.0, 1.0]).unwrap();
+    let weight = document
+        .add_scalar("weight", 1.0e-200, ScalarUnit::Parameter, weight_domain())
+        .unwrap();
+    let curve = document
+        .add_curve(
+            "rational",
+            CurveDefinition::RationalQuadraticConic {
+                start,
+                weighted_middle: [0.0, 1.0],
+                middle_weight: weight,
+                end,
+            },
+        )
+        .unwrap();
+    let before = document.to_canonical_json().unwrap();
+
+    let control = DocumentCurveControlId {
+        curve,
+        kind: DocumentCurveControlKind::RationalMiddle,
+    };
+    assert!(
+        matches!(
+            document.project_curve_control(control, [1.0e-200, 1.0e200]),
+            Err(DocumentCurveControlError::Document(DocumentError::InvalidField {
+                field: "rational homogeneous middle",
+                ref message,
+            })) if message.contains("loses material precision")
+        ),
+        "inverse projection must reject a control that cannot survive homogeneous storage"
+    );
+
+    let result = document.set_rational_conic_control(
+        curve,
+        DocumentRationalConicControl::Euclidean {
+            middle: [1.0e-200, 1.0e200],
+            weight: 1.0e-200,
+        },
+    );
+    assert!(
+        matches!(
+            result,
+            Err(DocumentError::InvalidField {
+                field: "rational homogeneous middle",
+                ref message,
+            }) if message.contains("loses material precision")
+        ),
+        "a nonzero Euclidean control must not collapse to a different homogeneous point"
     );
     assert_eq!(document.to_canonical_json().unwrap(), before);
 }
