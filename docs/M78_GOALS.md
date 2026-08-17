@@ -2,10 +2,12 @@
 
 # M78 — CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17); hardened product implementation is committed through
-`4845df7`, while clean release nomination, UAT, publication and closeout remain open**. M78 turns
-the demo's flat collection of geometry buttons into a polished CAD-style family palette while
-keeping recipe meaning, inference, branch state and atomic publication in reusable headless Rust.
+Status: **active (opened 2026-08-17); implementation, clean release qualification and immutable
+Tailscale nomination pass, while human UAT, publication and closeout remain open**. Hardened
+product implementation is committed through `4845df7`; exact clean candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` owns the frozen review artifact. M78 turns the demo's
+flat collection of geometry buttons into a polished CAD-style family palette while keeping recipe
+meaning, inference, branch state and atomic publication in reusable headless Rust.
 
 ## Product contract
 
@@ -175,15 +177,18 @@ systemic family or lifecycle dimension; isolated defects stay in focused owning-
 Latest post-hardening focused evidence at `4845df7` is 362/362 editor library tests, 32/32 geometry-
 variant cases, 7/7 editor extreme-finite cases and 1/1 sketch extreme-finite case, plus passing
 editor all-target/all-feature warnings-denied Clippy. The unchanged 270-case golden survey is all
-`PASS`, and its check/clean modes match. This is implementation evidence only; the clean workspace-
-wide, WASM, Rustdoc, Trunk and complete release gate still own nomination.
+`PASS`, and its check/clean modes match.
 
-Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant native and
-WASM parity, golden survey/check/require-clean, demo WASM and Trunk release assembly must pass
-before an exact no-rebuild artifact is frozen and byte-verified over the retained Tailscale
-endpoint. `docs/M78_UAT.md` remains open until explicit supervising-human approval. GitHub Pages
-publication and hosted-byte verification happen only after that approval and are required before
-M78 closes.
+Exact source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, passes formatting, warnings-denied
+Clippy/Rustdoc, locked all-feature workspace tests, relevant native/WASM parity, clean golden
+authority, demo WASM, performance/licence/package gates and Trunk 0.21.14 through the complete
+clean release gate. Its exact no-rebuild seven-file output is frozen at
+`/tmp/geosolve-m78-uat.SNgu3D`, ordered-manifest aggregate
+`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`, and byte-verified over
+the retained Tailscale endpoint. `docs/M78_UAT.md` remains open until explicit supervising-human
+approval. GitHub Pages publication and hosted-byte verification happen only after that approval
+and are required before M78 closes.
 
 ## Explicit deferrals
 

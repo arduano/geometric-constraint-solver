@@ -1358,7 +1358,8 @@ GitHub Pages publication, the unchanged retained M72 browser verification and M7
 M74/M75 browser verification now pass, completing M76. M77 subsequently completes without changing
 any completed M76 evidence. M78 is active under ADR 0036 for an exact nine-family/25-variant
 headless geometry authoring catalog; hardened product implementation is committed through
-`4845df7` and the latest focused owner suites pass, while clean release nomination, UAT and
+`4845df7`, and exact candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes complete clean
+qualification plus immutable byte-verified Tailscale nomination. Human UAT and accepted-source
 publication evidence remain pending.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
@@ -2412,8 +2413,14 @@ legacy ambient contact bytes and identity ordering do not change.
 M78 is active. A1-A8 implementation and M78-F001 through M78-F010 focused owner regressions pass
 through product commit `4845df7`: 362/362 editor library tests, 32/32 geometry-variant cases, 7/7
 editor extreme-finite cases and 1/1 sketch extreme-finite case. The unchanged 270-case golden
-survey is all `PASS`, and check/clean modes match. Clean workspace/release qualification, immutable
-Tailscale nomination, human UAT and accepted-source publication remain pending.
+survey is all `PASS`, and check/clean modes match. Exact source
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, then passes the complete clean release gate from
+02:14:05 through 02:26:24 AEST. Its exact seven-file Trunk output is frozen without rebuilding at
+`/tmp/geosolve-m78-uat.SNgu3D`, ordered-manifest aggregate
+`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`, and byte-verified at
+`http://100.94.63.83:8080/` for root plus every file. Human UAT and accepted-source publication
+remain pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

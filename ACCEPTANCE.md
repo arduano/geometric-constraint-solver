@@ -191,9 +191,10 @@ exact final public publication passes. M76 implementation, clean qualification, 
 byte-verified Tailscale nomination, scoped human acceptance and exact final public publication all
 pass. M77's replacement clean qualification, immutable Tailscale review, scoped human acceptance
 and exact final Pages publication also pass without changing any completed M76 evidence. M78 is
-active under ADR 0036; hardened product implementation is committed through `4845df7` and focused
-owner evidence passes, while clean release nomination, human acceptance and publication remain
-unclaimed and pending.
+active under ADR 0036; hardened product implementation is committed through `4845df7`, and exact
+candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes complete clean release qualification plus
+immutable byte-verified Tailscale nomination. Human acceptance, accepted-source publication and
+closeout remain unclaimed and pending.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2345,10 +2346,11 @@ gate-qualified product source.
 
 ## M78 acceptance: CAD geometry tool families and authoring variants
 
-Status: **active (2026-08-17); implementation and focused mechanical qualification pass;
-clean release-gate nomination, frozen-candidate verification, human UAT, publication and closeout
-remain pending**. Hardened product implementation is committed through `4845df7`; the final candidate
-source will be recorded only after the complete clean gate passes.
+Status: **active (2026-08-17); implementation, complete clean release qualification and immutable
+frozen-candidate verification pass; human UAT, publication and closeout remain pending**. Hardened
+product implementation is committed through `4845df7`; exact candidate source
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, is the mechanical review authority.
 
 - The exact public catalog contains nine families and 25 variants: Point 1; Lines 3; Rectangles 4;
   Circles 3; Arcs 3; Ellipses 4; Béziers 2; Conics 3; Splines 2. Stable keys, family membership,
@@ -2426,13 +2428,22 @@ source will be recorded only after the complete clean gate passes.
   `m78_geometry_variants`, 7/7 editor `m78_extreme_finite` and 1/1 sketch
   `m78_extreme_finite`. The editor all-target/all-feature warnings-denied Clippy command also
   passes. The exact 270-case golden inventory survey is all `PASS`; `--check` and
-  `--require-clean` match the unchanged recorded bytes. This does not substitute for the pending
-  clean workspace, WASM, Trunk, Rustdoc and complete release-gate evidence.
-- Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant native/
-  WASM parity, clean golden authority, demo WASM, Trunk and the complete clean release gate pass
-  before an exact no-rebuild candidate is frozen and byte-verified over Tailscale.
-  `docs/M78_UAT.md` then requires explicit supervising-human approval before accepted-source Pages
-  publication and hosted-byte verification may close M78.
+  `--require-clean` match the unchanged recorded bytes.
+- Exact candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes formatting, diff hygiene,
+  warnings-denied Clippy/Rustdoc, 1,730 passing locked all-feature workspace tests with zero
+  failures and three intentional ignores, demo-web 143/143, six carried native/WASM parity
+  binaries at 28/28, clean golden authority, benchmark/performance budgets, licence/package checks
+  and Trunk 0.21.14 in the complete 12m19s release gate. The 250,089-byte log is
+  `/tmp/geosolve-m78-clean-gate.8n2Fik.log`, SHA-256
+  `da48367b41084007637b08290e56fadd889dd1200f7918b83550237bf76d5fe3`.
+- The exact gate output is frozen without rebuilding at `/tmp/geosolve-m78-uat.SNgu3D` as seven
+  regular non-symlink files (`0555` directory, `0444` files), ordered-manifest aggregate
+  `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`. Proxy-disabled,
+  cache-bypassed identity requests for root and all seven files at
+  `http://100.94.63.83:8080/` return exact HTTP 200 bodies, lengths and media types with no
+  redirect or content encoding. This satisfies mechanical nomination only. `docs/M78_UAT.md`
+  still requires explicit supervising-human approval before accepted-source Pages publication and
+  hosted-byte verification may close M78.
 
 M78 adds no solver residual, curve family, canonical persistence version, hidden construction
 point, weighted-priority substitute, browser geometry authority, mobile layout or B-rep feature.

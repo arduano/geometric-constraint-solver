@@ -69,8 +69,9 @@ release gate with those focused regressions, the unchanged 198/198 golden and by
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
 of every prepared UAT step. M71-M77 are complete. M78 is the active CAD geometry-tool family and
 authoring-variant cut under ADR 0036; hardened product implementation is committed through
-`4845df7` and the latest focused owner suites pass, while clean release/UAT/publication gates remain
-open. M76's
+`4845df7`, and exact clean candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes the
+complete release gate plus immutable byte-verified Tailscale nomination. Human UAT, accepted-source
+publication and closeout remain open. M76's
 implementation,
 feature refinements,
 clean qualification, immutable Tailscale nomination, scoped human acceptance and exact public
@@ -5083,9 +5084,12 @@ bytes are historical only after M77-F012/F013 and must not be used for current U
 
 ### M78: CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17); hardened product implementation is committed through
-`4845df7`, while clean release nomination, UAT, publication and closeout remain open**. M78 groups
-the complete simple-geometry authoring surface into nine reusable headless families and exactly 25
+Status: **active (opened 2026-08-17); implementation, clean release qualification and immutable
+Tailscale nomination pass, while human UAT, publication and closeout remain open**. Hardened
+product implementation is committed through `4845df7`; exact clean candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, owns the frozen review artifact. M78 groups the
+complete simple-geometry authoring surface into nine reusable headless families and exactly 25
 CAD-style variants.
 `docs/M78_GOALS.md` owns the exact recipe/modifier contract and `docs/M78_UAT.md` owns the pending
 human scorecard.
@@ -5121,10 +5125,10 @@ human scorecard.
   Select; keep geometry, stage and branch intelligence out of the browser.
 - [x] Add focused native/coordinator/WASM catalog, recipe, modifier, branch, contact, redundancy,
   rejection, history and persistence coverage plus thin demo overlay/event/rendering tests.
-- [ ] Review any systemic golden authoring/scene expansion row by row; pass survey, check and
+- [x] Review any systemic golden authoring/scene expansion row by row; pass survey, check and
   require-clean together with formatting, warnings-denied Clippy/Rustdoc, locked all-feature
   workspace tests, relevant WASM parity, demo WASM and Trunk release assembly.
-- [ ] From the clean nominated source, pass the complete release gate, freeze the exact Trunk
+- [x] From the clean nominated source, pass the complete release gate, freeze the exact Trunk
   output without rebuilding, byte-verify it over the retained Tailscale endpoint and keep it live
   for correction until explicit human approval.
 - [ ] Complete `docs/M78_UAT.md`, receive explicit supervising-human approval, publish the exact
@@ -5140,7 +5144,22 @@ passing `m78_geometry_variants` cases, seven passing editor extreme-finite cases
 sketch extreme-finite case. The unchanged 270-case golden surveys as 270 `PASS`; `--check` and
 `--require-clean` match recorded SHA-256
 `7a4afd4fbd70d0ef6454e5f07f00fde7afb64eec59d329acfba7f761d986e343`. These results are
-implementation evidence, not the still-pending clean release nomination or human UAT disposition.
+implementation evidence; they are incorporated into the clean nomination below without accepting
+any human UAT row.
+
+Nomination note (2026-08-18): exact source
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, passes the complete clean release gate from
+02:14:05 through 02:26:24 AEST in 12m19s. The 250,089-byte log is
+`/tmp/geosolve-m78-clean-gate.8n2Fik.log`, SHA-256
+`da48367b41084007637b08290e56fadd889dd1200f7918b83550237bf76d5fe3`. Without rebuilding, its
+seven-file Trunk output was byte-compared and frozen read-only at
+`/tmp/geosolve-m78-uat.SNgu3D`; ordered-manifest aggregate
+`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`. PID `1753616`, retained
+command-runner session `76097`, serves only that snapshot at `http://100.94.63.83:8080/`.
+Proxy-disabled, cache-bypassed identity requests for `/` and all seven files pass exact status,
+length, media-type and byte verification. Human UAT, accepted-source Pages publication and final
+closeout remain pending.
 
 Gate: all nine families expose exactly the approved 25 variants; each gesture has one headless
 stage/recipe/branch owner and one atomic independently validated transaction; intrinsic recipe

@@ -34,8 +34,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   catalog, semantic draft stages and atomic recipe plans. Geometry kind remains a coarse
   `EditorTool` compatibility projection; intrinsic recipe relations, Shift regularization,
   ambient inference, contact operands and explicit sweep/orientation state remain headless.
-  Hardened product implementation is committed through `4845df7` and the latest focused owner
-  suites pass; clean release nomination, UAT, publication and closeout evidence remain pending.
+  Hardened product implementation is committed through `4845df7`; exact source
+  `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes complete clean release qualification and its
+  no-rebuild seven-file artifact is frozen and byte-verified over Tailscale. Human UAT,
+  accepted-source publication and closeout evidence remain pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -321,7 +323,8 @@ points, prospective contacts, remembered references and Tangent Arc endpoint jet
 reauthenticated before reuse; missing dependencies remain a local recoverable draft issue. Derived
 midpoint/reflection/circle projection, normalized circumcircle and Tangent Arc arithmetic validates
 local incidence and emits only finite status measurements. This hardened implementation is committed
-through `4845df7`; the clean M78 release and human gates remain open.
+through `4845df7`; exact candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes the clean
+release and immutable served-artifact gates, while human UAT remains open.
 
 M55 expands the closed headless action/applicability surface to every preserved M13-M14 alpha
 constraint, dimension and explicit branch choice. It lowers only through typed public
@@ -587,7 +590,8 @@ does not construct rectangles/circumcircles/tangent arcs, project ellipse trims,
 compose intrinsic and inferred relations. Draft-local rejection and finite-only measurement DTOs
 are rendered as supplied; the adapter cannot convert a nonrepresentable derived value into a status
 measurement or global problem. The implementation preserves that boundary; the clean M78 release
-and human gates remain open.
+and immutable served-artifact gates pass on exact candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, while human UAT remains open.
 
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is
@@ -1355,6 +1359,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   geometry catalog, semantic draft status, typed recipe operands and one authenticated atomic plan
   for geometry plus intrinsic/regularization/inferred relations. The workbench groups those exact
   variants in persistent family overlays and remains equation-free. Hardened product implementation
-  is committed through `4845df7`; focused post-hardening owner suites pass, while clean release
-  nomination, frozen-candidate, UAT, Pages and closeout evidence remains pending, so M78 is not yet
-  part of the accepted baseline.
+  is committed through `4845df7`; exact candidate
+  `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes the complete clean gate and immutable
+  byte-verified Tailscale nomination. UAT, Pages and closeout evidence remain pending, so M78 is
+  not yet part of the accepted baseline.

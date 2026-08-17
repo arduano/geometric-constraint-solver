@@ -2,24 +2,55 @@
 
 # M78 focused UAT — CAD geometry tool families and authoring variants
 
-Status: **open; hardened product implementation is committed through `4845df7`, candidate
-nomination pending**. No scorecard item is accepted. Record the exact clean source, tree, immutable
-snapshot, manifest, endpoint and browser-check evidence here only after the complete release gate
-passes.
+Status: **open; implementation, complete clean release qualification and immutable Tailscale
+nomination pass**. No U1-U8 scorecard item or final supervising approval is accepted. GitHub Pages
+publication must not start before that explicit approval.
 
-Candidate source: pending
+Candidate source: `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`
 
-Candidate tree: pending
+Candidate tree: `321ca280a5f581ee9755d615733617c98c0e21d7`
 
-Tailscale endpoint: pending
+Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Immutable snapshot and ordered-manifest aggregate: pending
+Server PID/session: `1753616` / retained command-runner session `76097`
 
-Focused implementation preconditions at `4845df7`: 362/362 editor library tests, 32/32
-`m78_geometry_variants`, 7/7 editor `m78_extreme_finite`, 1/1 sketch `m78_extreme_finite`, and
-warnings-denied editor all-target/all-feature Clippy pass. The unchanged 270-case golden survey is
-all `PASS`, and check/clean modes match. Clean workspace/WASM/Rustdoc/Trunk/release-gate evidence is
-not yet recorded; these results do not nominate a candidate or accept any UAT row.
+Immutable snapshot: `/tmp/geosolve-m78-uat.SNgu3D` (directory `0555`, seven regular non-symlink
+files `0444`)
+
+Ordered-manifest aggregate:
+`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 23,484 | `bdbd0eaf11d96425b98d52f546417e3e4f7dbe50568568aca30d8fe34f01a30f` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-59998f0c1a23e0f9.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
+| `geosolve-demo-web-59998f0c1a23e0f9_bg.wasm` | 6,535,148 | `0441c6fc9e931d0fe75358ac24d6f78b465008a04792475547840f9003699ae1` |
+| `index.html` | 29,143 | `1598ad7ce70d892496a55a3ea86b45ceb23fbbf9763278993f1e79f4cb5974d5` |
+| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+
+The exact clean command
+`env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
+ran from 02:14:05 through 02:26:24 AEST on 2026-08-18 and exited successfully in 12m19s without
+changing candidate HEAD, tree or worktree. Its retained 250,089-byte log is
+`/tmp/geosolve-m78-clean-gate.8n2Fik.log`, SHA-256
+`da48367b41084007637b08290e56fadd889dd1200f7918b83550237bf76d5fe3`. The gate includes
+formatting/diff hygiene, warnings-denied workspace Clippy/Rustdoc, 1,730 passing locked all-feature
+workspace tests with zero failures and three intentional ignores, editor 362/362, M78 geometry
+variants 32/32, editor extreme-finite 7/7, sketch endpoint/extreme-finite 3/3 and 1/1, demo-web
+143/143, six carried WASM parity binaries 28/28, unchanged 270/270 clean golden authority,
+benchmark/performance budgets, the 150.29-second release sparse crossover, licence/package checks
+and Trunk 0.21.14 release assembly.
+
+The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
+Freeze evidence is `/tmp/geosolve-m78-freeze-evidence.IRltTB`. Proxy-disabled, cache-bypassed,
+identity-encoded requests for `/` and all seven files return HTTP 200 with zero redirects, no
+content encoding, exact lengths, expected media types and snapshot-identical bodies. `/` equals
+`index.html`, and the fetched manifest has the same aggregate. HTTP evidence is
+`/tmp/geosolve-m78-http-verify.wpLUFR`. Previous M77 PID `284248` stayed live until the new freeze
+was complete and is now retired. This mechanically nominates the candidate; it does not accept any
+human scorecard row.
 
 Run the scorecard in the ordinary editable workbench at `1440x900` and approximately `1024x720`,
 at coarse and fine zoom, using both Profile and Construction roles. Direct tests, not visual

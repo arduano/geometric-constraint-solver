@@ -3,7 +3,8 @@
 # ADR 0036: Headless geometry variants and atomic construction recipes
 
 Status: accepted for active M78 on 2026-08-17; hardened product implementation is committed through
-`4845df7`; clean release nomination, human UAT, publication and closeout remain pending.
+`4845df7`; exact clean candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes immutable
+byte-verified Tailscale nomination. Human UAT, publication and closeout remain pending.
 
 ## Context
 
@@ -198,6 +199,10 @@ isolated findings receive focused owner regressions first. M78-F001 through M78-
 `docs/M78_IMPLEMENTATION.md` and `docs/SCENARIOS.md`. At product commit `4845df7`, focused evidence
 is 362/362 editor library tests, 32/32 geometry-variant cases, 7/7 editor extreme-finite cases and
 1/1 sketch extreme-finite case, plus passing editor warnings-denied Clippy. The unchanged 270-case
-golden survey/check/clean sequence also passes. Complete clean workspace/WASM/Rustdoc/Trunk/release
-qualification, immutable Tailscale review, explicit human UAT, accepted-source publication and
-hosted-byte verification remain required before M78 closes.
+golden survey/check/clean sequence also passes. Exact clean source
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, passes complete workspace/WASM/Rustdoc/Trunk/release
+qualification; its exact seven-file output is frozen without rebuilding and byte-verified over
+Tailscale at ordered-manifest aggregate
+`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`. Explicit human UAT,
+accepted-source publication and hosted-byte verification remain required before M78 closes.

@@ -3,8 +3,9 @@
 # M78 implementation — CAD geometry tool families and authoring variants
 
 Status: **active (opened 2026-08-17)**. Hardened product implementation is committed through
-`4845df7`; focused post-hardening owner suites pass, while clean release nomination, frozen-
-candidate review, human UAT, publication and closeout remain open.
+`4845df7`; exact clean candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes complete
+release qualification and immutable byte-verified Tailscale nomination. Human UAT, publication
+and closeout remain open.
 
 Architecture owner: ADR 0036.
 
@@ -251,37 +252,65 @@ The 271-line golden file (header plus 270 cases) remained unmodified at SHA-256
 `7a4afd4fbd70d0ef6454e5f07f00fde7afb64eec59d329acfba7f761d986e343`; no systemic matrix
 expansion was warranted.
 
-Before the final numeric hardening in `4845df7`, complete editor and sketch all-feature suites and
-the demo-web library suite (143/143) also passed. Those earlier broad runs are supporting evidence
-only: they do not qualify the final implementation source and must be repeated by the clean
-nomination/release workflow.
+## Clean release qualification and nomination
 
-The final clean nomination still requires the complete workspace/release sequence, including:
+Exact candidate source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, contains product commit `4845df7` plus the final
+warnings-denied and literal legacy-contact-label regressions. From a clean worktree, the exact
+command
 
 ```text
-cargo test --locked -p geosolve-constraint-editor \
-  --test golden_authoring_oracle golden_oracle_inventory_and_tsv_schema_are_exhaustive -- --exact
-./scripts/golden-authoring-scene-oracle.sh --survey
-./scripts/golden-authoring-scene-oracle.sh --check
-./scripts/golden-authoring-scene-oracle.sh --require-clean
-nix-shell shell.nix --run 'cargo fmt --all -- --check'
-nix-shell shell.nix --run 'cargo clippy --locked --workspace --all-targets --all-features -- -D warnings'
-nix-shell shell.nix --run 'cargo test --locked --workspace --all-features'
-nix-shell shell.nix --run \
-  'cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
-./scripts/release-gate.sh
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
-Only a clean nominated source may run `./scripts/release-gate.sh` as final qualification
-authority. The frozen Trunk output must be served without rebuilding over Tailscale until human UAT
-is accepted.
+ran from 02:14:05 through 02:26:24 AEST on 2026-08-18 and exited successfully in 12m19s without
+changing HEAD, tree or worktree. The retained 250,089-byte, 3,269-line log is
+`/tmp/geosolve-m78-clean-gate.8n2Fik.log`, SHA-256
+`da48367b41084007637b08290e56fadd889dd1200f7918b83550237bf76d5fe3`.
+
+The gate passes formatting/diff hygiene, warnings-denied workspace Clippy and Rustdoc, 1,730
+locked all-feature workspace tests with zero failures and three intentional ignores, editor
+362/362, M78 geometry variants 32/32, editor extreme-finite 7/7, sketch endpoint contacts 3/3,
+sketch extreme-finite 1/1, demo-web 143/143 and six carried WASM parity binaries at 28/28. It also
+passes unchanged 270/270 clean golden authority, demo WASM, benchmark compilation, M14/M32
+performance budgets, the explicit 150.29-second 256-body sparse crossover, licence/package checks
+and Trunk 0.21.14 release assembly. The only diagnostics are the longstanding non-failing Cargo
+advisories for packages declaring both `license` and `license-file`.
+
+Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was byte-compared and
+frozen at `/tmp/geosolve-m78-uat.SNgu3D`, directory mode `0555`, as seven regular non-symlink files
+mode `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 23,484 | `bdbd0eaf11d96425b98d52f546417e3e4f7dbe50568568aca30d8fe34f01a30f` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-59998f0c1a23e0f9.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
+| `geosolve-demo-web-59998f0c1a23e0f9_bg.wasm` | 6,535,148 | `0441c6fc9e931d0fe75358ac24d6f78b465008a04792475547840f9003699ae1` |
+| `index.html` | 29,143 | `1598ad7ce70d892496a55a3ea86b45ceb23fbbf9763278993f1e79f4cb5974d5` |
+| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+
+Its C-locale ordered-manifest aggregate is
+`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`; freeze evidence is
+`/tmp/geosolve-m78-freeze-evidence.IRltTB`. The previous M77 PID `284248` remained live until this
+snapshot was fully frozen, then retired. PID `1753616`, retained command-runner session `76097`,
+serves only the immutable M78 snapshot at `http://100.94.63.83:8080/`.
+
+Proxy-disabled, cache-bypassed, identity-encoded requests for `/` and every frozen file return
+HTTP 200 with zero redirects, no content encoding, exact lengths, expected media types and
+snapshot-identical bodies. `/` exactly equals `index.html`, and the fetched ordered manifest has
+the same aggregate. HTTP evidence is `/tmp/geosolve-m78-http-verify.wpLUFR`. The evidence-ledger
+commit is a documentation descendant and does not replace `1b2ce0f` as exact mechanically
+qualified product authority.
 
 ## Closeout evidence
 
 Focused A1-A8 and M78-F001 through M78-F010 owner regressions pass with the exact post-hardening
 counts above. Known scope limits remain the explicit deferrals in `docs/M78_GOALS.md`; there is no
 interior/periodic Tangent Arc or multi-tangent circle workflow. The unchanged golden survey/check/
-require-clean sequence passes; the complete clean workspace/release gate, exact no-rebuild frozen
-artifact and Tailscale byte verification, explicit human UAT disposition, accepted-source
-publication, hosted-byte verification and clean final worktree remain pending. M78 must not be
-described as complete before those steps.
+require-clean sequence, complete clean workspace/release gate and exact no-rebuild frozen-artifact
+Tailscale verification pass. All U1-U8 rows and final supervising approval remain pending;
+accepted-source publication and hosted-byte verification therefore have not started. M78 must not
+be described as complete before those steps.
