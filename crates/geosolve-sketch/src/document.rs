@@ -6086,20 +6086,23 @@ impl SketchDocument {
             }
             FeatureRef::CurveEndpoint { curve, .. } => {
                 let value = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
-                if matches!(
-                    value.definition,
+                match &value.definition {
+                    CurveDefinition::Polyline { closed: true, .. } => {
+                        return invalid("feature endpoint", "a closed curve has no endpoint");
+                    }
                     CurveDefinition::Circle { .. }
-                        | CurveDefinition::Ellipse { .. }
-                        | CurveDefinition::BSpline {
-                            form: DocumentBSplineForm::Periodic,
-                            ..
-                        }
-                        | CurveDefinition::Nurbs {
-                            form: DocumentBSplineForm::Periodic,
-                            ..
-                        }
-                ) {
-                    return invalid("feature endpoint", "a periodic curve has no endpoint");
+                    | CurveDefinition::Ellipse { .. }
+                    | CurveDefinition::BSpline {
+                        form: DocumentBSplineForm::Periodic,
+                        ..
+                    }
+                    | CurveDefinition::Nurbs {
+                        form: DocumentBSplineForm::Periodic,
+                        ..
+                    } => {
+                        return invalid("feature endpoint", "a periodic curve has no endpoint");
+                    }
+                    _ => {}
                 }
             }
             FeatureRef::CurveAxis { curve } => {

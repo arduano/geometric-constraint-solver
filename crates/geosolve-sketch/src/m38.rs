@@ -26,8 +26,8 @@ use crate::{
     DocumentConicFeature, DocumentConicMeasurement, DocumentCoordinateAxis,
     DocumentCurveMeasurementKind, DocumentCurveSpanRef, DocumentDimensionMode,
     DocumentDirectionSense, DocumentError, DocumentId, DocumentLineSide, DocumentLineSupportRef,
-    DocumentPointRef, DocumentScalarUnit, DocumentSourceId, FeatureEndpoint,
-    RetainedSketchDocumentSession, SketchDocument, SketchSolveRequest, SketchSolveResult,
+    DocumentPointRef, DocumentScalarUnit, DocumentSourceId, RetainedSketchDocumentSession,
+    SketchDocument, SketchSolveRequest, SketchSolveResult,
 };
 
 const VERSION: u32 = 1;
@@ -1597,13 +1597,9 @@ fn point_value(
             }
         }
         DocumentPointRef::Endpoint(endpoint) => {
-            let t = if endpoint.endpoint == FeatureEndpoint::Start {
-                0.0
-            } else {
-                1.0
-            };
+            let seed = document.curve_endpoint_contact_seed(endpoint)?;
             let p = document
-                .evaluate_curve_jet(crate::CurveSpan::line(endpoint.curve), t)
+                .evaluate_curve_jet(seed.support.span, seed.parameter)
                 .map_err(field_error("endpoint feature"))?
                 .position;
             [p.x, p.y]

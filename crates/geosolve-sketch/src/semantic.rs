@@ -228,6 +228,38 @@ pub struct DocumentCircleArcTangentRequest {
 }
 
 impl SketchDocument {
+    /// Resolves one whole-curve semantic endpoint to its exact executable contact seed.
+    ///
+    /// Start selects the first semantic span at parameter `0`; End selects the last span at
+    /// parameter `1`. Closed and periodic topology has no endpoint and is rejected through the
+    /// same capability validation as [`SketchDocument::validate_endpoint_ref`].
+    ///
+    /// # Errors
+    /// Returns an error for a missing curve, closed or periodic topology, or a bounded curve with
+    /// no executable span.
+    pub fn curve_endpoint_contact_seed(
+        &self,
+        endpoint: crate::DocumentEndpointRef,
+    ) -> Result<DocumentContactSeed, DocumentError> {
+        self.validate_endpoint_ref(endpoint)?;
+        let spans = self.curve_spans(endpoint.curve)?;
+        let (span, parameter, neighborhood) = match endpoint.endpoint {
+            crate::FeatureEndpoint::Start => {
+                (spans.first().copied(), 0.0, ContactNeighborhood::Start)
+            }
+            crate::FeatureEndpoint::End => (spans.last().copied(), 1.0, ContactNeighborhood::End),
+        };
+        let span = span.ok_or_else(|| DocumentError::InvalidField {
+            field: "feature endpoint",
+            message: "bounded endpoint curve has no executable span".into(),
+        })?;
+        Ok(DocumentContactSeed {
+            support: DocumentCurveSpanRef { span, winding: 0 },
+            parameter,
+            neighborhood,
+        })
+    }
+
     /// Validates the deliberately narrow dimensionless host-parameter target set.
     pub(crate) fn validate_dimensionless_parameter_property(
         &self,
