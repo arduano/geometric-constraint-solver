@@ -67,7 +67,9 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M77 are complete. M76's
+of every prepared UAT step. M71-M77 are complete. M78 is the active CAD geometry-tool family and
+authoring-variant cut under ADR 0036; implementation and every qualification/UAT/publication gate
+remain open. M76's
 implementation,
 feature refinements,
 clean qualification, immutable Tailscale nomination, scoped human acceptance and exact public
@@ -184,7 +186,7 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M76 have a recorded acceptance
+- Keep human acceptance records explicit: M40.7, M53 and M61-M77 have a recorded acceptance
   disposition. Newly scoped milestones normally end in supervising-human UAT; an explicit caller
   may instead defer an unexecuted hands-on scorecard without calling it passed, as recorded for
   M74. Every objective correctness, persistence, compatibility and presentation-adapter assertion
@@ -5077,6 +5079,65 @@ no-rebuild seven-file snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
 byte-verified at the shared Tailscale endpoint under now-retired PID `3912158` / session `12828`.
 `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` contain the file, log and HTTP evidence. These
 bytes are historical only after M77-F012/F013 and must not be used for current UAT.
+
+### M78: CAD geometry tool families and authoring variants
+
+Status: **active (2026-08-17); contract and ADR 0036 approved, implementation, qualification,
+UAT, publication and closeout remain open**. M78 groups the complete simple-geometry authoring
+surface into nine reusable headless families and exactly 25 CAD-style variants.
+`docs/M78_GOALS.md` owns the exact recipe/modifier contract and `docs/M78_UAT.md` owns the pending
+human scorecard.
+
+- [ ] Add stable non-exhaustive `GeometryToolFamily` and `GeometryToolVariant` metadata, exact
+  activation/inspection and a coarse compatibility projection that does not multiply
+  `EditorTool` into one case per menu item.
+- [ ] Publish semantic draft stages, progress, finishability, explicit branch state and typed live
+  measurements for all 25 variants; add typed finish, step-back and complementary-sweep actions.
+- [ ] Separate Shift recipe regularization from Ctrl/Cmd ambient-inference suppression, preserve
+  Shift+Ctrl square intent and support bounded Tab cycling for ambiguous inference candidates.
+- [ ] Implement Segment, open/closed Polyline and Midpoint Line recipes, including first-vertex
+  closure without duplication and intrinsic stored-centre Midpoint.
+- [ ] Implement 2-Point Aligned, 3-Point Corner, Center and 3-Point Center rectangles as four
+  explicit shared-corner lines with ordinary shape relations, no lock/dimension, visible centre
+  helper geometry and persistent Shift-square EqualLength intent.
+- [ ] Implement Center–Radius, 2-Point Diameter and 3-Point circles plus Center, 3-Point and native-
+  endpoint Tangent arcs with scale-aware degeneracy rejection, explicit sweep/contact/orientation
+  and no synthetic rim points.
+- [ ] Implement Center–Axes and Axis-Endpoints full ellipses and elliptical arcs, with exact
+  headless support projection and complementary-sweep control for arc forms.
+- [ ] Group existing Quadratic/Cubic Bézier, Rational Quadratic/Parabola/Hyperbola and Open/Periodic
+  Control NURBS construction under exact variants without changing their durable geometry,
+  scalar-domain or explicit branch meaning.
+- [ ] Route every interactive recipe, including geometry-only output, through one authenticated
+  `CommitConstructionPlan` with typed operands, per-curve roles and relation provenance; apply
+  intrinsic and regularization sources before compatible ambient inference.
+- [ ] Solve and independently validate each complete plan once, publish once as one history step,
+  and preserve document, accepted scene, allocator, history, preview and terminal draft on
+  rejection so correction does not leave a stale global problem.
+- [ ] Replace the flat workbench geometry palette with persistent bottom-left family overlays that
+  remember session variants/options, remain open through blur/canvas navigation and close to
+  Select; keep geometry, stage and branch intelligence out of the browser.
+- [ ] Add focused native/coordinator/WASM catalog, recipe, modifier, branch, contact, redundancy,
+  rejection, history and persistence coverage plus thin demo overlay/event/rendering tests.
+- [ ] Review any systemic golden authoring/scene expansion row by row; pass survey, check and
+  require-clean together with formatting, warnings-denied Clippy/Rustdoc, locked all-feature
+  workspace tests, relevant WASM parity, demo WASM and Trunk release assembly.
+- [ ] From the clean nominated source, pass the complete release gate, freeze the exact Trunk
+  output without rebuilding, byte-verify it over the retained Tailscale endpoint and keep it live
+  for correction until explicit human approval.
+- [ ] Complete `docs/M78_UAT.md`, receive explicit supervising-human approval, publish the exact
+  accepted source through GitHub Pages, verify hosted bytes and close M78.
+
+Gate: all nine families expose exactly the approved 25 variants; each gesture has one headless
+stage/recipe/branch owner and one atomic independently validated transaction; intrinsic recipe
+intent wins over redundant/conflicting ambient inference; invalid, cancelled or stale work cannot
+replace accepted geometry or history; the desktop adapter contains no recipe equation or branch
+heuristic; the frozen Tailscale candidate remains available until UAT is explicitly accepted.
+
+Explicitly deferred are tangent/tangent-radius and multi-tangent circles, interior/periodic Tangent
+Arc, curve/curve intersection Point inference, fit-point splines, polygons, slots and duplicate
+centre-radius/centre-diameter buttons. M78 adds no new residual, curve family, persistence version,
+mobile layout, B-rep behavior or browser-owned geometry.
 
 ## Explicit non-goals
 

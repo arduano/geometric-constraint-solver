@@ -30,6 +30,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
   UAT approval and exact Pages publication pass. It changes no solver equation,
   branch heuristic or persistence schema. `docs/M77_GOALS.md` owns the contract.
+- **Active target:** M78 implements ADR 0036's exact nine-family/25-variant geometry authoring
+  catalog, semantic draft stages and atomic recipe plans. Geometry kind remains a coarse
+  `EditorTool` compatibility projection; intrinsic recipe relations, Shift regularization,
+  ambient inference, contact operands and explicit sweep/orientation state remain headless. No
+  implementation, qualification, UAT, publication or closeout evidence is claimed yet.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -146,7 +151,7 @@ A target statement must not be exposed as an implemented capability before its m
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current accepted ownership is the completed M10-M76 sequence, including the completed M70B reproduction cut,
+current accepted ownership is the completed M10-M77 sequence, including the completed M70B reproduction cut,
 listed in section 15.
 
 ## 3. Crate responsibilities
@@ -292,6 +297,13 @@ geometry, stored-point alias precedence, exact property metadata and the direct 
 Only independently accepted prepared candidates preview; invalid later samples retain the last
 valid result, and stale, cancelled or no-op work publishes nothing. The adapter never chooses
 another owner from paint order.
+
+For active M78, ADR 0036 assigns the exact `GeometryToolFamily`/`GeometryToolVariant` catalog,
+semantic stages, Shift regularization, branch actions and typed stored/coordinate/contact operands
+to this crate. Every interactive recipe, including geometry-only output, lowers through one
+authenticated construction plan. Recipe-intrinsic and regularization relations precede compatible
+ambient inference; one cloned retained session solves and independently validates the whole plan
+before one publication/history entry. This is target architecture until the M78 gate passes.
 
 M55 expands the closed headless action/applicability surface to every preserved M13-M14 alpha
 constraint, dimension and explicit branch choice. It lowers only through typed public
@@ -551,6 +563,11 @@ For M77 this crate renders the exact published cage, direct grips, hover state a
 then forwards typed pointer/property requests. It neither recomputes curve controls nor owns
 inverse projection, effective rational weight, branch choice or hit priority.
 
+For active M78 this crate presents returned family/variant metadata in persistent bottom-left
+overlays, remembers only session-local menu/options state and maps platform modifiers/actions. It
+does not construct rectangles/circumcircles/tangent arcs, project ellipse trims, choose a sweep or
+compose intrinsic and inferred relations. These remain target responsibilities until M78 passes.
+
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is
 `GEOSOLVE_REPRO_V1:zlib-base64url:<workspace-bytes>:<fnv1a64>:<body>`. Strict unpadded base64url
@@ -667,7 +684,7 @@ gesture, drafting, lifecycle and history policy and made this crate a thin adapt
 `geosolve-constraint-editor`. Cleanup M46-M50 replaces direct-test ownership and removes the
 second legacy application and old browser E2E; M51 consolidates the survivor around one workspace
 snapshot and direct presentation/evidence owners. Human acceptance dispositions are recorded at
-completed M40.7, M53 and M61-M76. Newly scoped milestones normally end in hands-on UAT after direct
+completed M40.7, M53 and M61-M77. Newly scoped milestones normally end in hands-on UAT after direct
 qualification; M74 records the explicit exception that deferred its unexecuted scorecard without
 calling it passed, while M76 records the caller's explicit scoped acceptance without a separate
 post-refinement replay or invented step-level observations.
@@ -1313,3 +1330,9 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   paths exact-verify at aggregate
   `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is part of the
   accepted baseline.
+- M78: active under ADR 0036. The approved target adds an exact nine-family/25-variant headless
+  geometry catalog, semantic draft status, typed recipe operands and one authenticated atomic plan
+  for geometry plus intrinsic/regularization/inferred relations. The workbench groups those exact
+  variants in persistent family overlays and remains equation-free. All implementation,
+  qualification, frozen-candidate, UAT, Pages and closeout evidence remains pending; M78 is not yet
+  part of the accepted baseline.

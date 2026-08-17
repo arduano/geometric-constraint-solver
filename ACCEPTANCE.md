@@ -189,7 +189,10 @@ The F002 correction passes the complete clean replacement gate, immutable freeze
 Tailscale verification. The supervising caller accepted the qualified interaction scope, and
 exact final public publication passes. M76 implementation, clean qualification, immutable
 byte-verified Tailscale nomination, scoped human acceptance and exact final public publication all
-pass. M77 subsequently completes without changing any completed M76 evidence.
+pass. M77's replacement clean qualification, immutable Tailscale review, scoped human acceptance
+and exact final Pages publication also pass without changing any completed M76 evidence. M78 is
+active under ADR 0036; no implementation, qualification, human-acceptance or publication result is
+claimed yet.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2206,9 +2209,8 @@ historical evidence only; its PID `1077092` was retired.
 
 ## M77 acceptance: CAD curve handles and implicit-parameter editing
 
-Status: **closeout approved (2026-08-17); the replacement is clean-qualified, immutably frozen and
-byte-verified on Tailscale, and the supervising caller accepts U1-U6. Exact GitHub Pages publication
-and hosted-byte verification remain the final open acceptance step**.
+Status: **complete (2026-08-17); the replacement is clean-qualified, immutably frozen,
+scope-approved and exact-verified on both Tailscale and GitHub Pages**.
 
 - A selected editable curve exposes only its applicable finite typed controls. Circular and
   elliptical arcs, parabola segments and hyperbola segments expose derived Start/End trim handles;
@@ -2339,6 +2341,80 @@ The `51a3b95` source, `/tmp/geosolve-m77-uat.1mDjQv` snapshot and retired PID `3
 are superseded historical evidence only after M77-F012/F013, not current UAT authority. The later
 evidence-ledger commit is a documentation descendant and does not replace `cc99b11` as exact
 gate-qualified product source.
+
+## M78 acceptance: CAD geometry tool families and authoring variants
+
+Status: **active (2026-08-17); contract and ADR 0036 approved, all implementation, mechanical
+qualification, frozen-candidate, human UAT, publication and closeout evidence remains pending**.
+
+- The exact public catalog contains nine families and 25 variants: Point 1; Lines 3; Rectangles 4;
+  Circles 3; Arcs 3; Ellipses 4; Béziers 2; Conics 3; Splines 2. Stable keys, family membership,
+  ordering/defaults and exact activation are headless metadata. Coarse `EditorTool` compatibility
+  continues without becoming the exact recipe authority.
+- Each variant publishes a semantic stage, progress/finishability, explicit branch and typed live
+  measurements. The web does not infer progression from coordinate count or reconstruct preview
+  geometry. Enter/double-click finish eligible Polyline/NURBS drafts; first-vertex Polyline closure
+  reuses that identity without a duplicate point or zero-length edge.
+- Ctrl/Cmd suppresses ambient inference only. Shift regularizes every rectangle variant to a
+  persistent square and commits ordinary EqualLength even when Ctrl/Cmd is also held. Tab cycles
+  bounded ambiguous inference candidates; `F` flips only complementary Center/Elliptical Arc
+  sweep and retains the selected branch explicitly.
+- Backspace or Undo removes the latest unfinished stage before accepted history. First Escape
+  cancels only the current shape and retains its variant; a second draft-free Escape returns
+  Select. Closing a family overlay returns/focuses Select. Successful construction leaves the
+  exact variant active for repetition.
+- Segment, Polyline and Midpoint Line retain ordinary point/directional inference. Midpoint Line
+  stores its centre and commits ordinary Midpoint. No recipe hides point identity in coordinates.
+- Every rectangle contains four explicit shared-corner lines and no lock, dimension or target
+  scalar. Aligned/oriented variants retain their ordinary shape relations. Centre variants add one
+  visible Construction helper diagonal and ordinary centre Midpoint. Shift squares retain
+  EqualLength through drag, Undo/Redo and reload.
+- Two-/three-point circle and 3-Point Arc construction derive finite centre/radius from exact
+  samples and reject scale-aware coincidence/collinearity without publishing or losing the draft.
+  Coordinate-only rim/trim samples create no synthetic point; a snapped existing persistent point
+  receives ordinary PointOnCurve on the created curve in the same transaction.
+- Tangent Arc accepts only finite nonzero endpoint jets of native open curves and produces the
+  unique outgoing finite circular arc. Generic tangency persists exact contact, endpoint
+  neighbourhood, tangent orientation and sweep. Interior/periodic/computed contacts, zero chord,
+  tangent-line/infinite-radius and vanishing-sweep cases reject locally and transactionally.
+- Center–Axes and Axis-Endpoints ellipse variants derive one finite explicit principal frame.
+  Elliptical-arc variants inverse-project spatial trims through the headless support ellipse and
+  retain Start/End identity and explicit sweep. Browser code contains no ellipse equation,
+  projection or branch heuristic.
+- Existing Bézier, rational/parabola/hyperbola and NURBS geometry, option domains, explicit branch
+  state and M77 control meaning remain unchanged beneath exact grouped variants. Open/Periodic
+  Control NURBS topology is explicit and finishability is headless.
+- Every interactive recipe lowers to one authenticated `CommitConstructionPlan` with typed
+  stored/coordinate/prospective-contact/existing-contact operands, per-created-curve roles and
+  relation provenance. `RecipeIntrinsic` and `RecipeRegularization` precede compatible
+  `AutoInference`; a redundant/conflicting ambient source cannot make valid intrinsic geometry
+  fail or become hidden duplicate intent.
+- One cloned retained session allocates, solves and independently validates the complete plan
+  before one exact publication and one history step. Rejection, cancellation, exhaustion and stale
+  work retain document, accepted scene, allocator high-water, history, preview and terminal draft.
+  A corrected/cancelled/undone attempt leaves no stale global error.
+- Main geometry follows the active Profile/Construction role, while centre-rectangle helpers are
+  Construction. Save/reload and reproduction restore only ordinary durable geometry, relations,
+  contacts, roles and branch state; palette memory and unfinished drafts are not canonical sketch
+  persistence.
+- One persistent bottom-left overlay per family shows exact variants/options, survives blur,
+  canvas click, pan and zoom, remembers session-local state and closes only on explicit close,
+  Escape-to-Select or a tool/family switch. Its buttons, prompts, tooltips and focus names are
+  keyboard-accessible and do not encode geometric policy.
+- Focused native/coordinator and WASM tests cover all 25 variants, stages, modifiers, proposals,
+  branch/contact identity, precedence, invalid correction, atomic history and persistence. Thin
+  demo tests cover only platform mapping, overlay lifecycle, accessibility and headless rendering.
+  Golden expansion occurs only for a reviewed systemic dimension, never as blanket byte blessing.
+- Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant native/
+  WASM parity, clean golden authority, demo WASM, Trunk and the complete clean release gate pass
+  before an exact no-rebuild candidate is frozen and byte-verified over Tailscale.
+  `docs/M78_UAT.md` then requires explicit supervising-human approval before accepted-source Pages
+  publication and hosted-byte verification may close M78.
+
+M78 adds no solver residual, curve family, canonical persistence version, hidden construction
+point, weighted-priority substitute, browser geometry authority, mobile layout or B-rep feature.
+Two-/three-tangent and TTR circles, interior/periodic Tangent Arc, curve/curve intersection Point
+inference, fit-point splines, polygons and slots remain deferred.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

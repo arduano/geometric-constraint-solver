@@ -1333,7 +1333,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human acceptance dispositions
-are recorded at completed M40.7, M53 and M61-M76. M72's scoped UAT and exact final public-artifact
+are recorded at completed M40.7, M53 and M61-M77. M72's scoped UAT and exact final public-artifact
 verification complete its direct automated qualification. Completed M73 qualified its F001-F003
 construction-stage, contextual-authoring and candidate-trace consolidation plus F004 live
 world-axis span precedence, passed the clean replacement release gate, published a byte-verified
@@ -1356,7 +1356,9 @@ replacement publication. The caller accepts U1-U4 for scoped closure and explici
 separate post-refinement replay; that disposition does not invent individual observations. Exact
 GitHub Pages publication, the unchanged retained M72 browser verification and M76-adapted retained
 M74/M75 browser verification now pass, completing M76. M77 subsequently completes without changing
-any completed M76 evidence.
+any completed M76 evidence. M78 is active under ADR 0036 for an exact nine-family/25-variant
+headless geometry authoring catalog; all M78 implementation, qualification, UAT and publication
+evidence remains pending.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -2219,6 +2221,116 @@ requested closure; U1-U6 pass under that scoped disposition. Approval descendant
 Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`. Root plus all seven
 hosted paths byte-match exact ordered-manifest aggregate
 `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is complete.
+
+### M78-A1 - Exact family/variant catalog and semantic stages
+
+Enumerate `GeometryToolFamily::variants()` for Point, Lines, Rectangles, Circles, Arcs, Ellipses,
+Béziers, Conics and Splines. Require exactly 1/3/4/3/3/4/2/3/2 variants, 25 unique stable keys,
+deterministic family/variant order, one valid default per family and a defined coarse `EditorTool`
+projection. Exact activation and compatibility activation agree on the default recipe without
+requiring a 25-case legacy enum.
+
+Drive every exact variant through its semantic stages. Status names the variant and stage, reports
+progress/finishability and publishes only applicable finite typed measurements/branch actions.
+No terminal stage becomes committable from an ordinal or coordinate count alone. Native and WASM
+transition transcripts are identical.
+
+### M78-A2 - Line/polyline/midpoint and rectangle recipe intent
+
+Author one Segment, an Enter-finished open Polyline, a first-vertex-click closed Polyline and a
+Midpoint Line. Closure reuses the first persistent point without a duplicate allocation or
+zero-length span. Midpoint Line stores its centre, reflects its opposite endpoint and commits one
+ordinary Midpoint relation. Backspace/Undo first removes unfinished stages; first Escape cancels
+the shape but retains the tool, and a second draft-free Escape activates Select.
+
+Author all four rectangle variants normally and with regularization. Every rectangle has four
+explicit shared-corner lines, no lock/dimension/target scalar and the minimal ordinary aligned or
+oriented shape relations. Centre variants add one visible Construction diagonal and one centre
+Midpoint relation. Shift adds persistent adjacent-edge EqualLength. Shift plus suppressed inference
+retains the intrinsic square while committing no ambient source. One accepted rectangle recipe is
+one retained history step and survives Undo/Redo and reload with exact roles/relations.
+
+### M78-A3 - Derived circles, arcs and existing-point incidence
+
+For 2-Point Diameter and 3-Point Circle, sample free coordinates and existing persistent points.
+Derive one finite centre/radius without allocating a point for a free rim sample. Add PointOnCurve
+for each snapped existing point against the prospective created circle in the same plan. Repeated
+or scale-aware near-collinear samples reject with document, accepted scene, allocator, history and
+terminal draft unchanged; correcting the last stage succeeds without restarting.
+
+Repeat for Center Arc and ordered Start/Through/End 3-Point Arc. Require exact Start/End identity,
+Through incidence, explicit sweep and no synthetic trim point. Flip Center Arc between
+complementary sweeps before commit and preserve the chosen branch through Undo/Redo and reload.
+
+### M78-A4 - Native endpoint Tangent Arc
+
+Start from finite nonzero jets at both endpoints of representative native open affine, conic,
+Bézier and spline spans. Select one endpoint and target `E`, derive the unique outgoing tangent arc
+from the exact endpoint tangent/normal and chord, then commit generic tangency with explicit source
+contact, endpoint neighbourhood, orientation and created sweep. Independently validate finite
+radius, endpoint incidence, tangent alignment and hard residuals.
+
+Reject an interior contact, periodic/computed-only source, zero-speed endpoint, zero chord,
+zero-normal chord projection (the infinite-radius tangent-line limit), non-finite radius and
+vanishing sweep. Each case retains the complete previous accepted state and correction-ready
+draft, allocates nothing durably and never reports convergence for invalid geometry.
+
+### M78-A5 - Ellipse frames, spatial trims and advanced-family compatibility
+
+Author Center–Axes and Axis-Endpoints full ellipses with the same accepted principal frame and
+typed minor-ratio options. Author both corresponding elliptical-arc variants, inverse-project
+spatial Start/End through the headless support ellipse and retain endpoint identity plus explicit
+sweep. Complementary-sweep flip changes only branch state. Degenerate axis/frame or invalid trim
+projection rejects transactionally; the adapter receives render-ready preview/status and performs
+no ellipse equation or projection.
+
+Author Quadratic/Cubic Bézier, Rational Quadratic, Parabola and both Hyperbola branches through
+their exact grouped variants. Preserve the pre-M78 persistent geometry, scalar domains, ordinary/
+projective rational middle meaning and explicit branch state. Grouping cannot change later M77
+control cages, property edits or accepted document bytes for an equivalent recipe.
+
+### M78-A6 - Variable-length open and periodic NURBS
+
+Drive Open and Periodic Control NURBS with valid degree/topology options. Step back one unfinished
+control, then finish separately through Enter and double-click. Open output contains exactly the
+confirmed controls; periodic output records explicit periodic topology without duplicating the
+first control or using proximity closure. Finishability comes from typed headless status.
+
+Too few controls, malformed degree/knot/weight options, non-finite input and resource exhaustion
+retain the draft and accepted state for correction. An invalid inactive spline overlay cannot block
+another exact geometry variant.
+
+### M78-A7 - Provenance, precedence and atomic recovery
+
+For representative single- and multi-curve recipes, inspect the authenticated construction plan.
+Every relation is exactly `RecipeIntrinsic`, `RecipeRegularization` or `AutoInference`; intrinsic
+sources apply first, regularization second and compatible ambient sources in stage order. A
+redundant/conflicting horizontal, vertical, midpoint or equality inference yields to the recipe and
+does not persist as hidden duplicate intent.
+
+Allocate, solve and independently validate one cloned retained transaction, then publish once by
+exact compare-and-swap as one history entry. Rejected, ambiguous, exhausted, stale or cancelled
+work retains document, accepted scene, history, allocator high-water, last valid preview and
+terminal draft. Correction, cancel or Undo clears its local status and cannot leave a stale global
+problem or blank scene.
+
+### M78-A8 - Thin family overlays and role ownership
+
+At both supported desktop sizes, open all nine family overlays and exercise the 25 exact variants.
+One bottom-left overlay persists through blur, canvas click, pan and zoom, remembers session-local
+variant/options and closes to Select only by explicit close, Escape-to-Select or tool/family
+switch. Accessible labels, prompts, live measurements and keyboard focus match returned headless
+state; Tab focus does not synthesize pointer hover.
+
+Main created geometry follows the active Profile/Construction role and centre-rectangle helpers
+remain Construction. Save/reload and reproduction retain only ordinary document geometry,
+relations, contacts, roles and branch state; overlay memory/drafts are not canonical persistence.
+Thin demo tests prove event/modifier/action mapping and render parity without browser recipe
+geometry, inference precedence or branch choice.
+
+M78 is active. Every A1-A8 implementation, focused owner regression, reviewed golden disposition,
+clean release gate, immutable Tailscale nomination, human UAT, accepted-source Pages publication
+and hosted-byte verification remains pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
