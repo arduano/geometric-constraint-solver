@@ -7,14 +7,17 @@
 )]
 
 use geosolve_constraint_editor::{
-    CoordinatorError, EditorEffect, EditorScene, Modifiers, PointerInput,
+    CoordinatorError, EditorEffect, EditorScene, Modifiers, PointerInput, ReplayAction,
     RetainedEditorCoordinator, SceneCurveControl, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DocumentArcSweep, DocumentCurveControlKind,
-    DocumentCurveControlTarget, DocumentEdit, DocumentRationalConicControl, DocumentSessionError,
-    DocumentSolveRequest, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDocument, SketchLifecycleRevisionHighWater, SolverConfig,
+    CurveDefinition, CurveId, CurveSpan, DesignScalarId, DocumentArcSweep,
+    DocumentCurveControlKind, DocumentCurveControlTarget, DocumentEdit, DocumentParameterKind,
+    DocumentParameterTarget, DocumentRationalConicControl, DocumentScalarBranch,
+    DocumentScalarPropertyRef, DocumentScalarUnit, DocumentSessionError, DocumentSolveRequest,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ParameterBatch, ParameterBatchEntry, ParameterValue,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+    SketchLifecycleRevisionHighWater, SolverConfig,
 };
 
 fn pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
@@ -105,6 +108,23 @@ fn circle_fixture() -> (
         .unwrap()
         .clone();
     (coordinator, scene, control, radius, viewport)
+}
+
+fn rational_storage_bits(
+    document: &SketchDocument,
+    curve: CurveId,
+    weight: DesignScalarId,
+) -> ([u64; 2], u64) {
+    let CurveDefinition::RationalQuadraticConic {
+        weighted_middle, ..
+    } = &document.curve(curve).unwrap().definition
+    else {
+        panic!("expected rational quadratic conic")
+    };
+    (
+        weighted_middle.map(f64::to_bits),
+        document.scalar(weight).unwrap().value.to_bits(),
+    )
 }
 
 #[test]
@@ -931,6 +951,278 @@ fn positive_negative_and_projective_rational_middle_gestures_commit_one_exact_hi
             "{case} Redo"
         );
     }
+}
+
+#[test]
+fn m77_f009_spatial_rational_middle_uses_effective_weight_without_mutating_fallback() {
+    let mut document = SketchDocument::new(6.0).unwrap();
+    let start = document.add_point("start", [0.0, 0.0]).unwrap();
+    let end = document.add_point("end", [4.0, 0.0]).unwrap();
+    let domain = ScalarDomain::Bounded {
+        lower: MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+        upper: f64::MAX,
+    };
+    let weight = document
+        .add_scalar("stored fallback weight", 0.5, ScalarUnit::Parameter, domain)
+        .unwrap();
+    let original_weighted_middle = [1.6, 2.4];
+    let curve = document
+        .add_curve(
+            "host-weighted rational",
+            CurveDefinition::RationalQuadraticConic {
+                start,
+                weighted_middle: original_weighted_middle,
+                middle_weight: weight,
+                end,
+            },
+        )
+        .unwrap();
+    let parameter = document
+        .add_parameter("host weight", DocumentParameterKind::Dimensionless)
+        .unwrap();
+    document
+        .add_parameter_binding(
+            parameter,
+            DocumentParameterTarget::DimensionlessFixedScalar(DocumentScalarPropertyRef {
+                scalar: weight,
+                unit: DocumentScalarUnit::Dimensionless,
+                domain,
+                branch: DocumentScalarBranch::Dimensionless,
+            }),
+        )
+        .unwrap();
+    let host_weight = 0.8;
+    let batch = ParameterBatch::new(
+        19,
+        vec![ParameterBatchEntry {
+            parameter,
+            value: ParameterValue::Dimensionless(host_weight),
+        }],
+    )
+    .unwrap();
+    let session = RetainedSketchDocumentSession::new_with_parameter_batch(
+        document,
+        batch,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let replay_baseline = session.clone();
+    let mut coordinator = RetainedEditorCoordinator::new(session).unwrap();
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Curve(CurveSpan::line(curve))]);
+
+    let fallback_bits = 0.5_f64.to_bits();
+    let original_storage = (original_weighted_middle.map(f64::to_bits), fallback_bits);
+    assert_eq!(
+        rational_storage_bits(coordinator.session().design_document(), curve, weight),
+        original_storage,
+    );
+    assert_eq!(
+        coordinator.session().parameter_batch().entries()[0].value,
+        ParameterValue::Dimensionless(host_weight),
+        "the immutable host input owns the exact effective weight",
+    );
+    let accepted_effective_weight = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .scalar(weight)
+        .unwrap()
+        .value;
+    assert!(
+        (accepted_effective_weight - host_weight).abs() <= 1.0e-9,
+        "the independently accepted solve must satisfy the host weight",
+    );
+
+    let viewport = Viewport::new([1_000.0, 700.0], [0.0, 0.0], 50.0).unwrap();
+    let mut scene = base_scene(&coordinator, viewport);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .unwrap();
+    let control = scene
+        .curve_controls
+        .iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::RationalMiddle)
+        .unwrap()
+        .clone();
+    assert!((control.model_position[0] - 2.0).abs() <= 1.0e-9);
+    assert!((control.model_position[1] - 3.0).abs() <= 1.0e-9);
+
+    let target = [2.5, 3.5];
+    let target_screen = viewport.model_to_screen(target);
+    let pointer_id = 9_009;
+    assert!(
+        coordinator
+            .pointer_down(&scene, pointer(pointer_id, control.screen_position))
+            .is_empty()
+    );
+    let request = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, target_screen));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control: requested_control,
+            model_position,
+            ..
+        },
+    ] = request.as_slice()
+    else {
+        panic!("host-effective rational gesture did not request a preview: {request:?}")
+    };
+    assert!((model_position[0] - target[0]).abs() <= 1.0e-12);
+    assert!((model_position[1] - target[1]).abs() <= 1.0e-12);
+    let requested_middle = *model_position;
+    let expected_weighted_middle = [
+        accepted_effective_weight * requested_middle[0],
+        accepted_effective_weight * requested_middle[1],
+    ];
+    let expected_storage = (expected_weighted_middle.map(f64::to_bits), fallback_bits);
+    let acknowledgement = coordinator.resolve_curve_control_preview(
+        pointer_id,
+        *request_id,
+        *expected,
+        *requested_control,
+        *model_position,
+    );
+    let [
+        EditorEffect::PreviewCurveControl {
+            control: acknowledged_control,
+            model_position: acknowledged_position,
+        },
+    ] = acknowledgement.as_slice()
+    else {
+        panic!("host-effective rational gesture did not accept its preview: {acknowledgement:?}")
+    };
+    assert_eq!(*acknowledged_control, *requested_control);
+    assert!((acknowledged_position[0] - target[0]).abs() <= 1.0e-9);
+    assert!((acknowledged_position[1] - target[1]).abs() <= 1.0e-9);
+    assert_eq!(
+        rational_storage_bits(coordinator.session().design_document(), curve, weight),
+        original_storage,
+        "previews must not mutate the retained design",
+    );
+    let preview_session = coordinator.visible_preview_session().unwrap();
+    assert_eq!(
+        rational_storage_bits(preview_session.design_document(), curve, weight),
+        expected_storage,
+        "the prepared durable edit must retain the fallback before publication",
+    );
+    let preview = preview_session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    let DocumentRationalConicControl::Euclidean {
+        middle: preview_middle,
+        weight: preview_weight,
+    } = preview.rational_conic_control(curve).unwrap()
+    else {
+        panic!("nonzero host weight must retain Euclidean middle mode")
+    };
+    assert!((preview_middle[0] - target[0]).abs() <= 1.0e-9);
+    assert!((preview_middle[1] - target[1]).abs() <= 1.0e-9);
+    assert!((preview_weight - host_weight).abs() <= 1.0e-9);
+
+    let preview_scene = prepared_preview_scene(
+        &coordinator,
+        viewport,
+        scene.accepted_revision,
+        scene.design_identity,
+    );
+    let release = coordinator.editor_mut().pointer_up(
+        &preview_scene,
+        scene.design_identity,
+        pointer(pointer_id, target_screen),
+    );
+    let [commit @ EditorEffect::CommitCurveControl { .. }] = release.as_slice() else {
+        panic!("host-effective rational gesture did not release its prepared patch: {release:?}")
+    };
+    coordinator.apply_editor_effect(commit).unwrap().unwrap();
+    assert_eq!(
+        rational_storage_bits(coordinator.session().design_document(), curve, weight),
+        expected_storage,
+        "a spatial control edit must retain the stored fallback weight bit-for-bit",
+    );
+    let [action] = coordinator.transcript() else {
+        panic!("one spatial gesture must record exactly one action")
+    };
+    assert!(matches!(
+        action,
+        ReplayAction::Edit {
+            edit: DocumentEdit::SetConicWeightedMiddle {
+                curve: action_curve,
+                weighted_middle,
+            },
+            ..
+        } if *action_curve == curve
+            && weighted_middle.map(f64::to_bits) == expected_weighted_middle.map(f64::to_bits)
+    ));
+    let action = action.clone();
+    let checkpoint = coordinator.persistence_checkpoint().unwrap();
+
+    coordinator.undo().unwrap();
+    assert_eq!(
+        rational_storage_bits(coordinator.session().design_document(), curve, weight),
+        original_storage,
+    );
+    coordinator.redo().unwrap();
+    assert_eq!(
+        rational_storage_bits(coordinator.session().design_document(), curve, weight),
+        expected_storage,
+    );
+
+    let mut replayed = RetainedEditorCoordinator::new(replay_baseline.clone()).unwrap();
+    replayed.replay(&action).unwrap();
+    assert_eq!(
+        rational_storage_bits(replayed.session().design_document(), curve, weight),
+        expected_storage,
+        "replay must retain the stored fallback weight",
+    );
+    let DocumentRationalConicControl::Euclidean {
+        middle: replayed_middle,
+        weight: replayed_weight,
+    } = replayed
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .rational_conic_control(curve)
+        .unwrap()
+    else {
+        panic!("replay changed the rational control mode")
+    };
+    assert!((replayed_middle[0] - target[0]).abs() <= 1.0e-9);
+    assert!((replayed_middle[1] - target[1]).abs() <= 1.0e-9);
+    assert!((replayed_weight - host_weight).abs() <= 1.0e-9);
+
+    let mut restored = RetainedEditorCoordinator::new(replay_baseline).unwrap();
+    restored.reload(&checkpoint).unwrap();
+    assert_eq!(
+        rational_storage_bits(restored.session().design_document(), curve, weight),
+        expected_storage,
+        "checkpoint restore must retain the stored fallback weight",
+    );
+    let DocumentRationalConicControl::Euclidean {
+        middle: restored_middle,
+        weight: restored_weight,
+    } = restored
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .rational_conic_control(curve)
+        .unwrap()
+    else {
+        panic!("checkpoint restore changed the rational control mode")
+    };
+    assert!((restored_middle[0] - target[0]).abs() <= 1.0e-9);
+    assert!((restored_middle[1] - target[1]).abs() <= 1.0e-9);
+    assert!((restored_weight - host_weight).abs() <= 1.0e-9);
 }
 
 #[test]

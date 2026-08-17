@@ -5017,17 +5017,8 @@ impl RetainedEditorCoordinator {
             .map(geosolve_sketch::SketchAcceptedDocumentState::document)
             .ok_or(CoordinatorError::PreviewNotAccepted)?;
         let projection = accepted_document.project_curve_control(control, model_position)?;
-        let edit = match projection {
-            DocumentCurveControlProjection::Point { point, position } => {
-                DocumentEdit::SetPointPosition { point, position }
-            }
-            DocumentCurveControlProjection::Scalar { scalar, value } => {
-                DocumentEdit::SetScalarValue { scalar, value }
-            }
-            DocumentCurveControlProjection::RationalMiddle { curve, control } => {
-                DocumentEdit::SetRationalConicControl { curve, control }
-            }
-            _ => return Ok(CurveControlPreparedSample::Rejected),
+        let Some(edit) = curve_control_projection_edit(projection) else {
+            return Ok(CurveControlPreparedSample::Rejected);
         };
         let retained_position = accepted_document
             .curve_controls(control.curve)?
@@ -10229,6 +10220,38 @@ fn curve_control_point_aliases_match_scene(scene: &EditorScene) -> bool {
     })
 }
 
+fn curve_control_projection_edit(
+    projection: DocumentCurveControlProjection,
+) -> Option<DocumentEdit> {
+    match projection {
+        DocumentCurveControlProjection::Point { point, position } => {
+            Some(DocumentEdit::SetPointPosition { point, position })
+        }
+        DocumentCurveControlProjection::Scalar { scalar, value } => {
+            Some(DocumentEdit::SetScalarValue { scalar, value })
+        }
+        DocumentCurveControlProjection::RationalMiddle { curve, control } => {
+            let weighted_middle = match control {
+                DocumentRationalConicControl::Euclidean { middle, weight } => {
+                    [middle[0] * weight, middle[1] * weight]
+                }
+                DocumentRationalConicControl::Projective {
+                    weighted_middle, ..
+                } => weighted_middle,
+                _ => return None,
+            };
+            weighted_middle
+                .iter()
+                .all(|value| value.is_finite())
+                .then_some(DocumentEdit::SetConicWeightedMiddle {
+                    curve,
+                    weighted_middle,
+                })
+        }
+        _ => None,
+    }
+}
+
 fn curve_control_command_effect(
     edit: &DocumentEdit,
 ) -> Result<DocumentCommandEffect, CoordinatorError> {
@@ -10238,6 +10261,9 @@ fn curve_control_command_effect(
         }
         DocumentEdit::SetScalarValue { scalar, .. } => {
             Ok(DocumentCommandEffect::UpdatedScalar(*scalar))
+        }
+        DocumentEdit::SetConicWeightedMiddle { curve, .. } => {
+            Ok(DocumentCommandEffect::UpdatedConicWeightedMiddle(*curve))
         }
         DocumentEdit::SetRationalConicControl { curve, .. } => {
             Ok(DocumentCommandEffect::UpdatedRationalConicControl(*curve))
@@ -10336,6 +10362,18 @@ fn curve_control_edit_is_noop(document: &SketchDocument, edit: &DocumentEdit) ->
         DocumentEdit::SetScalarValue { scalar, value } => document
             .scalar(*scalar)
             .is_some_and(|current| current.value.to_bits() == value.to_bits()),
+        DocumentEdit::SetConicWeightedMiddle {
+            curve,
+            weighted_middle,
+        } => document.curve(*curve).is_some_and(|current| {
+            matches!(
+                &current.definition,
+                CurveDefinition::RationalQuadraticConic {
+                    weighted_middle: current,
+                    ..
+                } if point_bits_equal(*current, *weighted_middle)
+            )
+        }),
         DocumentEdit::SetRationalConicControl { curve, control } => document
             .rational_conic_control(*curve)
             .is_ok_and(|current| rational_control_bits_equal(current, *control)),
