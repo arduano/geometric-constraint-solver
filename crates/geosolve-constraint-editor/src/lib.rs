@@ -13,6 +13,7 @@ mod commit_plan;
 mod coordinator;
 mod curve_controls;
 mod feature_authoring;
+mod geometry_tools;
 mod inference;
 
 pub use annotations::{
@@ -56,6 +57,7 @@ pub use feature_authoring::{
     FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarning,
     FeatureAuthoringWarningKind,
 };
+pub use geometry_tools::{GeometryToolFamily, GeometryToolVariant};
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
 pub use geosolve_sketch_features::{
     ComputedCircularArc, ComputedConstructionFragment, ComputedConstructionFragmentId,
@@ -4096,6 +4098,7 @@ pub struct ConstraintEditor {
     computed_fillet_continuation_status: Option<ComputedFilletContinuationStatus>,
     fillet_branch_preview: Option<SceneFilletActionTarget>,
     tool: EditorTool,
+    geometry_tool_variant: Option<GeometryToolVariant>,
     conic_options: ConicConstructionOptions,
     nurbs_options: NurbsConstructionOptions,
     draft: Option<Draft>,
@@ -4129,6 +4132,7 @@ impl Default for ConstraintEditor {
             computed_fillet_continuation_status: None,
             fillet_branch_preview: None,
             tool: EditorTool::Select,
+            geometry_tool_variant: None,
             conic_options: ConicConstructionOptions::default(),
             nurbs_options: NurbsConstructionOptions::default(),
             draft: None,
@@ -4171,11 +4175,26 @@ impl ConstraintEditor {
     /// A moved gesture emits [`EditorEffect::ClearPointPreview`] even when every
     /// projection was rejected, so hosts also close retained continuation state.
     pub fn activate_tool(&mut self, tool: EditorTool) -> Vec<EditorEffect> {
+        self.activate_projected_tool(tool, GeometryToolVariant::default_for_editor_tool(tool))
+    }
+
+    /// Selects an exact geometry-authoring recipe while retaining its coarse
+    /// [`EditorTool`] compatibility projection.
+    pub fn activate_geometry_tool(&mut self, variant: GeometryToolVariant) -> Vec<EditorEffect> {
+        self.activate_projected_tool(variant.editor_tool(), Some(variant))
+    }
+
+    fn activate_projected_tool(
+        &mut self,
+        tool: EditorTool,
+        geometry_tool_variant: Option<GeometryToolVariant>,
+    ) -> Vec<EditorEffect> {
         if self.pending_construction_commit.is_some() {
             return Vec::new();
         }
         let leaving_select = self.tool == EditorTool::Select && tool != EditorTool::Select;
         self.tool = tool;
+        self.geometry_tool_variant = geometry_tool_variant;
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
         effects.extend(self.cancel_curve_control_gesture());
@@ -4193,6 +4212,12 @@ impl ConstraintEditor {
     #[must_use]
     pub const fn tool(&self) -> EditorTool {
         self.tool
+    }
+
+    /// Returns the exact active geometry recipe, or `None` in Select mode.
+    #[must_use]
+    pub const fn geometry_tool_variant(&self) -> Option<GeometryToolVariant> {
+        self.geometry_tool_variant
     }
 
     /// Returns the complete session-local geometry interaction policy.
