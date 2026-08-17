@@ -157,9 +157,14 @@ production-quality annotations and final feature refinements are scoped-approved
 and publicly deployed from final source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
 `248cba4509a992aeff7a02dd6d57a1a2481380a4`. Pages run `31961652265`, artifact `9267811418` and
 deployment `5933831093` pass exact public-byte verification. The caller explicitly waived a
-separate post-refinement UAT replay; M76 is complete. M77 is now active: it adds selected-curve
-trim, size and control affordances through accepted-domain projections and exact prepared-patch
-publication without changing solver equations or canonical persistence.
+separate post-refinement UAT replay; M76 is complete. M77 is now active and implemented: selected
+curves publish truthful trim, size, ordinary/projective rational-middle and stored-control
+affordances through accepted-domain projections and exact prepared-patch publication. Focused
+native/WASM, property, coordinator, replay, demo, golden, Rustdoc and Trunk qualification pass.
+Review findings `M77-F008` through `M77-F011` preserve stored-point ownership at shared guide
+origins, host-owned rational fallback weights, non-periodic trim orientation and precision-
+preserving homogeneous control storage. Clean release nomination, frozen-candidate human UAT and
+Pages publication remain open; no solver equation or canonical persistence changed.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -237,7 +242,7 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M75 have explicit acceptance dispositions; M74's hands-on
+direction-at-contact domain API. M61-M76 have explicit acceptance dispositions; M74's hands-on
 scorecard is deferred rather than marked passed. M70 implementation and focused
 direct qualification, integrated release qualification, frozen-candidate publication, served-byte
 verification and scoped human UAT are complete under ADR 0034. It
@@ -515,7 +520,9 @@ files byte-match that Pages artifact at the expected media types; evidence is re
 `/tmp/geosolve-m76-pages-verify.ijOz7p`. This does not assert byte identity with the separately
 built Tailscale snapshot. The caller accepted U1-U4 for scoped closure without claiming a
 separately logged post-refinement replay. M76 is complete; the `37eade50` and `9b4e7f7`
-nominations are superseded historical evidence only, and no later milestone is active.
+nominations are superseded historical evidence only. M77 implementation and focused qualification
+now pass; its clean release nomination, frozen Tailscale candidate, U1-U6 human scorecard and final
+Pages publication remain the active work.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -595,6 +602,9 @@ Durable milestone and cleanup records:
 - `docs/M76_GOALS.md` (scoped-approved production-quality annotation scope)
 - `docs/M76_IMPLEMENTATION.md` (feature-refined implementation and final qualification ledger)
 - `docs/M76_UAT.md` (scoped closure decision and exact accepted-candidate evidence)
+- `docs/M77_GOALS.md` (active selected-curve control and exact-property contract)
+- `docs/M77_IMPLEMENTATION.md` (implementation, review-finding and qualification ledger)
+- `docs/M77_UAT.md` (pending focused curve-control scorecard and candidate record)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

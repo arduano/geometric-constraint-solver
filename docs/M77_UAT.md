@@ -30,6 +30,9 @@ quadratic conic, parabola, hyperbola, Bezier, B-spline and NURBS.
 - Hover each visible handle and then click at the same location. Highlight, tooltip/cursor and
   pointer action must name the same role and owning curve. Underlying curve or annotation paint
   must not steal the click; stored control points must retain their ordinary point ownership.
+  In particular, acquire a stored centre/start point exactly where a radius, axis or projective
+  guide begins: the point must own the inner grip region, while the guide remains selectable just
+  beyond that region.
 - Selecting a derived endpoint or size handle must select its curve and must not create a point in
   the tree, persistence payload or constraint operand list.
 - An active Fillet-owned output arc must keep its Fillet affordance and expose no competing generic

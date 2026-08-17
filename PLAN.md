@@ -183,7 +183,7 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M75 have a recorded acceptance
+- Keep human acceptance records explicit: M40.7, M53 and M61-M76 have a recorded acceptance
   disposition. Newly scoped milestones normally end in supervising-human UAT; an explicit caller
   may instead defer an unexecuted hands-on scorecard without calling it passed, as recorded for
   M74. Every objective correctness, persistence, compatibility and presentation-adapter assertion
@@ -4947,39 +4947,41 @@ historical evidence only; its PID `1077092` was retired.
 
 ### M77: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); contract approved, implementation, qualification, UAT,
-publication and closeout remain open**. M77 gives selected advanced curves a compact,
-headless-owned control presentation for parameters that currently have no spatial editing surface.
-`docs/M77_GOALS.md` owns the approved scope and `docs/M77_UAT.md` owns the pending human scorecard.
+Status: **active (2026-08-17); implementation and pre-nomination qualification complete; clean
+release nomination, frozen-candidate UAT, publication and closeout remain open**. M77 gives
+selected advanced curves a compact, headless-owned control presentation for parameters that
+previously had no spatial editing surface. `docs/M77_GOALS.md` owns the approved scope and
+`docs/M77_UAT.md` owns the pending human scorecard.
 
-- [ ] Publish transient typed handles, family-specific guides and exact paint/hit geometry for
+- [x] Publish transient typed handles, family-specific guides and exact paint/hit geometry for
   selected editable curves; handles own their curve rather than inventing persistent sketch points.
-- [ ] Add derived Start/End trim handles for circular arcs, elliptical arcs, parabola segments and
+- [x] Add derived Start/End trim handles for circular arcs, elliptical arcs, parabola segments and
   hyperbola segments through the existing inverse trim projection and scalar-edit path.
-- [ ] Present rational quadratics through the ordinary Euclidean middle control `P1 = Qh / w`
+- [x] Present rational quadratics through the ordinary Euclidean middle control `P1 = Qh / w`
   whenever `w != 0`, map drags back to homogeneous storage atomically, and expose the valid
   zero-weight case as an explicitly projective `Qh` vector rather than a fictitious point.
-- [ ] Add spatial size handles for circle/circular-arc radius, ellipse/elliptical-arc minor-axis
+- [x] Add spatial size handles for circle/circular-arc radius, ellipse/elliptical-arc minor-axis
   ratio and hyperbola semi-conjugate size; keep persistent centres, axes, foci, endpoints and spline
   controls on their existing ordinary point-drag path.
-- [ ] Make rational construction use the same ordinary-control meaning for nonzero weights, and
+- [x] Make rational construction use the same ordinary-control meaning for nonzero weights, and
   present selected control cages plus exact numeric inspector fallback without adding spatial
   weight, knot, degree or topology editing; rational and NURBS weights remain explicit controls.
-- [ ] Reuse one headless hover/pointer owner, existing tolerance policy, 3 px movement threshold,
+- [x] Reuse one headless hover/pointer owner, existing tolerance policy, 3 px movement threshold,
   pointer capture and grab-offset preservation; revoke handles and gestures on owner/tool/scene or
   camera invalidation.
-- [ ] Preview typed direct edits from an exact accepted-session clone, retain the last valid finite
+- [x] Preview typed direct edits from an exact accepted-session clone, retain the last valid finite
   preview across invalid samples, and publish that exact candidate through stale-safe compare-and-
   swap as one Undo/Redo step.
-- [ ] Preserve scalar domains, Start/End identity, directed trims, arc sweep, hyperbola branch,
+- [x] Preserve scalar domains, Start/End identity, directed trims, arc sweep, hyperbola branch,
   accepted-scene authority and all independent validity checks; active Fillet-owned output arcs do
   not expose conflicting generic handles.
-- [ ] Add native/WASM family, geometry/hit parity, preview, cancellation, staleness, domain,
+- [x] Add native/WASM family, geometry/hit parity, preview, cancellation, staleness, domain,
   branch, history and save/reload regressions plus thin demo rendering/input tests.
 - [ ] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
   golden-oracle cleanliness, Rustdoc and Trunk release assembly.
-- [ ] Freeze and byte-verify an immutable Tailscale candidate, complete the focused human UAT and
-  keep it available for follow-up fixes until explicit approval.
+- [ ] Freeze and byte-verify an immutable Tailscale candidate and keep it available for follow-up
+  fixes until explicit approval.
+- [ ] Complete the focused human UAT under `docs/M77_UAT.md` and receive explicit approval.
 - [ ] Publish the exact accepted source through GitHub Pages, verify hosted bytes and close M77.
 
 Gate: every approved curve family exposes a truthful, selected-only spatial control surface;
@@ -4987,6 +4989,20 @@ rendering, hover and pointer-down consume the same headless primitives and owner
 samples cannot replace accepted geometry; one completed gesture is one durable history step; the
 solver, constraint set and canonical persistence schema remain unchanged; native/WASM regression,
 clean release, frozen-candidate UAT and exact public publication all pass.
+
+Implementation notes (2026-08-17): public sketch control/projection and immutable prepared-preview
+APIs, headless selected-curve cages and direct gestures, exact property metadata/setters, and the
+thin workbench surface are implemented. Focused suites pass at sketch 10/10, editor controls 8/8,
+properties 6/6, coordinator 14/14, native/WASM parity 4/4 each, rational replay 1/1 and demo-web
+127/127. The unchanged golden survey/check/clean modes pass 270/270, as do demo WASM, warnings-
+denied Rustdoc and Trunk 0.21.14 release assembly. Review findings `M77-F008` through `M77-F011`
+now preserve point-alias ownership at guide origins, host-owned rational fallback weights,
+directed non-periodic trim orientation and precision-preserving rational homogeneous storage. They
+remain focused owner regressions; no golden expansion was warranted. Test-only commit `20ae036`
+aligns one old M19 equality expectation with the stronger projection-time crossing rejection while
+retaining transactional setter coverage. The post-`20ae036` locked all-feature workspace rerun
+passes; the exact clean committed-source release gate remains final mechanical nomination
+authority.
 
 ## Explicit non-goals
 

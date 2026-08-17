@@ -2,10 +2,10 @@
 
 # M77 — CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); contract approved, all implementation, qualification, UAT,
-publication and closeout evidence remains pending**. M77 makes advanced curve parameters directly
-manipulable in the polished demo while preserving the existing document model, equations and
-explicit branch state.
+Status: **active (2026-08-17); implementation and focused qualification complete; clean release
+nomination, frozen-candidate UAT, publication and closeout remain open**. M77 makes advanced curve
+parameters directly manipulable in the polished demo while preserving the existing document
+model, equations and explicit branch state.
 
 ## Product contract
 

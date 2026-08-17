@@ -184,6 +184,32 @@ at their expected media types. The separately built Tailscale candidate remains 
 evidence rather than a claim of Pages byte identity. M76 is complete without changing the accepted
 compatibility boundary.
 
+M77 is an additive pre-1.0 curve-control and presentation extension. `DocumentCurveControlId`,
+`DocumentCurveControlKind`, `DocumentCurveControlTarget`, `DocumentCurveControlAvailability`,
+`DocumentCurveControlWithholdingReason`, `DocumentCurveControl`,
+`DocumentCurveControlProjection` and `DocumentCurveControlError` expose a closed accepted-domain
+control catalog and typed inverse projection. `DocumentRationalConicControlMode` and
+`DocumentRationalConicControl` give nonzero Euclidean `P1` and zero-weight projective `Qh`
+unambiguous state; `DocumentEdit::SetRationalConicControl` is the atomic numeric/mode edit, while
+spatial movement retains the existing `SetConicWeightedMiddle` lowering. `PreparedSketchPreview`
+adds only immutable candidate views to the existing opaque exact-CAS patch.
+
+`SceneCurveControl*`, `CurvePropertyFamily`, `CurveNumericPropertyKind`,
+`CurveNumericPropertyMetadata`, `SelectedCurvePropertyMetadata` and the corresponding
+`ConstraintEditor`/`RetainedEditorCoordinator` population, preview, commit and property-setter
+methods are presentation-independent host APIs. They add selected-only transient identities and
+finite paint/hit geometry; they do not create persistent sketch points or constraint operands.
+`DocumentTrimProjectionError::CrossesOppositeEndpoint` makes the existing non-periodic directed-
+trim invariant explicit at projection time. Callers that exhaustively match these pre-1.0 enums
+must handle the additive variants under the documented minor-release policy.
+
+M77 changes no solver equation, residual, constraint or dimension kind, hard/soft priority,
+rank/DOF rule, automatic branch policy, canonical sketch v1-v4 bytes, unsupported draft-v5
+disposition, workspace/reproduction schema or annotation cache. Curve-control cages are recomputed
+from accepted geometry and selection. Implementation and focused qualification pass, while clean
+candidate nomination, supervising-human UAT and final publication remain open; this paragraph does
+not claim M77 acceptance or closeout.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 

@@ -163,6 +163,18 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   manifest aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96` at expected media types.
   The caller accepted U1-U4 for scoped closure without claiming or requiring a separately logged
   post-refinement replay. M76 is complete.
+- The active M77 CAD curve-control cut. `geosolve-sketch` now publishes typed selected-curve
+  control catalogs, inverse trim/size/rational projections, atomic ordinary/projective rational
+  control edits and an immutable accepted prepared-preview view. `geosolve-constraint-editor`
+  publishes selected-only handles, control cages, rails and shared finite paint/hit geometry,
+  exact curve-property metadata/setters, one hover/click owner and stale-safe prepared-patch
+  gestures; the WASM workbench is a thin renderer/input adapter. Nonzero rational middle control
+  has one `P1 = Qh / w` meaning, zero weight remains explicit projective `Qh`, non-periodic trim
+  crossings reject rather than reverse, and no solver equation or canonical persistence changes.
+  Review findings F008-F011 retain stored-point ownership at guide origins, host-owned rational
+  fallback weights, directed trim orientation and precision-preserving homogeneous storage.
+  Focused native/WASM, coordinator, replay, demo and unchanged 270/270 golden evidence passes;
+  clean release nomination, human UAT and public closeout remain open.
 
 ### Changed
 

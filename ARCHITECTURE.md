@@ -25,9 +25,11 @@ advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
 - **Baseline:** implemented and accepted behavior through M76. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut; M67 completes the approved legacy-surface and frozen-harness cleanup; M68 completes the approved ADR 0032 Fillet direct-manipulation cut; M69 completes the approved ADR 0033 Profile/Construction semantics; M70 completes approved ADR 0034 headless auto-constraint drafting; M70B completes bounded workspace reproduction handoff; M71 completes approved retained drafting relations; M72 completes public-workbench fixes and Pages delivery; M73 completes retained-authoring consolidation; M74 completes intrinsic reference geometry and production-style desktop polish under an explicit scoped close decision that defers its hands-on scorecard into M75; M75 completes hover/click ownership parity under scoped approval and exact public verification; M76 completes production-quality annotation geometry, placement, persistence and final presentation refinements under explicit scoped approval. M1-M7 remain the frozen regression baseline.
-- **Active target:** M77 adds selected-curve trim, size and control affordances plus exact curve
-  properties through public accepted-domain projections and prepared-patch previews. It changes no
-  solver equation, branch heuristic or persistence schema. `docs/M77_GOALS.md` owns the contract.
+- **Active target:** M77 implements selected-curve trim, size and ordinary/projective control
+  affordances plus exact curve properties through public accepted-domain projections and
+  prepared-patch previews. Focused qualification passes; clean release nomination, frozen-
+  candidate UAT and publication remain open. It changes no solver equation, branch heuristic or
+  persistence schema. `docs/M77_GOALS.md` owns the contract.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -144,7 +146,7 @@ A target statement must not be exposed as an implemented capability before its m
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M74 sequence, including the completed M70B reproduction cut,
+current accepted ownership is the completed M10-M76 sequence, including the completed M70B reproduction cut,
 listed in section 15.
 
 ## 3. Crate responsibilities
@@ -253,6 +255,13 @@ equation; M56 completes revision-checked prepared jobs and M57 completes increme
 projection and application history remain outside this crate. One solve attempt consumes immutable
 input revisions and never calls host code.
 
+M77 keeps inverse configuration and storage truth here. `DocumentCurveControl*` enumerates stored
+point aliases and derived controls; typed projections preserve scalar domains, directed trims,
+arc sweep and hyperbola branch. Rational nonzero control uses `P1 = Qh / w`, validates a finite
+precision-preserving homogeneous round trip, and retains zero weight as explicit projective `Qh`.
+`PreparedSketchPreview` is immutable; only its opaque prepared patch can win exact compare-and-swap
+publication. These APIs add no residual or persistence field.
+
 ### `geosolve-constraint-editor`
 
 Owns presentation-independent sketch interaction policy over public `geosolve-sketch` and
@@ -277,6 +286,12 @@ storage or host expressions. M40.2 implements accepted scene, picking,
 selection, basic relation applicability and the click/drag boundary; M40.3-M40.6
 complete and mechanically qualify the state machine under ADR 0029 through one
 canonical native/release-WASM report and focused browser platform evidence.
+
+M77 owns selected-only `SceneCurveControl*` identities, finite cage/guide/rail paint and hit
+geometry, stored-point alias precedence, exact property metadata and the direct gesture lifecycle.
+Only independently accepted prepared candidates preview; invalid later samples retain the last
+valid result, and stale, cancelled or no-op work publishes nothing. The adapter never chooses
+another owner from paint order.
 
 M55 expands the closed headless action/applicability surface to every preserved M13-M14 alpha
 constraint, dimension and explicit branch choice. It lowers only through typed public
@@ -531,6 +546,10 @@ primary purpose is interactive sanity checking:
 - it is desktop-only for all future work; responsive, tablet and mobile support are
   not implementation or acceptance targets;
 - it remains non-authoritative and replaceable.
+
+For M77 this crate renders the exact published cage, direct grips, hover state and property rows,
+then forwards typed pointer/property requests. It neither recomputes curve controls nor owns
+inverse projection, effective rational weight, branch choice or hit priority.
 
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is
@@ -1279,5 +1298,12 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   aggregate `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`. Root and all seven public
   files byte-match that Pages artifact at the expected media types; this makes no byte-identity
   claim against the separately built Tailscale snapshot. The caller accepted U1-U4 for scoped
-  closure and explicitly waived a separate post-refinement replay. M76 is complete and no later
-  milestone is active.
+  closure and explicitly waived a separate post-refinement replay. M76 is complete. M77 is
+  implemented and pre-nomination qualified, with clean release nomination, immutable-candidate
+  human UAT and public closeout still active.
+- M77: implemented selected-curve control cages, exact trim/size/rational projections, immutable
+  prepared previews, unified headless direct manipulation and exact property metadata. Focused
+  native/WASM, retained-coordinator, replay, demo and unchanged-golden evidence passes. Resolved
+  findings F008-F011 retain point-alias ownership, stored rational fallback, directed trim
+  orientation and precision-preserving homogeneous controls. Candidate nomination and human/public
+  acceptance remain open, so M77 is not part of the accepted baseline yet.

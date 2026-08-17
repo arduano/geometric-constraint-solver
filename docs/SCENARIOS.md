@@ -2136,7 +2136,9 @@ family controls in `docs/M77_GOALS.md`, finite cage/guide geometry, stable curve
 and shared paint/hit primitives. Deselection, tool/input-owner change, camera change and accepted-
 scene replacement revoke them. Headless hover and pointer-down resolve the same role and owner;
 stored points keep point ownership, visible selected-curve handles outrank underlying curve or
-annotation paint, and active Fillet output arcs expose only their Fillet-owned affordances.
+annotation paint, and active Fillet output arcs expose only their Fillet-owned affordances. At a
+radius, minor/conjugate-axis or projective guide origin shared with a stored point alias, the point
+owns its acquisition region and the guide remains directly hittable beyond that region.
 
 ### M77-A2 - Inverse trim endpoints preserve discrete state
 
@@ -2146,6 +2148,8 @@ and durable scalar edit. Verify exact support-curve incidence, stable Start/End 
 trim order, angular unwrapping near the current seed, unchanged arc sweep and unchanged hyperbola
 branch. Invalid crossing, center, domain and stale-owner samples fail closed while retaining the
 last valid finite preview; they never exchange endpoints or change discrete state implicitly.
+For parabola and hyperbola trims, exercise Start and End crossings from both initially ascending
+and initially descending parameter order and require exact state/history/publication retention.
 
 ### M77-A3 - Rational middle and stored control cages
 
@@ -2155,6 +2159,10 @@ atomically writes `Qh = w·P1` while preserving the exact middle-weight scalar a
 endpoint owners. Verify that non-unit construction clicks have the same `P1` meaning. For an exact
 zero-weight curve, render and edit an explicitly projective `Qh` vector rather than dividing by
 zero or publishing a synthetic point; entering/leaving projective mode preserves `Qh` explicitly.
+When a host binding supplies an accepted effective weight different from the stored fallback,
+spatial movement uses that accepted weight for `Qh` and retains the fallback bit-for-bit through
+Undo/Redo, replay and checkpoint restoration. A nonzero Euclidean control that cannot survive a
+finite precision-preserving `P1 -> Qh -> P1` round trip rejects atomically.
 Bezier, B-spline and NURBS cages expose their existing stored control points through ordinary point
 dragging. Rational/NURBS weights remain explicit numeric inspector values; no spatial weight rail,
 synthetic point, new constraint operand or persisted handle is created.
@@ -2178,8 +2186,10 @@ Undo/Redo step regardless of pointer-sample count. Save/reload and reproduction 
 only existing scalar or weighted-middle data, then recompute selected handles from accepted
 geometry. Native/WASM semantics, thin demo mapping and the two-size/zoom UAT matrix must pass.
 
-M77 is active. All implementation, qualification, frozen-candidate, human UAT, Pages publication
-and closeout evidence for M77 remains pending.
+M77 is active. Implementation and focused pre-nomination qualification pass, including direct
+coverage for every A1-A5 contract and resolved findings `M77-F008` through `M77-F011`; no golden
+row changed. The post-`20ae036` locked workspace rerun passes; the clean committed-source release
+gate, immutable candidate, human UAT, Pages publication and closeout remain open.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

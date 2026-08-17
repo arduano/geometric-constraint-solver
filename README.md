@@ -93,14 +93,17 @@ post-refinement replay. Final source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`,
 `9267811418` and deployment `5933831093`. The artifact's ordered seven-file aggregate is
 `41e2a69d55a3232702b1ae429611c6d8351fd9041b970391f815a37078e9fa96`; root and every hosted file
 byte-match it at the expected media types. No Tailscale/Pages byte identity is claimed. M76 is
-complete and no later milestone is active.
+complete. M77 now implements selected-only CAD curve cages, derived trim and size grips,
+ordinary/projective rational-middle editing, exact property controls and stale-safe prepared-patch
+publication. Focused native/WASM, coordinator, replay, demo and unchanged-golden qualification
+passes; clean release nomination, frozen-candidate UAT and public closeout remain open.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74-M76 closed and no later milestone active.
+3. `PLAN.md` — authoritative roadmap, with M74-M76 closed and M77 active.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -113,22 +116,24 @@ Physics, collision and a production rendering system remain out of scope.
     and publicly verified hover/click ownership milestone.
 12. `docs/M76_GOALS.md`, `docs/M76_IMPLEMENTATION.md` and `docs/M76_UAT.md` — feature-refined,
     scoped-approved annotation milestone and exact closure evidence.
+13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — active selected-curve
+    control contract, implementation ledger and pending human scorecard.
 
 ## Workspace
 
 - `geosolve-geometry` — immutable geometry, curve evaluation, validated frames/workplanes and `Pose2`/`Pose3` manifold operations; no solver state.
 - `geosolve-core` — variables, residual blocks, dense/sparse Jacobian paths, nonlinear solve, structural/numerical analysis, strict hierarchy, continuation primitives and revision-stamped accepted hard linearization/sensitivity.
-- `geosolve-sketch` — persistent sketch entities, conics, non-rational B-splines, generic constraints and compilation into core residuals, with reusable accepted-only and retained-design lifecycle/serialization APIs, host-scheduled prepared jobs, exact-input compare-and-swap publication and dependency-local retained runtime updates.
+- `geosolve-sketch` — persistent sketch entities, conics, non-rational B-splines, generic constraints and compilation into core residuals, with reusable accepted-only and retained-design lifecycle/serialization APIs, typed curve-control projections, immutable prepared previews, exact-input compare-and-swap publication and dependency-local retained runtime updates.
 - `geosolve-sketch-ops` — deterministic equation-free split/trim/extend/construction proposals over complete stamped sketch snapshots; no residuals, solver state or private publication path.
 - `geosolve-sketch-topology` — read-only revision-stamped production wires, regions, holes and exact source provenance with explicit bounded completeness; no solver or B-rep state.
 - `geosolve-sketch-features` — separately versioned persistent computed-feature intent and independently validated revision-local output over exact accepted sketch snapshots; no residuals, solver variables, canonical sketch schema or B-rep state.
-- `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking, selection, gestures, constraint/dimension and computed-feature authoring, and typed editor effects over public sketch/feature APIs; no renderer, DOM, storage or equations.
+- `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking, selection, gestures, selected-curve control cages/properties, constraint/dimension and computed-feature authoring, and typed editor effects over public sketch/feature APIs; no renderer, DOM, storage or equations.
 - `geosolve-linkage` — persistent planar and spatial rigid bodies/features/sources, deterministic JSON/runtime remapping, gauge-separated mobility, common joints/mates, drivers, explicit assembly modes, independently published natural/pseudo-arclength continuation, typed hysteretic branch events/mode changes and multi-driver body/feature velocity fields with optional physical motion bases.
 - `geosolve-demo-web` — separate desktop WASM/SVG consumer without equations or authoritative
   document semantics; M50 removed its old playground, M51 consolidated the one directly tested
   workbench, M60 added public advanced-operation/topology presentation plus the versioned workspace
-  envelope, and M67 removed its raw developer evidence/topology cards while preserving the domain
-  APIs beneath them.
+  envelope, M67 removed its raw developer evidence/topology cards, and M77 renders only the
+  headless curve controls and exact properties supplied by the reusable crates.
 
 The critical design rule is: **share numerical machinery and feature evaluation, not one undifferentiated sketch/mechanism entity model.**
 
@@ -136,7 +141,7 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. M40.7, M53 and M61-M75 have explicit acceptance dispositions. New milestones
+and application undo. M40.7, M53 and M61-M76 have explicit acceptance dispositions. New milestones
 normally end in hands-on UAT after objective automation; M74 records an explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
 mobile support requirement.

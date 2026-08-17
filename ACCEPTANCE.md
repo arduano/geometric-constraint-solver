@@ -2205,8 +2205,9 @@ historical evidence only; its PID `1077092` was retired.
 
 ## M77 acceptance: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); all implementation, automated qualification, frozen-artifact,
-human UAT, publication and closeout acceptance items remain open**.
+Status: **active (2026-08-17); implementation and pre-nomination automated acceptance pass. Clean
+committed-source qualification, immutable candidate nomination, human UAT, publication and
+closeout remain open**.
 
 - A selected editable curve exposes only its applicable finite typed controls. Circular and
   elliptical arcs, parabola segments and hyperbola segments expose derived Start/End trim handles;
@@ -2257,6 +2258,25 @@ human UAT, publication and closeout acceptance items remain open**.
   before an exact immutable Tailscale candidate is nominated. `docs/M77_UAT.md` passes under
   explicit supervising-human approval before exact GitHub Pages publication and hosted-byte
   verification close M77.
+
+Implementation evidence (2026-08-17): the public sketch control catalog and inverse projections,
+immutable prepared-preview view, headless selected-curve cage/paint/hit DTOs, unified direct
+gesture, exact property metadata/setters and thin workbench adapter are implemented. Focused
+owners pass at sketch 10/10, editor controls 8/8, properties 6/6, retained coordinator 14/14,
+native/WASM parity 4/4 each, rational replay 1/1 and demo-web 127/127. Demo WASM,
+warnings-denied Rustdoc, Trunk 0.21.14 and the unchanged 270/270 golden survey/check/clean modes
+also pass.
+
+Review findings `M77-F008` through `M77-F011` are resolved at their owners. Stored point aliases
+win inside a guide's shared-origin point-acquisition region; spatial rational-middle edits use the
+accepted effective weight without overwriting the stored fallback; ascending and descending
+non-periodic trims reject endpoint crossings without reversing; and nonzero Euclidean rational
+controls must survive a finite precision-preserving `P1 -> Qh -> P1` round trip before atomic
+storage. No solver equation or golden row changed. The first broad run stopped at one stale M19
+assertion that expected endpoint equality to reach the setter; compatibility-only commit
+`20ae036` now checks typed projection rejection and the unchanged byte-identical setter rejection.
+The post-commit locked all-feature workspace rerun passes. The exact clean release gate remains
+final nomination authority, so no candidate or human item is accepted by this paragraph.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 
