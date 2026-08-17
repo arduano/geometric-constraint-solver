@@ -1557,6 +1557,127 @@ fn trim_drag_back_to_the_same_parameter_is_history_neutral() {
 }
 
 #[test]
+fn m77_f010_crossing_trim_sample_cannot_prepare_or_publish_a_reversed_curve() {
+    let mut document = SketchDocument::new(6.0).unwrap();
+    let vertex = document.add_point("vertex", [0.0, 0.0]).unwrap();
+    let focus = document.add_point("focus", [1.0, 0.0]).unwrap();
+    let start = document
+        .add_scalar("start", -1.0, ScalarUnit::Parameter, ScalarDomain::Finite)
+        .unwrap();
+    let end = document
+        .add_scalar("end", 1.0, ScalarUnit::Parameter, ScalarDomain::Finite)
+        .unwrap();
+    let parabola = document
+        .add_curve(
+            "parabola",
+            CurveDefinition::ParabolaSegment {
+                vertex,
+                focus,
+                trim_start: start,
+                trim_end: end,
+            },
+        )
+        .unwrap();
+
+    let mut crossing_document = document.clone();
+    crossing_document.set_scalar_value(start, 2.0).unwrap();
+    let crossing_target = crossing_document
+        .curve_controls(parabola)
+        .unwrap()
+        .into_iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::TrimStart)
+        .unwrap()
+        .position;
+
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let mut coordinator = RetainedEditorCoordinator::new(session).unwrap();
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Curve(CurveSpan::line(parabola))]);
+    let viewport = Viewport::new([1_000.0, 700.0], [1.0, 1.0], 50.0).unwrap();
+    let mut scene = base_scene(&coordinator, viewport);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .unwrap();
+    let control = scene
+        .curve_controls
+        .iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::TrimStart)
+        .unwrap()
+        .clone();
+    let before_input = coordinator.session().prepared_input();
+    let before_json = coordinator
+        .session()
+        .design_document()
+        .to_canonical_json()
+        .unwrap();
+    let before_history = coordinator.history_len();
+    let before_transcript = coordinator.transcript().len();
+    let pointer_id = 77_010;
+
+    assert!(
+        coordinator
+            .pointer_down(&scene, pointer(pointer_id, control.screen_position))
+            .is_empty()
+    );
+    let crossing_screen = viewport.model_to_screen(crossing_target);
+    let request = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, crossing_screen));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control: requested_control,
+            model_position,
+            ..
+        },
+    ] = request.as_slice()
+    else {
+        panic!("crossing trim did not request accepted-domain projection: {request:?}")
+    };
+    assert!(
+        coordinator
+            .resolve_curve_control_preview(
+                pointer_id,
+                *request_id,
+                *expected,
+                *requested_control,
+                *model_position,
+            )
+            .is_empty(),
+        "a crossing trim sample must not acknowledge a prepared preview"
+    );
+    assert!(coordinator.visible_preview_session().is_none());
+
+    assert_eq!(
+        coordinator.editor_mut().pointer_up(
+            &scene,
+            scene.design_identity,
+            pointer(pointer_id, crossing_screen),
+        ),
+        vec![EditorEffect::ClearCurveControlPreview]
+    );
+    assert_eq!(coordinator.session().prepared_input(), before_input);
+    assert_eq!(
+        coordinator
+            .session()
+            .design_document()
+            .to_canonical_json()
+            .unwrap(),
+        before_json
+    );
+    assert_eq!(coordinator.history_len(), before_history);
+    assert_eq!(coordinator.transcript().len(), before_transcript);
+}
+
+#[test]
 fn mismatched_release_revokes_the_non_authoritative_preview() {
     let (mut coordinator, scene, control, radius, viewport) = circle_fixture();
     let pointer_id = 81;
