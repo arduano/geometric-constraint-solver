@@ -276,7 +276,7 @@ sketch extreme-finite 1/1, demo-web 143/143 and six carried WASM parity binaries
 passes unchanged 270/270 clean golden authority, demo WASM, benchmark compilation, M14/M32
 performance budgets, the explicit 150.29-second 256-body sparse crossover, licence/package checks
 and Trunk 0.21.14 release assembly. The only diagnostics are the longstanding non-failing Cargo
-advisories for packages declaring both `license` and `license-file`.
+warnings for packages declaring both `license` and `license-file`.
 
 Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was byte-compared and
 frozen at `/tmp/geosolve-m78-uat.SNgu3D`, directory mode `0555`, as seven regular non-symlink files

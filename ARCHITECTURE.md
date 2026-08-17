@@ -1349,8 +1349,9 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   spatial elliptical-arc authoring, crowded-control acquisition and exact candidate-generation
   authority. Exact source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
   `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the clean gate; snapshot
-  `/tmp/geosolve-m77-uat.ARrQFw` is read-only, byte-verified and live for review. The supervising
-  caller accepts U1-U6 and requests closure. Approval descendant `66a89b7` passes Pages run
+  `/tmp/geosolve-m77-uat.ARrQFw` remains read-only historical candidate evidence, while its server
+  retired before the M78 listener started. The supervising caller accepts U1-U6 and requests
+  closure. Approval descendant `66a89b7` passes Pages run
   `32012819635`, artifact `9283439225` and deployment `5942438795`; root plus all seven hosted
   paths exact-verify at aggregate
   `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is part of the
