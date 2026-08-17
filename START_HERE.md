@@ -157,7 +157,9 @@ production-quality annotations and final feature refinements are scoped-approved
 and publicly deployed from final source `a7769e4107ab6a62b439d3cfaf0b1f779cbdd22b`, tree
 `248cba4509a992aeff7a02dd6d57a1a2481380a4`. Pages run `31961652265`, artifact `9267811418` and
 deployment `5933831093` pass exact public-byte verification. The caller explicitly waived a
-separate post-refinement UAT replay; M76 is complete and no later milestone is active.
+separate post-refinement UAT replay; M76 is complete. M77 is now active: it adds selected-curve
+trim, size and control affordances through accepted-domain projections and exact prepared-patch
+publication without changing solver equations or canonical persistence.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -178,6 +180,8 @@ support and physics remain outside future acceptance.
     and publicly verified hover/click ownership milestone.
 12. `docs/M76_GOALS.md`, `docs/M76_IMPLEMENTATION.md` and `docs/M76_UAT.md` — completed,
     scoped-approved and publicly verified feature-refined annotation milestone.
+13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — active CAD-ready
+    curve-control, exact-property and focused desktop-UAT milestone.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.

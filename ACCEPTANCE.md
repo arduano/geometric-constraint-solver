@@ -189,7 +189,7 @@ The F002 correction passes the complete clean replacement gate, immutable freeze
 Tailscale verification. The supervising caller accepted the qualified interaction scope, and
 exact final public publication passes. M76 implementation, clean qualification, immutable
 byte-verified Tailscale nomination, scoped human acceptance and exact final public publication all
-pass. No later milestone is active.
+pass. M77 is active subsequently and does not change any completed M76 evidence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2111,7 +2111,7 @@ M72/M74 two-size and M75 6/6 Chromium checks pass. Every M75 acceptance gate is 
 
 Status: **complete (2026-08-17); implementation, final clean release qualification, frozen
 byte-verified Tailscale nomination, scoped human approval and exact GitHub Pages publication pass.
-No later milestone is active**.
+M77 is active subsequently and does not change this evidence**.
 
 - Every accepted dimension family has truthful geometry: point distance, affine line/polyline-span
   length, radius, diameter, oriented angle, supporting-line offset and exact translated-segment
@@ -2202,6 +2202,61 @@ The initial nomination at source `37eade50b566f62905a395655bc80c17d9b6bef4`, tre
 `d6ad2f453d672accbcc3848a1a16d2039b3511d1`, snapshot `/tmp/geosolve-m76-uat.puiPgO` and aggregate
 `fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf` remains superseded
 historical evidence only; its PID `1077092` was retired.
+
+## M77 acceptance: CAD curve handles and implicit-parameter editing
+
+Status: **active (2026-08-17); all implementation, automated qualification, frozen-artifact,
+human UAT, publication and closeout acceptance items remain open**.
+
+- A selected editable curve exposes only its applicable finite typed controls. Circular and
+  elliptical arcs, parabola segments and hyperbola segments expose derived Start/End trim handles;
+  rational quadratics expose a middle-control handle; circles/arcs expose radius, ellipses/arcs
+  expose minor-axis size and hyperbolas expose semi-conjugate size.
+- Stored centres, endpoints, vertices, foci, axis points and Bezier/B-spline/NURBS controls remain
+  ordinary persistent points on the existing point-drag path. The selected control cage makes
+  their relationship legible. A derived handle owns and selects its curve and never appears as a
+  persistent point, constraint operand or independently deletable tree object.
+- Active Fillet-owned output arcs expose no conflicting generic arc controls. Protected, inactive,
+  external, bound or otherwise non-editable state never presents an affordance that promises an
+  unavailable direct edit.
+- Headless scene state owns stable handle role, curve owner, finite anchor, guides/rails,
+  editability, accessibility description and exact paint/hit geometry. Selected-only visibility,
+  hover and primary pointer-down use one accepted scene and resolver; browser paint order, local
+  SVG distance and CSS hover cannot choose another owner.
+- Pointer-down preserves the grab offset and begins a mutation only after 3 px. Escape, capture
+  loss, tool/camera/input-owner change and accepted-scene invalidation cancel and restore the exact
+  pre-gesture state. Hover/click parity and deterministic overlap ordering hold at every zoom and
+  supported desktop size.
+- A derived trim handle changes only its existing Start/End scalar through the accepted inverse
+  projection. Endpoint identity, directed trim, circular/elliptical sweep and hyperbola branch are
+  retained; crossing an invalid order, wrap or branch boundary does not silently swap or flip
+  discrete state.
+- For every nonzero rational middle weight, authoring and editing expose the same Euclidean
+  `P1 = Qh / w`; dragging keeps the weight and writes `Qh = w·P1`, while an exact weight edit can
+  preserve `P1` atomically. At the valid zero-weight case the scene and inspector explicitly expose
+  projective `Qh` vector state and never invent an ordinary point. Positive, negative and zero
+  rational weights retain their existing validated domain. NURBS weights remain gauge-aware
+  numeric controls and receive no ambiguous spatial weight rail.
+- Radius and semi-conjugate controls remain finite and positive. Minor-axis ratio remains finite,
+  positive and at most one. Each size handle follows a deterministic family rail and cannot
+  silently swap ellipse axes or change curve family.
+- Preview work starts from an exact accepted-session clone. Only independently accepted finite
+  candidates become visible; an invalid later sample retains the last valid preview. Release
+  publishes that exact candidate through stale-safe compare-and-swap as one Undo/Redo step. No
+  valid change, cancellation, rejection and stale work publish no history or accepted geometry.
+- A committed gesture round-trips through existing workspace and reproduction paths using only its
+  existing scalar or weighted-middle data. Handle/cage state is recomputed from selection and
+  accepted geometry, adds no canonical persistence field and cannot affect annotation cache data.
+- Native and WASM regressions cover every role/family, paint/hit parity, selection lifecycle,
+  threshold/grab offset, projection, domain limits, last-valid retention, cancellation, staleness,
+  branch preservation, one-step history and save/reload. Thin demo tests cover event translation,
+  capture and headless-only rendering. Existing solver equations, constraints, residuals, rank/DOF
+  semantics, branch policy and reviewed golden authority remain unchanged.
+- Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM
+  checks, golden cleanliness, benchmarks, licensing/package checks and Trunk release assembly pass
+  before an exact immutable Tailscale candidate is nominated. `docs/M77_UAT.md` passes under
+  explicit supervising-human approval before exact GitHub Pages publication and hosted-byte
+  verification close M77.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

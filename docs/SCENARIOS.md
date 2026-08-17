@@ -1355,7 +1355,8 @@ feature refinements pass complete clean qualification and immutable byte-verifie
 replacement publication. The caller accepts U1-U4 for scoped closure and explicitly waives a
 separate post-refinement replay; that disposition does not invent individual observations. Exact
 GitHub Pages publication, the unchanged retained M72 browser verification and M76-adapted retained
-M74/M75 browser verification now pass, completing M76. No later milestone is active.
+M74/M75 browser verification now pass, completing M76. M77 is active subsequently and does not
+change any completed M76 evidence.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -2126,6 +2127,59 @@ obsolete Origin-canvas expectations with the approved two-axis intersection cont
 `161e96d541dbcc189dbbc23c47da672e3080b7c7646e45c11ef458a5e521a067` pass M74 at both sizes and
 M75 6/6. Pages is final public-byte authority; the Tailscale snapshot is separately frozen
 candidate evidence and no cross-build byte identity is claimed. M76 is complete.
+
+### M77-A1 - Selected curve control inventory and owner parity
+
+Build one accepted scene with circle, circular/elliptical arc, ellipse, rational quadratic,
+parabola, hyperbola, Bezier, B-spline and NURBS examples. For each selection, publish exactly the
+family controls in `docs/M77_GOALS.md`, finite cage/guide geometry, stable curve-owned identities
+and shared paint/hit primitives. Deselection, tool/input-owner change, camera change and accepted-
+scene replacement revoke them. Headless hover and pointer-down resolve the same role and owner;
+stored points keep point ownership, visible selected-curve handles outrank underlying curve or
+annotation paint, and active Fillet output arcs expose only their Fillet-owned affordances.
+
+### M77-A2 - Inverse trim endpoints preserve discrete state
+
+Drag Start and End handles on circular arcs, elliptical arcs, parabola segments and both explicit
+hyperbola branches. Lower each finite cursor target through the existing inverse trim projection
+and durable scalar edit. Verify exact support-curve incidence, stable Start/End identity, directed
+trim order, angular unwrapping near the current seed, unchanged arc sweep and unchanged hyperbola
+branch. Invalid crossing, center, domain and stale-owner samples fail closed while retaining the
+last valid finite preview; they never exchange endpoints or change discrete state implicitly.
+
+### M77-A3 - Rational middle and stored control cages
+
+Select positive- and negative-nonzero-weight rational quadratics, render their Euclidean
+`P1 = Qh / w` middle control and endpoint cage, then move only that handle. The prepared edit
+atomically writes `Qh = w·P1` while preserving the exact middle-weight scalar and both persistent
+endpoint owners. Verify that non-unit construction clicks have the same `P1` meaning. For an exact
+zero-weight curve, render and edit an explicitly projective `Qh` vector rather than dividing by
+zero or publishing a synthetic point; entering/leaving projective mode preserves `Qh` explicitly.
+Bezier, B-spline and NURBS cages expose their existing stored control points through ordinary point
+dragging. Rational/NURBS weights remain explicit numeric inspector values; no spatial weight rail,
+synthetic point, new constraint operand or persisted handle is created.
+
+### M77-A4 - Family size rails and domains
+
+Exercise circle/circular-arc radius, ellipse/elliptical-arc minor-axis ratio and hyperbola
+semi-conjugate handles along deterministic family rails. Preserve the initial grab offset and wait
+for the 3 px movement threshold. Accepted candidates update only the owned existing scalar subject
+to its exact domain: radius and semi-conjugate are positive, and minor ratio is positive and at
+most one. Crossing a boundary retains the last valid preview without non-finite geometry, ellipse-
+axis exchange, curve-family change or a false accepted-state replacement.
+
+### M77-A5 - Exact prepared preview, history and persistence
+
+For endpoint, rational-middle and size gestures, prepare every preview from one exact accepted-
+session clone. Accept only independently validated finite candidates and publish the exact final
+prepared patch through compare-and-swap. Escape, capture loss, camera/tool change, rejection and
+stale scene work restore the origin and add no history; one successful gesture adds exactly one
+Undo/Redo step regardless of pointer-sample count. Save/reload and reproduction copy/restore retain
+only existing scalar or weighted-middle data, then recompute selected handles from accepted
+geometry. Native/WASM semantics, thin demo mapping and the two-size/zoom UAT matrix must pass.
+
+M77 is active. All implementation, qualification, frozen-candidate, human UAT, Pages publication
+and closeout evidence for M77 remains pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

@@ -67,7 +67,8 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M76 are complete. M76's implementation, feature refinements,
+of every prepared UAT step. M71-M76 are complete, and M77 is active. M76's implementation,
+feature refinements,
 clean qualification, immutable Tailscale nomination, scoped human acceptance and exact public
 publication all pass. M74
 closes under explicit scoped approval of its
@@ -78,7 +79,8 @@ gate and immutable freeze, but focused browser qualification found M75-F002 wher
 above a computed Fillet radius affordance hid that owner from both hover and pointer-down. The F002
 adapter correction passes the complete clean replacement gate and immutable Tailscale nomination;
 the supervising caller accepted the qualified interaction scope, and exact GitHub Pages
-publication now passes. No later milestone is active. M66's
+publication now passes. M77 subsequently opens the selected-curve control-handle cut without
+changing any completed M76 evidence. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -4856,7 +4858,8 @@ Status: **complete (2026-08-17); implementation, final clean qualification, immu
 scoped human approval and exact GitHub Pages publication pass**. M76 replaces the demo's
 provisional constraint and dimension marks with compact CAD
 notation, deterministic geometry-derived layout, and presentation-only manual placement.
-`docs/M76_GOALS.md` owns the approved contract. No later milestone is active.
+`docs/M76_GOALS.md` owns the approved contract. M77 was activated subsequently and does not change
+this closing evidence.
 
 - [x] Record the seven dimension families, twenty compact constraint categories, placement,
   compatibility, persistence and UAT contract.
@@ -4929,7 +4932,8 @@ replace only their obsolete Origin-canvas expectations with the approved axis-in
 contract;
 hashes `4aff982c6a9e10702d7b0179c17682c6904bb6c28362ebefe967705a984c3355` and
 `161e96d541dbcc189dbbc23c47da672e3080b7c7646e45c11ef458a5e521a067` pass M74 at both sizes and
-M75 6/6. Every M76 gate is complete and no later milestone is active.
+M75 6/6. Every M76 gate is complete. M77 was activated subsequently and does not change this
+closing evidence.
 
 The prior clean-qualified source `9b4e7f72dcacefdf4d7847a22eb675c711068d26`, tree
 `e0591664fbeb2e353bc880dd826dc39ac1caeec9`, snapshot `/tmp/geosolve-m76-uat.ctgYzp` and aggregate
@@ -4940,6 +4944,49 @@ The initial nomination at source `37eade50b566f62905a395655bc80c17d9b6bef4`, tre
 `d6ad2f453d672accbcc3848a1a16d2039b3511d1`, snapshot `/tmp/geosolve-m76-uat.puiPgO` and aggregate
 `fb18b7c2387b9cea4bb681cac124f6ef9e63180ff071a734e80d27ac8cd83bdf` is retained as superseded
 historical evidence only; its PID `1077092` was retired.
+
+### M77: CAD curve handles and implicit-parameter editing
+
+Status: **active (2026-08-17); contract approved, implementation, qualification, UAT,
+publication and closeout remain open**. M77 gives selected advanced curves a compact,
+headless-owned control presentation for parameters that currently have no spatial editing surface.
+`docs/M77_GOALS.md` owns the approved scope and `docs/M77_UAT.md` owns the pending human scorecard.
+
+- [ ] Publish transient typed handles, family-specific guides and exact paint/hit geometry for
+  selected editable curves; handles own their curve rather than inventing persistent sketch points.
+- [ ] Add derived Start/End trim handles for circular arcs, elliptical arcs, parabola segments and
+  hyperbola segments through the existing inverse trim projection and scalar-edit path.
+- [ ] Present rational quadratics through the ordinary Euclidean middle control `P1 = Qh / w`
+  whenever `w != 0`, map drags back to homogeneous storage atomically, and expose the valid
+  zero-weight case as an explicitly projective `Qh` vector rather than a fictitious point.
+- [ ] Add spatial size handles for circle/circular-arc radius, ellipse/elliptical-arc minor-axis
+  ratio and hyperbola semi-conjugate size; keep persistent centres, axes, foci, endpoints and spline
+  controls on their existing ordinary point-drag path.
+- [ ] Make rational construction use the same ordinary-control meaning for nonzero weights, and
+  present selected control cages plus exact numeric inspector fallback without adding spatial
+  weight, knot, degree or topology editing; rational and NURBS weights remain explicit controls.
+- [ ] Reuse one headless hover/pointer owner, existing tolerance policy, 3 px movement threshold,
+  pointer capture and grab-offset preservation; revoke handles and gestures on owner/tool/scene or
+  camera invalidation.
+- [ ] Preview typed direct edits from an exact accepted-session clone, retain the last valid finite
+  preview across invalid samples, and publish that exact candidate through stale-safe compare-and-
+  swap as one Undo/Redo step.
+- [ ] Preserve scalar domains, Start/End identity, directed trims, arc sweep, hyperbola branch,
+  accepted-scene authority and all independent validity checks; active Fillet-owned output arcs do
+  not expose conflicting generic handles.
+- [ ] Add native/WASM family, geometry/hit parity, preview, cancellation, staleness, domain,
+  branch, history and save/reload regressions plus thin demo rendering/input tests.
+- [ ] Pass formatting, warnings-denied Clippy, locked workspace tests, relevant WASM parity,
+  golden-oracle cleanliness, Rustdoc and Trunk release assembly.
+- [ ] Freeze and byte-verify an immutable Tailscale candidate, complete the focused human UAT and
+  keep it available for follow-up fixes until explicit approval.
+- [ ] Publish the exact accepted source through GitHub Pages, verify hosted bytes and close M77.
+
+Gate: every approved curve family exposes a truthful, selected-only spatial control surface;
+rendering, hover and pointer-down consume the same headless primitives and owner; invalid or stale
+samples cannot replace accepted geometry; one completed gesture is one durable history step; the
+solver, constraint set and canonical persistence schema remain unchanged; native/WASM regression,
+clean release, frozen-candidate UAT and exact public publication all pass.
 
 ## Explicit non-goals
 
