@@ -2875,15 +2875,18 @@ fn trim_projection_reports_typed_failures_and_leaves_degenerate_edits_transactio
         )
         .unwrap();
     let target = trim_endpoint_position(&reversed, parabola, FeatureEndpoint::End);
-    let projection = reversed
-        .project_curve_trim_endpoint(parabola, FeatureEndpoint::Start, target)
-        .unwrap();
-    assert_eq!(projection.scalar, start);
-    assert!((projection.value - reversed.scalar(end).unwrap().value).abs() <= 1.0e-12);
     let before = reversed.to_canonical_json().unwrap();
+    assert!(matches!(
+        reversed.project_curve_trim_endpoint(parabola, FeatureEndpoint::Start, target),
+        Err(DocumentTrimProjectionError::CrossesOppositeEndpoint {
+            curve,
+            endpoint: FeatureEndpoint::Start,
+        }) if curve == parabola
+    ));
+    assert_eq!(reversed.to_canonical_json().unwrap(), before);
     assert!(
         reversed
-            .set_scalar_value(projection.scalar, projection.value)
+            .set_scalar_value(start, reversed.scalar(end).unwrap().value)
             .is_err()
     );
     assert_eq!(reversed.to_canonical_json().unwrap(), before);
