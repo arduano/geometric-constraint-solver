@@ -4853,8 +4853,15 @@ impl ConstraintEditor {
                 let Some(point_position) = scene
                     .points
                     .iter()
-                    .find(|candidate| candidate.id == point)
-                    .map(|candidate| candidate.model_position)
+                    .find(|candidate| {
+                        candidate.id == point
+                            && model_positions_bit_equal(
+                                candidate.model_position,
+                                control.model_position,
+                            )
+                            && candidate.screen_position == control.screen_position
+                    })
+                    .map(|_| control.model_position)
                 else {
                     return effects;
                 };

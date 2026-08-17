@@ -11,10 +11,10 @@ use geosolve_constraint_editor::{
     RetainedEditorCoordinator, SceneCurveControl, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DocumentArcSweep, DocumentCurveControlKind, DocumentEdit,
-    DocumentRationalConicControl, DocumentSessionError, DocumentSolveRequest,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-    SketchDocument, SketchLifecycleRevisionHighWater, SolverConfig,
+    CurveDefinition, CurveSpan, DocumentArcSweep, DocumentCurveControlKind,
+    DocumentCurveControlTarget, DocumentEdit, DocumentRationalConicControl, DocumentSessionError,
+    DocumentSolveRequest, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchDocument, SketchLifecycleRevisionHighWater, SolverConfig,
 };
 
 fn pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
@@ -300,6 +300,24 @@ fn detached_or_mutated_same_design_scene_cannot_start_a_curve_point_alias_gestur
             .any(|effect| matches!(effect, EditorEffect::RequestProjectedPointMove { .. }))
     );
 
+    let DocumentCurveControlTarget::Point(alias_point) = alias.target else {
+        panic!("center control must remain an ordinary point alias")
+    };
+    let mut mutated_point = scene.clone();
+    mutated_point
+        .points
+        .iter_mut()
+        .find(|candidate| candidate.id == alias_point)
+        .unwrap()
+        .model_position[0] += 1.0;
+    assert!(
+        coordinator
+            .pointer_down(&mutated_point, pointer(7_022, alias.screen_position))
+            .is_empty()
+    );
+    assert!(coordinator.editor().active_pointer_gesture().is_none());
+    assert_eq!(coordinator.history_len(), before_history);
+
     let mut mutated = scene.clone();
     mutated
         .curve_controls
@@ -310,7 +328,7 @@ fn detached_or_mutated_same_design_scene_cannot_start_a_curve_point_alias_gestur
         .push_str(" forged");
     assert!(
         coordinator
-            .pointer_down(&mutated, pointer(7_022, alias.screen_position))
+            .pointer_down(&mutated, pointer(7_023, alias.screen_position))
             .is_empty()
     );
     assert!(coordinator.editor().active_pointer_gesture().is_none());
@@ -319,13 +337,13 @@ fn detached_or_mutated_same_design_scene_cannot_start_a_curve_point_alias_gestur
 
     assert!(
         coordinator
-            .pointer_down(&scene, pointer(7_023, alias.screen_position))
+            .pointer_down(&scene, pointer(7_024, alias.screen_position))
             .is_empty()
     );
     assert_eq!(
         coordinator.editor().active_pointer_gesture(),
         Some(geosolve_constraint_editor::ActivePointerGesture {
-            pointer_id: 7_023,
+            pointer_id: 7_024,
             kind: geosolve_constraint_editor::ActivePointerGestureKind::Point,
         })
     );
