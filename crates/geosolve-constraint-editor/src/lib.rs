@@ -4518,6 +4518,10 @@ pub struct ConstraintEditor {
     conic_options: ConicConstructionOptions,
     nurbs_options: NurbsConstructionOptions,
     draft: Option<Draft>,
+    /// Latest disposable hover or terminal candidate used only for semantic
+    /// status/measurement presentation. Stage progression remains owned by
+    /// the confirmed prefix in `draft`.
+    draft_status_candidate: Option<Draft>,
     draft_issue: Option<GeometryDraftIssue>,
     last_valid_drag_preview: Option<(u64, u64, u64, DesignPointId, [f64; 2])>,
     next_point_gesture_epoch: u64,
@@ -4554,6 +4558,7 @@ impl Default for ConstraintEditor {
             conic_options: ConicConstructionOptions::default(),
             nurbs_options: NurbsConstructionOptions::default(),
             draft: None,
+            draft_status_candidate: None,
             draft_issue: None,
             last_valid_drag_preview: None,
             next_point_gesture_epoch: 0,
@@ -4792,6 +4797,11 @@ impl ConstraintEditor {
             draft.conic_options = options;
             self.draft_issue = None;
         }
+        if let Some(candidate) = self.draft_status_candidate.as_mut()
+            && is_conic_tool(candidate.tool)
+        {
+            candidate.conic_options = options;
+        }
         Ok(())
     }
 
@@ -4818,8 +4828,13 @@ impl ConstraintEditor {
         if let Some(draft) = self.draft.as_mut()
             && draft.tool == EditorTool::Nurbs
         {
-            draft.nurbs_options = options;
+            draft.nurbs_options = options.clone();
             self.draft_issue = None;
+        }
+        if let Some(candidate) = self.draft_status_candidate.as_mut()
+            && candidate.tool == EditorTool::Nurbs
+        {
+            candidate.nurbs_options = options;
         }
         Ok(())
     }
@@ -6889,7 +6904,12 @@ impl ConstraintEditor {
                     }),
                 ),
             },
-            measurements: draft.map_or_else(Vec::new, geometry_draft_measurements),
+            measurements: self
+                .draft_status_candidate
+                .as_ref()
+                .filter(|candidate| candidate.variant == variant)
+                .or(draft)
+                .map_or_else(Vec::new, geometry_draft_measurements),
             issue: self.draft_issue,
         })
     }
@@ -6901,6 +6921,7 @@ impl ConstraintEditor {
             return Vec::new();
         }
         let had_issue = self.draft_issue.take().is_some();
+        self.draft_status_candidate = None;
         let Some(mut draft) = self.draft.take() else {
             return had_issue
                 .then_some(EditorEffect::ClearConstructionPreview)
@@ -6952,6 +6973,11 @@ impl ConstraintEditor {
             DocumentArcSweep::CounterClockwise => DocumentArcSweep::Clockwise,
             DocumentArcSweep::Clockwise => DocumentArcSweep::CounterClockwise,
         };
+        if let Some(candidate) = self.draft_status_candidate.as_mut()
+            && candidate.variant == draft.variant
+        {
+            candidate.conic_options.arc_sweep = draft.conic_options.arc_sweep;
+        }
         self.draft_issue = None;
         self.conic_options.arc_sweep = draft.conic_options.arc_sweep;
         draft_preview(draft)
@@ -6984,8 +7010,9 @@ impl ConstraintEditor {
             return Vec::new();
         }
         let had_draft = self.draft.take().is_some();
+        let had_status_candidate = self.draft_status_candidate.take().is_some();
         let had_issue = self.draft_issue.take().is_some();
-        let mut effects = (had_draft || had_issue)
+        let mut effects = (had_draft || had_status_candidate || had_issue)
             .then_some(EditorEffect::ClearConstructionPreview)
             .into_iter()
             .collect::<Vec<_>>();
@@ -7134,6 +7161,7 @@ impl ConstraintEditor {
         }
         if !valid_draft_stage(&draft) {
             self.draft_inference_engine = recovery_inference_engine;
+            self.draft_status_candidate = Some(draft);
             self.draft_issue = Some(GeometryDraftIssue::InvalidTerminalGeometry);
             return Vec::new();
         }
@@ -7155,6 +7183,7 @@ impl ConstraintEditor {
             || (matches!(draft.tool, EditorTool::Polyline | EditorTool::Nurbs) && !draft.closed);
         if keep {
             let preview = draft_preview(&draft);
+            self.draft_status_candidate = None;
             self.draft = Some(draft);
             self.prepare_next_draft_stage();
             let mut effects = self.clear_draft_inference_publication();
@@ -7170,6 +7199,7 @@ impl ConstraintEditor {
                 self.draft_inference_engine = recovery_inference_engine;
                 return Vec::new();
             };
+            self.draft_status_candidate = Some(draft.clone());
             if matches!(
                 &proposal,
                 ConstructionProposal::Point {
@@ -7302,6 +7332,7 @@ impl ConstraintEditor {
                 self.draft_issue = None;
             }
         }
+        self.draft_status_candidate = Some(preview.clone());
         let mut effects = self.publish_draft_inference(stage.resolution);
         effects.extend(
             draft_preview(&preview)
@@ -7669,6 +7700,7 @@ impl ConstraintEditor {
             return Vec::new();
         }
         self.draft = None;
+        self.draft_status_candidate = None;
         self.draft_issue = None;
         self.draft_inference_engine.clear_session();
         let mut effects = vec![EditorEffect::ClearConstructionPreview];
@@ -7683,6 +7715,7 @@ impl ConstraintEditor {
         if force {
             self.pending_construction_commit = None;
         }
+        self.draft_status_candidate = None;
         self.draft_issue = None;
         if !preserve_pending_ack {
             self.draft = None;
@@ -10603,24 +10636,45 @@ fn circumcircle(first: [f64; 2], second: [f64; 2], third: [f64; 2]) -> Option<([
         .hypot(ab[1])
         .max(ac[0].hypot(ac[1]))
         .max(bc[0].hypot(bc[1]));
-    let cross = ab[0].mul_add(ac[1], -ab[1] * ac[0]);
-    if !(scale.is_finite() && scale > 0.0 && cross.is_finite())
-        || cross.abs() <= 1.0e-10 * scale * scale
-    {
+    if !(scale.is_finite() && scale > 0.0) {
         return None;
     }
-    let a2 = first[0].mul_add(first[0], first[1] * first[1]);
-    let b2 = second[0].mul_add(second[0], second[1] * second[1]);
-    let c2 = third[0].mul_add(third[0], third[1] * third[1]);
-    let denominator = 2.0 * cross;
-    let center = [
-        (a2 * (second[1] - third[1]) + b2 * (third[1] - first[1]) + c2 * (first[1] - second[1]))
-            / denominator,
-        (a2 * (third[0] - second[0]) + b2 * (first[0] - third[0]) + c2 * (second[0] - first[0]))
-            / denominator,
+    // Work entirely in a translated, chord-normalized frame. Squared absolute
+    // coordinates discard the small chord at large translations, while raw
+    // chord squares can overflow at otherwise representable scales.
+    let unit_ab = [ab[0] / scale, ab[1] / scale];
+    let unit_ac = [ac[0] / scale, ac[1] / scale];
+    let cross = unit_ab[0].mul_add(unit_ac[1], -unit_ab[1] * unit_ac[0]);
+    if !cross.is_finite() || cross.abs() <= 1.0e-10 {
+        return None;
+    }
+    let ab2 = unit_ab[0].mul_add(unit_ab[0], unit_ab[1] * unit_ab[1]);
+    let ac2 = unit_ac[0].mul_add(unit_ac[0], unit_ac[1] * unit_ac[1]);
+    let factor = 0.5 * scale / cross;
+    let offset = [
+        factor * ab2.mul_add(unit_ac[1], -ac2 * unit_ab[1]),
+        factor * unit_ab[0].mul_add(ac2, -unit_ac[0] * ab2),
     ];
+    let center = [first[0] + offset[0], first[1] + offset[1]];
     let radius = (first[0] - center[0]).hypot(first[1] - center[1]);
-    (center.into_iter().all(f64::is_finite) && radius.is_finite() && radius > 0.0)
+    let second_radius = (second[0] - center[0]).hypot(second[1] - center[1]);
+    let third_radius = (third[0] - center[0]).hypot(third[1] - center[1]);
+    let coordinate_scale = first
+        .into_iter()
+        .chain(second)
+        .chain(third)
+        .map(f64::abs)
+        .fold(1.0_f64, f64::max);
+    let radius_scale = radius.max(second_radius).max(third_radius);
+    let tolerance = 1.0e-9 * radius_scale + 64.0 * f64::EPSILON * coordinate_scale;
+    (center.into_iter().all(f64::is_finite)
+        && radius.is_finite()
+        && radius > 0.0
+        && second_radius.is_finite()
+        && third_radius.is_finite()
+        && tolerance.is_finite()
+        && (second_radius - radius).abs() <= tolerance
+        && (third_radius - radius).abs() <= tolerance)
         .then_some((center, radius))
 }
 

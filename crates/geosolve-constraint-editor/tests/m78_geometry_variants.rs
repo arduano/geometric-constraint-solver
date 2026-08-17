@@ -3,9 +3,9 @@
 use geosolve_constraint_editor::{
     ConstraintEditor, ConstructionCommitPlan, ConstructionCommitToken, ConstructionPoint,
     ConstructionProposal, DraftAuthoringInput, DraftInferenceInput, DraftPointSlot, DraftSpanSlot,
-    EditorEffect, EditorMutation, EditorScene, GeometryDraftIssue, GeometryDraftStage,
-    GeometryToolVariant, InferredRelation, Modifiers, PointerInput, RetainedEditorCoordinator,
-    Viewport,
+    EditorEffect, EditorMutation, EditorScene, GeometryDraftIssue, GeometryDraftMeasurement,
+    GeometryDraftStage, GeometryToolVariant, InferredRelation, Modifiers, PointerInput,
+    RetainedEditorCoordinator, Viewport,
 };
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentArcSweep,
@@ -969,6 +969,87 @@ fn m78_every_exact_variant_activates_with_semantic_initial_status() {
 }
 
 #[test]
+fn m78_fixed_recipe_status_publishes_live_pointer_measurements() {
+    let scene = authenticated_empty_scene();
+
+    let mut segment = ConstraintEditor::default();
+    let _ = segment.activate_geometry_tool(GeometryToolVariant::Segment);
+    let _ = press(&mut segment, &scene, [1.0, 1.0], false);
+    let _ = move_pointer(&mut segment, &scene, [4.0, 5.0], false);
+    let measurements = segment
+        .geometry_draft_status()
+        .expect("live Segment status")
+        .measurements;
+    assert!(measurements.iter().any(
+        |measurement| matches!(measurement, GeometryDraftMeasurement::Length(value) if (*value - 5.0).abs() <= EPSILON)
+    ));
+
+    let mut circle = ConstraintEditor::default();
+    let _ = circle.activate_geometry_tool(GeometryToolVariant::CenterRadiusCircle);
+    let _ = press(&mut circle, &scene, [1.0, 1.0], false);
+    let _ = move_pointer(&mut circle, &scene, [4.0, 1.0], false);
+    let measurements = circle
+        .geometry_draft_status()
+        .expect("live Circle status")
+        .measurements;
+    assert!(measurements.iter().any(
+        |measurement| matches!(measurement, GeometryDraftMeasurement::Radius(value) if (*value - 3.0).abs() <= EPSILON)
+    ));
+    assert!(measurements.iter().any(
+        |measurement| matches!(measurement, GeometryDraftMeasurement::Diameter(value) if (*value - 6.0).abs() <= EPSILON)
+    ));
+
+    let mut rectangle = ConstraintEditor::default();
+    let _ = rectangle.activate_geometry_tool(GeometryToolVariant::TwoPointAlignedRectangle);
+    let _ = press(&mut rectangle, &scene, [1.0, 1.0], false);
+    let _ = move_pointer(&mut rectangle, &scene, [5.0, 3.0], false);
+    assert!(
+        rectangle
+            .geometry_draft_status()
+            .expect("live Rectangle status")
+            .measurements
+            .iter()
+            .any(|measurement| matches!(
+                measurement,
+                GeometryDraftMeasurement::WidthHeight { width, height }
+                    if (*width - 4.0).abs() <= EPSILON && (*height - 2.0).abs() <= EPSILON
+            ))
+    );
+
+    let mut ellipse = ConstraintEditor::default();
+    let _ = ellipse.activate_geometry_tool(GeometryToolVariant::CenterAxesEllipse);
+    let _ = press(&mut ellipse, &scene, [1.0, 1.0], false);
+    let _ = press(&mut ellipse, &scene, [5.0, 1.0], false);
+    let _ = move_pointer(&mut ellipse, &scene, [1.0, 3.0], false);
+    assert!(ellipse
+        .geometry_draft_status()
+        .expect("live Ellipse status")
+        .measurements
+        .iter()
+        .any(
+            |measurement| matches!(measurement, GeometryDraftMeasurement::Ratio(value) if (*value - 0.5).abs() <= EPSILON)
+        ));
+
+    let mut arc = ConstraintEditor::default();
+    let _ = arc.activate_geometry_tool(GeometryToolVariant::CenterArc);
+    let _ = press(&mut arc, &scene, [1.0, 1.0], false);
+    let _ = press(&mut arc, &scene, [3.0, 1.0], false);
+    let _ = move_pointer(&mut arc, &scene, [1.0, 3.0], false);
+    let measurements = arc
+        .geometry_draft_status()
+        .expect("live Arc status")
+        .measurements;
+    assert!(measurements.iter().any(
+        |measurement| matches!(measurement, GeometryDraftMeasurement::Radius(value) if (*value - 2.0).abs() <= EPSILON)
+    ));
+    assert!(measurements.iter().any(|measurement| matches!(
+        measurement,
+        GeometryDraftMeasurement::AngleRadians(value)
+            if (*value - std::f64::consts::FRAC_PI_2).abs() <= EPSILON
+    )));
+}
+
+#[test]
 fn m78_midpoint_line_is_one_line_with_an_atomic_midpoint_recipe() {
     let scene = authenticated_empty_scene();
     let mut editor = ConstraintEditor::default();
@@ -1250,6 +1331,37 @@ fn m78_diameter_and_three_point_circles_have_analytic_centers() {
         .expect("exact three-point recipe owns an atomic geometry-only plan");
     assert!(plan.relations.is_empty());
     assert_plan_solves_with_finite_geometry(plan);
+}
+
+#[test]
+fn m78_three_point_circle_and_arc_are_translation_stable_at_large_coordinates() {
+    const ORIGIN: f64 = 1.0e12;
+    let viewport = Viewport::new([1_000.0, 800.0], [ORIGIN, ORIGIN], 50.0).expect("viewport");
+    let scene =
+        authenticated_scene_with_viewport(SketchDocument::new(10.0).expect("document"), viewport);
+    for variant in [
+        GeometryToolVariant::ThreePointCircle,
+        GeometryToolVariant::ThreePointArc,
+    ] {
+        let mut editor = ConstraintEditor::default();
+        let _ = editor.activate_geometry_tool(variant);
+        let _ = press(&mut editor, &scene, [ORIGIN + 1.0, ORIGIN], false);
+        let _ = press(&mut editor, &scene, [ORIGIN, ORIGIN + 1.0], false);
+        let terminal =
+            terminal_construction(&press(&mut editor, &scene, [ORIGIN - 1.0, ORIGIN], false));
+        let (center, radius) = match &terminal.proposal {
+            ConstructionProposal::Circle { center, radius } => {
+                (construction_point_position(center), *radius)
+            }
+            ConstructionProposal::CircularArc { center, start, .. } => {
+                let center = construction_point_position(center);
+                (center, (start[0] - center[0]).hypot(start[1] - center[1]))
+            }
+            proposal => panic!("wrong translated {variant:?} proposal: {proposal:?}"),
+        };
+        assert_point_close(center, [ORIGIN, ORIGIN]);
+        assert_scalar_close(radius, 1.0);
+    }
 }
 
 #[test]
