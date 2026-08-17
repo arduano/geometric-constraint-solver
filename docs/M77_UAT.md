@@ -2,14 +2,56 @@
 
 # M77 focused UAT — CAD curve handles and implicit parameters
 
-Status: **replacement candidate preparation in progress (2026-08-17)**. UAT findings M77-F012 and
-M77-F013 supersede the initial candidate. Their corrections and review follow-ups pass direct
-qualification; the replacement clean gate, immutable freeze and served-byte verification remain
-open. U1-U6, explicit supervising-human approval, GitHub Pages publication and closeout remain
-pending; no scorecard item is accepted by automation.
+Status: **replacement candidate nominated (2026-08-17)**. UAT findings M77-F012 and M77-F013
+supersede the initial candidate. Their corrections and review follow-ups pass the complete clean
+gate, immutable freeze and served-byte verification below. U1-U6, explicit supervising-human
+approval, GitHub Pages publication and closeout remain pending; no scorecard item is accepted by
+automation.
 
-Replacement candidate source, tree, snapshot, manifest and server identity: **pending clean
-nomination**.
+## Current replacement candidate
+
+Product source: `cc99b11071dc62732e02b630ba7a1381d754b04c`
+
+Candidate tree: `3315a2bdd0137f59657ea2500962ef971a23ea15`
+
+Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Server PID/session: `284248` / retained command-runner session `5213`
+
+Immutable snapshot: `/tmp/geosolve-m77-uat.ARrQFw` (directory `0555`, seven regular non-symlink
+files `0444`)
+
+Ordered-manifest aggregate:
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 23,216 | `841936f73b5d21fbee999ec2bc4140ae0869cd2821429816e3766bd026ad771b` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-74621b73a35eab86.js` | 33,221 | `9f28eed1331a570a1fa894f16834a40be0593ef9bd673ca80db8fbea4017eef1` |
+| `geosolve-demo-web-74621b73a35eab86_bg.wasm` | 6,426,513 | `1c4701e10d4ca672b0aa2511ff3fc4067be5c03965274de4925a711b5414e3f1` |
+| `index.html` | 28,940 | `f3740f54742d6895e204cc41c08e031d0f2b639e6dd30df30c3e08b1b878527d` |
+| `styles-d7435a6d60dc3430.css` | 34,689 | `870bde7d758fe95f4323bedc6588ff2cffaf3c826549e684718ebfd818eebcd6` |
+
+The exact clean command
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` ran from 18:21:03 through
+18:33:22 AEST and exited successfully without changing HEAD, tree or worktree. Its retained
+243,128-byte log is `/tmp/geosolve-m77-replacement-clean-gate.cc99b11.log`, SHA-256
+`0da2456b69951a50ba41cfe939f37764fcc211f2af45f4b9526cd5c974829301`. The gate includes formatting
+and diff hygiene, warnings-denied workspace Clippy/Rustdoc, every locked all-feature workspace test,
+unchanged 270/270 clean golden, native/WASM M70/M71/M74/M75/M76/M77 parity, demo WASM, benchmark
+compilation, M14/M32 workloads, the 138.34-second 256-body sparse crossover, licence/package checks
+and Trunk 0.21.14 release assembly.
+
+The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
+Freeze evidence is `/tmp/geosolve-m77-replacement-freeze-evidence.2kfhjk`. Proxy-disabled,
+cache-bypassed, identity-encoded requests for `/` and all seven files return HTTP 200 with zero
+redirects, no content encoding, exact expected media types/lengths and snapshot-identical bytes.
+`/` equals `index.html`, and the fetched manifest has the same aggregate. HTTP evidence is
+`/tmp/geosolve-m77-replacement-http-verify.yxgjkL`. Withdrawn PID `3912158` stayed live until the
+replacement snapshot was ready and is now retired. The evidence-ledger commit is a documentation
+descendant; exact source `cc99b11` remains the mechanically qualified product authority.
 
 ## Superseded initial candidate
 
@@ -17,12 +59,11 @@ Historical source: `51a3b95d04f27216c164febf0808a180b6775537`
 
 Candidate tree: `8d154a147a08c7d6bc79008f19b74311cd60905a`
 
-The shared Tailscale endpoint may continue serving these withdrawn bytes only until the replacement
-is ready. Do not use them for current UAT.
+These bytes are no longer served. Do not use them for current UAT.
 
 Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Server PID/session: `3912158` / command-runner session `12828`
+Former server PID/session: `3912158` / command-runner session `12828` (retired)
 
 Immutable snapshot: `/tmp/geosolve-m77-uat.1mDjQv` (directory `0555`, seven regular non-symlink
 files `0444`)

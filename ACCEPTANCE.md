@@ -2206,9 +2206,8 @@ historical evidence only; its PID `1077092` was retired.
 
 ## M77 acceptance: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); the initial candidate is superseded by M77-F012/F013. Corrections
-and review follow-ups pass direct qualification; replacement clean nomination, human UAT,
-publication and closeout remain open**.
+Status: **active (2026-08-17); the M77-F012/F013 replacement is clean-qualified, immutably frozen
+and byte-verified on Tailscale. Human UAT, GitHub Pages publication and closeout remain open**.
 
 - A selected editable curve exposes only its applicable finite typed controls. Circular and
   elliptical arcs, parabola segments and hyperbola segments expose derived Start/End trim handles;
@@ -2274,8 +2273,8 @@ immutable prepared-preview view, headless selected-curve cage/paint/hit DTOs, un
 gesture, exact property metadata/setters and thin workbench adapter are implemented. Focused
 post-correction owners pass at sketch 11/11, editor controls 11/11, properties 6/6, retained
 coordinator 16/16, native/WASM parity 5/5 each, rational replay 1/1 and demo-web 131/131. The
-superseded initial candidate also passed demo WASM, warnings-denied Rustdoc, Trunk 0.21.14 and the
-unchanged 270/270 golden survey/check/clean modes; the replacement clean gate remains open.
+replacement also passes demo WASM, warnings-denied Rustdoc, Trunk 0.21.14, the unchanged 270/270
+golden authority and the complete clean release gate recorded below.
 
 Review findings `M77-F008` through `M77-F011` are resolved at their owners. Stored point aliases
 win inside a guide's shared-origin point-acquisition region; spatial rational-middle edits use the
@@ -2293,24 +2292,39 @@ the unchanged 270/270 clean golden, native/WASM M77 4/4, all carried parity, dem
 warnings-denied Clippy/Rustdoc, all workspace tests, benchmarks, M14/M32, licence/package checks,
 the 150.55-second 256-body sparse crossover and Trunk 0.21.14.
 
-The exact no-rebuild seven-file snapshot `/tmp/geosolve-m77-uat.1mDjQv` is read-only and has
+The superseded no-rebuild seven-file snapshot `/tmp/geosolve-m77-uat.1mDjQv` is read-only and has
 ordered-manifest aggregate
-`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`. PID `3912158` / session
-`12828` serves it at `http://100.94.63.83:8080/`; `/` and every asset return HTTP 200 with zero
-redirects or content encoding, exact expected media types and byte equality, and the fetched
-aggregate matches. This satisfies objective mechanical nomination only. U1-U6, explicit human
-approval, GitHub Pages publication and milestone closure remain open.
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`. Now-retired PID `3912158` /
+session `12828` formerly served it at the shared Tailscale endpoint; its exact HTTP evidence remains
+historical only.
 
 Replacement findings (2026-08-17): `M77-F012` fixes blank/no-op curve-control dragging by keeping
 candidate provenance truthful and attaching pointer-down authority separately. `M77-F013` is the
 approved four-stage spatial elliptical-arc authoring feature. `M77-F014` through `M77-F016` preserve
 stored major-axis ownership at a coincident trim, signed/both-pole minor-size acquisition and its
 rail, and exact candidate-generation authority. Their focused regressions pass; no solver equation
-or golden row changes. Source `f53934f` contains the corrections. A clean documentation descendant,
-replacement freeze and served-byte verification remain required before human UAT resumes.
+or golden row changes. Source `f53934f` contains the corrections.
 
-The `51a3b95` source, `/tmp/geosolve-m77-uat.1mDjQv` snapshot and PID `3912158` record above are
-superseded historical evidence only after M77-F012/F013, not current UAT authority.
+Replacement mechanical nomination (2026-08-17): exact product source
+`cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
+`3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate from 18:21:03 through
+18:33:22 AEST. The retained 243,128-byte log
+`/tmp/geosolve-m77-replacement-clean-gate.cc99b11.log` has SHA-256
+`0da2456b69951a50ba41cfe939f37764fcc211f2af45f4b9526cd5c974829301` and includes the unchanged
+270/270 golden, every carried native/WASM parity target through M77, all locked all-feature tests,
+warnings-denied Clippy/Rustdoc, demo WASM, benchmarks, M14/M32, the 138.34-second sparse crossover,
+licence/package checks and Trunk 0.21.14. Its exact no-rebuild snapshot
+`/tmp/geosolve-m77-uat.ARrQFw` is seven regular non-symlink files, read-only, and has aggregate
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`. PID `284248` / retained
+session `5213` serves it at `http://100.94.63.83:8080/`; root plus every file return HTTP 200 with
+zero redirects or content encoding, exact expected media types/lengths and byte equality, and the
+fetched aggregate matches. This completes objective mechanical nomination only. U1-U6, explicit
+human approval, GitHub Pages publication and milestone closure remain open.
+
+The `51a3b95` source, `/tmp/geosolve-m77-uat.1mDjQv` snapshot and retired PID `3912158` record above
+are superseded historical evidence only after M77-F012/F013, not current UAT authority. The later
+evidence-ledger commit is a documentation descendant and does not replace `cc99b11` as exact
+gate-qualified product source.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

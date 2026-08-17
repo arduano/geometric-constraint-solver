@@ -2,9 +2,8 @@
 
 # M77 implementation — CAD curve handles and implicit parameters
 
-Status: **active (2026-08-17); the initial nomination is superseded by M77-F012/F013. The
-corrections, review follow-ups and owner regressions pass direct qualification; replacement clean
-nomination, human UAT, GitHub Pages publication and closeout remain open.**
+Status: **active (2026-08-17); the M77-F012/F013 replacement is clean-qualified, immutably frozen
+and byte-verified on Tailscale. Human UAT, GitHub Pages publication and closeout remain open.**
 
 ## Approved architecture
 
@@ -151,7 +150,53 @@ The WASM parity command requires the project `shell.nix` in the current ambient 
 `wasm-bindgen-test-runner` is available. A direct ambient invocation failed only for that missing
 runner; the exact project-shell invocation passes 5/5.
 
-## Superseded initial qualification and replacement preparation
+## Replacement qualification and nomination
+
+Implementation commit `f53934f` is contained in exact clean product source
+`cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
+`3315a2bdd0137f59657ea2500962ef971a23ea15`. From a clean worktree, the exact command
+
+```text
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+ran from 18:21:03 through 18:33:22 AEST and exited successfully without changing HEAD, tree or
+worktree. The retained 243,128-byte log is
+`/tmp/geosolve-m77-replacement-clean-gate.cc99b11.log`, SHA-256
+`0da2456b69951a50ba41cfe939f37764fcc211f2af45f4b9526cd5c974829301`. It passes formatting/diff,
+warnings-denied workspace Clippy and Rustdoc, every locked all-feature workspace test, unchanged
+270/270 clean golden authority, every carried native/WASM parity target through M77, demo WASM,
+benchmark compilation, M14/M32 workloads, the 138.34-second 256-body sparse crossover,
+licensing/package contents and Trunk 0.21.14 release assembly. The only diagnostics are the
+longstanding non-failing Cargo advisories for packages declaring both `license` and `license-file`.
+
+Without rebuilding, the exact gate output was byte-compared and frozen at
+`/tmp/geosolve-m77-uat.ARrQFw`, directory mode `0555`, seven regular non-symlink files mode `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 23,216 | `841936f73b5d21fbee999ec2bc4140ae0869cd2821429816e3766bd026ad771b` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-74621b73a35eab86.js` | 33,221 | `9f28eed1331a570a1fa894f16834a40be0593ef9bd673ca80db8fbea4017eef1` |
+| `geosolve-demo-web-74621b73a35eab86_bg.wasm` | 6,426,513 | `1c4701e10d4ca672b0aa2511ff3fc4067be5c03965274de4925a711b5414e3f1` |
+| `index.html` | 28,940 | `f3740f54742d6895e204cc41c08e031d0f2b639e6dd30df30c3e08b1b878527d` |
+| `styles-d7435a6d60dc3430.css` | 34,689 | `870bde7d758fe95f4323bedc6588ff2cffaf3c826549e684718ebfd818eebcd6` |
+
+Its C-locale ordered-manifest aggregate is
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`; freeze evidence is
+`/tmp/geosolve-m77-replacement-freeze-evidence.2kfhjk`. PID `284248`, retained command-runner
+session `5213`, serves only that snapshot at `http://100.94.63.83:8080/`. Proxy-disabled,
+cache-bypassed identity requests for `/` and every file return HTTP 200 with zero redirects, no
+content encoding, expected media types/lengths and exact bytes; `/` equals `index.html` and the
+fetched aggregate matches. HTTP evidence is
+`/tmp/geosolve-m77-replacement-http-verify.yxgjkL`. Withdrawn PID `3912158` remained live until the
+replacement freeze was complete, then was retired before the verified replacement listener began.
+
+The later evidence-ledger commit is a documentation descendant and does not replace `cc99b11` as
+the exact gate-qualified product source.
+
+## Superseded initial qualification
 
 Initial source `51a3b95d04f27216c164febf0808a180b6775537`, tree
 `8d154a147a08c7d6bc79008f19b74311cd60905a`, passed:
@@ -174,21 +219,20 @@ Without rebuilding, the exact seven regular gate-output files were byte-compared
 manifest is recorded in `docs/M77_UAT.md`; aggregate:
 `af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`.
 
-PID `3912158`, command-runner session `12828`, temporarily continues to serve only that snapshot at
-`http://100.94.63.83:8080/`. Proxy-disabled, cache-bypassed identity requests for `/` and every
-file return HTTP 200 with zero redirects, no content encoding, expected media types/lengths and
-exact bytes; `/` equals `index.html` and the fetched aggregate matches. Freeze evidence is
+PID `3912158`, command-runner session `12828`, formerly served only that snapshot at the shared
+Tailscale endpoint. Proxy-disabled, cache-bypassed identity requests for `/` and every file returned
+HTTP 200 with zero redirects, no content encoding, expected media types/lengths and exact bytes;
+`/` equalled `index.html` and the fetched aggregate matched. Freeze evidence is
 `/tmp/geosolve-m77-freeze-evidence.qbBmc5`; HTTP evidence is
 `/tmp/geosolve-m77-http-verify.eu1KMY`. The previous M76 PID `1780608` was retired only after the
-new snapshot was ready. M77-F012/F013 supersede those product bytes for UAT; this is historical
-evidence only and must be retired after the replacement snapshot is ready.
+new snapshot was ready. M77-F012/F013 supersede those product bytes for UAT; PID `3912158` is now
+retired and these bytes are historical evidence only.
 
 Corrected implementation source `f53934f` passes formatting, diff hygiene, warnings-denied
 workspace Clippy, locked all-feature workspace tests, focused sketch 11/11, controls 11/11,
 coordinator 16/16, native/WASM parity 5/5, demo 131/131 and unchanged golden survey/check/clean
-270/270. A clean documentation descendant, complete release gate, no-rebuild immutable freeze and
-served-byte verification remain the replacement nomination authority and are intentionally not
-claimed yet.
+270/270. The clean documentation descendant, complete release gate, no-rebuild immutable freeze and
+served-byte verification recorded above are the replacement nomination authority.
 
 ## Acceptance and known limits
 
@@ -197,9 +241,8 @@ properties, preview/cancellation/staleness, one-step history and persistence con
 native evidence. Weight rails, knot/degree/topology editing, generalized derived-point constraint
 targets, automatic trim/branch changes and mobile layout remain deliberate non-goals.
 
-Replacement mechanical nomination remains open. U1-U6 remain genuine human UAT; no item is
-accepted by automation alone. GitHub Pages publication is intentionally withheld until explicit
-approval.
+Replacement mechanical nomination is complete. U1-U6 remain genuine human UAT; no item is accepted
+by automation alone. GitHub Pages publication is intentionally withheld until explicit approval.
 
 ## Closeout evidence
 

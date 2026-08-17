@@ -4948,10 +4948,10 @@ historical evidence only; its PID `1077092` was retired.
 
 ### M77: CAD curve handles and implicit-parameter editing
 
-Status: **active (2026-08-17); the initial candidate is superseded by M77-F012/F013. Corrections
-and review follow-ups pass direct qualification; replacement clean nomination, human UAT,
-publication and closeout remain open**. M77 gives selected advanced curves a compact,
-headless-owned control presentation for parameters that previously had no spatial editing surface.
+Status: **active (2026-08-17); the M77-F012/F013 replacement is clean-qualified, immutably frozen
+and byte-verified on Tailscale. Human UAT, GitHub Pages publication and closeout remain open**. M77
+gives selected advanced curves a compact, headless-owned control presentation for parameters that
+previously had no spatial editing surface.
 `docs/M77_GOALS.md` owns the approved scope and `docs/M77_UAT.md` owns the pending human scorecard.
 
 - [x] Publish transient typed handles, family-specific guides and exact paint/hit geometry for
@@ -4985,7 +4985,7 @@ headless-owned control presentation for parameters that previously had no spatia
   golden-oracle cleanliness, Rustdoc and Trunk release assembly.
 - [x] Freeze and byte-verify the initial immutable Tailscale candidate; retain it as superseded
   historical evidence after M77-F012/F013.
-- [ ] Pass the replacement clean gate, freeze and byte-verify its immutable Tailscale candidate,
+- [x] Pass the replacement clean gate, freeze and byte-verify its immutable Tailscale candidate,
   then retire the superseded server only after the new snapshot is ready.
 - [ ] Complete the focused human UAT under `docs/M77_UAT.md` and receive explicit approval.
 - [ ] Publish the exact accepted source through GitHub Pages, verify hosted bytes and close M77.
@@ -5008,8 +5008,8 @@ directed non-periodic trim orientation and precision-preserving rational homogen
 remain focused owner regressions; no golden expansion was warranted. Test-only commit `20ae036`
 aligns one old M19 equality expectation with the stronger projection-time crossing rejection while
 retaining transactional setter coverage. The post-`20ae036` locked all-feature workspace rerun
-passes; the exact clean committed-source release gate remains final mechanical nomination
-authority.
+passes; the exact clean committed-source release gate recorded below is final mechanical
+nomination authority.
 
 Replacement-UAT correction record (2026-08-17): `M77-F012` reproduced candidate geometry combined
 with pointer-down stamps, which blanked the scene during control dragging and made release a no-op.
@@ -5018,7 +5018,26 @@ origin authenticates the pointer-down gesture. `M77-F013` is the approved four-s
 elliptical-arc authoring feature. Review findings `M77-F014` through `M77-F016` preserve stored
 major-axis ownership at coincident trims, signed/both-pole minor-size acquisition and exact-shift
 rails, and reject an older sealed candidate generation before it can sample or release newer unseen
-geometry. The corrections are committed at `f53934f`; replacement clean nomination remains open.
+geometry. The corrections are committed at `f53934f`; their replacement mechanical nomination is
+recorded below.
+
+Replacement nomination record (2026-08-17): exact clean product source
+`cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
+`3315a2bdd0137f59657ea2500962ef971a23ea15`, passed
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from 18:21:03 through
+18:33:22 AEST without changing HEAD, tree or worktree. The 243,128-byte log
+`/tmp/geosolve-m77-replacement-clean-gate.cc99b11.log`, SHA-256
+`0da2456b69951a50ba41cfe939f37764fcc211f2af45f4b9526cd5c974829301`, includes the unchanged
+270/270 clean golden, every carried native/WASM parity target through M77, demo WASM,
+warnings-denied Clippy/Rustdoc, all workspace tests, benchmarks, M14/M32, licensing/package
+contents, the 138.34-second sparse crossover and Trunk 0.21.14. The exact no-rebuild seven-file
+snapshot `/tmp/geosolve-m77-uat.ARrQFw` is read-only, has ordered-manifest aggregate
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`, and is byte-verified at
+`http://100.94.63.83:8080/` under PID `284248` / retained session `5213`. Freeze evidence is
+`/tmp/geosolve-m77-replacement-freeze-evidence.2kfhjk`; HTTP evidence is
+`/tmp/geosolve-m77-replacement-http-verify.yxgjkL`. PID `3912158` remained live until the
+replacement freeze was ready, then was retired. U1-U6, explicit approval and Pages publication
+remain deliberately open; this later evidence ledger does not replace `cc99b11` as product source.
 
 Superseded initial nomination record (2026-08-17): exact source
 `51a3b95d04f27216c164febf0808a180b6775537`, tree
@@ -5027,11 +5046,10 @@ Superseded initial nomination record (2026-08-17): exact source
 target, demo WASM, warnings-denied Clippy/Rustdoc, all workspace tests, benchmarks, M14/M32,
 licensing/package contents, the 150.55-second sparse crossover and Trunk 0.21.14. The exact
 no-rebuild seven-file snapshot `/tmp/geosolve-m77-uat.1mDjQv`, aggregate
-`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, is read-only and
-byte-verified at `http://100.94.63.83:8080/` under PID `3912158` / session `12828`.
+`af7c2fbca1a6481c8c055142c9a64578b570fbcb297f687f09cc8ffc85bd1b8b`, is read-only and was
+byte-verified at the shared Tailscale endpoint under now-retired PID `3912158` / session `12828`.
 `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` contain the file, log and HTTP evidence. These
-bytes are historical only after M77-F012/F013 and must not be used for current UAT. Replacement
-nomination, U1-U6, explicit approval and Pages publication remain deliberately open.
+bytes are historical only after M77-F012/F013 and must not be used for current UAT.
 
 ## Explicit non-goals
 
