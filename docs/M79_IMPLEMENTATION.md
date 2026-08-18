@@ -3,7 +3,7 @@
 # M79 implementation — stable inference cycling and recovery
 
 Status: **implementation and clean release qualification complete; immutable byte-verified
-Tailscale candidate nominated; human UAT pending**.
+Tailscale candidate accepted; final GitHub Pages publication pending**.
 
 ## Ownership and interfaces
 
@@ -190,7 +190,7 @@ has the frozen aggregate. Temporary evidence is `/tmp/geosolve-m79-temp-verify.K
 evidence is `/tmp/geosolve-m79-final-verify.LExe3F`. Both `results.tsv` files have SHA-256
 `be0531a9306c1b3582af87f23b8e2725e1d85ba0b96d4a145c8954c50c5791ab`.
 
-This mechanically nominates the M79 candidate; it does not accept a human scorecard row. The later
-evidence-ledger commit is documentation-only and does not replace `6874aa1` as exact product-source
-authority. GitHub Pages publication and milestone closure remain gated on explicit supervising-
-human acceptance of this frozen candidate.
+This mechanically nominates the M79 candidate. The later evidence-ledger and approval commits are
+documentation-only and do not replace `6874aa1` as exact product-source authority. On 2026-08-18
+the supervising caller explicitly accepted U1-U5 without reporting a new finding and requested
+milestone closure. Final GitHub Pages publication and hosted-byte verification remain.

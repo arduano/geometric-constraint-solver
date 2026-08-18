@@ -2,7 +2,9 @@
 
 # M79 focused UAT — inference cycling and recovery
 
-Status: **not started; clean-qualified frozen Tailscale candidate ready**.
+Status: **accepted 2026-08-18; final GitHub Pages publication pending**. The supervising caller
+approved the clean-qualified frozen candidate and requested milestone closure without reporting a
+new finding.
 
 Use only the exact source, immutable snapshot and Tailscale endpoint recorded below. Findings must
 name the candidate and receive an M79 finding ID before replacement work begins.
@@ -103,5 +105,8 @@ genuinely stale states remain noncommittable.
 
 ## Acceptance record
 
-Pending supervising-human result. GitHub Pages publication and M79 closure occur only after this
-exact frozen candidate is explicitly accepted.
+On 2026-08-18 the supervising caller stated, “UAT approved, please close off.” That explicit
+milestone-level decision accepts U1-U5 for exact frozen product source `6874aa1`, tree `f2b70c0`,
+snapshot `/tmp/geosolve-m79-uat.I5TJTx` and aggregate
+`1da8503f4d9ab535bbe3b9ce2972e05d742b2928ad8c54b59596bbac240e9ebf`. No M79 UAT finding was
+reported. Final GitHub Pages publication and hosted-byte verification remain before closure.

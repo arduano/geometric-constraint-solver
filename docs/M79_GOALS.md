@@ -2,9 +2,9 @@
 
 # M79 — stable inference candidate cycling and recovery
 
-Status: **clean-qualified immutable Tailscale candidate nominated; human UAT pending**. M79 hardens
-the lifecycle of the existing M70/M71 drafting candidates without adding a primitive, constraint
-family or solver equation.
+Status: **clean-qualified immutable Tailscale candidate accepted; final GitHub Pages publication
+pending**. M79 hardens the lifecycle of the existing M70/M71 drafting candidates without adding a
+primitive, constraint family or solver equation.
 
 ## Product contract
 

@@ -48,7 +48,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   the narrowly authenticated redundant-direction retry. `geosolve-demo-web` owns only physical
   Tab/pointer ordering and exact browser-context invalidation. Exact product source `6874aa1`
   passes focused native/WASM, workspace and clean release qualification, unchanged golden
-  authority and immutable served-byte verification. Human UAT remains pending.
+  authority and immutable served-byte verification. Human UAT is accepted; final GitHub Pages
+  publication remains before closure.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1416,4 +1417,5 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M79: active. Exact stationary candidate cohorts, headless wraparound, browser context retirement
   and the authenticated positional-plus-redundant-direction retry are implemented. Product source
   `6874aa1`, tree `f2b70c0`, passes complete clean qualification and its immutable no-rebuild
-  Tailscale bytes are verified. Explicit human UAT is still required before publication or closure.
+  Tailscale bytes are verified and explicitly accepted. Final GitHub Pages publication remains
+  before closure.

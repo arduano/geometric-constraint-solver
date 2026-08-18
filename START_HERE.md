@@ -188,7 +188,8 @@ omit only an independently proven fully redundant direction from a bundle that r
 positional intent; generic plans and every partial, positional or direction-only redundancy remain
 fail-closed. Exact product source `6874aa1` passes focused native/WASM regressions, workspace and
 clean release qualification, unchanged 270-row golden authority, and immutable served-byte
-verification at `http://100.94.63.83:8080/`. Supervising-human UAT remains pending.
+verification at `http://100.94.63.83:8080/`. Supervising-human UAT is accepted; final GitHub Pages
+publication remains before closure.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -665,7 +666,7 @@ Durable milestone and cleanup records:
 - `docs/adr/0036-headless-geometry-variants-and-atomic-recipes.md`
 - `docs/M79_GOALS.md` (active stable candidate-cycling and recovery contract)
 - `docs/M79_IMPLEMENTATION.md` (implementation and qualification ledger)
-- `docs/M79_UAT.md` (pending focused stationary-cycling scorecard)
+- `docs/M79_UAT.md` (accepted focused stationary-cycling scorecard and candidate evidence)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

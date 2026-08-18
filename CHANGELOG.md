@@ -216,7 +216,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   partial, positional or direction-only redundancy remain transactional rejections. This adds no
   residual, constraint kind or persistence schema. Exact product source `6874aa1` passes focused
   native/WASM, demo, workspace and clean release qualification plus unchanged golden authority;
-  its immutable Tailscale candidate is byte-verified and human UAT remains pending.
+  its immutable Tailscale candidate is byte-verified and human UAT is accepted. Final GitHub Pages
+  publication remains before closure.
 
 ### Changed
 
