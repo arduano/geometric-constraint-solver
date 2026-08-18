@@ -2,9 +2,10 @@
 
 # M78 focused UAT — CAD geometry tool families and authoring variants
 
-Status: **open; M78-F011 withdraws the initial candidate from current UAT while its replacement is
-clean-qualified and frozen**. No U1-U8 scorecard item, F011 targeted recheck or final supervising
-approval is accepted. GitHub Pages publication must not start before that explicit approval.
+Status: **open; M78-F011 withdraws the initial candidate from current UAT while its replacement
+awaits clean qualification and freeze**. No U1-U8 scorecard item, F011 targeted recheck or final
+supervising approval is accepted. GitHub Pages publication must not start before that explicit
+approval.
 
 Withdrawn initial source: `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`
 
