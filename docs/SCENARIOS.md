@@ -2455,6 +2455,57 @@ Documentation-only approval descendant `a6d504e1d15ddcdd7e4cb02190b0ef83de814be0
 manifest aggregate `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`.
 Exact gate-qualified product authority remains `793e9de`; M78 is complete.
 
+### M79-F001 - One stationary cohort cycles without latch churn
+
+Resolve a point-stage frame with at least two equal semantic anchors and a line-stage frame with
+ranked positional/directional alternatives. Capture the complete candidate IDs, order, relations,
+coordinates and guides. Feed the exact frame back with candidate A, candidate B and candidate A
+again, then cycle the entire ranked list through two wraps.
+
+Every advertised ID remains selectable and publishes only its own guides. Candidate order and
+payload stay exact; explicit choice does not change automatic anchor, datum, direction,
+concentric, point-tracking or remembered-reference state. A genuinely foreign frame or ID remains
+`StalePreferredCandidate`, confirms no stage and exposes no cycleable replacement cohort.
+
+### M79-F002 - Stationary browser choice cannot poison another context
+
+Choose a drafting candidate with Tab, then independently change pointer coordinate/identity,
+Ctrl/Cmd suppression, Shift regularization, blur/leave, tool/stage, Escape/Backspace, Undo/Redo,
+camera, scene/import context and canvas ownership. The pointer queue retires the choice before the
+next sample and sends no candidate when geometry drafting does not own that sample. An unchanged
+pointer-down may forward one choice once; success or failure leaves no retry authority. A hover-
+only stale result clears and resolves the same stationary sample once without preference, while a
+stale pointer-down remains noncommittable.
+
+### M79-F003 - Latest queued movement owns Tab
+
+Queue movement from candidate frame A to a distinct frame B and invoke Tab before the animation
+frame callback. The adapter drains and resolves B first, then asks B's headless resolution for the
+next candidate. No ID or guide from A is applied to B, the cancelled scheduled callback is inert,
+and accepted geometry/history remain unchanged until an explicit current pointer-down.
+
+### M79-F004 - Strong midpoint snap survives a redundant direction
+
+Create an axis-aligned Center Rectangle centred on the immutable Origin. Start a Midpoint Line from
+that stored centre and hover the exact midpoint of the rectangle's right edge. The ranked cohort
+contains `Midpoint + Horizontal`, `Midpoint`, `PointOnCurve@0.5 + Horizontal`,
+`PointOnCurve@0.5` and `Horizontal` in deterministic semantic order.
+
+Commit the default mixed candidate through its authenticated token. The first trial must prove the
+auto Horizontal source fully redundant while the auto Midpoint source remains useful. Retry once
+from the original retained state without exactly that direction; independently validate finite
+accepted geometry and hard residual at most `1e-9`; then publish one history/transcript step. The
+retained document contains the recipe Midpoint and associative endpoint Midpoint, no auto
+Horizontal, and the original token receives positive acknowledgement only after effective-plan
+publication. Undo/Redo/replay reproduce that effective plan. Generic direct plans, partial
+redundancy, redundant positional intent and direction-only candidates retain fail-closed
+`RedundantInferredConstruction` behavior.
+
+M79 focused native/WASM, demo, workspace and unchanged 270-row golden qualification pass. The
+clean release gate, immutable Tailscale nomination and human UAT remain pending. These focused
+scenarios do not expand the stable golden because the defects concern stationary interaction/
+coordinator lifecycle rather than a missing durable authoring-family dimension.
+
 ### M72-R1 - Recoverable public workbench bulk fixes
 
 In the ordinary editable workspace, create an incompatible driving dimension that publishes a

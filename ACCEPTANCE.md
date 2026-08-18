@@ -2503,6 +2503,48 @@ point, weighted-priority substitute, browser geometry authority, mobile layout o
 Two-/three-tangent and TTR circles, interior/periodic Tangent Arc, curve/curve intersection Point
 inference, fit-point splines, polygons and slots remain deferred.
 
+## M79 acceptance: stable inference candidate cycling and recovery
+
+Status: **open; implementation and pre-nomination qualification complete; clean release
+qualification and human UAT pending**.
+
+- One exact stationary headless frame owns a bounded immutable cycle cohort. Every published
+  candidate ID remains selectable through repeated Tab wraparound without explicit selection
+  changing automatic anchor, datum, direction, concentric, point-tracking or wake/hysteresis state.
+- `DraftInferenceResolution::next_cycle_candidate_id()` is the sole generic next-choice policy. It
+  cycles the complete deterministic ranked list only for resolved/ambiguous cohorts with at least
+  two candidates; stale, suppressed, resource-limited and singleton output is not cycleable.
+- A preferred ID authenticates only against its exact sealed frame. Foreign/stale preference is
+  fail-closed, publishes no cycleable replacement cohort and cannot confirm a construction.
+- The browser binds one stationary choice to exact pointer identity, screen position and semantic
+  modifiers. Movement, modifiers, blur/leave, tool/stage/history, scene/camera, import/reload or
+  ownership changes retire it. Pointer-down may forward it once and then clears it.
+- Tab drains the newest queued animation-frame sample before reading the published cohort. The
+  adapter never applies an ID from the preceding coordinate to a newer sample and owns no candidate
+  ordering, ranking or geometry policy.
+- The authenticated construction effect may retry once only when independent accepted-state
+  evidence proves every problematic auto source is a fully redundant direction paired with
+  surviving strong positional intent. It removes exactly those directions, reruns from the
+  original state and publishes only after normal independent validation. Partial, positional,
+  direction-only or unknown redundancy remains rejected.
+- Strong positional intent includes structural point identity, origin/datum, midpoint,
+  point-on-curve, semantic centre and complete two-axis tracking. A lone contextual H/V guide does
+  not qualify, preserving M73 line-direction precedence.
+- The exact centre-rectangle/Origin/Midpoint-Line/right-edge-midpoint regression cycles the full
+  cohort and wraps without staleness. Default publication retains the endpoint Midpoint relation,
+  omits only redundant auto Horizontal and remains one finite hard-valid Undo/Redo step.
+- Cycling, stale input, resource exhaustion and failed publication preserve accepted document,
+  scene, history, transcript, persistent identity high-water, diagnostics and independently
+  validated residual authority.
+- Focused owner and adapter tests, native/WASM parity, formatting, warnings-denied Clippy, workspace
+  tests, unchanged golden survey/check/clean authority and the clean release gate pass before an
+  immutable byte-verified Tailscale candidate is offered for `docs/M79_UAT.md`.
+- Explicit supervising-human approval of that exact frozen candidate is required before final
+  GitHub Pages publication and M79 closure.
+
+M79 adds no solver residual/Jacobian, primitive, constraint family, canonical persistence field,
+weighted priority, browser-owned geometry, mobile behavior or broad golden dimension.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit

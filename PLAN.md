@@ -5242,6 +5242,46 @@ Arc, curve/curve intersection Point inference, fit-point splines, polygons, slot
 centre-radius/centre-diameter buttons. M78 adds no new residual, curve family, persistence version,
 mobile layout, B-rep behavior or browser-owned geometry.
 
+### M79: stable inference candidate cycling and recovery
+
+Status: **in progress; implementation and pre-nomination qualification complete; clean release
+qualification and human UAT pending**. M79 hardens the existing auto-constraint candidate
+lifecycle across the reusable editor and thin browser adapter.
+`docs/M79_GOALS.md` owns the exact contract and confirmed findings; `docs/M79_UAT.md` owns the
+pending focused human scorecard.
+
+- [x] Seal one bounded headless cohort for an exact stationary inference frame so repeated explicit
+  choices retain candidate IDs/order/guides without changing automatic hover/hysteresis latches.
+- [x] Add headless next-candidate selection over the complete ranked cohort, with deterministic
+  wraparound and no cycling from stale, suppressed, resource-limited or singleton output.
+- [x] Keep foreign candidate preferences fail-closed and noncommittable; make stale output
+  non-cycleable and recover ordinary hover through one unpreferred refresh rather than a silently
+  substituted candidate.
+- [x] Bind the demo's stationary choice to exact pointer identity/position/modifiers and retire it
+  on movement, modifier, blur/leave, tool/stage/history, scene/camera, import/reload or drafting-
+  ownership changes. Pointer-down may forward one exact choice once.
+- [x] Drain the latest animation-frame pointer sample before Tab reads the cohort, and keep all
+  candidate identity/ranking policy out of the browser.
+- [x] Correct M79-F004 through a narrow authenticated retry: only fully redundant auto directions
+  paired with surviving strong positional intent may be omitted; partial/positional/direction-only
+  redundancy retains the generic transactional rejection.
+- [x] Regress the exact centre-rectangle/Origin/Midpoint-Line/right-edge-midpoint scenario, full
+  wraparound, equal alternatives, movement/return, lifecycle invalidation, queued movement and
+  state-neutral stale/failure behavior at their owning layers.
+- [x] Pass focused native/WASM and demo tests, formatting, warnings-denied Clippy, locked workspace
+  tests and unchanged golden survey/check/clean authority.
+- [ ] Pass the complete clean release gate, freeze the exact no-rebuild output, byte-verify it over
+  Tailscale and retain it for focused human correction/UAT.
+- [ ] Receive explicit supervising-human approval, publish the accepted frozen candidate through
+  GitHub Pages with exact hosted-byte verification and close M79.
+
+Gate: every candidate advertised for one stationary frame can be selected repeatedly until its
+context genuinely changes; no stale/queued ID can commit another candidate; the default reported
+mixed midpoint/direction case publishes the associative midpoint without a redundant direction;
+and cycling/failure cannot change accepted geometry, history, identities, diagnostics or residual
+validity. M79 adds no solver residual, persistence version, primitive, constraint family, browser-
+owned geometry policy or broad golden expansion.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

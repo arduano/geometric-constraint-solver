@@ -142,6 +142,14 @@ Persistent identity stabilizes output order only. If all semantic and geometric 
 tie, the result is `Ambiguous` and no relation is auto-committed. A host may explicitly select one
 published candidate identity; it may not submit a different inferred relation under that identity.
 
+M79 strengthens that selection rule: one ordinary unpreferred sample seals the complete bounded
+candidate cohort for its exact normalized frame. Explicit selection reads that immutable cohort,
+so choosing A cannot update automatic latches or make B disappear at the same stationary sample.
+The headless resolution owns full-list wraparound; a foreign frame/ID is stale, clears stage state
+and publishes no replacement candidate prefix. Movement or an explicit reference-memory update
+invalidates the seal. The browser may translate Tab and event ordering, but it may not reconstruct
+candidate order or preserve an ID outside its exact pointer identity, position and modifiers.
+
 Entering an eligible hover boundary wakes the reference immediately; there is no timer. Reference
 memory is bounded to the active construction stage and clears after its placement click. It also
 clears on cancellation, tool exit, mutation, Undo/Redo, reload, viewport or geometry-policy
@@ -169,6 +177,17 @@ requires a newly independently accepted state for the exact plan. Every inferred
 survive ordinary domain validation and redundancy/conflict evidence. A newly fully or partially
 redundant inferred source rejects the inferred transaction rather than becoming hidden duplicate
 intent.
+
+M79 adds one narrow authenticated exception to that original generic rule. The coordinator first
+trials the exact tokenized displayed plan. If independent accepted-state evidence reports every
+problematic auto source as a fully redundant direction, and private editor-authenticated metadata
+proves each such direction belonged to a bundle with stronger surviving positional intent, it may
+remove exactly those directions and retry once from the original retained state. Point identity,
+Origin/datum attachment, Midpoint, PointOnCurve, semantic centre and a complete two-axis tracking
+intersection qualify; a lone contextual H/V guide does not. The retry must pass the same finite
+acceptance, hard-residual and redundancy checks, publishes one history entry and records its
+effective pruned plan for replay. Generic public plans, partial or positional redundancy,
+direction-only bundles and any failed retry retain the original transactional rejection.
 
 Only a scene authenticated from the retained session's exact current accepted document, design
 filter and `PreparedSketchInput` is publication-authoritative. Caller-assembled document,

@@ -42,6 +42,13 @@ construction/NURBS UAT and certified all-family visual profiles.
   and requests closure. Documentation-only approval descendant `a6d504e` passes Pages run
   `32096209036`, artifact `9310104202`, deployment `5955688918` and exact hosted-byte verification
   without replacing qualified product source `793e9de`. `docs/M78_GOALS.md` owns the contract.
+- **Active target:** M79 hardens the existing M70/M71 inference lifecycle without adding geometry
+  or solver semantics. `geosolve-constraint-editor` owns an immutable bounded cohort for one exact
+  stationary `DraftInferenceFrame`, deterministic full-list cycling, stale preference authority and
+  the narrowly authenticated redundant-direction retry. `geosolve-demo-web` owns only physical
+  Tab/pointer ordering and exact browser-context invalidation. Focused native/WASM regressions,
+  workspace qualification and unchanged golden authority pass; the complete clean release gate,
+  immutable Tailscale nomination and human UAT remain pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -334,6 +341,25 @@ local incidence and emits only finite status measurements. Initial candidate
 served-artifact gates but is withdrawn historical evidence. The F011 replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes both gates and remains qualified product
 authority; approval descendant `a6d504e` passes exact public publication.
+
+M79 preserves the M70 ownership split while separating automatic hover memory from explicit
+candidate selection. An unpreferred sample performs the ordinary bounded generation and seals its
+exact frame, ranked candidates and non-candidate guides. A preferred sample can only select from
+that seal; it neither regenerates candidates nor changes anchor, datum, direction, concentric,
+tracking or wake latches. Foreign frame/ID combinations clear stage state and expose an empty,
+non-cycleable stale result. The additive `DraftInferenceResolution::next_cycle_candidate_id()` is
+the sole headless wraparound policy. The thin browser binds a choice to pointer identity, exact
+screen position and modifiers, drains the newest queued sample before Tab and retires the choice
+on movement or lifecycle change.
+
+Retained publication still trials the exact authenticated visible plan first. Only that tokenized
+editor effect carries private eligibility for a second trial, and only accepted redundancy
+evidence can remove a fully redundant auto direction paired with surviving point, datum,
+midpoint, curve, semantic-centre or complete two-axis positional intent. The retry starts from the
+original retained session and must pass the ordinary finite solve, hard-residual and redundancy
+validation before one publication. Its pruned plan becomes replay truth while the original token
+remains acknowledgement authority. Generic public construction plans, partial or positional
+redundancy and direction-only bundles retain strict transactional rejection.
 
 M55 expands the closed headless action/applicability surface to every preserved M13-M14 alpha
 constraint, dimension and explicit branch choice. It lowers only through typed public
@@ -1387,3 +1413,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `5955688918` and exact hosted-byte aggregate
   `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. M78 is part of the
   accepted baseline; `793e9de` remains its qualified product authority.
+- M79: active. Exact stationary candidate cohorts, headless wraparound, browser context retirement
+  and the authenticated positional-plus-redundant-direction retry are implemented. Focused
+  native/WASM owner regressions, workspace qualification and unchanged golden authority pass.
+  Clean release qualification, a frozen byte-verified Tailscale candidate and explicit human UAT
+  are still required before publication or closure.

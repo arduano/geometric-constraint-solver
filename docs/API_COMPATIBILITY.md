@@ -239,6 +239,25 @@ documentation-only approval descendant `a6d504e` passes Pages run `32096209036`,
 requalify product source `793e9de`. M78 is complete. This approval and publication change no
 compatibility boundary.
 
+M79 adds one source-compatible pre-1.0 convenience method,
+`DraftInferenceResolution::next_cycle_candidate_id()`, over the already public ordered candidate
+publication. It returns a candidate only for a complete resolved or ambiguous cohort containing at
+least two entries; stale, suppressed, resource-limited, empty, singleton and malformed resolved
+output remains non-cycleable. The engine's exact stationary cohort is private ephemeral state and
+is neither serialized nor exposed as a second candidate API. Existing
+`DraftInferenceInput::preferred_candidate` and `DraftInferenceStatus::StalePreferredCandidate`
+shapes remain unchanged.
+
+M79 also changes only the private token-authenticated editor/coordinator path for one mixed
+publication case. After the exact displayed plan is trialled, independently proven fully redundant
+auto directions may be omitted only when private authenticated metadata shows that their candidate
+also retained stronger positional intent; the effective plan remains subject to the ordinary
+accepted-state and redundancy checks. Public `apply_construction_plan` and its controlled variant
+retain exact generic rejection, and the public `ConstructionCommitPlan`/effect/result shapes do not
+change. No solver residual, constraint kind, canonical sketch-v1-v4 syntax, draft-v5 support,
+workspace schema or browser geometry authority is added. Pre-nomination qualification passes; the
+clean release gate, immutable Tailscale nomination and human UAT remain pending.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 

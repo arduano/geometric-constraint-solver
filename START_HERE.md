@@ -180,6 +180,15 @@ palette, semantic headless recipe stages and authenticated atomic construction p
 product source `793e9de` passes the complete clean gate; approval descendant `a6d504e` passes Pages
 run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact hosted-byte aggregate
 `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`.
+M79 is the active interaction-hardening target. It seals one exact stationary inference cohort so
+Tab can traverse every ranked candidate repeatedly without changing automatic hysteresis, binds a
+browser choice to its exact pointer context, drains queued movement before cycling and makes stale
+preferences recover through a fresh unpreferred hover. Its authenticated publication path may
+omit only an independently proven fully redundant direction from a bundle that retains stronger
+positional intent; generic plans and every partial, positional or direction-only redundancy remain
+fail-closed. Implementation, focused native/WASM regressions, workspace qualification and the
+unchanged 270-row golden authority pass; the clean release gate, immutable Tailscale candidate and
+supervising-human UAT remain pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -654,6 +663,9 @@ Durable milestone and cleanup records:
   ledger)
 - `docs/M78_UAT.md` (accepted focused scorecard and exact candidate/publication evidence)
 - `docs/adr/0036-headless-geometry-variants-and-atomic-recipes.md`
+- `docs/M79_GOALS.md` (active stable candidate-cycling and recovery contract)
+- `docs/M79_IMPLEMENTATION.md` (implementation and qualification ledger)
+- `docs/M79_UAT.md` (pending focused stationary-cycling scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

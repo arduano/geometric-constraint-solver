@@ -205,6 +205,18 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   hosted paths byte-match aggregate
   `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. Qualified product source
   remains `793e9de`. M78 is complete.
+- The in-progress M79 inference-lifecycle hardening. One exact stationary headless frame now owns
+  an immutable bounded candidate cohort and additive
+  `DraftInferenceResolution::next_cycle_candidate_id()` wraparound policy. Explicit selection no
+  longer mutates automatic latches; stale foreign preferences publish no replacement cohort. The
+  thin workbench binds a Tab choice to exact pointer identity/position/modifiers, drains queued
+  movement before cycling and retires that choice across movement and lifecycle transitions. A
+  private token-authenticated coordinator retry may remove only independently proven fully
+  redundant auto directions paired with stronger surviving positional intent; generic plans and
+  partial, positional or direction-only redundancy remain transactional rejections. This adds no
+  residual, constraint kind or persistence schema. Focused native/WASM, demo, workspace and golden
+  qualification pass; the clean release gate, immutable Tailscale nomination and human UAT remain
+  pending.
 
 ### Changed
 
