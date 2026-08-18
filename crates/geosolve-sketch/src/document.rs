@@ -12689,6 +12689,14 @@ impl SketchDocument {
         for edge in edges {
             let source_family = self.profile_offset_curve_family(edge.source.curve)?;
             let target_family = self.profile_offset_curve_family(edge.target.curve)?;
+            if self.geometry_role(edge.source.curve.curve) != Some(GeometryRole::Profile)
+                || self.geometry_role(edge.target.curve.curve) != Some(GeometryRole::Profile)
+            {
+                return invalid(
+                    "profile offset geometry role",
+                    "source and target supports must remain Profile geometry",
+                );
+            }
             if source_family != target_family {
                 return invalid(
                     "profile offset edge pair",

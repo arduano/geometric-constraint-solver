@@ -382,7 +382,7 @@ impl OffsetOperandIndex {
         session: &RetainedSketchDocumentSession,
     ) -> Result<(), OffsetOperandConsumptionError> {
         let accepted = session
-            .accepted_state()
+            .accepted_state_for_current_input()
             .ok_or(OffsetOperandConsumptionError::Stale)?;
         if session.prepared_input() != self.input
             || accepted.identity() != self.accepted

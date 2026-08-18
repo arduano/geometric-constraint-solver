@@ -214,9 +214,12 @@ impl TopologySnapshot {
         if accepted.design_identity() != session.design_identity() {
             return Err(TopologySnapshotError::AcceptedStateForDifferentDesign);
         }
+        let current = session
+            .accepted_state_for_current_input()
+            .ok_or(TopologySnapshotError::AcceptedInputMismatch)?;
         let input = session.prepared_input();
-        if input.accepted_state_identity() != Some(accepted.identity())
-            || accepted.input() != input.attempt_input()
+        if current.identity() != accepted.identity()
+            || input.accepted_state_identity() != Some(accepted.identity())
         {
             return Err(TopologySnapshotError::AcceptedInputMismatch);
         }
@@ -526,7 +529,7 @@ impl TopologyProductionProfile {
         session: &RetainedSketchDocumentSession,
     ) -> Result<(), TopologyConsumptionError> {
         let accepted = session
-            .accepted_state()
+            .accepted_state_for_current_input()
             .ok_or(TopologyConsumptionError::Stale)?;
         if session.prepared_input() != self.input
             || accepted.identity() != self.accepted

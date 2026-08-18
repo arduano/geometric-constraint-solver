@@ -13,7 +13,7 @@ use geosolve_sketch::{
     DocumentProfileOffsetEdgePair, DocumentProfileOffsetJunctionBranch,
     DocumentProfileOffsetJunctionOwner, DocumentProfileOffsetOperand,
     DocumentProfileOffsetTerminalPolicy, DocumentProfileOffsetTurn, FaceOffsetDirection,
-    LineParameterDomain, LineSide, OffsetTraversal, PreparedSketchOperation,
+    GeometryRole, LineParameterDomain, LineSide, OffsetTraversal, PreparedSketchOperation,
     ProfileOffsetAssociation, ProfileOffsetChain, ProfileOffsetCurve, ProfileOffsetEdgePair,
     ProfileOffsetLoop, ProfileOffsetOperand, ProfileOffsetTerminalPolicy,
     RetainedSketchDocumentSession, Sketch, SketchCurve, SketchCurveContact, SketchDocument,
@@ -817,6 +817,110 @@ fn document_line_operand(
         source,
         target,
     )
+}
+
+fn assert_m80_f005_construction_operand_rejected(construction_is_source: bool) {
+    let mut document = SketchDocument::new(4.0).unwrap();
+    let (operand, source, target) = document_line_operand(&mut document);
+    let curve = if construction_is_source {
+        source.curve
+    } else {
+        target.curve
+    };
+    document
+        .set_geometry_role(curve, GeometryRole::Construction)
+        .unwrap();
+    let before = document.clone();
+    let before_bytes = document.to_draft_v5_json().unwrap();
+
+    let result = document.add_profile_offset("invalid construction operand", 2.0, operand);
+
+    assert!(
+        matches!(
+            &result,
+            Err(geosolve_sketch::DocumentError::InvalidField { field, .. })
+                if *field == "profile offset geometry role"
+        ),
+        "unexpected result: {result:?}"
+    );
+    assert_eq!(document, before);
+    assert_eq!(document.to_draft_v5_json().unwrap(), before_bytes);
+}
+
+#[test]
+fn m80_f005_construction_source_is_rejected_without_mutation() {
+    assert_m80_f005_construction_operand_rejected(true);
+}
+
+#[test]
+fn m80_f005_construction_target_is_rejected_without_mutation() {
+    assert_m80_f005_construction_operand_rejected(false);
+}
+
+fn assert_m80_f005_associated_role_change_rejected(change_source: bool) {
+    let mut document = SketchDocument::new(4.0).unwrap();
+    let (operand, source, target) = document_line_operand(&mut document);
+    document.add_profile_offset("offset", 2.0, operand).unwrap();
+    let before = document.clone();
+    let before_bytes = document.to_draft_v5_json().unwrap();
+    let curve = if change_source {
+        source.curve
+    } else {
+        target.curve
+    };
+
+    let result = document.set_geometry_role(curve, GeometryRole::Construction);
+
+    assert!(
+        matches!(
+            &result,
+            Err(geosolve_sketch::DocumentError::InvalidField { field, .. })
+                if *field == "profile offset geometry role"
+        ),
+        "unexpected result: {result:?}"
+    );
+    assert_eq!(document, before);
+    assert_eq!(document.to_draft_v5_json().unwrap(), before_bytes);
+}
+
+#[test]
+fn m80_f005_associated_source_role_change_is_atomically_rejected() {
+    assert_m80_f005_associated_role_change_rejected(true);
+}
+
+#[test]
+fn m80_f005_associated_target_role_change_is_atomically_rejected() {
+    assert_m80_f005_associated_role_change_rejected(false);
+}
+
+#[test]
+fn m80_f005_draft_v5_rejects_construction_profile_offset_operands() {
+    let mut document = SketchDocument::new(4.0).unwrap();
+    let (operand, source, target) = document_line_operand(&mut document);
+    document.add_profile_offset("offset", 2.0, operand).unwrap();
+    let draft = document.to_draft_v5_json().unwrap();
+    for curve in [source.curve, target.curve] {
+        let mut invalid: serde_json::Value = serde_json::from_str(&draft).unwrap();
+        invalid["geometry_roles"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({
+                "curve": curve,
+                "role": "construction"
+            }));
+        let invalid = serde_json::to_string(&invalid).unwrap();
+
+        let result = SketchDocument::from_draft_v5_json(&invalid);
+
+        assert!(
+            matches!(
+                &result,
+                Err(geosolve_sketch::DocumentError::InvalidField { field, .. })
+                    if *field == "profile offset geometry role"
+            ),
+            "unexpected result: {result:?}"
+        );
+    }
 }
 
 #[test]

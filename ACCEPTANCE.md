@@ -2626,10 +2626,12 @@ human UAT, publication and final acceptance remain pending**.
   multi-edge and tangent chains, both directions/sides, source and target edits, traversal reversal,
   association deletion/suppression, topology barriers, stale preview, atomic failure, persistence,
   rank/DOF, audit ordering and native/WASM parity.
-- Pre-nomination evidence passes exactly 16 sketch, 15 topology, 16 operations, 10 Offset-authoring,
-  7 coordinator, 150 demo and 6 native plus 6 WASM annotation-parity tests. The 270-row golden
+- Pre-nomination evidence passes exactly 21 sketch, 16 topology, 16 operations, 10 Offset-authoring,
+  8 coordinator, 150 demo and 6 native plus 6 WASM annotation-parity tests. The 270-row golden
   survey is all `PASS`, and `--check` plus `--require-clean` exactly match reviewed authority.
-  `M80-F001`-`M80-F003` have focused owner regressions.
+  `M80-F001`-`M80-F005` have focused owner regressions. A successful ordinary point edit remains
+  current for fresh Offset capture/preview/Apply, and every persistent source and target support
+  must remain Profile geometry across creation, role mutation and draft restore.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
   unchanged historical persistence/golden authority, Trunk and the complete release gate pass
   before a no-rebuild distribution is frozen and byte-verified over Tailscale.

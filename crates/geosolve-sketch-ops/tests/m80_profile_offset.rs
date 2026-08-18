@@ -685,6 +685,7 @@ fn accepted_geometry_seeds_offset_without_rewriting_retained_source_intent() {
         .dimensions()
         .last()
         .expect("profile offset dimension");
+    let created_dimension = dimension.id;
     let DocumentDimensionDefinition::ProfileOffset { operand, .. } = &dimension.definition else {
         panic!("ProfileOffset expected");
     };
@@ -746,6 +747,15 @@ fn accepted_geometry_seeds_offset_without_rewriting_retained_source_intent() {
         );
     }
 
+    let association_removal = session
+        .apply(
+            session.design_identity(),
+            DocumentEdit::Delete {
+                object: DocumentObjectId::Dimension(created_dimension),
+            },
+        )
+        .expect("detach the accepted association before changing a source role");
+    assert!(association_removal.published_accepted_identity().is_some());
     session
         .apply(
             session.design_identity(),
@@ -754,11 +764,15 @@ fn accepted_geometry_seeds_offset_without_rewriting_retained_source_intent() {
                 role: GeometryRole::Construction,
             },
         )
-        .expect("make the prepared source structurally stale");
+        .expect("make the detached prepared source structurally stale");
+    assert_eq!(
+        session.design_document().geometry_role(source.curve),
+        Some(GeometryRole::Construction)
+    );
     let before_stale_apply = session.design_document().clone();
     assert!(
         session.apply(session.design_identity(), edit).is_err(),
-        "a prepared accepted seed must fail closed after source-role change"
+        "a prepared accepted seed must fail closed after a detached source-role change"
     );
     assert_eq!(session.design_document(), &before_stale_apply);
 }

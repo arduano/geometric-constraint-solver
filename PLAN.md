@@ -5349,10 +5349,12 @@ one-to-one native association; `docs/M80_IMPLEMENTATION.md` is the live ledger a
 - [x] Regress closed linear/circular/mixed/holed faces, one-/multi-edge open chains, edits from both
   sides, direction/traversal retention, topology barriers, persistence/history, stale/cancelled/
   exhausted atomicity, Jacobians/audits/rank/DOF, native/WASM parity and thin demo behavior.
-- [x] Pass focused and broad pre-nomination qualification: sketch 16, topology 15, operations 16,
-  Offset authoring 10, coordinator 7, demo 150 and annotation parity 6 native/6 WASM; formatting,
+- [x] Pass focused and broad pre-nomination qualification: sketch 21, topology 16, operations 16,
+  Offset authoring 10, coordinator 8, demo 150 and annotation parity 6 native/6 WASM; formatting,
   warnings-denied workspace Clippy, locked all-feature workspace tests and exact 270-row golden
-  survey/check/require-clean all pass. `M80-F001`-`M80-F003` are frozen in owner regressions.
+  survey/check/require-clean all pass. `M80-F001`-`M80-F005` are frozen in owner regressions,
+  including fresh Offset capture after accepted point edits and the persistent Profile-role
+  invariant across creation, mutation and draft restore.
 - [ ] Pass the complete clean release gate, freeze its exact output without rebuilding, keep it
   byte-verified on the shared Tailscale endpoint through focused human UAT, then publish and verify
   GitHub Pages before closure.

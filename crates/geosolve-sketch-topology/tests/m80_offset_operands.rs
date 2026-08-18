@@ -3,10 +3,10 @@
 use geosolve_sketch::{
     CancellationToken, ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan,
     DocumentArcSweep, DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveTrimView,
-    DocumentHyperbolaBranch, DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter,
-    GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl, OperationLimits,
-    OperationOutcome, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
-    SolverConfig, cancellation_pair,
+    DocumentEdit, DocumentHyperbolaBranch, DocumentSolveRequest, DocumentTrimBoundary,
+    DocumentTrimParameter, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl,
+    OperationLimits, OperationOutcome, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+    SketchDocument, SolverConfig, cancellation_pair,
 };
 use geosolve_sketch_topology::{
     OffsetEndpointEligibility, OffsetEndpointRef, OffsetEndpointRole, OffsetFaceLookup,
@@ -108,6 +108,46 @@ fn offset_operand_queries_and_values_have_worker_safe_value_semantics() {
     assert_send_sync::<OffsetOperandIndex>();
     assert_clone_eq::<OffsetOperandResult>();
     assert_clone_eq::<OffsetOperandIndex>();
+}
+
+#[test]
+fn successful_point_edit_remains_current_for_fresh_offset_operand_capture() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    add_square(&mut document, "square", [0.0, 0.0], 4.0);
+    let probe = document.add_point("free probe", [8.0, 1.0]).unwrap();
+    let mut session = session(document);
+
+    let edit = session
+        .apply(
+            session.design_identity(),
+            DocumentEdit::SetPointPosition {
+                point: probe,
+                position: [8.5, 1.25],
+            },
+        )
+        .unwrap();
+    assert!(edit.published_accepted_identity().is_some());
+    let accepted = session
+        .accepted_state_for_current_input()
+        .expect("successful point edit remains current");
+    assert_ne!(
+        accepted.input().candidate_request(),
+        session.prepared_input().attempt_input().candidate_request(),
+        "one-shot point-edit guidance must remain accepted audit provenance only"
+    );
+
+    let query = PreparedOffsetOperandQuery::capture(&session, OffsetOperandRequest::default())
+        .expect("current accepted point edit must admit a fresh Offset operand query");
+    assert_eq!(query.input(), session.prepared_input());
+    let OperationOutcome::Completed { value, .. } =
+        query.execute(OperationControl::default()).unwrap()
+    else {
+        panic!("uncontrolled Offset operand query must complete");
+    };
+    let index = value
+        .operand_index
+        .expect("the edited current square remains an eligible face");
+    index.validate_current(&session).unwrap();
 }
 
 #[test]

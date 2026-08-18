@@ -146,6 +146,36 @@ validation. `supporting_line_contacts_at_endpoint_coordinates_do_not_own_offset_
 `supporting_line_contact_cannot_authenticate_a_profile_offset_endpoint_junction` freeze both
 boundaries.
 
+### M80-F004 — consumed point-edit guidance made fresh topology capture look stale
+
+Owners: retained accepted-state authentication in `geosolve-sketch-topology`, with a thin
+`geosolve-constraint-editor` lifecycle regression. After a successful ordinary
+`SetPointPosition`, the accepted publication remains current even though its consumed one-shot
+point-edit guidance is intentionally absent from the next prepared attempt. Topology capture
+incorrectly compared those two attempt payloads and rejected Modify → Offset with
+`AcceptedInputMismatch`. Capture and consumption now authenticate
+`accepted_state_for_current_input()` while retaining the exact current `prepared_input()` as the
+topology/proposal CAS stamp. `successful_point_edit_remains_current_for_fresh_offset_operand_capture`
+freezes the owner boundary, and
+`m80_f004_profile_offset_after_point_edit_keeps_preview_and_apply_current` proves activation,
+selection, preview and Apply through the ordinary coordinator path.
+
+### M80-F005 — Construction supports could remain in a persistent Profile Offset
+
+Owner: central `geosolve-sketch` document validation. Profile Offset operand validation checked
+curve family and topology but did not require every retained source and target support to remain
+`GeometryRole::Profile`. Direct creation, a later role mutation and draft-v5 restoration could
+therefore admit an association containing Construction geometry. Central path validation now
+requires Profile role on both sides. Five focused regressions cover Construction source and target
+creation, atomic associated source and target role-change rejection with identical document/draft
+bytes, and invalid draft-v5 restoration. The pre-fix focused run reproduced all five failures; the
+same run passes after the repair. No residual, Jacobian, priority or branch behavior changed.
+
+The existing operations stale-plan fixture now deletes only its newly created Profile Offset
+dimension before changing the source role. This deliberately detaches the native target geometry,
+so the fixture can still prove that an old prepared edit rejects after a source-role change without
+asking an active association to violate the new central Profile-only invariant.
+
 ### Pre-nomination interaction audit refinements
 
 The final editor/web audit also froze four cross-adapter behaviors without broadening mathematical
@@ -162,17 +192,17 @@ runs do not replace the required clean-candidate release gate:
 
 ```text
 cargo test --locked -p geosolve-sketch --test m80_offset
-  # 16 passed
+  # 21 passed
 cargo test --locked -p geosolve-sketch-topology --test m80_offset_operands
-  # 15 passed
+  # 16 passed
 cargo test --locked -p geosolve-sketch-ops --test m80_profile_offset
   # 16 passed
 cargo test --locked -p geosolve-constraint-editor --lib profile_offset_
-  # 7 passed
+  # 8 passed
 cargo test --locked -p geosolve-constraint-editor --lib offset_authoring::tests
   # 10 passed
 cargo test --locked -p geosolve-constraint-editor --lib
-  # 381 passed
+  # 382 passed
 cargo test --locked -p geosolve-demo-web --lib
   # 150 passed on the ordinary default test stack
 cargo test --locked -p geosolve-constraint-editor --test m76_annotation_parity

@@ -2673,6 +2673,26 @@ contact-owned junction. Invalid ownership rejects before publication without mut
 
 Status: fixed and mechanically passing.
 
+### M80-F004 - Accepted point edits remain current for fresh Offset authoring
+
+Successfully move an ordinary point, rebuild the exact accepted scene and immediately activate
+Offset without refresh or another solve. The fresh topology index must authenticate the current
+accepted publication even though one-shot point-edit guidance has been consumed, while retaining
+the current prepared input as the exact proposal/preview CAS stamp. Face selection, preview and
+Apply then complete through the normal coordinator lifecycle as one next history step.
+
+Status: fixed and mechanically passing.
+
+### M80-F005 - Persistent Offset supports must remain Profile geometry
+
+Reject a Construction source or target before creating a Profile Offset. After creating a valid
+association, attempting to change either side to Construction must preserve the complete document
+and draft bytes. A draft-v5 payload that marks either retained support Construction must fail
+strict restoration. One central document invariant owns all three entry paths; no adapter-only
+filter may make invalid persistent state acceptable.
+
+Status: fixed and mechanically passing.
+
 ### M72-R1 - Recoverable public workbench bulk fixes
 
 In the ordinary editable workspace, create an incompatible driving dimension that publishes a

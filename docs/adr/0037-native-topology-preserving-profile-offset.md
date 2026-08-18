@@ -288,9 +288,10 @@ and target edits; deletion/suppression retention; topology barriers; Undo/Redo a
 workspace/repro round trips; stale/cancelled/resource-limited atomicity; source mapping, rank/DOF,
 structured audits and finite-difference Jacobians at scales `1e-6`, `1` and `1e6`.
 
-`docs/M80_IMPLEMENTATION.md` records the focused counts and the `M80-F001`-`M80-F003` owner
-regressions for native-origin authentication, bidirectional arc gauges and exact endpoint-contact
-ownership.
+`docs/M80_IMPLEMENTATION.md` records the focused counts and the `M80-F001`-`M80-F005` owner
+regressions for native-origin authentication, bidirectional arc gauges, exact endpoint-contact
+ownership, current accepted-state capture after point edits and the persistent Profile-role
+invariant.
 
 Focused native/WASM and workbench tests, unchanged historical persistence bytes and the stable
 golden gate pass as pre-nomination evidence. The complete clean release gate must pass before the

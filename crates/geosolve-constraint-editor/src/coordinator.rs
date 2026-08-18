@@ -12722,6 +12722,60 @@ mod tests {
     }
 
     #[test]
+    fn m80_f004_profile_offset_after_point_edit_keeps_preview_and_apply_current() {
+        let (mut coordinator, _, source_spans) = profile_offset_rectangle_fixture();
+        let edited_point = coordinator.session().design_document().points()[0].id;
+        let edit = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: edited_point,
+                    position: [-2.25, -1.0],
+                },
+            )
+            .expect("ordinary point edit");
+        assert!(edit.published_accepted.is_some());
+        let edited_input = coordinator.session().prepared_input();
+        let history_cursor = coordinator.history_cursor();
+
+        let scene = {
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("point edit remains the current accepted state");
+            let viewport = Viewport::new([800.0, 600.0], [0.0, 0.0], 80.0).expect("viewport");
+            EditorScene::from_accepted_for_design(
+                accepted.identity().revision().get(),
+                coordinator.session().design_identity(),
+                accepted.document(),
+                coordinator.session().design_document(),
+                viewport,
+                0.25,
+            )
+            .expect("edited accepted scene")
+            .with_retained_session(coordinator.session())
+            .expect("edited scene retains current topology authority")
+        };
+
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Edited rectangle offset")
+            .expect("edited rectangle preview remains current");
+        assert_eq!(metadata.base_input, edited_input);
+        assert_eq!(metadata.source_spans, source_spans);
+        assert!(coordinator.offset_authoring_preview_matches(&state));
+
+        let applied = coordinator
+            .apply_offset_authoring_preview(&mut state)
+            .expect("edited rectangle Offset applies through the held current preview");
+        assert!(applied.published_accepted.is_some());
+        assert_eq!(coordinator.history_cursor(), history_cursor + 1);
+        assert!(state.is_active());
+        assert!(state.operand().is_none());
+    }
+
+    #[test]
     fn selected_profile_offset_direction_flip_preserves_operand_branches_and_undo_redo() {
         let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
         let mut state = OffsetAuthoringState::default();

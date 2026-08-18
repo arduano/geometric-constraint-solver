@@ -105,6 +105,10 @@ canvas click. Preview geometry must not intercept selection or masquerade as acc
 Change accepted geometry with Undo/Redo or another edit while an Offset preview is live; the stale
 preview must revoke and cannot apply to the new scene.
 
+Separately, complete an ordinary accepted point move first and then activate Offset on the edited
+face without refreshing. Hover/selection, preview and Apply should work immediately against that
+current scene; consumed drag guidance must not make the new Offset session appear stale.
+
 After a successful Apply, Offset should remain active and remember the last valid distance only.
 The previous face/chain must not remain secretly selected. Repeat all core checks at both viewport
 sizes and zoom levels, including keyboard focus, concise disabled reasons and absence of clipped or
