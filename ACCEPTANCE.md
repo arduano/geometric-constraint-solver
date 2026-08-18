@@ -2560,6 +2560,88 @@ Product qualification, milestone-level UAT acceptance, publication and hosted-by
 all pass. M79 is complete; `6874aa1` remains exact qualified product authority, the frozen
 Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte authority.
 
+## M80 acceptance: native topology-preserving Profile Offset
+
+Status: **implementation and broad pre-nomination mechanical evidence pass; clean nomination,
+human UAT, publication and final acceptance remain pending**.
+
+- One Apply creates exactly one grouped driving-only `ProfileOffset` over one positive finite
+  length scalar and either one complete bounded face including all holes or one manually ordered
+  open chain. A one-line or one-circular-arc chain is valid; a full circle is face-only.
+- A face stores material-left outer counter-clockwise and hole clockwise loops. Outward expands the
+  outer boundary and shrinks holes; Inward reverses that behavior. An open chain stores exact
+  collection traversal, and Left/Right remains relative to that traversal across canonicalization,
+  Undo/Redo and reload.
+- Every source edge has exactly one complete exact-family native target: a line or polyline source
+  span maps to a standalone native line, while circles and circular arcs retain their families.
+  Construction, external, computed-feature and arrangement-fragment provenance plus ellipse,
+  conic, Bezier, B-spline and NURBS families reject before allocation; no approximation is accepted.
+- Every source and target junction has authenticated shared-point or active endpoint-contact
+  provenance. Internal joins persist either a nonzero left/right miter turn or Tangent branch;
+  open terminals persist normal translation. Coordinate coincidence cannot supply connectivity or
+  select a branch.
+- One runtime/core source may own many ordered residual blocks while remaining one grouped source
+  in audit and diagnostics. Line pairs use supporting-line rows; radial pairs use equal-center and
+  signed-radius rows; open terminals and tangent joins use tangential anchors.
+- Both source and target circular-arc endpoint angles are active. Explicit source Start/End
+  `Preference` rows provide only a deterministic shared-angle gauge when hard equations leave it
+  free; one or two hard target endpoint drivers take precedence and propagate to the source. No
+  weighted objective substitutes for or weakens a hard equation.
+- Every new row has a structured finite audit descriptor and analytic/local-AD versus central
+  finite-difference coverage at scales `1e-6`, `1` and `1e6`. Independent validation re-evaluates
+  normalized residuals, finite regular geometry, target traversal alignment, side/direction,
+  terminal translation, arc endpoint branch, miter turn and tangent alignment before success.
+- Topology validation is independent and mandatory for the selected source/target operand paths.
+  Edge/loop/hole counts, cyclic order, family, source-target pairing, connectivity, simplicity,
+  non-contact, loop orientation and strict hole nesting remain unchanged; unrelated sketch
+  arrangement geometry is not part of this certificate. Collapse, self-intersection, contact,
+  split/merge, hole loss or a tangent/miter barrier retains the last finite accepted complete scene
+  and cannot publish.
+- One successful publication atomically creates all target native curves, ordinary persistent
+  target connectivity, the positive scalar and grouped dimension in one Undo step. Rejection,
+  staleness, cancellation and resource exhaustion preserve document, accepted scene, history,
+  transcript and identity high-water.
+- `geosolve-sketch-ops` owns deterministic same-family construction and the immutable exact-stamped
+  proposal; the retained coordinator alone consumes it through the ordinary exact-CAS transaction.
+- Deleting or suppressing only the `ProfileOffset` association leaves every generated native target
+  curve and its ordinary connectivity. Undo/Redo restores the same association and persistent
+  identities; target geometry is not computed/revision-local output.
+- Historical v2-v4 dimension syntax is frozen behind private DTOs. Canonical v4 export of M80 state
+  returns typed `UnsupportedM80State`; private draft-v5's omitted-when-empty side section preserves
+  all operand/branch state. Old canonical/draft bytes remain unchanged, and workspace-v6/
+  repro-v1 round trips are strict and atomic.
+- Modify → Offset uses one separate headless authoring owner and persistent bottom-left panel with
+  operand status, Distance, Flip, Apply and Cancel. Hover predicts the exact clicked face/edge;
+  preview is non-selectable; accepted-scene/topology/history/import changes revoke stale authority;
+  close/Cancel returns to Select.
+- A negative Distance entered before operand selection preserves transient direction intent for the
+  next face/chain. Unsupported or dynamically invalid targets retain typed unavailable hover and
+  click reasons. Ordered chains expose traversal arrows and Start/End terminals, and pointer, tree
+  and keyboard activation share one semantic Offset pick without duplicate input.
+- One movable grouped annotation uses only the disposable M76 presentation cache. Distance edits,
+  direction flips, source/target edits and cache loss remain finite and truthful; process-local
+  memory stores only the last valid distance, with `0.1 * model_scale` fallback. Ordinary workspace
+  save/reload retains compatible placement; reproduction copy/load omits and ignores it.
+- Direct fixtures cover rectangle/polygon, circle, mixed line/arc, holes, single line/arc,
+  multi-edge and tangent chains, both directions/sides, source and target edits, traversal reversal,
+  association deletion/suppression, topology barriers, stale preview, atomic failure, persistence,
+  rank/DOF, audit ordering and native/WASM parity.
+- Pre-nomination evidence passes exactly 16 sketch, 15 topology, 16 operations, 10 Offset-authoring,
+  7 coordinator, 150 demo and 6 native plus 6 WASM annotation-parity tests. The 270-row golden
+  survey is all `PASS`, and `--check` plus `--require-clean` exactly match reviewed authority.
+  `M80-F001`-`M80-F003` have focused owner regressions.
+- Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
+  unchanged historical persistence/golden authority, Trunk and the complete release gate pass
+  before a no-rebuild distribution is frozen and byte-verified over Tailscale.
+- The exact frozen Tailscale candidate stays available for `docs/M80_UAT.md` until explicit human
+  acceptance or withdrawal. GitHub Pages publication and hosted-byte verification occur only after
+  that decision and before milestone closure.
+
+M80 acceptance explicitly excludes topology-changing/computed Offset, trimming or loop removal,
+variable output cardinality, unsupported-curve approximation, canonical v5 support, Bake/Explode,
+mobile layout, B-rep/surface offset and 3D sketch behavior. None of these exclusions may be
+silently implemented as a fallback for an invalid native Profile Offset.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit

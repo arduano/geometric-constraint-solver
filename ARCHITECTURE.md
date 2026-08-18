@@ -53,6 +53,13 @@ construction/NURBS UAT and certified all-family visual profiles.
   `5959116526` and exact hosted-byte aggregate
   `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca` without replacing exact
   product authority `6874aa1`. M79 is complete.
+- **Active target:** M80 implements ADR 0037's native, topology-preserving Profile Offset. One
+  grouped driving dimension associates one authenticated bounded face (outer plus holes) or one
+  manually ordered open chain with one-to-one exact line-family/circle/circular-arc target geometry.
+  Explicit direction, traversal, junction provenance and miter/tangent branch state are persistent;
+  unchanged topology is an independent acceptance condition. Implementation and broad pre-
+  nomination qualification pass, but M80 remains outside the accepted baseline until clean
+  nomination, human UAT, publication and closure.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -169,8 +176,10 @@ A target statement must not be exposed as an implemented capability before its m
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current accepted ownership is the completed M10-M77 sequence, including the completed M70B reproduction cut,
-listed in section 15.
+current accepted ownership is the completed M10-M79 sequence, including the completed M70B
+reproduction cut, listed in section 15. M80's implementation exists and passes broad pre-
+nomination qualification, but it cannot be described as accepted baseline behavior until its
+remaining clean nomination, human UAT, publication and closure gate passes.
 
 ## 3. Crate responsibilities
 
@@ -310,9 +319,10 @@ Owns presentation-independent sketch interaction policy over public `geosolve-sk
 - deterministic transition/replay fixtures for native and WASM qualification.
 
 It depends one way on `geosolve-sketch` and, under ADR 0031, on
-`geosolve-sketch-features`. The unreleased ADR 0030 editor facade and its direct
-`geosolve-sketch-ops` dependency were removed when M66 closed; the independent M58 operations
-companion remains public and the workbench may consume it directly. These dependencies do not own
+`geosolve-sketch-features`. The unreleased general ADR 0030 operation-authoring facade and its
+dependency were removed when M66 closed. ADR 0037 narrowly reintroduces a direct
+`geosolve-sketch-ops` dependency for deterministic Profile Offset proposals; the editor still owns
+semantic authoring and the coordinator alone consumes an exact-stamped proposal. These dependencies do not own
 equations, accepted-sketch validation, a renderer, DOM, widget toolkit, platform event loop,
 storage or host expressions. M40.2 implements accepted scene, picking,
 selection, basic relation applicability and the click/drag boundary; M40.3-M40.6
@@ -371,6 +381,54 @@ U1-U5, and documentation-only approval descendant `2560ca5`, tree `bad5662`, pas
 exact-verify at aggregate `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`.
 Pages is final public-byte authority; the separately built Tailscale snapshot remains accepted UAT
 evidence. This closeout changes no ownership or compatibility boundary.
+
+Active M80 is a native sketch association under ADR 0037, not an ADR 0031 computed feature. One
+persistent driving dimension owns one positive scalar and a face or open-chain operand. A face
+contains material-left outer and hole loops; an open chain preserves manual collection traversal.
+Both persist ordered source-target same-family edge pairs, exact shared-point/endpoint-contact
+junction provenance and explicit miter-turn or tangent branch state. Open terminals additionally
+own normal-translation policy. Full circles are face-only; single lines and circular arcs are valid
+open chains.
+
+The runtime keeps `DimensionKind: Copy` by storing a `ProfileOffsetId` into a sketch-local arena.
+One document dimension lowers to one source whose `SketchSourceMapping::residual_ids` names all
+ordered sparse blocks. Lines reuse ADR 0020's supporting-line rows. Circles/arcs add equal-center
+and signed-radius-difference rows. Open terminals and tangent joins add tangential anchors. Every
+row has structured audit and finite-difference Jacobian ownership, while independent acceptance
+rechecks side/direction, traversal, arc endpoint, terminal, miter and tangent predicates.
+
+Both source and target circular-arc endpoint angles remain active. Two explicit
+`ResidualCategory::Preference` rows retain the source Start/End angles as deterministic gauges
+only when hard equations leave the common angle modes free. Hard target endpoint drivers take
+precedence and propagate to the source; no weighted objective substitutes for a hard equation.
+
+Equation validity alone cannot publish M80. The sketch domain reconstructs the selected source and
+target operand connectivity and proves unchanged edge/loop/hole cardinality, cyclic order, family
+pairing, simplicity, non-contact, orientation and hole nesting. Unrelated sketch arrangement
+geometry is outside that certificate. Collapse, self-intersection, contact, split/merge, hole loss
+or a branch-barrier crossing retains the last complete accepted scene. The solver never trims,
+drops or creates operand topology to satisfy this dimension.
+
+Generated targets and their shared-point or endpoint-contact connectivity are ordinary native
+sketch state created atomically with the scalar/dimension. Removing or suppressing only the
+association leaves those objects. Ellipses, conics, Beziers, B-splines, NURBS, external,
+Construction, computed and arrangement-derived partial edges are unavailable rather than
+approximated. A later variable-cardinality Offset remains an ADR 0031 computed-feature milestone.
+
+M80 does not promote supported canonical v4. Private v2-v4 dimension DTOs freeze their seven-
+variant language; canonical export rejects M80 state with `UnsupportedM80State`. Private draft-v5
+stores complete Profile Offset operand/branch state in an omitted-when-empty side section, so
+workspace v6 and repro-v1 retain their existing strict domain transport while historical empty
+bytes stay unchanged. Compatible annotation placement is retained only by ordinary workspace v6;
+repro-v1 omits and ignores that disposable cache so placement is recomputed.
+
+`geosolve-sketch-ops` owns deterministic target construction and immutable proposals over the
+authenticated topology/input stamp. The headless editor owns separate Offset authoring,
+authenticated face/ordered-chain collection, branch capture, non-selectable preview and atomic
+proposal consumption. The demo renders Modify → Offset in the
+standard persistent bottom-left panel and owns no equation, miter intersection or topology policy.
+One movable grouped annotation uses the disposable M76 cache. The exact clean-gate distribution
+must remain byte-verified on Tailscale through focused UAT before Pages publication or closure.
 
 M55 expands the closed headless action/applicability surface to every preserved M13-M14 alpha
 constraint, dimension and explicit branch choice. It lowers only through typed public
@@ -539,6 +597,11 @@ snapshots, applies them only through the ordinary retained transaction boundary 
 private residual equation, solver state or B-rep topology. Several visible intervals may share
 one immutable support through exact fixed/contact boundary identity; canonical sketch v4 remains
 the supported language until a future schema-freeze milestone is explicitly scoped.
+
+ADR 0037 extends this companion with deterministic Profile Offset target construction and an
+immutable exact-stamped proposal over a complete `geosolve-sketch-topology` operand. It neither
+duplicates Profile Offset residuals nor mutates retained state; the editor coordinator previews
+and consumes the proposal through the existing exact-CAS transaction boundary.
 
 The ADR 0030 solver-owned ordinary-UI candidate wrapped the existing public M28 associative-
 Fillet definition. ADR 0031 supersedes that ordinary routing, and M66 close-off removes its
@@ -1431,3 +1494,10 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   run `32116835502`, artifact `9317131695`, deployment `5959116526` and exact hosted-byte aggregate
   `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. M79 is part of the
   accepted baseline; `6874aa1` remains its exact qualified product authority.
+- M80: active under ADR 0037. The target is one grouped driving native Profile Offset over one
+  bounded face (outer plus holes) or one manually ordered open chain, exact same-family line/
+  circle/circular-arc pairs, persistent traversal/connectivity/miter-or-tangent branch state and
+  independent unchanged-topology validation. Generated target curves and ordinary connectivity
+  survive association removal. Topology-changing computed Offset, unsupported-curve approximation
+  and canonical-v5 promotion are excluded. Implementation and broad pre-nomination qualification
+  pass; clean nomination, human UAT, publication and closure remain pending.

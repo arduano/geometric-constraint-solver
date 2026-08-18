@@ -194,6 +194,16 @@ approval descendant `2560ca5`, tree `bad5662`, passes Pages run `32116835502`, a
 aggregate `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. The Pages rebuild is
 final public-byte authority while the separately built Tailscale snapshot remains accepted UAT
 evidence. M79 is complete; `6874aa1` remains exact qualified product authority.
+M80 is now active under ADR 0037. It adds one native topology-preserving Profile Offset dimension
+for an authenticated bounded face including holes or a manually ordered open chain. Exact line,
+circle and circular-arc source/target pairs share one positive distance and explicit direction,
+traversal, connectivity and miter/tangent branch state. Any collapse, self-intersection, contour
+contact, hole loss or other topology change rejects atomically; the separate variable-cardinality
+computed Offset remains deferred. `geosolve-sketch-topology` authenticates operands,
+`geosolve-sketch-ops` constructs deterministic proposals, the retained editor owns authoring and
+atomic consumption, and the web demo remains a thin renderer. Implementation and broad pre-
+nomination qualification pass; clean nomination, frozen Tailscale UAT, Pages publication and
+closure remain pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -205,7 +215,7 @@ support and physics remain outside future acceptance.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0036-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
@@ -220,6 +230,8 @@ support and physics remain outside future acceptance.
     publicly verified geometry-family/variant milestone, F001-F011 ledger and accepted scorecard.
 15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
+16. `docs/M80_GOALS.md`, `docs/M80_IMPLEMENTATION.md` and `docs/M80_UAT.md` — implemented native
+    topology-preserving Profile Offset contract, pre-nomination ledger and prepared scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -583,6 +595,12 @@ behaving correctly and requested closure. Documentation-only approval descendant
 Pages run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact hosted-byte
 aggregate `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`; qualified product
 authority remains `793e9de`.
+M79 subsequently completed exact stationary inference cohorts, deterministic full-list cycling,
+browser-context retirement and the authenticated redundant-direction retry. Exact qualified source
+`6874aa1` remains product authority and Pages publication is byte-verified. M80 is the only active
+milestone: nominate ADR 0037's implemented grouped native Profile Offset from clean source, keep
+the frozen no-rebuild distribution available over Tailscale and run the prepared focused UAT. Do
+not route M80 through computed features or admit a topology-changing fallback.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -673,6 +691,10 @@ Durable milestone and cleanup records:
 - `docs/M79_GOALS.md` (completed stable candidate-cycling and recovery contract)
 - `docs/M79_IMPLEMENTATION.md` (completed implementation, qualification and publication ledger)
 - `docs/M79_UAT.md` (accepted focused stationary-cycling scorecard and public evidence)
+- `docs/adr/0037-native-topology-preserving-profile-offset.md`
+- `docs/M80_GOALS.md` (implemented native face/open-chain Profile Offset contract)
+- `docs/M80_IMPLEMENTATION.md` (pre-nomination implementation and qualification ledger)
+- `docs/M80_UAT.md` (prepared focused Tailscale scorecard; not yet run)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

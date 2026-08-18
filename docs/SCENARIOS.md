@@ -2511,6 +2511,168 @@ Exact gate-qualified product authority remains `6874aa1`; M79 is complete. These
 do not expand the stable golden because the defects concern stationary interaction/coordinator
 lifecycle rather than a missing durable authoring-family dimension.
 
+### M80-O1 - Grouped closed linear face offset
+
+Create an axis-aligned rectangle and a non-axis convex polygon from complete native Profile line/
+polyline spans with authenticated shared-point junctions. Apply one grouped Profile Offset in both
+directions. The outer loop remains material-left and has the same edge count/order; every target
+support is parallel, same-traversal and at the one positive shared distance. One source mapping
+owns every ordered residual block, one annotation/dimension owns the operation and one Undo removes
+the complete publication. A source polyline span creates one standalone native
+`CurveDefinition::Line` target rather than rebuilding a polyline container.
+
+Move eligible source and target points without crossing a topology barrier. Both sides remain
+finite and offset-associated, independent normalized hard residual is at most `1e-9`, and rank/DOF
+match the grouped equations rather than a hidden lock. Suppress/delete only the dimension and prove
+the target curves plus ordinary shared-point connectivity remain and become freely editable.
+
+Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+
+### M80-O2 - Circular and mixed line/arc face offset
+
+Offset a one-circle face Outward and Inward. Centers remain equal and
+`r_target - r_source = D*w*d` for explicit face direction `D` and traversal winding `w`; a radius
+collapse rejects without replacing the accepted circle. Build a simple closed loop containing line
+and circular-arc edges with one persisted miter and one persisted tangent join. Target edge family,
+traversal, sweep, connectivity provenance and join branch remain exact through regular source
+edits. No polyline approximation or arrangement fragment is emitted.
+
+Each line block reuses the supporting-line Jacobian; each circular block's equal-center/signed-
+radius rows and every tangent anchor pass central finite differences at scales `1e-6`, `1` and
+`1e6`. Structured audits retain deterministic high-level source/edge/join attribution.
+
+Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+
+### M80-O3 - One face carries all holes with material semantics
+
+Create a native bounded face with one outer counter-clockwise loop and at least two clockwise holes,
+including one circular hole. One Apply owns all loops. Outward expands the outer loop while shrinking
+both holes; Inward shrinks the outer loop while expanding both holes. Ordered loop/edge pairing,
+orientation, strict nesting and hole identities survive Undo/Redo and draft-v5/workspace/repro
+round trips.
+
+Increase distance to the first outer/hole contact, hole/hole contact, hole collapse or nesting
+barrier. Independent topology validation rejects the whole candidate atomically: it may not trim,
+drop a hole, split a loop or publish a partially valid subset.
+
+Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+
+### M80-O4 - Exact one-edge open chains
+
+Collect one native line in its explicit traversal and apply Left and Right. The two supporting-line
+rows plus both terminal tangential anchors are equivalent to exact endpoint normal translation; a
+fixed source leaves no target endpoint slide or length freedom. Collect one directed circular arc
+and apply both sides. Equal center, signed radius and both terminal anchors fix the exact Start/End
+branch and reject the antipodal endpoint root.
+
+Both source and target arc endpoint angles remain active for bidirectional editing. Explicit source
+Start/End `Preference` rows retain only the otherwise-free shared-angle gauges; one or both hard
+target endpoint drivers take precedence and propagate to the source without any weighted hard-row
+substitute.
+
+Flip and signed negative authoring input change only the durable direction while retaining a
+positive scalar. Canonicalization, insertion order changes, Undo/Redo and reload never reverse the
+stored source or target traversal.
+
+Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+
+### M80-O5 - Ordered multi-edge open chains and junction provenance
+
+Manually collect a connected non-branching line/arc chain with miter and tangent joins. Every next
+edge must connect to the current terminal through the persisted shared point or active endpoint-
+contact source; coordinate coincidence is insufficient. Store the same provenance on ordinary
+target junctions, one explicit left/right miter turn or Tangent branch at internal joins and normal-
+translation policy at both terminals.
+
+Target connectivity, terminal translation, same-family pairing and collection order survive edits
+inside the cell. A disconnected edge, branch, reversed tangent, cusp, miter-to-tangent transition,
+turn reversal or deleted junction owner rejects locally and leaves the last complete accepted scene
+and all history/IDs unchanged.
+
+Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+
+### M80-O6 - Unsupported provenance and topology barriers are atomic
+
+Attempt Construction, external, computed-Fillet, arrangement-partial, ellipse/elliptical-arc,
+conic, Bezier, B-spline and NURBS operands. Reject before target allocation and emit no approximate
+or sampled substitute. On supported profiles, exercise edge/loop collapse, self-intersection,
+non-adjacent chain contact, contour contact, split/merge, hole loss and invalid circular radius.
+The topology certificate covers only the selected source/target operand paths and their contours;
+unrelated sketch arrangement geometry is not compared and cannot veto an otherwise valid offset.
+
+For each rejection compare document JSON, accepted identity/coordinates, residuals, scene,
+history/transcript, source diagnostics and persistent high-water with the exact prior accepted
+state. Recovery at a later valid distance publishes normally without refresh, stale global error or
+partial target geometry.
+
+Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+
+### M80-O7 - Persistence and compatibility remain explicit
+
+Freeze the v2-v4 dimension wire language at its historical seven variants and prove prior canonical
+and empty draft-v5 fixture bytes unchanged. A document containing Profile Offset returns typed
+`UnsupportedM80State` from canonical-v4 export. Its private draft-v5
+`profile_offset_dimensions` side section round-trips the exact positive scalar, driving mode,
+operand, loop/chain order, traversals, source-target pairs, junction provenance, branches, terminal
+policies and suppression state. Workspace v6 and `GEOSOLVE_REPRO_V1` reconstruct through their
+ordinary strict atomic path.
+
+Undo/Redo, deletion/suppression, stale exact-CAS, cancellation and forced allocation/resource
+failure preserve identity non-reuse and one-step transaction semantics.
+
+Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+
+### M80-O8 - Headless authoring, preview and Tailscale UAT
+
+The shared scene resolver returns whole-face or eligible ordered-edge ownership consistently for
+hover and pointer-down. A separate Offset authoring state owns Distance, Flip, collection, exact
+scene/topology stamp and Apply/Cancel. Preview target geometry is provisional and non-selectable;
+scene/history/import/tool changes revoke it, and the browser does not calculate supports, miters,
+branches or topology validity.
+
+Modify → Offset uses the persistent bottom-left panel, remembers only the last valid process-local
+distance with `0.1 * model_scale` fallback and returns to Select on explicit close/Cancel. A
+negative Distance entered before operand selection supplies transient direction intent. Typed
+unavailable hover/click feedback survives for unsupported and dynamically invalid candidates;
+ordered collection renders traversal arrows and Start/End terminals; pointer, tree and keyboard
+activation share one semantic Offset pick. One movable Profile Offset annotation uses the
+disposable cache and recomputes safely after cache loss.
+Workspace-v6 retains a compatible placement, while reproduction copy omits it and reproduction
+load ignores any legacy cache row so placement is recomputed.
+Focused native/WASM/presentation tests and the complete clean gate precede a no-rebuild read-only
+snapshot kept byte-verified on `http://100.94.63.83:8080/` through `docs/M80_UAT.md`; Pages and
+closure require an explicit human decision.
+
+Status: headless authoring, presentation and native/WASM mechanics pass; clean release nomination,
+frozen Tailscale service, human UAT, Pages publication and closure remain pending.
+
+### M80-F001 - Computed Fillet fragments cannot impersonate native operands
+
+A computed-Fillet discarded occurrence may carry a semantic native source-span ID for selection
+and diagnostics, but Offset target resolution must also authenticate
+`SceneCurveOrigin::Native`. The focused editor regression proves a computed occurrence receives no
+hover/click authority and creates no operand or retained state.
+
+Status: fixed and mechanically passing.
+
+### M80-F002 - Bidirectional arc endpoint edits retain a deterministic gauge
+
+Activate both source and target arc endpoint angles for Profile Offset. One and both hard target
+endpoint drivers added after the association must propagate to the free source without a shared-
+angle gauge or insertion-order dependence. Structured source Start/End `Preference` rows retain
+only the free gauges; hard residual validation and priority semantics remain unchanged.
+
+Status: fixed and mechanically passing.
+
+### M80-F003 - Only exact endpoint contacts own Offset junctions
+
+A supporting-line or interior contact placed at endpoint coordinates must not authenticate
+adjacency. Both topology discovery and persistent validation require exact bounded `[0, 1]`
+domain, winding `0`, matching Start/End neighborhood and the bit-exact endpoint scalar for every
+contact-owned junction. Invalid ownership rejects before publication without mutation.
+
+Status: fixed and mechanically passing.
+
 ### M72-R1 - Recoverable public workbench bulk fixes
 
 In the ordinary editable workspace, create an incompatible driving dimension that publishes a

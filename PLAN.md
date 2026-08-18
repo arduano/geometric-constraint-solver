@@ -67,7 +67,7 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M78 are complete. M78 is the CAD geometry-tool family and
+of every prepared UAT step. M71-M79 are complete. M78 is the CAD geometry-tool family and
 authoring-variant cut under ADR 0036. Initial candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the complete release gate plus immutable
 Tailscale nomination but is withdrawn from current UAT by M78-F011. Its focused Tangent-Arc
@@ -75,6 +75,9 @@ centre-drag repair passes owning-layer regressions; replacement clean qualificat
 Tailscale nomination, human UAT and closeout approval pass. Documentation-only approval descendant
 `a6d504e` passes Pages run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact
 hosted-byte verification without replacing the qualified product source.
+M80 is the active native topology-preserving Profile Offset milestone under ADR 0037. Its
+implementation and broad pre-nomination qualification pass; clean candidate nomination, human
+UAT, publication and closure remain pending.
 M76's
 implementation,
 feature refinements,
@@ -5302,6 +5305,64 @@ authoritative `public-complete/results.tsv` has SHA-256
 `a7679ce2e5f45a2ad32631c24bbc90892cd64bd19678ec483b2c2e494ad86660`. The frozen Tailscale
 snapshot remains accepted UAT evidence; the repository-prefixed Pages rebuild is final M79
 public-byte authority. No byte identity between those separately built distributions is claimed.
+
+### M80: native topology-preserving Profile Offset
+
+Status: **implementation and broad pre-nomination qualification complete; clean nomination,
+human UAT, publication and closure pending**. ADR 0037 and `docs/M80_GOALS.md` own the approved
+one-to-one native association; `docs/M80_IMPLEMENTATION.md` is the live ledger and
+`docs/M80_UAT.md` is the prepared human scorecard.
+
+- [x] Add one grouped driving-only `ProfileOffset` dimension with one positive shared length
+  scalar, explicit face Outward/Inward or open-chain Left/Right state and no reference mode.
+- [x] Admit exactly one authenticated bounded native Profile face including holes, or one manually
+  collected ordered native open chain; accept a one-line or one-circular-arc chain.
+- [x] Map exact line/polyline source spans to standalone native line targets and preserve exact
+  circle and circular-arc families. Reject Construction/external/computed/partial-fragment
+  provenance and every ellipse, conic, Bezier, B-spline and NURBS operand without approximation.
+- [x] Persist ordered source-target traversals, exact shared-point/endpoint-contact junction
+  provenance, explicit miter turn or tangent branch and open-terminal normal-translation policy.
+- [x] Preserve runtime `DimensionKind: Copy` through a `ProfileOffsetId` arena; compile one grouped
+  source into multiple ordered sparse residual blocks with structured audits and complete source
+  mapping.
+- [x] Reuse ADR 0020 line-support rows, add equal-center/signed-radius circle/arc rows and add
+  tangential anchors for open terminals and tangent joins. Keep both arc sides active and use
+  explicit source Start/End `Preference` rows only as deterministic shared-angle gauges, so hard
+  target endpoint drivers propagate without weighted hard equations. Independently validate every
+  equation, side, traversal, sweep, terminal and branch predicate.
+- [x] Make unchanged topology a hard acceptance condition for the selected operand paths: reject
+  collapse, self-intersection, non-adjacent contact, split/merge, hole loss/nesting change and
+  tangent/miter barrier crossings transactionally while retaining the last accepted complete
+  scene; unrelated sketch arrangement geometry is outside this certificate.
+- [x] Make `geosolve-sketch-ops` own deterministic same-family Profile Offset proposals over an
+  authenticated topology stamp, then create all target native geometry, ordinary persistent target
+  connectivity, scalar and grouped dimension in one exact retained transaction and one Undo step.
+  Deleting/suppressing only the association leaves the target geometry and ordinary connectivity.
+- [x] Freeze historical v2-v4 dimension wire syntax, return typed `UnsupportedM80State` from
+  canonical v4 export and add an omitted-when-empty private draft-v5 Profile Offset side section;
+  preserve old bytes and workspace-v6/repro-v1 atomic restore.
+- [x] Add separate headless Offset authoring and Modify → Offset bottom-left presentation with
+  authenticated hover/click ownership, Distance/Flip/Apply/Cancel, non-selectable preview,
+  process-local valid-distance memory and one movable disposable-cache annotation. Preserve a
+  negative pre-operand direction, typed unavailable hover/click, ordered arrows/terminals and
+  common pointer/tree/keyboard semantic picking.
+- [x] Regress closed linear/circular/mixed/holed faces, one-/multi-edge open chains, edits from both
+  sides, direction/traversal retention, topology barriers, persistence/history, stale/cancelled/
+  exhausted atomicity, Jacobians/audits/rank/DOF, native/WASM parity and thin demo behavior.
+- [x] Pass focused and broad pre-nomination qualification: sketch 16, topology 15, operations 16,
+  Offset authoring 10, coordinator 7, demo 150 and annotation parity 6 native/6 WASM; formatting,
+  warnings-denied workspace Clippy, locked all-feature workspace tests and exact 270-row golden
+  survey/check/require-clean all pass. `M80-F001`-`M80-F003` are frozen in owner regressions.
+- [ ] Pass the complete clean release gate, freeze its exact output without rebuilding, keep it
+  byte-verified on the shared Tailscale endpoint through focused human UAT, then publish and verify
+  GitHub Pages before closure.
+
+Gate: every accepted source edge retains exactly one same-family native target edge under one
+positive grouped distance and explicit direction/traversal/junction branch; every success passes
+independent residual, domain and unchanged-topology validation; invalid or stale work is atomic;
+removing only the association preserves ordinary target topology. M80 does not implement the later
+ADR 0031 variable-cardinality computed Offset, curve approximation, topology trimming, canonical
+v5, mobile UI, B-rep offset or 3D behavior.
 
 ## Explicit non-goals
 
