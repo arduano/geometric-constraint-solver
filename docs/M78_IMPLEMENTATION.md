@@ -2,12 +2,13 @@
 
 # M78 implementation — CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17)**. Initial clean candidate
+Status: **closeout-approved (2026-08-18); final Pages publication pending**. Initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete release qualification and immutable
 Tailscale nomination, but M78-F011 withdraws it from current UAT. The focused Tangent-Arc
 centre-drag correction passes owner regressions; replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the complete clean gate and immutable,
-byte-verified Tailscale nomination. Human UAT, publication and closeout remain open.
+byte-verified Tailscale nomination. Human UAT and the focused F011 recheck are accepted; final
+publication remains open.
 
 Architecture owner: ADR 0036.
 
@@ -434,6 +435,7 @@ above. Known scope limits remain the explicit deferrals in `docs/M78_GOALS.md`; 
 interior/periodic Tangent Arc or multi-tangent circle workflow. The unchanged golden survey/check/
 require-clean sequence still matches. F011 replacement clean workspace/release qualification and
 exact no-rebuild Tailscale verification pass; the earlier candidate evidence above is withdrawn
-historical evidence. All U1-U8 rows, the targeted F011 recheck and final supervising approval
-remain pending; accepted-source publication and hosted-byte verification therefore have not
-started. M78 must not be described as complete before those steps.
+historical evidence. On 2026-08-18 the supervising caller accepted U1-U8, reported the focused
+F011 centre-drag replacement behaving correctly and requested milestone closure. Exact GitHub
+Pages publication from a documentation-only approval descendant and hosted-byte verification
+remain required before M78 is complete; exact gate-qualified product authority remains `793e9de`.

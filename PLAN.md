@@ -67,12 +67,14 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M77 are complete. M78 is the active CAD geometry-tool family and
-authoring-variant cut under ADR 0036. Initial candidate
+of every prepared UAT step. M71-M77 are complete. M78 is the closeout-approved CAD geometry-tool
+family and authoring-variant cut under ADR 0036. Initial candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the complete release gate plus immutable
 Tailscale nomination but is withdrawn from current UAT by M78-F011. Its focused Tangent-Arc
 centre-drag repair passes owning-layer regressions; replacement clean qualification and immutable
-Tailscale nomination now pass. Human UAT, accepted-source publication and closeout remain open.
+Tailscale nomination now pass. Human UAT and closeout approval pass; publication from a
+documentation-only approval descendant remains open and will not replace the qualified product
+source.
 M76's
 implementation,
 feature refinements,
@@ -5087,8 +5089,8 @@ bytes are historical only after M77-F012/F013 and must not be used for current U
 
 ### M78: CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17); implementation and M78-F011 replacement clean/Tailscale
-nomination pass, while human UAT, publication and closeout remain open**. Hardened product
+Status: **closeout-approved (2026-08-18); implementation, M78-F011 replacement clean/Tailscale
+nomination and human UAT pass, while final Pages publication remains open**. Hardened product
 implementation is committed through `e43aa85`; initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn historical evidence. Replacement source
@@ -5097,7 +5099,7 @@ implementation is committed through `e43aa85`; initial clean candidate
 groups the
 complete simple-geometry authoring surface into nine reusable headless families and exactly 25
 CAD-style variants.
-`docs/M78_GOALS.md` owns the exact recipe/modifier contract and `docs/M78_UAT.md` owns the pending
+`docs/M78_GOALS.md` owns the exact recipe/modifier contract and `docs/M78_UAT.md` owns the accepted
 human scorecard.
 
 - [x] Add stable non-exhaustive `GeometryToolFamily` and `GeometryToolVariant` metadata, exact
@@ -5141,8 +5143,11 @@ human scorecard.
   output without rebuilding, byte-verify it over the retained Tailscale endpoint and keep it live
   for correction until explicit human approval. The M78-F011 replacement now supersedes the
   withdrawn initial nomination.
-- [ ] Complete `docs/M78_UAT.md`, receive explicit supervising-human approval, publish the exact
-  accepted source through GitHub Pages, verify hosted bytes and close M78.
+- [x] Complete `docs/M78_UAT.md` and receive explicit supervising-human approval, including the
+  focused M78-F011 centre-drag recheck.
+- [ ] Publish a documentation-only approval descendant through GitHub Pages, verify its exact
+  hosted bytes and close M78. Exact gate-qualified product authority remains `793e9de` and is not
+  replaced or requalified by that publication commit.
 
 Implementation note (2026-08-18): `4845df7` resolves M78-F001 through M78-F010. The hardening
 freezes typed relation provenance and recipe/ambient precedence, publication-authenticated positive
@@ -5205,8 +5210,10 @@ session `40375`, started on `http://100.94.63.83:8080/`. Final proxy-disabled, c
 identity-encoded requests for `/` and all seven files return HTTP 200 with zero redirects, no
 content encoding, exact media types/lengths and snapshot-identical bodies. Final evidence is
 `/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
-`8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`. Human UAT,
-accepted-source Pages publication and final closeout remain pending.
+`8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`. On 2026-08-18 the
+supervising caller accepted U1-U8, reported the focused F011 replacement behaving correctly and
+requested closure. Pages publication from a documentation-only approval descendant remains
+pending; exact gate-qualified product authority remains `793e9de`.
 
 Gate: all nine families expose exactly the approved 25 variants; each gesture has one headless
 stage/recipe/branch owner and one atomic independently validated transaction; intrinsic recipe

@@ -186,6 +186,23 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Follow-up `62d9d26`
   makes Pages publication-only, retaining the locked Trunk build and seven-file validation while
   removing the duplicated complete integration gate. M77 is complete.
+- The closeout-approved M78 CAD geometry-family cut. `geosolve-constraint-editor` now publishes
+  stable non-exhaustive `GeometryToolFamily`/`GeometryToolVariant` metadata, exact activation,
+  semantic stages, independent inference-suppression/recipe-regularization input, typed finite
+  status and one authenticated atomic construction plan with explicit relation provenance. Nine
+  families expose exactly 25 variants across points, lines, rectangles, circles, arcs, ellipses,
+  Béziers, conics and open/periodic NURBS; the WASM workbench remains a thin persistent family
+  presenter. F001-F010 harden scale-safe derived geometry, transactional publication, stale operand
+  refresh, work budgets, recipe precedence and compatibility labels. F011 restores both centre
+  drags in an endpoint-tangent arc pair by counting only point-observable passive locality and
+  retaining fixed coordinate bounds in dense-nullspace and projected-CGLS secondary solves. It
+  changes no residual, Jacobian, priority, branch rule or canonical persistence schema. Exact
+  replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+  `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate, unchanged 270/270
+  golden authority and immutable byte-verified Tailscale nomination. The supervising caller accepts
+  U1-U8 plus F011 and requests closure; final publication from a documentation-only approval
+  descendant and hosted-byte verification remain open without replacing qualified product source
+  `793e9de`.
 
 ### Changed
 

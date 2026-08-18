@@ -104,13 +104,24 @@ Tailscale endpoint. The supervising caller accepts U1-U6 and requests closure. A
 `66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`; all
 hosted bytes exact-verify at ordered aggregate
 `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is complete.
+M78 implements the exact nine-family/25-variant CAD geometry palette through headless semantic
+stages and one authenticated atomic recipe plan. Intrinsic recipe and Shift regularization intent
+precede compatible ambient inference; circles, arcs, ellipses, grouped advanced curves and
+variable-length splines retain explicit point/contact/branch meaning without browser equations.
+M78-F011 restores projected dragging of both centres in an endpoint-tangent arc pair by counting
+only point-observable passive freedom and keeping fixed contact coordinates equality-active in both
+secondary backends. Exact replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate and immutable
+byte-verified Tailscale nomination. The supervising caller accepts U1-U8 plus the focused F011
+recheck and requests closure; final publication from a documentation-only approval descendant and
+hosted-byte verification remain open without replacing qualified product source `793e9de`.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74-M77 closed.
+3. `PLAN.md` — authoritative roadmap, with M74-M77 closed and M78 awaiting final Pages publication.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -125,6 +136,8 @@ Physics, collision and a production rendering system remain out of scope.
     scoped-approved annotation milestone and exact closure evidence.
 13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — completed and
     publicly verified selected-curve control contract, implementation ledger and scorecard.
+14. `docs/M78_GOALS.md`, `docs/M78_IMPLEMENTATION.md` and `docs/M78_UAT.md` — closeout-approved
+    geometry-family/variant contract, implementation ledger and accepted scorecard.
 
 ## Workspace
 
@@ -134,13 +147,16 @@ Physics, collision and a production rendering system remain out of scope.
 - `geosolve-sketch-ops` — deterministic equation-free split/trim/extend/construction proposals over complete stamped sketch snapshots; no residuals, solver state or private publication path.
 - `geosolve-sketch-topology` — read-only revision-stamped production wires, regions, holes and exact source provenance with explicit bounded completeness; no solver or B-rep state.
 - `geosolve-sketch-features` — separately versioned persistent computed-feature intent and independently validated revision-local output over exact accepted sketch snapshots; no residuals, solver variables, canonical sketch schema or B-rep state.
-- `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking, selection, gestures, selected-curve control cages/properties, constraint/dimension and computed-feature authoring, and typed editor effects over public sketch/feature APIs; no renderer, DOM, storage or equations.
+- `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking,
+  selection, gestures, exact geometry-family recipes, selected-curve control cages/properties,
+  constraint/dimension and computed-feature authoring, and typed editor effects over public
+  sketch/feature APIs; no renderer, DOM, storage or equations.
 - `geosolve-linkage` — persistent planar and spatial rigid bodies/features/sources, deterministic JSON/runtime remapping, gauge-separated mobility, common joints/mates, drivers, explicit assembly modes, independently published natural/pseudo-arclength continuation, typed hysteretic branch events/mode changes and multi-driver body/feature velocity fields with optional physical motion bases.
 - `geosolve-demo-web` — separate desktop WASM/SVG consumer without equations or authoritative
   document semantics; M50 removed its old playground, M51 consolidated the one directly tested
   workbench, M60 added public advanced-operation/topology presentation plus the versioned workspace
-  envelope, M67 removed its raw developer evidence/topology cards, and M77 renders only the
-  headless curve controls and exact properties supplied by the reusable crates.
+  envelope, M67 removed its raw developer evidence/topology cards, M77 renders only headless curve
+  controls/properties, and M78 presents only headless geometry families, stages and recipe previews.
 
 The critical design rule is: **share numerical machinery and feature evaluation, not one undifferentiated sketch/mechanism entity model.**
 

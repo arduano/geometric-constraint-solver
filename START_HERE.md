@@ -198,8 +198,8 @@ support and physics remain outside future acceptance.
     scoped-approved and publicly verified feature-refined annotation milestone.
 13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — completed,
     scoped-approved and publicly verified CAD-ready curve-control milestone.
-14. `docs/M78_GOALS.md`, `docs/M78_IMPLEMENTATION.md` and `docs/M78_UAT.md` — active exact
-    geometry-family/variant milestone, F001-F011 ledger and open replacement UAT scorecard.
+14. `docs/M78_GOALS.md`, `docs/M78_IMPLEMENTATION.md` and `docs/M78_UAT.md` — closeout-approved
+    geometry-family/variant milestone, F001-F011 ledger and accepted replacement UAT scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -545,9 +545,10 @@ source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 accepts U1-U6 and requests closure. Pages run `32012819635`, artifact `9283439225` and deployment
 `5942438795` exact-verify all public bytes at aggregate
 `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`; M77 is complete.
-M78 is active under ADR 0036. It implements the exact nine-family/25-variant geometry-authoring
-catalog and has passed its initial clean release/Tailscale nomination. Human UAT then opened
-`M78-F011`: a Tangent Arc authored at the endpoint of another arc exposed no accepted preview when
+M78 is closeout-approved under ADR 0036. It implements the exact nine-family/25-variant geometry-
+authoring catalog and has passed its initial clean release/Tailscale nomination. Human UAT then
+opened `M78-F011`: a Tangent Arc authored at the endpoint of another arc exposed no accepted
+preview when
 either arc centre was dragged, so both centres appeared locked despite having only the intended
 generic tangency. The focused repair makes drag locality count only point-observable passive
 freedom and keeps every fixed coordinate bound active during dense-nullspace and projected-CGLS
@@ -557,8 +558,10 @@ pass. Replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
 immutable seven-file snapshot `/tmp/geosolve-m78-f011-uat.MOsOFy`, aggregate
 `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`, is byte-verified and
 live at `http://100.94.63.83:8080/`. The initial candidate remains withdrawn historical evidence.
-U1-U8, the targeted F011 human recheck, explicit approval, Pages publication and closeout remain
-pending.
+On 2026-08-18 the supervising caller accepted U1-U8, reported the targeted F011 replacement
+behaving correctly and requested closure. Pages publication from a documentation-only approval
+descendant and hosted-byte verification remain pending; exact gate-qualified product authority
+remains `793e9de`.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -641,9 +644,11 @@ Durable milestone and cleanup records:
 - `docs/M77_GOALS.md` (completed selected-curve control and exact-property contract)
 - `docs/M77_IMPLEMENTATION.md` (implementation, review-finding, publication and closeout ledger)
 - `docs/M77_UAT.md` (accepted focused scorecard and exact candidate/publication evidence)
-- `docs/M78_GOALS.md` (active geometry-family/variant and authoring-recipe contract)
-- `docs/M78_IMPLEMENTATION.md` (active implementation, F001-F011 and qualification ledger)
-- `docs/M78_UAT.md` (open focused scorecard and withdrawn/replacement immutable-candidate evidence)
+- `docs/M78_GOALS.md` (closeout-approved geometry-family/variant and authoring-recipe contract)
+- `docs/M78_IMPLEMENTATION.md` (closeout-approved implementation, F001-F011 and qualification
+  ledger)
+- `docs/M78_UAT.md` (accepted focused scorecard and withdrawn/replacement immutable-candidate
+  evidence)
 - `docs/adr/0036-headless-geometry-variants-and-atomic-recipes.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

@@ -4,8 +4,8 @@
 
 Status: accepted for active M78 on 2026-08-17; hardened product implementation is committed through
 F011 fix `e43aa85`; replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete
-clean qualification and immutable byte-verified Tailscale nomination. Human UAT, publication and
-closeout remain pending.
+clean qualification and immutable byte-verified Tailscale nomination. Human UAT and closeout
+approval pass; final Pages publication and hosted-byte verification remain pending.
 
 ## Context
 
@@ -207,5 +207,7 @@ changing a residual, Jacobian, priority or branch rule. Exact replacement source
 `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes complete workspace/WASM/Rustdoc/Trunk/release
 qualification; its exact seven-file output is frozen without rebuilding and byte-verified over
 Tailscale at ordered-manifest aggregate
-`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`. Explicit human UAT,
-accepted-source publication and hosted-byte verification remain required before M78 closes.
+`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`. The supervising caller
+accepts U1-U8 plus the focused F011 recheck and requests closure. Pages publication from a
+documentation-only approval descendant and hosted-byte verification remain required before M78
+closes; that descendant will not replace or requalify product source `793e9de`.

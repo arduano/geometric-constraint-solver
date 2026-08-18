@@ -2,9 +2,14 @@
 
 # M78 focused UAT — CAD geometry tool families and authoring variants
 
-Status: **open on the clean-qualified, immutable M78-F011 replacement candidate**. No U1-U8
-scorecard item, F011 targeted recheck or final supervising approval is accepted. GitHub Pages
-publication must not start before that explicit approval.
+Status: **approved on the clean-qualified, immutable M78-F011 replacement candidate; final GitHub
+Pages publication remains pending**. On 2026-08-18 the supervising caller reported that the
+candidate works correctly and requested milestone closure. U1-U8 and the focused F011 centre-drag
+recheck are accepted under that explicit milestone-level decision.
+
+The publication source will be the forthcoming documentation-only approval descendant that records
+this decision. It does not replace or requalify exact gate-qualified product source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc`.
 
 Current replacement source: `793e9de39d78bdabfded15d8c8e79f86df0f52bc`
 
@@ -200,14 +205,28 @@ displaying NaN or infinity.
 
 ## Acceptance record
 
-- U1 — family palette, variant memory and stage language: pending
-- U2 — points, segments, polylines and midpoint lines: pending
-- U3 — four rectangle recipes and Shift squares: pending
-- U4 — circles and arcs: pending
-- U5 — ellipses, Béziers and conics: pending
-- U6 — open and periodic control NURBS: pending
-- U7 — modifiers, inference cycling and recovery: pending
-- U8 — role, persistence and desktop polish: pending
-- M78-F011 — source and created Tangent-Arc centre drag targeted recheck: pending
-- Final supervising approval: pending
-- GitHub Pages publication and hosted-byte verification: pending
+- U1 — family palette, variant memory and stage language: accepted under the supervising caller's
+  milestone-level approval
+- U2 — points, segments, polylines and midpoint lines: accepted under the supervising caller's
+  milestone-level approval
+- U3 — four rectangle recipes and Shift squares: accepted under the supervising caller's
+  milestone-level approval
+- U4 — circles and arcs: accepted under the supervising caller's milestone-level approval
+- U5 — ellipses, Béziers and conics: accepted under the supervising caller's milestone-level
+  approval
+- U6 — open and periodic control NURBS: accepted under the supervising caller's milestone-level
+  approval
+- U7 — modifiers, inference cycling and recovery: accepted under the supervising caller's
+  milestone-level approval
+- U8 — role, persistence and desktop polish: accepted under the supervising caller's milestone-
+  level approval
+- M78-F011 — source and created Tangent-Arc centre drag targeted recheck: passed; the caller reports
+  that the replacement behaves correctly
+- Final supervising approval: passed on 2026-08-18; the caller accepted the current replacement and
+  requested milestone closure
+- Documentation-only approval-descendant Pages publication and hosted-byte verification: pending
+
+This is explicit milestone-level acceptance of the current replacement. It does not invent a
+separately logged row-by-row replay beyond the focused defect checks and interaction review
+reported by the supervising caller; exact mathematical, lifecycle, authority and persistence
+behavior remains owned by the qualified native/WASM regressions above.

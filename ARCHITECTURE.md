@@ -38,8 +38,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   qualification and immutable Tailscale nomination, but M78-F011 withdrew it from current UAT.
   The point-observable-locality/fixed-bound repair passes focused owner regressions and replacement
   source `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the complete clean gate plus immutable,
-  byte-verified Tailscale nomination. Human UAT, accepted-source publication and closeout remain
-  pending.
+  byte-verified Tailscale nomination. The supervising caller accepts U1-U8 plus the F011 recheck
+  and requests closure; publication from a documentation-only approval descendant remains pending
+  without replacing the qualified product source.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1372,11 +1373,13 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   paths exact-verify at aggregate
   `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is part of the
   accepted baseline.
-- M78: active under ADR 0036. The approved target adds an exact nine-family/25-variant headless
-  geometry catalog, semantic draft status, typed recipe operands and one authenticated atomic plan
-  for geometry plus intrinsic/regularization/inferred relations. The workbench groups those exact
+- M78: closeout-approved under ADR 0036. The approved target adds an exact nine-family/25-variant
+  headless geometry catalog, semantic draft status, typed recipe operands and one authenticated
+  atomic plan for geometry plus intrinsic/regularization/inferred relations. The workbench groups
+  those exact
   variants in persistent family overlays and remains equation-free. Initial candidate
   `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn by M78-F011. Replacement source
   `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes owning-layer regressions, the complete clean
-  gate and immutable byte-verified Tailscale nomination. UAT, Pages and closeout remain pending,
-  so M78 is not yet part of the accepted baseline.
+  gate and immutable byte-verified Tailscale nomination. Human UAT and closeout approval pass;
+  Pages publication from a documentation-only approval descendant remains pending, so M78 is not
+  yet part of the accepted baseline and `793e9de` remains its qualified product authority.

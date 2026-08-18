@@ -195,8 +195,9 @@ active under ADR 0036. Initial candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593
 qualification plus immutable Tailscale nomination but is withdrawn from current UAT by M78-F011.
 Its focused centre-drag correction passes owning-layer regressions; replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete clean qualification plus immutable
-byte-verified Tailscale nomination. Human acceptance, accepted-source publication and closeout
-remain unclaimed and pending.
+byte-verified Tailscale nomination. Human acceptance and closeout approval pass; publication from
+a documentation-only approval descendant remains pending and does not replace that qualified
+product source.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2352,9 +2353,9 @@ gate-qualified product source.
 
 ## M78 acceptance: CAD geometry tool families and authoring variants
 
-Status: **active (2026-08-17); implementation and the M78-F011 replacement clean frozen-candidate
-verification pass; human UAT, publication and closeout remain pending**. Hardened product
-implementation is committed through `e43aa85`; initial candidate source
+Status: **closeout-approved (2026-08-18); implementation, the M78-F011 replacement clean frozen-
+candidate verification and human UAT pass; final Pages publication remains pending**. Hardened
+product implementation is committed through `e43aa85`; initial candidate source
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn historical evidence. Replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
@@ -2480,9 +2481,10 @@ implementation is committed through `e43aa85`; initial candidate source
   identical bodies. Final HTTP evidence is
   `/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
   `8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`.
-- `docs/M78_UAT.md` still requires U1-U8, the F011 targeted human recheck and explicit supervising-
-  human approval before accepted-source Pages publication and hosted-byte verification may close
-  M78.
+- On 2026-08-18 the supervising caller accepted U1-U8, reported the focused F011 centre-drag
+  replacement behaving correctly and requested closure. Pages publication from a documentation-
+  only approval descendant and hosted-byte verification remain the only open acceptance item;
+  exact gate-qualified product authority remains `793e9de`.
 
 M78 adds no solver residual, curve family, canonical persistence version, hidden construction
 point, weighted-priority substitute, browser geometry authority, mobile layout or B-rep feature.

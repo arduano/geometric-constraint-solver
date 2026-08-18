@@ -215,6 +215,27 @@ plus all seven hosted paths exact-verify at aggregate
 `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is complete. This
 approval and publication change no compatibility boundary.
 
+M78 is an additive pre-1.0 authoring extension in `geosolve-constraint-editor`.
+`GeometryToolFamily` and `GeometryToolVariant` provide stable exact catalog keys, family membership
+and coarse `EditorTool` compatibility projection; `DraftAuthoringInput` keeps ambient-inference
+suppression independent from recipe regularization, while typed draft status/issues, construction
+operands and relation provenance keep stage, branch, correction and transaction meaning headless.
+Existing `EditorTool` activation remains source-compatible and selects the corresponding family
+default. Callers that exhaustively match the new non-exhaustive enums must retain a wildcard under
+the documented pre-1.0 additive policy.
+
+M78-F011 clarifies that `DocumentDragLocalityPlan::passive_degrees_of_freedom` counts passive
+freedom observable through persistent points; scalar-only curve/contact freedom cannot demand an
+impossible point anchor. Fixed coordinate bounds remain equality-active in both secondary-solve
+backends even when their projected normals are dependent. This correction adds no residual,
+Jacobian, tolerance, priority or branch change. M78 as a whole adds no curve/constraint/dimension
+kind, canonical sketch-v1-v4 syntax, supported draft-v5 language, workspace/reproduction schema or
+browser geometry authority. Exact source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate and immutable Tailscale
+nomination. The supervising caller accepts U1-U8 plus the focused F011 recheck and requests closure;
+final publication from a documentation-only approval descendant remains pending and will not
+replace or requalify product source `793e9de`. This approval changes no compatibility boundary.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 
