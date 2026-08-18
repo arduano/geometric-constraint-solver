@@ -214,9 +214,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   private token-authenticated coordinator retry may remove only independently proven fully
   redundant auto directions paired with stronger surviving positional intent; generic plans and
   partial, positional or direction-only redundancy remain transactional rejections. This adds no
-  residual, constraint kind or persistence schema. Focused native/WASM, demo, workspace and golden
-  qualification pass; the clean release gate, immutable Tailscale nomination and human UAT remain
-  pending.
+  residual, constraint kind or persistence schema. Exact product source `6874aa1` passes focused
+  native/WASM, demo, workspace and clean release qualification plus unchanged golden authority;
+  its immutable Tailscale candidate is byte-verified and human UAT remains pending.
 
 ### Changed
 

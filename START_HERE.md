@@ -186,9 +186,9 @@ browser choice to its exact pointer context, drains queued movement before cycli
 preferences recover through a fresh unpreferred hover. Its authenticated publication path may
 omit only an independently proven fully redundant direction from a bundle that retains stronger
 positional intent; generic plans and every partial, positional or direction-only redundancy remain
-fail-closed. Implementation, focused native/WASM regressions, workspace qualification and the
-unchanged 270-row golden authority pass; the clean release gate, immutable Tailscale candidate and
-supervising-human UAT remain pending.
+fail-closed. Exact product source `6874aa1` passes focused native/WASM regressions, workspace and
+clean release qualification, unchanged 270-row golden authority, and immutable served-byte
+verification at `http://100.94.63.83:8080/`. Supervising-human UAT remains pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 

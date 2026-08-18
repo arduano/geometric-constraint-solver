@@ -2,11 +2,51 @@
 
 # M79 focused UAT — inference cycling and recovery
 
-Status: **not started; frozen Tailscale candidate pending**.
+Status: **not started; clean-qualified frozen Tailscale candidate ready**.
 
-Use only the exact source, immutable snapshot and Tailscale endpoint recorded here after clean
-qualification. Findings must name the candidate and receive an M79 finding ID before replacement
-work begins.
+Use only the exact source, immutable snapshot and Tailscale endpoint recorded below. Findings must
+name the candidate and receive an M79 finding ID before replacement work begins.
+
+Product source: `6874aa1961798f4838fcda8b5fbedc4e39abfa7a`
+
+Candidate tree: `f2b70c0b5a3bd8d759479c42bf742f7f288c821d`
+
+Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Server: `geosolve-m79-uat.service`, PID `40049`
+
+Immutable snapshot: `/tmp/geosolve-m79-uat.I5TJTx` (directory `0555`, seven regular non-symlink
+files `0444`)
+
+Ordered-manifest aggregate:
+`1da8503f4d9ab535bbe3b9ce2972e05d742b2928ad8c54b59596bbac240e9ebf`
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 26,922 | `0106c01a41c0a227da03dd3f389a92070119ff81178cd9ff4f621e73198edd3a` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-6ab7a24d44cc82f6.js` | 33,333 | `075079f4bb9ae65c52e728c49fdca8df0dfa200fc3e7a8623ead8781cbe8d840` |
+| `geosolve-demo-web-6ab7a24d44cc82f6_bg.wasm` | 6,554,076 | `7aa509532cd544a6cf6410652a9e7f3c8d9df5c36de036401b1a9c9641c1f3ec` |
+| `index.html` | 29,143 | `10f178a075eb4e7a6ee8e3a28de0e2f20d2f961d0bce47c6ffdee5663b9446b6` |
+| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+
+The exact clean release command
+`env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
+ran from 17:43:28 through 17:54:19 AEST on 2026-08-18 and exited successfully without changing
+candidate HEAD, tree or worktree. Its 253,043-byte, 3,307-line retained log is
+`/tmp/geosolve-m79-clean-gate.HpmSbd.log`, SHA-256
+`838fafa04c67a64f75a9c38d40ea4b3cbb5825dbe8ccb59e339bcee462db21b3`.
+
+The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
+Freeze evidence is `/tmp/geosolve-m79-freeze-evidence.M5PXPY`. Proxy-disabled, cache-bypassed,
+identity-encoded requests first passed on temporary port `18079`, after which the old M78 listener
+was retired and this candidate started on `8080`. Final requests for `/` and all seven files return
+HTTP 200 with zero redirects, no content encoding, exact media types/lengths and snapshot-identical
+bodies; `/` equals `index.html`. Temporary evidence is
+`/tmp/geosolve-m79-temp-verify.K5bILD`; final evidence is
+`/tmp/geosolve-m79-final-verify.LExe3F`. Both `results.tsv` files have SHA-256
+`be0531a9306c1b3582af87f23b8e2725e1d85ba0b96d4a145c8954c50c5791ab`.
 
 ## U1 — exact reported reproduction
 

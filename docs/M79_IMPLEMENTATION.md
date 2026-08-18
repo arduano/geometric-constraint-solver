@@ -2,8 +2,8 @@
 
 # M79 implementation — stable inference cycling and recovery
 
-Status: **implementation and pre-nomination qualification complete; clean release qualification,
-immutable Tailscale nomination and human UAT pending**.
+Status: **implementation and clean release qualification complete; immutable byte-verified
+Tailscale candidate nominated; human UAT pending**.
 
 ## Ownership and interfaces
 
@@ -138,6 +138,59 @@ because M79 changes transient candidate/coordinator lifecycle rather than the du
 family matrix. The only diagnostics are the longstanding non-failing Cargo notices for packages
 declaring both `license` and `license-file`.
 
-The clean release log, exact nominated commit/tree, no-rebuild frozen manifest and served-byte
-evidence will be appended after committing this implementation and running the release gate from a
-clean tree. Until then this file does not claim an accepted release candidate.
+## Clean release qualification and immutable nomination
+
+Exact candidate source `6874aa1961798f4838fcda8b5fbedc4e39abfa7a`, tree
+`f2b70c0b5a3bd8d759479c42bf742f7f288c821d`, contains implementation commits `e6cdde5` and
+`959893b` plus qualification-contract commit `6874aa1`. From a clean worktree, the exact command
+
+```text
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+ran from 17:43:28 through 17:54:19 AEST on 2026-08-18 and exited successfully in 10m50s without
+changing HEAD, tree or worktree. The retained 253,043-byte, 3,307-line log is
+`/tmp/geosolve-m79-clean-gate.HpmSbd.log`, SHA-256
+`838fafa04c67a64f75a9c38d40ea4b3cbb5825dbe8ccb59e339bcee462db21b3`.
+
+The gate passes formatting/diff hygiene, warnings-denied workspace Clippy and Rustdoc, 1,738 locked
+all-feature workspace tests with zero failures and three intentional ignores, editor 364/364,
+demo-web 144/144 and seven native/WASM parity binaries at 29/29 including M79. It also passes
+unchanged 270/270 clean golden authority, demo WASM, benchmark compilation, M14/M32 performance
+budgets, the explicit 140.72-second 256-body sparse crossover, licence/package checks and Trunk
+0.21.14 release assembly. The only diagnostics are the longstanding non-failing Cargo notices for
+packages declaring both `license` and `license-file`.
+
+Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was byte-compared and
+frozen at `/tmp/geosolve-m79-uat.I5TJTx`, directory mode `0555`, as seven regular non-symlink files
+mode `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 26,922 | `0106c01a41c0a227da03dd3f389a92070119ff81178cd9ff4f621e73198edd3a` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-6ab7a24d44cc82f6.js` | 33,333 | `075079f4bb9ae65c52e728c49fdca8df0dfa200fc3e7a8623ead8781cbe8d840` |
+| `geosolve-demo-web-6ab7a24d44cc82f6_bg.wasm` | 6,554,076 | `7aa509532cd544a6cf6410652a9e7f3c8d9df5c36de036401b1a9c9641c1f3ec` |
+| `index.html` | 29,143 | `10f178a075eb4e7a6ee8e3a28de0e2f20d2f961d0bce47c6ffdee5663b9446b6` |
+| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+
+Its C-locale ordered-manifest aggregate is
+`1da8503f4d9ab535bbe3b9ce2972e05d742b2928ad8c54b59596bbac240e9ebf`; freeze evidence is
+`/tmp/geosolve-m79-freeze-evidence.M5PXPY`. Temporary service `geosolve-m79-temp.service`, PID
+`34487`, first served the snapshot on `100.94.63.83:18079`. Proxy-disabled, cache-bypassed,
+identity-encoded requests for `/` and all seven files passed exact status, redirect, content-
+encoding, length, media-type and byte checks before cutover.
+
+Only then was M78 PID `3433169` retired. Service `geosolve-m79-uat.service`, PID `40049`, now serves
+only this immutable snapshot at `http://100.94.63.83:8080/`; the temporary listener is stopped. The
+same final verification passes, `/` exactly equals `index.html`, and the fetched ordered manifest
+has the frozen aggregate. Temporary evidence is `/tmp/geosolve-m79-temp-verify.K5bILD`; final
+evidence is `/tmp/geosolve-m79-final-verify.LExe3F`. Both `results.tsv` files have SHA-256
+`be0531a9306c1b3582af87f23b8e2725e1d85ba0b96d4a145c8954c50c5791ab`.
+
+This mechanically nominates the M79 candidate; it does not accept a human scorecard row. The later
+evidence-ledger commit is documentation-only and does not replace `6874aa1` as exact product-source
+authority. GitHub Pages publication and milestone closure remain gated on explicit supervising-
+human acceptance of this frozen candidate.

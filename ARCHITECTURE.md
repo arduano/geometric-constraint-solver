@@ -46,9 +46,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   or solver semantics. `geosolve-constraint-editor` owns an immutable bounded cohort for one exact
   stationary `DraftInferenceFrame`, deterministic full-list cycling, stale preference authority and
   the narrowly authenticated redundant-direction retry. `geosolve-demo-web` owns only physical
-  Tab/pointer ordering and exact browser-context invalidation. Focused native/WASM regressions,
-  workspace qualification and unchanged golden authority pass; the complete clean release gate,
-  immutable Tailscale nomination and human UAT remain pending.
+  Tab/pointer ordering and exact browser-context invalidation. Exact product source `6874aa1`
+  passes focused native/WASM, workspace and clean release qualification, unchanged golden
+  authority and immutable served-byte verification. Human UAT remains pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1414,7 +1414,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. M78 is part of the
   accepted baseline; `793e9de` remains its qualified product authority.
 - M79: active. Exact stationary candidate cohorts, headless wraparound, browser context retirement
-  and the authenticated positional-plus-redundant-direction retry are implemented. Focused
-  native/WASM owner regressions, workspace qualification and unchanged golden authority pass.
-  Clean release qualification, a frozen byte-verified Tailscale candidate and explicit human UAT
-  are still required before publication or closure.
+  and the authenticated positional-plus-redundant-direction retry are implemented. Product source
+  `6874aa1`, tree `f2b70c0`, passes complete clean qualification and its immutable no-rebuild
+  Tailscale bytes are verified. Explicit human UAT is still required before publication or closure.

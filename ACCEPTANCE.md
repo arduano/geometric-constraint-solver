@@ -2505,8 +2505,7 @@ inference, fit-point splines, polygons and slots remain deferred.
 
 ## M79 acceptance: stable inference candidate cycling and recovery
 
-Status: **open; implementation and pre-nomination qualification complete; clean release
-qualification and human UAT pending**.
+Status: **open; clean-qualified immutable Tailscale candidate nominated; human UAT pending**.
 
 - One exact stationary headless frame owns a bounded immutable cycle cohort. Every published
   candidate ID remains selectable through repeated Tab wraparound without explicit selection

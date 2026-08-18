@@ -5244,9 +5244,9 @@ mobile layout, B-rep behavior or browser-owned geometry.
 
 ### M79: stable inference candidate cycling and recovery
 
-Status: **in progress; implementation and pre-nomination qualification complete; clean release
-qualification and human UAT pending**. M79 hardens the existing auto-constraint candidate
-lifecycle across the reusable editor and thin browser adapter.
+Status: **in progress; clean-qualified immutable Tailscale candidate nominated; human UAT
+pending**. M79 hardens the existing auto-constraint candidate lifecycle across the reusable editor
+and thin browser adapter.
 `docs/M79_GOALS.md` owns the exact contract and confirmed findings; `docs/M79_UAT.md` owns the
 pending focused human scorecard.
 
@@ -5270,7 +5270,7 @@ pending focused human scorecard.
   state-neutral stale/failure behavior at their owning layers.
 - [x] Pass focused native/WASM and demo tests, formatting, warnings-denied Clippy, locked workspace
   tests and unchanged golden survey/check/clean authority.
-- [ ] Pass the complete clean release gate, freeze the exact no-rebuild output, byte-verify it over
+- [x] Pass the complete clean release gate, freeze the exact no-rebuild output, byte-verify it over
   Tailscale and retain it for focused human correction/UAT.
 - [ ] Receive explicit supervising-human approval, publish the accepted frozen candidate through
   GitHub Pages with exact hosted-byte verification and close M79.

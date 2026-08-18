@@ -2501,10 +2501,11 @@ publication. Undo/Redo/replay reproduce that effective plan. Generic direct plan
 redundancy, redundant positional intent and direction-only candidates retain fail-closed
 `RedundantInferredConstruction` behavior.
 
-M79 focused native/WASM, demo, workspace and unchanged 270-row golden qualification pass. The
-clean release gate, immutable Tailscale nomination and human UAT remain pending. These focused
-scenarios do not expand the stable golden because the defects concern stationary interaction/
-coordinator lifecycle rather than a missing durable authoring-family dimension.
+M79 product source `6874aa1` passes focused native/WASM, demo, workspace and clean release
+qualification plus unchanged 270-row golden authority. Its immutable Tailscale candidate is byte-
+verified; human UAT remains pending. These focused scenarios do not expand the stable golden
+because the defects concern stationary interaction/coordinator lifecycle rather than a missing
+durable authoring-family dimension.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
