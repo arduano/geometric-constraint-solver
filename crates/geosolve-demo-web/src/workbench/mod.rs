@@ -245,13 +245,38 @@ impl DraftingPointerSample {
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct StationaryDraftInferenceContext {
+    pointer_id: u64,
+    position: geosolve_constraint_editor::ScreenPoint,
+    modifiers: geosolve_constraint_editor::Modifiers,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl StationaryDraftInferenceContext {
+    const fn from_input(input: geosolve_constraint_editor::PointerInput) -> Self {
+        Self {
+            pointer_id: input.pointer_id,
+            position: input.position,
+            modifiers: input.modifiers,
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct StationaryDraftInferenceChoice {
+    context: StationaryDraftInferenceContext,
+    candidate: geosolve_constraint_editor::DraftInferenceCandidateId,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 #[derive(Default)]
 struct PointerMoveQueue {
     pending: Option<DraftingPointerSample>,
     last_input: Option<geosolve_constraint_editor::PointerInput>,
-    suppressed: bool,
-    regularized: bool,
-    preferred_candidate: Option<geosolve_constraint_editor::DraftInferenceCandidateId>,
+    modifiers: geosolve_constraint_editor::Modifiers,
+    stationary_choice: Option<StationaryDraftInferenceChoice>,
     next_generation: u64,
     scheduled_generation: Option<u64>,
 }
@@ -295,23 +320,49 @@ impl PointerMoveQueue {
         input: geosolve_constraint_editor::PointerInput,
         painted_item: Option<geosolve_constraint_editor::SelectionItem>,
     ) -> DraftingPointerSample {
+        let context = StationaryDraftInferenceContext::from_input(input);
+        if self
+            .stationary_choice
+            .is_some_and(|choice| choice.context != context)
+        {
+            self.clear_candidate_preference();
+        }
         self.last_input = Some(input);
-        self.suppressed = input.modifiers.control || input.modifiers.command;
-        self.regularized = input.modifiers.shift;
-        DraftingPointerSample::with_painted_item(input, painted_item, self.preferred_candidate)
+        self.modifiers = input.modifiers;
+        let preferred_candidate = self
+            .stationary_choice
+            .filter(|choice| choice.context == context)
+            .map(|choice| choice.candidate);
+        DraftingPointerSample::with_painted_item(input, painted_item, preferred_candidate)
+    }
+
+    fn observe_for_pointer_down(
+        &mut self,
+        input: geosolve_constraint_editor::PointerInput,
+    ) -> DraftingPointerSample {
+        let sample = self.observe(input);
+        // An exact stationary choice may authorize this pointer-down once. A
+        // rejected or stale click must never leave an ID behind for a retry.
+        self.clear_candidate_preference();
+        sample
     }
 
     fn stationary_authoring_state(
         &mut self,
-        suppressed: bool,
-        regularized: bool,
+        modifiers: geosolve_constraint_editor::Modifiers,
         owns_queued_sample: bool,
     ) -> Option<DraftingPointerSample> {
-        if self.suppressed == suppressed && self.regularized == regularized {
+        if !owns_queued_sample {
+            self.clear_candidate_preference();
+        }
+        if self.modifiers == modifiers {
             return None;
         }
-        self.suppressed = suppressed;
-        self.regularized = regularized;
+        self.modifiers = modifiers;
+        self.clear_candidate_preference();
+        if let Some(input) = self.last_input.as_mut() {
+            input.modifiers = modifiers;
+        }
         if !owns_queued_sample {
             // Select drags, Fillet gestures, authoring overlays, and pan share
             // this RAF queue but do not consume geometry recipe intent. Keep their
@@ -323,9 +374,9 @@ impl PointerMoveQueue {
         self.last_input.map(|input| {
             DraftingPointerSample::with_state(
                 input,
-                suppressed,
-                regularized,
-                self.preferred_candidate,
+                modifiers.control || modifiers.command,
+                modifiers.shift,
+                None,
             )
         })
     }
@@ -336,7 +387,38 @@ impl PointerMoveQueue {
         preferred_candidate: geosolve_constraint_editor::DraftInferenceCandidateId,
         owns_queued_sample: bool,
     ) -> Option<DraftingPointerSample> {
-        self.preferred_candidate = Some(preferred_candidate);
+        if !owns_queued_sample {
+            self.clear_candidate_preference();
+            return None;
+        }
+        let input = self.last_input?;
+        let context = StationaryDraftInferenceContext::from_input(input);
+        self.stationary_choice = Some(StationaryDraftInferenceChoice {
+            context,
+            candidate: preferred_candidate,
+        });
+        self.scheduled_generation = None;
+        self.pending = None;
+        Some(DraftingPointerSample::with_state(
+            input,
+            self.modifiers.control || self.modifiers.command,
+            self.modifiers.shift,
+            Some(preferred_candidate),
+        ))
+    }
+
+    fn clear_candidate_preference(&mut self) {
+        self.stationary_choice = None;
+        if let Some(pending) = self.pending.as_mut() {
+            pending.authoring.inference.preferred_candidate = None;
+        }
+    }
+
+    fn clear_candidate_and_refresh(
+        &mut self,
+        owns_queued_sample: bool,
+    ) -> Option<DraftingPointerSample> {
+        self.clear_candidate_preference();
         if !owns_queued_sample {
             return None;
         }
@@ -345,26 +427,39 @@ impl PointerMoveQueue {
         self.last_input.map(|input| {
             DraftingPointerSample::with_state(
                 input,
-                self.suppressed,
-                self.regularized,
-                self.preferred_candidate,
+                self.modifiers.control || self.modifiers.command,
+                self.modifiers.shift,
+                None,
             )
         })
     }
 
-    fn clear_candidate_preference(&mut self) {
-        self.preferred_candidate = None;
-    }
-
     fn window_blur(&mut self, owns_queued_sample: bool) -> Option<DraftingPointerSample> {
-        self.stationary_authoring_state(false, false, owns_queued_sample)
+        let had_choice = self.stationary_choice.is_some();
+        self.clear_candidate_preference();
+        let modifiers = geosolve_constraint_editor::Modifiers::default();
+        let modifiers_changed = self.modifiers != modifiers;
+        let had_owned_pending = owns_queued_sample && self.pending.is_some();
+        if !had_choice && !modifiers_changed && !had_owned_pending {
+            return None;
+        }
+        self.modifiers = modifiers;
+        if let Some(input) = self.last_input.as_mut() {
+            input.modifiers = modifiers;
+        }
+        if !owns_queued_sample {
+            return None;
+        }
+        self.scheduled_generation = None;
+        self.pending = None;
+        self.last_input
+            .map(|input| DraftingPointerSample::with_state(input, false, false, None))
     }
 
     fn clear_stationary_sample(&mut self) -> bool {
         let cleared = self.last_input.take().is_some();
-        self.suppressed = false;
-        self.regularized = false;
-        self.preferred_candidate = None;
+        self.modifiers = geosolve_constraint_editor::Modifiers::default();
+        self.clear_candidate_preference();
         self.invalidate_before_immediate_action();
         cleared
     }
@@ -388,8 +483,19 @@ impl PointerMoveQueue {
         self.pending.take()
     }
 
-    /// Invalidates a coalesced ordinary move before an immediately handled
-    /// semantic overlay transition.
+    fn drain_before_stationary_cycle(
+        &mut self,
+        owns_queued_sample: bool,
+    ) -> Option<DraftingPointerSample> {
+        if !owns_queued_sample {
+            self.clear_candidate_preference();
+            return None;
+        }
+        self.drain_before_terminal()
+    }
+
+    /// Invalidates a coalesced ordinary move and stationary inference choice
+    /// before an immediately handled semantic lifecycle transition.
     ///
     /// The scheduled animation-frame closure will observe the missing
     /// generation and do nothing, so it cannot later clear the newer Fillet
@@ -397,42 +503,20 @@ impl PointerMoveQueue {
     fn invalidate_before_immediate_action(&mut self) {
         self.scheduled_generation = None;
         self.pending = None;
+        self.clear_candidate_preference();
     }
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
-fn cycle_candidate_index<T: PartialEq>(candidates: &[T], current: Option<&T>) -> Option<usize> {
-    if candidates.len() < 2 {
-        return None;
-    }
-    let next = current
-        .and_then(|current| candidates.iter().position(|candidate| candidate == current))
-        .map_or(0, |index| (index + 1) % candidates.len());
-    Some(next)
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-#[cfg_attr(test, allow(dead_code))]
-fn next_draft_inference_candidate(
-    resolution: &geosolve_constraint_editor::DraftInferenceResolution,
-) -> Option<geosolve_constraint_editor::DraftInferenceCandidateId> {
-    use geosolve_constraint_editor::DraftInferenceStatus;
-
-    let candidates = resolution
-        .candidates
-        .iter()
-        .map(|candidate| candidate.id)
-        .collect::<Vec<_>>();
-    let current = match &resolution.status {
-        DraftInferenceStatus::Resolved { candidate } => Some(*candidate),
-        DraftInferenceStatus::StalePreferredCandidate { preferred } => Some(*preferred),
-        DraftInferenceStatus::Ambiguous { .. } => None,
-        DraftInferenceStatus::None
-        | DraftInferenceStatus::Suppressed
-        | DraftInferenceStatus::ResourceLimited => return None,
-    };
-    cycle_candidate_index(&candidates, current.as_ref())
-        .and_then(|index| candidates.get(index).copied())
+fn draft_inference_preference_is_stale(
+    resolution: Option<&geosolve_constraint_editor::DraftInferenceResolution>,
+) -> bool {
+    resolution.is_some_and(|resolution| {
+        matches!(
+            &resolution.status,
+            geosolve_constraint_editor::DraftInferenceStatus::StalePreferredCandidate { .. }
+        )
+    })
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -2614,7 +2698,10 @@ pub(crate) mod wasm {
                 }
                 super::CanvasPointerOwnership::Foreign => return,
                 super::CanvasPointerOwnership::Uncaptured => {
-                    wb.pointer_moves.borrow_mut().drain_before_terminal();
+                    let mut pointer_moves = wb.pointer_moves.borrow_mut();
+                    pointer_moves.drain_before_terminal();
+                    pointer_moves.clear_candidate_preference();
+                    drop(pointer_moves);
                     let effects = wb.coordinator.editor_mut().cancel();
                     dispatch_effects(&mut wb, effects);
                     wb.notice = "Interaction canceled".into();
@@ -2717,6 +2804,9 @@ pub(crate) mod wasm {
             event.prevent_default();
             event.stop_propagation();
             let mut wb = click_workbench.borrow_mut();
+            wb.pointer_moves
+                .borrow_mut()
+                .invalidate_before_immediate_action();
             if step_back {
                 let effects = wb.coordinator.editor_mut().step_back_draft();
                 dispatch_effects(&mut wb, effects);
@@ -2816,7 +2906,10 @@ pub(crate) mod wasm {
             route.disposition,
             super::CanvasPointerTerminalDisposition::Cancel
         );
-        wb.pointer_moves.borrow_mut().drain_before_terminal();
+        let mut pointer_moves = wb.pointer_moves.borrow_mut();
+        pointer_moves.drain_before_terminal();
+        pointer_moves.clear_candidate_preference();
+        drop(pointer_moves);
         wb.pan_gesture = None;
         let effects = wb.coordinator.editor_mut().cancel();
         dispatch_effects(wb, effects);
@@ -2877,15 +2970,7 @@ pub(crate) mod wasm {
             );
             let effects = match owner {
                 super::CanvasPointerMoveOwner::Editor => {
-                    let problem_items = current_problem_items(&wb.coordinator, &scene);
-                    wb.coordinator
-                        .editor_mut()
-                        .pointer_move_with_problem_items_and_draft_authoring(
-                            &scene,
-                            sample.input,
-                            &problem_items,
-                            sample.authoring,
-                        )
+                    editor_pointer_move_with_stale_preference_recovery(&mut wb, &scene, sample)
                 }
                 super::CanvasPointerMoveOwner::OrdinaryAuthoring => {
                     let authoring = wb.authoring.clone();
@@ -3442,7 +3527,10 @@ pub(crate) mod wasm {
             if wb.pointer_captures.is_empty() {
                 wb.pointer_moves.borrow_mut().drain_before_terminal();
             }
-            let drafting_sample = wb.pointer_moves.borrow_mut().observe(input);
+            let drafting_sample = wb
+                .pointer_moves
+                .borrow_mut()
+                .observe_for_pointer_down(input);
             if wb.pointer_captures.is_empty() && painted_action.is_some() {
                 let painted = resolve_canvas_fillet_action_at_point(
                     &callback_document,
@@ -3530,7 +3618,6 @@ pub(crate) mod wasm {
                     drafting_sample.authoring,
                 )
             };
-            wb.pointer_moves.borrow_mut().clear_candidate_preference();
             dispatch_effects(&mut wb, effects);
             if capture_active_editor_pointer(&callback_viewport, &mut wb, event.pointer_id())
                 .is_err()
@@ -3565,8 +3652,11 @@ pub(crate) mod wasm {
                 owns_stationary_draft_inference(&wb)
             };
             let sample = down_pointer_moves.borrow_mut().stationary_authoring_state(
-                event.ctrl_key() || event.meta_key(),
-                event.shift_key(),
+                Modifiers {
+                    shift: event.shift_key(),
+                    control: event.ctrl_key(),
+                    command: event.meta_key(),
+                },
                 owns_queued_sample,
             );
             if let Some(sample) = sample {
@@ -3588,8 +3678,11 @@ pub(crate) mod wasm {
                 owns_stationary_draft_inference(&wb)
             };
             let sample = up_pointer_moves.borrow_mut().stationary_authoring_state(
-                event.ctrl_key() || event.meta_key(),
-                event.shift_key(),
+                Modifiers {
+                    shift: event.shift_key(),
+                    control: event.ctrl_key(),
+                    command: event.meta_key(),
+                },
                 owns_queued_sample,
             );
             if let Some(sample) = sample {
@@ -3620,6 +3713,52 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn editor_pointer_move_with_stale_preference_recovery(
+        wb: &mut Workbench,
+        scene: &EditorScene,
+        sample: super::DraftingPointerSample,
+    ) -> Vec<EditorEffect> {
+        let problem_items = current_problem_items(&wb.coordinator, scene);
+        let mut effects = wb
+            .coordinator
+            .editor_mut()
+            .pointer_move_with_problem_items_and_draft_authoring(
+                scene,
+                sample.input,
+                &problem_items,
+                sample.authoring,
+            );
+        let stale_preference = sample.authoring.inference.preferred_candidate.is_some()
+            && super::draft_inference_preference_is_stale(
+                wb.coordinator.editor().draft_inference_resolution(),
+            );
+        if !stale_preference {
+            return effects;
+        }
+
+        // A stale publication is fail-closed headlessly. Retire the exact
+        // browser choice and issue one ordinary hover refresh; never turn the
+        // replacement cohort into an implicit pointer-down fallback.
+        let refresh = wb
+            .pointer_moves
+            .borrow_mut()
+            .clear_candidate_and_refresh(true);
+        if let Some(refresh) = refresh {
+            let problem_items = current_problem_items(&wb.coordinator, scene);
+            effects.extend(
+                wb.coordinator
+                    .editor_mut()
+                    .pointer_move_with_problem_items_and_draft_authoring(
+                        scene,
+                        refresh.input,
+                        &problem_items,
+                        refresh.authoring,
+                    ),
+            );
+        }
+        effects
+    }
+
     fn owns_stationary_draft_inference(wb: &Workbench) -> bool {
         super::should_route_stationary_draft_inference(
             wb.reproduction_overlay_open,
@@ -3637,21 +3776,14 @@ pub(crate) mod wasm {
     ) {
         let mut wb = workbench.borrow_mut();
         if !owns_stationary_draft_inference(&wb) {
+            wb.pointer_moves.borrow_mut().clear_candidate_preference();
             return;
         }
         let Some(scene) = editor_scene(&wb) else {
+            wb.pointer_moves.borrow_mut().clear_candidate_preference();
             return;
         };
-        let problem_items = current_problem_items(&wb.coordinator, &scene);
-        let effects = wb
-            .coordinator
-            .editor_mut()
-            .pointer_move_with_problem_items_and_draft_authoring(
-                &scene,
-                sample.input,
-                &problem_items,
-                sample.authoring,
-            );
+        let effects = editor_pointer_move_with_stale_preference_recovery(&mut wb, &scene, sample);
         if effects.is_empty() {
             return;
         }
@@ -3825,6 +3957,9 @@ pub(crate) mod wasm {
                 event.prevent_default();
                 let selected = {
                     let mut wb = callback_workbench.borrow_mut();
+                    wb.pointer_moves
+                        .borrow_mut()
+                        .invalidate_before_immediate_action();
                     let effects = wb.coordinator.editor_mut().escape_geometry_tool();
                     dispatch_effects(&mut wb, effects);
                     let selected = wb.coordinator.editor().tool() == EditorTool::Select;
@@ -3857,12 +3992,31 @@ pub(crate) mod wasm {
                 return;
             }
             if event.key() == "Tab" && !keyboard_target_is_editable_or_dialog(&event) {
+                let pending = {
+                    let wb = callback_workbench.borrow();
+                    let owns = owns_stationary_draft_inference(&wb);
+                    wb.pointer_moves
+                        .borrow_mut()
+                        .drain_before_stationary_cycle(owns)
+                };
+                if let Some(pending) = pending {
+                    // Resolve the most recent coalesced coordinate before
+                    // consulting the headless candidate cohort. The retired
+                    // RAF generation will observe that it no longer owns work.
+                    dispatch_stationary_draft_inference(
+                        &callback_document,
+                        &callback_workbench,
+                        pending,
+                    );
+                }
                 let next = callback_workbench
                     .borrow()
                     .coordinator
                     .editor()
                     .draft_inference_resolution()
-                    .and_then(super::next_draft_inference_candidate);
+                    .and_then(
+                        geosolve_constraint_editor::DraftInferenceResolution::next_cycle_candidate_id,
+                    );
                 if let Some(next) = next {
                     event.prevent_default();
                     let sample = {
@@ -3897,6 +4051,9 @@ pub(crate) mod wasm {
             {
                 event.prevent_default();
                 let mut wb = callback_workbench.borrow_mut();
+                wb.pointer_moves
+                    .borrow_mut()
+                    .invalidate_before_immediate_action();
                 let effects = wb.coordinator.editor_mut().flip_geometry_draft_branch();
                 if effects.is_empty() {
                     return;
@@ -4008,6 +4165,9 @@ pub(crate) mod wasm {
                 if event.key() == "Backspace"
                     && wb.coordinator.editor().geometry_tool_variant().is_some()
                 {
+                    wb.pointer_moves
+                        .borrow_mut()
+                        .invalidate_before_immediate_action();
                     let effects = wb.coordinator.editor_mut().step_back_draft();
                     if effects.is_empty() {
                         wb.notice = "No unfinished geometry stage to remove".into();
@@ -4052,8 +4212,16 @@ pub(crate) mod wasm {
                 return;
             }
             let effects = match event.key().as_str() {
-                "Escape" => wb.coordinator.editor_mut().escape_geometry_tool(),
+                "Escape" => {
+                    wb.pointer_moves
+                        .borrow_mut()
+                        .invalidate_before_immediate_action();
+                    wb.coordinator.editor_mut().escape_geometry_tool()
+                }
                 "Enter" => {
+                    wb.pointer_moves
+                        .borrow_mut()
+                        .invalidate_before_immediate_action();
                     let expected = wb.coordinator.session().design_identity();
                     wb.coordinator.editor_mut().complete_draft(expected)
                 }
@@ -7335,9 +7503,9 @@ mod tests {
     use geosolve_constraint_editor::{
         ActivePointerGesture, ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome,
         AuthoringState, AuthoringTool, ComputedSceneState, ConstraintEditor, ConstraintIntent,
-        DraftInferenceCompleteness, DraftInferenceResolution, DraftInferenceStatus,
-        EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene, EditorTool,
-        FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        DraftInferenceCandidateId, DraftInferenceCompleteness, DraftInferenceResolution,
+        DraftInferenceStatus, EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene,
+        EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
         GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus, GeometryInteractionPolicy,
         GeometryPickScope, GeometryToolVariant, GeometryVisibility, Modifiers, PickTolerance,
@@ -7366,9 +7534,9 @@ mod tests {
         apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
         canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
         compose_editor_scene, coordinate_hud, current_problem_items,
-        curve_control_inspector_detail, curve_control_inspector_markup, cycle_candidate_index,
-        foreground_overlay_escape_owner, geometry_sweep_flip_available,
-        geometry_variant_keyboard_target, history_shortcut,
+        curve_control_inspector_detail, curve_control_inspector_markup,
+        draft_inference_preference_is_stale, foreground_overlay_escape_owner,
+        geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
         reproduction_focus_target_after_action, reproduction_overlay_presentation,
@@ -9852,6 +10020,54 @@ mod tests {
         );
     }
 
+    fn ordinary_horizontal_inference_candidate() -> DraftInferenceCandidateId {
+        let document = SketchDocument::new(10.0).expect("document");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted empty document");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            super::scene::viewport(),
+            0.5,
+        )
+        .expect("empty editor scene")
+        .with_retained_session(&session)
+        .expect("authenticated empty editor scene");
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Line);
+        let pointer = |model_position| PointerInput {
+            pointer_id: 91,
+            position: scene.viewport.model_to_screen(model_position),
+            modifiers: Modifiers::default(),
+        };
+        assert!(
+            editor
+                .pointer_down_with_draft_authoring(
+                    &scene,
+                    pointer([1.0, 1.0]),
+                    geosolve_constraint_editor::DraftAuthoringInput::default(),
+                )
+                .is_empty(),
+        );
+        editor.pointer_move_with_draft_authoring(
+            &scene,
+            pointer([2.0, 1.0]),
+            geosolve_constraint_editor::DraftAuthoringInput::default(),
+        );
+        editor
+            .draft_inference_resolution()
+            .and_then(|resolution| resolution.candidates.first())
+            .map(|candidate| candidate.id)
+            .expect("exact horizontal draft candidate")
+    }
+
     #[test]
     fn pointer_move_queue_keeps_only_latest_sample_and_terminal_invalidates_old_frame() {
         let input = |x| PointerInput {
@@ -9924,16 +10140,225 @@ mod tests {
             )),
             "RAF coalescing must keep the painted intent hint paired with the latest position",
         );
+
+        let cycle_frame = queue.push(input(11.0)).expect("queued move before Tab");
+        assert_eq!(
+            queue.drain_before_stationary_cycle(true),
+            Some(sample(11.0)),
+            "Tab must resolve the newest queued coordinate before reading candidates",
+        );
+        assert_eq!(
+            queue.take_for_frame(cycle_frame),
+            None,
+            "the retired RAF callback cannot replay the older resolution",
+        );
+
+        let foreign_frame = queue
+            .push(input(12.0))
+            .expect("queued non-drafting-owner move");
+        assert_eq!(queue.drain_before_stationary_cycle(false), None);
+        assert_eq!(
+            queue.take_for_frame(foreign_frame),
+            Some(sample(12.0)),
+            "Tab outside geometry drafting must not consume another owner's movement",
+        );
     }
 
     #[test]
-    fn tab_candidate_cycle_starts_at_ranked_first_and_wraps() {
-        let candidates = [11_u64, 22, 33];
-        assert_eq!(cycle_candidate_index(&candidates, None), Some(0));
-        assert_eq!(cycle_candidate_index(&candidates, Some(&11)), Some(1));
-        assert_eq!(cycle_candidate_index(&candidates, Some(&22)), Some(2));
-        assert_eq!(cycle_candidate_index(&candidates, Some(&33)), Some(0));
-        assert_eq!(cycle_candidate_index(&[11_u64], None), None);
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one queue-owner regression exercises every exact stationary-choice invalidation transition"
+    )]
+    fn stationary_candidate_choice_is_exact_one_shot_and_recovers_without_a_stale_id() {
+        let candidate = ordinary_horizontal_inference_candidate();
+        let mut resolution = DraftInferenceResolution {
+            status: DraftInferenceStatus::StalePreferredCandidate {
+                preferred: candidate,
+            },
+            completeness: DraftInferenceCompleteness::Complete,
+            raw_model_position: [0.0, 0.0],
+            adjusted_model_position: [0.0, 0.0],
+            raw_screen_position: ScreenPoint { x: 11.0, y: 3.0 },
+            adjusted_screen_position: ScreenPoint { x: 11.0, y: 3.0 },
+            candidates: Vec::new(),
+            guides: Vec::new(),
+        };
+        assert!(draft_inference_preference_is_stale(Some(&resolution)));
+        resolution.status = DraftInferenceStatus::Resolved { candidate };
+        assert!(!draft_inference_preference_is_stale(Some(&resolution)));
+
+        let input = |x, pointer_id, modifiers| PointerInput {
+            pointer_id,
+            position: ScreenPoint { x, y: 3.0 },
+            modifiers,
+        };
+        let base = input(11.0, 7, Modifiers::default());
+        let mut queue = PointerMoveQueue::default();
+        queue.observe(base);
+
+        assert_eq!(queue.stationary_candidate(candidate, false), None);
+        assert_eq!(
+            queue.observe(base).authoring.inference.preferred_candidate,
+            None,
+            "a non-drafting owner must never seed a later preference",
+        );
+
+        let selected = queue
+            .stationary_candidate(candidate, true)
+            .expect("owned stationary choice");
+        assert_eq!(
+            selected.authoring.inference.preferred_candidate,
+            Some(candidate),
+        );
+        let ownership_frame = queue
+            .push(base)
+            .expect("queued preferred sample before ownership loss");
+        assert_eq!(
+            queue.stationary_authoring_state(Modifiers::default(), false),
+            None,
+        );
+        assert_eq!(
+            queue
+                .take_for_frame(ownership_frame)
+                .expect("foreign owner keeps its movement")
+                .authoring
+                .inference
+                .preferred_candidate,
+            None,
+            "ownership loss must scrub a candidate from preserved foreign movement",
+        );
+        queue
+            .stationary_candidate(candidate, true)
+            .expect("reselected stationary choice");
+        assert_eq!(
+            queue
+                .observe_for_pointer_down(base)
+                .authoring
+                .inference
+                .preferred_candidate,
+            Some(candidate),
+            "the unchanged pointer-down may forward the exact choice once",
+        );
+        assert_eq!(
+            queue
+                .observe_for_pointer_down(base)
+                .authoring
+                .inference
+                .preferred_candidate,
+            None,
+            "a rejected pointer-down must not retry its candidate",
+        );
+
+        queue
+            .stationary_candidate(candidate, true)
+            .expect("second stationary choice");
+        let moved = input(12.0, 7, Modifiers::default());
+        assert_eq!(
+            queue.observe(moved).authoring.inference.preferred_candidate,
+            None,
+            "real movement retires the choice",
+        );
+        assert_eq!(
+            queue.observe(base).authoring.inference.preferred_candidate,
+            None,
+            "returning to the old coordinate cannot resurrect it",
+        );
+
+        queue
+            .stationary_candidate(candidate, true)
+            .expect("pointer identity choice");
+        assert_eq!(
+            queue
+                .observe(input(11.0, 8, Modifiers::default()))
+                .authoring
+                .inference
+                .preferred_candidate,
+            None,
+            "pointer identity is part of the stationary context",
+        );
+
+        queue.observe(base);
+        queue
+            .stationary_candidate(candidate, true)
+            .expect("modifier choice");
+        let shifted = queue
+            .stationary_authoring_state(
+                Modifiers {
+                    shift: true,
+                    ..Modifiers::default()
+                },
+                true,
+            )
+            .expect("stationary modifier refresh");
+        assert_eq!(shifted.authoring.inference.preferred_candidate, None);
+        assert!(shifted.authoring.regularized);
+
+        queue
+            .stationary_candidate(candidate, true)
+            .expect("stale recovery choice");
+        let refreshed = queue
+            .clear_candidate_and_refresh(true)
+            .expect("one unpreferred stale recovery sample");
+        assert_eq!(refreshed.authoring.inference.preferred_candidate, None);
+        assert_eq!(
+            queue
+                .observe(refreshed.input)
+                .authoring
+                .inference
+                .preferred_candidate,
+            None,
+            "the recovery refresh does not advertise a reusable fallback ID",
+        );
+        queue
+            .stationary_candidate(candidate, true)
+            .expect("blur choice");
+        let blur_frame = queue
+            .push(refreshed.input)
+            .expect("queued preferred sample before blur");
+        let blurred = queue.window_blur(true).expect("blur modifier release");
+        assert_eq!(blurred.authoring.inference.preferred_candidate, None);
+        assert_eq!(
+            queue.take_for_frame(blur_frame),
+            None,
+            "blur must retire a queued sample carrying the old choice",
+        );
+
+        queue
+            .stationary_candidate(candidate, true)
+            .expect("lifecycle choice");
+        queue.invalidate_before_immediate_action();
+        assert_eq!(
+            queue
+                .observe(blurred.input)
+                .authoring
+                .inference
+                .preferred_candidate,
+            None,
+            "history, stage, tool, and overlay transitions share one invalidation path",
+        );
+    }
+
+    #[test]
+    fn tab_cycle_drains_the_latest_raf_sample_before_the_headless_decision() {
+        let source = include_str!("mod.rs");
+        let tab = source
+            .find("if event.key() == \"Tab\"")
+            .expect("Tab keyboard route");
+        let route = &source[tab..];
+        let drain = route
+            .find("drain_before_stationary_cycle")
+            .expect("synchronous queued-move drain");
+        let headless = route
+            .find("next_cycle_candidate_id")
+            .expect("headless candidate-cycle decision");
+        assert!(
+            drain < headless,
+            "the old resolution must not be read before the latest pointer coordinate",
+        );
+        assert!(
+            !source[..tab].contains("fn next_draft_inference_candidate"),
+            "candidate ordering must remain presentation-independent",
+        );
     }
 
     #[test]
@@ -10128,7 +10553,16 @@ mod tests {
         let press_frame = queue
             .push(input(40.0, false))
             .expect("projected drag frame before Shift press");
-        assert_eq!(queue.stationary_authoring_state(false, true, false), None);
+        assert_eq!(
+            queue.stationary_authoring_state(
+                Modifiers {
+                    shift: true,
+                    ..Modifiers::default()
+                },
+                false,
+            ),
+            None,
+        );
         assert_eq!(
             queue.drain_before_terminal(),
             Some(DraftingPointerSample::from_input(input(40.0, false)))
@@ -10138,7 +10572,10 @@ mod tests {
         let release_frame = queue
             .push(input(44.0, true))
             .expect("projected drag frame before Shift release");
-        assert_eq!(queue.stationary_authoring_state(false, false, false), None);
+        assert_eq!(
+            queue.stationary_authoring_state(Modifiers::default(), false),
+            None,
+        );
         assert_eq!(
             queue.take_for_frame(release_frame),
             Some(DraftingPointerSample::from_input(input(44.0, true)))
@@ -10158,34 +10595,52 @@ mod tests {
         let mut queue = PointerMoveQueue::default();
         let stale_frame = queue.push(input).expect("scheduled pointer frame");
 
+        let pressed_modifiers = Modifiers {
+            control: true,
+            shift: true,
+            ..Modifiers::default()
+        };
         let pressed = queue
-            .stationary_authoring_state(true, true, true)
+            .stationary_authoring_state(pressed_modifiers, true)
             .expect("stationary Shift press");
-        assert_eq!(pressed.input, input);
+        assert_eq!(pressed.input.modifiers, pressed_modifiers);
+        assert_eq!(pressed.input.position, input.position);
         assert!(pressed.authoring.inference.suppressed);
         assert!(pressed.authoring.regularized);
         assert_eq!(queue.take_for_frame(stale_frame), None);
-        assert_eq!(queue.stationary_authoring_state(true, true, true), None);
+        assert_eq!(
+            queue.stationary_authoring_state(pressed_modifiers, true),
+            None,
+        );
 
+        let released_modifiers = Modifiers {
+            control: true,
+            ..Modifiers::default()
+        };
         let released = queue
-            .stationary_authoring_state(true, false, true)
+            .stationary_authoring_state(released_modifiers, true)
             .expect("stationary Shift release");
-        assert_eq!(released.input, input);
+        assert_eq!(released.input.modifiers, released_modifiers);
+        assert_eq!(released.input.position, input.position);
         assert!(released.authoring.inference.suppressed);
         assert!(!released.authoring.regularized);
 
         queue
-            .stationary_authoring_state(true, true, true)
+            .stationary_authoring_state(pressed_modifiers, true)
             .expect("second stationary Shift press");
         let blurred = queue.window_blur(true).expect("blur releases suppression");
-        assert_eq!(blurred.input, input);
+        assert_eq!(blurred.input.modifiers, Modifiers::default());
+        assert_eq!(blurred.input.position, input.position);
         assert!(!blurred.authoring.inference.suppressed);
         assert!(!blurred.authoring.regularized);
         assert_eq!(queue.window_blur(true), None);
 
         assert!(queue.clear_stationary_sample());
         assert!(!queue.clear_stationary_sample());
-        assert_eq!(queue.stationary_authoring_state(true, true, true), None);
+        assert_eq!(
+            queue.stationary_authoring_state(pressed_modifiers, true),
+            None,
+        );
     }
 
     #[test]

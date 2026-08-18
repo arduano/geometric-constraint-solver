@@ -1370,9 +1370,9 @@ fn auto_constraint_drafting_document()
     )?;
 
     // Drawing a line between these centers reuses both point identities.
-    // A construction reference over the same point pair already owns the
-    // Horizontal relation, so the inferred duplicate is deterministically
-    // rejected while the line draft remains correction-ready.
+    // A construction reference over the same point pair already proves the
+    // inferred Horizontal redundant, so M79 retains the stronger structural
+    // point snap and omits only that duplicate direction.
     let mut rejection_points = Vec::new();
     for (suffix, position) in [("start", [2.0, -9.0]), ("end", [10.0, -9.0])] {
         rejection_points.push(add_point_specimen_marker(
@@ -2192,7 +2192,7 @@ mod tests {
     use geosolve_constraint_editor::{
         ComputedFilletContinuationLimitKind, ConstructionRelationDefinition,
         ConstructionRelationProvenance, CoordinatorError, EditorEffect, EditorHoverState,
-        EditorScene, EditorTool, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        EditorMutation, EditorScene, EditorTool, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
         GeometryInteractionPolicy, GeometryPickScope, InferredRelation, Modifiers, PickTolerance,
         PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
@@ -2953,9 +2953,9 @@ mod tests {
     #[test]
     #[allow(
         clippy::too_many_lines,
-        reason = "one rejection fixture proves displayed plan, atomic refusal, recoverable draft and retry"
+        reason = "one legacy rejection fixture proves strong point identity survives redundant direction pruning"
     )]
-    fn auto_constraint_rejection_specimen_preserves_the_recoverable_draft() {
+    fn auto_constraint_point_identity_survives_redundant_direction() {
         let mut catalog = SampleCatalogState::default();
         let mut coordinator = catalog
             .open_key(SampleId::AutoConstraintDrafting.key())
@@ -3029,55 +3029,24 @@ mod tests {
                 _ => None,
             })
             .expect("redundant horizontal plan");
-        let rejection = coordinator.apply_editor_effect(commit);
-        assert!(
-            matches!(
-                rejection,
-                Err(CoordinatorError::RedundantInferredConstruction { .. })
-            ),
-            "expected redundant inferred construction, got {rejection:?}"
-        );
+        let accepted = coordinator
+            .apply_editor_effect(commit)
+            .expect("redundant direction is omitted beside point identity")
+            .expect("accepted construction mutation");
+        let EditorMutation::InferredConstruction(result) = accepted.value else {
+            panic!("expected inferred construction");
+        };
+        assert!(result.constraints.is_empty());
         assert_eq!(
             (coordinator.history_len(), coordinator.history_cursor()),
-            history
+            (history.0 + 1, history.1 + 1)
         );
         assert!(
             coordinator
-                .editor()
-                .pending_construction_commit_token()
-                .is_some()
-        );
-        assert!(
-            coordinator
-                .acknowledge_construction_commit(token, false)
-                .is_empty()
-        );
-        let corrected = [positions[1][0], positions[1][1] + 2.0];
-        let preview = coordinator.editor_mut().pointer_move(
-            &scene,
-            PointerInput {
-                pointer_id: 170,
-                position: scene.viewport.model_to_screen(corrected),
-                modifiers: Modifiers::default(),
-            },
-        );
-        assert!(
-            preview
+                .acknowledge_construction_commit(token, true)
                 .iter()
-                .any(|effect| matches!(effect, EditorEffect::PreviewConstruction(_)))
+                .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
         );
-        let retry = coordinator.pointer_down(
-            &scene,
-            PointerInput {
-                pointer_id: 170,
-                position: scene.viewport.model_to_screen(corrected),
-                modifiers: Modifiers::default(),
-            },
-        );
-        assert!(retry.iter().any(|effect| matches!(
-            effect,
-            EditorEffect::CommitConstructionPlan { plan, .. } if plan.relations.is_empty()
-        )));
     }
 
     #[test]
