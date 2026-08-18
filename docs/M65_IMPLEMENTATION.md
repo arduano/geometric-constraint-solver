@@ -45,7 +45,8 @@ The implementation is divided by owner:
   `src/document_lowering.rs` implement controlled locality planning, exact transient objective
   lowering, accepted-preview continuation and bounded exact release.
 - `crates/geosolve-sketch/src/lib.rs` exports the opaque `DocumentDragLocalityPlan`; consumers can
-  inspect only passive-DOF and anchor-count evidence, not solver matrices or anchor identities.
+  inspect only point-observable passive-DOF and anchor-count evidence, not solver matrices or
+  anchor identities.
 - `crates/geosolve-sketch/tests/m34_lifecycle.rs` and `tests/m65_locality.rs` cover frozen accepted
   targets, symmetric continuation, deterministic greedy ordering/minimal cover and the exact
   cursor/anchor objective inventory.
@@ -78,10 +79,15 @@ nullspace vectors, solver matrices or a policy they can reinterpret.
 The planner:
 
 1. measures the active point's rank in the accepted hard nullspace;
-2. computes the passive mobility not covered by that active rank;
+2. computes the point-observable passive mobility not covered by that active rank;
 3. considers ordinary accepted points in compile order;
 4. chooses anchors by greatest new rank gain, then lower point mobility rank, then compile order;
 5. captures those anchor targets from gesture-start accepted visible geometry.
+
+A remaining hard-nullspace direction that changes only scalar curve/contact state is invisible to
+every persistent point. It cannot be represented by a point-position Preference and therefore
+neither admits nor requires a locality anchor. `passive_degrees_of_freedom` reports only the
+point-observable passive cover.
 
 The solve request compiles the cursor point as the sole Temporary target and only the planned
 anchors as PreviousState Preferences. Numerical seeds may advance between samples; the locality

@@ -13,8 +13,8 @@ use geosolve_sketch::{
     DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveTrimView, DocumentEdit,
     DocumentEndpointRef, DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary,
     DocumentTrimParameter, FeatureEndpoint, GeometryRole, OperationControl, OperationOutcome,
-    OperationStopReason, OperationWorkCounter, RetainedSketchDocumentSession, SketchDocument,
-    SolverConfig, TangentOrientation,
+    OperationStopReason, OperationWorkCounter, RetainedSketchDocumentSession, ScalarDomain,
+    ScalarUnit, SketchDocument, SolverConfig, TangentOrientation,
 };
 
 const POINTER_ID: u64 = 0x7800;
@@ -537,6 +537,287 @@ fn m78_tangent_arc_is_one_retained_history_step_and_round_trips_checkpoint() {
         coordinator.session().design_document().curves().len(),
         original_curves + 1
     );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the exact authored pair keeps both center projections and persisted tangency state explicit"
+)]
+fn m78_f011_authored_tangent_arc_centers_publish_projected_drag() {
+    let mut document = SketchDocument::new(3.0).expect("document");
+    let source_center = document
+        .add_point("source arc center", [0.0, 0.0])
+        .expect("source center");
+    let source_radius = document
+        .add_scalar(
+            "source arc radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .expect("source radius");
+    let source_start = document
+        .add_scalar(
+            "source arc start",
+            0.0,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .expect("source start");
+    let source_end = document
+        .add_scalar(
+            "source arc end",
+            std::f64::consts::FRAC_PI_2,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .expect("source end");
+    let source_arc = document
+        .add_curve(
+            "source arc",
+            CurveDefinition::CircularArc {
+                center: source_center,
+                radius: source_radius,
+                start_angle: source_start,
+                end_angle: source_end,
+                sweep: DocumentArcSweep::CounterClockwise,
+            },
+        )
+        .expect("source arc");
+
+    let scene = authenticated_scene(document.clone());
+    let mut editor = ConstraintEditor::default();
+    let _ = editor.activate_geometry_tool(GeometryToolVariant::TangentArc);
+    let _ = press(&mut editor, &scene, [0.0, 2.0], false);
+    let terminal = terminal_construction(&press(&mut editor, &scene, [-1.0, 3.0], false));
+    let plan = terminal.plan.expect("authored Tangent Arc plan");
+    assert!(matches!(
+        plan.proposal,
+        ConstructionProposal::CircularArc {
+            sweep: DocumentArcSweep::Clockwise,
+            ..
+        }
+    ));
+
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .expect("source session");
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+    let expected = coordinator
+        .session()
+        .accepted_prepared_input()
+        .expect("accepted source input");
+    let result = coordinator
+        .apply_construction_plan(&expected, &plan)
+        .expect("atomic Tangent Arc publication")
+        .value;
+    assert_eq!(result.construction.curves.len(), 1);
+    assert_eq!(result.contacts.len(), 2);
+    assert_eq!(result.constraints.len(), 1);
+    assert_eq!(
+        coordinator.session().design_document().constraints().len(),
+        1
+    );
+    assert!(
+        coordinator
+            .session()
+            .design_document()
+            .dimensions()
+            .is_empty()
+    );
+
+    let created_arc = result.construction.curves[0];
+    let authored_document = coordinator.session().design_document();
+    let CurveDefinition::CircularArc {
+        center: created_center,
+        sweep: DocumentArcSweep::Clockwise,
+        ..
+    } = authored_document
+        .curve(created_arc)
+        .expect("created arc")
+        .definition
+    else {
+        panic!("expected authored clockwise Tangent Arc");
+    };
+    let contact_for = |curve| {
+        result
+            .contacts
+            .iter()
+            .find(|entry| {
+                authored_document
+                    .contact(entry.contact)
+                    .is_some_and(|contact| contact.curve == CurveSpan::line(curve))
+            })
+            .expect("authored tangent contact")
+            .contact
+    };
+    let source_contact = contact_for(source_arc);
+    let created_contact = contact_for(created_arc);
+    assert!(matches!(
+        authored_document
+            .constraint(result.constraints[0].constraint)
+            .expect("generic tangency")
+            .definition,
+        DocumentConstraintDefinition::CurveCurveTangency {
+            first_contact,
+            second_contact,
+        } if first_contact == source_contact && second_contact == created_contact
+    ));
+
+    let authored_session = coordinator.session().clone();
+    let accepted = authored_session
+        .accepted_state_for_current_input()
+        .expect("accepted authored arcs");
+    let source_initial = accepted
+        .document()
+        .point(source_center)
+        .expect("source center")
+        .position;
+    let created_initial = accepted
+        .document()
+        .point(created_center)
+        .expect("created center")
+        .position;
+    assert_point_close(source_initial, [0.0, 0.0]);
+    assert_point_close(created_initial, [0.0, 3.0]);
+
+    for (label, active, passive, target) in [
+        (
+            "source",
+            source_center,
+            created_center,
+            [source_initial[0] + 0.48, source_initial[1] + 0.34],
+        ),
+        (
+            "created",
+            created_center,
+            source_center,
+            [created_initial[0] + 0.48, created_initial[1] + 0.34],
+        ),
+    ] {
+        let mut drag = RetainedEditorCoordinator::new(authored_session.clone())
+            .expect("fresh drag coordinator");
+        let before_history = (drag.history_len(), drag.history_cursor());
+        let before_design = drag.session().design_document().clone();
+        let _ = drag.resolve_projected_point_move(POINTER_ID, 1, active, target);
+
+        let work = drag
+            .projected_drag_work_evidence()
+            .expect("projected drag work");
+        assert_eq!(work.attempts, 1, "{label}: {work:#?}");
+        assert!(work.accepted, "{label}: {work:#?}");
+        assert_eq!(work.passive_degrees_of_freedom, 2, "{label}: {work:#?}");
+        assert_eq!(work.anchor_count, 1, "{label}: {work:#?}");
+        assert_eq!(work.rejection_stage, None, "{label}: {work:#?}");
+
+        let preview = drag
+            .solved_preview_session()
+            .and_then(RetainedSketchDocumentSession::accepted_state_for_current_input)
+            .expect("accepted projected preview");
+        let position = preview
+            .document()
+            .point(active)
+            .expect("active preview center")
+            .position;
+        assert!(
+            (position[0] - target[0]).hypot(position[1] - target[1]) <= 1.0e-8,
+            "{label} center reached {position:?}, not {target:?}"
+        );
+        assert!(
+            preview
+                .document()
+                .point(passive)
+                .expect("tangency-coupled center")
+                .position
+                .into_iter()
+                .all(f64::is_finite),
+            "{label} drag made the coupled center non-finite"
+        );
+        assert!(
+            preview
+                .solve_result()
+                .acceptance_hard_residual_max
+                .is_some_and(|residual| residual.is_finite() && residual <= EPSILON),
+            "{label} preview must remain independently hard-valid"
+        );
+
+        for (contact_id, curve, neighborhood, parameter) in [
+            (
+                source_contact,
+                source_arc,
+                ContactNeighborhood::End,
+                1.0_f64,
+            ),
+            (
+                created_contact,
+                created_arc,
+                ContactNeighborhood::Start,
+                0.0_f64,
+            ),
+        ] {
+            let contact = preview
+                .document()
+                .contact(contact_id)
+                .expect("persisted tangent contact");
+            assert_eq!(contact.curve, CurveSpan::line(curve), "{label}");
+            assert_eq!(
+                contact.domain,
+                ContactDomain::Bounded {
+                    lower: 0.0,
+                    upper: 1.0,
+                },
+                "{label}"
+            );
+            assert_eq!(contact.neighborhood, neighborhood, "{label}");
+            assert_eq!(
+                contact.tangent_orientation,
+                Some(TangentOrientation::Aligned),
+                "{label}"
+            );
+            assert_eq!(
+                preview
+                    .document()
+                    .scalar(contact.parameter)
+                    .expect("contact parameter")
+                    .value
+                    .to_bits(),
+                parameter.to_bits(),
+                "{label}"
+            );
+        }
+        assert!(matches!(
+            preview
+                .document()
+                .curve(source_arc)
+                .expect("source preview arc")
+                .definition,
+            CurveDefinition::CircularArc {
+                sweep: DocumentArcSweep::CounterClockwise,
+                ..
+            }
+        ));
+        assert!(matches!(
+            preview
+                .document()
+                .curve(created_arc)
+                .expect("created preview arc")
+                .definition,
+            CurveDefinition::CircularArc {
+                sweep: DocumentArcSweep::Clockwise,
+                ..
+            }
+        ));
+        assert_eq!(
+            (drag.history_len(), drag.history_cursor()),
+            before_history,
+            "{label} preview must remain history-neutral before release"
+        );
+        assert_eq!(drag.session().design_document(), &before_design, "{label}");
+    }
 }
 
 #[test]

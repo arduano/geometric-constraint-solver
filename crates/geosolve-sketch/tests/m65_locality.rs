@@ -1,10 +1,10 @@
-use geosolve_core::{OperationControl, ResidualCategory, SolverConfig};
+use geosolve_core::{OperationControl, ResidualCategory, SecondaryStatus, SolverConfig};
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DesignPointId, DocumentConstraintDefinition,
-    DocumentCoordinateAxis, DocumentDimensionDefinition, DocumentDimensionMode,
-    DocumentDragLocalityPlan, DocumentRuntimeMap, DocumentSolveRequest, PointId,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SketchSolveResult,
-    SketchSource,
+    ContactNeighborhood, CurveDefinition, CurveSpan, DesignPointId, DocumentArcSweep,
+    DocumentConstraintDefinition, DocumentCoordinateAxis, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentDragLocalityPlan, DocumentRuntimeMap, DocumentSolveRequest,
+    PointId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+    SketchSolveResult, SketchSource, TangentOrientation,
 };
 
 struct LocalityFixture {
@@ -346,4 +346,234 @@ fn drag_locality_compiles_only_the_cursor_and_planned_anchors_as_secondary_sourc
         inventory.previous_state_points.len(),
         inventory.plan.anchor_count()
     );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the exact tangency fixture audits both center drags and all retained contact and sweep state"
+)]
+fn m78_f011_endpoint_tangency_does_not_block_arc_center_locality() {
+    let mut document = SketchDocument::new(3.0).unwrap();
+    let source_center = document.add_point("source arc center", [0.0, 0.0]).unwrap();
+    let tangent_center = document
+        .add_point("tangent arc center", [0.0, 3.0])
+        .unwrap();
+    let unrelated = document.add_point("unrelated point", [8.0, -5.0]).unwrap();
+    let mut add_arc = |label: &str, center, radius_value, start_value, end_value, sweep| {
+        let radius = document
+            .add_scalar(
+                format!("{label} radius"),
+                radius_value,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let start_angle = document
+            .add_scalar(
+                format!("{label} start"),
+                start_value,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let end_angle = document
+            .add_scalar(
+                format!("{label} end"),
+                end_value,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        document
+            .add_curve(
+                label,
+                CurveDefinition::CircularArc {
+                    center,
+                    radius,
+                    start_angle,
+                    end_angle,
+                    sweep,
+                },
+            )
+            .unwrap()
+    };
+    let source = add_arc(
+        "source arc",
+        source_center,
+        2.0,
+        0.0,
+        std::f64::consts::FRAC_PI_2,
+        DocumentArcSweep::CounterClockwise,
+    );
+    let tangent = add_arc(
+        "tangent arc",
+        tangent_center,
+        1.0,
+        -std::f64::consts::FRAC_PI_2,
+        std::f64::consts::PI,
+        DocumentArcSweep::Clockwise,
+    );
+    let first_contact = document
+        .add_curve_contact(
+            "source end contact",
+            CurveSpan::line(source),
+            1.0,
+            0,
+            ContactNeighborhood::End,
+            Some(TangentOrientation::Aligned),
+        )
+        .unwrap();
+    let second_contact = document
+        .add_curve_contact(
+            "tangent start contact",
+            CurveSpan::line(tangent),
+            0.0,
+            0,
+            ContactNeighborhood::Start,
+            Some(TangentOrientation::Aligned),
+        )
+        .unwrap();
+    document
+        .add_constraint(
+            "tangent arc relation",
+            DocumentConstraintDefinition::CurveCurveTangency {
+                first_contact,
+                second_contact,
+            },
+        )
+        .unwrap();
+
+    let request = DocumentSolveRequest::default().without_previous_state_preferences();
+    let session =
+        RetainedSketchDocumentSession::new(document, request, SolverConfig::default()).unwrap();
+    let accepted = session.accepted_state().unwrap();
+    assert!(
+        accepted
+            .solve_result()
+            .acceptance_hard_residual_max
+            .is_some_and(|residual| residual.is_finite() && residual <= 1.0e-9)
+    );
+    let rank = accepted.diagnostics().rank.unwrap();
+    assert_eq!(rank.numerical_right_nullity, Some(7));
+    let unrelated_start = accepted.document().point(unrelated).unwrap().position;
+
+    for (active, passive, target) in [
+        (tangent_center, source_center, [0.25, 3.2]),
+        (source_center, tangent_center, [-0.2, 0.25]),
+    ] {
+        let plan = session
+            .drag_locality_plan(active)
+            .expect("scalar and fixed-contact freedom must not prevent point locality");
+        assert_eq!(plan.passive_degrees_of_freedom(), 2);
+        assert_eq!(plan.anchor_count(), 1);
+
+        let mut preview = session.clone();
+        let _ = preview
+            .reattempt_with_drag_locality_controlled(
+                preview.design_identity(),
+                request
+                    .with_previous_state_preferences()
+                    .with_drag(active, target),
+                &plan,
+                OperationControl::unlimited(),
+            )
+            .unwrap();
+        let attempted = preview.last_attempt().solve_result().unwrap();
+        let report = attempted.unstable_core_report();
+        assert!(
+            preview.last_attempt().accepted_state_identity().is_some(),
+            "termination={:?}, hard={:?}, temporary={:?}, preference={:?}, rejection={:?}",
+            report.termination,
+            report.hard_termination,
+            report.temporary_status,
+            report.preference_status,
+            attempted.rejection,
+        );
+        let preview = preview
+            .accepted_state()
+            .expect("tangent arc center drag preview");
+        let active_position = preview.document().point(active).unwrap().position;
+        assert!((active_position[0] - target[0]).hypot(active_position[1] - target[1]) <= 1.0e-8);
+        let passive_position = preview.document().point(passive).unwrap().position;
+        assert!(passive_position.into_iter().all(f64::is_finite));
+        assert_eq!(
+            preview
+                .document()
+                .point(unrelated)
+                .unwrap()
+                .position
+                .map(f64::to_bits),
+            unrelated_start.map(f64::to_bits)
+        );
+        assert_eq!(report.temporary_status, SecondaryStatus::Optimal);
+        assert!(matches!(
+            report.preference_status,
+            SecondaryStatus::Optimal | SecondaryStatus::Acceptable
+        ));
+        assert!(
+            preview
+                .solve_result()
+                .acceptance_hard_residual_max
+                .is_some_and(|residual| residual.is_finite() && residual <= 1.0e-9)
+        );
+        assert_eq!(
+            preview
+                .document()
+                .contact(first_contact)
+                .unwrap()
+                .neighborhood,
+            ContactNeighborhood::End
+        );
+        assert_eq!(
+            preview
+                .document()
+                .contact(first_contact)
+                .unwrap()
+                .tangent_orientation,
+            Some(TangentOrientation::Aligned)
+        );
+        assert_eq!(
+            preview
+                .document()
+                .contact(second_contact)
+                .unwrap()
+                .neighborhood,
+            ContactNeighborhood::Start
+        );
+        assert_eq!(
+            preview
+                .document()
+                .contact(second_contact)
+                .unwrap()
+                .tangent_orientation,
+            Some(TangentOrientation::Aligned)
+        );
+        for (contact, expected) in [(first_contact, 1.0_f64), (second_contact, 0.0_f64)] {
+            let parameter = preview.document().contact(contact).unwrap().parameter;
+            assert_eq!(
+                preview
+                    .document()
+                    .scalar(parameter)
+                    .unwrap()
+                    .value
+                    .to_bits(),
+                expected.to_bits()
+            );
+        }
+        assert!(matches!(
+            preview.document().curve(source).unwrap().definition,
+            CurveDefinition::CircularArc {
+                sweep: DocumentArcSweep::CounterClockwise,
+                ..
+            }
+        ));
+        assert!(matches!(
+            preview.document().curve(tangent).unwrap().definition,
+            CurveDefinition::CircularArc {
+                sweep: DocumentArcSweep::Clockwise,
+                ..
+            }
+        ));
+    }
 }

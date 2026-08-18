@@ -1604,6 +1604,194 @@ fn coupled_dense_working_set_preserves_bounds_without_freezing_other_components(
 }
 
 #[test]
+fn dependent_fixed_bounds_remain_equalities_during_dense_secondary_solve() {
+    let mut problem = Problem::new();
+    let variables = (0..8)
+        .map(|_| problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap()))
+        .collect::<Vec<_>>();
+
+    // This affine system is the accepted-state linearization of two circular-arc
+    // endpoints in tangent contact. The last two coordinates are the fixed End
+    // and Start contact parameters. Their projected hard-nullspace normals are
+    // linearly dependent, while the first two coordinates remain movable.
+    add_affine(
+        &mut problem,
+        "endpoint tangency linearization",
+        variables.clone(),
+        vec![
+            vec![
+                1.0,
+                0.0,
+                -1.0,
+                0.0,
+                6.123_233_995_736_766e-17,
+                -6.123_233_995_736_766e-17,
+                -1.0,
+                6.412_235_645_739_299e-17,
+            ],
+            vec![
+                0.0,
+                1.0,
+                0.0,
+                -1.0,
+                1.0,
+                1.0,
+                0.0,
+                -std::f64::consts::FRAC_PI_2,
+            ],
+            vec![
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                -std::f64::consts::FRAC_PI_3,
+                std::f64::consts::FRAC_PI_6,
+            ],
+        ],
+        1.0,
+    );
+    for (variable, label) in [
+        (variables[6], "fixed end contact parameter"),
+        (variables[7], "fixed start contact parameter"),
+    ] {
+        problem
+            .add_bound(CoordinateBound::new(variable, 0, Some(0.0), Some(0.0), label).unwrap())
+            .unwrap();
+    }
+    add_secondary_affine_target(
+        &mut problem,
+        "drag movable center",
+        ResidualCategory::Temporary,
+        variables.clone(),
+        vec![
+            vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ],
+        vec![-1.0 / 15.0, 1.0 / 12.0],
+    );
+
+    let report = problem.solve(SolverConfig::default()).unwrap();
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_eq!(report.hard_validity, HardValidity::Valid, "{report:#?}");
+    assert_eq!(report.temporary_status, SecondaryStatus::Optimal);
+    assert!(report.hard_residual_max <= 1.0e-12, "{report:#?}");
+    assert!((scalar(&problem, variables[0]) + 1.0 / 15.0).abs() <= 1.0e-12);
+    assert!((scalar(&problem, variables[1]) - 1.0 / 12.0).abs() <= 1.0e-12);
+    assert_eq!(scalar(&problem, variables[6]).to_bits(), 0.0_f64.to_bits());
+    assert_eq!(scalar(&problem, variables[7]).to_bits(), 0.0_f64.to_bits());
+    assert!(
+        variables
+            .iter()
+            .all(|&variable| scalar(&problem, variable).is_finite())
+    );
+    assert_eq!(
+        report.priority_solves[0].backend,
+        Some(PrioritySolveBackend::DenseNullspace)
+    );
+}
+
+#[test]
+fn dependent_fixed_bounds_remain_equalities_during_projected_cgls_secondary_solve() {
+    const VARIABLE_COUNT: usize = 131;
+
+    let mut problem = Problem::new();
+    let variables = (0..VARIABLE_COUNT)
+        .map(|_| problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap()))
+        .collect::<Vec<_>>();
+
+    // Pad the exact dense endpoint-tangency linearization above with independent
+    // free coordinates so the secondary group selects ProjectedCgls at a
+    // 128-dimensional protected nullspace. The dependent fixed contact bounds
+    // must remain equalities in both secondary backends.
+    let mut hard_matrix = vec![vec![0.0; VARIABLE_COUNT]; 3];
+    hard_matrix[0][..8].copy_from_slice(&[
+        1.0,
+        0.0,
+        -1.0,
+        0.0,
+        6.123_233_995_736_766e-17,
+        -6.123_233_995_736_766e-17,
+        -1.0,
+        6.412_235_645_739_299e-17,
+    ]);
+    hard_matrix[1][..8].copy_from_slice(&[
+        0.0,
+        1.0,
+        0.0,
+        -1.0,
+        1.0,
+        1.0,
+        0.0,
+        -std::f64::consts::FRAC_PI_2,
+    ]);
+    hard_matrix[2][..8].copy_from_slice(&[
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -std::f64::consts::FRAC_PI_3,
+        std::f64::consts::FRAC_PI_6,
+    ]);
+    add_affine(
+        &mut problem,
+        "padded endpoint tangency linearization",
+        variables.clone(),
+        hard_matrix,
+        1.0,
+    );
+    for (variable, label) in [
+        (variables[6], "padded fixed end contact parameter"),
+        (variables[7], "padded fixed start contact parameter"),
+    ] {
+        problem
+            .add_bound(CoordinateBound::new(variable, 0, Some(0.0), Some(0.0), label).unwrap())
+            .unwrap();
+    }
+    let mut temporary_matrix = vec![vec![0.0; VARIABLE_COUNT]; 2];
+    temporary_matrix[0][0] = 1.0;
+    temporary_matrix[1][1] = 1.0;
+    add_secondary_affine_target(
+        &mut problem,
+        "padded drag movable center",
+        ResidualCategory::Temporary,
+        variables.clone(),
+        temporary_matrix,
+        vec![-1.0 / 15.0, 1.0 / 12.0],
+    );
+
+    let report = problem.solve(SolverConfig::default()).unwrap();
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_eq!(report.hard_validity, HardValidity::Valid, "{report:#?}");
+    assert_eq!(report.temporary_status, SecondaryStatus::Optimal);
+    assert!(report.hard_residual_max <= 1.0e-12, "{report:#?}");
+    assert!((scalar(&problem, variables[0]) + 1.0 / 15.0).abs() <= 1.0e-12);
+    assert!((scalar(&problem, variables[1]) - 1.0 / 12.0).abs() <= 1.0e-12);
+    assert_eq!(scalar(&problem, variables[6]).to_bits(), 0.0_f64.to_bits());
+    assert_eq!(scalar(&problem, variables[7]).to_bits(), 0.0_f64.to_bits());
+    assert!(
+        variables
+            .iter()
+            .all(|&variable| scalar(&problem, variable).is_finite())
+    );
+    assert_eq!(
+        report.priority_solves[0].backend,
+        Some(PrioritySolveBackend::ProjectedCgls)
+    );
+}
+
+#[test]
 #[allow(clippy::too_many_lines)]
 fn hierarchy_only_session_edit_reuses_hard_components_and_reruns_coupled_group() {
     let mut problem = Problem::new();

@@ -191,10 +191,10 @@ exact final public publication passes. M76 implementation, clean qualification, 
 byte-verified Tailscale nomination, scoped human acceptance and exact final public publication all
 pass. M77's replacement clean qualification, immutable Tailscale review, scoped human acceptance
 and exact final Pages publication also pass without changing any completed M76 evidence. M78 is
-active under ADR 0036; hardened product implementation is committed through `4845df7`, and exact
-candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes complete clean release qualification plus
-immutable byte-verified Tailscale nomination. Human acceptance, accepted-source publication and
-closeout remain unclaimed and pending.
+active under ADR 0036. Initial candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed clean
+qualification plus immutable Tailscale nomination but is withdrawn from current UAT by M78-F011.
+Its focused centre-drag correction passes owning-layer regressions; replacement qualification,
+human acceptance, accepted-source publication and closeout remain unclaimed and pending.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -254,6 +254,9 @@ M8 does not require timed performance thresholds. It freezes reproducible benchm
 - Non-structural one-component edits cannot omit dirty IDs and do not rebuild or iterate unaffected components.
 - Accepted-state commits are atomic and rollback remains transactional.
 - Bounds participate in step computation rather than only post-solve rejection.
+- A coordinate bound with equal lower/upper values remains an equality-active row throughout
+  dense-nullspace and projected-CGLS secondary solves even when its projected normal is dependent;
+  the independence check still consumes the same controlled work.
 - Reports distinguish equality nullity, bidirectional active-set DOF and one-sided feasible motion.
 - Redundancy/conflict sections expose completeness, budget, consumed work and reason under the M8 contract.
 - Endpoint contacts and positive radii report active bounds truthfully through the sketch consumer.
@@ -991,8 +994,9 @@ browser E2E qualification may return.
 Status: complete and explicitly approved by the supervising human on 2026-08-01.
 
 - [x] One gesture-start locality plan is derived from the independently accepted hard nullspace.
-  Active rank and passive rank cover are explicit, and anchors are selected deterministically by
-  greatest rank gain, lower mobility rank and compile order.
+  Active rank and point-observable passive rank cover are explicit, and anchors are selected
+  deterministically by greatest rank gain, lower mobility rank and compile order. Scalar-only
+  freedom invisible to every persistent point neither admits nor requires a point anchor.
 - [x] Locality targets are frozen from gesture-start accepted visible geometry. The selected
   cursor is the only Temporary target and the planned anchors are the only PreviousState
   Preferences; no all-point stabilizer, retry loop, sample key or sample driver controls motion.
@@ -2346,11 +2350,12 @@ gate-qualified product source.
 
 ## M78 acceptance: CAD geometry tool families and authoring variants
 
-Status: **active (2026-08-17); implementation, complete clean release qualification and immutable
-frozen-candidate verification pass; human UAT, publication and closeout remain pending**. Hardened
-product implementation is committed through `4845df7`; exact candidate source
+Status: **active (2026-08-17); implementation and the initial clean frozen-candidate verification
+pass; M78-F011 replacement qualification, human UAT, publication and closeout remain pending**.
+Hardened product implementation is committed through `4845df7`; initial candidate source
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
-`321ca280a5f581ee9755d615733617c98c0e21d7`, is the mechanical review authority.
+`321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn from current UAT by M78-F011 while its
+focused Tangent-Arc centre-drag correction is qualified.
 
 - The exact public catalog contains nine families and 25 variants: Point 1; Lines 3; Rectangles 4;
   Circles 3; Arcs 3; Ellipses 4; Béziers 2; Conics 3; Splines 2. Stable keys, family membership,
@@ -2405,6 +2410,14 @@ product implementation is committed through `4845df7`; exact candidate source
   midpoint/curve references and Tangent Arc endpoint jets from the next exact accepted scene.
   Moved dependencies regenerate current geometry/contact/orientation state; deleted dependencies
   remain a local correction-ready rejection recoverable through step-back or Escape.
+- Dragging either centre of an endpoint-authored Tangent Arc publishes an independently valid
+  projected preview when the intended generic tangency leaves that point motion available. The
+  locality planner anchors only passive hard-nullspace freedom observable through persistent point
+  positions; scalar-only arc/contact freedom cannot demand an impossible point anchor. Fixed
+  contact-coordinate bounds remain equalities in dense-nullspace and projected-CGLS secondary
+  working sets even when their projected normals are linearly dependent. Explicit contact
+  neighbourhood/parameter and arc sweep/orientation state remain unchanged, and unrelated points
+  remain bit-stable.
 - All derived recipe arithmetic fails closed on nonrepresentable output while retaining finite
   representable input. Midpoint/symmetry residual evaluation, segment/conic norms, midpoint and
   reflection recipes, circle projection, circumcircles and Tangent Arc construction avoid
@@ -2429,7 +2442,11 @@ product implementation is committed through `4845df7`; exact candidate source
   `m78_extreme_finite`. The editor all-target/all-feature warnings-denied Clippy command also
   passes. The exact 270-case golden inventory survey is all `PASS`; `--check` and
   `--require-clean` match the unchanged recorded bytes.
-- Exact candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes formatting, diff hygiene,
+- F011 focused evidence is 47/47 core M16, 34/34 core M10, 26/26 sketch lifecycle, 5/5 sketch
+  locality and 33/33 actual M78 geometry-variant cases. Focused warnings-denied Clippy, formatting,
+  diff hygiene and the unchanged 270/270 golden survey/check/clean authority pass. No residual or
+  Jacobian changed; replacement complete release qualification remains pending.
+- Initial candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes formatting, diff hygiene,
   warnings-denied Clippy/Rustdoc, 1,730 passing locked all-feature workspace tests with zero
   failures and three intentional ignores, demo-web 143/143, six carried native/WASM parity
   binaries at 28/28, clean golden authority, benchmark/performance budgets, licence/package checks
@@ -2441,9 +2458,10 @@ product implementation is committed through `4845df7`; exact candidate source
   `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`. Proxy-disabled,
   cache-bypassed identity requests for root and all seven files at
   `http://100.94.63.83:8080/` return exact HTTP 200 bodies, lengths and media types with no
-  redirect or content encoding. This satisfies mechanical nomination only. `docs/M78_UAT.md`
-  still requires explicit supervising-human approval before accepted-source Pages publication and
-  hosted-byte verification may close M78.
+  redirect or content encoding. M78-F011 withdraws that nomination from current UAT; it remains
+  historical evidence until a clean-gated, byte-verified replacement supersedes it.
+  `docs/M78_UAT.md` still requires explicit supervising-human approval before accepted-source
+  Pages publication and hosted-byte verification may close M78.
 
 M78 adds no solver residual, curve family, canonical persistence version, hidden construction
 point, weighted-priority substitute, browser geometry authority, mobile layout or B-rep feature.

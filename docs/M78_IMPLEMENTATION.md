@@ -2,10 +2,11 @@
 
 # M78 implementation — CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17)**. Hardened product implementation is committed through
-`4845df7`; exact clean candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes complete
-release qualification and immutable byte-verified Tailscale nomination. Human UAT, publication
-and closeout remain open.
+Status: **active (opened 2026-08-17)**. Initial clean candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete release qualification and immutable
+Tailscale nomination, but M78-F011 withdraws it from current UAT. The focused Tangent-Arc
+centre-drag correction passes owner regressions; replacement clean nomination, human UAT,
+publication and closeout remain open.
 
 Architecture owner: ADR 0036.
 
@@ -66,6 +67,12 @@ The implementation is concentrated in:
 - `crates/geosolve-sketch/src/{compiler,conics,model,residuals}.rs` and
   `tests/m78_extreme_finite.rs` for overflow-safe existing segment/conic validation and
   midpoint/symmetry residual evaluation without adding a residual equation;
+- `crates/geosolve-sketch/src/{session,document_session}.rs` and `tests/m65_locality.rs` for
+  point-observable drag locality when remaining hard freedom changes scalar curve/contact state
+  but no persistent point;
+- `crates/geosolve-core/src/solver.rs` and `tests/m16.rs` for equality-active fixed bounds in both
+  dense-nullspace and projected-CGLS secondary working sets, including dependent projected
+  normals;
 - `crates/geosolve-demo-web/src/workbench/{geometry_palette,effect_adapter,icons,mod,scene}.rs`
   for thin family overlays, event translation, local issue copy and published preview rendering;
   and
@@ -223,6 +230,36 @@ ambient contact occurrence labels. Auto-inferred point-on-curve contacts therefo
 `auto point-on-curve contact N` spelling and numbering, while recipe-owned contact labels receive
 their typed provenance prefix. The compatibility lowering therefore retains the legacy bytes.
 
+### M78-F011 — endpoint tangency made both arc centres appear locked
+
+Owners: `geosolve-sketch` drag-locality planning and `geosolve-core` bounded secondary working
+sets. At source `7018e87`, a counterclockwise source arc centred at `(0,0)`, radius `2`, spanning
+`0` to `pi/2`, and a clockwise Tangent Arc centred at `(0,3)`, radius `1`, joined at source End
+parameter `1` to created Start parameter `0` with one Aligned generic tangency and no lock or
+dimension, produced no accepted projected preview when either centre was dragged.
+
+The locality planner required every hard-nullspace direction left after the active point rank to
+be covered by another point. This fixture also has freedom that changes only scalar arc/contact
+state and is invisible to every persistent point, so the planner requested an impossible anchor.
+After that correction, a second failure remained: initial secondary working sets could discard a
+linearly dependent fixed contact-coordinate equality, allowing rank-reduced roundoff to rediscover
+it repeatedly as a zero-length bound event and terminate backend-specifically as
+`NumericalFailure` or `Stalled`.
+
+Locality planning now stops once no persistent point observes the remaining nullspace and reports
+`passive_degrees_of_freedom` as point-observable passive freedom. Both dense-nullspace and
+projected-CGLS initial working sets retain every `Fixed` coordinate bound as an equality even when
+its projected normal is dependent; the independence check still runs so controlled-work accounting
+is unchanged. Exact core, sketch and actual authored-coordinator regressions require both centres
+to attain diagonal targets, unrelated point positions to remain bit-exact, finite accepted
+geometry, independently validated hard residual at most `1e-9`, bit-exact contact parameters,
+retained endpoint neighbourhoods/orientation/sweeps and history-neutral previews.
+
+No residual or analytical Jacobian changed, so F011 requires no new finite-difference Jacobian or
+audit descriptor. The tangency-owned source-End and created-Start trim grips remain a separate
+truthful-affordance limitation: F011 repairs centre dragging and does not claim every contact-owned
+trim handle can move.
+
 ## Qualification commands and outcomes
 
 The following commands ran successfully after product commit `4845df7`:
@@ -248,11 +285,38 @@ cargo test --locked -p geosolve-constraint-editor \
   # both match the recorded checklist
 ```
 
+The following focused F011 commands also ran successfully on the correction worktree before clean
+nomination:
+
+```text
+cargo test --locked -p geosolve-core --test m16
+  # 47 passed; includes dense-nullspace and 128-nullity ProjectedCgls dependent-Fixed parity
+cargo test --locked -p geosolve-core --test m10
+  # 34 passed
+cargo test --locked -p geosolve-sketch --test m34_lifecycle
+  # 26 passed
+cargo test --locked -p geosolve-sketch --test m65_locality
+  # 5 passed
+cargo test --locked -p geosolve-constraint-editor --test m78_geometry_variants
+  # 33 passed
+cargo clippy --locked -p geosolve-core -p geosolve-sketch \
+  -p geosolve-constraint-editor --all-targets --all-features -- -D warnings
+  # passed with warnings denied
+nix-shell shell.nix --run 'cargo fmt --all -- --check'
+git diff --check
+  # passed
+./scripts/golden-authoring-scene-oracle.sh --survey
+  # 270 PASS; no golden expansion warranted
+./scripts/golden-authoring-scene-oracle.sh --check
+./scripts/golden-authoring-scene-oracle.sh --require-clean
+  # both match the recorded checklist
+```
+
 The 271-line golden file (header plus 270 cases) remained unmodified at SHA-256
 `7a4afd4fbd70d0ef6454e5f07f00fde7afb64eec59d329acfba7f761d986e343`; no systemic matrix
 expansion was warranted.
 
-## Clean release qualification and nomination
+## Initial clean release qualification and nomination (withdrawn by F011)
 
 Exact candidate source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, contains product commit `4845df7` plus the final
@@ -302,15 +366,17 @@ Proxy-disabled, cache-bypassed, identity-encoded requests for `/` and every froz
 HTTP 200 with zero redirects, no content encoding, exact lengths, expected media types and
 snapshot-identical bodies. `/` exactly equals `index.html`, and the fetched ordered manifest has
 the same aggregate. HTTP evidence is `/tmp/geosolve-m78-http-verify.wpLUFR`. The evidence-ledger
-commit is a documentation descendant and does not replace `1b2ce0f` as exact mechanically
-qualified product authority.
+commit is a documentation descendant and does not replace `1b2ce0f` as the exact initial
+mechanically qualified authority. F011 subsequently withdraws that authority from current UAT;
+the snapshot remains historical fallback evidence until its clean replacement is frozen.
 
 ## Closeout evidence
 
-Focused A1-A8 and M78-F001 through M78-F010 owner regressions pass with the exact post-hardening
-counts above. Known scope limits remain the explicit deferrals in `docs/M78_GOALS.md`; there is no
+Focused A1-A8 and M78-F001 through M78-F011 owner regressions pass with the exact focused counts
+above. Known scope limits remain the explicit deferrals in `docs/M78_GOALS.md`; there is no
 interior/periodic Tangent Arc or multi-tangent circle workflow. The unchanged golden survey/check/
-require-clean sequence, complete clean workspace/release gate and exact no-rebuild frozen-artifact
-Tailscale verification pass. All U1-U8 rows and final supervising approval remain pending;
-accepted-source publication and hosted-byte verification therefore have not started. M78 must not
-be described as complete before those steps.
+require-clean sequence still matches. F011 replacement clean workspace/release qualification and
+exact no-rebuild Tailscale verification remain pending; the earlier candidate evidence above is
+withdrawn from current UAT. All U1-U8 rows, the targeted F011 recheck and final supervising
+approval remain pending; accepted-source publication and hosted-byte verification therefore have
+not started. M78 must not be described as complete before those steps.

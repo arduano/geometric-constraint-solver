@@ -2,12 +2,12 @@
 
 # M78 — CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17); implementation, clean release qualification and immutable
-Tailscale nomination pass, while human UAT, publication and closeout remain open**. Hardened
-product implementation is committed through `4845df7`; exact clean candidate
-`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` owns the frozen review artifact. M78 turns the demo's
-flat collection of geometry buttons into a polished CAD-style family palette while keeping recipe
-meaning, inference, branch state and atomic publication in reusable headless Rust.
+Status: **active (opened 2026-08-17); implementation and the initial clean/Tailscale nomination
+pass, while M78-F011 replacement qualification, human UAT, publication and closeout remain
+open**. Initial clean candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn from
+current UAT by F011 while its focused Tangent-Arc centre-drag correction is qualified. M78 turns
+the demo's flat collection of geometry buttons into a polished CAD-style family palette while
+keeping recipe meaning, inference, branch state and atomic publication in reusable headless Rust.
 
 ## Product contract
 
@@ -88,6 +88,13 @@ tangency with explicit contact, tangent orientation, source endpoint neighbourho
 Zero chord, a zero-speed jet, the tangent-line/infinite-radius limit, non-finite radius and vanishing
 sweep reject locally and retain correction-ready draft state. Interior, periodic and computed-only
 contacts are unavailable rather than approximated.
+
+After placement, generic endpoint tangency does not imply a fixed centre for either curve. When
+the remaining hard freedom permits it, dragging the source-arc centre or the created Tangent-Arc
+centre must publish a finite independently hard-valid preview, retain the exact endpoint contact
+parameters/neighbourhoods, tangent orientation and both sweeps, and introduce no lock or dimension.
+The join trims themselves remain tangency-owned controls; M78-F011 does not claim that dragging a
+contact-bearing trim handle changes the owned endpoint.
 
 Ellipse variants differ only in how their centre and principal-axis frame are established. The
 centre forms collect Centre then Major axis endpoint; axis-endpoint forms collect Major endpoint 1
@@ -174,12 +181,13 @@ demo tests own family overlay persistence, event/modifier mapping, accessible la
 of published previews. Any broad golden authoring/scene expansion must represent a reviewed
 systemic family or lifecycle dimension; isolated defects stay in focused owning-layer regressions.
 
-Latest post-hardening focused evidence at `4845df7` is 362/362 editor library tests, 32/32 geometry-
-variant cases, 7/7 editor extreme-finite cases and 1/1 sketch extreme-finite case, plus passing
-editor all-target/all-feature warnings-denied Clippy. The unchanged 270-case golden survey is all
-`PASS`, and its check/clean modes match.
+Initial post-hardening evidence through F010 is 362/362 editor library tests, 32/32 geometry-variant
+cases, 7/7 editor extreme-finite cases and 1/1 sketch extreme-finite case. F011 additionally passes
+47/47 core M16 tests, 5/5 sketch-locality tests and 33/33 geometry-variant tests, plus focused
+warnings-denied Clippy and formatting. The unchanged 270-case golden survey/check/clean authority
+still matches; replacement complete release qualification remains pending.
 
-Exact source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+Initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, passes formatting, warnings-denied
 Clippy/Rustdoc, locked all-feature workspace tests, relevant native/WASM parity, clean golden
 authority, demo WASM, performance/licence/package gates and Trunk 0.21.14 through the complete
@@ -187,8 +195,9 @@ clean release gate. Its exact no-rebuild seven-file output is frozen at
 `/tmp/geosolve-m78-uat.SNgu3D`, ordered-manifest aggregate
 `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`, and byte-verified over
 the retained Tailscale endpoint. `docs/M78_UAT.md` remains open until explicit supervising-human
-approval. GitHub Pages publication and hosted-byte verification happen only after that approval
-and are required before M78 closes.
+approval. F011 withdraws these bytes from current UAT until a clean-gated immutable replacement is
+served. GitHub Pages publication and hosted-byte verification happen only after human approval and
+are required before M78 closes.
 
 ## Explicit deferrals
 

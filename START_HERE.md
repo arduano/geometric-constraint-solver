@@ -187,7 +187,7 @@ support and physics remain outside future acceptance.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0035-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0036-*.md`
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
@@ -198,6 +198,8 @@ support and physics remain outside future acceptance.
     scoped-approved and publicly verified feature-refined annotation milestone.
 13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — completed,
     scoped-approved and publicly verified CAD-ready curve-control milestone.
+14. `docs/M78_GOALS.md`, `docs/M78_IMPLEMENTATION.md` and `docs/M78_UAT.md` — active exact
+    geometry-family/variant milestone, F001-F011 ledger and open replacement UAT scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -543,6 +545,18 @@ source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 accepts U1-U6 and requests closure. Pages run `32012819635`, artifact `9283439225` and deployment
 `5942438795` exact-verify all public bytes at aggregate
 `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`; M77 is complete.
+M78 is active under ADR 0036. It implements the exact nine-family/25-variant geometry-authoring
+catalog and has passed its initial clean release/Tailscale nomination. Human UAT then opened
+`M78-F011`: a Tangent Arc authored at the endpoint of another arc exposed no accepted preview when
+either arc centre was dragged, so both centres appeared locked despite having only the intended
+generic tangency. The focused repair makes drag locality count only point-observable passive
+freedom and keeps every fixed coordinate bound active during dense-nullspace and projected-CGLS
+secondary solves, including a linearly dependent fixed contact bound. Owning-layer regressions
+pass; replacement clean
+qualification and immutable Tailscale nomination are in progress. The earlier candidate source
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` and snapshot
+`/tmp/geosolve-m78-uat.SNgu3D` are withdrawn from current UAT but remain served as historical
+fallback bytes until that replacement is frozen.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -625,6 +639,10 @@ Durable milestone and cleanup records:
 - `docs/M77_GOALS.md` (completed selected-curve control and exact-property contract)
 - `docs/M77_IMPLEMENTATION.md` (implementation, review-finding, publication and closeout ledger)
 - `docs/M77_UAT.md` (accepted focused scorecard and exact candidate/publication evidence)
+- `docs/M78_GOALS.md` (active geometry-family/variant and authoring-recipe contract)
+- `docs/M78_IMPLEMENTATION.md` (active implementation, F001-F011 and qualification ledger)
+- `docs/M78_UAT.md` (open focused scorecard and withdrawn/replacement immutable-candidate evidence)
+- `docs/adr/0036-headless-geometry-variants-and-atomic-recipes.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -68,10 +68,11 @@ the closing regressions were satisfactory. Clean closing source `48e3cc3` passes
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
 of every prepared UAT step. M71-M77 are complete. M78 is the active CAD geometry-tool family and
-authoring-variant cut under ADR 0036; hardened product implementation is committed through
-`4845df7`, and exact clean candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes the
-complete release gate plus immutable byte-verified Tailscale nomination. Human UAT, accepted-source
-publication and closeout remain open. M76's
+authoring-variant cut under ADR 0036. Initial candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the complete release gate plus immutable
+Tailscale nomination but is withdrawn from current UAT by M78-F011. Its focused Tangent-Arc
+centre-drag repair passes owning-layer regressions; replacement qualification, human UAT,
+accepted-source publication and closeout remain open. M76's
 implementation,
 feature refinements,
 clean qualification, immutable Tailscale nomination, scoped human acceptance and exact public
@@ -3007,8 +3008,9 @@ mechanism samples. Stability and local UX take priority; bounded work must not w
 validation or introduce sample-specific behavior.
 
 - [x] Derive one opaque locality plan at gesture start from the independently accepted hard
-  nullspace. Measure the active point rank, cover only passive mobility, and choose the smallest
-  deterministic anchor set by rank gain, then lower anchor mobility rank, then compile order.
+  nullspace. Measure the active point rank, cover only point-observable passive mobility, and
+  choose the smallest deterministic anchor set by rank gain, then lower anchor mobility rank, then
+  compile order. Scalar-only freedom invisible to every persistent point needs no point anchor.
 - [x] Capture anchor targets from the gesture-start accepted visible geometry. Compile only the
   cursor as a Temporary target and only locality anchors as PreviousState Preferences; do not
   reintroduce all-point stabilization, persistent-ID retry order or sample-owned driver metadata.
@@ -5084,11 +5086,13 @@ bytes are historical only after M77-F012/F013 and must not be used for current U
 
 ### M78: CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17); implementation, clean release qualification and immutable
-Tailscale nomination pass, while human UAT, publication and closeout remain open**. Hardened
-product implementation is committed through `4845df7`; exact clean candidate
+Status: **active (opened 2026-08-17); implementation and the initial clean/Tailscale nomination
+pass, while M78-F011 replacement qualification, human UAT, publication and closeout remain
+open**. Hardened product implementation is committed through `4845df7`; initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
-`321ca280a5f581ee9755d615733617c98c0e21d7`, owns the frozen review artifact. M78 groups the
+`321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn from current UAT but remains served as
+historical fallback bytes while the focused F011 Tangent-Arc centre-drag correction is qualified.
+M78 groups the
 complete simple-geometry authoring surface into nine reusable headless families and exactly 25
 CAD-style variants.
 `docs/M78_GOALS.md` owns the exact recipe/modifier contract and `docs/M78_UAT.md` owns the pending
@@ -5128,9 +5132,13 @@ human scorecard.
 - [x] Review any systemic golden authoring/scene expansion row by row; pass survey, check and
   require-clean together with formatting, warnings-denied Clippy/Rustdoc, locked all-feature
   workspace tests, relevant WASM parity, demo WASM and Trunk release assembly.
-- [x] From the clean nominated source, pass the complete release gate, freeze the exact Trunk
+- [x] Resolve M78-F011 so both centres in an endpoint-tangent arc pair publish finite hard-valid
+  projected drags without a lock/dimension; define passive locality as point-observable and retain
+  dependent Fixed bounds across dense-nullspace and projected-CGLS secondary working sets.
+- [ ] From the clean nominated source, pass the complete release gate, freeze the exact Trunk
   output without rebuilding, byte-verify it over the retained Tailscale endpoint and keep it live
-  for correction until explicit human approval.
+  for correction until explicit human approval. The initial nomination passed; repeat it for
+  M78-F011 before resuming UAT.
 - [ ] Complete `docs/M78_UAT.md`, receive explicit supervising-human approval, publish the exact
   accepted source through GitHub Pages, verify hosted bytes and close M78.
 
@@ -5147,6 +5155,20 @@ sketch extreme-finite case. The unchanged 270-case golden surveys as 270 `PASS`;
 implementation evidence; they are incorporated into the clean nomination below without accepting
 any human UAT row.
 
+Finding note (2026-08-18): human UAT opened `M78-F011` from source `7018e87`. A native source arc
+and endpoint-authored Tangent Arc with exactly one generic tangency, fixed End/Start contact
+parameters and no lock or dimension produced no accepted preview when either arc centre was
+dragged. The drag-locality planner treated scalar-only hard-nullspace freedom as requiring an
+impossible point anchor, while dense-nullspace and projected-CGLS secondary working sets could drop
+a linearly dependent fixed contact-coordinate equality and rediscover it indefinitely as a
+zero-length bound event, ending as `NumericalFailure` or `Stalled`. The focused repair counts only
+point-observable passive freedom and retains every fixed coordinate bound as an equality while
+preserving controlled-work accounting. Core, sketch-locality and actual
+Tangent-Arc coordinator regressions prove both centres reach diagonal targets, unrelated points
+stay bit-stable, contacts/sweeps remain explicit, accepted geometry is finite and the independent
+hard residual is at most `1e-9`. This changes no residual equation, priority order or persistence
+schema. Replacement clean qualification and Tailscale nomination remain pending.
+
 Nomination note (2026-08-18): exact source
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, passes the complete clean release gate from
@@ -5158,14 +5180,16 @@ seven-file Trunk output was byte-compared and frozen read-only at
 `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`. PID `1753616`, retained
 command-runner session `76097`, serves only that snapshot at `http://100.94.63.83:8080/`.
 Proxy-disabled, cache-bypassed identity requests for `/` and all seven files pass exact status,
-length, media-type and byte verification. Human UAT, accepted-source Pages publication and final
-closeout remain pending.
+length, media-type and byte verification. M78-F011 withdraws these bytes from current UAT; they
+remain served only as a historical fallback until the replacement is frozen. Human UAT,
+accepted-source Pages publication and final closeout remain pending.
 
 Gate: all nine families expose exactly the approved 25 variants; each gesture has one headless
 stage/recipe/branch owner and one atomic independently validated transaction; intrinsic recipe
 intent wins over redundant/conflicting ambient inference; invalid, cancelled or stale work cannot
 replace accepted geometry or history; the desktop adapter contains no recipe equation or branch
 heuristic; the frozen Tailscale candidate remains available until UAT is explicitly accepted.
+The F011 replacement, rather than the withdrawn initial snapshot, must satisfy this gate.
 
 Explicitly deferred are tangent/tangent-radius and multi-tangent circles, interior/periodic Tangent
 Arc, curve/curve intersection Point inference, fit-point splines, polygons, slots and duplicate

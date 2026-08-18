@@ -2,13 +2,13 @@
 
 # M78 focused UAT — CAD geometry tool families and authoring variants
 
-Status: **open; implementation, complete clean release qualification and immutable Tailscale
-nomination pass**. No U1-U8 scorecard item or final supervising approval is accepted. GitHub Pages
-publication must not start before that explicit approval.
+Status: **open; M78-F011 withdraws the initial candidate from current UAT while its replacement is
+clean-qualified and frozen**. No U1-U8 scorecard item, F011 targeted recheck or final supervising
+approval is accepted. GitHub Pages publication must not start before that explicit approval.
 
-Candidate source: `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`
+Withdrawn initial source: `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`
 
-Candidate tree: `321ca280a5f581ee9755d615733617c98c0e21d7`
+Withdrawn initial tree: `321ca280a5f581ee9755d615733617c98c0e21d7`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
@@ -50,7 +50,8 @@ content encoding, exact lengths, expected media types and snapshot-identical bod
 `index.html`, and the fetched manifest has the same aggregate. HTTP evidence is
 `/tmp/geosolve-m78-http-verify.wpLUFR`. Previous M77 PID `284248` stayed live until the new freeze
 was complete and is now retired. This mechanically nominates the candidate; it does not accept any
-human scorecard row.
+human scorecard row. M78-F011 withdraws these bytes from current UAT; the endpoint continues to
+serve historical fallback bytes only until a clean replacement is frozen.
 
 Run the scorecard in the ordinary editable workbench at `1440x900` and approximately `1024x720`,
 at coarse and fine zoom, using both Profile and Construction roles. Direct tests, not visual
@@ -123,6 +124,14 @@ confirm the next preview follows its current position/tangent rather than a cach
 attempted source should leave the draft recoverable through Backspace/Escape rather than blanking the
 scene.
 
+For the F011 targeted recheck, create a source circular arc and place a Tangent Arc from its End so
+the document contains exactly the intended generic tangency and no lock/dimension. In Select, drag
+the source-arc centre diagonally, then Undo and drag the created Tangent-Arc centre diagonally. Both
+gestures must show and commit a live finite preview rather than appearing locked; the other centre
+may move as required by tangency. The join must retain its endpoint contact, aligned tangent
+orientation and both arc sweeps, with no extra constraint or dimension appearing. This check does
+not require the tangency-owned source-End or created-Start trim grip itself to move.
+
 ## U5 — ellipses, Béziers and conics
 
 Create both full-ellipse variants and both elliptical-arc variants. Centre-based and axis-endpoint
@@ -192,5 +201,6 @@ displaying NaN or infinity.
 - U6 — open and periodic control NURBS: pending
 - U7 — modifiers, inference cycling and recovery: pending
 - U8 — role, persistence and desktop polish: pending
+- M78-F011 — source and created Tangent-Arc centre drag targeted recheck: pending
 - Final supervising approval: pending
 - GitHub Pages publication and hosted-byte verification: pending

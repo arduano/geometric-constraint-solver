@@ -1357,10 +1357,10 @@ separate post-refinement replay; that disposition does not invent individual obs
 GitHub Pages publication, the unchanged retained M72 browser verification and M76-adapted retained
 M74/M75 browser verification now pass, completing M76. M77 subsequently completes without changing
 any completed M76 evidence. M78 is active under ADR 0036 for an exact nine-family/25-variant
-headless geometry authoring catalog; hardened product implementation is committed through
-`4845df7`, and exact candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes complete clean
-qualification plus immutable byte-verified Tailscale nomination. Human UAT and accepted-source
-publication evidence remain pending.
+headless geometry authoring catalog. Initial candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete clean qualification plus immutable
+Tailscale nomination but is withdrawn from current UAT by M78-F011. Replacement qualification,
+human UAT and accepted-source publication evidence remain pending.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -2410,17 +2410,34 @@ contact label remains exactly `auto point-on-curve contact N`, including one-bas
 numbering. Recipe-owned relations/contacts may expose their provenance-specific audit labels, but
 legacy ambient contact bytes and identity ordering do not change.
 
-M78 is active. A1-A8 implementation and M78-F001 through M78-F010 focused owner regressions pass
-through product commit `4845df7`: 362/362 editor library tests, 32/32 geometry-variant cases, 7/7
-editor extreme-finite cases and 1/1 sketch extreme-finite case. The unchanged 270-case golden
-survey is all `PASS`, and check/clean modes match. Exact source
+### M78-F011 - Endpoint tangency does not implicitly lock either arc centre
+
+At source `7018e87`, author a counterclockwise source arc centred at `(0,0)`, radius `2`, spanning
+`0` to `pi/2`, then a clockwise Tangent Arc centred at `(0,3)`, radius `1`. Join source End
+parameter `1` to created Start parameter `0` with exactly one Aligned generic tangency and no lock
+or dimension. Drag each centre diagonally through the ordinary projected-move coordinator.
+
+Both drags must publish a history-neutral accepted preview and attain the active target within
+`1e-8`. The coupled centre remains finite, an unrelated point remains bit-exact, the independent
+hard residual is at most `1e-9`, endpoint parameters remain bit-exact, contact neighbourhoods and
+orientation remain End/Start/Aligned, and source/created sweeps remain counterclockwise/clockwise.
+Locality evidence reports one anchor and two point-observable passive DOF; scalar-only nullspace
+freedom cannot require an impossible point anchor. Dense-nullspace and projected-CGLS secondary
+working sets keep every fixed coordinate bound equality-active even when its projected normal is
+dependent, preventing a repeated zero-length bound event and backend-specific `NumericalFailure`
+or `Stalled` termination.
+
+M78 is active. A1-A8 implementation and M78-F001 through M78-F010 pass through product commit
+`4845df7`; F011 additionally passes focused core, sketch-locality and actual authored-coordinator
+regressions. The unchanged 270-case golden survey/check/clean authority still matches. Initial source
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, then passes the complete clean release gate from
 02:14:05 through 02:26:24 AEST. Its exact seven-file Trunk output is frozen without rebuilding at
 `/tmp/geosolve-m78-uat.SNgu3D`, ordered-manifest aggregate
 `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`, and byte-verified at
 `http://100.94.63.83:8080/` for root plus every file. Human UAT and accepted-source publication
-remain pending.
+remain pending. F011 withdraws that snapshot from current UAT; replacement clean qualification and
+immutable nomination remain pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
@@ -3375,8 +3392,10 @@ scale-invariant persistent roles and is directly checked at `1e-6`, `1` and `1e6
 
 Projected drag remains sample-agnostic. At gesture start, the headless sketch layer derives an
 opaque locality plan from the independently accepted hard nullspace. The selected point's rank
-covers the motion it can control; deterministic point anchors cover only remaining passive
-mobility. Anchor targets are the accepted visible positions at gesture start. The selected cursor
+covers the motion it can control; deterministic point anchors cover only remaining
+point-observable passive mobility. A nullspace direction that changes only scalar curve/contact
+state and no persistent point neither admits nor requires an anchor. Anchor targets are the
+accepted visible positions at gesture start. The selected cursor
 is the only Temporary target, planned anchors are the only PreviousState Preferences, and neither
 sample keys nor presentation code choose a passive point.
 
@@ -3393,7 +3412,7 @@ The direct path corpus is table-driven:
 | --- | --- |
 | Scotch yoke | Delete the horizontal guide, then exercise horizontal, vertical, diagonal and reversal paths through the two-DOF point without an unrelated valid-root jump. |
 | Scissor jack and five-stage tower | Exercise opening/closing reversals; accepted previews stay locally continuous and all work remains inside the projected-sample envelope. |
-| Pantograph | Drive input, guide, output and center independently, including natural off-manifold guide targets. A point whose active rank covers all hard mobility needs no anchor; otherwise deterministic anchors cover only passive mobility. Rank-one `2 x 2` cursor projection must be stationarity- and minimum-norm-certified under the authoritative rank cutoff. |
+| Pantograph | Drive input, guide, output and center independently, including natural off-manifold guide targets. A point whose active rank covers all point-observable hard mobility needs no anchor; otherwise deterministic anchors cover only point-observable passive mobility. Rank-one `2 x 2` cursor projection must be stationarity- and minimum-norm-certified under the authoritative rank cutoff. |
 | Twin-roller cam | Drive both rollers separately from their centers and circumferences, including the left driving-radius overlap, then exercise horizontal, vertical, diagonal and reversal paths. The passive center moves by at most `1e-8`; a difficult rejected target retains the full last preview and a later valid target recovers in the same gesture. |
 | Circle handle offset | Press away from a circumference's center and verify that the semantic center moves without snapping the cursor to it. |
 

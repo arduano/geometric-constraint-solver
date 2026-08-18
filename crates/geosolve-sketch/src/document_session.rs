@@ -924,9 +924,12 @@ pub struct DocumentDragLocalityPlan {
 }
 
 impl DocumentDragLocalityPlan {
-    /// Returns the accepted hard-equality freedom not controlled by the dragged point.
+    /// Returns the accepted point-observable hard-equality freedom not controlled by the
+    /// dragged point.
     ///
-    /// Active-bound and one-sided mobility remain separate core-owned evidence.
+    /// Hard-nullspace directions that change only scalar curve state cannot be represented by
+    /// point-position anchors and are excluded. Active-bound and one-sided mobility remain
+    /// separate core-owned evidence.
     #[must_use]
     pub const fn passive_degrees_of_freedom(&self) -> usize {
         self.passive_degrees_of_freedom

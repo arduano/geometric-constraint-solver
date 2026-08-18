@@ -1178,6 +1178,9 @@ pub struct ProjectedDragWorkEvidence {
     /// Ordinary projected dragging always performs exactly one retained solve attempt.
     pub attempts: u8,
     pub accepted: bool,
+    /// Point-observable hard freedom preserved by the gesture's locality anchors.
+    ///
+    /// Scalar-only nullspace freedom cannot be represented by a point target and is excluded.
     pub passive_degrees_of_freedom: usize,
     pub anchor_count: usize,
     pub rejection_stage: Option<ProjectedDragRejectionStage>,

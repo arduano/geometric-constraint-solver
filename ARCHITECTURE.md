@@ -34,10 +34,10 @@ construction/NURBS UAT and certified all-family visual profiles.
   catalog, semantic draft stages and atomic recipe plans. Geometry kind remains a coarse
   `EditorTool` compatibility projection; intrinsic recipe relations, Shift regularization,
   ambient inference, contact operands and explicit sweep/orientation state remain headless.
-  Hardened product implementation is committed through `4845df7`; exact source
-  `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes complete clean release qualification and its
-  no-rebuild seven-file artifact is frozen and byte-verified over Tailscale. Human UAT,
-  accepted-source publication and closeout evidence remain pending.
+  Initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete clean release
+  qualification and immutable Tailscale nomination, but M78-F011 withdraws it from current UAT.
+  The point-observable-locality/fixed-bound repair passes focused owner regressions; replacement
+  clean nomination, human UAT, accepted-source publication and closeout remain pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -275,6 +275,9 @@ symmetry residuals with an overflow-safe midpoint form, and uses `hypot`-style n
 finite segment and conic axes so representable geometry is not rejected because an intermediate
 square or endpoint sum overflows. The midpoint Jacobian remains the same and has direct finite-
 difference coverage; independent residual validation and non-finite rejection remain mandatory.
+M78-F011 additionally clarifies point-observable drag locality and retains dependent fixed bounds
+through both secondary-solve backends; it changes no residual, tolerance, priority, branch rule or
+persistence schema.
 
 ### `geosolve-constraint-editor`
 
@@ -322,9 +325,10 @@ Rejected plans retain semantically typed draft stages. On the next exact accepte
 points, prospective contacts, remembered references and Tangent Arc endpoint jets are
 reauthenticated before reuse; missing dependencies remain a local recoverable draft issue. Derived
 midpoint/reflection/circle projection, normalized circumcircle and Tangent Arc arithmetic validates
-local incidence and emits only finite status measurements. This hardened implementation is committed
-through `4845df7`; exact candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes the clean
-release and immutable served-artifact gates, while human UAT remains open.
+local incidence and emits only finite status measurements. Initial candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the clean release and immutable
+served-artifact gates, but M78-F011 withdraws it from current UAT while the focused replacement is
+qualified.
 
 M55 expands the closed headless action/applicability surface to every preserved M13-M14 alpha
 constraint, dimension and explicit branch choice. It lowers only through typed public
@@ -589,9 +593,9 @@ overlays, remembers only session-local menu/options state and maps platform modi
 does not construct rectangles/circumcircles/tangent arcs, project ellipse trims, choose a sweep or
 compose intrinsic and inferred relations. Draft-local rejection and finite-only measurement DTOs
 are rendered as supplied; the adapter cannot convert a nonrepresentable derived value into a status
-measurement or global problem. The implementation preserves that boundary; the clean M78 release
-and immutable served-artifact gates pass on exact candidate
-`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, while human UAT remains open.
+measurement or global problem. The implementation preserves that boundary. Initial candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the clean/served-artifact gates but is
+withdrawn by M78-F011; replacement qualification and human UAT remain open.
 
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is
@@ -829,9 +833,11 @@ M64 supersedes M61's temporary active-scenario interaction boundary. Samples hav
 driver or drag metadata. M65 keeps that ordinary sample-agnostic boundary and replaces retry-based
 stabilization with one opaque gesture-local plan derived by `geosolve-sketch` from the
 independently accepted hard nullspace. The active point's nullspace response establishes active
-rank; only uncovered passive mobility is anchored. Candidate points are chosen by greatest rank
-gain, then lower mobility rank, then compile order. Anchor coordinates are captured from the
-gesture-start accepted visible geometry, not from advancing numerical seeds.
+rank; only uncovered point-observable passive mobility is anchored. A hard-nullspace direction
+that changes scalar curve/contact state but no persistent point position neither admits nor
+requires a point anchor. Candidate points are chosen by greatest rank gain, then lower mobility
+rank, then compile order. Anchor coordinates are captured from the gesture-start accepted visible
+geometry, not from advancing numerical seeds.
 
 The compiler receives the cursor point as the sole Temporary target and the selected anchors as
 the sole PreviousState Preferences. The plan remains presentation-independent and contains no
@@ -863,6 +869,13 @@ numerical-failure termination and requires successful audit-row evaluation; a tr
 non-optimal secondary `Stalled` or `IterationLimit` status remains distinct from independent Hard
 validity. These requirements do not replace
 Hard/Temporary/Preference ordering with weights or relax success tolerances.
+
+Every coordinate bound whose lower and upper values are identical is an equality during a
+secondary solve. Dense-nullspace and projected-CGLS working sets retain all such `Fixed` rows even
+when their projected normals are linearly dependent; rank-revealing projection handles the
+redundancy. The independence check still runs so bounded-operation accounting is unchanged.
+Dropping a dependent fixed row could otherwise let roundoff rediscover the same equality forever
+as a zero-length bound event.
 
 One projected sample is synchronously bounded to `16,384` each validation, dependency and lowering
 items; `256` each nonlinear iterations, factorizations and rank kernels; `512` rejected trials;
@@ -1359,8 +1372,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M78: active under ADR 0036. The approved target adds an exact nine-family/25-variant headless
   geometry catalog, semantic draft status, typed recipe operands and one authenticated atomic plan
   for geometry plus intrinsic/regularization/inferred relations. The workbench groups those exact
-  variants in persistent family overlays and remains equation-free. Hardened product implementation
-  is committed through `4845df7`; exact candidate
-  `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes the complete clean gate and immutable
-  byte-verified Tailscale nomination. UAT, Pages and closeout evidence remain pending, so M78 is
-  not yet part of the accepted baseline.
+  variants in persistent family overlays and remains equation-free. Initial candidate
+  `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the complete clean gate and immutable
+  Tailscale nomination but is withdrawn by M78-F011. Its focused correction passes owning-layer
+  regressions; replacement nomination, UAT, Pages and closeout remain pending, so M78 is not yet
+  part of the accepted baseline.

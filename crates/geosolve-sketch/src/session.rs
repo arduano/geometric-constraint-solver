@@ -177,6 +177,11 @@ pub(crate) struct SketchDragLocalityPlan {
     pub(crate) point: PointId,
     pub(crate) hard_degrees_of_freedom: usize,
     pub(crate) active_rank: usize,
+    /// Point-observable hard freedom not controlled by `point`.
+    ///
+    /// A hard-nullspace direction that changes only scalar curve state cannot
+    /// be preserved by a point-position preference and therefore does not
+    /// require (or admit) a point anchor.
     pub(crate) passive_degrees_of_freedom: usize,
     pub(crate) anchors: Vec<SketchDragLocalityAnchor>,
 }
@@ -719,13 +724,12 @@ impl SketchSession {
             return Ok(None);
         };
         let active_rank = covered.len();
-        let passive_degrees_of_freedom = hard_degrees_of_freedom.saturating_sub(active_rank);
-        if passive_degrees_of_freedom == 0 {
+        if active_rank == hard_degrees_of_freedom {
             return Ok(Some(SketchDragLocalityPlan {
                 point,
                 hard_degrees_of_freedom,
                 active_rank,
-                passive_degrees_of_freedom,
+                passive_degrees_of_freedom: 0,
                 anchors: Vec::new(),
             }));
         }
@@ -847,10 +851,13 @@ impl SketchSession {
                 }
             }
             let Some((_, _, best_order, expanded)) = best else {
-                return Err(SketchSessionError::DragLocalityIncomplete {
-                    required: hard_degrees_of_freedom,
-                    spanned: covered.len(),
-                });
+                // Every remaining nullspace direction is invisible to every
+                // persistent point in this hard component. Previous-state
+                // locality objectives are point targets, so scalar-only arc,
+                // conic, contact, or size freedom neither admits nor needs an
+                // anchor. The selected cover is complete for the observable
+                // point motion that this interaction can preserve.
+                break;
             };
             let candidate = candidates
                 .iter()
@@ -864,6 +871,8 @@ impl SketchSession {
             });
             covered = expanded;
         }
+
+        let passive_degrees_of_freedom = covered.len().saturating_sub(active_rank);
 
         Ok(Some(SketchDragLocalityPlan {
             point,

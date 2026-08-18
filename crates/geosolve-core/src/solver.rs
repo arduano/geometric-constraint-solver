@@ -3645,7 +3645,7 @@ fn optimize_coupled_priority_inner(
             limit_block_steps(&mut step, &layout, config.max_block_normalized_step).map(|_| ())
         };
         let bounds_valid = if use_projected && group_has_bounds {
-            operator_step_is_within_bounds(problem, &state, &layout, &step)
+            operator_step_is_within_bounds(problem, &state, &layout, &mut step)
         } else {
             limit_step_to_bound_events(problem, &state, &layout, &mut step).map(|_| ())
         };
@@ -4253,7 +4253,7 @@ fn bounded_projected_cgls_step(
             if status == WorkingBound::Free || (status == WorkingBound::Fixed) != fixed_only {
                 continue;
             }
-            if operator_bound_is_independent(
+            let independent = operator_bound_is_independent(
                 space,
                 &constraints,
                 &working,
@@ -4261,7 +4261,13 @@ fn bounded_projected_cgls_step(
                 rank_tolerance,
                 step_tolerance,
                 control.as_deref_mut(),
-            )? {
+            )?;
+            if status == WorkingBound::Fixed || independent {
+                // Fixed coordinate bounds remain equality rows even when their
+                // projected normals are dependent. Otherwise roundoff can
+                // repeatedly rediscover an omitted equality as a zero-length
+                // event. Keep the independence check for controlled-work
+                // accounting and for the releasable one-sided bounds.
                 working[index] = status;
             }
         }
@@ -4311,7 +4317,8 @@ fn bounded_projected_cgls_step(
             return None;
         }
 
-        let full_step = space.apply_local_bases(&step)?;
+        let mut full_step = space.apply_local_bases(&step)?;
+        snap_constrained_roundoff(&mut full_step, &full_bounds)?;
         if !operator_full_step_satisfies_bounds(&full_step, &full_bounds) {
             return None;
         }
@@ -9096,13 +9103,20 @@ fn independent_initial_working_set(
             if status == WorkingBound::Free || (status == WorkingBound::Fixed) != fixed_only {
                 continue;
             }
-            if working_constraint_is_independent(
+            let independent = working_constraint_is_independent(
                 constraints,
                 &working,
                 index,
                 relative_tolerance,
                 control.as_deref_mut(),
-            )? {
+            )?;
+            if status == WorkingBound::Fixed || independent {
+                // Fixed coordinate bounds are equalities. Retain even
+                // linearly dependent occurrences: their step right-hand side
+                // is zero at the accepted bound, and dropping one allows
+                // roundoff in the rank-reduced solve to rediscover it forever
+                // as a zero-length bound event. The independence check still
+                // runs so controlled-work accounting stays unchanged.
                 working[index] = status;
             }
         }
@@ -9301,9 +9315,10 @@ fn operator_step_is_within_bounds(
     problem: &Problem,
     state: &VariableState,
     layout: &ActiveLayout,
-    step: &DVector<f64>,
+    step: &mut DVector<f64>,
 ) -> Option<()> {
     let bounds = normalized_step_bounds(problem, state, layout, step.len())?;
+    snap_constrained_roundoff(step, &bounds)?;
     operator_full_step_satisfies_bounds(step, &bounds).then_some(())
 }
 
