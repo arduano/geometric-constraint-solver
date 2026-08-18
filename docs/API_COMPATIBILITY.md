@@ -233,8 +233,11 @@ kind, canonical sketch-v1-v4 syntax, supported draft-v5 language, workspace/repr
 browser geometry authority. Exact source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
 `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate and immutable Tailscale
 nomination. The supervising caller accepts U1-U8 plus the focused F011 recheck and requests closure;
-final publication from a documentation-only approval descendant remains pending and will not
-replace or requalify product source `793e9de`. This approval changes no compatibility boundary.
+documentation-only approval descendant `a6d504e` passes Pages run `32096209036`, artifact
+`9310104202`, deployment `5955688918` and exact hosted-byte aggregate
+`bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. It does not replace or
+requalify product source `793e9de`. M78 is complete. This approval and publication change no
+compatibility boundary.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

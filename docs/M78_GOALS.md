@@ -2,12 +2,12 @@
 
 # M78 — CAD geometry tool families and authoring variants
 
-Status: **closeout-approved (2026-08-18); implementation, the M78-F011 replacement clean/Tailscale
-nomination and human UAT pass, while final Pages publication remains open**. Initial clean candidate
+Status: **complete (closed 2026-08-18)**. Initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn historical evidence. Replacement source
-`793e9de39d78bdabfded15d8c8e79f86df0f52bc` is current immutable Tailscale UAT authority. M78
-turns the demo's flat collection of geometry buttons into a polished CAD-style family palette while
-keeping recipe meaning, inference, branch state and atomic publication in reusable headless Rust.
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc` remains qualified product authority, and its immutable
+Tailscale snapshot remains accepted UAT evidence. M78 turns the demo's flat collection of geometry
+buttons into a polished CAD-style family palette while keeping recipe meaning, inference, branch
+state and atomic publication in reusable headless Rust.
 
 ## Product contract
 
@@ -206,9 +206,11 @@ the 149.39-second sparse crossover and Trunk 0.21.14. Its exact no-rebuild seven
 frozen at `/tmp/geosolve-m78-f011-uat.MOsOFy`, ordered-manifest aggregate
 `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`, and byte-verified live at
 `http://100.94.63.83:8080/`. On 2026-08-18 the supervising caller accepted U1-U8, reported the
-focused F011 replacement behaving correctly and requested closure. GitHub Pages publication from a
-documentation-only approval descendant and hosted-byte verification remain the only open closeout
-step; that descendant does not replace or requalify exact product source `793e9de`.
+focused F011 replacement behaving correctly and requested closure. GitHub Pages publication from
+documentation-only approval descendant `a6d504e` now passes: run `32096209036`, artifact
+`9310104202` and deployment `5955688918` exact-verify root plus all seven public paths at ordered-
+manifest aggregate `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`.
+That descendant does not replace or requalify exact product source `793e9de`. M78 is closed.
 
 ## Explicit deferrals
 

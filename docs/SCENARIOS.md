@@ -1356,14 +1356,15 @@ replacement publication. The caller accepts U1-U4 for scoped closure and explici
 separate post-refinement replay; that disposition does not invent individual observations. Exact
 GitHub Pages publication, the unchanged retained M72 browser verification and M76-adapted retained
 M74/M75 browser verification now pass, completing M76. M77 subsequently completes without changing
-any completed M76 evidence. M78 is closeout-approved under ADR 0036 for an exact nine-family/
+any completed M76 evidence. M78 is complete under ADR 0036 with an exact nine-family/
 25-variant headless geometry authoring catalog. Initial candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete clean qualification plus immutable
 Tailscale nomination but is withdrawn from current UAT by M78-F011. Replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete clean qualification plus immutable,
-byte-verified Tailscale nomination. Human UAT and closeout approval pass; publication evidence for
-a documentation-only approval descendant remains pending without replacing qualified product
-source `793e9de`.
+byte-verified Tailscale nomination. Human UAT and closeout approval pass. Approval descendant
+`a6d504e` passes Pages run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact
+hosted-byte aggregate `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`
+without replacing qualified product source `793e9de`.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -2430,7 +2431,7 @@ working sets keep every fixed coordinate bound equality-active even when its pro
 dependent, preventing a repeated zero-length bound event and backend-specific `NumericalFailure`
 or `Stalled` termination.
 
-M78 is closeout-approved. A1-A8 implementation and M78-F001 through M78-F010 pass through product
+M78 is complete. A1-A8 implementation and M78-F001 through M78-F010 pass through product
 commit `4845df7`; F011 additionally passes focused core, sketch-locality and actual authored-
 coordinator regressions through product fix `e43aa85`. The unchanged 270-case golden
 survey/check/clean authority still matches. Initial source
@@ -2447,9 +2448,12 @@ seven-file output is frozen without rebuilding at `/tmp/geosolve-m78-f011-uat.MO
 manifest aggregate
 `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`, and byte-verified at
 `http://100.94.63.83:8080/` for root plus every file. On 2026-08-18 the supervising caller accepts
-U1-U8, reports the focused F011 replacement behaving correctly and requests closure. Publication
-remains pending through a documentation-only approval descendant; exact
-gate-qualified product authority remains `793e9de`.
+U1-U8, reports the focused F011 replacement behaving correctly and requests closure.
+Documentation-only approval descendant `a6d504e1d15ddcdd7e4cb02190b0ef83de814be0`, tree
+`ca50d013fe4a6ac040336344056a1d142c5629fa`, passes Pages run `32096209036`, artifact
+`9310104202` and deployment `5955688918`. Root plus all seven hosted paths byte-match ordered-
+manifest aggregate `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`.
+Exact gate-qualified product authority remains `793e9de`; M78 is complete.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

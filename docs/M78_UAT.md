@@ -2,14 +2,14 @@
 
 # M78 focused UAT — CAD geometry tool families and authoring variants
 
-Status: **approved on the clean-qualified, immutable M78-F011 replacement candidate; final GitHub
-Pages publication remains pending**. On 2026-08-18 the supervising caller reported that the
-candidate works correctly and requested milestone closure. U1-U8 and the focused F011 centre-drag
-recheck are accepted under that explicit milestone-level decision.
+Status: **complete (closed 2026-08-18)**. The supervising caller reported that the clean-qualified,
+immutable M78-F011 replacement works correctly and requested milestone closure. U1-U8 and the
+focused F011 centre-drag recheck are accepted under that explicit milestone-level decision; final
+GitHub Pages publication and hosted-byte verification pass.
 
-The publication source will be the forthcoming documentation-only approval descendant that records
-this decision. It does not replace or requalify exact gate-qualified product source
-`793e9de39d78bdabfded15d8c8e79f86df0f52bc`.
+Documentation-only approval descendant `a6d504e1d15ddcdd7e4cb02190b0ef83de814be0`
+records this decision and is the exact Pages source. It does not replace or requalify exact gate-
+qualified product source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`.
 
 Current replacement source: `793e9de39d78bdabfded15d8c8e79f86df0f52bc`
 
@@ -19,7 +19,8 @@ Product fix: `e43aa8537f8d45533c2d445ea310f340aac5a530`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Server PID/session: `3120501` / retained command-runner session `40375`
+Restored closeout server PID/session: `3433169` / retained command-runner session `24394` (the
+original accepted-candidate listener `3120501` / `40375` exited after acceptance)
 
 Immutable snapshot: `/tmp/geosolve-m78-f011-uat.MOsOFy` (directory `0555`, seven regular non-
 symlink files `0444`)
@@ -52,13 +53,35 @@ native/WASM parity, unchanged 270/270 clean golden authority, benchmark/performa
 The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
 Freeze evidence is `/tmp/geosolve-m78-f011-freeze-evidence.gS2PTc`. The snapshot first passed
 proxy-disabled, cache-bypassed, identity-encoded verification on temporary port `18081`. Only then
-was withdrawn PID `1753616` retired and the current listener started on `8080`; temporary PID
-`3116484` is also retired. Final requests for `/` and all seven files return HTTP 200 with zero
-redirects, no content encoding, exact lengths, expected media types and snapshot-identical bodies.
-`/` equals `index.html`. Final evidence is
+was withdrawn PID `1753616` retired and accepted-candidate listener `3120501` started on `8080`;
+temporary PID `3116484` also retired. Final requests for `/` and all seven files returned HTTP 200
+with zero redirects, no content encoding, exact lengths, expected media types and snapshot-
+identical bodies. `/` equalled `index.html`. The accepted-candidate listener later exited; the
+unchanged snapshot was restored under PID `3433169` for closeout and remains byte-identical. Final
+evidence is
 `/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
 `8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`. This mechanically
 nominates the replacement candidate; it does not accept any human scorecard row.
+
+## Final GitHub Pages publication
+
+Approval descendant `a6d504e1d15ddcdd7e4cb02190b0ef83de814be0`, tree
+`ca50d013fe4a6ac040336344056a1d142c5629fa`, passed push run `32096209036` attempt 1. Assembly job
+`95587961776` passed in 4m45s; deploy job `95588776635` passed in 11s and deployment `5955688918`
+reached `success` at `https://arduano.github.io/geometric-constraint-solver/`.
+
+Artifact `9310104202` is 2,267,050 bytes with Actions/ZIP SHA-256
+`fdc6db01bf02a91d33f163fc528e90aeade764ffb1b8325c47f847a827a3bb95`; its sole 6,707,200-byte
+inner tar has SHA-256 `8e6ddd73fb11fe2efbdbc90f20b46fdd53f20282358d3be70717c3f6ad60a4ff`.
+The exact seven-file manifest is recorded in `docs/M78_IMPLEMENTATION.md` and has aggregate
+`bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. Proxy-disabled,
+cache-busted identity requests for root plus every artifact path returned HTTP 200 with zero
+redirects, exact expected media types/lengths, no `Location` or `Content-Encoding`, and exact byte
+equality; root equals artifact `index.html`. Complete evidence is
+`/tmp/geosolve-m78-pages-verify.KpqpHi`, with the authoritative repeat under `public-complete` and
+`results.tsv` SHA-256 `e012272d6f852f33810123fbc5a6cd4e2f961a71a8f56860ba6d693c5ca7debf`.
+Pages is final public-byte authority; the separately built Tailscale snapshot remains immutable UAT
+candidate evidence and is intentionally not compared across builds.
 
 The withdrawn initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, snapshot `/tmp/geosolve-m78-uat.SNgu3D` and aggregate
@@ -224,7 +247,8 @@ displaying NaN or infinity.
   that the replacement behaves correctly
 - Final supervising approval: passed on 2026-08-18; the caller accepted the current replacement and
   requested milestone closure
-- Documentation-only approval-descendant Pages publication and hosted-byte verification: pending
+- Documentation-only approval-descendant Pages publication and hosted-byte verification: passed in
+  run `32096209036`, artifact `9310104202` and deployment `5955688918`
 
 This is explicit milestone-level acceptance of the current replacement. It does not invent a
 separately logged row-by-row replay beyond the focused defect checks and interaction review

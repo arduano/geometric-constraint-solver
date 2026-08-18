@@ -98,10 +98,11 @@ ordinary/projective rational-middle editing, exact property controls and stale-s
 publication. Focused native/WASM, coordinator, replay, demo and unchanged-golden qualification
 passes. Exact replacement source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
 `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its immutable snapshot
-`/tmp/geosolve-m77-uat.ARrQFw` is byte-verified at ordered aggregate
-`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94` and remains live on the
-Tailscale endpoint. The supervising caller accepts U1-U6 and requests closure. Approval descendant
-`66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`; all
+`/tmp/geosolve-m77-uat.ARrQFw` was byte-verified at ordered aggregate
+`abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`; its listener retired before
+the M78 candidate started. The supervising caller accepts U1-U6 and requests closure. Approval
+descendant `66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment
+`5942438795`; all
 hosted bytes exact-verify at ordered aggregate
 `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. M77 is complete.
 M78 implements the exact nine-family/25-variant CAD geometry palette through headless semantic
@@ -113,15 +114,17 @@ only point-observable passive freedom and keeping fixed contact coordinates equa
 secondary backends. Exact replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
 `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate and immutable
 byte-verified Tailscale nomination. The supervising caller accepts U1-U8 plus the focused F011
-recheck and requests closure; final publication from a documentation-only approval descendant and
-hosted-byte verification remain open without replacing qualified product source `793e9de`.
+recheck and requests closure. Documentation-only approval descendant `a6d504e` passes Pages run
+`32096209036`, artifact `9310104202`, deployment `5955688918` and exact hosted-byte aggregate
+`bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f` without replacing
+qualified product source `793e9de`. M78 is complete.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74-M77 closed and M78 awaiting final Pages publication.
+3. `PLAN.md` — authoritative roadmap, with M74-M78 closed.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -136,8 +139,8 @@ Physics, collision and a production rendering system remain out of scope.
     scoped-approved annotation milestone and exact closure evidence.
 13. `docs/M77_GOALS.md`, `docs/M77_IMPLEMENTATION.md` and `docs/M77_UAT.md` — completed and
     publicly verified selected-curve control contract, implementation ledger and scorecard.
-14. `docs/M78_GOALS.md`, `docs/M78_IMPLEMENTATION.md` and `docs/M78_UAT.md` — closeout-approved
-    geometry-family/variant contract, implementation ledger and accepted scorecard.
+14. `docs/M78_GOALS.md`, `docs/M78_IMPLEMENTATION.md` and `docs/M78_UAT.md` — completed and
+    publicly verified geometry-family/variant contract, implementation ledger and scorecard.
 
 ## Workspace
 

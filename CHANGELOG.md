@@ -178,15 +178,15 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   Focused native/WASM, coordinator, replay, demo and unchanged 270/270 golden evidence passes.
   Exact source `cc99b11071dc62732e02b630ba7a1381d754b04c`, tree
   `3315a2bdd0137f59657ea2500962ef971a23ea15`, passes the complete clean gate; its immutable
-  no-rebuild snapshot `/tmp/geosolve-m77-uat.ARrQFw` is byte-verified at aggregate
-  `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94` and remains live for
-  review. The supervising caller accepts U1-U6 and requests closure. Approval descendant
+  no-rebuild snapshot `/tmp/geosolve-m77-uat.ARrQFw` was byte-verified at aggregate
+  `abfa7ef6b75f127fa6d93ff6ad6960c7f5df7d4c799a578c785e1192c2b7ee94`; its listener retired
+  before M78. The supervising caller accepts U1-U6 and requests closure. Approval descendant
   `66a89b7` passes Pages run `32012819635`, artifact `9283439225` and deployment `5942438795`;
   root plus all seven hosted paths byte-match aggregate
   `872719a0f4323f978bf31a4e567646b61a8bd607a2dbc384e47b676054979f15`. Follow-up `62d9d26`
   makes Pages publication-only, retaining the locked Trunk build and seven-file validation while
   removing the duplicated complete integration gate. M77 is complete.
-- The closeout-approved M78 CAD geometry-family cut. `geosolve-constraint-editor` now publishes
+- The completed M78 CAD geometry-family cut. `geosolve-constraint-editor` now publishes
   stable non-exhaustive `GeometryToolFamily`/`GeometryToolVariant` metadata, exact activation,
   semantic stages, independent inference-suppression/recipe-regularization input, typed finite
   status and one authenticated atomic construction plan with explicit relation provenance. Nine
@@ -200,9 +200,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
   `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate, unchanged 270/270
   golden authority and immutable byte-verified Tailscale nomination. The supervising caller accepts
-  U1-U8 plus F011 and requests closure; final publication from a documentation-only approval
-  descendant and hosted-byte verification remain open without replacing qualified product source
-  `793e9de`.
+  U1-U8 plus F011 and requests closure. Documentation-only approval descendant `a6d504e` passes
+  Pages run `32096209036`, artifact `9310104202` and deployment `5955688918`; root plus all seven
+  hosted paths byte-match aggregate
+  `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. Qualified product source
+  remains `793e9de`. M78 is complete.
 
 ### Changed
 

@@ -2,13 +2,14 @@
 
 # M78 implementation — CAD geometry tool families and authoring variants
 
-Status: **closeout-approved (2026-08-18); final Pages publication pending**. Initial clean candidate
+Status: **complete (closed 2026-08-18)**. Initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete release qualification and immutable
 Tailscale nomination, but M78-F011 withdraws it from current UAT. The focused Tangent-Arc
 centre-drag correction passes owner regressions; replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the complete clean gate and immutable,
-byte-verified Tailscale nomination. Human UAT and the focused F011 recheck are accepted; final
-publication remains open.
+byte-verified Tailscale nomination. Human UAT and the focused F011 recheck are accepted.
+Documentation-only approval descendant `a6d504e` passes exact GitHub Pages publication and hosted-
+byte verification without replacing the qualified product source.
 
 Architecture owner: ADR 0036.
 
@@ -419,9 +420,11 @@ requests for `/` and all seven files passed exact status, redirect, content-enco
 media-type and byte checks before any cutover.
 
 Only then was withdrawn PID `1753616` retired and replacement PID `3120501`, retained command-
-runner session `40375`, started at `http://100.94.63.83:8080/`. The same final verification passes;
-`/` exactly equals `index.html`, all asset bodies match the frozen files and no temporary listener
-remains on `18081`. Temporary evidence is
+runner session `40375`, started at `http://100.94.63.83:8080/`. The same final verification passed;
+`/` exactly equalled `index.html`, all asset bodies matched the frozen files and no temporary
+listener remained on `18081`. That listener later exited after human acceptance. The unchanged
+snapshot was restored without rebuilding for closeout under PID `3433169`, retained command-runner
+session `24394`, and remains byte-identical at the same URL. Temporary evidence is
 `/tmp/geosolve-m78-f011-temp-verify.bri3pd/results.tsv`; final evidence is
 `/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`. Each has SHA-256
 `8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`.
@@ -436,6 +439,44 @@ interior/periodic Tangent Arc or multi-tangent circle workflow. The unchanged go
 require-clean sequence still matches. F011 replacement clean workspace/release qualification and
 exact no-rebuild Tailscale verification pass; the earlier candidate evidence above is withdrawn
 historical evidence. On 2026-08-18 the supervising caller accepted U1-U8, reported the focused
-F011 centre-drag replacement behaving correctly and requested milestone closure. Exact GitHub
-Pages publication from a documentation-only approval descendant and hosted-byte verification
-remain required before M78 is complete; exact gate-qualified product authority remains `793e9de`.
+F011 centre-drag replacement behaving correctly and requested milestone closure.
+
+Documentation-only approval descendant
+`a6d504e1d15ddcdd7e4cb02190b0ef83de814be0`, tree
+`ca50d013fe4a6ac040336344056a1d142c5629fa`, triggered push run `32096209036` attempt 1. The
+publication-only `Assemble Pages artifact` job `95587961776` passed from 03:38:36 through 03:43:21
+UTC in 4m45s; it retained the locked repository-prefixed Trunk build and seven-file validation
+without rerunning the already-qualified complete integration gate. Deploy job `95588776635` passed
+from 03:43:24 through 03:43:35 UTC in 11s. Deployment `5955688918` reached `success` at
+`https://arduano.github.io/geometric-constraint-solver/` at 03:43:35 UTC. The approval descendant
+records the accepted scorecard; exact clean product source `793e9de` remains release authority,
+and no byte identity with the separately built Tailscale candidate is claimed.
+
+Actions artifact `9310104202` (`github-pages`) is 2,267,050 bytes. Its API digest and independently
+downloaded outer-ZIP SHA-256 are both
+`fdc6db01bf02a91d33f163fc528e90aeade764ffb1b8325c47f847a827a3bb95`. The ZIP contains only a
+6,707,200-byte `artifact.tar` with SHA-256
+`8e6ddd73fb11fe2efbdbc90f20b46fdd53f20282358d3be70717c3f6ad60a4ff`. The tar extracts to exactly
+seven flat regular non-symlink files:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 25,248 | `d7b1786e26f328e40de0608cd63cdc2dc341fd396dcde103b15f3ef7495fd0ac` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-b2ee90b4d3e13fe6.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
+| `geosolve-demo-web-b2ee90b4d3e13fe6_bg.wasm` | 6,535,072 | `34f671f38f9399a53e70334f9bfb5452ec07ea2cb0835086f9b5e1b47b1eb6eb` |
+| `index.html` | 29,283 | `a1ae44f9b26bbe56a27f73bd538d9fb260ce856aeb26e172f7a6c24c94c53db5` |
+| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+
+The C-locale ordered-manifest aggregate is
+`bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. A fresh proxy-disabled,
+cache-busted, identity-encoded repeat for `/`, `/index.html` and all six other artifact paths
+returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected media
+types and lengths, and artifact-identical bodies; `/` equals artifact `index.html`. Complete
+evidence is `/tmp/geosolve-m78-pages-verify.KpqpHi`, with the authoritative repeat under
+`public-complete`; its `results.tsv` has SHA-256
+`e012272d6f852f33810123fbc5a6cd4e2f961a71a8f56860ba6d693c5ca7debf`. The retained 155,222-byte
+workflow log has SHA-256 `31b5bd026a6311fe4195a3af55aa37e932b540aadb2898b7829bad90a2f334e0`.
+Product qualification, human acceptance, publication and hosted-byte verification all pass. M78
+is complete.

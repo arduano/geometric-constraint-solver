@@ -2,10 +2,12 @@
 
 # ADR 0036: Headless geometry variants and atomic construction recipes
 
-Status: accepted for active M78 on 2026-08-17; hardened product implementation is committed through
-F011 fix `e43aa85`; replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete
-clean qualification and immutable byte-verified Tailscale nomination. Human UAT and closeout
-approval pass; final Pages publication and hosted-byte verification remain pending.
+Status: accepted for completed M78 on 2026-08-17; hardened product implementation is committed
+through F011 fix `e43aa85`; replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete clean qualification and immutable
+byte-verified Tailscale nomination. Human UAT and closeout approval pass. Approval descendant
+`a6d504e` passes Pages run `32096209036`, artifact `9310104202` and deployment `5955688918`; exact
+hosted-byte verification closes M78.
 
 ## Context
 
@@ -208,6 +210,8 @@ changing a residual, Jacobian, priority or branch rule. Exact replacement source
 qualification; its exact seven-file output is frozen without rebuilding and byte-verified over
 Tailscale at ordered-manifest aggregate
 `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`. The supervising caller
-accepts U1-U8 plus the focused F011 recheck and requests closure. Pages publication from a
-documentation-only approval descendant and hosted-byte verification remain required before M78
-closes; that descendant will not replace or requalify product source `793e9de`.
+accepts U1-U8 plus the focused F011 recheck and requests closure. Pages publication from
+documentation-only approval descendant `a6d504e` now passes: run `32096209036`, artifact
+`9310104202` and deployment `5955688918` exact-verify the seven-file ordered aggregate
+`bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. That descendant does not
+replace or requalify product source `793e9de`. M78 is complete.

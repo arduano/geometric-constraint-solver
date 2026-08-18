@@ -67,14 +67,14 @@ reported the F005 movement behavior fixed and requested a final investigation an
 the closing regressions were satisfactory. Clean closing source `48e3cc3` passes the complete
 release gate with those focused regressions, the unchanged 198/198 golden and byte-identical F005
 release output. That scoped approval closes M70B without claiming an unrecorded exhaustive replay
-of every prepared UAT step. M71-M77 are complete. M78 is the closeout-approved CAD geometry-tool
-family and authoring-variant cut under ADR 0036. Initial candidate
+of every prepared UAT step. M71-M78 are complete. M78 is the CAD geometry-tool family and
+authoring-variant cut under ADR 0036. Initial candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the complete release gate plus immutable
 Tailscale nomination but is withdrawn from current UAT by M78-F011. Its focused Tangent-Arc
 centre-drag repair passes owning-layer regressions; replacement clean qualification and immutable
-Tailscale nomination now pass. Human UAT and closeout approval pass; publication from a
-documentation-only approval descendant remains open and will not replace the qualified product
-source.
+Tailscale nomination, human UAT and closeout approval pass. Documentation-only approval descendant
+`a6d504e` passes Pages run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact
+hosted-byte verification without replacing the qualified product source.
 M76's
 implementation,
 feature refinements,
@@ -5089,15 +5089,13 @@ bytes are historical only after M77-F012/F013 and must not be used for current U
 
 ### M78: CAD geometry tool families and authoring variants
 
-Status: **closeout-approved (2026-08-18); implementation, M78-F011 replacement clean/Tailscale
-nomination and human UAT pass, while final Pages publication remains open**. Hardened product
+Status: **complete (closed 2026-08-18)**. Hardened product
 implementation is committed through `e43aa85`; initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn historical evidence. Replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
-`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, is current immutable Tailscale UAT authority. M78
-groups the
-complete simple-geometry authoring surface into nine reusable headless families and exactly 25
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, remains the qualified product authority. M78 groups
+the complete simple-geometry authoring surface into nine reusable headless families and exactly 25
 CAD-style variants.
 `docs/M78_GOALS.md` owns the exact recipe/modifier contract and `docs/M78_UAT.md` owns the accepted
 human scorecard.
@@ -5145,9 +5143,9 @@ human scorecard.
   withdrawn initial nomination.
 - [x] Complete `docs/M78_UAT.md` and receive explicit supervising-human approval, including the
   focused M78-F011 centre-drag recheck.
-- [ ] Publish a documentation-only approval descendant through GitHub Pages, verify its exact
-  hosted bytes and close M78. Exact gate-qualified product authority remains `793e9de` and is not
-  replaced or requalified by that publication commit.
+- [x] Publish documentation-only approval descendant `a6d504e` through GitHub Pages, verify its
+  exact hosted bytes and close M78. Exact gate-qualified product authority remains `793e9de` and
+  is not replaced or requalified by that publication commit.
 
 Implementation note (2026-08-18): `4845df7` resolves M78-F001 through M78-F010. The hardening
 freezes typed relation provenance and recipe/ambient precedence, publication-authenticated positive
@@ -5212,15 +5210,32 @@ content encoding, exact media types/lengths and snapshot-identical bodies. Final
 `/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
 `8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`. On 2026-08-18 the
 supervising caller accepted U1-U8, reported the focused F011 replacement behaving correctly and
-requested closure. Pages publication from a documentation-only approval descendant remains
-pending; exact gate-qualified product authority remains `793e9de`.
+requested closure. The accepted-candidate listener later exited; the same immutable snapshot was
+restored without rebuilding under PID `3433169`, retained session `24394`, for closeout and remains
+byte-identical at the same URL.
+
+Final public publication and closeout record (2026-08-18): documentation-only approval descendant
+`a6d504e1d15ddcdd7e4cb02190b0ef83de814be0`, tree
+`ca50d013fe4a6ac040336344056a1d142c5629fa`, passes GitHub Pages push run `32096209036` attempt 1.
+Assembly job `95587961776` passes in 4m45s, deploy job `95588776635` passes in 11s, and deployment
+`5955688918` reaches `success` at `https://arduano.github.io/geometric-constraint-solver/`.
+Artifact `9310104202` is 2,267,050 bytes with ZIP/API SHA-256
+`fdc6db01bf02a91d33f163fc528e90aeade764ffb1b8325c47f847a827a3bb95`; its 6,707,200-byte inner
+tar has SHA-256 `8e6ddd73fb11fe2efbdbc90f20b46fdd53f20282358d3be70717c3f6ad60a4ff`.
+Exactly seven regular files have ordered-manifest aggregate
+`bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. Root plus all seven
+public paths return HTTP 200 with zero redirects or encoding and byte-match the artifact at exact
+lengths and expected media types; root equals artifact `index.html`. Evidence is
+`/tmp/geosolve-m78-pages-verify.KpqpHi`, with the authoritative repeat in `public-complete`. Pages
+is public-byte authority; the separate Tailscale freeze remains exact UAT-candidate evidence.
+Exact gate-qualified product authority remains `793e9de`. M78 is complete.
 
 Gate: all nine families expose exactly the approved 25 variants; each gesture has one headless
 stage/recipe/branch owner and one atomic independently validated transaction; intrinsic recipe
 intent wins over redundant/conflicting ambient inference; invalid, cancelled or stale work cannot
 replace accepted geometry or history; the desktop adapter contains no recipe equation or branch
 heuristic; the F011 replacement frozen Tailscale candidate remains available until UAT is
-explicitly accepted.
+explicitly accepted and is retained as separate immutable candidate evidence after closeout.
 
 Explicitly deferred are tangent/tangent-radius and multi-tangent circles, interior/periodic Tangent
 Arc, curve/curve intersection Point inference, fit-point splines, polygons, slots and duplicate

@@ -191,12 +191,13 @@ exact final public publication passes. M76 implementation, clean qualification, 
 byte-verified Tailscale nomination, scoped human acceptance and exact final public publication all
 pass. M77's replacement clean qualification, immutable Tailscale review, scoped human acceptance
 and exact final Pages publication also pass without changing any completed M76 evidence. M78 is
-active under ADR 0036. Initial candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed clean
+complete under ADR 0036. Initial candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed clean
 qualification plus immutable Tailscale nomination but is withdrawn from current UAT by M78-F011.
 Its focused centre-drag correction passes owning-layer regressions; replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete clean qualification plus immutable
-byte-verified Tailscale nomination. Human acceptance and closeout approval pass; publication from
-a documentation-only approval descendant remains pending and does not replace that qualified
+byte-verified Tailscale nomination. Human acceptance and closeout approval pass. Documentation-
+only approval descendant `a6d504e` passes Pages run `32096209036`, artifact `9310104202`,
+deployment `5955688918` and exact hosted-byte verification without replacing that qualified
 product source.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
@@ -2353,13 +2354,13 @@ gate-qualified product source.
 
 ## M78 acceptance: CAD geometry tool families and authoring variants
 
-Status: **closeout-approved (2026-08-18); implementation, the M78-F011 replacement clean frozen-
-candidate verification and human UAT pass; final Pages publication remains pending**. Hardened
+Status: **complete (closed 2026-08-18); implementation, M78-F011 replacement clean frozen-
+candidate verification, human UAT and exact Pages publication pass**. Hardened
 product implementation is committed through `e43aa85`; initial candidate source
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn historical evidence. Replacement source
 `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
-`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, is current Tailscale UAT authority.
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, remains the gate-qualified product authority.
 
 - The exact public catalog contains nine families and 25 variants: Point 1; Lines 3; Rectangles 4;
   Circles 3; Arcs 3; Ellipses 4; Béziers 2; Conics 3; Splines 2. Stable keys, family membership,
@@ -2476,15 +2477,26 @@ product implementation is committed through `e43aa85`; initial candidate source
   seven regular non-symlink files (`0555` directory, `0444` files), ordered-manifest aggregate
   `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`. It was byte-verified on
   a temporary port before the withdrawn listener was retired. PID `3120501`, retained session
-  `40375`, now exclusively serves it at `http://100.94.63.83:8080/`; root and all seven files
-  return HTTP 200 with zero redirects, no content encoding, exact media types/lengths and snapshot-
-  identical bodies. Final HTTP evidence is
+  `40375`, served it at `http://100.94.63.83:8080/`; root and all seven files returned HTTP 200
+  with zero redirects, no content encoding, exact media types/lengths and snapshot-identical
+  bodies. That listener later exited after acceptance. The unchanged snapshot was restored without
+  rebuilding under PID `3433169`, retained session `24394`, and remains byte-identical at the same
+  URL. Final HTTP evidence is
   `/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
   `8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`.
 - On 2026-08-18 the supervising caller accepted U1-U8, reported the focused F011 centre-drag
-  replacement behaving correctly and requested closure. Pages publication from a documentation-
-  only approval descendant and hosted-byte verification remain the only open acceptance item;
-  exact gate-qualified product authority remains `793e9de`.
+  replacement behaving correctly and requested closure.
+- Final publication evidence (2026-08-18): approval descendant
+  `a6d504e1d15ddcdd7e4cb02190b0ef83de814be0`, tree
+  `ca50d013fe4a6ac040336344056a1d142c5629fa`, passes Pages run `32096209036`, assembly job
+  `95587961776`, deploy job `95588776635` and deployment `5955688918`. Artifact `9310104202` is
+  2,267,050 bytes, has ZIP/API SHA-256
+  `fdc6db01bf02a91d33f163fc528e90aeade764ffb1b8325c47f847a827a3bb95`, inner-tar SHA-256
+  `8e6ddd73fb11fe2efbdbc90f20b46fdd53f20282358d3be70717c3f6ad60a4ff` and exact seven-file
+  aggregate `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. Root plus all seven
+  public paths return HTTP 200 and byte-match the artifact at their exact lengths and media types;
+  root equals artifact `index.html`. Product-source qualification, human approval, publication and
+  hosted-byte verification all pass. M78 is complete; `793e9de` remains product authority.
 
 M78 adds no solver residual, curve family, canonical persistence version, hidden construction
 point, weighted-priority substitute, browser geometry authority, mobile layout or B-rep feature.
