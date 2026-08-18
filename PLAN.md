@@ -5308,10 +5308,11 @@ public-byte authority. No byte identity between those separately built distribut
 
 ### M80: native topology-preserving Profile Offset
 
-Status: **implementation and broad pre-nomination qualification complete; clean nomination,
-human UAT, publication and closure pending**. ADR 0037 and `docs/M80_GOALS.md` own the approved
-one-to-one native association; `docs/M80_IMPLEMENTATION.md` is the live ledger and
-`docs/M80_UAT.md` is the prepared human scorecard.
+Status: **implementation, complete clean release qualification and immutable byte-verified
+Tailscale nomination complete; human UAT, publication and closure pending**. ADR 0037 and
+`docs/M80_GOALS.md` own the approved one-to-one native association;
+`docs/M80_IMPLEMENTATION.md` is the live ledger and `docs/M80_UAT.md` is the active human
+scorecard.
 
 - [x] Add one grouped driving-only `ProfileOffset` dimension with one positive shared length
   scalar, explicit face Outward/Inward or open-chain Left/Right state and no reference mode.
@@ -5355,9 +5356,13 @@ one-to-one native association; `docs/M80_IMPLEMENTATION.md` is the live ledger a
   survey/check/require-clean all pass. `M80-F001`-`M80-F005` are frozen in owner regressions,
   including fresh Offset capture after accepted point edits and the persistent Profile-role
   invariant across creation, mutation and draft restore.
-- [ ] Pass the complete clean release gate, freeze its exact output without rebuilding, keep it
-  byte-verified on the shared Tailscale endpoint through focused human UAT, then publish and verify
-  GitHub Pages before closure.
+- [x] Pass the complete clean release gate, freeze its exact output without rebuilding and keep it
+  byte-verified on the shared Tailscale endpoint through focused human UAT. Exact source
+  `949c3db`, tree `23a6f8d`, snapshot `/tmp/geosolve-m80-uat.Nnxsu7` and ordered-manifest
+  aggregate `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9` are current
+  nomination authority at `http://100.94.63.83:8080/`.
+- [ ] Receive explicit human UAT acceptance, publish the accepted descendant through GitHub Pages,
+  verify the hosted artifact exactly and close M80.
 
 Gate: every accepted source edge retains exactly one same-family native target edge under one
 positive grouped distance and explicit direction/traversal/junction branch; every success passes

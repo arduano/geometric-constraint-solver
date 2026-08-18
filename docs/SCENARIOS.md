@@ -2643,8 +2643,11 @@ Focused native/WASM/presentation tests and the complete clean gate precede a no-
 snapshot kept byte-verified on `http://100.94.63.83:8080/` through `docs/M80_UAT.md`; Pages and
 closure require an explicit human decision.
 
-Status: headless authoring, presentation and native/WASM mechanics pass; clean release nomination,
-frozen Tailscale service, human UAT, Pages publication and closure remain pending.
+Status: headless authoring, presentation, native/WASM mechanics, complete clean qualification and
+the immutable byte-verified Tailscale nomination pass. Exact source `949c3db`, tree `23a6f8d`,
+snapshot `/tmp/geosolve-m80-uat.Nnxsu7` and ordered-manifest aggregate
+`18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9` are current authority at
+`http://100.94.63.83:8080/`. Human UAT, Pages publication and closure remain pending.
 
 ### M80-F001 - Computed Fillet fragments cannot impersonate native operands
 

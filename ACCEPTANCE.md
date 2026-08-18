@@ -2562,8 +2562,8 @@ Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte 
 
 ## M80 acceptance: native topology-preserving Profile Offset
 
-Status: **implementation and broad pre-nomination mechanical evidence pass; clean nomination,
-human UAT, publication and final acceptance remain pending**.
+Status: **implementation, complete clean release qualification and immutable byte-verified
+Tailscale nomination pass; human UAT, publication and final acceptance remain pending**.
 
 - One Apply creates exactly one grouped driving-only `ProfileOffset` over one positive finite
   length scalar and either one complete bounded face including all holes or one manually ordered
@@ -2638,6 +2638,22 @@ human UAT, publication and final acceptance remain pending**.
 - The exact frozen Tailscale candidate stays available for `docs/M80_UAT.md` until explicit human
   acceptance or withdrawal. GitHub Pages publication and hosted-byte verification occur only after
   that decision and before milestone closure.
+
+Mechanical nomination (2026-08-19): exact source
+`949c3dbde769cb7de41a9fd97ba0a40094bea14a`, tree
+`23a6f8df89e16bb1ae3a74ee0bd4d90d2cd9245a`, passes the complete clean release gate from
+02:58:27 through 03:11:36 AEST. The retained 263,727-byte, 3,427-line log
+`/tmp/geosolve-m80-clean-gate.949c3db.log` has SHA-256
+`389f590c52fba4bc436c4910056e2610d34d6d0fbf1b10dd4b960d985bd8c962`; it includes the focused
+M80 counts above, unchanged 270/270 golden authority, relevant native/WASM parity, warnings-denied
+Clippy/Rustdoc, the 113.70-second sparse crossover, licence/package checks and Trunk 0.21.14.
+The exact no-rebuild seven-file snapshot `/tmp/geosolve-m80-uat.Nnxsu7` is read-only (`0555`
+directory, `0444` regular non-symlink files) with ordered-manifest aggregate
+`18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`. It passed temporary-port
+verification before replacing M79; PID `1946736` serves it at
+`http://100.94.63.83:8080/`. Root plus all seven files return HTTP 200 with zero redirects or
+content encoding, exact media types/lengths and snapshot-identical bytes. This evidence nominates
+the candidate only; it disposes no human UAT item and authorizes no GitHub Pages publication.
 
 M80 acceptance explicitly excludes topology-changing/computed Offset, trimming or loop removal,
 variable output cardinality, unsupported-curve approximation, canonical v5 support, Bake/Explode,

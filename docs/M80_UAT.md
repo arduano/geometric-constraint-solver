@@ -2,17 +2,32 @@
 
 # M80 focused UAT — native topology-preserving Profile Offset
 
-Status: **prepared but not started**. Implementation and broad pre-nomination mechanics pass, but
-no clean source, immutable distribution or human acceptance is recorded. Run this scorecard only
-against the exact clean-qualified candidate entered below.
+Status: **exact clean-qualified candidate nominated; human UAT not started**. Run this scorecard
+only against the immutable candidate entered below. Mechanical evidence does not pass any UAT row.
 
-Product source: pending
+Product source: `949c3dbde769cb7de41a9fd97ba0a40094bea14a`
 
-Candidate tree: pending
+Candidate tree: `23a6f8df89e16bb1ae3a74ee0bd4d90d2cd9245a`
 
-Tailscale endpoint: `http://100.94.63.83:8080/` after nomination
+Tailscale endpoint: `http://100.94.63.83:8080/` (PID `1946736`)
 
-Immutable snapshot and ordered-manifest aggregate: pending
+Immutable snapshot: `/tmp/geosolve-m80-uat.Nnxsu7` (directory `0555`; seven regular non-symlink
+files `0444`)
+
+Ordered-manifest aggregate:
+`18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`
+
+Clean gate: 2026-08-19 02:58:27–03:11:36 AEST;
+`/tmp/geosolve-m80-clean-gate.949c3db.log` (263,727 bytes, 3,427 lines, SHA-256
+`389f590c52fba4bc436c4910056e2610d34d6d0fbf1b10dd4b960d985bd8c962`)
+
+Freeze/HTTP evidence: `/tmp/geosolve-m80-freeze-evidence.GWHVEQ`,
+`/tmp/geosolve-m80-temp-verify.f6vjdf` and `/tmp/geosolve-m80-final-verify.crUf79`. Temporary and
+final eight-request ledgers have SHA-256
+`af8eb2f377450feaa7a12baef23f8d06ff034c739421bd80cdeaf4e9ad7c88fa`; root plus every file
+returned HTTP 200 with exact media/length/bytes, no redirects and no content encoding. M79 remained
+live until the temporary candidate passed and the temporary M80 listener remained live until final
+`:8080` verification passed.
 
 Keep the exact no-rebuild snapshot running locally over Tailscale until the supervising human
 accepts it or an M80 finding explicitly withdraws it. A replacement candidate gets new source,
