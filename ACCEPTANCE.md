@@ -193,8 +193,10 @@ pass. M77's replacement clean qualification, immutable Tailscale review, scoped 
 and exact final Pages publication also pass without changing any completed M76 evidence. M78 is
 active under ADR 0036. Initial candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed clean
 qualification plus immutable Tailscale nomination but is withdrawn from current UAT by M78-F011.
-Its focused centre-drag correction passes owning-layer regressions; replacement qualification,
-human acceptance, accepted-source publication and closeout remain unclaimed and pending.
+Its focused centre-drag correction passes owning-layer regressions; replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete clean qualification plus immutable
+byte-verified Tailscale nomination. Human acceptance, accepted-source publication and closeout
+remain unclaimed and pending.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -2350,12 +2352,13 @@ gate-qualified product source.
 
 ## M78 acceptance: CAD geometry tool families and authoring variants
 
-Status: **active (2026-08-17); implementation and the initial clean frozen-candidate verification
-pass; M78-F011 replacement qualification, human UAT, publication and closeout remain pending**.
-Hardened product implementation is committed through `4845df7`; initial candidate source
+Status: **active (2026-08-17); implementation and the M78-F011 replacement clean frozen-candidate
+verification pass; human UAT, publication and closeout remain pending**. Hardened product
+implementation is committed through `e43aa85`; initial candidate source
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
-`321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn from current UAT by M78-F011 while its
-focused Tangent-Arc centre-drag correction is qualified.
+`321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn historical evidence. Replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, is current Tailscale UAT authority.
 
 - The exact public catalog contains nine families and 25 variants: Point 1; Lines 3; Rectangles 4;
   Circles 3; Arcs 3; Ellipses 4; Béziers 2; Conics 3; Splines 2. Stable keys, family membership,
@@ -2445,7 +2448,8 @@ focused Tangent-Arc centre-drag correction is qualified.
 - F011 focused evidence is 47/47 core M16, 34/34 core M10, 26/26 sketch lifecycle, 5/5 sketch
   locality and 33/33 actual M78 geometry-variant cases. Focused warnings-denied Clippy, formatting,
   diff hygiene and the unchanged 270/270 golden survey/check/clean authority pass. No residual or
-  Jacobian changed; replacement complete release qualification remains pending.
+  Jacobian changed. Tangency-owned source-End/created-Start trim grips remain outside F011's centre-
+  drag acceptance.
 - Initial candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes formatting, diff hygiene,
   warnings-denied Clippy/Rustdoc, 1,730 passing locked all-feature workspace tests with zero
   failures and three intentional ignores, demo-web 143/143, six carried native/WASM parity
@@ -2456,12 +2460,29 @@ focused Tangent-Arc centre-drag correction is qualified.
 - The exact gate output is frozen without rebuilding at `/tmp/geosolve-m78-uat.SNgu3D` as seven
   regular non-symlink files (`0555` directory, `0444` files), ordered-manifest aggregate
   `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`. Proxy-disabled,
-  cache-bypassed identity requests for root and all seven files at
-  `http://100.94.63.83:8080/` return exact HTTP 200 bodies, lengths and media types with no
-  redirect or content encoding. M78-F011 withdraws that nomination from current UAT; it remains
-  historical evidence until a clean-gated, byte-verified replacement supersedes it.
-  `docs/M78_UAT.md` still requires explicit supervising-human approval before accepted-source
-  Pages publication and hosted-byte verification may close M78.
+  cache-bypassed identity requests for root and all seven files at the then-current
+  `http://100.94.63.83:8080/` returned exact HTTP 200 bodies, lengths and media types with no
+  redirect or content encoding. M78-F011 withdraws that nomination; it remains historical evidence.
+- Replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+  `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean release gate from
+  11:07:08 through 11:19:06 AEST. The 251,148-byte, 3,280-line log is
+  `/tmp/geosolve-m78-f011-clean-gate.xNKJwu.log`, SHA-256
+  `d8ae7648a5c1426d5d275b0c2178df49a1793130d16532c6b36214ce0fb73fc6`. The gate includes 1,734
+  passing locked all-feature workspace tests, three intentional ignores, unchanged 270/270 golden
+  authority, warnings-denied Clippy/Rustdoc, native/WASM parity, demo WASM, performance/licence/
+  package checks, the 149.39-second sparse crossover and Trunk 0.21.14.
+- The exact no-rebuild replacement output is frozen at `/tmp/geosolve-m78-f011-uat.MOsOFy` as
+  seven regular non-symlink files (`0555` directory, `0444` files), ordered-manifest aggregate
+  `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`. It was byte-verified on
+  a temporary port before the withdrawn listener was retired. PID `3120501`, retained session
+  `40375`, now exclusively serves it at `http://100.94.63.83:8080/`; root and all seven files
+  return HTTP 200 with zero redirects, no content encoding, exact media types/lengths and snapshot-
+  identical bodies. Final HTTP evidence is
+  `/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
+  `8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`.
+- `docs/M78_UAT.md` still requires U1-U8, the F011 targeted human recheck and explicit supervising-
+  human approval before accepted-source Pages publication and hosted-byte verification may close
+  M78.
 
 M78 adds no solver residual, curve family, canonical persistence version, hidden construction
 point, weighted-priority substitute, browser geometry authority, mobile layout or B-rep feature.

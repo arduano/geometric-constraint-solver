@@ -35,9 +35,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   `EditorTool` compatibility projection; intrinsic recipe relations, Shift regularization,
   ambient inference, contact operands and explicit sweep/orientation state remain headless.
   Initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete clean release
-  qualification and immutable Tailscale nomination, but M78-F011 withdraws it from current UAT.
-  The point-observable-locality/fixed-bound repair passes focused owner regressions; replacement
-  clean nomination, human UAT, accepted-source publication and closeout remain pending.
+  qualification and immutable Tailscale nomination, but M78-F011 withdrew it from current UAT.
+  The point-observable-locality/fixed-bound repair passes focused owner regressions and replacement
+  source `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the complete clean gate plus immutable,
+  byte-verified Tailscale nomination. Human UAT, accepted-source publication and closeout remain
+  pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -327,8 +329,8 @@ reauthenticated before reuse; missing dependencies remain a local recoverable dr
 midpoint/reflection/circle projection, normalized circumcircle and Tangent Arc arithmetic validates
 local incidence and emits only finite status measurements. Initial candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the clean release and immutable
-served-artifact gates, but M78-F011 withdraws it from current UAT while the focused replacement is
-qualified.
+served-artifact gates but is withdrawn historical evidence. The F011 replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc` now passes both gates and is current UAT authority.
 
 M55 expands the closed headless action/applicability surface to every preserved M13-M14 alpha
 constraint, dimension and explicit branch choice. It lowers only through typed public
@@ -594,8 +596,9 @@ does not construct rectangles/circumcircles/tangent arcs, project ellipse trims,
 compose intrinsic and inferred relations. Draft-local rejection and finite-only measurement DTOs
 are rendered as supplied; the adapter cannot convert a nonrepresentable derived value into a status
 measurement or global problem. The implementation preserves that boundary. Initial candidate
-`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the clean/served-artifact gates but is
-withdrawn by M78-F011; replacement qualification and human UAT remain open.
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn historical evidence; F011 replacement
+source `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the clean/served-artifact gates and is
+current UAT authority. Human UAT remains open.
 
 M70B's reproduction codec is a pure deterministic transformation over freshly encoded
 `WorkspaceSnapshot` v5 JSON. The single-line envelope is
@@ -1373,7 +1376,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   geometry catalog, semantic draft status, typed recipe operands and one authenticated atomic plan
   for geometry plus intrinsic/regularization/inferred relations. The workbench groups those exact
   variants in persistent family overlays and remains equation-free. Initial candidate
-  `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the complete clean gate and immutable
-  Tailscale nomination but is withdrawn by M78-F011. Its focused correction passes owning-layer
-  regressions; replacement nomination, UAT, Pages and closeout remain pending, so M78 is not yet
-  part of the accepted baseline.
+  `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn by M78-F011. Replacement source
+  `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes owning-layer regressions, the complete clean
+  gate and immutable byte-verified Tailscale nomination. UAT, Pages and closeout remain pending,
+  so M78 is not yet part of the accepted baseline.

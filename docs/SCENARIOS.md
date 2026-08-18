@@ -1359,8 +1359,10 @@ M74/M75 browser verification now pass, completing M76. M77 subsequently complete
 any completed M76 evidence. M78 is active under ADR 0036 for an exact nine-family/25-variant
 headless geometry authoring catalog. Initial candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete clean qualification plus immutable
-Tailscale nomination but is withdrawn from current UAT by M78-F011. Replacement qualification,
-human UAT and accepted-source publication evidence remain pending.
+Tailscale nomination but is withdrawn from current UAT by M78-F011. Replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete clean qualification plus immutable,
+byte-verified Tailscale nomination. Human UAT and accepted-source publication evidence remain
+pending.
 
 ### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
 
@@ -2429,15 +2431,20 @@ or `Stalled` termination.
 
 M78 is active. A1-A8 implementation and M78-F001 through M78-F010 pass through product commit
 `4845df7`; F011 additionally passes focused core, sketch-locality and actual authored-coordinator
-regressions. The unchanged 270-case golden survey/check/clean authority still matches. Initial source
-`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
-`321ca280a5f581ee9755d615733617c98c0e21d7`, then passes the complete clean release gate from
-02:14:05 through 02:26:24 AEST. Its exact seven-file Trunk output is frozen without rebuilding at
-`/tmp/geosolve-m78-uat.SNgu3D`, ordered-manifest aggregate
-`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`, and byte-verified at
+regressions through product fix `e43aa85`. The unchanged 270-case golden survey/check/clean
+authority still matches. Initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, passes the complete clean gate and historical
+nomination but is withdrawn by F011.
+
+Replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean release gate from 11:07:08
+through 11:19:06 AEST with 1,734 passing locked all-feature workspace tests, three intentional
+ignores, unchanged 270/270 golden authority, warnings-denied Clippy/Rustdoc, native/WASM parity,
+performance/licence/package checks, the 149.39-second sparse crossover and Trunk 0.21.14. Its exact
+seven-file output is frozen without rebuilding at `/tmp/geosolve-m78-f011-uat.MOsOFy`, ordered-
+manifest aggregate `a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`, and byte-verified at
 `http://100.94.63.83:8080/` for root plus every file. Human UAT and accepted-source publication
-remain pending. F011 withdraws that snapshot from current UAT; replacement clean qualification and
-immutable nomination remain pending.
+remain pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

@@ -5,8 +5,9 @@
 Status: **active (opened 2026-08-17)**. Initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed complete release qualification and immutable
 Tailscale nomination, but M78-F011 withdraws it from current UAT. The focused Tangent-Arc
-centre-drag correction passes owner regressions; replacement clean nomination, human UAT,
-publication and closeout remain open.
+centre-drag correction passes owner regressions; replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes the complete clean gate and immutable,
+byte-verified Tailscale nomination. Human UAT, publication and closeout remain open.
 
 Architecture owner: ADR 0036.
 
@@ -360,15 +361,71 @@ Its C-locale ordered-manifest aggregate is
 `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`; freeze evidence is
 `/tmp/geosolve-m78-freeze-evidence.IRltTB`. The previous M77 PID `284248` remained live until this
 snapshot was fully frozen, then retired. PID `1753616`, retained command-runner session `76097`,
-serves only the immutable M78 snapshot at `http://100.94.63.83:8080/`.
+served only the immutable M78 snapshot at `http://100.94.63.83:8080/`.
 
-Proxy-disabled, cache-bypassed, identity-encoded requests for `/` and every frozen file return
+Proxy-disabled, cache-bypassed, identity-encoded requests for `/` and every frozen file returned
 HTTP 200 with zero redirects, no content encoding, exact lengths, expected media types and
-snapshot-identical bodies. `/` exactly equals `index.html`, and the fetched ordered manifest has
+snapshot-identical bodies. `/` exactly equalled `index.html`, and the fetched ordered manifest had
 the same aggregate. HTTP evidence is `/tmp/geosolve-m78-http-verify.wpLUFR`. The evidence-ledger
 commit is a documentation descendant and does not replace `1b2ce0f` as the exact initial
 mechanically qualified authority. F011 subsequently withdraws that authority from current UAT;
-the snapshot remains historical fallback evidence until its clean replacement is frozen.
+the snapshot remains historical evidence and its listener is retired.
+
+## M78-F011 clean replacement qualification and nomination
+
+Exact replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, contains product fix `e43aa85` and its focused
+regressions. From a clean worktree, the exact command
+
+```text
+env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true \
+  nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+ran from 11:07:08 through 11:19:06 AEST on 2026-08-18 and exited successfully without changing
+HEAD, tree or worktree. The retained 251,148-byte, 3,280-line log is
+`/tmp/geosolve-m78-f011-clean-gate.xNKJwu.log`, SHA-256
+`d8ae7648a5c1426d5d275b0c2178df49a1793130d16532c6b36214ce0fb73fc6`.
+
+The gate passes formatting/diff hygiene, warnings-denied workspace Clippy and Rustdoc, 1,734
+locked all-feature workspace tests with zero failures and three intentional ignores, core M16
+47/47, core M10 34/34, sketch lifecycle 26/26, sketch locality 5/5, M78 geometry variants 33/33,
+demo-web 143/143 and all carried native/WASM parity. It also passes unchanged 270/270 clean golden
+authority, demo WASM, benchmark compilation, M14/M32 performance budgets, the explicit
+149.39-second 256-body sparse crossover, licence/package checks and Trunk 0.21.14 release assembly.
+The only diagnostics are the longstanding non-failing Cargo warnings for packages declaring both
+`license` and `license-file`.
+
+Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was byte-compared and
+frozen at `/tmp/geosolve-m78-f011-uat.MOsOFy`, directory mode `0555`, as seven regular non-symlink
+files mode `0444`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 23,484 | `bdbd0eaf11d96425b98d52f546417e3e4f7dbe50568568aca30d8fe34f01a30f` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-5e889f68dd26a44a.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
+| `geosolve-demo-web-5e889f68dd26a44a_bg.wasm` | 6,535,152 | `8dab4bb97047798e92bfc906694aa69d447e8ebf600d6cd83e3024ab3d770460` |
+| `index.html` | 29,143 | `5ce14e955e0ac798a61b0f06a6cccdbd44f0b2308b2aed67674d30e8e3c7b76d` |
+| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+
+Its C-locale ordered-manifest aggregate is
+`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`; freeze evidence is
+`/tmp/geosolve-m78-f011-freeze-evidence.gS2PTc`. Temporary PID `3116484`, retained session `81879`,
+first served the snapshot on port `18081`. Proxy-disabled, cache-bypassed, identity-encoded
+requests for `/` and all seven files passed exact status, redirect, content-encoding, length,
+media-type and byte checks before any cutover.
+
+Only then was withdrawn PID `1753616` retired and replacement PID `3120501`, retained command-
+runner session `40375`, started at `http://100.94.63.83:8080/`. The same final verification passes;
+`/` exactly equals `index.html`, all asset bodies match the frozen files and no temporary listener
+remains on `18081`. Temporary evidence is
+`/tmp/geosolve-m78-f011-temp-verify.bri3pd/results.tsv`; final evidence is
+`/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`. Each has SHA-256
+`8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`.
+The documentation-only evidence-ledger descendant does not replace `793e9de` as the exact clean
+gate-qualified and immutable UAT source.
 
 ## Closeout evidence
 
@@ -376,7 +433,7 @@ Focused A1-A8 and M78-F001 through M78-F011 owner regressions pass with the exac
 above. Known scope limits remain the explicit deferrals in `docs/M78_GOALS.md`; there is no
 interior/periodic Tangent Arc or multi-tangent circle workflow. The unchanged golden survey/check/
 require-clean sequence still matches. F011 replacement clean workspace/release qualification and
-exact no-rebuild Tailscale verification remain pending; the earlier candidate evidence above is
-withdrawn from current UAT. All U1-U8 rows, the targeted F011 recheck and final supervising
-approval remain pending; accepted-source publication and hosted-byte verification therefore have
-not started. M78 must not be described as complete before those steps.
+exact no-rebuild Tailscale verification pass; the earlier candidate evidence above is withdrawn
+historical evidence. All U1-U8 rows, the targeted F011 recheck and final supervising approval
+remain pending; accepted-source publication and hosted-byte verification therefore have not
+started. M78 must not be described as complete before those steps.

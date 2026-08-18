@@ -2,57 +2,63 @@
 
 # M78 focused UAT — CAD geometry tool families and authoring variants
 
-Status: **open; M78-F011 withdraws the initial candidate from current UAT while its replacement
-awaits clean qualification and freeze**. No U1-U8 scorecard item, F011 targeted recheck or final
-supervising approval is accepted. GitHub Pages publication must not start before that explicit
-approval.
+Status: **open on the clean-qualified, immutable M78-F011 replacement candidate**. No U1-U8
+scorecard item, F011 targeted recheck or final supervising approval is accepted. GitHub Pages
+publication must not start before that explicit approval.
 
-Withdrawn initial source: `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`
+Current replacement source: `793e9de39d78bdabfded15d8c8e79f86df0f52bc`
 
-Withdrawn initial tree: `321ca280a5f581ee9755d615733617c98c0e21d7`
+Current replacement tree: `9f74ec9b63955bfffdf2338fd1ab95ac8092856a`
+
+Product fix: `e43aa8537f8d45533c2d445ea310f340aac5a530`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Server PID/session: `1753616` / retained command-runner session `76097`
+Server PID/session: `3120501` / retained command-runner session `40375`
 
-Immutable snapshot: `/tmp/geosolve-m78-uat.SNgu3D` (directory `0555`, seven regular non-symlink
-files `0444`)
+Immutable snapshot: `/tmp/geosolve-m78-f011-uat.MOsOFy` (directory `0555`, seven regular non-
+symlink files `0444`)
 
 Ordered-manifest aggregate:
-`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`
+`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
 | `API_COMPATIBILITY.md` | 23,484 | `bdbd0eaf11d96425b98d52f546417e3e4f7dbe50568568aca30d8fe34f01a30f` |
 | `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
 | `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
-| `geosolve-demo-web-59998f0c1a23e0f9.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
-| `geosolve-demo-web-59998f0c1a23e0f9_bg.wasm` | 6,535,148 | `0441c6fc9e931d0fe75358ac24d6f78b465008a04792475547840f9003699ae1` |
-| `index.html` | 29,143 | `1598ad7ce70d892496a55a3ea86b45ceb23fbbf9763278993f1e79f4cb5974d5` |
+| `geosolve-demo-web-5e889f68dd26a44a.js` | 33,333 | `99dc56d063d0397708890b9805612f2c22dc22445a899d105a848eaa3c3a5e73` |
+| `geosolve-demo-web-5e889f68dd26a44a_bg.wasm` | 6,535,152 | `8dab4bb97047798e92bfc906694aa69d447e8ebf600d6cd83e3024ab3d770460` |
+| `index.html` | 29,143 | `5ce14e955e0ac798a61b0f06a6cccdbd44f0b2308b2aed67674d30e8e3c7b76d` |
 | `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
 
 The exact clean command
 `env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`
-ran from 02:14:05 through 02:26:24 AEST on 2026-08-18 and exited successfully in 12m19s without
-changing candidate HEAD, tree or worktree. Its retained 250,089-byte log is
-`/tmp/geosolve-m78-clean-gate.8n2Fik.log`, SHA-256
-`da48367b41084007637b08290e56fadd889dd1200f7918b83550237bf76d5fe3`. The gate includes
-formatting/diff hygiene, warnings-denied workspace Clippy/Rustdoc, 1,730 passing locked all-feature
-workspace tests with zero failures and three intentional ignores, editor 362/362, M78 geometry
-variants 32/32, editor extreme-finite 7/7, sketch endpoint/extreme-finite 3/3 and 1/1, demo-web
-143/143, six carried WASM parity binaries 28/28, unchanged 270/270 clean golden authority,
-benchmark/performance budgets, the 150.29-second release sparse crossover, licence/package checks
-and Trunk 0.21.14 release assembly.
+ran from 11:07:08 through 11:19:06 AEST on 2026-08-18 and exited successfully without changing
+candidate HEAD, tree or worktree. Its retained 251,148-byte, 3,280-line log is
+`/tmp/geosolve-m78-f011-clean-gate.xNKJwu.log`, SHA-256
+`d8ae7648a5c1426d5d275b0c2178df49a1793130d16532c6b36214ce0fb73fc6`. The gate includes
+formatting/diff hygiene, warnings-denied workspace Clippy/Rustdoc, 1,734 passing locked all-feature
+workspace tests with zero failures and three intentional ignores, core M16 47/47, core M10 34/34,
+sketch lifecycle 26/26, sketch locality 5/5, M78 geometry variants 33/33, demo-web 143/143, carried
+native/WASM parity, unchanged 270/270 clean golden authority, benchmark/performance budgets, the
+149.39-second release sparse crossover, licence/package checks and Trunk 0.21.14 release assembly.
 
 The gate-produced `dist` was copied without rebuilding, compared byte-for-byte and frozen above.
-Freeze evidence is `/tmp/geosolve-m78-freeze-evidence.IRltTB`. Proxy-disabled, cache-bypassed,
-identity-encoded requests for `/` and all seven files return HTTP 200 with zero redirects, no
-content encoding, exact lengths, expected media types and snapshot-identical bodies. `/` equals
-`index.html`, and the fetched manifest has the same aggregate. HTTP evidence is
-`/tmp/geosolve-m78-http-verify.wpLUFR`. Previous M77 PID `284248` stayed live until the new freeze
-was complete and is now retired. This mechanically nominates the candidate; it does not accept any
-human scorecard row. M78-F011 withdraws these bytes from current UAT; the endpoint continues to
-serve historical fallback bytes only until a clean replacement is frozen.
+Freeze evidence is `/tmp/geosolve-m78-f011-freeze-evidence.gS2PTc`. The snapshot first passed
+proxy-disabled, cache-bypassed, identity-encoded verification on temporary port `18081`. Only then
+was withdrawn PID `1753616` retired and the current listener started on `8080`; temporary PID
+`3116484` is also retired. Final requests for `/` and all seven files return HTTP 200 with zero
+redirects, no content encoding, exact lengths, expected media types and snapshot-identical bodies.
+`/` equals `index.html`. Final evidence is
+`/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
+`8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`. This mechanically
+nominates the replacement candidate; it does not accept any human scorecard row.
+
+The withdrawn initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
+`321ca280a5f581ee9755d615733617c98c0e21d7`, snapshot `/tmp/geosolve-m78-uat.SNgu3D` and aggregate
+`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4` remain historical evidence
+only and are no longer served.
 
 Run the scorecard in the ordinary editable workbench at `1440x900` and approximately `1024x720`,
 at coarse and fine zoom, using both Profile and Construction roles. Direct tests, not visual

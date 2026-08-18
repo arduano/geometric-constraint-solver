@@ -71,8 +71,9 @@ of every prepared UAT step. M71-M77 are complete. M78 is the active CAD geometry
 authoring-variant cut under ADR 0036. Initial candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passed the complete release gate plus immutable
 Tailscale nomination but is withdrawn from current UAT by M78-F011. Its focused Tangent-Arc
-centre-drag repair passes owning-layer regressions; replacement qualification, human UAT,
-accepted-source publication and closeout remain open. M76's
+centre-drag repair passes owning-layer regressions; replacement clean qualification and immutable
+Tailscale nomination now pass. Human UAT, accepted-source publication and closeout remain open.
+M76's
 implementation,
 feature refinements,
 clean qualification, immutable Tailscale nomination, scoped human acceptance and exact public
@@ -5086,13 +5087,14 @@ bytes are historical only after M77-F012/F013 and must not be used for current U
 
 ### M78: CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17); implementation and the initial clean/Tailscale nomination
-pass, while M78-F011 replacement qualification, human UAT, publication and closeout remain
-open**. Hardened product implementation is committed through `4845df7`; initial clean candidate
+Status: **active (opened 2026-08-17); implementation and M78-F011 replacement clean/Tailscale
+nomination pass, while human UAT, publication and closeout remain open**. Hardened product
+implementation is committed through `e43aa85`; initial clean candidate
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
-`321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn from current UAT but remains served as
-historical fallback bytes while the focused F011 Tangent-Arc centre-drag correction is qualified.
-M78 groups the
+`321ca280a5f581ee9755d615733617c98c0e21d7`, is withdrawn historical evidence. Replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, is current immutable Tailscale UAT authority. M78
+groups the
 complete simple-geometry authoring surface into nine reusable headless families and exactly 25
 CAD-style variants.
 `docs/M78_GOALS.md` owns the exact recipe/modifier contract and `docs/M78_UAT.md` owns the pending
@@ -5135,10 +5137,10 @@ human scorecard.
 - [x] Resolve M78-F011 so both centres in an endpoint-tangent arc pair publish finite hard-valid
   projected drags without a lock/dimension; define passive locality as point-observable and retain
   dependent Fixed bounds across dense-nullspace and projected-CGLS secondary working sets.
-- [ ] From the clean nominated source, pass the complete release gate, freeze the exact Trunk
+- [x] From the clean nominated source, pass the complete release gate, freeze the exact Trunk
   output without rebuilding, byte-verify it over the retained Tailscale endpoint and keep it live
-  for correction until explicit human approval. The initial nomination passed; repeat it for
-  M78-F011 before resuming UAT.
+  for correction until explicit human approval. The M78-F011 replacement now supersedes the
+  withdrawn initial nomination.
 - [ ] Complete `docs/M78_UAT.md`, receive explicit supervising-human approval, publish the exact
   accepted source through GitHub Pages, verify hosted bytes and close M78.
 
@@ -5167,7 +5169,8 @@ preserving controlled-work accounting. Core, sketch-locality and actual
 Tangent-Arc coordinator regressions prove both centres reach diagonal targets, unrelated points
 stay bit-stable, contacts/sweeps remain explicit, accepted geometry is finite and the independent
 hard residual is at most `1e-9`. This changes no residual equation, priority order or persistence
-schema. Replacement clean qualification and Tailscale nomination remain pending.
+schema. Tangency-owned source-End/created-Start trim grips remain a separate limitation; F011 owns
+centre dragging only. Replacement clean qualification and Tailscale nomination now pass.
 
 Nomination note (2026-08-18): exact source
 `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
@@ -5178,18 +5181,39 @@ Nomination note (2026-08-18): exact source
 seven-file Trunk output was byte-compared and frozen read-only at
 `/tmp/geosolve-m78-uat.SNgu3D`; ordered-manifest aggregate
 `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`. PID `1753616`, retained
-command-runner session `76097`, serves only that snapshot at `http://100.94.63.83:8080/`.
-Proxy-disabled, cache-bypassed identity requests for `/` and all seven files pass exact status,
+command-runner session `76097`, served only that snapshot at `http://100.94.63.83:8080/`.
+Proxy-disabled, cache-bypassed identity requests for `/` and all seven files passed exact status,
 length, media-type and byte verification. M78-F011 withdraws these bytes from current UAT; they
-remain served only as a historical fallback until the replacement is frozen. Human UAT,
+remain historical evidence and PID `1753616` is now retired.
+
+M78-F011 replacement nomination note (2026-08-18): exact source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, contains product fix `e43aa85` and passes
+`env -u GEOSOLVE_ALLOW_DIRTY NO_COLOR=true nix-shell shell.nix --run
+'./scripts/release-gate.sh'` from 11:07:08 through 11:19:06 AEST. The 251,148-byte, 3,280-line log
+is `/tmp/geosolve-m78-f011-clean-gate.xNKJwu.log`, SHA-256
+`d8ae7648a5c1426d5d275b0c2178df49a1793130d16532c6b36214ce0fb73fc6`. It includes 1,734
+passing locked all-feature workspace tests with zero failures and three intentional ignores,
+unchanged 270/270 golden authority, warnings-denied Clippy/Rustdoc, native/WASM parity, demo WASM,
+performance/licence/package checks, the 149.39-second sparse crossover and Trunk 0.21.14.
+Without rebuilding, the exact seven-file output is frozen read-only at
+`/tmp/geosolve-m78-f011-uat.MOsOFy`, ordered-manifest aggregate
+`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`; freeze evidence is
+`/tmp/geosolve-m78-f011-freeze-evidence.gS2PTc`. It was first verified on temporary port `18081`.
+Only after that passed was the old listener retired and PID `3120501`, retained command-runner
+session `40375`, started on `http://100.94.63.83:8080/`. Final proxy-disabled, cache-bypassed,
+identity-encoded requests for `/` and all seven files return HTTP 200 with zero redirects, no
+content encoding, exact media types/lengths and snapshot-identical bodies. Final evidence is
+`/tmp/geosolve-m78-f011-final-verify.yHlzj1/results.tsv`, SHA-256
+`8e9ed63257499b6073d381bd02962d9c46d05cc52e84fa86917c4829347e86da`. Human UAT,
 accepted-source Pages publication and final closeout remain pending.
 
 Gate: all nine families expose exactly the approved 25 variants; each gesture has one headless
 stage/recipe/branch owner and one atomic independently validated transaction; intrinsic recipe
 intent wins over redundant/conflicting ambient inference; invalid, cancelled or stale work cannot
 replace accepted geometry or history; the desktop adapter contains no recipe equation or branch
-heuristic; the frozen Tailscale candidate remains available until UAT is explicitly accepted.
-The F011 replacement, rather than the withdrawn initial snapshot, must satisfy this gate.
+heuristic; the F011 replacement frozen Tailscale candidate remains available until UAT is
+explicitly accepted.
 
 Explicitly deferred are tangent/tangent-radius and multi-tangent circles, interior/periodic Tangent
 Arc, curve/curve intersection Point inference, fit-point splines, polygons, slots and duplicate

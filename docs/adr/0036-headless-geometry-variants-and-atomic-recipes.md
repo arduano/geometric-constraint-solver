@@ -3,8 +3,9 @@
 # ADR 0036: Headless geometry variants and atomic construction recipes
 
 Status: accepted for active M78 on 2026-08-17; hardened product implementation is committed through
-`4845df7`; exact clean candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` passes immutable
-byte-verified Tailscale nomination. Human UAT, publication and closeout remain pending.
+F011 fix `e43aa85`; replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc` passes complete
+clean qualification and immutable byte-verified Tailscale nomination. Human UAT, publication and
+closeout remain pending.
 
 ## Context
 
@@ -195,14 +196,16 @@ semantic stages, modifier separation, relation provenance/order, every recipe's 
 invalid/redundant/stale rollback, branch/contact identity, history and native/WASM parity. Thin demo
 tests own only event mapping, overlay lifecycle, accessibility and headless rendering. The stable
 golden authoring/scene matrix expands only for a reviewed systemic catalog or lifecycle dimension;
-isolated findings receive focused owner regressions first. M78-F001 through M78-F010 are recorded in
+isolated findings receive focused owner regressions first. M78-F001 through M78-F011 are recorded in
 `docs/M78_IMPLEMENTATION.md` and `docs/SCENARIOS.md`. At product commit `4845df7`, focused evidence
 is 362/362 editor library tests, 32/32 geometry-variant cases, 7/7 editor extreme-finite cases and
 1/1 sketch extreme-finite case, plus passing editor warnings-denied Clippy. The unchanged 270-case
-golden survey/check/clean sequence also passes. Exact clean source
-`1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
-`321ca280a5f581ee9755d615733617c98c0e21d7`, passes complete workspace/WASM/Rustdoc/Trunk/release
+golden survey/check/clean sequence also passes. F011 adds 47/47 core M16, 34/34 core M10, 26/26
+sketch lifecycle, 5/5 sketch locality and 33/33 actual M78 geometry-variant focused evidence without
+changing a residual, Jacobian, priority or branch rule. Exact replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes complete workspace/WASM/Rustdoc/Trunk/release
 qualification; its exact seven-file output is frozen without rebuilding and byte-verified over
 Tailscale at ordered-manifest aggregate
-`803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`. Explicit human UAT,
+`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`. Explicit human UAT,
 accepted-source publication and hosted-byte verification remain required before M78 closes.

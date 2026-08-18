@@ -552,11 +552,13 @@ either arc centre was dragged, so both centres appeared locked despite having on
 generic tangency. The focused repair makes drag locality count only point-observable passive
 freedom and keeps every fixed coordinate bound active during dense-nullspace and projected-CGLS
 secondary solves, including a linearly dependent fixed contact bound. Owning-layer regressions
-pass; replacement clean
-qualification and immutable Tailscale nomination are in progress. The earlier candidate source
-`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` and snapshot
-`/tmp/geosolve-m78-uat.SNgu3D` are withdrawn from current UAT but remain served as historical
-fallback bytes until that replacement is frozen.
+pass. Replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, now passes the complete clean release gate; its
+immutable seven-file snapshot `/tmp/geosolve-m78-f011-uat.MOsOFy`, aggregate
+`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`, is byte-verified and
+live at `http://100.94.63.83:8080/`. The initial candidate remains withdrawn historical evidence.
+U1-U8, the targeted F011 human recheck, explicit approval, Pages publication and closeout remain
+pending.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

@@ -2,11 +2,11 @@
 
 # M78 — CAD geometry tool families and authoring variants
 
-Status: **active (opened 2026-08-17); implementation and the initial clean/Tailscale nomination
-pass, while M78-F011 replacement qualification, human UAT, publication and closeout remain
-open**. Initial clean candidate `1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn from
-current UAT by F011 while its focused Tangent-Arc centre-drag correction is qualified. M78 turns
-the demo's flat collection of geometry buttons into a polished CAD-style family palette while
+Status: **active (opened 2026-08-17); implementation and the M78-F011 replacement clean/Tailscale
+nomination pass, while human UAT, publication and closeout remain open**. Initial clean candidate
+`1b2ce0f9d843c036e3a7023674cbf219c9f593b7` is withdrawn historical evidence. Replacement source
+`793e9de39d78bdabfded15d8c8e79f86df0f52bc` is current immutable Tailscale UAT authority. M78
+turns the demo's flat collection of geometry buttons into a polished CAD-style family palette while
 keeping recipe meaning, inference, branch state and atomic publication in reusable headless Rust.
 
 ## Product contract
@@ -185,7 +185,8 @@ Initial post-hardening evidence through F010 is 362/362 editor library tests, 32
 cases, 7/7 editor extreme-finite cases and 1/1 sketch extreme-finite case. F011 additionally passes
 47/47 core M16 tests, 5/5 sketch-locality tests and 33/33 geometry-variant tests, plus focused
 warnings-denied Clippy and formatting. The unchanged 270-case golden survey/check/clean authority
-still matches; replacement complete release qualification remains pending.
+still matches. Tangency-owned source-End/created-Start trim grips remain a separate limitation;
+F011 qualifies centre dragging only.
 
 Initial source `1b2ce0f9d843c036e3a7023674cbf219c9f593b7`, tree
 `321ca280a5f581ee9755d615733617c98c0e21d7`, passes formatting, warnings-denied
@@ -195,9 +196,18 @@ clean release gate. Its exact no-rebuild seven-file output is frozen at
 `/tmp/geosolve-m78-uat.SNgu3D`, ordered-manifest aggregate
 `803b539588fa2d462f154feded4a71b4c4b94a6fe2f6480b25af584b109ceba4`, and byte-verified over
 the retained Tailscale endpoint. `docs/M78_UAT.md` remains open until explicit supervising-human
-approval. F011 withdraws these bytes from current UAT until a clean-gated immutable replacement is
-served. GitHub Pages publication and hosted-byte verification happen only after human approval and
-are required before M78 closes.
+approval. F011 withdraws these bytes permanently from current UAT; they remain historical evidence.
+
+Replacement source `793e9de39d78bdabfded15d8c8e79f86df0f52bc`, tree
+`9f74ec9b63955bfffdf2338fd1ab95ac8092856a`, passes the complete clean gate with 1,734 passing
+locked all-feature workspace tests, three intentional ignores, unchanged 270/270 golden authority,
+warnings-denied Clippy/Rustdoc, native/WASM parity, demo WASM, performance/licence/package checks,
+the 149.39-second sparse crossover and Trunk 0.21.14. Its exact no-rebuild seven-file output is
+frozen at `/tmp/geosolve-m78-f011-uat.MOsOFy`, ordered-manifest aggregate
+`a51e76c2567d7e6c0352503cb3abeed23bddb7ecbd04e5c3d7acd1dd1d45fd97`, and byte-verified live at
+`http://100.94.63.83:8080/`. `docs/M78_UAT.md` remains open for U1-U8, the focused F011 recheck and
+explicit supervising-human approval. GitHub Pages publication and hosted-byte verification happen
+only after that approval and are required before M78 closes.
 
 ## Explicit deferrals
 
