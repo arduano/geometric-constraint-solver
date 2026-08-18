@@ -118,13 +118,27 @@ recheck and requests closure. Documentation-only approval descendant `a6d504e` p
 `32096209036`, artifact `9310104202`, deployment `5955688918` and exact hosted-byte aggregate
 `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f` without replacing
 qualified product source `793e9de`. M78 is complete.
+M79 completes stable inference candidate cycling and recovery. One exact stationary headless frame
+owns the immutable ranked cohort; Tab wraps that complete cohort without mutating automatic
+hysteresis, stale choices cannot cross pointer or lifecycle contexts, queued movement is resolved
+before cycling, and only an authenticated fully redundant auto direction paired with stronger
+positional intent may be omitted on publication. Exact product source
+`6874aa1961798f4838fcda8b5fbedc4e39abfa7a`, tree
+`f2b70c0b5a3bd8d759479c42bf742f7f288c821d`, passes focused native/WASM, workspace, unchanged
+golden and complete clean release qualification plus immutable Tailscale verification. The
+supervising caller accepts U1-U5 without a new finding. Documentation-only approval descendant
+`2560ca5` passes Pages run `32116835502`, artifact `9317131695` and deployment `5959116526`; root
+plus all seven public files exact-verify at aggregate
+`5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. Pages is final public-byte
+authority while the separately built Tailscale snapshot remains accepted UAT evidence. M79 is
+complete; `6874aa1` remains qualified product authority.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74-M78 closed.
+3. `PLAN.md` — authoritative roadmap, with M74-M79 closed.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -141,6 +155,8 @@ Physics, collision and a production rendering system remain out of scope.
     publicly verified selected-curve control contract, implementation ledger and scorecard.
 14. `docs/M78_GOALS.md`, `docs/M78_IMPLEMENTATION.md` and `docs/M78_UAT.md` — completed and
     publicly verified geometry-family/variant contract, implementation ledger and scorecard.
+15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
+    publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
 
 ## Workspace
 
@@ -167,7 +183,7 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. M40.7, M53 and M61-M76 have explicit acceptance dispositions. New milestones
+and application undo. M40.7, M53 and M61-M79 have explicit acceptance dispositions. New milestones
 normally end in hands-on UAT after objective automation; M74 records an explicit scoped exception
 that defers its unexecuted scorecard without calling it passed. The desktop demo has no future
 mobile support requirement.

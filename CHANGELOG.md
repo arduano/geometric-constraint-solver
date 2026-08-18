@@ -205,7 +205,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   hosted paths byte-match aggregate
   `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`. Qualified product source
   remains `793e9de`. M78 is complete.
-- The in-progress M79 inference-lifecycle hardening. One exact stationary headless frame now owns
+- The completed M79 inference-lifecycle hardening. One exact stationary headless frame now owns
   an immutable bounded candidate cohort and additive
   `DraftInferenceResolution::next_cycle_candidate_id()` wraparound policy. Explicit selection no
   longer mutates automatic latches; stale foreign preferences publish no replacement cohort. The
@@ -216,8 +216,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   partial, positional or direction-only redundancy remain transactional rejections. This adds no
   residual, constraint kind or persistence schema. Exact product source `6874aa1` passes focused
   native/WASM, demo, workspace and clean release qualification plus unchanged golden authority;
-  its immutable Tailscale candidate is byte-verified and human UAT is accepted. Final GitHub Pages
-  publication remains before closure.
+  its immutable Tailscale candidate is byte-verified and human UAT accepts U1-U5 without a new
+  finding. Documentation-only approval descendant `2560ca5`, tree `bad5662`, passes Pages run
+  `32116835502`, artifact `9317131695` and deployment `5959116526`; root plus all seven hosted
+  paths byte-match aggregate
+  `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. Qualified product source
+  remains `6874aa1`; Pages is final public-byte authority and the frozen Tailscale snapshot remains
+  separate accepted UAT evidence. M79 is complete.
 
 ### Changed
 

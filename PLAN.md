@@ -5244,11 +5244,11 @@ mobile layout, B-rep behavior or browser-owned geometry.
 
 ### M79: stable inference candidate cycling and recovery
 
-Status: **closure in progress; clean-qualified immutable Tailscale candidate accepted; final
-GitHub Pages publication pending**. M79 hardens the existing auto-constraint candidate lifecycle
+Status: **complete and closed; clean-qualified immutable Tailscale candidate accepted and exact
+GitHub Pages publication verified**. M79 hardens the existing auto-constraint candidate lifecycle
 across the reusable editor and thin browser adapter.
 `docs/M79_GOALS.md` owns the exact contract and confirmed findings; `docs/M79_UAT.md` owns the
-pending focused human scorecard.
+accepted focused human scorecard and public closeout evidence.
 
 - [x] Seal one bounded headless cohort for an exact stationary inference frame so repeated explicit
   choices retain candidate IDs/order/guides without changing automatic hover/hysteresis latches.
@@ -5272,8 +5272,9 @@ pending focused human scorecard.
   tests and unchanged golden survey/check/clean authority.
 - [x] Pass the complete clean release gate, freeze the exact no-rebuild output, byte-verify it over
   Tailscale and retain it for focused human correction/UAT.
-- [ ] Receive explicit supervising-human approval, publish the accepted frozen candidate through
-  GitHub Pages with exact hosted-byte verification and close M79.
+- [x] Receive explicit supervising-human approval, publish the documentation-only approval
+  descendant through GitHub Pages, exact-verify the separately rebuilt hosted artifact and close
+  M79.
 
 Gate: every candidate advertised for one stationary frame can be selected repeatedly until its
 context genuinely changes; no stale/queued ID can commit another candidate; the default reported
@@ -5281,6 +5282,26 @@ mixed midpoint/direction case publishes the associative midpoint without a redun
 and cycling/failure cannot change accepted geometry, history, identities, diagnostics or residual
 validity. M79 adds no solver residual, persistence version, primitive, constraint family, browser-
 owned geometry policy or broad golden expansion.
+
+Closeout: exact qualified product source `6874aa1961798f4838fcda8b5fbedc4e39abfa7a`, tree
+`f2b70c0b5a3bd8d759479c42bf742f7f288c821d`, remains product authority. After the supervising
+caller accepted U1-U5 without a new finding, documentation-only approval descendant
+`2560ca5b966f50f99db52de9d60c89a7c01b38db`, tree
+`bad5662cb727e2dbb02fe9d015ca44f5ca01cb43`, passed Pages run `32116835502`: assembly job
+`95648139868` passed in 4m38s, deploy job `95649392571` passed in 50s and deployment `5959116526`
+reached success at `https://arduano.github.io/geometric-constraint-solver/`. Artifact `9317131695`
+is an independently downloaded 2,277,662-byte ZIP with API-matching SHA-256
+`3627af7137bad4f35a664a5d971e7e199c1f5da2a29223fd7a99c141fcac4220`; its sole 6,727,680-byte tar has SHA-256
+`635f870ee26f504d8841e3c6014ccc9a31604c26b9fe622fd0df87c9d0ca79b6` and exactly seven flat
+regular files at C-locale manifest aggregate
+`5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. Proxy-disabled,
+cache-busted identity requests for root and all seven paths returned HTTP 200 with zero redirects,
+no `Location` or `Content-Encoding`, exact media types/lengths and artifact-identical bodies; root
+equals artifact `index.html`. Complete evidence is `/tmp/geosolve-m79-pages-verify.KojLmQ`; its
+authoritative `public-complete/results.tsv` has SHA-256
+`a7679ce2e5f45a2ad32631c24bbc90892cd64bd19678ec483b2c2e494ad86660`. The frozen Tailscale
+snapshot remains accepted UAT evidence; the repository-prefixed Pages rebuild is final M79
+public-byte authority. No byte identity between those separately built distributions is claimed.
 
 ## Explicit non-goals
 

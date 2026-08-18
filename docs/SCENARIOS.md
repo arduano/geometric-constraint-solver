@@ -2503,10 +2503,13 @@ redundancy, redundant positional intent and direction-only candidates retain fai
 
 M79 product source `6874aa1` passes focused native/WASM, demo, workspace and clean release
 qualification plus unchanged 270-row golden authority. Its immutable Tailscale candidate is byte-
-verified and supervising-human UAT is accepted without a new finding. Final GitHub Pages
-publication remains before closure. These focused scenarios do not expand the stable golden because
-the defects concern stationary interaction/coordinator lifecycle rather than a missing durable
-authoring-family dimension.
+verified and supervising-human UAT accepts U1-U5 without a new finding. Documentation-only
+approval descendant `2560ca5`, tree `bad5662`, passes Pages run `32116835502`, artifact
+`9317131695` and deployment `5959116526`. Root plus all seven hosted paths byte-match ordered-
+manifest aggregate `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`.
+Exact gate-qualified product authority remains `6874aa1`; M79 is complete. These focused scenarios
+do not expand the stable golden because the defects concern stationary interaction/coordinator
+lifecycle rather than a missing durable authoring-family dimension.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

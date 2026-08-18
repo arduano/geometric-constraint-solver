@@ -2505,8 +2505,8 @@ inference, fit-point splines, polygons and slots remain deferred.
 
 ## M79 acceptance: stable inference candidate cycling and recovery
 
-Status: **closure in progress; clean-qualified immutable Tailscale candidate accepted; final
-GitHub Pages publication pending**.
+Status: **complete and closed; clean-qualified immutable Tailscale candidate accepted and exact
+GitHub Pages publication verified**.
 
 - One exact stationary headless frame owns a bounded immutable cycle cohort. Every published
   candidate ID remains selectable through repeated Tab wraparound without explicit selection
@@ -2539,11 +2539,26 @@ GitHub Pages publication pending**.
 - Focused owner and adapter tests, native/WASM parity, formatting, warnings-denied Clippy, workspace
   tests, unchanged golden survey/check/clean authority and the clean release gate pass before an
   immutable byte-verified Tailscale candidate is offered for `docs/M79_UAT.md`.
-- Explicit supervising-human approval of that exact frozen candidate is required before final
-  GitHub Pages publication and M79 closure.
+- The supervising human explicitly accepts U1-U5 for exact product source `6874aa1`, tree
+  `f2b70c0`, and the frozen Tailscale candidate without reporting a new M79 finding.
+- Documentation-only approval descendant `2560ca5`, tree `bad5662`, passes Pages run
+  `32116835502`, assembly job `95648139868`, deploy job `95649392571` and deployment `5959116526`
+  at `https://arduano.github.io/geometric-constraint-solver/` without replacing product authority.
+- Artifact `9317131695` has independently verified outer-ZIP SHA-256
+  `3627af7137bad4f35a664a5d971e7e199c1f5da2a29223fd7a99c141fcac4220`, sole inner-tar SHA-256
+  `635f870ee26f504d8841e3c6014ccc9a31604c26b9fe622fd0df87c9d0ca79b6` and exact seven-file
+  aggregate `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`.
+- Proxy-disabled, cache-busted identity requests for root and all seven paths return HTTP 200 with
+  zero redirects, no `Location` or `Content-Encoding`, exact media types and lengths, and
+  artifact-identical bodies; root equals artifact `index.html`. Retained results
+  `/tmp/geosolve-m79-pages-verify.KojLmQ/public-complete/results.tsv` have SHA-256
+  `a7679ce2e5f45a2ad32631c24bbc90892cd64bd19678ec483b2c2e494ad86660`.
 
 M79 adds no solver residual/Jacobian, primitive, constraint family, canonical persistence field,
 weighted priority, browser-owned geometry, mobile behavior or broad golden dimension.
+Product qualification, milestone-level UAT acceptance, publication and hosted-byte verification
+all pass. M79 is complete; `6874aa1` remains exact qualified product authority, the frozen
+Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte authority.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

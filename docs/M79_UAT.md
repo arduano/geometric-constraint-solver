@@ -2,9 +2,9 @@
 
 # M79 focused UAT — inference cycling and recovery
 
-Status: **accepted 2026-08-18; final GitHub Pages publication pending**. The supervising caller
-approved the clean-qualified frozen candidate and requested milestone closure without reporting a
-new finding.
+Status: **accepted and closed 2026-08-18; final GitHub Pages publication and hosted-byte
+verification pass**. The supervising caller approved the clean-qualified frozen candidate and
+requested milestone closure without reporting a new finding.
 
 Use only the exact source, immutable snapshot and Tailscale endpoint recorded below. Findings must
 name the candidate and receive an M79 finding ID before replacement work begins.
@@ -109,4 +109,25 @@ On 2026-08-18 the supervising caller stated, “UAT approved, please close off.�
 milestone-level decision accepts U1-U5 for exact frozen product source `6874aa1`, tree `f2b70c0`,
 snapshot `/tmp/geosolve-m79-uat.I5TJTx` and aggregate
 `1da8503f4d9ab535bbe3b9ce2972e05d742b2928ad8c54b59596bbac240e9ebf`. No M79 UAT finding was
-reported. Final GitHub Pages publication and hosted-byte verification remain before closure.
+reported. This is milestone-level acceptance of the recorded scorecard; it does not invent or
+imply a separately logged row-by-row replay.
+
+Documentation-only approval descendant
+`2560ca5b966f50f99db52de9d60c89a7c01b38db`, tree
+`bad5662cb727e2dbb02fe9d015ca44f5ca01cb43`, passes Pages run `32116835502`, assembly job
+`95648139868`, deploy job `95649392571` and deployment `5959116526` at
+`https://arduano.github.io/geometric-constraint-solver/`. Artifact `9317131695` has independently
+verified 2,277,662-byte ZIP/API SHA-256
+`3627af7137bad4f35a664a5d971e7e199c1f5da2a29223fd7a99c141fcac4220`, sole 6,727,680-byte tar
+SHA-256 `635f870ee26f504d8841e3c6014ccc9a31604c26b9fe622fd0df87c9d0ca79b6` and exact seven-file
+aggregate `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`.
+
+Proxy-disabled, cache-busted identity requests for root and all seven paths returned HTTP 200 with
+zero redirects, no `Location` or `Content-Encoding`, exact media types and lengths, and
+artifact-identical bodies; root equals artifact `index.html`. Complete evidence is
+`/tmp/geosolve-m79-pages-verify.KojLmQ`, whose authoritative `public-complete/results.tsv` has
+SHA-256 `a7679ce2e5f45a2ad32631c24bbc90892cd64bd19678ec483b2c2e494ad86660`.
+
+The frozen Tailscale snapshot remains accepted UAT evidence. The separately rebuilt GitHub Pages
+artifact is final public-byte authority; no byte identity between the two distributions is
+claimed. Exact qualified product source remains `6874aa1`. M79 is complete.

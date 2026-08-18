@@ -256,8 +256,12 @@ accepted-state and redundancy checks. Public `apply_construction_plan` and its c
 retain exact generic rejection, and the public `ConstructionCommitPlan`/effect/result shapes do not
 change. No solver residual, constraint kind, canonical sketch-v1-v4 syntax, draft-v5 support,
 workspace schema or browser geometry authority is added. Exact product source `6874aa1` passes the
-complete clean gate and immutable served-byte verification; human UAT is accepted and final GitHub
-Pages publication remains before closure.
+complete clean gate and immutable served-byte verification; human UAT accepts U1-U5. The
+documentation-only approval descendant `2560ca5`, tree `bad5662`, passes Pages run `32116835502`,
+artifact `9317131695`, deployment `5959116526` and exact hosted-byte aggregate
+`5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. It does not replace or
+requalify exact product source `6874aa1`. M79 is complete. Approval, publication and closeout
+change no compatibility boundary.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

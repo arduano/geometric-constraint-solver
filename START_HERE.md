@@ -180,7 +180,7 @@ palette, semantic headless recipe stages and authenticated atomic construction p
 product source `793e9de` passes the complete clean gate; approval descendant `a6d504e` passes Pages
 run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact hosted-byte aggregate
 `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`.
-M79 is the active interaction-hardening target. It seals one exact stationary inference cohort so
+M79 completes the interaction-hardening target. It seals one exact stationary inference cohort so
 Tab can traverse every ranked candidate repeatedly without changing automatic hysteresis, binds a
 browser choice to its exact pointer context, drains queued movement before cycling and makes stale
 preferences recover through a fresh unpreferred hover. Its authenticated publication path may
@@ -188,8 +188,12 @@ omit only an independently proven fully redundant direction from a bundle that r
 positional intent; generic plans and every partial, positional or direction-only redundancy remain
 fail-closed. Exact product source `6874aa1` passes focused native/WASM regressions, workspace and
 clean release qualification, unchanged 270-row golden authority, and immutable served-byte
-verification at `http://100.94.63.83:8080/`. Supervising-human UAT is accepted; final GitHub Pages
-publication remains before closure.
+verification at `http://100.94.63.83:8080/`. Supervising-human UAT is accepted. Documentation-only
+approval descendant `2560ca5`, tree `bad5662`, passes Pages run `32116835502`, artifact
+`9317131695` and deployment `5959116526`; root plus all seven hosted files exact-verify at
+aggregate `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. The Pages rebuild is
+final public-byte authority while the separately built Tailscale snapshot remains accepted UAT
+evidence. M79 is complete; `6874aa1` remains exact qualified product authority.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -214,6 +218,8 @@ support and physics remain outside future acceptance.
     scoped-approved and publicly verified CAD-ready curve-control milestone.
 14. `docs/M78_GOALS.md`, `docs/M78_IMPLEMENTATION.md` and `docs/M78_UAT.md` — completed and
     publicly verified geometry-family/variant milestone, F001-F011 ledger and accepted scorecard.
+15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
+    publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -664,9 +670,9 @@ Durable milestone and cleanup records:
   ledger)
 - `docs/M78_UAT.md` (accepted focused scorecard and exact candidate/publication evidence)
 - `docs/adr/0036-headless-geometry-variants-and-atomic-recipes.md`
-- `docs/M79_GOALS.md` (active stable candidate-cycling and recovery contract)
-- `docs/M79_IMPLEMENTATION.md` (implementation and qualification ledger)
-- `docs/M79_UAT.md` (accepted focused stationary-cycling scorecard and candidate evidence)
+- `docs/M79_GOALS.md` (completed stable candidate-cycling and recovery contract)
+- `docs/M79_IMPLEMENTATION.md` (completed implementation, qualification and publication ledger)
+- `docs/M79_UAT.md` (accepted focused stationary-cycling scorecard and public evidence)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

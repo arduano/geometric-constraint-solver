@@ -2,8 +2,8 @@
 
 # M79 implementation — stable inference cycling and recovery
 
-Status: **implementation and clean release qualification complete; immutable byte-verified
-Tailscale candidate accepted; final GitHub Pages publication pending**.
+Status: **complete and closed; implementation, clean release qualification, immutable Tailscale
+acceptance, GitHub Pages publication and hosted-byte verification pass**.
 
 ## Ownership and interfaces
 
@@ -193,4 +193,50 @@ evidence is `/tmp/geosolve-m79-final-verify.LExe3F`. Both `results.tsv` files ha
 This mechanically nominates the M79 candidate. The later evidence-ledger and approval commits are
 documentation-only and do not replace `6874aa1` as exact product-source authority. On 2026-08-18
 the supervising caller explicitly accepted U1-U5 without reporting a new finding and requested
-milestone closure. Final GitHub Pages publication and hosted-byte verification remain.
+milestone closure. The final publication evidence follows.
+
+## Final GitHub Pages publication
+
+Documentation-only approval descendant
+`2560ca5b966f50f99db52de9d60c89a7c01b38db`, tree
+`bad5662cb727e2dbb02fe9d015ca44f5ca01cb43`, triggered Pages run `32116835502`.
+Assembly job `95648139868` passed from 08:31:44 through 08:36:22 UTC in 4m38s. Deploy job
+`95649392571` passed from 08:36:26 through 08:37:16 UTC in 50s. Deployment `5959116526` reached
+`success` at 08:37:17 UTC at `https://arduano.github.io/geometric-constraint-solver/`. This
+approval descendant records accepted UAT and supplies repository-prefixed publication inputs; it
+does not replace or requalify exact product source `6874aa1`, tree `f2b70c0`.
+
+Actions artifact `9317131695` (`github-pages`) is 2,277,662 bytes. Its API digest and independently
+downloaded outer-ZIP SHA-256 are both
+`3627af7137bad4f35a664a5d971e7e199c1f5da2a29223fd7a99c141fcac4220`. The ZIP contains only a
+6,727,680-byte `artifact.tar` with SHA-256
+`635f870ee26f504d8841e3c6014ccc9a31604c26b9fe622fd0df87c9d0ca79b6`. The tar extracts to exactly
+seven flat regular non-symlink files:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 26,983 | `a6cc61cfbf2c9f6988599b476574a212b97b4b41300594e8d791a33982247534` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-69883bf6baf97620.js` | 33,333 | `075079f4bb9ae65c52e728c49fdca8df0dfa200fc3e7a8623ead8781cbe8d840` |
+| `geosolve-demo-web-69883bf6baf97620_bg.wasm` | 6,553,996 | `4589931a5da082f0e5c9a721a20789747ed8b6dc22bc5a25dc130a6b3e0bb1ef` |
+| `index.html` | 29,283 | `5bc00f450425e1cdb9a6cdfe43358fff214d1864e444c4256961b4aa314eda66` |
+| `styles-a83e80383c7972df.css` | 35,731 | `cc0f03992191c1952bc4242fc951eac0e4c1d3a6bce0965a2290f2892cbe6572` |
+
+The C-locale ordered-manifest aggregate is
+`5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. Fresh direct,
+proxy-disabled, cache-busted, identity-encoded HTTP/1.1 requests for `/`, `/index.html` and all six
+other artifact paths returned one HTTP 200 response apiece with zero redirects, no `Location` or
+`Content-Encoding`, exact `Content-Length`, downloaded length and expected media type, and
+artifact-identical bodies. `/` exactly equals artifact `index.html`; the fetched seven-file
+manifest and aggregate exactly match the artifact.
+
+Complete metadata, container listings, headers, bodies and manifests are retained at
+`/tmp/geosolve-m79-pages-verify.KojLmQ`. Authoritative
+`public-complete/results.tsv` has SHA-256
+`a7679ce2e5f45a2ad32631c24bbc90892cd64bd19678ec483b2c2e494ad86660`; the retained 156,716-byte
+workflow log has SHA-256
+`2acdfd173b6d36495f12c676286b66f2cd10a24e855befcca7d3756b5f875e63`. GitHub Pages is final M79
+public-byte authority; the separately built frozen Tailscale snapshot remains exact accepted UAT
+evidence and is not claimed byte-identical. Product qualification, UAT, publication and
+hosted-byte verification all pass. M79 is complete.

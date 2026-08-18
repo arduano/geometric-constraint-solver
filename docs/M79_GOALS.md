@@ -2,9 +2,9 @@
 
 # M79 — stable inference candidate cycling and recovery
 
-Status: **clean-qualified immutable Tailscale candidate accepted; final GitHub Pages publication
-pending**. M79 hardens the lifecycle of the existing M70/M71 drafting candidates without adding a
-primitive, constraint family or solver equation.
+Status: **complete and closed; clean-qualified immutable Tailscale candidate accepted and exact
+GitHub Pages publication verified**. M79 hardens the lifecycle of the existing M70/M71 drafting
+candidates without adding a primitive, constraint family or solver equation.
 
 ## Product contract
 
@@ -75,8 +75,27 @@ The independent public-boundary reproduction used source
 - Focused native/WASM parity, demo tests, formatting, warnings-denied Clippy, workspace tests, the
   unchanged golden survey/check/clean modes and the complete clean release gate pass before an
   immutable no-rebuild Tailscale candidate is nominated.
-- Human UAT explicitly accepts the frozen candidate before GitHub Pages publication and milestone
-  closure.
+- Human UAT explicitly accepts U1-U5 for the frozen candidate before GitHub Pages publication and
+  milestone closure.
+- A documentation-only approval descendant publishes through GitHub Pages, and root plus every
+  artifact path pass exact hosted-byte, status, redirect, encoding, media-type and length checks.
 
 M79 adds no solver residual, Jacobian, persistence version, browser geometry policy, mobile work,
 new candidate family, weighted priority substitute or broad golden expansion.
+
+## Closeout
+
+Exact qualified product source `6874aa1961798f4838fcda8b5fbedc4e39abfa7a`, tree
+`f2b70c0b5a3bd8d759479c42bf742f7f288c821d`, remains product authority. Its immutable seven-file
+Tailscale snapshot was accepted at aggregate
+`1da8503f4d9ab535bbe3b9ce2972e05d742b2928ad8c54b59596bbac240e9ebf` with no new UAT finding.
+
+Documentation-only approval descendant `2560ca5b966f50f99db52de9d60c89a7c01b38db`, tree
+`bad5662cb727e2dbb02fe9d015ca44f5ca01cb43`, passes Pages run `32116835502`, artifact
+`9317131695` and deployment `5959116526` at
+`https://arduano.github.io/geometric-constraint-solver/`. The independently downloaded artifact
+and all public paths exact-verify at C-locale seven-file aggregate
+`5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`; complete evidence is
+`/tmp/geosolve-m79-pages-verify.KojLmQ`. The repository-prefixed Pages rebuild is final public-byte
+authority. No byte identity with the separately built frozen UAT distribution is claimed. M79 is
+complete.
