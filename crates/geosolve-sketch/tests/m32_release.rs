@@ -259,7 +259,8 @@ fn dimension_target(document: &SketchDocument, dimension: DocumentDimensionId) -
         | DocumentDimensionDefinition::PointDistance { target, .. }
         | DocumentDimensionDefinition::CurveLength { target, .. }
         | DocumentDimensionDefinition::Radius { target, .. }
-        | DocumentDimensionDefinition::Diameter { target, .. } => target,
+        | DocumentDimensionDefinition::Diameter { target, .. }
+        | DocumentDimensionDefinition::ProfileOffset { target, .. } => target,
     }
 }
 

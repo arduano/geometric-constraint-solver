@@ -2382,7 +2382,8 @@ const fn dimension_target_scalar(definition: &DocumentDimensionDefinition) -> De
         | DocumentDimensionDefinition::Diameter { target, .. }
         | DocumentDimensionDefinition::OrientedAngle { target, .. }
         | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
-        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. }
+        | DocumentDimensionDefinition::ProfileOffset { target, .. } => *target,
     }
 }
 
@@ -2435,7 +2436,8 @@ fn validate_dimension_geometry(
                     * std::f64::consts::TAU
         }
         DocumentDimensionDefinition::SupportingLineOffset { .. }
-        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. } => {
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. }
+        | DocumentDimensionDefinition::ProfileOffset { .. } => {
             return Err(defect(
                 "geometry.oracle",
                 format!("unexpected non-authoring dimension definition for {kind:?}"),

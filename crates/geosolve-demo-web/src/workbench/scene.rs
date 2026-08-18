@@ -9,8 +9,9 @@ use geosolve_constraint_editor::{
     DraftGuideClassification, DraftGuideGeometry, DraftInferenceFamily, DraftInferenceRelation,
     DraftInferenceResolution, DraftInferenceStatus, EditorHoverState, EditorHoverTarget,
     EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
-    EditorScene, GeometryInteractionPolicy, SceneAnnotationGeometry, SceneAnnotationKind,
-    SceneConstraintGlyph, SceneCurveControl, SceneCurveControlGripGeometry,
+    EditorScene, GeometryInteractionPolicy, OffsetAuthoringChainPresentation,
+    OffsetAuthoringChainTerminal, OffsetEndpointRole, OffsetTraversal, SceneAnnotationGeometry,
+    SceneAnnotationKind, SceneConstraintGlyph, SceneCurveControl, SceneCurveControlGripGeometry,
     SceneCurveControlGuideKind, SceneCurveControlInteraction, SceneCurveOrigin, SceneDatum,
     SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionId, SceneFilletActionTarget,
     SceneFilletCornerAffordances, ScreenPoint, SelectionItem, Viewport, display_dimension_target,
@@ -36,6 +37,15 @@ const GRID_TARGET_MAJOR_PIXELS: f64 = 96.0;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct CanvasDisplayOptions {
     pub(crate) grid_visible: bool,
+}
+
+/// Transient Offset-specific canvas state that must not be flattened into ordinary selection.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct OffsetCanvasPresentation {
+    pub(crate) pending: Vec<SelectionItem>,
+    pub(crate) unavailable: Vec<SelectionItem>,
+    pub(crate) unavailable_message: Option<String>,
+    pub(crate) chain: Option<OffsetAuthoringChainPresentation>,
 }
 
 impl Default for CanvasDisplayOptions {
@@ -305,6 +315,7 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
 
 /// Renders the exact accepted/intrinsic scene with transient visual-only display options.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[cfg(test)]
 pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
     scene: Option<&EditorScene>,
     accepted: Option<&SketchAcceptedDocumentState>,
@@ -319,6 +330,47 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
     fillet_action_stamp: Option<u64>,
     geometry_policy: GeometryInteractionPolicy,
     display: CanvasDisplayOptions,
+    viewport: Viewport,
+) -> String {
+    svg_markup_with_computed_context_action_stamp_display_and_provisional(
+        scene,
+        accepted,
+        computed_problems,
+        selection,
+        pending,
+        &[],
+        hover,
+        construction_preview,
+        inference,
+        problem,
+        active_fillet_preview,
+        fillet_action_stamp,
+        geometry_policy,
+        display,
+        None,
+        viewport,
+    )
+}
+
+/// Renders a candidate scene while keeping exact prepared-patch geometry visibly provisional and
+/// outside every DOM interaction route.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisional(
+    scene: Option<&EditorScene>,
+    accepted: Option<&SketchAcceptedDocumentState>,
+    computed_problems: &[ComputedFeatureProblemMetadata],
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
+    provisional: &[SelectionItem],
+    hover: EditorHoverState,
+    construction_preview: Option<&ConstructionPreview>,
+    inference: Option<&DraftInferenceResolution>,
+    problem: Option<&EditorProblemMetadata>,
+    active_fillet_preview: Option<&SceneFilletActionTarget>,
+    fillet_action_stamp: Option<u64>,
+    geometry_policy: GeometryInteractionPolicy,
+    display: CanvasDisplayOptions,
+    offset: Option<&OffsetCanvasPresentation>,
     viewport: Viewport,
 ) -> String {
     let mut output = String::new();
@@ -373,7 +425,10 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
     output.push_str(concat!(
         "<defs><marker id=\"wb-fillet-direction-arrow\" markerWidth=\"6\" markerHeight=\"6\" ",
         "refX=\"5\" refY=\"3\" orient=\"auto\"><path fill=\"context-stroke\" ",
-        "d=\"M0 0L6 3L0 6Z\"/></marker></defs>"
+        "d=\"M0 0L6 3L0 6Z\"/></marker>",
+        "<marker id=\"wb-offset-chain-arrow\" markerWidth=\"7\" markerHeight=\"7\" ",
+        "refX=\"6\" refY=\"3.5\" orient=\"auto\"><path fill=\"context-stroke\" ",
+        "d=\"M0 0L7 3.5L0 7Z\"/></marker></defs>"
     ));
     if display.grid_visible {
         render_adaptive_grid(&mut output, viewport);
@@ -394,25 +449,39 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
                 continue;
             }
             let path = polyline_path(&curve.screen_polyline);
-            let selected = selection.contains(&SelectionItem::Curve(curve.span));
-            let pending = pending.contains(&SelectionItem::Curve(curve.span));
+            let item = SelectionItem::Curve(curve.span);
+            let selected = selection.contains(&item);
+            let pending = pending.contains(&item);
+            let provisional = provisional.contains(&item);
+            let offset_unavailable =
+                offset.is_some_and(|offset| offset.unavailable.contains(&item));
             let target = EditorProblemTarget::Curve(curve.span.curve);
             let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
             let role = curve.role;
-            let item = SelectionItem::Curve(curve.span);
-            let interactive = curve.is_interactive(geometry_policy);
+            let interactive =
+                curve.is_interactive(geometry_policy) && !provisional && !offset_unavailable;
             let hovered = geometry_is_hovered(hover, item);
             let _ = write!(
                 output,
                 concat!(
-                    "<path class=\"wb-curve{}{}{}{}{}{}{}\" d=\"{}\" ",
+                    "<path class=\"wb-curve{}{}{}{}{}{}{}{}{}\" d=\"{}\" ",
                     "data-persistent-id=\"{}\" {}",
                     "data-editor-segment=\"{}\" data-role=\"{}\" data-source-role=\"{}\" ",
-                    "data-construction-origin=\"{}\" data-interactive=\"{}\"/>"
+                    "data-construction-origin=\"{}\" data-interactive=\"{}\" {}/>"
                 ),
                 if selected { " selected" } else { "" },
                 if hovered { " geometry-hovered" } else { "" },
                 if pending { " authoring-pending" } else { "" },
+                if provisional {
+                    " offset-provisional"
+                } else {
+                    ""
+                },
+                if offset_unavailable {
+                    " offset-unavailable"
+                } else {
+                    ""
+                },
                 if related.contains(&item) {
                     " related"
                 } else {
@@ -441,6 +510,18 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
                 geometry_role_key(curve.source_role),
                 scene_curve_origin_key(curve.origin, role),
                 interactive,
+                if offset_unavailable {
+                    format!(
+                        "role=\"img\" aria-disabled=\"true\" data-offset-availability=\"unavailable\" aria-label=\"{}\"",
+                        escape(
+                            offset
+                                .and_then(|offset| offset.unavailable_message.as_deref())
+                                .unwrap_or("Unavailable for Offset"),
+                        ),
+                    )
+                } else {
+                    String::new()
+                },
             );
             if has_problem && resolved_targets.insert(target) {
                 let anchor = curve.screen_polyline[curve.screen_polyline.len() / 2];
@@ -480,17 +561,24 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
             let selected = selection.contains(&item);
             let hovered = geometry_is_hovered(hover, item);
             let pending = pending.contains(&item);
+            let provisional = provisional.contains(&item);
             let target = EditorProblemTarget::Point(point.id);
             let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
+            let interactive = interactive && !provisional;
             let _ = write!(
                 output,
                 concat!(
-                    "<circle class=\"wb-point{}{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
+                    "<circle class=\"wb-point{}{}{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
                     "data-persistent-id=\"{}\" {}data-interactive=\"{}\"/>"
                 ),
                 if selected { " selected" } else { "" },
                 if hovered { " geometry-hovered" } else { "" },
                 if pending { " authoring-pending" } else { "" },
+                if provisional {
+                    " offset-provisional"
+                } else {
+                    ""
+                },
                 if related.contains(&item) {
                     " related"
                 } else {
@@ -530,6 +618,8 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
             scene,
             accepted,
             selection,
+            pending,
+            provisional,
             hover,
             &problem_items,
             problem,
@@ -538,6 +628,9 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_and_display(
     output.push_str("</g>");
     if let Some(scene) = scene {
         render_curve_controls(&mut output, scene, hover);
+        if let Some(chain) = offset.and_then(|offset| offset.chain.as_ref()) {
+            render_offset_chain_cues(&mut output, scene, chain, viewport);
+        }
     }
     if let Some(inference) = inference {
         render_inference_guides(&mut output, inference, viewport);
@@ -683,6 +776,117 @@ fn render_datums(
 
 fn geometry_is_hovered(hover: EditorHoverState, item: SelectionItem) -> bool {
     matches!(hover.target, Some(EditorHoverTarget::Geometry(target)) if target == item)
+}
+
+fn render_offset_chain_cues(
+    output: &mut String,
+    scene: &EditorScene,
+    chain: &OffsetAuthoringChainPresentation,
+    viewport: Viewport,
+) {
+    if chain.spans.is_empty() {
+        return;
+    }
+    let _ = write!(
+        output,
+        "<g class=\"wb-offset-chain-cues\" role=\"img\" aria-label=\"Ordered Offset chain, {} edges, Start to End\" pointer-events=\"none\">",
+        chain.spans.len(),
+    );
+    for (index, directed) in chain.spans.iter().enumerate() {
+        let Some(curve) = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == directed.span)
+        else {
+            continue;
+        };
+        let middle = curve.screen_polyline.len() / 2;
+        if middle == 0 {
+            continue;
+        }
+        let (local_start, local_end) = (
+            curve.screen_polyline[middle - 1],
+            curve.screen_polyline[middle],
+        );
+        let delta = [local_end.x - local_start.x, local_end.y - local_start.y];
+        let length = delta[0].hypot(delta[1]);
+        if !length.is_finite() || length <= f64::EPSILON {
+            continue;
+        }
+        let center = ScreenPoint {
+            x: (local_start.x + local_end.x) * 0.5,
+            y: (local_start.y + local_end.y) * 0.5,
+        };
+        let half_length = 8.0;
+        let direction = [delta[0] / length, delta[1] / length];
+        let (mut start, mut end) = (
+            ScreenPoint {
+                x: center.x - half_length * direction[0],
+                y: center.y - half_length * direction[1],
+            },
+            ScreenPoint {
+                x: center.x + half_length * direction[0],
+                y: center.y + half_length * direction[1],
+            },
+        );
+        if directed.traversal == OffsetTraversal::Reverse {
+            std::mem::swap(&mut start, &mut end);
+        }
+        let _ = write!(
+            output,
+            concat!(
+                "<path class=\"wb-offset-chain-direction\" data-offset-chain-index=\"{}\" ",
+                "data-offset-traversal=\"{}\" data-curve-id=\"{}\" data-editor-segment=\"{}\" ",
+                "d=\"M{:.3} {:.3}L{:.3} {:.3}\" marker-end=\"url(#wb-offset-chain-arrow)\"/>"
+            ),
+            index + 1,
+            match directed.traversal {
+                OffsetTraversal::Forward => "forward",
+                OffsetTraversal::Reverse => "reverse",
+            },
+            directed.span.curve,
+            directed.span.segment,
+            start.x,
+            start.y,
+            end.x,
+            end.y,
+        );
+    }
+    render_offset_chain_terminal(output, chain.start, "start", "S", viewport);
+    render_offset_chain_terminal(output, chain.end, "end", "E", viewport);
+    output.push_str("</g>");
+}
+
+fn render_offset_chain_terminal(
+    output: &mut String,
+    terminal: OffsetAuthoringChainTerminal,
+    kind: &'static str,
+    label: &'static str,
+    viewport: Viewport,
+) {
+    let position = viewport.model_to_screen(terminal.model_position);
+    let native_endpoint = match terminal.endpoint.endpoint {
+        OffsetEndpointRole::Start => "start",
+        OffsetEndpointRole::End => "end",
+    };
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-offset-chain-terminal {}\" data-offset-terminal=\"{}\" ",
+            "data-curve-id=\"{}\" data-editor-segment=\"{}\" data-native-endpoint=\"{}\" ",
+            "transform=\"translate({:.3} {:.3})\"><title>{} terminal</title>",
+            "<circle r=\"7\"/><text x=\"0\" y=\"0\">{}</text></g>"
+        ),
+        kind,
+        kind,
+        terminal.endpoint.span.curve,
+        terminal.endpoint.span.segment,
+        native_endpoint,
+        position.x,
+        position.y,
+        if kind == "start" { "Start" } else { "End" },
+        label,
+    );
 }
 
 fn curve_control_is_hovered(hover: EditorHoverState, control: DocumentCurveControlId) -> bool {
@@ -1531,6 +1735,8 @@ fn render_annotations(
     scene: &EditorScene,
     accepted: &SketchAcceptedDocumentState,
     selection: &[SelectionItem],
+    pending: &[SelectionItem],
+    provisional: &[SelectionItem],
     hover: EditorHoverState,
     problem_items: &[SelectionItem],
     problem: Option<&EditorProblemMetadata>,
@@ -1546,6 +1752,8 @@ fn render_annotations(
             continue;
         }
         let selected = selection.contains(&annotation.item);
+        let pending = pending.contains(&annotation.item);
+        let provisional = provisional.contains(&annotation.item);
         let hovered_occurrence = match hover.target {
             Some(EditorHoverTarget::Annotation(occurrence))
                 if occurrence.item == annotation.item =>
@@ -1563,7 +1771,7 @@ fn render_annotations(
             hovered_occurrence.is_some_and(|occurrence| occurrence.marker_index.is_none());
         let has_problem = problem_items.contains(&annotation.item);
         let class = format!(
-            "{}{}{}{}{}{}",
+            "{}{}{}{}{}{}{}{}",
             if selected { " selected" } else { "" },
             if is_hovered { " hovered" } else { "" },
             if has_problem { " has-problem" } else { "" },
@@ -1579,6 +1787,12 @@ fn render_annotations(
             },
             if annotation.is_movable() {
                 " movable"
+            } else {
+                ""
+            },
+            if pending { " authoring-pending" } else { "" },
+            if provisional {
+                " offset-provisional"
             } else {
                 ""
             },
@@ -1636,9 +1850,20 @@ fn render_annotations(
         };
         let escaped_label = escape(&annotation.accessible_label);
         let visible_text = annotation.visible_text.as_deref().map(escape);
+        let (identity, accessibility) = if provisional {
+            (
+                String::new(),
+                "tabindex=\"-1\" role=\"img\" data-provisional=\"true\"".to_owned(),
+            )
+        } else {
+            (
+                format!("data-editor-item=\"{editor_kind}\" data-persistent-id=\"{id}\" "),
+                "tabindex=\"0\" role=\"button\"".to_owned(),
+            )
+        };
         let _ = write!(
             output,
-            "<g class=\"wb-annotation wb-{editor_kind}{class}\" tabindex=\"0\" role=\"button\" aria-label=\"{escaped_label}\" data-editor-item=\"{editor_kind}\" data-persistent-id=\"{id}\" data-{editor_kind}-kind=\"{kind}\"{}{} data-annotation-kind=\"{kind}\">",
+            "<g class=\"wb-annotation wb-{editor_kind}{class}\" aria-label=\"{escaped_label}\" {identity}data-{editor_kind}-kind=\"{kind}\"{}{} data-annotation-kind=\"{kind}\" {accessibility}>",
             if mode.is_empty() {
                 String::new()
             } else {
@@ -2068,6 +2293,7 @@ const fn annotation_kind(kind: SceneAnnotationKind) -> &'static str {
         SceneAnnotationKind::OrientedAngle => "oriented-angle",
         SceneAnnotationKind::SupportingLineOffset => "supporting-line-offset",
         SceneAnnotationKind::ExactTranslatedSegmentOffset => "translated-segment-offset",
+        SceneAnnotationKind::ProfileOffset => "profile-offset",
     }
 }
 
@@ -2167,6 +2393,7 @@ const fn dimension_kind(definition: &DocumentDimensionDefinition) -> &'static st
         DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. } => {
             "translated-segment-offset"
         }
+        DocumentDimensionDefinition::ProfileOffset { .. } => "profile-offset",
     }
 }
 
@@ -2237,7 +2464,8 @@ fn dimension_target(definition: &DocumentDimensionDefinition) -> DesignScalarId 
         | DocumentDimensionDefinition::Diameter { target, .. }
         | DocumentDimensionDefinition::OrientedAngle { target, .. }
         | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
-        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. }
+        | DocumentDimensionDefinition::ProfileOffset { target, .. } => *target,
     }
 }
 
@@ -2874,7 +3102,9 @@ mod tests {
         DraftInferenceEngine, DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy,
         DraftInferenceResolution, DraftInferenceSample, DraftInferenceSubject,
         DraftReferenceAnchor, DraftReferenceOrigin, EditorHoverState, EditorHoverTarget,
-        EditorProblemScope, EditorScene, GeometryInteractionPolicy, RetainedEditorCoordinator,
+        EditorProblemScope, EditorScene, GeometryInteractionPolicy,
+        OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal, OffsetDirectedSpan,
+        OffsetEndpointRef, OffsetEndpointRole, OffsetTraversal, RetainedEditorCoordinator,
         SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationLabelBounds,
         SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
     };
@@ -2896,10 +3126,12 @@ mod tests {
     };
 
     use super::{
-        CanvasCamera, CanvasDisplayOptions, adaptive_grid_spec, annotation_geometry,
-        constraint_glyph, construction_geometry_markup, construction_markup, dimension_kind,
-        grid_path, render_curve_controls, svg_markup, svg_markup_with_computed_context,
+        CanvasCamera, CanvasDisplayOptions, OffsetCanvasPresentation, adaptive_grid_spec,
+        annotation_geometry, constraint_glyph, construction_geometry_markup, construction_markup,
+        dimension_kind, grid_path, render_curve_controls, svg_markup,
+        svg_markup_with_computed_context,
         svg_markup_with_computed_context_action_stamp_and_display,
+        svg_markup_with_computed_context_action_stamp_display_and_provisional,
         svg_markup_with_computed_context_and_action_stamp, svg_markup_with_context, viewport,
     };
     use crate::workbench::panels::{lifecycle_presentation, problem_markup};
@@ -4011,6 +4243,247 @@ mod tests {
             "<title>{reference_label}; Reference curve-length dimension; 3 model units</title>"
         )));
         assert!(markup.contains("class=\"wb-dimension-arrow\""));
+    }
+
+    #[test]
+    fn provisional_offset_geometry_and_annotation_have_no_selectable_dom_identity() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let rectangle = document
+            .add_rectangle("provisional offset", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted rectangle");
+        let viewport = viewport();
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .expect("scene");
+        scene.set_show_all_constraint_annotations(true);
+        let point = rectangle.points[0];
+        let curve = CurveSpan::line(rectangle.curves[0]);
+        let constraint = rectangle.constraints[0];
+        let dimension = rectangle.dimensions[0];
+        let provisional = [
+            SelectionItem::Point(point),
+            SelectionItem::Curve(curve),
+            SelectionItem::Constraint(constraint),
+            SelectionItem::Dimension(dimension),
+        ];
+        let markup = svg_markup_with_computed_context_action_stamp_display_and_provisional(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            &[],
+            &provisional,
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions::default(),
+            None,
+            viewport,
+        );
+
+        let element = |id: &str| {
+            let identity = format!("data-persistent-id=\"{id}\"");
+            let identity_start = markup.find(&identity).expect("persistent identity");
+            let start = markup[..identity_start].rfind('<').expect("element start");
+            let end = identity_start + markup[identity_start..].find('>').expect("element end") + 1;
+            &markup[start..end]
+        };
+        let point_element = element(&point.to_string());
+        let curve_element = element(&curve.curve.to_string());
+        let annotation_start = markup
+            .match_indices("<g class=\"wb-annotation")
+            .filter_map(|(start, _)| {
+                let end = start + markup[start..].find('>')? + 1;
+                markup[start..end]
+                    .contains("offset-provisional")
+                    .then_some((start, end))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(annotation_start.len(), 2);
+        let annotation_elements = annotation_start
+            .into_iter()
+            .map(|(start, end)| &markup[start..end])
+            .collect::<Vec<_>>();
+        let constraint_element = annotation_elements
+            .iter()
+            .copied()
+            .find(|element| element.contains("wb-constraint"))
+            .expect("provisional constraint glyph");
+        let dimension_element = annotation_elements
+            .iter()
+            .copied()
+            .find(|element| element.contains("wb-dimension"))
+            .expect("provisional dimension annotation");
+
+        for geometry in [point_element, curve_element] {
+            assert!(geometry.contains("offset-provisional"));
+            assert!(geometry.contains("data-interactive=\"false\""));
+            assert!(!geometry.contains("data-editor-item"));
+        }
+        for annotation in [constraint_element, dimension_element] {
+            assert!(annotation.contains("offset-provisional"));
+            assert!(annotation.contains("tabindex=\"-1\" role=\"img\""));
+            assert!(annotation.contains("data-provisional=\"true\""));
+            assert!(!annotation.contains("data-editor-item"));
+            assert!(!annotation.contains("data-persistent-id"));
+        }
+        assert!(!constraint_element.contains(&constraint.to_string()));
+        assert!(!dimension_element.contains(&dimension.to_string()));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one SVG regression freezes ordered cues, terminals, and disabled-hover semantics"
+    )]
+    fn offset_chain_markup_preserves_order_reversal_terminals_and_disabled_hover() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let a = document.add_point("a", [-3.0, 0.0]).unwrap();
+        let b = document.add_point("b", [-1.0, 0.0]).unwrap();
+        let c = document.add_point("c", [1.0, 0.0]).unwrap();
+        let first = CurveSpan::line(
+            document
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: b,
+                        end: a,
+                        branch_direction: [-1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let second = CurveSpan::line(
+            document
+                .add_curve(
+                    "second",
+                    CurveDefinition::Line {
+                        start: b,
+                        end: c,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let accepted = session.accepted_state().expect("accepted chain");
+        let viewport = viewport();
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .unwrap();
+        let presentation = OffsetCanvasPresentation {
+            pending: vec![SelectionItem::Curve(first), SelectionItem::Curve(second)],
+            unavailable: vec![SelectionItem::Curve(first)],
+            unavailable_message: Some("This curve is unavailable for Offset".into()),
+            chain: Some(OffsetAuthoringChainPresentation {
+                spans: vec![
+                    OffsetDirectedSpan {
+                        span: first,
+                        traversal: OffsetTraversal::Reverse,
+                    },
+                    OffsetDirectedSpan {
+                        span: second,
+                        traversal: OffsetTraversal::Forward,
+                    },
+                ],
+                start: OffsetAuthoringChainTerminal {
+                    endpoint: OffsetEndpointRef {
+                        span: first,
+                        endpoint: OffsetEndpointRole::End,
+                    },
+                    model_position: [-3.0, 0.0],
+                },
+                end: OffsetAuthoringChainTerminal {
+                    endpoint: OffsetEndpointRef {
+                        span: second,
+                        endpoint: OffsetEndpointRole::End,
+                    },
+                    model_position: [1.0, 0.0],
+                },
+            }),
+        };
+        let markup = svg_markup_with_computed_context_action_stamp_display_and_provisional(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            &presentation.pending,
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions::default(),
+            Some(&presentation),
+            viewport,
+        );
+
+        let first_order = markup
+            .find("data-offset-chain-index=\"1\"")
+            .expect("first ordered cue");
+        let second_order = markup
+            .find("data-offset-chain-index=\"2\"")
+            .expect("second ordered cue");
+        assert!(first_order < second_order);
+        assert!(
+            markup[first_order..]
+                .starts_with("data-offset-chain-index=\"1\" data-offset-traversal=\"reverse\"")
+        );
+        assert!(
+            markup[second_order..]
+                .starts_with("data-offset-chain-index=\"2\" data-offset-traversal=\"forward\"")
+        );
+        assert!(markup.contains("data-offset-terminal=\"start\""));
+        assert!(markup.contains("data-offset-terminal=\"end\""));
+        let cues = markup
+            .split_once("<g class=\"wb-offset-chain-cues\"")
+            .and_then(|(_, rest)| rest.split_once("</g></g>"))
+            .map(|(cues, _)| cues)
+            .expect("complete Offset cue group");
+        assert!(!cues.contains("data-editor-item"));
+        assert!(!cues.contains("data-persistent-id"));
+
+        let first_identity = format!("data-persistent-id=\"{}\"", first.curve);
+        let identity = markup.find(&first_identity).expect("first curve identity");
+        let element_start = markup[..identity].rfind('<').unwrap();
+        let element_end = identity + markup[identity..].find('>').unwrap();
+        let first_element = &markup[element_start..=element_end];
+        assert!(first_element.contains("offset-unavailable"));
+        assert!(first_element.contains("data-interactive=\"false\""));
+        assert!(!first_element.contains("data-editor-item"));
+        assert!(first_element.contains("aria-disabled=\"true\""));
+        assert!(first_element.contains("data-offset-availability=\"unavailable\""));
     }
 
     #[test]

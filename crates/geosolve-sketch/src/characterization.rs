@@ -32,6 +32,8 @@ characterized_enum!(CurrentDocumentCommandKind {
     CreateContact => "create_contact",
     CreateConstraint => "create_constraint",
     CreateDimension => "create_dimension",
+    CreateProfileOffset => "create_profile_offset",
+    CreateProfileOffsetGeometry => "create_profile_offset_geometry",
     CreateParameter => "create_parameter",
     AddParameterBinding => "add_parameter_binding",
     RemoveParameterBinding => "remove_parameter_binding",
@@ -60,6 +62,7 @@ characterized_enum!(CurrentDocumentCommandKind {
     SetContactBranches => "set_contact_branches",
     SetCircleTangencyBranch => "set_circle_tangency_branch",
     SetDimensionMode => "set_dimension_mode",
+    SetProfileOffsetOperand => "set_profile_offset_operand",
     SetOrientedAngleOrientation => "set_oriented_angle_orientation",
     SetSourceSuppressed => "set_source_suppressed",
     SetGeometryRole => "set_geometry_role",
@@ -76,6 +79,7 @@ characterized_enum!(CurrentDocumentEffectKind {
     CreatedContact => "created_contact",
     CreatedConstraint => "created_constraint",
     CreatedDimension => "created_dimension",
+    CreatedProfileOffset => "created_profile_offset",
     CreatedParameter => "created_parameter",
     AddedParameterBinding => "added_parameter_binding",
     RemovedParameterBinding => "removed_parameter_binding",
@@ -98,6 +102,7 @@ characterized_enum!(CurrentDocumentEffectKind {
     UpdatedContacts => "updated_contacts",
     UpdatedConstraint => "updated_constraint",
     UpdatedDimension => "updated_dimension",
+    UpdatedProfileOffset => "updated_profile_offset",
     UpdatedSource => "updated_source",
     UpdatedGeometryRole => "updated_geometry_role",
     UpdatedGeometryRoles => "updated_geometry_roles",
@@ -118,6 +123,7 @@ characterized_enum!(CurrentMeasurementKind {
     DimensionOrientedAngle => "dimension_oriented_angle",
     DimensionSupportingLineOffset => "dimension_supporting_line_offset",
     DimensionExactTranslatedSegmentOffset => "dimension_exact_translated_segment_offset",
+    DimensionProfileOffset => "dimension_profile_offset",
     CurveSignedCurvature => "curve_signed_curvature",
     CurveUnsignedCurvature => "curve_unsigned_curvature",
     CurveOsculatingRadius => "curve_osculating_radius",
@@ -140,6 +146,11 @@ impl DocumentEdit {
             Self::CreateContact { .. } => CurrentDocumentCommandKind::CreateContact,
             Self::CreateConstraint { .. } => CurrentDocumentCommandKind::CreateConstraint,
             Self::CreateDimension { .. } => CurrentDocumentCommandKind::CreateDimension,
+            Self::CreateProfileOffset { .. } => CurrentDocumentCommandKind::CreateProfileOffset,
+            Self::CreateProfileOffsetGeometry { .. }
+            | Self::CreatePreparedProfileOffsetGeometry { .. } => {
+                CurrentDocumentCommandKind::CreateProfileOffsetGeometry
+            }
             Self::CreateParameter { .. } => CurrentDocumentCommandKind::CreateParameter,
             Self::AddParameterBinding { .. } => CurrentDocumentCommandKind::AddParameterBinding,
             Self::RemoveParameterBinding { .. } => {
@@ -188,6 +199,9 @@ impl DocumentEdit {
                 CurrentDocumentCommandKind::SetCircleTangencyBranch
             }
             Self::SetDimensionMode { .. } => CurrentDocumentCommandKind::SetDimensionMode,
+            Self::SetProfileOffsetOperand { .. } => {
+                CurrentDocumentCommandKind::SetProfileOffsetOperand
+            }
             Self::SetOrientedAngleOrientation { .. } => {
                 CurrentDocumentCommandKind::SetOrientedAngleOrientation
             }
@@ -216,6 +230,7 @@ impl DocumentCommandEffect {
             Self::CreatedContact(_) => CurrentDocumentEffectKind::CreatedContact,
             Self::CreatedConstraint(_) => CurrentDocumentEffectKind::CreatedConstraint,
             Self::CreatedDimension(_) => CurrentDocumentEffectKind::CreatedDimension,
+            Self::CreatedProfileOffset(_) => CurrentDocumentEffectKind::CreatedProfileOffset,
             Self::CreatedParameter(_) => CurrentDocumentEffectKind::CreatedParameter,
             Self::AddedParameterBinding { .. } => CurrentDocumentEffectKind::AddedParameterBinding,
             Self::RemovedParameterBinding { .. } => {
@@ -248,6 +263,7 @@ impl DocumentCommandEffect {
             Self::UpdatedContacts(_) => CurrentDocumentEffectKind::UpdatedContacts,
             Self::UpdatedConstraint(_) => CurrentDocumentEffectKind::UpdatedConstraint,
             Self::UpdatedDimension(_) => CurrentDocumentEffectKind::UpdatedDimension,
+            Self::UpdatedProfileOffset(_) => CurrentDocumentEffectKind::UpdatedProfileOffset,
             Self::UpdatedSource(_) => CurrentDocumentEffectKind::UpdatedSource,
             Self::UpdatedGeometryRole(_) => CurrentDocumentEffectKind::UpdatedGeometryRole,
             Self::UpdatedGeometryRoles(_) => CurrentDocumentEffectKind::UpdatedGeometryRoles,
@@ -282,6 +298,7 @@ impl DocumentDimensionDefinition {
             Self::ExactTranslatedSegmentOffset { .. } => {
                 CurrentMeasurementKind::DimensionExactTranslatedSegmentOffset
             }
+            Self::ProfileOffset { .. } => CurrentMeasurementKind::DimensionProfileOffset,
         }
     }
 }

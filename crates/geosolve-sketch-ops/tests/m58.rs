@@ -592,9 +592,9 @@ fn companion_manifest_has_only_the_accepted_one_way_dependencies() {
     let manifest = include_str!("../Cargo.toml");
     assert!(manifest.contains("geosolve-sketch ="));
     assert!(manifest.contains("geosolve-geometry ="));
+    assert!(manifest.contains("geosolve-sketch-topology ="));
     assert!(!manifest.contains("geosolve-core ="));
     assert!(!manifest.contains("geosolve-linkage ="));
-    assert!(!manifest.contains("geosolve-sketch-topology ="));
 }
 
 #[test]

@@ -7,21 +7,35 @@
 //! the retained document transaction boundary.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use geosolve_sketch::{
     ContactNeighborhood, CurveCurveFilletRequest, CurveDefinition, CurveId, CurveSpan,
-    DesignPointId, DocumentArcSweep, DocumentConstraintDefinition, DocumentCurveTrimView,
-    DocumentDimensionDefinition, DocumentDimensionMode, DocumentElementId, DocumentError,
-    DocumentTrimBoundary, DocumentTrimParameter, GeometryRole, OperationCheckpoint,
-    OperationControl, OperationController, OperationOutcome, OperationWorkCounter,
-    PreparedSketchInput, RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchAcceptedStateIdentity, SketchDesignIdentity, SketchDocument,
+    DesignPointId, DocumentArcSweep, DocumentConstraintDefinition, DocumentCurveContinuity,
+    DocumentCurveTrimView, DocumentDimensionDefinition, DocumentDimensionMode,
+    DocumentDirectedProfileOffsetCurve, DocumentEdit, DocumentElementId, DocumentError,
+    DocumentFaceOffsetDirection, DocumentLineSide, DocumentOffsetTraversal,
+    DocumentPreparedProfileOffsetGeometry, DocumentProfileOffsetCreationJunction,
+    DocumentProfileOffsetCreationOperand, DocumentProfileOffsetCreationPath,
+    DocumentProfileOffsetCreationRequest, DocumentProfileOffsetJunctionBranch,
+    DocumentProfileOffsetJunctionOwner, DocumentProfileOffsetTurn, DocumentTrimBoundary,
+    DocumentTrimParameter, GeometryRole, OperationCheckpoint, OperationControl,
+    OperationController, OperationOutcome, OperationWorkCounter, PreparedSketchInput,
+    RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+    SketchAcceptedStateIdentity, SketchDesignIdentity, SketchDocument,
+};
+use geosolve_sketch_topology::{
+    OffsetDirectedSpan, OffsetEndpointEligibility, OffsetEndpointRef, OffsetEndpointRole,
+    OffsetFaceKey, OffsetJoinOwner, OffsetOperandEligibility, OffsetOperandIndex,
+    OffsetOperandIneligibility, OffsetTraversal,
 };
 use thiserror::Error;
 
 const PARAMETER_EPSILON: f64 = 1.0e-12;
 const MAX_PATTERN_INSTANCES: usize = 256;
 const MAX_POLYGON_SIDES: usize = 256;
+const MAX_PROFILE_OFFSET_SPANS: usize = 256;
+const PROFILE_OFFSET_TANGENT_CROSS_TOLERANCE: f64 = 1.0e-9;
 
 /// Exact retained side selected when one support is split into two visible pieces.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -42,6 +56,19 @@ pub enum TrimRetainedSide {
 pub enum LineEndpoint {
     Start,
     End,
+}
+
+/// One exact authenticated operand for the topology-preserving Profile Offset operation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SketchProfileOffsetOperand {
+    Face {
+        key: OffsetFaceKey,
+        direction: DocumentFaceOffsetDirection,
+    },
+    OpenChain {
+        spans: Vec<OffsetDirectedSpan>,
+        side: DocumentLineSide,
+    },
 }
 
 /// Closed sketch-operation request surface.
@@ -110,6 +137,12 @@ pub enum SketchOperationRequest {
         instances: usize,
         step: [f64; 2],
     },
+    ProfileOffset {
+        label: String,
+        distance: f64,
+        operand: SketchProfileOffsetOperand,
+        operand_index: Arc<OffsetOperandIndex>,
+    },
 }
 
 impl SketchOperationRequest {
@@ -127,6 +160,7 @@ impl SketchOperationRequest {
             Self::RegularPolygon { .. } => SketchOperationKind::RegularPolygon,
             Self::Slot { .. } => SketchOperationKind::Slot,
             Self::LinearPattern { .. } => SketchOperationKind::LinearPattern,
+            Self::ProfileOffset { .. } => SketchOperationKind::ProfileOffset,
         }
     }
 }
@@ -145,6 +179,7 @@ pub enum SketchOperationKind {
     RegularPolygon,
     Slot,
     LinearPattern,
+    ProfileOffset,
 }
 
 /// Complete immutable document/accepted-state input used to prepare one proposal.
@@ -312,6 +347,17 @@ pub enum SketchOperationUnsupportedReason {
     PeriodicMultiInterval {
         support: CurveSpan,
     },
+    ProfileOffsetFace {
+        key: OffsetFaceKey,
+        reasons: Vec<OffsetOperandIneligibility>,
+    },
+    ProfileOffsetSpan {
+        span: CurveSpan,
+        reasons: Vec<OffsetOperandIneligibility>,
+    },
+    ProfileOffsetPeriodicChain {
+        span: CurveSpan,
+    },
 }
 
 /// Typed incomplete input-state outcome.
@@ -332,6 +378,31 @@ pub enum SketchOperationIncompleteReason {
     LinesDoNotShareOneEndpoint,
     ParallelLines,
     IntersectionDoesNotExtendSelectedEndpoint,
+    ProfileOffsetIndexForDifferentInput,
+    ProfileOffsetIndexForDifferentAcceptedState,
+    ProfileOffsetFaceMissing {
+        key: OffsetFaceKey,
+    },
+    ProfileOffsetSpanMissing {
+        span: CurveSpan,
+    },
+    ProfileOffsetEmptyChain,
+    ProfileOffsetSpanLimitExceeded,
+    ProfileOffsetDuplicateSpan {
+        span: CurveSpan,
+    },
+    ProfileOffsetDisconnectedJoin {
+        incoming: CurveSpan,
+        outgoing: CurveSpan,
+    },
+    ProfileOffsetBranchedJoin {
+        endpoint: OffsetEndpointRef,
+    },
+    ProfileOffsetClosedChain,
+    ProfileOffsetDegenerateJunction {
+        incoming: CurveSpan,
+        outgoing: CurveSpan,
+    },
 }
 
 /// Completed preparation result.
@@ -402,11 +473,38 @@ impl SketchOperationProposal {
         &self.expected
     }
 
+    /// Returns the authenticated atomic document edit for a prepared Profile Offset.
+    ///
+    /// The caller must prepare this edit against [`Self::input`]. Once that prepared sketch job
+    /// completes, its exact `PreparedSketchPatch` is the sole preview/commit authority; the edit
+    /// must not be rebuilt from UI state before publication. Other operation kinds return `None`.
+    #[must_use]
+    pub fn profile_offset_document_edit(&self) -> Option<DocumentEdit> {
+        match &self.plan {
+            PlannedOperation::ProfileOffset { prepared, .. } => {
+                Some(DocumentEdit::CreatePreparedProfileOffsetGeometry {
+                    prepared: Box::new(prepared.clone()),
+                })
+            }
+            PlannedOperation::Visibility { .. }
+            | PlannedOperation::ExtendLine { .. }
+            | PlannedOperation::Mirror { .. }
+            | PlannedOperation::Chamfer(_)
+            | PlannedOperation::Fillet { .. }
+            | PlannedOperation::Rectangle { .. }
+            | PlannedOperation::Polygon { .. }
+            | PlannedOperation::Slot(_)
+            | PlannedOperation::Pattern { .. } => None,
+        }
+    }
+
     /// Applies through the normal retained document transaction after exact-input
     /// compare-and-swap validation.
     ///
-    /// A solve rejection remains an ordinary retained-design attempt; this method
-    /// never bypasses sketch validation or publication policy.
+    /// A solve rejection normally remains an ordinary retained-design attempt. Profile Offset is
+    /// stricter: its topology-preserving contract requires a newly accepted state, so a rejected
+    /// attempt returns [`SketchOperationApplyError::ProfileOffsetRejected`] without changing the
+    /// live session.
     ///
     /// # Errors
     ///
@@ -425,20 +523,16 @@ impl SketchOperationProposal {
                 actual: Box::new(actual),
             });
         }
-        let expected_application = self.expected.clone();
-        let plan = self.plan.clone();
-        let outcome = session.transact(self.input.design_identity(), move |document| {
-            let application = plan.apply(document)?;
-            if application != expected_application {
-                return Err(DocumentError::InvalidField {
-                    field: "operation proposal replay",
-                    message: "same stamped document did not reproduce the prepared identity map"
-                        .into(),
-                });
+        if self.requires_accepted_publication() {
+            let mut candidate = session.clone();
+            let outcome = self.apply_retained(&mut candidate)?;
+            if outcome.published_accepted_identity().is_none() {
+                return Err(SketchOperationApplyError::ProfileOffsetRejected);
             }
-            Ok(application)
-        })?;
-        Ok(outcome)
+            *session = candidate;
+            return Ok(outcome);
+        }
+        self.apply_retained(session)
     }
 
     /// Controlled counterpart to [`Self::apply`].
@@ -468,9 +562,60 @@ impl SketchOperationProposal {
                 actual: Box::new(actual),
             });
         }
+        if self.requires_accepted_publication() {
+            let mut candidate = session.clone();
+            let outcome = self.apply_retained_controlled(&mut candidate, control)?;
+            if let OperationOutcome::Completed { value, .. } = &outcome {
+                if value.published_accepted_identity().is_none() {
+                    return Err(SketchOperationApplyError::ProfileOffsetRejected);
+                }
+                *session = candidate;
+            }
+            return Ok(outcome);
+        }
+        self.apply_retained_controlled(session, control)
+    }
+
+    const fn requires_accepted_publication(&self) -> bool {
+        matches!(&self.plan, PlannedOperation::ProfileOffset { .. })
+    }
+
+    fn apply_retained(
+        &self,
+        session: &mut RetainedSketchDocumentSession,
+    ) -> Result<
+        RetainedDocumentTransactionOutcome<SketchOperationApplication>,
+        SketchOperationApplyError,
+    > {
         let expected_application = self.expected.clone();
         let plan = self.plan.clone();
-        let outcome = session.transact_controlled(
+        Ok(
+            session.transact(self.input.design_identity(), move |document| {
+                let application = plan.apply(document)?;
+                if application != expected_application {
+                    return Err(DocumentError::InvalidField {
+                        field: "operation proposal replay",
+                        message:
+                            "same stamped document did not reproduce the prepared identity map"
+                                .into(),
+                    });
+                }
+                Ok(application)
+            })?,
+        )
+    }
+
+    fn apply_retained_controlled(
+        &self,
+        session: &mut RetainedSketchDocumentSession,
+        control: OperationControl,
+    ) -> Result<
+        OperationOutcome<RetainedDocumentTransactionOutcome<SketchOperationApplication>>,
+        SketchOperationApplyError,
+    > {
+        let expected_application = self.expected.clone();
+        let plan = self.plan.clone();
+        Ok(session.transact_controlled(
             self.input.design_identity(),
             move |document| {
                 let application = plan.apply(document)?;
@@ -485,8 +630,7 @@ impl SketchOperationProposal {
                 Ok(application)
             },
             control,
-        )?;
-        Ok(outcome)
+        )?)
     }
 }
 
@@ -512,6 +656,8 @@ pub enum SketchOperationApplyError {
         expected: Box<PreparedSketchInput>,
         actual: Box<PreparedSketchInput>,
     },
+    #[error("Profile Offset did not produce an independently accepted state")]
+    ProfileOffsetRejected,
     #[error(transparent)]
     Session(#[from] geosolve_sketch::DocumentSessionError),
 }
@@ -557,6 +703,10 @@ enum PlannedOperation {
         sources: Vec<CurveId>,
         instances: usize,
         step: [f64; 2],
+    },
+    ProfileOffset {
+        prepared: DocumentPreparedProfileOffsetGeometry,
+        sources: Vec<CurveSpan>,
     },
 }
 
@@ -1002,6 +1152,49 @@ fn build_result(
                 Some(accepted.identity),
             )
         }
+        SketchOperationRequest::ProfileOffset {
+            label,
+            distance,
+            operand,
+            operand_index,
+        } => {
+            ensure_positive(*distance, "profile offset distance")?;
+            let Some(accepted) = accepted_for_design(snapshot) else {
+                return Ok(missing_accepted(snapshot, kind));
+            };
+            if operand_index.input() != snapshot.input {
+                return Ok(incomplete(
+                    kind,
+                    SketchOperationIncompleteReason::ProfileOffsetIndexForDifferentInput,
+                ));
+            }
+            if operand_index.accepted_state_identity() != accepted.identity {
+                return Ok(incomplete(
+                    kind,
+                    SketchOperationIncompleteReason::ProfileOffsetIndexForDifferentAcceptedState,
+                ));
+            }
+            let (creation_operand, sources) =
+                match plan_profile_offset_operand(&accepted.document, operand_index, operand) {
+                    Ok(plan) => plan,
+                    Err(ProfileOffsetPlanFailure::Unsupported(reason)) => {
+                        return Ok(unsupported(kind, reason));
+                    }
+                    Err(ProfileOffsetPlanFailure::Incomplete(reason)) => {
+                        return Ok(incomplete(kind, reason));
+                    }
+                };
+            let request = DocumentProfileOffsetCreationRequest {
+                label: label.clone(),
+                distance: *distance,
+                operand: creation_operand,
+            };
+            let prepared = accepted.document.prepare_profile_offset_geometry(request)?;
+            (
+                PlannedOperation::ProfileOffset { prepared, sources },
+                Some(accepted.identity),
+            )
+        }
     };
 
     let mut scratch = snapshot.design.clone();
@@ -1176,6 +1369,16 @@ impl PlannedOperation {
                     sources
                         .iter()
                         .map(|source| SketchOperationIdentityChange::Retained((*source).into()))
+                        .collect(),
+                )
+            }
+            Self::ProfileOffset { prepared, sources } => {
+                document.create_prepared_profile_offset_geometry(prepared.clone())?;
+                (
+                    SketchOperationKind::ProfileOffset,
+                    sources
+                        .iter()
+                        .map(|source| SketchOperationIdentityChange::Retained(source.curve.into()))
                         .collect(),
                 )
             }
@@ -1614,6 +1817,363 @@ fn point_defined_controls(definition: &CurveDefinition) -> Option<Vec<DesignPoin
     }
 }
 
+enum ProfileOffsetPlanFailure {
+    Unsupported(SketchOperationUnsupportedReason),
+    Incomplete(SketchOperationIncompleteReason),
+}
+
+fn plan_profile_offset_operand(
+    document: &SketchDocument,
+    index: &OffsetOperandIndex,
+    operand: &SketchProfileOffsetOperand,
+) -> Result<(DocumentProfileOffsetCreationOperand, Vec<CurveSpan>), ProfileOffsetPlanFailure> {
+    match operand {
+        SketchProfileOffsetOperand::Face { key, direction } => {
+            let candidate = index.face(key).ok_or_else(|| {
+                ProfileOffsetPlanFailure::Incomplete(
+                    SketchOperationIncompleteReason::ProfileOffsetFaceMissing { key: key.clone() },
+                )
+            })?;
+            if let Some(reasons) = disabled_offset_reasons(&candidate.eligibility) {
+                return Err(ProfileOffsetPlanFailure::Unsupported(
+                    SketchOperationUnsupportedReason::ProfileOffsetFace {
+                        key: key.clone(),
+                        reasons,
+                    },
+                ));
+            }
+            let span_count = key.outer.spans.len()
+                + key.holes.iter().map(|hole| hole.spans.len()).sum::<usize>();
+            if span_count == 0 || span_count > MAX_PROFILE_OFFSET_SPANS {
+                return Err(ProfileOffsetPlanFailure::Incomplete(
+                    SketchOperationIncompleteReason::ProfileOffsetSpanLimitExceeded,
+                ));
+            }
+            let mut seen = BTreeSet::new();
+            let outer =
+                plan_profile_offset_path(document, index, &key.outer.spans, true, &mut seen)?;
+            let holes = key
+                .holes
+                .iter()
+                .map(|hole| plan_profile_offset_path(document, index, &hole.spans, true, &mut seen))
+                .collect::<Result<Vec<_>, _>>()?;
+            let sources = seen.into_iter().collect();
+            Ok((
+                DocumentProfileOffsetCreationOperand::Face {
+                    direction: *direction,
+                    outer,
+                    holes,
+                },
+                sources,
+            ))
+        }
+        SketchProfileOffsetOperand::OpenChain { spans, side } => {
+            if spans.is_empty() {
+                return Err(ProfileOffsetPlanFailure::Incomplete(
+                    SketchOperationIncompleteReason::ProfileOffsetEmptyChain,
+                ));
+            }
+            if spans.len() > MAX_PROFILE_OFFSET_SPANS {
+                return Err(ProfileOffsetPlanFailure::Incomplete(
+                    SketchOperationIncompleteReason::ProfileOffsetSpanLimitExceeded,
+                ));
+            }
+            for directed in spans {
+                let candidate = index.span(directed.span).ok_or({
+                    ProfileOffsetPlanFailure::Incomplete(
+                        SketchOperationIncompleteReason::ProfileOffsetSpanMissing {
+                            span: directed.span,
+                        },
+                    )
+                })?;
+                if let Some(reasons) = disabled_offset_reasons(&candidate.eligibility) {
+                    return Err(ProfileOffsetPlanFailure::Unsupported(
+                        SketchOperationUnsupportedReason::ProfileOffsetSpan {
+                            span: directed.span,
+                            reasons,
+                        },
+                    ));
+                }
+                if candidate.periodic {
+                    return Err(ProfileOffsetPlanFailure::Unsupported(
+                        SketchOperationUnsupportedReason::ProfileOffsetPeriodicChain {
+                            span: directed.span,
+                        },
+                    ));
+                }
+            }
+            let mut seen = BTreeSet::new();
+            let chain = plan_profile_offset_path(document, index, spans, false, &mut seen)?;
+            if spans.len() > 1
+                && index
+                    .adjacent_endpoints(directed_offset_endpoint(spans[0], true))
+                    .any(|endpoint| {
+                        endpoint == directed_offset_endpoint(spans[spans.len() - 1], false)
+                    })
+            {
+                return Err(ProfileOffsetPlanFailure::Incomplete(
+                    SketchOperationIncompleteReason::ProfileOffsetClosedChain,
+                ));
+            }
+            let sources = seen.into_iter().collect();
+            Ok((
+                DocumentProfileOffsetCreationOperand::OpenChain { side: *side, chain },
+                sources,
+            ))
+        }
+    }
+}
+
+fn disabled_offset_reasons(
+    eligibility: &OffsetOperandEligibility,
+) -> Option<Vec<OffsetOperandIneligibility>> {
+    match eligibility {
+        OffsetOperandEligibility::Eligible => None,
+        OffsetOperandEligibility::Disabled { reasons } => Some(reasons.clone()),
+    }
+}
+
+fn plan_profile_offset_path(
+    document: &SketchDocument,
+    index: &OffsetOperandIndex,
+    spans: &[OffsetDirectedSpan],
+    closed: bool,
+    seen: &mut BTreeSet<CurveSpan>,
+) -> Result<DocumentProfileOffsetCreationPath, ProfileOffsetPlanFailure> {
+    let mut edges = Vec::with_capacity(spans.len());
+    for directed in spans {
+        if !seen.insert(directed.span) {
+            return Err(ProfileOffsetPlanFailure::Incomplete(
+                SketchOperationIncompleteReason::ProfileOffsetDuplicateSpan {
+                    span: directed.span,
+                },
+            ));
+        }
+        edges.push(DocumentDirectedProfileOffsetCurve {
+            curve: directed.span,
+            traversal: document_offset_traversal(directed.traversal),
+        });
+    }
+    let junction_count = if closed && !is_periodic_offset_path(index, spans) {
+        spans.len()
+    } else {
+        spans.len().saturating_sub(1)
+    };
+    let mut junctions = Vec::with_capacity(junction_count);
+    for current in 0..junction_count {
+        let next = (current + 1) % spans.len();
+        let incoming_endpoint = directed_offset_endpoint(spans[current], false);
+        let outgoing_endpoint = directed_offset_endpoint(spans[next], true);
+        if !closed {
+            ensure_offset_endpoint_not_branched(index, incoming_endpoint)?;
+            ensure_offset_endpoint_not_branched(index, outgoing_endpoint)?;
+        }
+        let adjacency = find_offset_adjacency(index, incoming_endpoint, outgoing_endpoint)
+            .ok_or_else(|| {
+                ProfileOffsetPlanFailure::Incomplete(
+                    SketchOperationIncompleteReason::ProfileOffsetDisconnectedJoin {
+                        incoming: spans[current].span,
+                        outgoing: spans[next].span,
+                    },
+                )
+            })?;
+        let owner = adjacency
+            .owners
+            .first()
+            .copied()
+            .map(document_profile_offset_owner)
+            .ok_or_else(|| {
+                ProfileOffsetPlanFailure::Incomplete(
+                    SketchOperationIncompleteReason::ProfileOffsetDisconnectedJoin {
+                        incoming: spans[current].span,
+                        outgoing: spans[next].span,
+                    },
+                )
+            })?;
+        let branch = profile_offset_junction_branch(
+            document,
+            spans[current],
+            spans[next],
+            adjacency
+                .owners
+                .iter()
+                .copied()
+                .any(|owner| offset_join_is_explicitly_tangent(document, owner)),
+        )
+        .ok_or_else(|| {
+            ProfileOffsetPlanFailure::Incomplete(
+                SketchOperationIncompleteReason::ProfileOffsetDegenerateJunction {
+                    incoming: spans[current].span,
+                    outgoing: spans[next].span,
+                },
+            )
+        })?;
+        junctions.push(DocumentProfileOffsetCreationJunction {
+            source_owner: owner,
+            branch,
+        });
+    }
+    Ok(DocumentProfileOffsetCreationPath { edges, junctions })
+}
+
+fn is_periodic_offset_path(index: &OffsetOperandIndex, spans: &[OffsetDirectedSpan]) -> bool {
+    spans.len() == 1
+        && index
+            .span(spans[0].span)
+            .is_some_and(|candidate| candidate.periodic)
+}
+
+fn ensure_offset_endpoint_not_branched(
+    index: &OffsetOperandIndex,
+    endpoint: OffsetEndpointRef,
+) -> Result<(), ProfileOffsetPlanFailure> {
+    let branched = index
+        .span(endpoint.span)
+        .and_then(|span| {
+            span.endpoints
+                .iter()
+                .find(|candidate| candidate.endpoint == endpoint)
+        })
+        .is_some_and(|candidate| {
+            matches!(
+                candidate.eligibility,
+                OffsetEndpointEligibility::Branched { .. }
+            )
+        });
+    if branched {
+        Err(ProfileOffsetPlanFailure::Incomplete(
+            SketchOperationIncompleteReason::ProfileOffsetBranchedJoin { endpoint },
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn find_offset_adjacency(
+    index: &OffsetOperandIndex,
+    first: OffsetEndpointRef,
+    second: OffsetEndpointRef,
+) -> Option<&geosolve_sketch_topology::OffsetEndpointAdjacency> {
+    let endpoints = if first < second {
+        [first, second]
+    } else {
+        [second, first]
+    };
+    index
+        .adjacencies()
+        .iter()
+        .find(|adjacency| adjacency.endpoints == endpoints)
+}
+
+const fn document_profile_offset_owner(
+    owner: OffsetJoinOwner,
+) -> DocumentProfileOffsetJunctionOwner {
+    match owner {
+        OffsetJoinOwner::SharedPoint(point) => {
+            DocumentProfileOffsetJunctionOwner::SharedPoint(point)
+        }
+        OffsetJoinOwner::Constraint(constraint) => {
+            DocumentProfileOffsetJunctionOwner::Constraint(constraint)
+        }
+    }
+}
+
+fn offset_join_is_explicitly_tangent(document: &SketchDocument, owner: OffsetJoinOwner) -> bool {
+    let OffsetJoinOwner::Constraint(owner) = owner else {
+        return false;
+    };
+    document.constraint(owner).is_some_and(|constraint| {
+        matches!(
+            &constraint.definition,
+            DocumentConstraintDefinition::LineCircleTangency { .. }
+                | DocumentConstraintDefinition::CircleArcTangency { .. }
+                | DocumentConstraintDefinition::LineCurveTangency { .. }
+                | DocumentConstraintDefinition::CurveCurveTangency { .. }
+                | DocumentConstraintDefinition::EndpointContinuity {
+                    continuity: DocumentCurveContinuity::G1
+                        | DocumentCurveContinuity::G2
+                        | DocumentCurveContinuity::ParametricC2 { .. },
+                    ..
+                }
+        )
+    })
+}
+
+fn profile_offset_junction_branch(
+    document: &SketchDocument,
+    incoming: OffsetDirectedSpan,
+    outgoing: OffsetDirectedSpan,
+    explicitly_tangent: bool,
+) -> Option<DocumentProfileOffsetJunctionBranch> {
+    let incoming_tangent = directed_offset_tangent(document, incoming, false)?;
+    let outgoing_tangent = directed_offset_tangent(document, outgoing, true)?;
+    let cross_value = cross(incoming_tangent, outgoing_tangent);
+    let alignment = incoming_tangent[0].mul_add(
+        outgoing_tangent[0],
+        incoming_tangent[1] * outgoing_tangent[1],
+    );
+    if explicitly_tangent || cross_value.abs() <= PROFILE_OFFSET_TANGENT_CROSS_TOLERANCE {
+        (alignment > 0.0).then_some(DocumentProfileOffsetJunctionBranch::Tangent)
+    } else {
+        Some(DocumentProfileOffsetJunctionBranch::Miter {
+            turn: if cross_value.is_sign_positive() {
+                DocumentProfileOffsetTurn::Left
+            } else {
+                DocumentProfileOffsetTurn::Right
+            },
+        })
+    }
+}
+
+fn directed_offset_tangent(
+    document: &SketchDocument,
+    directed: OffsetDirectedSpan,
+    at_start: bool,
+) -> Option<[f64; 2]> {
+    let parameter = match (directed.traversal, at_start) {
+        (OffsetTraversal::Forward, true) | (OffsetTraversal::Reverse, false) => 0.0,
+        (OffsetTraversal::Forward, false) | (OffsetTraversal::Reverse, true) => 1.0,
+    };
+    let differential = document
+        .evaluate_curve_jet(directed.span, parameter)
+        .ok()?
+        .differential()
+        .ok()?;
+    let sign = match directed.traversal {
+        OffsetTraversal::Forward => 1.0,
+        OffsetTraversal::Reverse => -1.0,
+    };
+    Some([
+        differential.unit_tangent.x * sign,
+        differential.unit_tangent.y * sign,
+    ])
+}
+
+const fn document_offset_traversal(traversal: OffsetTraversal) -> DocumentOffsetTraversal {
+    match traversal {
+        OffsetTraversal::Forward => DocumentOffsetTraversal::Forward,
+        OffsetTraversal::Reverse => DocumentOffsetTraversal::Reverse,
+    }
+}
+
+const fn directed_offset_endpoint(
+    directed: OffsetDirectedSpan,
+    at_start: bool,
+) -> OffsetEndpointRef {
+    let endpoint = match (directed.traversal, at_start) {
+        (OffsetTraversal::Forward, true) | (OffsetTraversal::Reverse, false) => {
+            OffsetEndpointRole::Start
+        }
+        (OffsetTraversal::Forward, false) | (OffsetTraversal::Reverse, true) => {
+            OffsetEndpointRole::End
+        }
+    };
+    OffsetEndpointRef {
+        span: directed.span,
+        endpoint,
+    }
+}
+
 fn plan_chamfer(
     document: &SketchDocument,
     label: &str,
@@ -1908,6 +2468,12 @@ fn request_operand_count(request: &SketchOperationRequest) -> usize {
         | SketchOperationRequest::RegularPolygon { .. }
         | SketchOperationRequest::Slot { .. } => 0,
         SketchOperationRequest::LinearPattern { sources, .. } => sources.len(),
+        SketchOperationRequest::ProfileOffset { operand, .. } => match operand {
+            SketchProfileOffsetOperand::Face { key, .. } => {
+                key.outer.spans.len() + key.holes.iter().map(|hole| hole.spans.len()).sum::<usize>()
+            }
+            SketchProfileOffsetOperand::OpenChain { spans, .. } => spans.len(),
+        },
     }
 }
 

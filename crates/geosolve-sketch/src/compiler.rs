@@ -33,8 +33,9 @@ use crate::residuals::{
     GenericPointOnCurveResidual, LineBezierTangencyResidual, LineCircleTangencyResidual,
     LineOffsetResidual, LineOffsetResidualMode, M38DimensionResidual, MidpointResidual,
     NurbsWeightIncidence, OrientedAngleResidual, PointOnBezierResidual, PointOnCircleResidual,
-    PointOnLineResidual, PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual,
-    SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
+    PointOnLineResidual, PointTargetResidual, ProfileOffsetLineResidual,
+    ProfileOffsetRadialResidual, ProfileOffsetTangentialAnchorResidual, ScalarEqualityResidual,
+    ScalarTargetResidual, SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
 };
 
 /// Temporary point target supplied for one solve only.
@@ -1436,6 +1437,8 @@ pub enum SolveRejection {
         tolerance: f64,
     },
     LineOffsetBranchFlipped(SketchDimensionId),
+    ProfileOffsetBranchFlipped(SketchDimensionId),
+    ProfileOffsetTopologyChanged(SketchDimensionId),
     InvalidFilletGeometry(SketchConstraintId),
     FilletSideFlipped(SketchConstraintId),
     ContactParameterOutOfDomain(SketchConstraintId),
@@ -1773,6 +1776,17 @@ impl Sketch {
                     match dimension.kind() {
                         DimensionKind::CircularSweep { arc, .. }
                         | DimensionKind::CircularArcLength { arc, .. } => vec![(arc, false)],
+                        DimensionKind::ProfileOffset { profile, .. } => self
+                            .profile_offsets
+                            .get(profile)
+                            .ok_or(SketchError::UnknownProfileOffset(profile))?
+                            .edge_pairs()
+                            .flat_map(|pair| [pair.source.curve, pair.target.curve])
+                            .filter_map(|curve| match curve {
+                                crate::ProfileOffsetCurve::CircularArc(arc) => Some((arc, false)),
+                                _ => None,
+                            })
+                            .collect(),
                         _ => continue,
                     }
                 }
@@ -3455,6 +3469,15 @@ impl Sketch {
             ) {
                 independent_advanced_max =
                     independent_advanced_max.max(validate_line_offset_candidate(
+                        self,
+                        candidate,
+                        dimension_id,
+                        dimension.kind(),
+                        tolerance,
+                    )?);
+            } else if matches!(dimension.kind(), DimensionKind::ProfileOffset { .. }) {
+                independent_advanced_max =
+                    independent_advanced_max.max(validate_profile_offset_candidate(
                         self,
                         candidate,
                         dimension_id,
@@ -6304,6 +6327,19 @@ fn compile_dimension(
             kind,
         );
     }
+    if matches!(kind, DimensionKind::ProfileOffset { .. }) {
+        return compile_profile_offset_dimension(
+            sketch,
+            problem,
+            point_variables,
+            circle_radius_variables,
+            arc_radius_variables,
+            arc_angle_variables,
+            dimension_id,
+            dimension,
+            kind,
+        );
+    }
     if matches!(
         kind,
         DimensionKind::SupportingLineOffset { .. }
@@ -6875,6 +6911,554 @@ fn compile_line_offset_dimension(
         source_id,
         residual_id,
     ))
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn compile_profile_offset_dimension(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    point_variables: &[PointVariableMapping],
+    circle_radius_variables: &[CircleRadiusVariableMapping],
+    arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
+    dimension_id: SketchDimensionId,
+    dimension: &crate::SketchDimension,
+    kind: DimensionKind,
+) -> Result<SketchSourceMapping, SketchError> {
+    let DimensionKind::ProfileOffset { profile, target } = kind else {
+        unreachable!("non-profile-offset dimension reached profile-offset compiler");
+    };
+    if dimension.mode() != DimensionMode::Driving {
+        return Err(SketchError::ProfileOffsetRequiresDriving);
+    }
+    let association = sketch
+        .profile_offsets
+        .get(profile)
+        .ok_or(SketchError::UnknownProfileOffset(profile))?;
+    let label = format!(
+        "dimension {}: grouped profile offset = {target} (driving)",
+        dimension.ordinal()
+    );
+    let source_id = problem.add_source(SourceConstraint::new(&label)?);
+    let mut residual_ids = Vec::new();
+    match &association.operand {
+        crate::ProfileOffsetOperand::Face {
+            direction,
+            outer,
+            holes,
+        } => {
+            compile_profile_offset_path(
+                sketch,
+                problem,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                source_id,
+                "outer",
+                &outer.edges,
+                &outer.junctions,
+                true,
+                direction.left_normal_sign(),
+                target,
+                &mut residual_ids,
+            )?;
+            for (hole_index, hole) in holes.iter().enumerate() {
+                let selected_path = format!("hole {hole_index}");
+                compile_profile_offset_path(
+                    sketch,
+                    problem,
+                    point_variables,
+                    circle_radius_variables,
+                    arc_radius_variables,
+                    arc_angle_variables,
+                    source_id,
+                    &selected_path,
+                    &hole.edges,
+                    &hole.junctions,
+                    true,
+                    direction.left_normal_sign(),
+                    target,
+                    &mut residual_ids,
+                )?;
+            }
+        }
+        crate::ProfileOffsetOperand::OpenChain { side, chain } => {
+            compile_profile_offset_path(
+                sketch,
+                problem,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                source_id,
+                "open chain",
+                &chain.edges,
+                &chain.junctions,
+                false,
+                side.sign(),
+                target,
+                &mut residual_ids,
+            )?;
+        }
+    }
+    Ok(SketchSourceMapping {
+        source: SketchSource::Dimension(dimension_id),
+        source_label: label,
+        core_source_id: Some(source_id),
+        residual_ids,
+    })
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn compile_profile_offset_path(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    point_variables: &[PointVariableMapping],
+    circle_radius_variables: &[CircleRadiusVariableMapping],
+    arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
+    source_id: SourceConstraintId,
+    selected_path: &str,
+    edges: &[crate::ProfileOffsetEdgePair],
+    junctions: &[crate::ProfileOffsetJunctionBranch],
+    closed: bool,
+    left_normal_sign: f64,
+    target: f64,
+    residual_ids: &mut Vec<ResidualId>,
+) -> Result<(), SketchError> {
+    for (edge_index, edge) in edges.iter().enumerate() {
+        let source_label = profile_offset_curve_label(sketch, edge.source.curve)?;
+        let target_label = profile_offset_curve_label(sketch, edge.target.curve)?;
+        let bindings = vec![
+            AuditBinding::new("selected path", selected_path),
+            AuditBinding::new("edge", edge_index.to_string()),
+            AuditBinding::new("source", source_label),
+            AuditBinding::new("target", target_label),
+            AuditBinding::new("source traversal", format!("{:?}", edge.source.traversal)),
+            AuditBinding::new("target traversal", format!("{:?}", edge.target.traversal)),
+            AuditBinding::new("distance", target.to_string()),
+        ];
+        match (edge.source.curve, edge.target.curve) {
+            (
+                crate::ProfileOffsetCurve::Line(source),
+                crate::ProfileOffsetCurve::Line(target_line),
+            ) => {
+                let mut incidence = IncidenceBuilder::default();
+                let source_points =
+                    segment_incidence(sketch, point_variables, &mut incidence, source)?;
+                let target_points =
+                    segment_incidence(sketch, point_variables, &mut incidence, target_line)?;
+                residual_ids.push(problem.add_residual(ResidualBlock::new(
+                    source_id,
+                    ResidualCategory::Hard,
+                    incidence.variables,
+                    2,
+                    vec![1.0, sketch.model_scale],
+                    vec![
+                        audit_row(
+                            "cross(unit(directed_source), unit(directed_target))".into(),
+                            bindings.clone(),
+                        ),
+                        audit_row(
+                            "(dot(directed_target.start - directed_source.start, left_normal(unit(directed_source))) - signed_distance) / model_scale".into(),
+                            bindings,
+                        ),
+                    ],
+                    ProfileOffsetLineResidual {
+                        source: source_points,
+                        target: target_points,
+                        source_traversal: edge.source.traversal,
+                        target_traversal: edge.target.traversal,
+                        signed_distance: left_normal_sign * target,
+                    },
+                )?)?);
+            }
+            (
+                crate::ProfileOffsetCurve::CircularArc(source),
+                crate::ProfileOffsetCurve::CircularArc(target_arc),
+            ) => {
+                let turn = profile_offset_curve_turn(sketch, edge.source)?;
+                compile_profile_offset_radial_block(
+                    sketch,
+                    problem,
+                    point_variables,
+                    circle_radius_variables,
+                    arc_radius_variables,
+                    source_id,
+                    edge.source.curve,
+                    edge.target.curve,
+                    -left_normal_sign * turn * target,
+                    bindings.clone(),
+                    residual_ids,
+                )?;
+                compile_profile_offset_source_angle_preferences(
+                    sketch,
+                    problem,
+                    arc_angle_variables,
+                    source_id,
+                    source,
+                    &bindings,
+                    residual_ids,
+                )?;
+                let _ = (source, target_arc);
+            }
+            (crate::ProfileOffsetCurve::Circle(_), crate::ProfileOffsetCurve::Circle(_)) => {
+                let turn = profile_offset_curve_turn(sketch, edge.source)?;
+                compile_profile_offset_radial_block(
+                    sketch,
+                    problem,
+                    point_variables,
+                    circle_radius_variables,
+                    arc_radius_variables,
+                    source_id,
+                    edge.source.curve,
+                    edge.target.curve,
+                    -left_normal_sign * turn * target,
+                    bindings,
+                    residual_ids,
+                )?;
+            }
+            _ => {
+                return Err(SketchError::InvalidProfileOffset(
+                    "source/target curve families changed after validation",
+                ));
+            }
+        }
+    }
+
+    let periodic_circle =
+        edges.len() == 1 && matches!(edges[0].source.curve, crate::ProfileOffsetCurve::Circle(_));
+    let junction_count = if periodic_circle {
+        0
+    } else if closed {
+        edges.len()
+    } else {
+        edges.len().saturating_sub(1)
+    };
+    for junction_index in 0..junction_count {
+        let incoming = edges[junction_index];
+        let branch = junctions[junction_index];
+        let branch_binding = vec![
+            AuditBinding::new("selected path", selected_path),
+            AuditBinding::new("junction", junction_index.to_string()),
+            AuditBinding::new("branch", format!("{branch:?}")),
+        ];
+        if branch == crate::ProfileOffsetJunctionBranch::Tangent {
+            compile_profile_offset_anchor_block(
+                sketch,
+                problem,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                source_id,
+                incoming.source,
+                incoming.target,
+                ProfilePathEndpoint::End,
+                branch_binding,
+                residual_ids,
+            )?;
+        }
+    }
+
+    if !closed && !periodic_circle {
+        for (edge, endpoint, terminal) in [
+            (edges[0], ProfilePathEndpoint::Start, "start"),
+            (edges[edges.len() - 1], ProfilePathEndpoint::End, "end"),
+        ] {
+            compile_profile_offset_anchor_block(
+                sketch,
+                problem,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                source_id,
+                edge.source,
+                edge.target,
+                endpoint,
+                vec![
+                    AuditBinding::new("selected path", selected_path),
+                    AuditBinding::new("free terminal", terminal),
+                ],
+                residual_ids,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn compile_profile_offset_source_angle_preferences(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    arc_angle_variables: &[ArcAngleVariableMapping],
+    source_id: SourceConstraintId,
+    source: ArcId,
+    bindings: &[AuditBinding],
+    residual_ids: &mut Vec<ResidualId>,
+) -> Result<(), SketchError> {
+    let retained = sketch.arc_value(source)?;
+    for (role, endpoint, target) in [
+        (ArcAngleRole::Start, "start", retained.start_angle()),
+        (ArcAngleRole::End, "end", retained.end_angle()),
+    ] {
+        let mut row_bindings = bindings.to_owned();
+        row_bindings.extend([
+            AuditBinding::new("source endpoint", endpoint),
+            AuditBinding::new("retained source angle", target.to_string()),
+        ]);
+        residual_ids.push(problem.add_residual(ResidualBlock::new(
+            source_id,
+            ResidualCategory::Preference,
+            vec![arc_angle_variable(arc_angle_variables, source, role)?],
+            1,
+            vec![1.0],
+            vec![audit_row_unit(
+                "source endpoint angle - retained source endpoint angle".into(),
+                row_bindings,
+                "radian",
+            )],
+            ScalarTargetResidual {
+                target,
+                multiplier: 1.0,
+            },
+        )?)?);
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compile_profile_offset_radial_block(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    point_variables: &[PointVariableMapping],
+    circle_radius_variables: &[CircleRadiusVariableMapping],
+    arc_radius_variables: &[ArcRadiusVariableMapping],
+    source_id: SourceConstraintId,
+    source: crate::ProfileOffsetCurve,
+    target: crate::ProfileOffsetCurve,
+    radius_delta: f64,
+    bindings: Vec<AuditBinding>,
+    residual_ids: &mut Vec<ResidualId>,
+) -> Result<(), SketchError> {
+    let mut incidence = IncidenceBuilder::default();
+    let (source_center, source_radius) = profile_offset_radial_incidence(
+        sketch,
+        point_variables,
+        circle_radius_variables,
+        arc_radius_variables,
+        &mut incidence,
+        source,
+    )?;
+    let (target_center, target_radius) = profile_offset_radial_incidence(
+        sketch,
+        point_variables,
+        circle_radius_variables,
+        arc_radius_variables,
+        &mut incidence,
+        target,
+    )?;
+    residual_ids.push(problem.add_residual(ResidualBlock::new(
+        source_id,
+        ResidualCategory::Hard,
+        incidence.variables,
+        3,
+        vec![sketch.model_scale; 3],
+        vec![
+            audit_row(
+                "(target.center.x - source.center.x) / model_scale".into(),
+                bindings.clone(),
+            ),
+            audit_row(
+                "(target.center.y - source.center.y) / model_scale".into(),
+                bindings.clone(),
+            ),
+            audit_row(
+                "(target.radius - source.radius - retained_radius_delta) / model_scale".into(),
+                bindings,
+            ),
+        ],
+        ProfileOffsetRadialResidual {
+            source_center,
+            source_radius,
+            target_center,
+            target_radius,
+            radius_delta,
+        },
+    )?)?);
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum ProfilePathEndpoint {
+    Start,
+    End,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compile_profile_offset_anchor_block(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    point_variables: &[PointVariableMapping],
+    circle_radius_variables: &[CircleRadiusVariableMapping],
+    arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
+    source_id: SourceConstraintId,
+    source_curve: crate::DirectedProfileOffsetCurve,
+    target_curve: crate::DirectedProfileOffsetCurve,
+    endpoint: ProfilePathEndpoint,
+    bindings: Vec<AuditBinding>,
+    residual_ids: &mut Vec<ResidualId>,
+) -> Result<(), SketchError> {
+    let mut incidence = IncidenceBuilder::default();
+    let source_join = profile_offset_endpoint_incidence(
+        sketch,
+        point_variables,
+        circle_radius_variables,
+        arc_radius_variables,
+        arc_angle_variables,
+        &mut incidence,
+        source_curve,
+        endpoint,
+    )?;
+    let target_join = profile_offset_endpoint_incidence(
+        sketch,
+        point_variables,
+        circle_radius_variables,
+        arc_radius_variables,
+        arc_angle_variables,
+        &mut incidence,
+        target_curve,
+        endpoint,
+    )?;
+    residual_ids.push(problem.add_residual(ResidualBlock::new(
+        source_id,
+        ResidualCategory::Hard,
+        incidence.variables,
+        1,
+        vec![sketch.model_scale],
+        vec![audit_row(
+            "dot(target_join - source_join, directed_source_tangent) / model_scale".into(),
+            bindings,
+        )],
+        ProfileOffsetTangentialAnchorResidual {
+            source_join,
+            source_tangent_sign: source_curve.traversal.sign(),
+            target_join,
+        },
+    )?)?);
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn profile_offset_endpoint_incidence(
+    sketch: &Sketch,
+    point_variables: &[PointVariableMapping],
+    circle_radius_variables: &[CircleRadiusVariableMapping],
+    arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
+    incidence: &mut IncidenceBuilder,
+    curve: crate::DirectedProfileOffsetCurve,
+    endpoint: ProfilePathEndpoint,
+) -> Result<GenericCurveIncidence, SketchError> {
+    let parameter = match (curve.traversal, endpoint) {
+        (crate::OffsetTraversal::Forward, ProfilePathEndpoint::Start)
+        | (crate::OffsetTraversal::Reverse, ProfilePathEndpoint::End) => 0.0,
+        (crate::OffsetTraversal::Forward, ProfilePathEndpoint::End)
+        | (crate::OffsetTraversal::Reverse, ProfilePathEndpoint::Start) => 1.0,
+    };
+    let curve = match curve.curve {
+        crate::ProfileOffsetCurve::Line(segment) => SketchCurve::Line {
+            segment,
+            domain: crate::LineParameterDomain::BoundedSegment,
+        },
+        crate::ProfileOffsetCurve::CircularArc(arc) => SketchCurve::Arc(arc),
+        crate::ProfileOffsetCurve::Circle(_) => {
+            return Err(SketchError::InvalidProfileOffset(
+                "a full circle has no terminal or junction endpoint",
+            ));
+        }
+    };
+    generic_curve_incidence(
+        sketch,
+        point_variables,
+        circle_radius_variables,
+        arc_radius_variables,
+        arc_angle_variables,
+        &[],
+        &[],
+        &[],
+        incidence,
+        curve,
+        CurveParameterIncidence::Fixed(parameter),
+    )
+}
+
+fn profile_offset_radial_incidence(
+    sketch: &Sketch,
+    point_variables: &[PointVariableMapping],
+    circle_radius_variables: &[CircleRadiusVariableMapping],
+    arc_radius_variables: &[ArcRadiusVariableMapping],
+    incidence: &mut IncidenceBuilder,
+    curve: crate::ProfileOffsetCurve,
+) -> Result<(usize, usize), SketchError> {
+    match curve {
+        crate::ProfileOffsetCurve::CircularArc(arc) => {
+            let value = sketch.arc_value(arc)?;
+            Ok((
+                incidence.add(point_variable(point_variables, value.center())?),
+                incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
+            ))
+        }
+        crate::ProfileOffsetCurve::Circle(circle) => {
+            let value = sketch.circle_value(circle)?;
+            Ok((
+                incidence.add(point_variable(point_variables, value.center())?),
+                incidence.add(circle_radius_variable(circle_radius_variables, circle)?),
+            ))
+        }
+        crate::ProfileOffsetCurve::Line(_) => Err(SketchError::InvalidProfileOffset(
+            "a line reached the radial offset compiler",
+        )),
+    }
+}
+
+fn profile_offset_curve_turn(
+    sketch: &Sketch,
+    curve: crate::DirectedProfileOffsetCurve,
+) -> Result<f64, SketchError> {
+    let native = match curve.curve {
+        crate::ProfileOffsetCurve::CircularArc(arc) => match sketch.arc_value(arc)?.sweep() {
+            crate::ArcSweep::CounterClockwise => 1.0,
+            crate::ArcSweep::Clockwise => -1.0,
+        },
+        crate::ProfileOffsetCurve::Circle(_) => 1.0,
+        crate::ProfileOffsetCurve::Line(_) => {
+            return Err(SketchError::InvalidProfileOffset(
+                "a line has no radial turn branch",
+            ));
+        }
+    };
+    Ok(native * curve.traversal.sign())
+}
+
+fn profile_offset_curve_label(
+    sketch: &Sketch,
+    curve: crate::ProfileOffsetCurve,
+) -> Result<String, SketchError> {
+    Ok(match curve {
+        crate::ProfileOffsetCurve::Line(segment) => sketch
+            .segments
+            .get(segment)
+            .ok_or(SketchError::UnknownSegment(segment))?
+            .label()
+            .to_owned(),
+        crate::ProfileOffsetCurve::CircularArc(arc) => sketch.arc_value(arc)?.label().to_owned(),
+        crate::ProfileOffsetCurve::Circle(circle) => {
+            sketch.circle_value(circle)?.label().to_owned()
+        }
+    })
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -8586,6 +9170,1177 @@ fn validate_line_offset_candidate(
     validate_independent_dimension_rows(dimension, &rows, tolerance)
 }
 
+#[allow(clippy::too_many_lines)]
+fn validate_profile_offset_candidate(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    dimension: SketchDimensionId,
+    kind: DimensionKind,
+    tolerance: f64,
+) -> Result<f64, SolveRejection> {
+    let DimensionKind::ProfileOffset { profile, target } = kind else {
+        unreachable!("non-profile offset reached profile-offset validator");
+    };
+    let association = sketch.profile_offsets.get(profile).ok_or_else(|| {
+        SolveRejection::IndependentValidationFailed(
+            "profile offset references a stale grouped association".into(),
+        )
+    })?;
+    let topology_tolerance =
+        (tolerance * sketch.model_scale).max(64.0 * f64::EPSILON * sketch.model_scale.max(1.0));
+    let mut rows = Vec::new();
+    match &association.operand {
+        crate::ProfileOffsetOperand::Face {
+            direction,
+            outer,
+            holes,
+        } => {
+            validate_profile_offset_path_candidate(
+                sketch,
+                candidate,
+                dimension,
+                &outer.edges,
+                &outer.junctions,
+                true,
+                direction.left_normal_sign(),
+                target,
+                &mut rows,
+            )?;
+            for hole in holes {
+                validate_profile_offset_path_candidate(
+                    sketch,
+                    candidate,
+                    dimension,
+                    &hole.edges,
+                    &hole.junctions,
+                    true,
+                    direction.left_normal_sign(),
+                    target,
+                    &mut rows,
+                )?;
+            }
+            validate_profile_offset_face_topology(
+                sketch,
+                candidate,
+                dimension,
+                outer,
+                holes,
+                false,
+                topology_tolerance,
+            )?;
+            validate_profile_offset_face_topology(
+                sketch,
+                candidate,
+                dimension,
+                outer,
+                holes,
+                true,
+                topology_tolerance,
+            )?;
+        }
+        crate::ProfileOffsetOperand::OpenChain { side, chain } => {
+            validate_profile_offset_path_candidate(
+                sketch,
+                candidate,
+                dimension,
+                &chain.edges,
+                &chain.junctions,
+                false,
+                side.sign(),
+                target,
+                &mut rows,
+            )?;
+            for target_curves in [false, true] {
+                let path = candidate_profile_offset_topology_path(
+                    sketch,
+                    candidate,
+                    &chain.edges,
+                    target_curves,
+                )?;
+                if profile_offset_path_has_invalid_self_contact(&path, false, topology_tolerance) {
+                    return Err(SolveRejection::ProfileOffsetTopologyChanged(dimension));
+                }
+            }
+        }
+    }
+    validate_independent_dimension_rows(dimension, &rows, tolerance)
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn validate_profile_offset_path_candidate(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    dimension: SketchDimensionId,
+    edges: &[crate::ProfileOffsetEdgePair],
+    junctions: &[crate::ProfileOffsetJunctionBranch],
+    closed: bool,
+    left_normal_sign: f64,
+    target: f64,
+    rows: &mut Vec<f64>,
+) -> Result<(), SolveRejection> {
+    for edge in edges {
+        match (edge.source.curve, edge.target.curve) {
+            (crate::ProfileOffsetCurve::Line(_), crate::ProfileOffsetCurve::Line(_)) => {
+                let source =
+                    candidate_profile_offset_endpoint_pair(sketch, candidate, edge.source)?;
+                let target_line =
+                    candidate_profile_offset_endpoint_pair(sketch, candidate, edge.target)?;
+                let direction_dot = source.start_tangent.dot(&target_line.start_tangent);
+                let direction_cross = cross_2d(source.start_tangent, target_line.start_tangent);
+                let displacement = target_line.start - source.start;
+                let signed_distance = cross_2d(source.start_tangent, displacement);
+                if !direction_dot.is_finite()
+                    || direction_dot <= 0.0
+                    || left_normal_sign * signed_distance <= 0.0
+                {
+                    return Err(SolveRejection::ProfileOffsetBranchFlipped(dimension));
+                }
+                rows.push(direction_cross);
+                rows.push((signed_distance - left_normal_sign * target) / sketch.model_scale);
+            }
+            (
+                crate::ProfileOffsetCurve::CircularArc(_),
+                crate::ProfileOffsetCurve::CircularArc(_),
+            )
+            | (crate::ProfileOffsetCurve::Circle(_), crate::ProfileOffsetCurve::Circle(_)) => {
+                let source = candidate_profile_offset_radial(sketch, candidate, edge.source)?;
+                let target_curve = candidate_profile_offset_radial(sketch, candidate, edge.target)?;
+                if source.turn * target_curve.turn <= 0.0 {
+                    return Err(SolveRejection::ProfileOffsetBranchFlipped(dimension));
+                }
+                let expected_delta = -left_normal_sign * source.turn * target;
+                rows.extend([
+                    (target_curve.center.x - source.center.x) / sketch.model_scale,
+                    (target_curve.center.y - source.center.y) / sketch.model_scale,
+                    (target_curve.radius - source.radius - expected_delta) / sketch.model_scale,
+                ]);
+            }
+            _ => return Err(SolveRejection::ProfileOffsetBranchFlipped(dimension)),
+        }
+    }
+
+    let periodic_circle =
+        edges.len() == 1 && matches!(edges[0].source.curve, crate::ProfileOffsetCurve::Circle(_));
+    let junction_count = if periodic_circle {
+        0
+    } else if closed {
+        edges.len()
+    } else {
+        edges.len().saturating_sub(1)
+    };
+    for junction_index in 0..junction_count {
+        let outgoing_index = (junction_index + 1) % edges.len();
+        let source_in = candidate_profile_offset_endpoint_pair(
+            sketch,
+            candidate,
+            edges[junction_index].source,
+        )?;
+        let source_out = candidate_profile_offset_endpoint_pair(
+            sketch,
+            candidate,
+            edges[outgoing_index].source,
+        )?;
+        let target_in = candidate_profile_offset_endpoint_pair(
+            sketch,
+            candidate,
+            edges[junction_index].target,
+        )?;
+        let target_out = candidate_profile_offset_endpoint_pair(
+            sketch,
+            candidate,
+            edges[outgoing_index].target,
+        )?;
+        let source_gap = source_in.end - source_out.start;
+        let target_gap = target_in.end - target_out.start;
+        rows.extend([
+            source_gap.x / sketch.model_scale,
+            source_gap.y / sketch.model_scale,
+            target_gap.x / sketch.model_scale,
+            target_gap.y / sketch.model_scale,
+        ]);
+        match junctions[junction_index] {
+            crate::ProfileOffsetJunctionBranch::Miter { turn } => {
+                let source_cross = cross_2d(source_in.end_tangent, source_out.start_tangent);
+                let target_cross = cross_2d(target_in.end_tangent, target_out.start_tangent);
+                if turn.sign() * source_cross <= 0.0 || turn.sign() * target_cross <= 0.0 {
+                    return Err(SolveRejection::ProfileOffsetBranchFlipped(dimension));
+                }
+            }
+            crate::ProfileOffsetJunctionBranch::Tangent => {
+                let source_dot = source_in.end_tangent.dot(&source_out.start_tangent);
+                let target_dot = target_in.end_tangent.dot(&target_out.start_tangent);
+                if source_dot <= 0.0 || target_dot <= 0.0 {
+                    return Err(SolveRejection::ProfileOffsetBranchFlipped(dimension));
+                }
+                rows.extend([
+                    cross_2d(source_in.end_tangent, source_out.start_tangent),
+                    cross_2d(target_in.end_tangent, target_out.start_tangent),
+                ]);
+                validate_profile_offset_terminal_translation(
+                    sketch,
+                    dimension,
+                    source_in.end,
+                    source_in.end_tangent,
+                    target_in.end,
+                    left_normal_sign,
+                    target,
+                    rows,
+                )?;
+            }
+        }
+    }
+
+    if !closed && !periodic_circle {
+        let first_source =
+            candidate_profile_offset_endpoint_pair(sketch, candidate, edges[0].source)?;
+        let first_target =
+            candidate_profile_offset_endpoint_pair(sketch, candidate, edges[0].target)?;
+        validate_profile_offset_terminal_translation(
+            sketch,
+            dimension,
+            first_source.start,
+            first_source.start_tangent,
+            first_target.start,
+            left_normal_sign,
+            target,
+            rows,
+        )?;
+        let last = edges.len() - 1;
+        let last_source =
+            candidate_profile_offset_endpoint_pair(sketch, candidate, edges[last].source)?;
+        let last_target =
+            candidate_profile_offset_endpoint_pair(sketch, candidate, edges[last].target)?;
+        validate_profile_offset_terminal_translation(
+            sketch,
+            dimension,
+            last_source.end,
+            last_source.end_tangent,
+            last_target.end,
+            left_normal_sign,
+            target,
+            rows,
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_profile_offset_terminal_translation(
+    sketch: &Sketch,
+    dimension: SketchDimensionId,
+    source: Point2<f64>,
+    tangent: Vector2<f64>,
+    target_point: Point2<f64>,
+    left_normal_sign: f64,
+    target: f64,
+    rows: &mut Vec<f64>,
+) -> Result<(), SolveRejection> {
+    let normal = Vector2::new(-tangent.y, tangent.x) * (left_normal_sign * target);
+    let error = target_point - source - normal;
+    let actual = target_point - source;
+    if actual.dot(&normal) <= 0.0 {
+        return Err(SolveRejection::ProfileOffsetBranchFlipped(dimension));
+    }
+    rows.extend([error.x / sketch.model_scale, error.y / sketch.model_scale]);
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+struct CandidateProfileOffsetEndpointPair {
+    start: Point2<f64>,
+    end: Point2<f64>,
+    start_tangent: Vector2<f64>,
+    end_tangent: Vector2<f64>,
+}
+
+fn candidate_profile_offset_endpoint_pair(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    curve: crate::DirectedProfileOffsetCurve,
+) -> Result<CandidateProfileOffsetEndpointPair, SolveRejection> {
+    let native = match curve.curve {
+        crate::ProfileOffsetCurve::Line(segment) => {
+            let value = sketch.segments.get(segment).ok_or_else(|| {
+                SolveRejection::IndependentValidationFailed(
+                    "profile offset references a stale line".into(),
+                )
+            })?;
+            let start = candidate.geometry.point(value.start()).ok_or_else(|| {
+                SolveRejection::IndependentValidationFailed(
+                    "profile offset line start is missing".into(),
+                )
+            })?;
+            let end = candidate.geometry.point(value.end()).ok_or_else(|| {
+                SolveRejection::IndependentValidationFailed(
+                    "profile offset line end is missing".into(),
+                )
+            })?;
+            let direction = end - start;
+            let length = direction.norm();
+            if !length.is_finite() || length == 0.0 {
+                return Err(SolveRejection::IndependentValidationFailed(
+                    "profile offset line is degenerate".into(),
+                ));
+            }
+            let tangent = direction / length;
+            CandidateProfileOffsetEndpointPair {
+                start,
+                end,
+                start_tangent: tangent,
+                end_tangent: tangent,
+            }
+        }
+        crate::ProfileOffsetCurve::CircularArc(arc) => {
+            let value = candidate.geometry.arc(arc).ok_or_else(|| {
+                SolveRejection::IndependentValidationFailed("profile offset arc is missing".into())
+            })?;
+            let start = value.evaluate(0.0).ok_or_else(|| {
+                SolveRejection::IndependentValidationFailed(
+                    "profile offset arc start is invalid".into(),
+                )
+            })?;
+            let end = value.evaluate(1.0).ok_or_else(|| {
+                SolveRejection::IndependentValidationFailed(
+                    "profile offset arc end is invalid".into(),
+                )
+            })?;
+            let turn = value.signed_sweep.signum();
+            let start_tangent =
+                Vector2::new(-value.start_angle.sin(), value.start_angle.cos()) * turn;
+            let end_tangent = Vector2::new(-value.end_angle.sin(), value.end_angle.cos()) * turn;
+            CandidateProfileOffsetEndpointPair {
+                start,
+                end,
+                start_tangent,
+                end_tangent,
+            }
+        }
+        crate::ProfileOffsetCurve::Circle(_) => {
+            return Err(SolveRejection::IndependentValidationFailed(
+                "a full circle has no profile endpoint".into(),
+            ));
+        }
+    };
+    Ok(match curve.traversal {
+        crate::OffsetTraversal::Forward => native,
+        crate::OffsetTraversal::Reverse => CandidateProfileOffsetEndpointPair {
+            start: native.end,
+            end: native.start,
+            start_tangent: -native.end_tangent,
+            end_tangent: -native.start_tangent,
+        },
+    })
+}
+
+#[derive(Clone, Copy)]
+struct CandidateProfileOffsetRadial {
+    center: Point2<f64>,
+    radius: f64,
+    turn: f64,
+}
+
+fn candidate_profile_offset_radial(
+    _sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    curve: crate::DirectedProfileOffsetCurve,
+) -> Result<CandidateProfileOffsetRadial, SolveRejection> {
+    let (center, radius, native_turn) = match curve.curve {
+        crate::ProfileOffsetCurve::CircularArc(arc) => {
+            let value = candidate.geometry.arc(arc).ok_or_else(|| {
+                SolveRejection::IndependentValidationFailed(
+                    "profile offset radial arc is missing".into(),
+                )
+            })?;
+            (value.center, value.radius, value.signed_sweep.signum())
+        }
+        crate::ProfileOffsetCurve::Circle(circle) => {
+            let value = candidate.geometry.circle(circle).ok_or_else(|| {
+                SolveRejection::IndependentValidationFailed(
+                    "profile offset circle is missing".into(),
+                )
+            })?;
+            (value.center, value.radius, 1.0)
+        }
+        crate::ProfileOffsetCurve::Line(_) => {
+            return Err(SolveRejection::IndependentValidationFailed(
+                "profile offset line reached radial validation".into(),
+            ));
+        }
+    };
+    if !radius.is_finite() || radius <= 0.0 || native_turn == 0.0 {
+        return Err(SolveRejection::IndependentValidationFailed(
+            "profile offset radial curve is invalid".into(),
+        ));
+    }
+    Ok(CandidateProfileOffsetRadial {
+        center,
+        radius,
+        turn: native_turn * curve.traversal.sign(),
+    })
+}
+
+fn validate_profile_offset_face_topology(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    dimension: SketchDimensionId,
+    outer: &crate::ProfileOffsetLoop,
+    holes: &[crate::ProfileOffsetLoop],
+    target_curves: bool,
+    linear_tolerance: f64,
+) -> Result<(), SolveRejection> {
+    let outer_path =
+        candidate_profile_offset_topology_path(sketch, candidate, &outer.edges, target_curves)?;
+    let outer_area = profile_offset_path_signed_area(&outer_path);
+    if !outer_area.is_finite()
+        || outer_area <= profile_offset_area_tolerance(&outer_path, linear_tolerance)
+        || profile_offset_path_has_invalid_self_contact(&outer_path, true, linear_tolerance)
+    {
+        return Err(SolveRejection::ProfileOffsetTopologyChanged(dimension));
+    }
+    let mut hole_paths: Vec<Vec<CandidateProfileOffsetTopologyCurve>> = Vec::new();
+    for hole in holes {
+        let path =
+            candidate_profile_offset_topology_path(sketch, candidate, &hole.edges, target_curves)?;
+        let area = profile_offset_path_signed_area(&path);
+        if !area.is_finite()
+            || area >= -profile_offset_area_tolerance(&path, linear_tolerance)
+            || profile_offset_path_has_invalid_self_contact(&path, true, linear_tolerance)
+            || profile_offset_paths_intersect(&path, &outer_path, linear_tolerance)
+            || !profile_offset_point_in_path(path[0].start(), &outer_path, linear_tolerance)
+                .unwrap_or(false)
+        {
+            return Err(SolveRejection::ProfileOffsetTopologyChanged(dimension));
+        }
+        for previous in &hole_paths {
+            if profile_offset_paths_intersect(&path, previous, linear_tolerance)
+                || profile_offset_point_in_path(path[0].start(), previous, linear_tolerance)
+                    .unwrap_or(true)
+                || profile_offset_point_in_path(previous[0].start(), &path, linear_tolerance)
+                    .unwrap_or(true)
+            {
+                return Err(SolveRejection::ProfileOffsetTopologyChanged(dimension));
+            }
+        }
+        hole_paths.push(path);
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CandidateProfileOffsetTopologyCurve {
+    Line {
+        start: Point2<f64>,
+        end: Point2<f64>,
+    },
+    Radial {
+        center: Point2<f64>,
+        radius: f64,
+        start_angle: f64,
+        signed_sweep: f64,
+        full_circle: bool,
+    },
+}
+
+impl CandidateProfileOffsetTopologyCurve {
+    fn start(self) -> Point2<f64> {
+        match self {
+            Self::Line { start, .. } => start,
+            Self::Radial {
+                center,
+                radius,
+                start_angle,
+                ..
+            } => profile_offset_radial_point(center, radius, start_angle),
+        }
+    }
+
+    fn end(self) -> Point2<f64> {
+        match self {
+            Self::Line { end, .. } => end,
+            Self::Radial {
+                center,
+                radius,
+                start_angle,
+                signed_sweep,
+                ..
+            } => profile_offset_radial_point(center, radius, start_angle + signed_sweep),
+        }
+    }
+}
+
+fn candidate_profile_offset_topology_path(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    edges: &[crate::ProfileOffsetEdgePair],
+    target_curves: bool,
+) -> Result<Vec<CandidateProfileOffsetTopologyCurve>, SolveRejection> {
+    let mut result = Vec::with_capacity(edges.len());
+    for edge in edges {
+        let directed = if target_curves {
+            edge.target
+        } else {
+            edge.source
+        };
+        let curve = match directed.curve {
+            crate::ProfileOffsetCurve::Line(_) => {
+                let value = candidate_profile_offset_endpoint_pair(sketch, candidate, directed)?;
+                CandidateProfileOffsetTopologyCurve::Line {
+                    start: value.start,
+                    end: value.end,
+                }
+            }
+            crate::ProfileOffsetCurve::CircularArc(arc) => {
+                let value = candidate.geometry.arc(arc).ok_or_else(|| {
+                    SolveRejection::IndependentValidationFailed(
+                        "profile offset topology arc is missing".into(),
+                    )
+                })?;
+                let (start_angle, signed_sweep) = match directed.traversal {
+                    crate::OffsetTraversal::Forward => (value.start_angle, value.signed_sweep),
+                    crate::OffsetTraversal::Reverse => (value.end_angle, -value.signed_sweep),
+                };
+                if !value.center.x.is_finite()
+                    || !value.center.y.is_finite()
+                    || !value.radius.is_finite()
+                    || value.radius <= 0.0
+                    || !start_angle.is_finite()
+                    || !signed_sweep.is_finite()
+                    || signed_sweep == 0.0
+                    || signed_sweep.abs() >= std::f64::consts::TAU
+                {
+                    return Err(SolveRejection::IndependentValidationFailed(
+                        "profile offset topology arc is invalid".into(),
+                    ));
+                }
+                CandidateProfileOffsetTopologyCurve::Radial {
+                    center: value.center,
+                    radius: value.radius,
+                    start_angle,
+                    signed_sweep,
+                    full_circle: false,
+                }
+            }
+            crate::ProfileOffsetCurve::Circle(circle) => {
+                let value = candidate.geometry.circle(circle).ok_or_else(|| {
+                    SolveRejection::IndependentValidationFailed(
+                        "profile offset topology circle is missing".into(),
+                    )
+                })?;
+                if !value.center.x.is_finite()
+                    || !value.center.y.is_finite()
+                    || !value.radius.is_finite()
+                    || value.radius <= 0.0
+                {
+                    return Err(SolveRejection::IndependentValidationFailed(
+                        "profile offset topology circle is invalid".into(),
+                    ));
+                }
+                CandidateProfileOffsetTopologyCurve::Radial {
+                    center: value.center,
+                    radius: value.radius,
+                    start_angle: 0.0,
+                    signed_sweep: directed.traversal.sign() * std::f64::consts::TAU,
+                    full_circle: true,
+                }
+            }
+        };
+        result.push(curve);
+    }
+    Ok(result)
+}
+
+fn profile_offset_path_signed_area(path: &[CandidateProfileOffsetTopologyCurve]) -> f64 {
+    let Some(origin) = path.first().map(|curve| curve.start()) else {
+        return f64::NAN;
+    };
+    path.iter()
+        .copied()
+        .map(|curve| match curve {
+            CandidateProfileOffsetTopologyCurve::Line { start, end } => {
+                let start = start - origin;
+                let end = end - origin;
+                cross_2d(start, end) * 0.5
+            }
+            CandidateProfileOffsetTopologyCurve::Radial {
+                center,
+                radius,
+                start_angle,
+                signed_sweep,
+                ..
+            } => {
+                let center = center - origin;
+                let start = Vector2::new(radius * start_angle.cos(), radius * start_angle.sin());
+                let end_angle = start_angle + signed_sweep;
+                let end = Vector2::new(radius * end_angle.cos(), radius * end_angle.sin());
+                (center.x * (end.y - start.y) - center.y * (end.x - start.x)
+                    + radius * radius * signed_sweep)
+                    * 0.5
+            }
+        })
+        .sum()
+}
+
+fn profile_offset_area_tolerance(
+    path: &[CandidateProfileOffsetTopologyCurve],
+    linear_tolerance: f64,
+) -> f64 {
+    let Some(origin) = path.first().map(|curve| curve.start()) else {
+        return f64::INFINITY;
+    };
+    let extent = path
+        .iter()
+        .flat_map(|curve| [curve.start(), curve.end()])
+        .map(|point| (point - origin).norm())
+        .fold(0.0, f64::max);
+    let edge_count = u32::try_from(path.len().max(1)).map_or(f64::INFINITY, f64::from);
+    linear_tolerance * extent.max(linear_tolerance) * edge_count
+}
+
+fn profile_offset_path_has_invalid_self_contact(
+    path: &[CandidateProfileOffsetTopologyCurve],
+    closed: bool,
+    linear_tolerance: f64,
+) -> bool {
+    for first in 0..path.len() {
+        for second in (first + 1)..path.len() {
+            let sequentially_adjacent = second == first + 1;
+            let closure_adjacent = closed && first == 0 && second + 1 == path.len();
+            let allowed = [
+                if sequentially_adjacent {
+                    Some(path[first].end())
+                } else if closure_adjacent {
+                    Some(path[second].end())
+                } else {
+                    None
+                },
+                (sequentially_adjacent && closure_adjacent).then(|| path[second].end()),
+            ];
+            let intersections =
+                profile_offset_curve_intersections(path[first], path[second], linear_tolerance);
+            if intersections.overlap
+                || intersections.points.iter().any(|point| {
+                    !allowed.iter().flatten().any(|allowed| {
+                        profile_offset_points_near(*point, *allowed, linear_tolerance)
+                    })
+                })
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn profile_offset_paths_intersect(
+    first: &[CandidateProfileOffsetTopologyCurve],
+    second: &[CandidateProfileOffsetTopologyCurve],
+    linear_tolerance: f64,
+) -> bool {
+    first.iter().copied().any(|first_curve| {
+        second.iter().copied().any(|second_curve| {
+            let intersections =
+                profile_offset_curve_intersections(first_curve, second_curve, linear_tolerance);
+            intersections.overlap || !intersections.points.is_empty()
+        })
+    })
+}
+
+#[derive(Default)]
+struct ProfileOffsetCurveIntersections {
+    points: Vec<Point2<f64>>,
+    overlap: bool,
+}
+
+fn profile_offset_curve_intersections(
+    first: CandidateProfileOffsetTopologyCurve,
+    second: CandidateProfileOffsetTopologyCurve,
+    linear_tolerance: f64,
+) -> ProfileOffsetCurveIntersections {
+    match (first, second) {
+        (
+            CandidateProfileOffsetTopologyCurve::Line {
+                start: first_start,
+                end: first_end,
+            },
+            CandidateProfileOffsetTopologyCurve::Line {
+                start: second_start,
+                end: second_end,
+            },
+        ) => profile_offset_line_line_intersections(
+            first_start,
+            first_end,
+            second_start,
+            second_end,
+            linear_tolerance,
+        ),
+        (CandidateProfileOffsetTopologyCurve::Line { start, end }, radial)
+        | (radial, CandidateProfileOffsetTopologyCurve::Line { start, end }) => {
+            profile_offset_line_radial_intersections(start, end, radial, linear_tolerance)
+        }
+        (first, second) => {
+            profile_offset_radial_radial_intersections(first, second, linear_tolerance)
+        }
+    }
+}
+
+fn profile_offset_line_line_intersections(
+    first_start: Point2<f64>,
+    first_end: Point2<f64>,
+    second_start: Point2<f64>,
+    second_end: Point2<f64>,
+    linear_tolerance: f64,
+) -> ProfileOffsetCurveIntersections {
+    let tolerance = profile_offset_coordinate_tolerance(
+        linear_tolerance,
+        &[first_start, first_end, second_start, second_end],
+        &[],
+    );
+    let first = first_end - first_start;
+    let second = second_end - second_start;
+    let first_length = first.norm();
+    let second_length = second.norm();
+    if first_length <= tolerance || second_length <= tolerance {
+        return ProfileOffsetCurveIntersections {
+            overlap: true,
+            ..ProfileOffsetCurveIntersections::default()
+        };
+    }
+    let denominator = cross_2d(first, second);
+    let denominator_tolerance = tolerance * (first_length + second_length);
+    let displacement = second_start - first_start;
+    if denominator.abs() <= denominator_tolerance {
+        if cross_2d(displacement, first).abs() > tolerance * first_length {
+            return ProfileOffsetCurveIntersections::default();
+        }
+        let first_unit = first / first_length;
+        let second_interval = [
+            displacement.dot(&first_unit),
+            (second_end - first_start).dot(&first_unit),
+        ];
+        let overlap_start = 0.0_f64.max(second_interval[0].min(second_interval[1]));
+        let overlap_end = first_length.min(second_interval[0].max(second_interval[1]));
+        if overlap_end < overlap_start - tolerance {
+            return ProfileOffsetCurveIntersections::default();
+        }
+        if overlap_end > overlap_start + tolerance {
+            return ProfileOffsetCurveIntersections {
+                overlap: true,
+                ..ProfileOffsetCurveIntersections::default()
+            };
+        }
+        return ProfileOffsetCurveIntersections {
+            points: vec![first_start + first_unit * ((overlap_start + overlap_end) * 0.5)],
+            overlap: false,
+        };
+    }
+    let first_parameter = cross_2d(displacement, second) / denominator;
+    let second_parameter = cross_2d(displacement, first) / denominator;
+    let first_parameter_tolerance = tolerance / first_length;
+    let second_parameter_tolerance = tolerance / second_length;
+    if (-first_parameter_tolerance..=1.0 + first_parameter_tolerance).contains(&first_parameter)
+        && (-second_parameter_tolerance..=1.0 + second_parameter_tolerance)
+            .contains(&second_parameter)
+    {
+        ProfileOffsetCurveIntersections {
+            points: vec![first_start + first * first_parameter.clamp(0.0, 1.0)],
+            overlap: false,
+        }
+    } else {
+        ProfileOffsetCurveIntersections::default()
+    }
+}
+
+fn profile_offset_line_radial_intersections(
+    line_start: Point2<f64>,
+    line_end: Point2<f64>,
+    radial_curve: CandidateProfileOffsetTopologyCurve,
+    linear_tolerance: f64,
+) -> ProfileOffsetCurveIntersections {
+    let CandidateProfileOffsetTopologyCurve::Radial { center, radius, .. } = radial_curve else {
+        unreachable!("line/radial topology intersection requires one radial curve");
+    };
+    let tolerance = profile_offset_coordinate_tolerance(
+        linear_tolerance,
+        &[line_start, line_end, center],
+        &[radius],
+    );
+    let direction = line_end - line_start;
+    let length = direction.norm();
+    if length <= tolerance {
+        return ProfileOffsetCurveIntersections {
+            overlap: true,
+            ..ProfileOffsetCurveIntersections::default()
+        };
+    }
+    let offset = line_start - center;
+    let projection = -offset.dot(&direction) / direction.norm_squared();
+    let closest_offset = offset + direction * projection;
+    let closest_distance = closest_offset.norm();
+    if closest_distance > radius + tolerance {
+        return ProfileOffsetCurveIntersections::default();
+    }
+    let mut parameters = Vec::with_capacity(2);
+    if (closest_distance - radius).abs() <= tolerance {
+        parameters.push(projection);
+    } else {
+        let half_parameter = (radius
+            .mul_add(radius, -closest_distance * closest_distance)
+            .max(0.0))
+        .sqrt()
+            / length;
+        parameters.extend([projection - half_parameter, projection + half_parameter]);
+    }
+    let parameter_tolerance = tolerance / length;
+    let mut result = ProfileOffsetCurveIntersections::default();
+    for parameter in parameters {
+        if !(-parameter_tolerance..=1.0 + parameter_tolerance).contains(&parameter) {
+            continue;
+        }
+        let point = line_start + direction * parameter.clamp(0.0, 1.0);
+        if profile_offset_radial_contains_point(radial_curve, point, tolerance) {
+            profile_offset_push_unique_point(&mut result.points, point, tolerance);
+        }
+    }
+    result
+}
+
+fn profile_offset_radial_radial_intersections(
+    first_curve: CandidateProfileOffsetTopologyCurve,
+    second_curve: CandidateProfileOffsetTopologyCurve,
+    linear_tolerance: f64,
+) -> ProfileOffsetCurveIntersections {
+    let CandidateProfileOffsetTopologyCurve::Radial {
+        center: first_center,
+        radius: first_radius,
+        ..
+    } = first_curve
+    else {
+        unreachable!("radial topology intersection requires radial curves");
+    };
+    let CandidateProfileOffsetTopologyCurve::Radial {
+        center: second_center,
+        radius: second_radius,
+        ..
+    } = second_curve
+    else {
+        unreachable!("radial topology intersection requires radial curves");
+    };
+    let tolerance = profile_offset_coordinate_tolerance(
+        linear_tolerance,
+        &[first_center, second_center],
+        &[first_radius, second_radius],
+    );
+    let delta = second_center - first_center;
+    let center_distance = delta.norm();
+    if center_distance <= tolerance {
+        if (first_radius - second_radius).abs() <= tolerance {
+            return profile_offset_same_carrier_intersections(first_curve, second_curve, tolerance);
+        }
+        return ProfileOffsetCurveIntersections::default();
+    }
+    if center_distance > first_radius + second_radius + tolerance
+        || center_distance < (first_radius - second_radius).abs() - tolerance
+    {
+        return ProfileOffsetCurveIntersections::default();
+    }
+    let along = (first_radius * first_radius - second_radius * second_radius
+        + center_distance * center_distance)
+        / (2.0 * center_distance);
+    let height_squared = first_radius.mul_add(first_radius, -along * along);
+    let unit = delta / center_distance;
+    let base = first_center + unit * along;
+    let mut candidates = vec![base];
+    if height_squared > tolerance * tolerance {
+        let perpendicular = Vector2::new(-unit.y, unit.x) * height_squared.sqrt();
+        candidates = vec![base + perpendicular, base - perpendicular];
+    }
+    let mut result = ProfileOffsetCurveIntersections::default();
+    for point in candidates {
+        if profile_offset_radial_contains_point(first_curve, point, tolerance)
+            && profile_offset_radial_contains_point(second_curve, point, tolerance)
+        {
+            profile_offset_push_unique_point(&mut result.points, point, tolerance);
+        }
+    }
+    result
+}
+
+fn profile_offset_same_carrier_intersections(
+    first: CandidateProfileOffsetTopologyCurve,
+    second: CandidateProfileOffsetTopologyCurve,
+    linear_tolerance: f64,
+) -> ProfileOffsetCurveIntersections {
+    let CandidateProfileOffsetTopologyCurve::Radial {
+        center,
+        radius,
+        full_circle: first_full,
+        ..
+    } = first
+    else {
+        unreachable!("same carrier requires radial curves");
+    };
+    let CandidateProfileOffsetTopologyCurve::Radial {
+        full_circle: second_full,
+        ..
+    } = second
+    else {
+        unreachable!("same carrier requires radial curves");
+    };
+    if first_full || second_full {
+        return ProfileOffsetCurveIntersections {
+            overlap: true,
+            ..ProfileOffsetCurveIntersections::default()
+        };
+    }
+    let first_intervals = profile_offset_radial_ccw_intervals(first);
+    let second_intervals = profile_offset_radial_ccw_intervals(second);
+    let angle_tolerance = (linear_tolerance / radius).min(std::f64::consts::PI);
+    if first_intervals.iter().any(|first_interval| {
+        second_intervals.iter().any(|second_interval| {
+            first_interval.1.min(second_interval.1) - first_interval.0.max(second_interval.0)
+                > angle_tolerance
+        })
+    }) {
+        return ProfileOffsetCurveIntersections {
+            overlap: true,
+            ..ProfileOffsetCurveIntersections::default()
+        };
+    }
+    let mut result = ProfileOffsetCurveIntersections::default();
+    for point in [first.start(), first.end(), second.start(), second.end()] {
+        if profile_offset_radial_contains_point(first, point, linear_tolerance)
+            && profile_offset_radial_contains_point(second, point, linear_tolerance)
+        {
+            profile_offset_push_unique_point(&mut result.points, point, linear_tolerance);
+        }
+    }
+    if result.points.is_empty()
+        && profile_offset_points_near(first.start(), second.start(), linear_tolerance)
+    {
+        result.points.push(profile_offset_radial_point(
+            center,
+            radius,
+            profile_offset_radial_point_angle(center, first.start()),
+        ));
+    }
+    result
+}
+
+fn profile_offset_radial_ccw_intervals(
+    curve: CandidateProfileOffsetTopologyCurve,
+) -> Vec<(f64, f64)> {
+    let CandidateProfileOffsetTopologyCurve::Radial {
+        start_angle,
+        signed_sweep,
+        ..
+    } = curve
+    else {
+        unreachable!("angular intervals require a radial curve");
+    };
+    let ccw_start = if signed_sweep > 0.0 {
+        start_angle
+    } else {
+        start_angle + signed_sweep
+    }
+    .rem_euclid(std::f64::consts::TAU);
+    let span = signed_sweep.abs();
+    if ccw_start + span <= std::f64::consts::TAU {
+        vec![(ccw_start, ccw_start + span)]
+    } else {
+        vec![
+            (ccw_start, std::f64::consts::TAU),
+            (0.0, ccw_start + span - std::f64::consts::TAU),
+        ]
+    }
+}
+
+fn profile_offset_radial_contains_point(
+    curve: CandidateProfileOffsetTopologyCurve,
+    point: Point2<f64>,
+    linear_tolerance: f64,
+) -> bool {
+    let CandidateProfileOffsetTopologyCurve::Radial { center, radius, .. } = curve else {
+        return false;
+    };
+    let offset = point - center;
+    let distance = offset.norm();
+    distance.is_finite()
+        && (distance - radius).abs() <= linear_tolerance
+        && profile_offset_radial_contains_angle(curve, offset.y.atan2(offset.x), linear_tolerance)
+}
+
+fn profile_offset_radial_contains_angle(
+    curve: CandidateProfileOffsetTopologyCurve,
+    angle: f64,
+    linear_tolerance: f64,
+) -> bool {
+    let CandidateProfileOffsetTopologyCurve::Radial {
+        radius,
+        start_angle,
+        signed_sweep,
+        full_circle,
+        ..
+    } = curve
+    else {
+        return false;
+    };
+    if full_circle {
+        return true;
+    }
+    let delta = if signed_sweep > 0.0 {
+        (angle - start_angle).rem_euclid(std::f64::consts::TAU)
+    } else {
+        (start_angle - angle).rem_euclid(std::f64::consts::TAU)
+    };
+    delta <= signed_sweep.abs() + linear_tolerance / radius
+}
+
+fn profile_offset_point_in_path(
+    point: Point2<f64>,
+    path: &[CandidateProfileOffsetTopologyCurve],
+    linear_tolerance: f64,
+) -> Option<bool> {
+    if path
+        .iter()
+        .copied()
+        .any(|curve| profile_offset_point_on_curve(point, curve, linear_tolerance))
+    {
+        return None;
+    }
+    let crossings = path
+        .iter()
+        .copied()
+        .map(|curve| profile_offset_positive_x_ray_crossings(point, curve, linear_tolerance))
+        .sum::<usize>();
+    Some(crossings % 2 == 1)
+}
+
+fn profile_offset_point_on_curve(
+    point: Point2<f64>,
+    curve: CandidateProfileOffsetTopologyCurve,
+    linear_tolerance: f64,
+) -> bool {
+    match curve {
+        CandidateProfileOffsetTopologyCurve::Line { start, end } => {
+            let direction = end - start;
+            let length_squared = direction.norm_squared();
+            if length_squared == 0.0 {
+                return profile_offset_points_near(point, start, linear_tolerance);
+            }
+            let parameter = (point - start).dot(&direction) / length_squared;
+            (-linear_tolerance / length_squared.sqrt()
+                ..=1.0 + linear_tolerance / length_squared.sqrt())
+                .contains(&parameter)
+                && ((point - start) - direction * parameter).norm() <= linear_tolerance
+        }
+        CandidateProfileOffsetTopologyCurve::Radial { .. } => {
+            profile_offset_radial_contains_point(curve, point, linear_tolerance)
+        }
+    }
+}
+
+fn profile_offset_positive_x_ray_crossings(
+    point: Point2<f64>,
+    curve: CandidateProfileOffsetTopologyCurve,
+    linear_tolerance: f64,
+) -> usize {
+    match curve {
+        CandidateProfileOffsetTopologyCurve::Line { start, end } => {
+            if (start.y > point.y) == (end.y > point.y) {
+                return 0;
+            }
+            let crossing = (end.x - start.x) * (point.y - start.y) / (end.y - start.y) + start.x;
+            usize::from(crossing > point.x + linear_tolerance)
+        }
+        CandidateProfileOffsetTopologyCurve::Radial {
+            center,
+            radius,
+            start_angle,
+            signed_sweep,
+            ..
+        } => {
+            let ordinate = (point.y - center.y) / radius;
+            if !ordinate.is_finite() || ordinate.abs() > 1.0 {
+                return 0;
+            }
+            let first = ordinate.clamp(-1.0, 1.0).asin();
+            let principals = [first, std::f64::consts::PI - first];
+            let midpoint = start_angle + signed_sweep * 0.5;
+            let parameter_tolerance = linear_tolerance / radius;
+            let mut roots = Vec::with_capacity(2);
+            for principal in principals {
+                let unwrapped = unwrap_near(principal, midpoint);
+                for angle in [
+                    unwrapped - std::f64::consts::TAU,
+                    unwrapped,
+                    unwrapped + std::f64::consts::TAU,
+                ] {
+                    let parameter = (angle - start_angle) / signed_sweep;
+                    if parameter < -parameter_tolerance
+                        || parameter >= 1.0 - parameter_tolerance
+                        || radius * angle.cos().abs() <= linear_tolerance
+                    {
+                        continue;
+                    }
+                    let x = center.x + radius * angle.cos();
+                    if x > point.x + linear_tolerance
+                        && !roots.iter().any(|existing: &f64| {
+                            (*existing - parameter).abs() <= parameter_tolerance
+                        })
+                    {
+                        roots.push(parameter);
+                    }
+                }
+            }
+            roots.len()
+        }
+    }
+}
+
+fn profile_offset_coordinate_tolerance(
+    linear_tolerance: f64,
+    points: &[Point2<f64>],
+    radii: &[f64],
+) -> f64 {
+    let magnitude = points
+        .iter()
+        .flat_map(|point| [point.x.abs(), point.y.abs()])
+        .chain(radii.iter().map(|radius| radius.abs()))
+        .fold(1.0, f64::max);
+    linear_tolerance.max(64.0 * f64::EPSILON * magnitude)
+}
+
+fn profile_offset_points_near(
+    first: Point2<f64>,
+    second: Point2<f64>,
+    linear_tolerance: f64,
+) -> bool {
+    let tolerance = profile_offset_coordinate_tolerance(linear_tolerance, &[first, second], &[]);
+    (first - second).norm() <= tolerance
+}
+
+fn profile_offset_push_unique_point(
+    points: &mut Vec<Point2<f64>>,
+    point: Point2<f64>,
+    linear_tolerance: f64,
+) {
+    if !points
+        .iter()
+        .any(|existing| profile_offset_points_near(*existing, point, linear_tolerance))
+    {
+        points.push(point);
+    }
+}
+
+fn profile_offset_radial_point(center: Point2<f64>, radius: f64, angle: f64) -> Point2<f64> {
+    center + Vector2::new(radius * angle.cos(), radius * angle.sin())
+}
+
+fn profile_offset_radial_point_angle(center: Point2<f64>, point: Point2<f64>) -> f64 {
+    let offset = point - center;
+    offset.y.atan2(offset.x)
+}
+
 fn validate_independent_dimension_rows(
     dimension: SketchDimensionId,
     rows: &[f64],
@@ -8856,6 +10611,110 @@ mod tests {
         let tangent = Vector2::new(8.0, 8.0 - 16.0 * parameter);
         let point = Point2::new(-4.0 + 8.0 * parameter, 8.0 * parameter * (1.0 - parameter));
         point + Vector2::new(-tangent.y, tangent.x) / tangent.norm()
+    }
+
+    #[test]
+    fn profile_offset_topology_is_analytic_for_overlap_tangency_and_radial_containment() {
+        let line = |start: (f64, f64), end: (f64, f64)| CandidateProfileOffsetTopologyCurve::Line {
+            start: Point2::new(start.0, start.1),
+            end: Point2::new(end.0, end.1),
+        };
+        let radial =
+            |start_angle, signed_sweep, full_circle| CandidateProfileOffsetTopologyCurve::Radial {
+                center: Point2::origin(),
+                radius: 1.0,
+                start_angle,
+                signed_sweep,
+                full_circle,
+            };
+        let tolerance = 1.0e-10;
+
+        let overlap = profile_offset_curve_intersections(
+            line((0.0, 0.0), (3.0, 0.0)),
+            line((1.0, 0.0), (2.0, 0.0)),
+            tolerance,
+        );
+        assert!(overlap.overlap);
+
+        let tangent = profile_offset_curve_intersections(
+            line((-2.0, 1.0), (2.0, 1.0)),
+            radial(0.0, TAU, true),
+            tolerance,
+        );
+        assert!(!tangent.overlap);
+        assert_eq!(tangent.points.len(), 1);
+        assert!((tangent.points[0] - Point2::new(0.0, 1.0)).norm() <= tolerance);
+
+        let first_quarter = radial(0.0, PI * 0.5, false);
+        let second_quarter = radial(PI * 0.5, PI * 0.5, false);
+        let endpoint_only =
+            profile_offset_curve_intersections(first_quarter, second_quarter, tolerance);
+        assert!(!endpoint_only.overlap);
+        assert_eq!(endpoint_only.points.len(), 1);
+        let overlapping = profile_offset_curve_intersections(
+            first_quarter,
+            radial(PI * 0.25, PI * 0.5, false),
+            tolerance,
+        );
+        assert!(overlapping.overlap);
+
+        assert_eq!(
+            profile_offset_point_in_path(Point2::origin(), &[radial(0.0, TAU, true)], tolerance,),
+            Some(true)
+        );
+        assert_eq!(
+            profile_offset_point_in_path(
+                Point2::new(2.0, 0.0),
+                &[radial(0.0, TAU, true)],
+                tolerance,
+            ),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn profile_offset_topology_rejects_nonadjacent_collinear_overlap_without_tessellation() {
+        let line = |start: (f64, f64), end: (f64, f64)| CandidateProfileOffsetTopologyCurve::Line {
+            start: Point2::new(start.0, start.1),
+            end: Point2::new(end.0, end.1),
+        };
+        let path = [
+            line((0.0, 0.0), (3.0, 0.0)),
+            line((3.0, 0.0), (3.0, 1.0)),
+            line((3.0, 1.0), (1.0, 1.0)),
+            line((1.0, 1.0), (1.0, 0.0)),
+            line((1.0, 0.0), (2.0, 0.0)),
+        ];
+        assert!(profile_offset_path_has_invalid_self_contact(
+            &path, false, 1.0e-10
+        ));
+    }
+
+    #[test]
+    fn profile_offset_topology_allows_both_junctions_of_a_closed_two_edge_loop() {
+        let line = CandidateProfileOffsetTopologyCurve::Line {
+            start: Point2::new(0.0, -1.0),
+            end: Point2::new(0.0, 1.0),
+        };
+        let semicircle = CandidateProfileOffsetTopologyCurve::Radial {
+            center: Point2::origin(),
+            radius: 1.0,
+            start_angle: std::f64::consts::FRAC_PI_2,
+            signed_sweep: std::f64::consts::PI,
+            full_circle: false,
+        };
+
+        assert!(!profile_offset_path_has_invalid_self_contact(
+            &[line, semicircle],
+            true,
+            1.0e-10,
+        ));
+
+        assert!(profile_offset_path_has_invalid_self_contact(
+            &[semicircle, semicircle],
+            true,
+            1.0e-10,
+        ));
     }
 
     #[test]

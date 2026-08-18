@@ -172,6 +172,8 @@ pub enum DocumentError {
     UnsupportedM71State,
     #[error("supported sketch-v4 encoding cannot represent M74 datum relations")]
     UnsupportedM74State,
+    #[error("supported sketch-v4 encoding cannot represent M80 profile-offset dimensions")]
+    UnsupportedM80State,
     #[error("activation revision {actual} is not newer than retained revision {retained}")]
     StaleActivationRevision { actual: u64, retained: u64 },
     #[error("activation input contains duplicate element {0:?}")]
@@ -1377,6 +1379,111 @@ pub enum DocumentAngleOrientation {
     Clockwise,
 }
 
+/// Explicit traversal of one persistent profile-offset support span.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentOffsetTraversal {
+    Forward,
+    Reverse,
+}
+
+/// One exact source or target support plus its retained traversal.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentDirectedProfileOffsetCurve {
+    pub curve: CurveSpan,
+    pub traversal: DocumentOffsetTraversal,
+}
+
+/// One source support and its existing same-family target support.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentProfileOffsetEdgePair {
+    pub source: DocumentDirectedProfileOffsetCurve,
+    pub target: DocumentDirectedProfileOffsetCurve,
+}
+
+/// Retained non-tangent turn at one ordered junction.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentProfileOffsetTurn {
+    Left,
+    Right,
+}
+
+/// Exact persistent source-junction ownership.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
+pub enum DocumentProfileOffsetJunctionOwner {
+    SharedPoint(DesignPointId),
+    Constraint(DocumentConstraintId),
+}
+
+/// Retained local branch at one ordered source/target junction.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DocumentProfileOffsetJunctionBranch {
+    Miter { turn: DocumentProfileOffsetTurn },
+    Tangent,
+}
+
+/// One ordered junction with exact source ownership and an explicit branch.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentProfileOffsetJunction {
+    pub source_owner: DocumentProfileOffsetJunctionOwner,
+    pub target_owner: DocumentProfileOffsetJunctionOwner,
+    pub branch: DocumentProfileOffsetJunctionBranch,
+}
+
+/// One closed, material-left profile loop.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentProfileOffsetLoop {
+    pub edges: Vec<DocumentProfileOffsetEdgePair>,
+    pub junctions: Vec<DocumentProfileOffsetJunction>,
+}
+
+/// One ordered open profile chain.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentProfileOffsetChain {
+    pub edges: Vec<DocumentProfileOffsetEdgePair>,
+    pub junctions: Vec<DocumentProfileOffsetJunction>,
+    pub start_terminal: DocumentProfileOffsetTerminalPolicy,
+    pub end_terminal: DocumentProfileOffsetTerminalPolicy,
+}
+
+/// Explicit endpoint policy retained by a topology-preserving open-chain offset.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentProfileOffsetTerminalPolicy {
+    NormalTranslation,
+}
+
+/// Material-side direction for a persistent closed-face offset.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentFaceOffsetDirection {
+    Outward,
+    Inward,
+}
+
+/// Exact source/target topology retained by one profile-offset dimension.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DocumentProfileOffsetOperand {
+    Face {
+        direction: DocumentFaceOffsetDirection,
+        outer: DocumentProfileOffsetLoop,
+        holes: Vec<DocumentProfileOffsetLoop>,
+    },
+    OpenChain {
+        side: DocumentLineSide,
+        chain: DocumentProfileOffsetChain,
+    },
+}
+
 /// Current persistent dimension-definition set.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -1418,6 +1525,17 @@ pub enum DocumentDimensionDefinition {
         side: DocumentLineSide,
         orientation: DocumentLineOffsetOrientation,
     },
+    ProfileOffset {
+        target: DesignScalarId,
+        operand: DocumentProfileOffsetOperand,
+    },
+}
+
+/// Persistent identities created by one atomic profile-offset declaration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DocumentProfileOffsetIds {
+    pub target: DesignScalarId,
+    pub dimension: DocumentDimensionId,
 }
 
 /// One persistent dimension source.
@@ -3182,6 +3300,207 @@ impl From<DocumentDimensionDefinitionV1> for DocumentDimensionDefinition {
     }
 }
 
+/// Frozen v2-v4 dimension wire record. The private draft-v5 side table owns
+/// post-v4 profile-offset dimensions so historical canonical bytes cannot widen.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DocumentDimensionV4 {
+    id: DocumentDimensionId,
+    source_id: DocumentSourceId,
+    label: String,
+    mode: DocumentDimensionMode,
+    suppressed: bool,
+    definition: DocumentDimensionDefinitionV4,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum DocumentDimensionDefinitionV4 {
+    PointDistance {
+        first: DesignPointId,
+        second: DesignPointId,
+        target: DesignScalarId,
+    },
+    CurveLength {
+        curve: CurveSpan,
+        target: DesignScalarId,
+    },
+    Radius {
+        curve: CurveId,
+        target: DesignScalarId,
+    },
+    Diameter {
+        curve: CurveId,
+        target: DesignScalarId,
+    },
+    OrientedAngle {
+        first: CurveSpan,
+        second: CurveSpan,
+        target: DesignScalarId,
+        orientation: DocumentAngleOrientation,
+    },
+    SupportingLineOffset {
+        source: CurveSpan,
+        target_segment: CurveSpan,
+        target: DesignScalarId,
+        side: DocumentLineSide,
+        orientation: DocumentLineOffsetOrientation,
+    },
+    ExactTranslatedSegmentOffset {
+        source: CurveSpan,
+        target_segment: CurveSpan,
+        target: DesignScalarId,
+        side: DocumentLineSide,
+        orientation: DocumentLineOffsetOrientation,
+    },
+}
+
+impl TryFrom<&DocumentDimension> for DocumentDimensionV4 {
+    type Error = DocumentError;
+
+    fn try_from(value: &DocumentDimension) -> Result<Self, Self::Error> {
+        use DocumentDimensionDefinition as D;
+        let definition = match &value.definition {
+            D::PointDistance {
+                first,
+                second,
+                target,
+            } => DocumentDimensionDefinitionV4::PointDistance {
+                first: *first,
+                second: *second,
+                target: *target,
+            },
+            D::CurveLength { curve, target } => DocumentDimensionDefinitionV4::CurveLength {
+                curve: *curve,
+                target: *target,
+            },
+            D::Radius { curve, target } => DocumentDimensionDefinitionV4::Radius {
+                curve: *curve,
+                target: *target,
+            },
+            D::Diameter { curve, target } => DocumentDimensionDefinitionV4::Diameter {
+                curve: *curve,
+                target: *target,
+            },
+            D::OrientedAngle {
+                first,
+                second,
+                target,
+                orientation,
+            } => DocumentDimensionDefinitionV4::OrientedAngle {
+                first: *first,
+                second: *second,
+                target: *target,
+                orientation: *orientation,
+            },
+            D::SupportingLineOffset {
+                source,
+                target_segment,
+                target,
+                side,
+                orientation,
+            } => DocumentDimensionDefinitionV4::SupportingLineOffset {
+                source: *source,
+                target_segment: *target_segment,
+                target: *target,
+                side: *side,
+                orientation: *orientation,
+            },
+            D::ExactTranslatedSegmentOffset {
+                source,
+                target_segment,
+                target,
+                side,
+                orientation,
+            } => DocumentDimensionDefinitionV4::ExactTranslatedSegmentOffset {
+                source: *source,
+                target_segment: *target_segment,
+                target: *target,
+                side: *side,
+                orientation: *orientation,
+            },
+            D::ProfileOffset { .. } => return Err(DocumentError::UnsupportedM80State),
+        };
+        Ok(Self {
+            id: value.id,
+            source_id: value.source_id,
+            label: value.label.clone(),
+            mode: value.mode,
+            suppressed: value.suppressed,
+            definition,
+        })
+    }
+}
+
+impl From<DocumentDimensionV4> for DocumentDimension {
+    fn from(value: DocumentDimensionV4) -> Self {
+        use DocumentDimensionDefinitionV4 as D;
+        let definition = match value.definition {
+            D::PointDistance {
+                first,
+                second,
+                target,
+            } => DocumentDimensionDefinition::PointDistance {
+                first,
+                second,
+                target,
+            },
+            D::CurveLength { curve, target } => {
+                DocumentDimensionDefinition::CurveLength { curve, target }
+            }
+            D::Radius { curve, target } => DocumentDimensionDefinition::Radius { curve, target },
+            D::Diameter { curve, target } => {
+                DocumentDimensionDefinition::Diameter { curve, target }
+            }
+            D::OrientedAngle {
+                first,
+                second,
+                target,
+                orientation,
+            } => DocumentDimensionDefinition::OrientedAngle {
+                first,
+                second,
+                target,
+                orientation,
+            },
+            D::SupportingLineOffset {
+                source,
+                target_segment,
+                target,
+                side,
+                orientation,
+            } => DocumentDimensionDefinition::SupportingLineOffset {
+                source,
+                target_segment,
+                target,
+                side,
+                orientation,
+            },
+            D::ExactTranslatedSegmentOffset {
+                source,
+                target_segment,
+                target,
+                side,
+                orientation,
+            } => DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+                source,
+                target_segment,
+                target,
+                side,
+                orientation,
+            },
+        };
+        Self {
+            id: value.id,
+            source_id: value.source_id,
+            label: value.label,
+            mode: value.mode,
+            suppressed: value.suppressed,
+            definition,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct SketchDocumentV2 {
@@ -3194,7 +3513,7 @@ struct SketchDocumentV2 {
     curves: Vec<DesignCurve>,
     contacts: Vec<ContactSlot>,
     constraints: Vec<DocumentConstraintV2>,
-    dimensions: Vec<DocumentDimension>,
+    dimensions: Vec<DocumentDimensionV4>,
     source_order: Vec<DocumentSourceId>,
 }
 
@@ -3215,7 +3534,11 @@ impl From<SketchDocumentV2> for SketchDocument {
                 .into_iter()
                 .map(DocumentConstraint::from)
                 .collect(),
-            dimensions: document.dimensions,
+            dimensions: document
+                .dimensions
+                .into_iter()
+                .map(DocumentDimension::from)
+                .collect(),
             parameters: Vec::new(),
             parameter_bindings: Vec::new(),
             parameter_outputs: Vec::new(),
@@ -3242,7 +3565,7 @@ struct SketchDocumentV3 {
     curves: Vec<DesignCurve>,
     contacts: Vec<ContactSlot>,
     constraints: Vec<DocumentConstraintV3>,
-    dimensions: Vec<DocumentDimension>,
+    dimensions: Vec<DocumentDimensionV4>,
     source_order: Vec<DocumentSourceId>,
 }
 
@@ -3263,7 +3586,11 @@ impl From<SketchDocumentV3> for SketchDocument {
                 .into_iter()
                 .map(DocumentConstraint::from)
                 .collect(),
-            dimensions: document.dimensions,
+            dimensions: document
+                .dimensions
+                .into_iter()
+                .map(DocumentDimension::from)
+                .collect(),
             parameters: Vec::new(),
             parameter_bindings: Vec::new(),
             parameter_outputs: Vec::new(),
@@ -3291,12 +3618,16 @@ struct SketchDocumentV4 {
     contacts: Vec<ContactSlot>,
     trim_views: Vec<DocumentCurveTrimView>,
     constraints: Vec<DocumentConstraintV4>,
-    dimensions: Vec<DocumentDimension>,
+    dimensions: Vec<DocumentDimensionV4>,
     source_order: Vec<DocumentSourceId>,
 }
 
 impl SketchDocumentV4 {
-    fn with_constraints(document: &SketchDocument, constraints: Vec<DocumentConstraintV4>) -> Self {
+    fn with_sources(
+        document: &SketchDocument,
+        constraints: Vec<DocumentConstraintV4>,
+        dimensions: Vec<DocumentDimensionV4>,
+    ) -> Self {
         Self {
             version: document.version,
             id: document.id,
@@ -3308,7 +3639,7 @@ impl SketchDocumentV4 {
             contacts: document.contacts.clone(),
             trim_views: document.trim_views.clone(),
             constraints,
-            dimensions: document.dimensions.clone(),
+            dimensions,
             source_order: document.source_order.clone(),
         }
     }
@@ -3323,7 +3654,12 @@ impl TryFrom<&SketchDocument> for SketchDocumentV4 {
             .iter()
             .map(DocumentConstraintV4::try_from)
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self::with_constraints(document, constraints))
+        let dimensions = document
+            .dimensions
+            .iter()
+            .map(DocumentDimensionV4::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::with_sources(document, constraints, dimensions))
     }
 }
 
@@ -3344,7 +3680,11 @@ impl From<SketchDocumentV4> for SketchDocument {
                 .into_iter()
                 .map(DocumentConstraint::from)
                 .collect(),
-            dimensions: document.dimensions,
+            dimensions: document
+                .dimensions
+                .into_iter()
+                .map(DocumentDimension::from)
+                .collect(),
             parameters: Vec::new(),
             parameter_bindings: Vec::new(),
             parameter_outputs: Vec::new(),
@@ -3379,6 +3719,61 @@ struct SketchDocumentDraftV5 {
     external_bindings: Vec<DocumentExternalBinding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     retained_planar_constraints: Vec<DraftRetainedPlanarConstraint>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    profile_offset_dimensions: Vec<DraftProfileOffsetDimension>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DraftProfileOffsetDimension {
+    id: DocumentDimensionId,
+    source_id: DocumentSourceId,
+    label: String,
+    suppressed: bool,
+    target: DesignScalarId,
+    operand: DocumentProfileOffsetOperand,
+}
+
+impl DraftProfileOffsetDimension {
+    fn try_from_dimension(value: &DocumentDimension) -> Result<Self, DocumentError> {
+        let DocumentDimensionDefinition::ProfileOffset { target, operand } = &value.definition
+        else {
+            return invalid(
+                "draft profile-offset dimension",
+                "side-table entries must be profile offsets",
+            );
+        };
+        if value.mode != DocumentDimensionMode::Driving {
+            return invalid(
+                "draft profile-offset dimension",
+                "profile offsets must remain driving",
+            );
+        }
+        Ok(Self {
+            id: value.id,
+            source_id: value.source_id,
+            label: value.label.clone(),
+            suppressed: value.suppressed,
+            target: *target,
+            operand: operand.clone(),
+        })
+    }
+}
+
+impl From<DraftProfileOffsetDimension> for DocumentDimension {
+    fn from(value: DraftProfileOffsetDimension) -> Self {
+        Self {
+            id: value.id,
+            source_id: value.source_id,
+            label: value.label,
+            mode: DocumentDimensionMode::Driving,
+            suppressed: value.suppressed,
+            definition: DocumentDimensionDefinition::ProfileOffset {
+                target: value.target,
+                operand: value.operand,
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -7546,6 +7941,70 @@ impl SketchDocument {
         Ok(id)
     }
 
+    /// Atomically declares one grouped driving profile-offset dimension and its
+    /// private positive length scalar. All source and target geometry already exists.
+    ///
+    /// # Errors
+    /// Returns an error without mutation when the distance, topology, exact
+    /// junction provenance, curve families, or branch state is invalid.
+    pub fn add_profile_offset(
+        &mut self,
+        label: impl Into<String>,
+        distance: f64,
+        operand: DocumentProfileOffsetOperand,
+    ) -> Result<DocumentProfileOffsetIds, DocumentError> {
+        let label = label.into();
+        validate_label(&label, "profile offset label")?;
+        finite_positive(distance, "profile offset distance")?;
+        let mut candidate = self.clone();
+        let target = candidate.add_scalar(
+            format!("{label} distance"),
+            distance,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )?;
+        let dimension = candidate.add_dimension(
+            label,
+            DocumentDimensionDefinition::ProfileOffset { target, operand },
+            DocumentDimensionMode::Driving,
+        )?;
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(DocumentProfileOffsetIds { target, dimension })
+    }
+
+    /// Atomically replaces only the retained topology and discrete branch state
+    /// of an existing profile offset while preserving its dimension/source IDs.
+    ///
+    /// # Errors
+    /// Returns an error without mutation for a stale/non-profile dimension or an
+    /// invalid replacement association.
+    pub fn set_profile_offset_operand(
+        &mut self,
+        dimension: DocumentDimensionId,
+        operand: DocumentProfileOffsetOperand,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let value = candidate
+            .dimensions
+            .iter_mut()
+            .find(|value| value.id == dimension)
+            .ok_or_else(|| unknown("profile offset dimension", dimension.0))?;
+        let DocumentDimensionDefinition::ProfileOffset {
+            operand: current, ..
+        } = &mut value.definition
+        else {
+            return invalid(
+                "profile offset dimension",
+                "the selected dimension is not a profile offset",
+            );
+        };
+        *current = operand;
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
+    }
+
     /// Expands a rectangle into ordinary shared-corner geometry and sources.
     ///
     /// # Errors
@@ -10254,6 +10713,14 @@ impl SketchDocument {
     /// Returns a validation or JSON serialization error.
     pub fn to_canonical_json(&self) -> Result<String, DocumentError> {
         self.validate()?;
+        if self.dimensions.iter().any(|dimension| {
+            matches!(
+                dimension.definition,
+                DocumentDimensionDefinition::ProfileOffset { .. }
+            )
+        }) {
+            return Err(DocumentError::UnsupportedM80State);
+        }
         if self
             .constraints
             .iter()
@@ -10324,7 +10791,20 @@ impl SketchDocument {
                 constraints.push(DocumentConstraintV4::try_from(constraint)?);
             }
         }
-        let document = SketchDocumentV4::with_constraints(&canonical, constraints);
+        let mut dimensions = Vec::with_capacity(canonical.dimensions.len());
+        let mut profile_offset_dimensions = Vec::new();
+        for dimension in &canonical.dimensions {
+            if matches!(
+                dimension.definition,
+                DocumentDimensionDefinition::ProfileOffset { .. }
+            ) {
+                profile_offset_dimensions
+                    .push(DraftProfileOffsetDimension::try_from_dimension(dimension)?);
+            } else {
+                dimensions.push(DocumentDimensionV4::try_from(dimension)?);
+            }
+        }
+        let document = SketchDocumentV4::with_sources(&canonical, constraints, dimensions);
         let draft = SketchDocumentDraftV5 {
             version: 5,
             document,
@@ -10336,12 +10816,17 @@ impl SketchDocument {
             parameter_outputs: canonical.parameter_outputs,
             external_bindings: canonical.external_bindings,
             retained_planar_constraints,
+            profile_offset_dimensions,
         };
         Ok(serde_json::to_string(&draft)?)
     }
 
     /// Restores the explicitly unsupported pre-M62 draft-v5 representation.
     #[doc(hidden)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one closed draft decoder keeps compatibility validation and side-table merging atomic"
+    )]
     pub fn from_draft_v5_json(json: &str) -> Result<Self, DocumentError> {
         if json.len() > MAX_DOCUMENT_JSON_BYTES {
             return Err(DocumentError::ResourceLimit {
@@ -10400,6 +10885,38 @@ impl SketchDocument {
             document
                 .constraints
                 .push(DocumentConstraint::from(constraint));
+        }
+        let side_dimension_count = draft.profile_offset_dimensions.len();
+        if document
+            .dimensions
+            .len()
+            .saturating_add(side_dimension_count)
+            > MAX_DOCUMENT_OBJECTS / 2
+        {
+            return Err(DocumentError::ResourceLimit {
+                resource: "profile offset dimensions",
+                actual: side_dimension_count,
+                limit: MAX_DOCUMENT_OBJECTS / 2,
+            });
+        }
+        let mut side_dimension_ids = BTreeSet::new();
+        let mut side_dimension_sources = BTreeSet::new();
+        for dimension in draft.profile_offset_dimensions {
+            if !side_dimension_ids.insert(dimension.id)
+                || !side_dimension_sources.insert(dimension.source_id)
+            {
+                return invalid(
+                    "profile offset dimensions",
+                    "dimension and source identities must be unique",
+                );
+            }
+            if !embedded_source_order.contains(&dimension.source_id) {
+                return invalid(
+                    "profile offset dimensions",
+                    "every side dimension source must occur in the embedded source order",
+                );
+            }
+            document.dimensions.push(DocumentDimension::from(dimension));
         }
         for role in draft.geometry_roles {
             if role.role == GeometryRole::Profile
@@ -12060,6 +12577,16 @@ impl SketchDocument {
                 }
                 *target
             }
+            D::ProfileOffset { target, operand } => {
+                if mode != DocumentDimensionMode::Driving {
+                    return invalid(
+                        "profile offset mode",
+                        "a grouped profile offset must remain driving",
+                    );
+                }
+                self.validate_profile_offset_operand(operand)?;
+                *target
+            }
         };
         let scalar = self.require_scalar(target)?;
         if mode == DocumentDimensionMode::Driving {
@@ -12088,6 +12615,281 @@ impl SketchDocument {
                 "scalar unit or domain does not match its semantic role",
             )
         }
+    }
+
+    fn validate_profile_offset_operand(
+        &self,
+        operand: &DocumentProfileOffsetOperand,
+    ) -> Result<(), DocumentError> {
+        let mut used = BTreeSet::new();
+        match operand {
+            DocumentProfileOffsetOperand::Face { outer, holes, .. } => {
+                self.validate_profile_offset_path(&outer.edges, &outer.junctions, true, &mut used)?;
+                for hole in holes {
+                    self.validate_profile_offset_path(
+                        &hole.edges,
+                        &hole.junctions,
+                        true,
+                        &mut used,
+                    )?;
+                }
+            }
+            DocumentProfileOffsetOperand::OpenChain { chain, .. } => {
+                self.validate_profile_offset_path(
+                    &chain.edges,
+                    &chain.junctions,
+                    false,
+                    &mut used,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_profile_offset_path(
+        &self,
+        edges: &[DocumentProfileOffsetEdgePair],
+        junctions: &[DocumentProfileOffsetJunction],
+        closed: bool,
+        used: &mut BTreeSet<CurveSpan>,
+    ) -> Result<(), DocumentError> {
+        if edges.is_empty() {
+            return invalid(
+                "profile offset topology",
+                "an operand path must contain at least one edge",
+            );
+        }
+        let first_family = self.profile_offset_curve_family(edges[0].source.curve)?;
+        let periodic_circle = edges.len() == 1 && first_family == ProfileOffsetCurveFamily::Circle;
+        if periodic_circle && !closed {
+            return invalid(
+                "profile offset topology",
+                "a full circle is available only as a closed face operand",
+            );
+        }
+        let expected_junctions = if periodic_circle {
+            0
+        } else if closed {
+            edges.len()
+        } else {
+            edges.len() - 1
+        };
+        if junctions.len() != expected_junctions {
+            return invalid(
+                "profile offset topology",
+                "junction count does not match the ordered path",
+            );
+        }
+        if !periodic_circle && edges.len() == 1 && closed {
+            return invalid(
+                "profile offset topology",
+                "a one-edge closed loop must be a full circle",
+            );
+        }
+        for edge in edges {
+            let source_family = self.profile_offset_curve_family(edge.source.curve)?;
+            let target_family = self.profile_offset_curve_family(edge.target.curve)?;
+            if source_family != target_family {
+                return invalid(
+                    "profile offset edge pair",
+                    "source and target supports must use the same exact curve family",
+                );
+            }
+            if edge.source.curve == edge.target.curve
+                || !used.insert(edge.source.curve)
+                || !used.insert(edge.target.curve)
+            {
+                return invalid(
+                    "profile offset edge pair",
+                    "every source and target support must be distinct and occur exactly once",
+                );
+            }
+            if source_family == ProfileOffsetCurveFamily::Circle && !periodic_circle {
+                return invalid(
+                    "profile offset topology",
+                    "a full circle must be the only edge in its periodic path",
+                );
+            }
+        }
+        for (index, junction) in junctions.iter().enumerate() {
+            let incoming = edges[index];
+            let outgoing = edges[(index + 1) % edges.len()];
+            self.validate_profile_offset_junction_owner(
+                junction.source_owner,
+                incoming.source,
+                outgoing.source,
+            )?;
+            self.validate_profile_offset_junction_owner(
+                junction.target_owner,
+                incoming.target,
+                outgoing.target,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn profile_offset_curve_family(
+        &self,
+        span: CurveSpan,
+    ) -> Result<ProfileOffsetCurveFamily, DocumentError> {
+        let curve = self.validate_span(span)?;
+        Ok(match curve.definition {
+            CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. } => {
+                ProfileOffsetCurveFamily::Line
+            }
+            CurveDefinition::CircularArc { .. } => ProfileOffsetCurveFamily::CircularArc,
+            CurveDefinition::Circle { .. } => ProfileOffsetCurveFamily::Circle,
+            _ => {
+                return invalid(
+                    "profile offset support",
+                    "only lines, circular arcs, and full circles are supported",
+                );
+            }
+        })
+    }
+
+    fn validate_profile_offset_junction_owner(
+        &self,
+        owner: DocumentProfileOffsetJunctionOwner,
+        incoming: DocumentDirectedProfileOffsetCurve,
+        outgoing: DocumentDirectedProfileOffsetCurve,
+    ) -> Result<(), DocumentError> {
+        match owner {
+            DocumentProfileOffsetJunctionOwner::SharedPoint(point) => {
+                self.require_point(point)?;
+                let incoming_end = self.profile_offset_line_endpoint(incoming, false)?;
+                let outgoing_start = self.profile_offset_line_endpoint(outgoing, true)?;
+                if incoming_end != point || outgoing_start != point {
+                    return invalid(
+                        "profile offset junction owner",
+                        "the retained shared point must own both directed line endpoints",
+                    );
+                }
+            }
+            DocumentProfileOffsetJunctionOwner::Constraint(owner) => {
+                let constraint = self
+                    .constraint(owner)
+                    .ok_or_else(|| unknown("profile offset junction constraint", owner.0))?;
+                let expected = [
+                    (
+                        incoming,
+                        false,
+                        profile_offset_endpoint_parameter(incoming.traversal, false),
+                    ),
+                    (
+                        outgoing,
+                        true,
+                        profile_offset_endpoint_parameter(outgoing.traversal, true),
+                    ),
+                ];
+                let both_contact_owned = expected.iter().all(|(directed, _, parameter)| {
+                    constraint_contacts(&constraint.definition)
+                        .into_iter()
+                        .any(|contact| {
+                            self.profile_offset_contact_matches(contact, *directed, *parameter)
+                        })
+                });
+                let owns_pair = match constraint.definition {
+                    DocumentConstraintDefinition::Coincident { first, second } => self
+                        .profile_offset_line_endpoint(incoming, false)
+                        .ok()
+                        .zip(self.profile_offset_line_endpoint(outgoing, true).ok())
+                        .is_some_and(|(incoming, outgoing)| {
+                            (incoming == first && outgoing == second)
+                                || (incoming == second && outgoing == first)
+                        }),
+                    DocumentConstraintDefinition::PointOnCurve { point, contact } => {
+                        [(0, 1), (1, 0)]
+                            .into_iter()
+                            .any(|(curve_index, point_index)| {
+                                let (curve, _, parameter) = expected[curve_index];
+                                let (point_curve, directed_start, _) = expected[point_index];
+                                self.profile_offset_contact_matches(contact, curve, parameter)
+                                    && self
+                                        .profile_offset_line_endpoint(point_curve, directed_start)
+                                        .is_ok_and(|endpoint| endpoint == point)
+                            })
+                    }
+                    DocumentConstraintDefinition::LineCurveTangency {
+                        line,
+                        endpoint,
+                        curve_contact,
+                    } => [(0, 1), (1, 0)]
+                        .into_iter()
+                        .any(|(line_index, curve_index)| {
+                            let (expected_line, _, line_parameter) = expected[line_index];
+                            let (expected_curve, _, curve_parameter) = expected[curve_index];
+                            let native_line_parameter = match endpoint {
+                                FeatureEndpoint::Start => 0.0,
+                                FeatureEndpoint::End => 1.0,
+                            };
+                            expected_line.curve == line
+                                && (line_parameter - native_line_parameter).abs()
+                                    <= 64.0 * f64::EPSILON
+                                && self.profile_offset_contact_matches(
+                                    curve_contact,
+                                    expected_curve,
+                                    curve_parameter,
+                                )
+                        }),
+                    DocumentConstraintDefinition::LineCircleTangency { .. }
+                    | DocumentConstraintDefinition::CircleArcTangency { .. }
+                    | DocumentConstraintDefinition::CurveCurveContact { .. }
+                    | DocumentConstraintDefinition::CurveCurveTangency { .. }
+                    | DocumentConstraintDefinition::EndpointContinuity { .. } => both_contact_owned,
+                    _ => false,
+                };
+                if !owns_pair {
+                    return invalid(
+                        "profile offset junction owner",
+                        "the retained constraint must own both exact directed endpoints",
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn profile_offset_contact_matches(
+        &self,
+        contact: ContactId,
+        directed: DocumentDirectedProfileOffsetCurve,
+        parameter: f64,
+    ) -> bool {
+        self.contact(contact).is_some_and(|contact| {
+            let neighborhood_matches = if parameter.to_bits() == 0.0_f64.to_bits() {
+                matches!(contact.neighborhood, ContactNeighborhood::Start)
+            } else if parameter.to_bits() == 1.0_f64.to_bits() {
+                matches!(contact.neighborhood, ContactNeighborhood::End)
+            } else {
+                false
+            };
+            contact.curve == directed.curve
+                && contact.domain
+                    == (ContactDomain::Bounded {
+                        lower: 0.0,
+                        upper: 1.0,
+                    })
+                && contact.winding == 0
+                && neighborhood_matches
+                && self
+                    .scalar(contact.parameter)
+                    .is_some_and(|scalar| scalar.value.to_bits() == parameter.to_bits())
+        })
+    }
+
+    fn profile_offset_line_endpoint(
+        &self,
+        curve: DocumentDirectedProfileOffsetCurve,
+        start: bool,
+    ) -> Result<DesignPointId, DocumentError> {
+        let (native_start, native_end) = self.line_span_endpoint_ids(curve.curve)?;
+        Ok(match (curve.traversal, start) {
+            (DocumentOffsetTraversal::Forward, true)
+            | (DocumentOffsetTraversal::Reverse, false) => native_start,
+            (DocumentOffsetTraversal::Forward, false)
+            | (DocumentOffsetTraversal::Reverse, true) => native_end,
+        })
     }
 
     fn validate_fillet_parent_request(
@@ -13725,9 +14527,64 @@ fn dimension_references_object(
             },
             DocumentObjectId::Curve(selected),
         ) => source.curve == selected || target_segment.curve == selected,
+        (
+            DocumentDimensionDefinition::ProfileOffset { operand, .. },
+            DocumentObjectId::Curve(selected),
+        ) => document_profile_offset_edges(operand)
+            .any(|edge| edge.source.curve.curve == selected || edge.target.curve.curve == selected),
+        (
+            DocumentDimensionDefinition::ProfileOffset { operand, .. },
+            DocumentObjectId::Constraint(selected),
+        ) => document_profile_offset_junctions(operand).any(|junction| {
+            junction.source_owner == DocumentProfileOffsetJunctionOwner::Constraint(selected)
+                || junction.target_owner == DocumentProfileOffsetJunctionOwner::Constraint(selected)
+        }),
+        (
+            DocumentDimensionDefinition::ProfileOffset { operand, .. },
+            DocumentObjectId::Point(selected),
+        ) => document_profile_offset_junctions(operand).any(|junction| {
+            junction.source_owner == DocumentProfileOffsetJunctionOwner::SharedPoint(selected)
+                || junction.target_owner
+                    == DocumentProfileOffsetJunctionOwner::SharedPoint(selected)
+        }),
         (definition, DocumentObjectId::Scalar(scalar)) => dimension_target(definition) == scalar,
         _ => false,
     }
+}
+
+fn document_profile_offset_edges(
+    operand: &DocumentProfileOffsetOperand,
+) -> impl Iterator<Item = &DocumentProfileOffsetEdgePair> {
+    let (first, rest): (
+        &[DocumentProfileOffsetEdgePair],
+        Vec<&[DocumentProfileOffsetEdgePair]>,
+    ) = match operand {
+        DocumentProfileOffsetOperand::Face { outer, holes, .. } => (
+            &outer.edges,
+            holes.iter().map(|value| value.edges.as_slice()).collect(),
+        ),
+        DocumentProfileOffsetOperand::OpenChain { chain, .. } => (&chain.edges, Vec::new()),
+    };
+    first.iter().chain(rest.into_iter().flatten())
+}
+
+fn document_profile_offset_junctions(
+    operand: &DocumentProfileOffsetOperand,
+) -> impl Iterator<Item = &DocumentProfileOffsetJunction> {
+    let (first, rest): (
+        &[DocumentProfileOffsetJunction],
+        Vec<&[DocumentProfileOffsetJunction]>,
+    ) = match operand {
+        DocumentProfileOffsetOperand::Face { outer, holes, .. } => (
+            &outer.junctions,
+            holes
+                .iter()
+                .map(|value| value.junctions.as_slice())
+                .collect(),
+        ),
+        DocumentProfileOffsetOperand::OpenChain { chain, .. } => (&chain.junctions, Vec::new()),
+    };
+    first.iter().chain(rest.into_iter().flatten())
 }
 
 fn is_unit_interval(lower: f64, upper: f64) -> bool {
@@ -13937,7 +14794,8 @@ const fn dimension_target(definition: &DocumentDimensionDefinition) -> DesignSca
         | DocumentDimensionDefinition::Diameter { target, .. }
         | DocumentDimensionDefinition::OrientedAngle { target, .. }
         | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
-        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. }
+        | DocumentDimensionDefinition::ProfileOffset { target, .. } => *target,
     }
 }
 
@@ -13951,9 +14809,22 @@ const fn dimension_parameter_kind(
         | DocumentDimensionDefinition::Radius { .. }
         | DocumentDimensionDefinition::Diameter { .. }
         | DocumentDimensionDefinition::SupportingLineOffset { .. }
-        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. } => {
-            DocumentParameterKind::Length
-        }
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. }
+        | DocumentDimensionDefinition::ProfileOffset { .. } => DocumentParameterKind::Length,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProfileOffsetCurveFamily {
+    Line,
+    CircularArc,
+    Circle,
+}
+
+const fn profile_offset_endpoint_parameter(traversal: DocumentOffsetTraversal, start: bool) -> f64 {
+    match (traversal, start) {
+        (DocumentOffsetTraversal::Forward, true) | (DocumentOffsetTraversal::Reverse, false) => 0.0,
+        (DocumentOffsetTraversal::Forward, false) | (DocumentOffsetTraversal::Reverse, true) => 1.0,
     }
 }
 

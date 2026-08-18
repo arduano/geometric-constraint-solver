@@ -9,9 +9,11 @@ use geosolve_sketch::{
     AlphaScenarioKind, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentAngleOrientation,
     DocumentCenterRef, DocumentConstraintDefinition, DocumentCurveCurvatureRelation,
     DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentDirectionSense, DocumentLineSupportRef, DocumentSolveRequest,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
-    TangentOrientation, alpha_scenario,
+    DocumentDimensionMode, DocumentDirectedProfileOffsetCurve, DocumentDirectionSense,
+    DocumentLineSide, DocumentLineSupportRef, DocumentOffsetTraversal, DocumentProfileOffsetChain,
+    DocumentProfileOffsetEdgePair, DocumentProfileOffsetOperand,
+    DocumentProfileOffsetTerminalPolicy, DocumentSolveRequest, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchDocument, SolverConfig, TangentOrientation, alpha_scenario,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -334,6 +336,60 @@ fn annotation_fixture() -> (
     (scene, document_id, span, item, marker)
 }
 
+fn profile_offset_annotation_fixture() -> (
+    EditorScene,
+    geosolve_sketch::DocumentId,
+    geosolve_sketch::DocumentDimensionId,
+    CurveSpan,
+    CurveSpan,
+) {
+    let mut document = SketchDocument::new(4.0).expect("profile-offset document");
+    let source = CurveSpan::line(add_line(
+        &mut document,
+        "profile-offset source",
+        [0.0, 0.0],
+        [4.0, 0.0],
+    ));
+    let target = CurveSpan::line(add_line(
+        &mut document,
+        "profile-offset target",
+        [0.0, 1.25],
+        [4.0, 1.25],
+    ));
+    let ids = document
+        .add_profile_offset(
+            "one-line profile offset",
+            1.25,
+            DocumentProfileOffsetOperand::OpenChain {
+                side: DocumentLineSide::Left,
+                chain: DocumentProfileOffsetChain {
+                    edges: vec![DocumentProfileOffsetEdgePair {
+                        source: DocumentDirectedProfileOffsetCurve {
+                            curve: source,
+                            traversal: DocumentOffsetTraversal::Forward,
+                        },
+                        target: DocumentDirectedProfileOffsetCurve {
+                            curve: target,
+                            traversal: DocumentOffsetTraversal::Forward,
+                        },
+                    }],
+                    junctions: Vec::new(),
+                    start_terminal: DocumentProfileOffsetTerminalPolicy::NormalTranslation,
+                    end_terminal: DocumentProfileOffsetTerminalPolicy::NormalTranslation,
+                },
+            },
+        )
+        .expect("profile-offset dimension");
+    let document_id = document.id();
+    (
+        accepted_scene(document, DocumentSolveRequest::default()),
+        document_id,
+        ids.dimension,
+        source,
+        target,
+    )
+}
+
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
 fn annotation_geometry_and_layout_are_native_wasm_identical() {
@@ -412,6 +468,115 @@ fn annotation_geometry_and_layout_are_native_wasm_identical() {
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
+fn profile_offset_annotation_layout_and_cache_loss_are_native_wasm_identical() {
+    let (scene, document_id, dimension, source, target) = profile_offset_annotation_fixture();
+    let item = SelectionItem::Dimension(dimension);
+    let annotation = scene
+        .annotations
+        .iter()
+        .find(|annotation| annotation.item == item)
+        .expect("accepted Profile Offset annotation");
+
+    assert_eq!(annotation.kind, SceneAnnotationKind::ProfileOffset);
+    assert_eq!(annotation.visible_text.as_deref(), Some("1.25"));
+    assert_eq!(
+        annotation.operands,
+        vec![SelectionItem::Curve(source), SelectionItem::Curve(target)]
+    );
+    assert!(
+        annotation
+            .accessible_label
+            .contains("Driving grouped profile offset dimension; 1.25 model units")
+    );
+    assert!(!annotation.reference);
+    assert!(!annotation.suppressed);
+    assert!(annotation.is_movable());
+
+    let SceneAnnotationGeometry::LinearDimension {
+        measured_first,
+        measured_second,
+        label_anchor,
+        ..
+    } = annotation.geometry
+    else {
+        panic!("Profile Offset must publish one grouped linear annotation");
+    };
+    let source_anchor = scene
+        .curves
+        .iter()
+        .find(|curve| curve.span == source)
+        .and_then(|curve| curve.screen_polyline.first())
+        .copied()
+        .expect("source annotation anchor");
+    let target_anchor = scene
+        .curves
+        .iter()
+        .find(|curve| curve.span == target)
+        .and_then(|curve| curve.screen_polyline.first())
+        .copied()
+        .expect("target annotation anchor");
+    assert_eq!(measured_first, source_anchor);
+    assert_eq!(measured_second, target_anchor);
+    assert!(annotation.label_bounds.is_some_and(|bounds| {
+        bounds.contains(label_anchor, 0.0) && annotation.hit_test(label_anchor, 0.0)
+    }));
+
+    let automatic_geometry = annotation.geometry.clone();
+    let moved_position = ScreenPoint {
+        x: label_anchor.x + 22.0,
+        y: label_anchor.y,
+    };
+    let mut editor = ConstraintEditor::default();
+    editor.pointer_move(&scene, pointer(80, label_anchor));
+    editor.pointer_down(&scene, pointer(80, label_anchor));
+    editor.pointer_move(&scene, pointer(80, moved_position));
+    assert_eq!(editor.annotation_layout_for_scene().entries().len(), 1);
+    assert!(editor.annotation_layout().entries().is_empty());
+    editor.pointer_up(&scene, scene.design_identity, pointer(80, moved_position));
+
+    let entries = editor.annotation_layout().entries();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].key,
+        AnnotationLayoutKey {
+            document: document_id,
+            source: annotation.source,
+            item,
+            kind: SceneAnnotationKind::ProfileOffset,
+            marker_index: None,
+        }
+    );
+    assert!(matches!(
+        entries[0].placement,
+        AnnotationPlacement::Linear {
+            perpendicular_pixels
+        } if perpendicular_pixels.is_finite()
+    ));
+
+    let mut moved = scene.clone();
+    moved.apply_annotation_layout(editor.annotation_layout());
+    let moved_annotation = moved
+        .annotations
+        .iter()
+        .find(|annotation| annotation.item == item)
+        .expect("moved Profile Offset annotation");
+    assert_ne!(moved_annotation.geometry, automatic_geometry);
+    assert_eq!(moved_annotation.visible_text.as_deref(), Some("1.25"));
+    assert_eq!(moved_annotation.operands, annotation.operands);
+
+    moved.apply_annotation_layout(&AnnotationLayoutState::default());
+    let recomputed = moved
+        .annotations
+        .iter()
+        .find(|annotation| annotation.item == item)
+        .expect("cache-loss recomputed Profile Offset annotation");
+    assert_eq!(recomputed.geometry, automatic_geometry);
+    assert_eq!(recomputed.visible_text.as_deref(), Some("1.25"));
+    assert_eq!(recomputed.operands, annotation.operands);
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn annotation_drag_preview_cancel_and_commit_are_native_wasm_identical() {
     let (scene, _, span, item, origin) = annotation_fixture();
     let mut editor = ConstraintEditor::default();
@@ -457,17 +622,19 @@ fn annotation_drag_preview_cancel_and_commit_are_native_wasm_identical() {
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
-fn all_seven_dimension_families_publish_native_wasm_geometry() {
+fn all_eight_dimension_families_publish_native_wasm_geometry() {
     use std::collections::BTreeSet;
 
-    let scenes = [
+    let mut scenes = [
         AlphaScenarioKind::Corpus,
         AlphaScenarioKind::A2,
         AlphaScenarioKind::A3,
         AlphaScenarioKind::SupportingOffset,
         AlphaScenarioKind::ExactTranslatedOffset,
     ]
-    .map(alpha_scene);
+    .map(alpha_scene)
+    .to_vec();
+    scenes.push(profile_offset_annotation_fixture().0);
     let annotations = scenes
         .iter()
         .flat_map(|scene| &scene.annotations)
@@ -485,6 +652,7 @@ fn all_seven_dimension_families_publish_native_wasm_geometry() {
         SceneAnnotationKind::OrientedAngle,
         SceneAnnotationKind::SupportingLineOffset,
         SceneAnnotationKind::ExactTranslatedSegmentOffset,
+        SceneAnnotationKind::ProfileOffset,
     ]);
     assert_eq!(actual, expected);
 
@@ -498,7 +666,8 @@ fn all_seven_dimension_families_publish_native_wasm_geometry() {
             SceneAnnotationKind::PointDistance
             | SceneAnnotationKind::CurveLength
             | SceneAnnotationKind::SupportingLineOffset
-            | SceneAnnotationKind::ExactTranslatedSegmentOffset => {
+            | SceneAnnotationKind::ExactTranslatedSegmentOffset
+            | SceneAnnotationKind::ProfileOffset => {
                 matches!(
                     annotation.geometry,
                     SceneAnnotationGeometry::LinearDimension { .. }

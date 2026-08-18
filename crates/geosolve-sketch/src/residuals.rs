@@ -2482,6 +2482,143 @@ pub(crate) struct LineOffsetResidual {
     pub(crate) mode: LineOffsetResidualMode,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ProfileOffsetLineResidual {
+    pub(crate) source: [usize; 2],
+    pub(crate) target: [usize; 2],
+    pub(crate) source_traversal: crate::OffsetTraversal,
+    pub(crate) target_traversal: crate::OffsetTraversal,
+    pub(crate) signed_distance: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ProfileOffsetRadialResidual {
+    pub(crate) source_center: usize,
+    pub(crate) source_radius: usize,
+    pub(crate) target_center: usize,
+    pub(crate) target_radius: usize,
+    pub(crate) radius_delta: f64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ProfileOffsetTangentialAnchorResidual {
+    pub(crate) source_join: GenericCurveIncidence,
+    pub(crate) source_tangent_sign: f64,
+    pub(crate) target_join: GenericCurveIncidence,
+}
+
+macro_rules! impl_ad_residual {
+    ($type:ty) => {
+        impl ResidualEvaluator for $type {
+            fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+                evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+            }
+
+            fn jacobian(
+                &self,
+                variables: &[VariableValue],
+            ) -> Result<Vec<LocalJacobian>, EvaluationError> {
+                evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+            }
+        }
+    };
+}
+
+impl_ad_residual!(ProfileOffsetLineResidual);
+impl_ad_residual!(ProfileOffsetRadialResidual);
+impl_ad_residual!(ProfileOffsetTangentialAnchorResidual);
+
+impl SketchAdFormula for ProfileOffsetLineResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let source_native = [
+            ad_point(variables, self.source[0], "profile-offset source start")?,
+            ad_point(variables, self.source[1], "profile-offset source end")?,
+        ];
+        let target_native = [
+            ad_point(variables, self.target[0], "profile-offset target start")?,
+            ad_point(variables, self.target[1], "profile-offset target end")?,
+        ];
+        let source = match self.source_traversal {
+            crate::OffsetTraversal::Forward => source_native,
+            crate::OffsetTraversal::Reverse => [source_native[1], source_native[0]],
+        };
+        let target = match self.target_traversal {
+            crate::OffsetTraversal::Forward => target_native,
+            crate::OffsetTraversal::Reverse => [target_native[1], target_native[0]],
+        };
+        let source_direction = [&source[1][0] - &source[0][0], &source[1][1] - &source[0][1]];
+        let target_direction = [&target[1][0] - &target[0][0], &target[1][1] - &target[0][1]];
+        let source_unit = ad_unit(&source_direction, "profile-offset source line")?;
+        let target_unit = ad_unit(&target_direction, "profile-offset target line")?;
+        let displacement = [&target[0][0] - &source[0][0], &target[0][1] - &source[0][1]];
+        Ok(vec![
+            &source_unit[0] * &target_unit[1] - &source_unit[1] * &target_unit[0],
+            -&displacement[0] * &source_unit[1] + &displacement[1] * &source_unit[0]
+                - self.signed_distance,
+        ])
+    }
+}
+
+impl SketchAdFormula for ProfileOffsetRadialResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let source_center = ad_point(
+            variables,
+            self.source_center,
+            "profile-offset source center",
+        )?;
+        let target_center = ad_point(
+            variables,
+            self.target_center,
+            "profile-offset target center",
+        )?;
+        let source_radius = ad_scalar(
+            variables,
+            self.source_radius,
+            "profile-offset source radius",
+        )?;
+        let target_radius = ad_scalar(
+            variables,
+            self.target_radius,
+            "profile-offset target radius",
+        )?;
+        Ok(vec![
+            &target_center[0] - &source_center[0],
+            &target_center[1] - &source_center[1],
+            target_radius - source_radius - self.radius_delta,
+        ])
+    }
+}
+
+impl SketchAdFormula for ProfileOffsetTangentialAnchorResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let source = evaluate_ad_curve(variables, &self.source_join)?;
+        let target = evaluate_ad_curve(variables, &self.target_join)?;
+        let tangent = ad_curve_unit_tangent(
+            variables,
+            &self.source_join,
+            &source,
+            "profile-offset source tangent",
+        )?;
+        let displacement = [
+            target.position[0].clone() - &source.position[0],
+            target.position[1].clone() - &source.position[1],
+        ];
+        Ok(vec![
+            (&displacement[0] * &tangent[0] + &displacement[1] * &tangent[1])
+                * self.source_tangent_sign,
+        ])
+    }
+}
+
 impl ResidualEvaluator for LineOffsetResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
         evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)

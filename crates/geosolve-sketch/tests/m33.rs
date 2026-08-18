@@ -570,6 +570,7 @@ fn dimension_kind(definition: &DocumentDimensionDefinition) -> &'static str {
         DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. } => {
             "dimension_exact_translated_segment_offset"
         }
+        DocumentDimensionDefinition::ProfileOffset { .. } => "dimension_profile_offset",
     }
 }
 

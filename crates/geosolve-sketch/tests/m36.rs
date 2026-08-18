@@ -225,9 +225,9 @@ fn spline_and_nurbs_controls_are_persistent_point_features() {
 
 #[test]
 fn current_command_effect_and_measurement_characterization_is_exhaustive_and_stable() {
-    assert_eq!(CurrentDocumentCommandKind::ALL.len(), 41);
-    assert_eq!(CurrentDocumentEffectKind::ALL.len(), 38);
-    assert_eq!(CurrentMeasurementKind::ALL.len(), 16);
+    assert_eq!(CurrentDocumentCommandKind::ALL.len(), 44);
+    assert_eq!(CurrentDocumentEffectKind::ALL.len(), 40);
+    assert_eq!(CurrentMeasurementKind::ALL.len(), 17);
 
     let command_codes = CurrentDocumentCommandKind::ALL
         .iter()
@@ -248,6 +248,12 @@ fn current_command_effect_and_measurement_characterization_is_exhaustive_and_sta
     assert!(command_codes.contains("create_point"));
     assert!(command_codes.contains("set_curve_curve_fillet_branch"));
     assert!(command_codes.contains("set_rational_conic_control"));
+    assert!(command_codes.contains("create_profile_offset"));
+    assert!(command_codes.contains("create_profile_offset_geometry"));
+    assert!(command_codes.contains("set_profile_offset_operand"));
+    assert!(effect_codes.contains("created_profile_offset"));
+    assert!(effect_codes.contains("updated_profile_offset"));
+    assert!(measurement_codes.contains("dimension_profile_offset"));
     let m41_command_codes = [
         "set_geometry_role",
         "set_geometry_roles",

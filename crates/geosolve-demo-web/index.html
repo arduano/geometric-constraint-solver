@@ -101,6 +101,9 @@
             <div class="wb-palette-option-tool">
               <button id="wb-feature-fillet-trigger" type="button" data-wb-feature="fillet" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-feature-icon" aria-hidden="true"></span><span>Fillet</span></button>
             </div>
+            <div class="wb-palette-option-tool">
+              <button id="wb-offset-trigger" type="button" data-wb-offset="offset" aria-pressed="false" aria-controls="wb-tool-options-overlay" aria-expanded="false" aria-haspopup="dialog"><span class="wb-offset-icon" aria-hidden="true"></span><span>Offset</span></button>
+            </div>
           </div>
         </section>
         <section class="wb-palette-section wb-palette-terminal">
@@ -164,6 +167,13 @@
               <label>Shared radius<input id="wb-feature-fillet-radius" type="number" min="0" step="any" /></label>
               <p class="wb-option-help">Select a preview arc to use its explicit retained-direction and local-alternative controls on the canvas or in the Inspector.</p>
               <p class="wb-option-help">Pick one or more corners, then Apply. Every corner in this batch shares the radius.</p>
+            </div>
+            <div id="wb-option-panel-offset" class="wb-option-panel" data-wb-option-panel="offset" hidden>
+              <div class="wb-offset-status"><span>Operand</span><strong id="wb-offset-operand-status">Select a face or curve</strong></div>
+              <label>Distance<input id="wb-offset-distance" type="number" step="any" /></label>
+              <div class="wb-offset-direction"><span>Direction</span><strong id="wb-offset-direction">—</strong></div>
+              <div class="wb-option-actions"><button type="button" data-wb-action="offset-flip">Flip</button><button id="wb-offset-apply" type="button" data-wb-action="offset-apply" disabled>Apply</button><button type="button" data-wb-action="offset-cancel">Cancel</button></div>
+              <p class="wb-option-help">Pick a bounded face, or collect a connected open chain. Exact lines, circles and circular arcs only; topology-changing offsets are intentionally unavailable.</p>
             </div>
             <div id="wb-option-panel-conic" class="wb-option-panel" data-wb-option-panel="conic" hidden>
               <label id="wb-conic-ratio-field">Minor-axis ratio<input id="wb-conic-ratio" type="number" min="0" max="1" step="any" value="0.5" /></label>
@@ -249,6 +259,7 @@
           <input id="wb-dimension-target" type="number" min="0" step="any" />
           <span id="wb-dimension-target-meta"></span>
           <button type="button" data-wb-action="dimension-target">Update target</button>
+          <button id="wb-profile-offset-flip" type="button" data-wb-action="profile-offset-flip" hidden>Flip offset direction</button>
         </section>
         <section id="wb-branch-editor" class="wb-inspector-section wb-branch-editor" hidden>
           <span class="wb-field-label">Explicit branch state</span>

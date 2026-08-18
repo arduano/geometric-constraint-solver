@@ -21,10 +21,11 @@ use crate::document::{
     DocumentError, DocumentExternalBindingId, DocumentFilletEndpointOrder,
     DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentMirroredBSplineInsertion,
     DocumentNurbsInsertion, DocumentObjectId, DocumentParameterId, DocumentParameterKind,
-    DocumentParameterTarget, DocumentRationalConicControl, DocumentSourceId, ExternalFeatureKindV1,
-    ExternalTopologyDigest, GeometryRole, GeometryRoleEdit, HostConfigurationActivation,
-    LineLineFilletIds, LineLineFilletRequest, MirroredCurveIds, PersistentId, RectangleIds,
-    ScalarDomain, ScalarUnit, SketchDocument, SketchPersistentIdentityHighWater,
+    DocumentParameterTarget, DocumentProfileOffsetIds, DocumentProfileOffsetOperand,
+    DocumentRationalConicControl, DocumentSourceId, ExternalFeatureKindV1, ExternalTopologyDigest,
+    GeometryRole, GeometryRoleEdit, HostConfigurationActivation, LineLineFilletIds,
+    LineLineFilletRequest, MirroredCurveIds, PersistentId, RectangleIds, ScalarDomain, ScalarUnit,
+    SketchDocument, SketchPersistentIdentityHighWater,
 };
 use crate::document_lowering::{
     DocumentRuntimeMap, ResolvedDocumentParameters, ResolvedParameterBinding, RuntimeSource,
@@ -33,6 +34,7 @@ use crate::{
     DocumentMeasurementProvenance, DocumentScalarUnit, SketchSession, SketchSessionError,
     SketchSolveRequest, SketchSolveResult, SketchSource, SolveRejection,
 };
+use crate::{DocumentPreparedProfileOffsetGeometry, DocumentProfileOffsetCreationRequest};
 
 /// Unstable pre-M62 external snapshot wire version.
 pub const EXTERNAL_SNAPSHOT_SET_VERSION_V1: u32 = 1;
@@ -1782,6 +1784,19 @@ pub enum DocumentEdit {
         definition: DocumentDimensionDefinition,
         mode: DocumentDimensionMode,
     },
+    CreateProfileOffset {
+        label: String,
+        distance: f64,
+        operand: DocumentProfileOffsetOperand,
+    },
+    CreateProfileOffsetGeometry {
+        request: DocumentProfileOffsetCreationRequest,
+    },
+    /// Applies target seeds prepared from an authenticated accepted document while retaining the
+    /// current design document as transaction authority.
+    CreatePreparedProfileOffsetGeometry {
+        prepared: Box<DocumentPreparedProfileOffsetGeometry>,
+    },
     CreateParameter {
         label: String,
         kind: DocumentParameterKind,
@@ -1908,6 +1923,10 @@ pub enum DocumentEdit {
         dimension: DocumentDimensionId,
         mode: DocumentDimensionMode,
     },
+    SetProfileOffsetOperand {
+        dimension: DocumentDimensionId,
+        operand: DocumentProfileOffsetOperand,
+    },
     SetOrientedAngleOrientation {
         dimension: DocumentDimensionId,
         orientation: DocumentAngleOrientation,
@@ -1970,6 +1989,7 @@ pub enum DocumentCommandEffect {
     CreatedContact(ContactId),
     CreatedConstraint(DocumentConstraintId),
     CreatedDimension(DocumentDimensionId),
+    CreatedProfileOffset(Box<DocumentProfileOffsetIds>),
     CreatedParameter(DocumentParameterId),
     AddedParameterBinding {
         parameter: DocumentParameterId,
@@ -2004,6 +2024,7 @@ pub enum DocumentCommandEffect {
     UpdatedContacts(Vec<ContactId>),
     UpdatedConstraint(DocumentConstraintId),
     UpdatedDimension(DocumentDimensionId),
+    UpdatedProfileOffset(DocumentDimensionId),
     UpdatedSource(DocumentSourceId),
     UpdatedGeometryRole(CurveId),
     UpdatedGeometryRoles(Vec<CurveId>),
@@ -7783,6 +7804,23 @@ fn apply_edit(
         } => DocumentCommandEffect::CreatedDimension(
             document.add_dimension(label, definition, mode)?,
         ),
+        DocumentEdit::CreateProfileOffset {
+            label,
+            distance,
+            operand,
+        } => DocumentCommandEffect::CreatedProfileOffset(Box::new(
+            document.add_profile_offset(label, distance, operand)?,
+        )),
+        DocumentEdit::CreateProfileOffsetGeometry { request } => {
+            DocumentCommandEffect::CreatedProfileOffset(Box::new(
+                document.create_profile_offset_geometry(request)?,
+            ))
+        }
+        DocumentEdit::CreatePreparedProfileOffsetGeometry { prepared } => {
+            DocumentCommandEffect::CreatedProfileOffset(Box::new(
+                document.create_prepared_profile_offset_geometry(*prepared)?,
+            ))
+        }
         DocumentEdit::CreateParameter { label, kind } => {
             DocumentCommandEffect::CreatedParameter(document.add_parameter(label, kind)?)
         }
@@ -7967,6 +8005,10 @@ fn apply_edit(
         DocumentEdit::SetDimensionMode { dimension, mode } => {
             document.set_dimension_mode(dimension, mode)?;
             DocumentCommandEffect::UpdatedDimension(dimension)
+        }
+        DocumentEdit::SetProfileOffsetOperand { dimension, operand } => {
+            document.set_profile_offset_operand(dimension, operand)?;
+            DocumentCommandEffect::UpdatedProfileOffset(dimension)
         }
         DocumentEdit::SetOrientedAngleOrientation {
             dimension,

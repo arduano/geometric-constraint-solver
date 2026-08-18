@@ -113,6 +113,10 @@ const CONTINUITY: &str = concat!(
     "<circle r=\"1.5\"/>",
 );
 const FILLET: &str = "<path d=\"M-8 7H-4A11 11 0 0 1 7-4V-8\"/>";
+const OFFSET: &str = concat!(
+    "<path d=\"M-8 5L5-8M-5 8L8-5\"/>",
+    "<path d=\"M-4-4L4 4M-4-4v4M-4-4h4M4 4v-4M4 4H0\"/>",
+);
 const EQUAL: &str = "<path d=\"M-7-3H7M-7 3H7\"/>";
 const POINT_DISTANCE: &str = concat!(
     "<circle cx=\"-8\" r=\"1.5\"/><circle cx=\"8\" r=\"1.5\"/>",
@@ -355,6 +359,12 @@ pub(crate) fn feature_icon_markup(tool: FeatureAuthoringTool) -> String {
     )
 }
 
+pub(crate) fn offset_icon_markup() -> String {
+    format!(
+        "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"modify-offset\">{OFFSET}</svg>"
+    )
+}
+
 const fn constraint_intent_icon(intent: ConstraintIntent) -> (&'static str, &'static str) {
     match intent {
         ConstraintIntent::Lock => ("lock", FIXED),
@@ -396,7 +406,7 @@ mod tests {
         GEOMETRY_TOOLS, TreeIconKind, authoring_icon_markup, constraint_icon_fragment,
         constraint_icon_key, construction_role_icon_markup, feature_icon_markup,
         geometry_tool_icon_markup, geometry_tool_key, geometry_variant_icon_markup,
-        tree_icon_markup,
+        offset_icon_markup, tree_icon_markup,
     };
 
     #[test]
@@ -544,12 +554,19 @@ mod tests {
     }
 
     #[test]
-    fn fillet_modify_tool_has_a_text_free_vector_symbol() {
+    fn modify_tools_have_text_free_vector_symbols() {
         let icon = feature_icon_markup(FeatureAuthoringTool::Fillet);
         assert!(icon.starts_with("<svg class=\"wb-palette-icon\""));
         assert!(icon.contains("data-icon-key=\"feature-fillet\""));
         assert!(icon.contains("aria-hidden=\"true\""));
         assert!(!icon.contains("<text"));
+
+        let offset = offset_icon_markup();
+        assert!(offset.starts_with("<svg class=\"wb-palette-icon\""));
+        assert!(offset.contains("data-icon-key=\"modify-offset\""));
+        assert!(offset.contains("aria-hidden=\"true\""));
+        assert!(!offset.contains("<text"));
+        assert_ne!(offset, icon);
 
         let construction = construction_role_icon_markup();
         assert!(construction.starts_with("<svg class=\"wb-palette-icon\""));

@@ -371,6 +371,7 @@ pub enum SceneAnnotationKind {
     OrientedAngle,
     SupportingLineOffset,
     ExactTranslatedSegmentOffset,
+    ProfileOffset,
 }
 
 /// Stable identity of one movable annotation occurrence within a document.
@@ -453,7 +454,8 @@ impl AnnotationLayoutEntry {
                 SelectionItem::Dimension(_),
                 SceneAnnotationKind::PointDistance
                 | SceneAnnotationKind::SupportingLineOffset
-                | SceneAnnotationKind::ExactTranslatedSegmentOffset,
+                | SceneAnnotationKind::ExactTranslatedSegmentOffset
+                | SceneAnnotationKind::ProfileOffset,
                 AnnotationPlacement::Linear { .. },
             )
             | (
@@ -1071,6 +1073,7 @@ fn accessible_dimension_label(
         SceneAnnotationKind::ExactTranslatedSegmentOffset => {
             "exact translated-segment offset dimension"
         }
+        SceneAnnotationKind::ProfileOffset => "grouped profile offset dimension",
         SceneAnnotationKind::Constraint(_) => "constraint",
     };
     let mode = if reference { "Reference" } else { "Driving" };
@@ -1127,6 +1130,7 @@ fn dimension_default_text(
             Dimension::ExactTranslatedSegmentOffset { .. } => {
                 SceneAnnotationKind::ExactTranslatedSegmentOffset
             }
+            Dimension::ProfileOffset { .. } => SceneAnnotationKind::ProfileOffset,
         },
         dimension.mode == DocumentDimensionMode::Reference,
     )
@@ -1143,7 +1147,8 @@ fn dimension_stored_value(
         | Dimension::Diameter { target, .. }
         | Dimension::OrientedAngle { target, .. }
         | Dimension::SupportingLineOffset { target, .. }
-        | Dimension::ExactTranslatedSegmentOffset { target, .. } => *target,
+        | Dimension::ExactTranslatedSegmentOffset { target, .. }
+        | Dimension::ProfileOffset { target, .. } => *target,
     };
     document
         .scalar(target)
@@ -1176,7 +1181,8 @@ pub(crate) fn update_dimension_values(
                     | Dimension::Diameter { target, .. }
                     | Dimension::OrientedAngle { target, .. }
                     | Dimension::SupportingLineOffset { target, .. }
-                    | Dimension::ExactTranslatedSegmentOffset { target, .. } => *target,
+                    | Dimension::ExactTranslatedSegmentOffset { target, .. }
+                    | Dimension::ProfileOffset { target, .. } => *target,
                 };
                 accepted
                     .document()
@@ -1214,7 +1220,8 @@ pub fn compact_dimension_text(
         | SceneAnnotationKind::PointDistance
         | SceneAnnotationKind::CurveLength
         | SceneAnnotationKind::SupportingLineOffset
-        | SceneAnnotationKind::ExactTranslatedSegmentOffset => number,
+        | SceneAnnotationKind::ExactTranslatedSegmentOffset
+        | SceneAnnotationKind::ProfileOffset => number,
     };
     Some(if reference {
         format!("({value})")
@@ -2085,7 +2092,7 @@ fn constraint_presentation(
 
 #[allow(
     clippy::too_many_lines,
-    reason = "one exhaustive dimension-family dispatch keeps all seven public geometry contracts together"
+    reason = "one exhaustive dimension-family dispatch keeps all eight public geometry contracts together"
 )]
 fn dimension_presentation(
     document: &SketchDocument,
@@ -2224,6 +2231,46 @@ fn dimension_presentation(
                 ],
                 linear_dimension(first, second, 24.0)?,
             ))
+        }
+        Dimension::ProfileOffset { operand, .. } => {
+            let edges = profile_offset_edge_pairs(operand);
+            let first_pair = edges.first()?;
+            let source = curve_anchor(curves, first_pair.source.curve)?;
+            let target = curve_anchor(curves, first_pair.target.curve)?;
+            if source.distance(target) <= f64::EPSILON {
+                return None;
+            }
+            let operands = unique_items(
+                edges
+                    .iter()
+                    .flat_map(|edge| {
+                        [
+                            SelectionItem::Curve(edge.source.curve),
+                            SelectionItem::Curve(edge.target.curve),
+                        ]
+                    })
+                    .collect(),
+            );
+            Some((
+                SceneAnnotationKind::ProfileOffset,
+                operands,
+                linear_dimension(source, target, 24.0)?,
+            ))
+        }
+    }
+}
+
+fn profile_offset_edge_pairs(
+    operand: &geosolve_sketch::DocumentProfileOffsetOperand,
+) -> Vec<&geosolve_sketch::DocumentProfileOffsetEdgePair> {
+    match operand {
+        geosolve_sketch::DocumentProfileOffsetOperand::Face { outer, holes, .. } => outer
+            .edges
+            .iter()
+            .chain(holes.iter().flat_map(|hole| &hole.edges))
+            .collect(),
+        geosolve_sketch::DocumentProfileOffsetOperand::OpenChain { chain, .. } => {
+            chain.edges.iter().collect()
         }
     }
 }

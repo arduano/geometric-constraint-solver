@@ -280,6 +280,7 @@ const fn annotation_kind_key(kind: SceneAnnotationKind) -> &'static str {
         SceneAnnotationKind::OrientedAngle => "dimension:angle",
         SceneAnnotationKind::SupportingLineOffset => "dimension:supporting-offset",
         SceneAnnotationKind::ExactTranslatedSegmentOffset => "dimension:translated-offset",
+        SceneAnnotationKind::ProfileOffset => "dimension:profile-offset",
     }
 }
 
@@ -292,6 +293,7 @@ fn parse_annotation_kind(value: &str) -> Option<SceneAnnotationKind> {
         "dimension:angle" => SceneAnnotationKind::OrientedAngle,
         "dimension:supporting-offset" => SceneAnnotationKind::SupportingLineOffset,
         "dimension:translated-offset" => SceneAnnotationKind::ExactTranslatedSegmentOffset,
+        "dimension:profile-offset" => SceneAnnotationKind::ProfileOffset,
         value => SceneAnnotationKind::Constraint(parse_constraint_glyph(value)?),
     })
 }
@@ -775,7 +777,11 @@ fn layout_form_is_compatible(
 pub(crate) fn reproduction_payload_from_coordinator(
     coordinator: &RetainedEditorCoordinator,
 ) -> Result<String, String> {
-    let workspace = WorkspaceSnapshot::from_coordinator(coordinator)?.encode()?;
+    let mut snapshot = WorkspaceSnapshot::from_coordinator(coordinator)?;
+    // A reproduction capsule carries authoritative/reconstructable workspace state, not the
+    // disposable per-viewport annotation cache retained by ordinary local workspace saves.
+    snapshot.annotation_layout_json = None;
+    let workspace = snapshot.encode()?;
     crate::reproduction::encode_workspace(&workspace).map_err(|error| error.to_string())
 }
 
@@ -784,7 +790,10 @@ pub(crate) fn coordinator_from_reproduction_payload(
 ) -> Result<RetainedEditorCoordinator, String> {
     let workspace =
         crate::reproduction::decode_workspace(payload).map_err(|error| error.to_string())?;
-    let snapshot = WorkspaceSnapshot::decode(&workspace)?;
+    let mut snapshot = WorkspaceSnapshot::decode(&workspace)?;
+    // Older capsules may have embedded this optional presentation cache. Ignore it so restoration
+    // always recomputes placement from the accepted scene under the receiving viewport.
+    snapshot.annotation_layout_json = None;
     coordinator_from_snapshot(&snapshot)
 }
 
@@ -859,15 +868,221 @@ mod tests {
         AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveId, CurveSpan,
         DesignPointId, DocumentBSplineForm, DocumentCenterRef, DocumentCommandEffect,
         DocumentConstraintDefinition, DocumentDirectionSense, DocumentEdit, DocumentError,
-        DocumentLineSupportRef, DocumentObjectId, DocumentSolveRequest, GeometryRole, PersistentId,
-        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, alpha_scenario,
+        DocumentId, DocumentLineSupportRef, DocumentObjectId, DocumentSolveRequest, GeometryRole,
+        PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+        alpha_scenario,
     };
 
     use super::{
-        WorkspaceSnapshot, coordinator_from_reproduction_payload, coordinator_from_snapshot,
-        default_evaluation_high_water, derive_sketch_identity_high_water,
+        WorkspaceSnapshot, annotation_kind_key, coordinator_from_reproduction_payload,
+        coordinator_from_snapshot, default_evaluation_high_water,
+        derive_sketch_identity_high_water, parse_annotation_kind,
         reproduction_payload_from_coordinator,
     };
+
+    fn restored_annotation_layout(
+        snapshot: &WorkspaceSnapshot,
+    ) -> (DocumentId, Vec<AnnotationLayoutEntry>) {
+        let restored = coordinator_from_snapshot(snapshot).expect("restore workspace");
+        (
+            restored.session().design_document().id(),
+            restored.editor().annotation_layout().entries(),
+        )
+    }
+
+    fn reproduced_annotation_layout(payload: &str) -> Vec<AnnotationLayoutEntry> {
+        coordinator_from_reproduction_payload(payload)
+            .expect("restore reproduction")
+            .editor()
+            .annotation_layout()
+            .entries()
+    }
+
+    #[test]
+    fn m80_profile_offset_annotation_cache_identity_round_trips() {
+        let key = annotation_kind_key(SceneAnnotationKind::ProfileOffset);
+        assert_eq!(key, "dimension:profile-offset");
+        assert_eq!(
+            parse_annotation_kind(key),
+            Some(SceneAnnotationKind::ProfileOffset)
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn m80_profile_offset_draft_workspace_and_reproduction_round_trip_exactly() {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let source_points = [
+            document.add_point("source start", [0.0, 0.0]).unwrap(),
+            document.add_point("source end", [4.0, 0.0]).unwrap(),
+        ];
+        let target_points = [
+            document.add_point("target start", [0.0, 1.0]).unwrap(),
+            document.add_point("target end", [4.0, 1.0]).unwrap(),
+        ];
+        let add_line = |document: &mut SketchDocument, label: &str, points: [DesignPointId; 2]| {
+            document
+                .add_curve(
+                    label,
+                    CurveDefinition::Line {
+                        start: points[0],
+                        end: points[1],
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap()
+        };
+        let source = CurveSpan::line(add_line(&mut document, "source", source_points));
+        let target = CurveSpan::line(add_line(&mut document, "target", target_points));
+        let operand = geosolve_sketch::DocumentProfileOffsetOperand::OpenChain {
+            side: geosolve_sketch::DocumentLineSide::Left,
+            chain: geosolve_sketch::DocumentProfileOffsetChain {
+                edges: vec![geosolve_sketch::DocumentProfileOffsetEdgePair {
+                    source: geosolve_sketch::DocumentDirectedProfileOffsetCurve {
+                        curve: source,
+                        traversal: geosolve_sketch::DocumentOffsetTraversal::Forward,
+                    },
+                    target: geosolve_sketch::DocumentDirectedProfileOffsetCurve {
+                        curve: target,
+                        traversal: geosolve_sketch::DocumentOffsetTraversal::Forward,
+                    },
+                }],
+                junctions: Vec::new(),
+                start_terminal:
+                    geosolve_sketch::DocumentProfileOffsetTerminalPolicy::NormalTranslation,
+                end_terminal:
+                    geosolve_sketch::DocumentProfileOffsetTerminalPolicy::NormalTranslation,
+            },
+        };
+        let ids = document
+            .add_profile_offset("one-line offset", 1.0, operand.clone())
+            .expect("profile offset");
+        let document_id = document.id();
+        let dimension_source = document
+            .dimension(ids.dimension)
+            .expect("Profile Offset dimension")
+            .source_id;
+        let draft = document.to_draft_v5_json().expect("M80 draft-v5");
+        assert!(matches!(
+            document.to_canonical_json(),
+            Err(DocumentError::UnsupportedM80State)
+        ));
+        let mut coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .expect("accepted M80 session"),
+        )
+        .expect("M80 coordinator");
+
+        let annotation_entry = AnnotationLayoutEntry {
+            key: AnnotationLayoutKey {
+                document: document_id,
+                source: dimension_source,
+                item: SelectionItem::Dimension(ids.dimension),
+                kind: SceneAnnotationKind::ProfileOffset,
+                marker_index: None,
+            },
+            placement: AnnotationPlacement::Linear {
+                perpendicular_pixels: 47.0,
+            },
+        };
+        coordinator
+            .editor_mut()
+            .restore_annotation_layout(AnnotationLayoutState::from_entries([annotation_entry]));
+
+        let workspace = WorkspaceSnapshot::from_coordinator(&coordinator).expect("workspace");
+        assert_eq!(
+            workspace.design.encoding,
+            super::WorkspaceDocumentEncoding::DraftV5
+        );
+        assert_eq!(workspace.design.json, draft);
+        let decoded = WorkspaceSnapshot::decode(&workspace.encode().expect("encode workspace"))
+            .expect("decode workspace");
+        let restored = coordinator_from_snapshot(&decoded).expect("restore workspace");
+        assert_eq!(
+            restored.editor().annotation_layout().entries(),
+            vec![annotation_entry],
+            "ordinary workspace restore must retain a compatible Profile Offset placement",
+        );
+        assert_eq!(
+            restored
+                .session()
+                .design_document()
+                .to_draft_v5_json()
+                .expect("restored draft"),
+            draft
+        );
+        assert_eq!(
+            restored
+                .session()
+                .design_document()
+                .dimension(ids.dimension)
+                .map(|dimension| dimension.definition.clone()),
+            Some(
+                geosolve_sketch::DocumentDimensionDefinition::ProfileOffset {
+                    target: ids.target,
+                    operand: operand.clone(),
+                }
+            )
+        );
+
+        let payload = reproduction_payload_from_coordinator(&coordinator).expect("reproduction");
+        let reproduction_workspace =
+            crate::reproduction::decode_workspace(&payload).expect("decode reproduction");
+        assert!(
+            WorkspaceSnapshot::decode(&reproduction_workspace)
+                .expect("decode reproduction workspace")
+                .annotation_layout_json
+                .is_none(),
+            "reproduction export must omit disposable Profile Offset placement",
+        );
+        let reproduced =
+            coordinator_from_reproduction_payload(&payload).expect("restore reproduction");
+        assert!(
+            reproduced.editor().annotation_layout().entries().is_empty(),
+            "reproduction restore must recompute Profile Offset placement",
+        );
+        assert_eq!(
+            reproduced
+                .session()
+                .design_document()
+                .to_draft_v5_json()
+                .expect("reproduced draft"),
+            draft
+        );
+        assert_eq!(
+            reproduced
+                .session()
+                .design_document()
+                .dimension(ids.dimension)
+                .map(|dimension| dimension.definition.clone()),
+            Some(
+                geosolve_sketch::DocumentDimensionDefinition::ProfileOffset {
+                    target: ids.target,
+                    operand,
+                }
+            )
+        );
+
+        let legacy_payload = crate::reproduction::encode_workspace(
+            &workspace
+                .encode()
+                .expect("workspace carrying Profile Offset placement"),
+        )
+        .expect("legacy reproduction with presentation cache");
+        assert!(
+            coordinator_from_reproduction_payload(&legacy_payload)
+                .expect("restore legacy reproduction")
+                .editor()
+                .annotation_layout()
+                .entries()
+                .is_empty(),
+            "reproduction import must ignore a carried Profile Offset placement",
+        );
+    }
 
     fn computed_fillet_candidate(
         coordinator: &RetainedEditorCoordinator,
@@ -1186,15 +1401,34 @@ mod tests {
         let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).unwrap();
         assert_eq!(snapshot.version, 6);
         let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
-        let restored = coordinator_from_snapshot(&decoded).unwrap();
-        assert_eq!(restored.editor().annotation_layout().entries(), vec![entry]);
+        let (restored_document, restored_entries) = restored_annotation_layout(&decoded);
+        assert_eq!(restored_document, document);
+        assert_eq!(restored_entries, vec![entry]);
 
         let reproduction = reproduction_payload_from_coordinator(&coordinator).unwrap();
-        let reproduced = coordinator_from_reproduction_payload(&reproduction).unwrap();
+        let reproduction_workspace =
+            crate::reproduction::decode_workspace(&reproduction).expect("reproduction workspace");
+        let reproduction_snapshot =
+            WorkspaceSnapshot::decode(&reproduction_workspace).expect("reproduction snapshot");
+        assert!(
+            reproduction_snapshot.annotation_layout_json.is_none(),
+            "a reproduction capsule must omit disposable annotation placement",
+        );
         assert_eq!(
-            reproduced.editor().annotation_layout().entries(),
-            vec![entry],
-            "the opaque reproduction envelope must carry workspace-v6 presentation state",
+            reproduced_annotation_layout(&reproduction),
+            Vec::new(),
+            "reproduction restore must recompute disposable annotation placement",
+        );
+
+        let legacy_reproduction = crate::reproduction::encode_workspace(
+            &snapshot
+                .encode()
+                .expect("workspace with a presentation cache"),
+        )
+        .expect("legacy reproduction");
+        assert!(
+            reproduced_annotation_layout(&legacy_reproduction).is_empty(),
+            "import must ignore a presentation cache carried by an older reproduction capsule",
         );
 
         let mut mixed_rows = snapshot.clone();
@@ -1210,12 +1444,10 @@ mod tests {
             .expect("layout rows")
             .push(serde_json::json!({"malformed": true}));
         mixed_rows.annotation_layout_json = Some(serde_json::to_string(&mixed_cache).unwrap());
-        let restored = coordinator_from_snapshot(
-            &WorkspaceSnapshot::decode(&mixed_rows.encode().unwrap()).unwrap(),
-        )
-        .unwrap();
+        let decoded_mixed = WorkspaceSnapshot::decode(&mixed_rows.encode().unwrap()).unwrap();
+        let (_, restored_entries) = restored_annotation_layout(&decoded_mixed);
         assert_eq!(
-            restored.editor().annotation_layout().entries(),
+            restored_entries,
             vec![entry],
             "one malformed row must not discard independent valid placement",
         );
@@ -1231,12 +1463,10 @@ mod tests {
             .unwrap();
             cache["entries"][0][field] = value;
             corrupted.annotation_layout_json = Some(serde_json::to_string(&cache).unwrap());
-            let restored = coordinator_from_snapshot(
-                &WorkspaceSnapshot::decode(&corrupted.encode().unwrap()).unwrap(),
-            )
-            .unwrap();
+            let decoded = WorkspaceSnapshot::decode(&corrupted.encode().unwrap()).unwrap();
+            let (_, restored_entries) = restored_annotation_layout(&decoded);
             assert!(
-                restored.editor().annotation_layout().entries().is_empty(),
+                restored_entries.is_empty(),
                 "corrupt annotation field {field} must be discarded independently",
             );
         };
@@ -1266,9 +1496,9 @@ mod tests {
         });
         let decoded = WorkspaceSnapshot::decode(&serde_json::to_string(&wrong_outer).unwrap())
             .expect("a disposable cache with the wrong outer JSON type cannot reject the sketch");
-        let restored = coordinator_from_snapshot(&decoded).unwrap();
-        assert!(restored.editor().annotation_layout().entries().is_empty());
-        assert_eq!(restored.session().design_document().id(), document);
+        let (restored_document, restored_entries) = restored_annotation_layout(&decoded);
+        assert!(restored_entries.is_empty());
+        assert_eq!(restored_document, document);
 
         let mut stale_document = snapshot.clone();
         let mut stale_cache: serde_json::Value = serde_json::from_str(
@@ -1281,26 +1511,23 @@ mod tests {
         stale_cache["entries"][0]["document"] =
             serde_json::Value::String(PersistentId::from_u128(0x7600).to_string());
         stale_document.annotation_layout_json = Some(serde_json::to_string(&stale_cache).unwrap());
-        let restored = coordinator_from_snapshot(
-            &WorkspaceSnapshot::decode(&stale_document.encode().unwrap()).unwrap(),
-        )
-        .unwrap();
-        assert!(restored.editor().annotation_layout().entries().is_empty());
+        let decoded_stale = WorkspaceSnapshot::decode(&stale_document.encode().unwrap()).unwrap();
+        let (_, restored_entries) = restored_annotation_layout(&decoded_stale);
+        assert!(restored_entries.is_empty());
 
         let mut corrupt = snapshot.clone();
         corrupt.annotation_layout_json = Some("{not valid layout json".into());
         let decoded = WorkspaceSnapshot::decode(&corrupt.encode().unwrap()).unwrap();
-        let restored = coordinator_from_snapshot(&decoded).unwrap();
-        assert!(restored.editor().annotation_layout().entries().is_empty());
-        assert_eq!(restored.session().design_document().id(), document);
+        let (restored_document, restored_entries) = restored_annotation_layout(&decoded);
+        assert!(restored_entries.is_empty());
+        assert_eq!(restored_document, document);
 
         let mut incompatible = snapshot;
         incompatible.annotation_layout_json = Some(r#"{"version":999,"entries":[]}"#.into());
-        let restored = coordinator_from_snapshot(
-            &WorkspaceSnapshot::decode(&incompatible.encode().unwrap()).unwrap(),
-        )
-        .unwrap();
-        assert!(restored.editor().annotation_layout().entries().is_empty());
+        let decoded_incompatible =
+            WorkspaceSnapshot::decode(&incompatible.encode().unwrap()).unwrap();
+        let (_, restored_entries) = restored_annotation_layout(&decoded_incompatible);
+        assert!(restored_entries.is_empty());
     }
 
     #[test]

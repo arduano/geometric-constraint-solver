@@ -667,19 +667,26 @@ enum CanvasPointerMoveOwner {
     Editor,
     OrdinaryAuthoring,
     FeatureAuthoring,
+    OffsetAuthoring,
 }
 
 /// Routes one mapped canvas move to the same headless state machine that will
 /// own an unchanged press. Captured gestures remain editor-owned until their
 /// matching terminal sample.
 #[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::fn_params_excessive_bools)]
 const fn canvas_pointer_move_owner(
     ordinary_authoring_active: bool,
     feature_authoring_active: bool,
+    offset_authoring_active: bool,
     pointer_is_captured: bool,
 ) -> CanvasPointerMoveOwner {
-    if pointer_is_captured || (!ordinary_authoring_active && !feature_authoring_active) {
+    if pointer_is_captured
+        || (!ordinary_authoring_active && !feature_authoring_active && !offset_authoring_active)
+    {
         CanvasPointerMoveOwner::Editor
+    } else if offset_authoring_active {
+        CanvasPointerMoveOwner::OffsetAuthoring
     } else if feature_authoring_active {
         CanvasPointerMoveOwner::FeatureAuthoring
     } else {
@@ -740,14 +747,18 @@ fn history_shortcut(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::fn_params_excessive_bools)]
 const fn canvas_cursor_key(
     tool: geosolve_constraint_editor::EditorTool,
     authoring_active: bool,
     feature_authoring_active: bool,
+    offset_authoring_active: bool,
     panning: bool,
 ) -> &'static str {
     if panning {
         "pan"
+    } else if offset_authoring_active {
+        "offset"
     } else if feature_authoring_active {
         "fillet"
     } else if authoring_active {
@@ -760,10 +771,12 @@ const fn canvas_cursor_key(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::fn_params_excessive_bools)]
 fn canvas_cursor_key_with_curve_control(
     tool: geosolve_constraint_editor::EditorTool,
     authoring_active: bool,
     feature_authoring_active: bool,
+    offset_authoring_active: bool,
     panning: bool,
     hover: geosolve_constraint_editor::EditorHoverState,
     active: Option<geosolve_constraint_editor::ActivePointerGesture>,
@@ -771,9 +784,16 @@ fn canvas_cursor_key_with_curve_control(
     if panning
         || authoring_active
         || feature_authoring_active
+        || offset_authoring_active
         || tool != geosolve_constraint_editor::EditorTool::Select
     {
-        return canvas_cursor_key(tool, authoring_active, feature_authoring_active, panning);
+        return canvas_cursor_key(
+            tool,
+            authoring_active,
+            feature_authoring_active,
+            offset_authoring_active,
+            panning,
+        );
     }
     if active.is_some_and(|gesture| {
         gesture.kind == geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
@@ -785,7 +805,13 @@ fn canvas_cursor_key_with_curve_control(
     ) {
         "curve-control"
     } else {
-        canvas_cursor_key(tool, authoring_active, feature_authoring_active, panning)
+        canvas_cursor_key(
+            tool,
+            authoring_active,
+            feature_authoring_active,
+            offset_authoring_active,
+            panning,
+        )
     }
 }
 
@@ -1334,6 +1360,7 @@ const fn annotation_family_name(
         SceneAnnotationKind::ExactTranslatedSegmentOffset => {
             "Exact translated-segment offset dimension"
         }
+        SceneAnnotationKind::ProfileOffset => "Profile offset dimension",
     }
 }
 
@@ -1347,6 +1374,7 @@ enum OptionOverlayKind {
     Continuity,
     Dimension(geosolve_constraint_editor::DimensionKind),
     Fillet,
+    Offset,
     ConstructionDisplay,
 }
 
@@ -1389,6 +1417,7 @@ impl OptionOverlayKind {
             Self::Dimension(DimensionKind::Diameter) => "dimension-diameter",
             Self::Dimension(DimensionKind::OrientedAngle) => "dimension-oriented-angle",
             Self::Fillet => "fillet",
+            Self::Offset => "offset",
             Self::ConstructionDisplay => "construction-display",
         }
     }
@@ -1406,6 +1435,7 @@ impl OptionOverlayKind {
             "dimension-diameter" => Self::Dimension(DimensionKind::Diameter),
             "dimension-oriented-angle" => Self::Dimension(DimensionKind::OrientedAngle),
             "fillet" => Self::Fillet,
+            "offset" => Self::Offset,
             "construction-display" => Self::ConstructionDisplay,
             _ => return None,
         })
@@ -1425,6 +1455,7 @@ impl OptionOverlayKind {
             Self::Dimension(DimensionKind::Diameter) => "Diameter options",
             Self::Dimension(DimensionKind::OrientedAngle) => "Oriented angle options",
             Self::Fillet => "Fillet options",
+            Self::Offset => "Offset",
             Self::ConstructionDisplay => "Canvas display",
         }
     }
@@ -1437,6 +1468,7 @@ impl OptionOverlayKind {
             Self::Continuity => "wb-authoring-continuity",
             Self::Dimension(_) => "wb-authoring-dimension-mode",
             Self::Fillet => "wb-feature-fillet-radius",
+            Self::Offset => "wb-offset-distance",
             Self::ConstructionDisplay => "wb-geometry-pick-scope",
         }
     }
@@ -1457,6 +1489,142 @@ impl OptionOverlayState {
     fn close(&mut self) {
         self.open = None;
     }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn offset_operand_status(authoring: &geosolve_constraint_editor::OffsetAuthoringState) -> String {
+    if let Some(message) = authoring
+        .hover()
+        .and_then(|hover| hover.availability.message())
+    {
+        return format!("Unavailable · {message}");
+    }
+    let operand = authoring.operand();
+    let Some(operand) = operand else {
+        return "Select a face or curve".into();
+    };
+    let count = operand.span_count();
+    match operand {
+        geosolve_constraint_editor::OffsetAuthoringOperand::OpenChain { .. } => format!(
+            "{} · {count} ordered edge{} · Start → End",
+            operand.kind_label(),
+            if count == 1 { "" } else { "s" },
+        ),
+        geosolve_constraint_editor::OffsetAuthoringOperand::Face { .. } => format!(
+            "{} · {count} edge{}",
+            operand.kind_label(),
+            if count == 1 { "" } else { "s" },
+        ),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+const fn offset_direction_label(
+    operand: Option<&geosolve_constraint_editor::OffsetAuthoringOperand>,
+) -> &'static str {
+    use geosolve_constraint_editor::OffsetAuthoringOperand;
+    use geosolve_sketch::{DocumentFaceOffsetDirection, DocumentLineSide};
+
+    match operand {
+        Some(OffsetAuthoringOperand::Face {
+            direction: DocumentFaceOffsetDirection::Outward,
+            ..
+        }) => "Outward",
+        Some(OffsetAuthoringOperand::Face {
+            direction: DocumentFaceOffsetDirection::Inward,
+            ..
+        }) => "Inward",
+        Some(OffsetAuthoringOperand::OpenChain {
+            side: DocumentLineSide::Left,
+            ..
+        }) => "Left",
+        Some(OffsetAuthoringOperand::OpenChain {
+            side: DocumentLineSide::Right,
+            ..
+        }) => "Right",
+        None => "—",
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn offset_canvas_presentation(
+    authoring: &geosolve_constraint_editor::OffsetAuthoringState,
+) -> scene::OffsetCanvasPresentation {
+    use geosolve_constraint_editor::{
+        OffsetAuthoringOperand, OffsetAuthoringTarget, OffsetAuthoringTargetAvailability,
+        SelectionItem,
+    };
+
+    fn push_target(items: &mut Vec<SelectionItem>, target: &OffsetAuthoringTarget) {
+        match target {
+            OffsetAuthoringTarget::Face(key) => key
+                .outer
+                .spans
+                .iter()
+                .chain(key.holes.iter().flat_map(|hole| &hole.spans))
+                .for_each(|directed| items.push(SelectionItem::Curve(directed.span))),
+            OffsetAuthoringTarget::Span(span) => items.push(SelectionItem::Curve(*span)),
+        }
+    }
+
+    let mut presentation = scene::OffsetCanvasPresentation {
+        chain: authoring.chain_presentation(),
+        ..scene::OffsetCanvasPresentation::default()
+    };
+    match authoring.operand() {
+        Some(OffsetAuthoringOperand::Face { key, .. }) => {
+            key.outer
+                .spans
+                .iter()
+                .chain(key.holes.iter().flat_map(|hole| &hole.spans))
+                .for_each(|directed| {
+                    presentation
+                        .pending
+                        .push(SelectionItem::Curve(directed.span));
+                });
+        }
+        Some(OffsetAuthoringOperand::OpenChain { spans, .. }) => {
+            for directed in spans {
+                presentation
+                    .pending
+                    .push(SelectionItem::Curve(directed.span));
+            }
+        }
+        None => {}
+    }
+    if let Some(hover) = authoring.hover() {
+        match &hover.availability {
+            OffsetAuthoringTargetAvailability::Available => {
+                push_target(&mut presentation.pending, &hover.target);
+            }
+            OffsetAuthoringTargetAvailability::Unavailable { message, .. } => {
+                push_target(&mut presentation.unavailable, &hover.target);
+                presentation.unavailable_message = Some(message.clone());
+            }
+        }
+    }
+    presentation.pending.sort_unstable();
+    presentation.pending.dedup();
+    presentation.unavailable.sort_unstable();
+    presentation.unavailable.dedup();
+    presentation
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn offset_target_for_selection(
+    item: geosolve_constraint_editor::SelectionItem,
+) -> Option<geosolve_constraint_editor::OffsetAuthoringTarget> {
+    match item {
+        geosolve_constraint_editor::SelectionItem::Curve(span) => Some(
+            geosolve_constraint_editor::OffsetAuthoringTarget::Span(span),
+        ),
+        _ => None,
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn offset_click_owns_semantic_pick(is_canvas_item: bool, is_pointer_click: bool) -> bool {
+    !is_canvas_item || !is_pointer_click
 }
 
 /// Presentation-only disclosure state for an exact current value.
@@ -1858,9 +2026,10 @@ pub(crate) mod wasm {
         FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
         FeatureAuthoringTransaction, GeometryInteractionPolicy, GeometryPickScope,
         GeometryRoleSelectionState, GeometryToolVariant, GeometryVisibility, Modifiers,
-        NurbsConstructionOptions, PickTolerance, PointerInput, RetainedEditorCoordinator,
-        SceneCurveOrigin, SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint,
-        SelectionItem,
+        NurbsConstructionOptions, OffsetAuthoringOutcome, OffsetAuthoringStage,
+        OffsetAuthoringState, PickTolerance, PointerInput, ProfileOffsetDirectionState,
+        RetainedEditorCoordinator, SceneCurveOrigin, SceneFilletActionInput,
+        SceneFilletActionTarget, ScreenPoint, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1892,6 +2061,7 @@ pub(crate) mod wasm {
         coordinator: RetainedEditorCoordinator,
         authoring: AuthoringState,
         feature_authoring: FeatureAuthoringState,
+        offset_authoring: OffsetAuthoringState,
         feature_candidate: Option<FeatureAuthoringCandidate>,
         feature_pending: Vec<FeatureAuthoringPick>,
         samples: super::samples::SampleCatalogState,
@@ -1965,6 +2135,7 @@ pub(crate) mod wasm {
             coordinator,
             authoring: AuthoringState::default(),
             feature_authoring: FeatureAuthoringState::default(),
+            offset_authoring: OffsetAuthoringState::default(),
             feature_candidate: None,
             feature_pending: Vec::new(),
             samples: super::samples::SampleCatalogState::default(),
@@ -2029,6 +2200,11 @@ pub(crate) mod wasm {
                 continue;
             };
             icon.set_inner_html(&super::icons::feature_icon_markup(tool));
+        }
+        if let Some(icon) =
+            required(document, "wb-offset-trigger")?.query_selector(".wb-offset-icon")?
+        {
+            icon.set_inner_html(&super::icons::offset_icon_markup());
         }
         Ok(())
     }
@@ -2154,7 +2330,7 @@ pub(crate) mod wasm {
             let target = origin
                 .closest(concat!(
                     "[data-wb-tool], [data-wb-geometry-family], [data-wb-geometry-variant], ",
-                    "[data-wb-authoring], [data-wb-feature], [data-wb-option], ",
+                    "[data-wb-authoring], [data-wb-feature], [data-wb-offset], [data-wb-option], ",
                     "[data-fillet-action], [data-editor-item], [data-wb-action], [data-sample-id], ",
                     "[data-sample-group-trigger]"
                 ))
@@ -2190,6 +2366,7 @@ pub(crate) mod wasm {
                 }
                 wb.authoring.deactivate();
                 clear_feature_authoring(&mut wb);
+                clear_offset_authoring(&mut wb);
                 let effects = wb.coordinator.editor_mut().activate_tool(tool);
                 dispatch_effects(&mut wb, effects);
                 wb.notice = format!("{} tool active", super::icons::geometry_tool_key(tool));
@@ -2203,12 +2380,14 @@ pub(crate) mod wasm {
                 let variant = wb.geometry_palette.selected(family);
                 let already_active = wb.authoring.active_tool().is_none()
                     && wb.feature_authoring.active_tool().is_none()
+                    && !wb.offset_authoring.is_active()
                     && wb.coordinator.editor().geometry_tool_variant() == Some(variant);
                 wb.option_overlay
                     .open(super::OptionOverlayKind::GeometryFamily(family));
                 focus_option_control = Some(super::geometry_palette::variant_button_id(variant));
                 wb.authoring.deactivate();
                 clear_feature_authoring(&mut wb);
+                clear_offset_authoring(&mut wb);
                 if !already_active {
                     let effects = wb.coordinator.editor_mut().activate_geometry_tool(variant);
                     dispatch_effects(&mut wb, effects);
@@ -2237,6 +2416,7 @@ pub(crate) mod wasm {
                 let family = variant.family();
                 let already_active = wb.authoring.active_tool().is_none()
                     && wb.feature_authoring.active_tool().is_none()
+                    && !wb.offset_authoring.is_active()
                     && wb.coordinator.editor().geometry_tool_variant() == Some(variant);
                 wb.geometry_palette.remember(variant);
                 wb.option_overlay
@@ -2244,6 +2424,7 @@ pub(crate) mod wasm {
                 focus_option_control = Some(super::geometry_palette::variant_button_id(variant));
                 wb.authoring.deactivate();
                 clear_feature_authoring(&mut wb);
+                clear_offset_authoring(&mut wb);
                 if !already_active {
                     let effects = wb.coordinator.editor_mut().activate_geometry_tool(variant);
                     dispatch_effects(&mut wb, effects);
@@ -2274,6 +2455,7 @@ pub(crate) mod wasm {
                     wb.option_overlay.close();
                 }
                 clear_feature_authoring(&mut wb);
+                clear_offset_authoring(&mut wb);
                 activate_authoring(&callback_document, &mut wb, tool);
             } else if let Some(tool) = target
                 .get_attribute("data-wb-feature")
@@ -2287,7 +2469,21 @@ pub(crate) mod wasm {
                         .first_control_id()
                         .to_owned(),
                 );
+                clear_offset_authoring(&mut wb);
                 activate_feature_authoring(&callback_document, &mut wb, tool);
+            } else if target
+                .get_attribute("data-wb-offset")
+                .is_some_and(|key| super::action_surface::is_offset_tool_key(&key))
+            {
+                let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
+                wb.option_overlay.open(super::OptionOverlayKind::Offset);
+                focus_option_control = Some(
+                    super::OptionOverlayKind::Offset
+                        .first_control_id()
+                        .to_owned(),
+                );
+                activate_offset_authoring(&mut wb);
             } else if let Some(kind) = target
                 .get_attribute("data-wb-option")
                 .as_deref()
@@ -2374,7 +2570,12 @@ pub(crate) mod wasm {
                         })
                         .unwrap_or_default();
                     let mut wb = callback_workbench.borrow_mut();
-                    if wb.feature_authoring.active_tool().is_some() {
+                    if wb.offset_authoring.is_active() {
+                        if super::offset_click_owns_semantic_pick(is_canvas_item, is_pointer_click)
+                        {
+                            handle_offset_item_pick(&mut wb, item);
+                        }
+                    } else if wb.feature_authoring.active_tool().is_some() {
                         let input = if is_canvas_item {
                             super::AuthoringItemInput::CanvasClick
                         } else {
@@ -2512,6 +2713,9 @@ pub(crate) mod wasm {
                         Some(super::OptionOverlayKind::Fillet) => {
                             update_feature_options(&change_document, &mut wb)
                                 .map(|()| "Fillet options updated".to_owned())
+                        }
+                        Some(super::OptionOverlayKind::Offset) => {
+                            update_offset_options(&change_document, &mut wb)
                         }
                         Some(super::OptionOverlayKind::ConstructionDisplay) => {
                             update_geometry_interaction_policy(&change_document, &mut wb)
@@ -2745,12 +2949,9 @@ pub(crate) mod wasm {
         let leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             let mut wb = leave_workbench.borrow_mut();
             let cleared_hud_sample = wb.pointer_moves.borrow_mut().clear_stationary_sample();
-            let effects = wb.coordinator.editor_mut().pointer_leave();
-            if effects.is_empty() && !cleared_hud_sample {
+            let cleared_pointer_context = clear_canvas_pointer_ownership(&mut wb);
+            if !cleared_pointer_context && !cleared_hud_sample {
                 return;
-            }
-            if !effects.is_empty() {
-                dispatch_effects(&mut wb, effects);
             }
             drop(wb);
             let _ = render(&leave_document, &leave_workbench);
@@ -2966,6 +3167,7 @@ pub(crate) mod wasm {
             let owner = super::canvas_pointer_move_owner(
                 wb.authoring.active_tool().is_some(),
                 wb.feature_authoring.active_tool().is_some(),
+                wb.offset_authoring.is_active(),
                 pointer_is_captured,
             );
             let effects = match owner {
@@ -2992,6 +3194,17 @@ pub(crate) mod wasm {
                             PickTolerance::default(),
                         )
                         .unwrap_or_else(|_| wb.coordinator.editor_mut().pointer_leave())
+                }
+                super::CanvasPointerMoveOwner::OffsetAuthoring => {
+                    let policy = wb.coordinator.editor().geometry_interaction_policy();
+                    let outcome = wb.offset_authoring.hover_at(
+                        &scene,
+                        sample.input.position,
+                        PickTolerance::default(),
+                        policy,
+                    );
+                    handle_offset_outcome(&mut wb, outcome);
+                    wb.coordinator.editor_mut().pointer_leave()
                 }
             };
             dispatch_effects(&mut wb, effects);
@@ -3590,6 +3803,24 @@ pub(crate) mod wasm {
                 let _ = render(&callback_document, &callback_workbench);
                 return;
             }
+            if wb.offset_authoring.is_active() {
+                let geometry_policy = wb.coordinator.editor().geometry_interaction_policy();
+                let outcome = wb.offset_authoring.pick_at(
+                    &scene,
+                    input.position,
+                    PickTolerance::default(),
+                    geometry_policy,
+                );
+                let rebuild = matches!(&outcome, OffsetAuthoringOutcome::OperandChanged { .. });
+                handle_offset_outcome(&mut wb, outcome);
+                if rebuild {
+                    refresh_offset_authoring_preview(&mut wb);
+                }
+                save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                return;
+            }
             if wb.authoring.active_tool().is_some() {
                 let geometry_policy = wb.coordinator.editor().geometry_interaction_policy();
                 if super::owns_authoring_pick(super::AuthoringItemInput::CanvasPointerDown) {
@@ -4132,7 +4363,9 @@ pub(crate) mod wasm {
                     command: event.meta_key(),
                 };
                 let mut wb = callback_workbench.borrow_mut();
-                if wb.feature_authoring.active_tool().is_some() {
+                if wb.offset_authoring.is_active() {
+                    handle_offset_item_pick(&mut wb, item);
+                } else if wb.feature_authoring.active_tool().is_some() {
                     handle_feature_item_pick(&mut wb, item, None);
                 } else {
                     wb.coordinator.select_item(item, modifiers);
@@ -4162,7 +4395,14 @@ pub(crate) mod wasm {
             let mut wb = callback_workbench.borrow_mut();
             if matches!(event.key().as_str(), "Delete" | "Backspace") {
                 event.prevent_default();
-                if event.key() == "Backspace"
+                if event.key() == "Backspace" && wb.offset_authoring.is_active() {
+                    let outcome = wb.offset_authoring.backspace();
+                    let rebuild = matches!(&outcome, OffsetAuthoringOutcome::OperandChanged { .. });
+                    handle_offset_outcome(&mut wb, outcome);
+                    if rebuild {
+                        refresh_offset_authoring_preview(&mut wb);
+                    }
+                } else if event.key() == "Backspace"
                     && wb.coordinator.editor().geometry_tool_variant().is_some()
                 {
                     wb.pointer_moves
@@ -4206,6 +4446,14 @@ pub(crate) mod wasm {
                 event.prevent_default();
                 let outcome = wb.feature_authoring.enter();
                 handle_feature_outcome(&mut wb, outcome);
+                save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                return;
+            }
+            if event.key() == "Enter" && wb.offset_authoring.is_active() {
+                event.prevent_default();
+                let _ = apply_offset_authoring(&mut wb);
                 save(&wb);
                 drop(wb);
                 let _ = render(&callback_document, &callback_workbench);
@@ -4499,6 +4747,7 @@ pub(crate) mod wasm {
     )]
     fn perform_action(document: &Document, wb: &mut Workbench, action: &str) {
         clear_canvas_pointer_ownership(wb);
+        let offset_input_before = wb.offset_authoring.index().map(|index| index.input());
         let mut stepped_geometry_draft = false;
         let result = match action {
             "new" => cancel_before_camera_change(document, wb).and_then(|()| {
@@ -4506,6 +4755,7 @@ pub(crate) mod wasm {
                 wb.coordinator = coordinator;
                 wb.authoring.deactivate();
                 clear_feature_authoring(wb);
+                clear_offset_authoring(wb);
                 wb.camera.reset();
                 wb.option_overlay.close();
                 wb.reproduction_overlay_open = false;
@@ -4527,7 +4777,11 @@ pub(crate) mod wasm {
             }
             "redo" => wb.coordinator.redo().map_err(|error| error.to_string()),
             "cancel" => cancel_before_camera_change(document, wb).map(|()| {
-                if wb.feature_authoring.active_tool().is_some() {
+                if wb.offset_authoring.is_active() {
+                    let outcome = wb.offset_authoring.cancel();
+                    handle_offset_outcome(wb, outcome);
+                    close_options_to_select(wb);
+                } else if wb.feature_authoring.active_tool().is_some() {
                     let effects = wb.coordinator.editor_mut().cancel();
                     dispatch_effects(wb, effects);
                     let outcome = wb.feature_authoring.cancel();
@@ -4552,6 +4806,20 @@ pub(crate) mod wasm {
             "feature-apply" => {
                 let outcome = wb.feature_authoring.apply();
                 handle_feature_outcome(wb, outcome);
+                Ok(())
+            }
+            "offset-flip" => {
+                let outcome = wb.offset_authoring.flip();
+                let rebuild = matches!(&outcome, OffsetAuthoringOutcome::OperandChanged { .. });
+                handle_offset_outcome(wb, outcome);
+                if rebuild {
+                    refresh_offset_authoring_preview(wb);
+                }
+                Ok(())
+            }
+            "offset-apply" => apply_offset_authoring(wb),
+            "offset-cancel" => {
+                close_options_to_select(wb);
                 Ok(())
             }
             "finish" => {
@@ -4590,6 +4858,7 @@ pub(crate) mod wasm {
             "feature-radius" => apply_selected_feature_radius(document, wb),
             "feature-suppression" => toggle_selected_feature_suppression(wb),
             "dimension-target" => apply_dimension_target(document, wb),
+            "profile-offset-flip" => flip_selected_profile_offset_direction(wb),
             "curve-rational-middle" => apply_curve_rational_middle(document, wb),
             "curve-sweep" => apply_curve_sweep(document, wb),
             "curve-hyperbola-branch" => apply_curve_hyperbola_branch(document, wb),
@@ -4673,6 +4942,26 @@ pub(crate) mod wasm {
             clear_feature_authoring(wb);
             wb.notice = "Workspace changed; start a new Fillet batch".into();
         }
+        if result.is_ok()
+            && wb.offset_authoring.is_active()
+            && offset_input_before
+                .is_some_and(|input| input != wb.coordinator.session().prepared_input())
+            && action != "offset-apply"
+        {
+            let refreshed = {
+                let Workbench {
+                    coordinator,
+                    offset_authoring,
+                    ..
+                } = wb;
+                coordinator.activate_offset_authoring(offset_authoring)
+            };
+            if refreshed.is_err() {
+                clear_offset_authoring(wb);
+                wb.option_overlay.close();
+                wb.notice = "Workspace changed; Offset needs a current accepted scene".into();
+            }
+        }
         wb.notice = result.map_or_else(
             |error| error,
             |()| match action {
@@ -4680,7 +4969,11 @@ pub(crate) mod wasm {
                 | "problems-close"
                 | "cancel"
                 | "dimension-target"
+                | "profile-offset-flip"
                 | "feature-apply"
+                | "offset-flip"
+                | "offset-apply"
+                | "offset-cancel"
                 | "options-close"
                 | "geometry-role"
                 | "annotation-reset-selected"
@@ -4941,6 +5234,7 @@ pub(crate) mod wasm {
         wb.coordinator = coordinator;
         wb.authoring = AuthoringState::default();
         wb.feature_authoring = FeatureAuthoringState::default();
+        clear_offset_authoring(wb);
         wb.feature_candidate = None;
         wb.feature_pending.clear();
         wb.samples = super::samples::SampleCatalogState::default();
@@ -5104,6 +5398,40 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    const fn profile_offset_direction_label(
+        direction: ProfileOffsetDirectionState,
+    ) -> &'static str {
+        match direction {
+            ProfileOffsetDirectionState::Outward => "Outward",
+            ProfileOffsetDirectionState::Inward => "Inward",
+            ProfileOffsetDirectionState::Left => "Left",
+            ProfileOffsetDirectionState::Right => "Right",
+        }
+    }
+
+    fn flip_selected_profile_offset_direction(wb: &mut Workbench) -> Result<(), String> {
+        let metadata = wb
+            .coordinator
+            .selected_profile_offset_direction_metadata()
+            .ok_or_else(|| "select exactly one Profile Offset dimension".to_owned())?;
+        let next = metadata.direction.opposite();
+        let expected = wb.coordinator.session().design_identity();
+        let outcome = wb
+            .coordinator
+            .flip_selected_profile_offset_direction(expected)
+            .map_err(|error| error.to_string())?;
+        wb.notice = if outcome.published_accepted.is_some() {
+            format!(
+                "Profile Offset direction changed to {} and accepted",
+                profile_offset_direction_label(next),
+            )
+        } else {
+            "Profile Offset direction retained, but the solve rejected; prior accepted geometry remains"
+                .into()
+        };
+        Ok(())
+    }
+
     fn selected_feature(wb: &Workbench) -> Option<ComputedFeatureId> {
         match wb.coordinator.editor().selection() {
             [SelectionItem::Feature(feature)] => Some(*feature),
@@ -5182,6 +5510,7 @@ pub(crate) mod wasm {
                 wb.coordinator = coordinator;
                 wb.authoring.deactivate();
                 clear_feature_authoring(wb);
+                clear_offset_authoring(wb);
                 wb.option_overlay.close();
                 wb.reproduction_overlay_open = false;
                 wb.reproduction_copy_request = wb.reproduction_copy_request.wrapping_add(1);
@@ -5245,9 +5574,42 @@ pub(crate) mod wasm {
         super::revoke_held_feature_authoring_preview(&mut wb.coordinator);
     }
 
+    fn clear_offset_authoring(wb: &mut Workbench) {
+        let Workbench {
+            coordinator,
+            offset_authoring,
+            ..
+        } = wb;
+        let _ = coordinator.cancel_offset_authoring(offset_authoring);
+    }
+
+    fn activate_offset_authoring(wb: &mut Workbench) {
+        wb.authoring.deactivate();
+        clear_feature_authoring(wb);
+        clear_offset_authoring(wb);
+        let effects = wb
+            .coordinator
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        dispatch_effects(wb, effects);
+        let result = {
+            let Workbench {
+                coordinator,
+                offset_authoring,
+                ..
+            } = wb;
+            coordinator.activate_offset_authoring(offset_authoring)
+        };
+        match result {
+            Ok(outcome) => handle_offset_outcome(wb, outcome),
+            Err(error) => wb.notice = format!("Offset is unavailable: {error}"),
+        }
+    }
+
     fn close_options_to_select(wb: &mut Workbench) {
         wb.authoring.deactivate();
         clear_feature_authoring(wb);
+        clear_offset_authoring(wb);
         let effects = wb
             .coordinator
             .editor_mut()
@@ -5381,6 +5743,19 @@ pub(crate) mod wasm {
         }
     }
 
+    fn handle_offset_item_pick(wb: &mut Workbench, item: SelectionItem) {
+        let Some(target) = super::offset_target_for_selection(item) else {
+            wb.notice = "Offset tree and keyboard picks require a native curve".into();
+            return;
+        };
+        let outcome = wb.offset_authoring.pick_target(target);
+        let rebuild = matches!(&outcome, OffsetAuthoringOutcome::OperandChanged { .. });
+        handle_offset_outcome(wb, outcome);
+        if rebuild {
+            refresh_offset_authoring_preview(wb);
+        }
+    }
+
     fn update_feature_options(document: &Document, wb: &mut Workbench) -> Result<(), String> {
         let radius = feature_radius_input(document)?;
         let label = next_feature_authoring_label(wb);
@@ -5390,6 +5765,99 @@ pub(crate) mod wasm {
             .map_err(|error| format!("Fillet preview is unavailable: {error}"))?;
         handle_feature_transaction(wb, transaction);
         Ok(())
+    }
+
+    fn update_offset_options(document: &Document, wb: &mut Workbench) -> Result<String, String> {
+        let value = input_value(document, "wb-offset-distance")
+            .and_then(|value| value.parse::<f64>().ok())
+            .unwrap_or(f64::NAN);
+        let outcome = wb.offset_authoring.set_distance(value);
+        let rebuild = matches!(&outcome, OffsetAuthoringOutcome::DistanceChanged { .. });
+        let invalid = matches!(&outcome, OffsetAuthoringOutcome::Warning(_));
+        handle_offset_outcome(wb, outcome);
+        if rebuild {
+            refresh_offset_authoring_preview(wb);
+        }
+        if invalid {
+            Err(wb.notice.clone())
+        } else {
+            Ok(wb.notice.clone())
+        }
+    }
+
+    fn apply_offset_authoring(wb: &mut Workbench) -> Result<(), String> {
+        let outcome = wb.offset_authoring.apply();
+        let ready = matches!(&outcome, OffsetAuthoringOutcome::ApplyRequested(_));
+        handle_offset_outcome(wb, outcome);
+        if !ready {
+            return Ok(());
+        }
+        if !wb
+            .coordinator
+            .offset_authoring_preview_matches(&wb.offset_authoring)
+        {
+            return Err(
+                "Offset needs a complete current preview; adjust the distance or operand to rebuild it"
+                    .into(),
+            );
+        }
+        let mutation = {
+            let Workbench {
+                coordinator,
+                offset_authoring,
+                ..
+            } = wb;
+            coordinator
+                .apply_offset_authoring_preview(offset_authoring)
+                .map_err(|error| format!("Offset was not applied: {error}"))?
+        };
+        let geosolve_sketch::DocumentCommandEffect::CreatedProfileOffset(ids) = mutation.value
+        else {
+            return Err("Offset publication returned an unexpected document effect".into());
+        };
+        wb.coordinator
+            .set_selection([SelectionItem::Dimension(ids.dimension)]);
+        wb.notice = "Offset accepted; select another face or open chain".into();
+        Ok(())
+    }
+
+    fn next_offset_authoring_label(wb: &Workbench) -> String {
+        let ordinal = wb
+            .coordinator
+            .session()
+            .design_document()
+            .dimensions()
+            .iter()
+            .filter(|dimension| {
+                matches!(
+                    dimension.definition,
+                    geosolve_sketch::DocumentDimensionDefinition::ProfileOffset { .. }
+                )
+            })
+            .count()
+            + 1;
+        format!("Offset {ordinal}")
+    }
+
+    fn refresh_offset_authoring_preview(wb: &mut Workbench) {
+        if wb.offset_authoring.candidate().is_none() {
+            if wb.offset_authoring.operand().is_none() {
+                wb.coordinator.clear_offset_authoring_preview();
+            }
+            return;
+        }
+        let label = next_offset_authoring_label(wb);
+        match wb
+            .coordinator
+            .prepare_offset_authoring_preview(&wb.offset_authoring, label)
+        {
+            Ok(_) => {
+                wb.notice = format!("{} · Preview ready", wb.offset_authoring.guidance().message);
+            }
+            Err(error) => {
+                wb.notice = format!("Offset preview is unavailable: {error}");
+            }
+        }
     }
 
     fn feature_radius_input(document: &Document) -> Result<Option<f64>, String> {
@@ -5526,6 +5994,28 @@ pub(crate) mod wasm {
                 wb.notice = "Computed feature authoring exited; Select active".into();
             }
             FeatureAuthoringOutcome::Inactive => {}
+        }
+    }
+
+    fn handle_offset_outcome(wb: &mut Workbench, outcome: OffsetAuthoringOutcome) {
+        match outcome {
+            OffsetAuthoringOutcome::ModeEntered(guidance) => {
+                wb.notice = format!("{} · Escape exits", guidance.message);
+            }
+            OffsetAuthoringOutcome::HoverChanged(_) | OffsetAuthoringOutcome::Inactive => {}
+            OffsetAuthoringOutcome::OperandChanged { guidance, .. }
+            | OffsetAuthoringOutcome::DistanceChanged { guidance, .. } => {
+                guidance.message.clone_into(&mut wb.notice);
+            }
+            OffsetAuthoringOutcome::ApplyRequested(_) => {
+                wb.notice = "Offset candidate ready to apply".into();
+            }
+            OffsetAuthoringOutcome::Warning(warning) => {
+                wb.notice = warning.message;
+            }
+            OffsetAuthoringOutcome::ModeExited => {
+                wb.notice = "Offset canceled; Select active".into();
+            }
         }
     }
 
@@ -5815,13 +6305,34 @@ pub(crate) mod wasm {
         wb: &mut Workbench,
         route: super::CanvasPointerContextRoute,
     ) -> bool {
+        let cleared_offset_hover = if wb.offset_authoring.hover_target().is_some() {
+            let scene = editor_scene(wb);
+            let policy = wb.coordinator.editor().geometry_interaction_policy();
+            if let Some(scene) = scene {
+                let outcome = wb.offset_authoring.hover_at(
+                    &scene,
+                    ScreenPoint {
+                        x: -1.0e12,
+                        y: -1.0e12,
+                    },
+                    PickTolerance::default(),
+                    policy,
+                );
+                handle_offset_outcome(wb, outcome);
+            }
+            wb.offset_authoring.hover_target().is_none()
+        } else {
+            false
+        };
         let pointer_moves = Rc::clone(&wb.pointer_moves);
         let revocation = super::revoke_canvas_pointer_context(
             &mut pointer_moves.borrow_mut(),
             wb.coordinator.editor_mut(),
             route,
         );
-        let changed = revocation.cleared_stationary_sample || !revocation.effects.is_empty();
+        let changed = cleared_offset_hover
+            || revocation.cleared_stationary_sample
+            || !revocation.effects.is_empty();
         if !revocation.effects.is_empty() {
             dispatch_effects(wb, revocation.effects);
         }
@@ -5880,6 +6391,28 @@ pub(crate) mod wasm {
                 "none"
             },
         )?;
+        required(document, "workbench-root")?.set_attribute(
+            "data-offset-authoring",
+            if wb.offset_authoring.is_active() {
+                match wb.offset_authoring.guidance().stage {
+                    OffsetAuthoringStage::PickOperand => "pick-operand",
+                    OffsetAuthoringStage::CollectChain => "collect-chain",
+                    OffsetAuthoringStage::PreviewReady => "preview-ready",
+                }
+            } else {
+                "inactive"
+            },
+        )?;
+        required(document, "workbench-root")?.set_attribute(
+            "data-offset-preview",
+            if coordinator.offset_authoring_preview_matches(&wb.offset_authoring) {
+                "ready"
+            } else if coordinator.offset_authoring_preview().is_some() {
+                "last-valid"
+            } else {
+                "none"
+            },
+        )?;
         let source = coordinator
             .visible_preview_session()
             .unwrap_or(coordinator.session());
@@ -5902,19 +6435,52 @@ pub(crate) mod wasm {
                 .iter()
                 .map(|pick| SelectionItem::Curve(pick.curve.source.span)),
         );
+        let offset_presentation = super::offset_canvas_presentation(&wb.offset_authoring);
+        pending.extend(offset_presentation.pending.iter().copied());
+        let mut provisional = Vec::new();
+        if let Some(preview) = coordinator.offset_authoring_preview() {
+            provisional.extend(
+                preview
+                    .metadata()
+                    .target_spans
+                    .iter()
+                    .copied()
+                    .map(SelectionItem::Curve),
+            );
+            provisional.extend(
+                preview
+                    .metadata()
+                    .provisional_points
+                    .iter()
+                    .copied()
+                    .map(SelectionItem::Point),
+            );
+            provisional.extend(
+                preview
+                    .metadata()
+                    .provisional_constraints
+                    .iter()
+                    .copied()
+                    .map(SelectionItem::Constraint),
+            );
+            provisional.push(SelectionItem::Dimension(preview.metadata().dimension));
+        }
         pending.sort_unstable();
         pending.dedup();
+        provisional.sort_unstable();
+        provisional.dedup();
         let construction_preview = wb.construction_preview.as_ref();
         let hover = coordinator.editor().hover_state();
         let computed_problems = coordinator.computed_feature_problems();
         let active_fillet_preview = coordinator.editor().fillet_branch_preview();
         required(document, "wb-viewport")?.set_inner_html(
-            &super::scene::svg_markup_with_computed_context_action_stamp_and_display(
+            &super::scene::svg_markup_with_computed_context_action_stamp_display_and_provisional(
                 scene.as_ref(),
                 accepted,
                 &computed_problems,
                 &canvas_selection,
                 &pending,
+                &provisional,
                 hover,
                 construction_preview,
                 coordinator.editor().draft_inference_resolution(),
@@ -5925,6 +6491,7 @@ pub(crate) mod wasm {
                 super::scene::CanvasDisplayOptions {
                     grid_visible: wb.grid_visible,
                 },
+                Some(&offset_presentation),
                 wb.camera.viewport(),
             ),
         );
@@ -5982,13 +6549,20 @@ pub(crate) mod wasm {
         let guide = required(document, "wb-draft-guide")?;
         if wb.authoring.active_tool().is_some()
             || wb.feature_authoring.active_tool().is_some()
+            || wb.offset_authoring.is_active()
             || coordinator.editor().tool() != EditorTool::Select
         {
             guide.remove_attribute("hidden")?;
         } else {
             guide.set_attribute("hidden", "")?;
         }
-        let guide_text = if wb.feature_authoring.active_tool().is_some() {
+        let guide_text = if wb.offset_authoring.is_active() {
+            wb.offset_authoring
+                .hover()
+                .and_then(|hover| hover.availability.message())
+                .unwrap_or(wb.offset_authoring.guidance().message)
+                .to_owned()
+        } else if wb.feature_authoring.active_tool().is_some() {
             wb.feature_authoring.guidance().message.to_owned()
         } else {
             wb.authoring.active_tool().map_or_else(
@@ -6016,6 +6590,7 @@ pub(crate) mod wasm {
         required(document, "wb-draft-guide-text")?.set_text_content(Some(&guide_text));
         if wb.authoring.active_tool().is_some()
             || wb.feature_authoring.active_tool().is_some()
+            || wb.offset_authoring.is_active()
             || !coordinator.editor().can_complete_draft()
         {
             required(document, "wb-guide-finish")?.set_attribute("hidden", "")?;
@@ -6034,7 +6609,11 @@ pub(crate) mod wasm {
         }
         required(document, "wb-tool-select")?.set_attribute(
             "aria-pressed",
-            if coordinator.editor().tool() == EditorTool::Select {
+            if coordinator.editor().tool() == EditorTool::Select
+                && wb.authoring.active_tool().is_none()
+                && wb.feature_authoring.active_tool().is_none()
+                && !wb.offset_authoring.is_active()
+            {
                 "true"
             } else {
                 "false"
@@ -6084,8 +6663,15 @@ pub(crate) mod wasm {
             wb.grid_visible,
             wb.show_all_constraints,
         )?;
-        render_action_availability(document, coordinator, &wb.authoring, &wb.feature_authoring)?;
+        render_action_availability(
+            document,
+            coordinator,
+            &wb.authoring,
+            &wb.feature_authoring,
+            &wb.offset_authoring,
+        )?;
         render_feature_options(document, &wb.feature_authoring)?;
+        render_offset_options(document, coordinator, &wb.offset_authoring)?;
         render_reproduction_overlay(document, wb.reproduction_overlay_open, &wb.notice)?;
         render_tool_options_overlay(document, &wb)?;
         render_dimension_target_editor(document, coordinator)?;
@@ -6107,6 +6693,7 @@ pub(crate) mod wasm {
                 coordinator.editor().tool(),
                 wb.authoring.active_tool().is_some(),
                 wb.feature_authoring.active_tool().is_some(),
+                wb.offset_authoring.is_active(),
                 wb.pan_gesture.is_some(),
                 coordinator.editor().hover_state(),
                 coordinator.editor().active_pointer_gesture(),
@@ -6369,6 +6956,12 @@ pub(crate) mod wasm {
         )?;
         set_option_invoker_expanded(
             document,
+            "wb-offset-trigger",
+            super::OptionOverlayKind::Offset,
+            open,
+        )?;
+        set_option_invoker_expanded(
+            document,
             "wb-construction-display-trigger",
             super::OptionOverlayKind::ConstructionDisplay,
             open,
@@ -6429,6 +7022,10 @@ pub(crate) mod wasm {
             (
                 "wb-option-panel-fillet",
                 open == Some(super::OptionOverlayKind::Fillet),
+            ),
+            (
+                "wb-option-panel-offset",
+                open == Some(super::OptionOverlayKind::Offset),
             ),
             (
                 "wb-option-panel-construction-display",
@@ -6571,6 +7168,7 @@ pub(crate) mod wasm {
         coordinator: &RetainedEditorCoordinator,
         authoring: &AuthoringState,
         feature_authoring: &FeatureAuthoringState,
+        offset_authoring: &OffsetAuthoringState,
     ) -> Result<(), JsValue> {
         for key in ["new", "finish", "cancel", "clear-selection"] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
@@ -6579,6 +7177,7 @@ pub(crate) mod wasm {
                     key == "finish"
                         && (authoring.active_tool().is_some()
                             || feature_authoring.active_tool().is_some()
+                            || offset_authoring.is_active()
                             || !coordinator.editor().can_complete_draft()),
                 )?;
             }
@@ -6651,6 +7250,14 @@ pub(crate) mod wasm {
                 )?;
             }
         }
+        required(document, "wb-offset-trigger")?.set_attribute(
+            "aria-pressed",
+            if offset_authoring.is_active() {
+                "true"
+            } else {
+                "false"
+            },
+        )?;
         for id in [
             "wb-authoring-curvature",
             "wb-authoring-tangent-orientation",
@@ -6666,11 +7273,65 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn render_offset_options(
+        document: &Document,
+        coordinator: &RetainedEditorCoordinator,
+        authoring: &OffsetAuthoringState,
+    ) -> Result<(), JsValue> {
+        required(document, "wb-offset-operand-status")?
+            .set_text_content(Some(&super::offset_operand_status(authoring)));
+        required(document, "wb-offset-direction")?
+            .set_text_content(Some(super::offset_direction_label(authoring.operand())));
+        if let Some(distance) = authoring.distance()
+            && document
+                .active_element()
+                .is_none_or(|element| element.id() != "wb-offset-distance")
+            && let Ok(input) =
+                required(document, "wb-offset-distance")?.dyn_into::<HtmlInputElement>()
+        {
+            input.set_value(&distance.to_string());
+        }
+        let apply = required(document, "wb-offset-apply")?;
+        set_disabled(
+            &apply,
+            !coordinator.offset_authoring_preview_matches(authoring),
+        )?;
+        if let Some(flip) = document.query_selector("[data-wb-action=\"offset-flip\"]")? {
+            set_disabled(&flip, authoring.operand().is_none())?;
+        }
+        set_disabled(
+            &required(document, "wb-offset-distance")?,
+            !authoring.is_active(),
+        )?;
+        Ok(())
+    }
+
     fn render_dimension_target_editor(
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
     ) -> Result<(), JsValue> {
         let section = required(document, "wb-dimension-target-editor")?;
+        let direction = coordinator.selected_profile_offset_direction_metadata();
+        let flip = required(document, "wb-profile-offset-flip")?;
+        if let Some(direction) = direction {
+            let next = direction.direction.opposite();
+            flip.set_text_content(Some(&format!(
+                "Flip offset to {}",
+                profile_offset_direction_label(next),
+            )));
+            flip.set_attribute(
+                "aria-label",
+                &format!(
+                    "Flip Profile Offset direction from {} to {}",
+                    profile_offset_direction_label(direction.direction),
+                    profile_offset_direction_label(next),
+                ),
+            )?;
+            flip.remove_attribute("hidden")?;
+            set_disabled(&flip, false)?;
+        } else {
+            flip.set_attribute("hidden", "")?;
+        }
         let Some(metadata) = coordinator.selected_dimension_target_metadata() else {
             section.set_attribute("hidden", "")?;
             return Ok(());
@@ -7508,10 +8169,12 @@ mod tests {
         EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
         FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
         GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus, GeometryInteractionPolicy,
-        GeometryPickScope, GeometryToolVariant, GeometryVisibility, Modifiers, PickTolerance,
-        PointerInput, RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
-        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneConstraintGlyph,
-        SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
+        GeometryPickScope, GeometryToolVariant, GeometryVisibility, Modifiers,
+        OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringWarning,
+        OffsetAuthoringWarningKind, PickTolerance, PointerInput, RetainedEditorCoordinator,
+        SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationOccurrence,
+        SceneAnnotationVisibility, SceneConstraintGlyph, SceneCurveOrigin, ScreenPoint,
+        SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -7537,12 +8200,14 @@ mod tests {
         curve_control_inspector_detail, curve_control_inspector_markup,
         draft_inference_preference_is_stale, foreground_overlay_escape_owner,
         geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
-        observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
-        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
-        reproduction_focus_target_after_action, reproduction_overlay_presentation,
-        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
-        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
-        route_canvas_pan_pointer_down, should_route_stationary_draft_inference,
+        observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
+        offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
+        owns_authoring_pick, rational_conic_construction_copy,
+        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
+        reproduction_overlay_presentation, reproduction_payload_size_label,
+        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
+        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
+        should_route_stationary_draft_inference,
     };
 
     fn rejected_constraint_fixture() -> (
@@ -8956,8 +9621,12 @@ mod tests {
                 SceneAnnotationKind::ExactTranslatedSegmentOffset,
                 "Exact translated-segment offset dimension",
             ),
+            (
+                SceneAnnotationKind::ProfileOffset,
+                "Profile offset dimension",
+            ),
         ];
-        assert_eq!(cases.len(), 27);
+        assert_eq!(cases.len(), 28);
         for (kind, expected) in cases {
             assert_eq!(annotation_family_name(kind), expected);
         }
@@ -9177,22 +9846,29 @@ mod tests {
     #[test]
     fn canvas_cursor_context_is_explicit() {
         assert_eq!(
-            canvas_cursor_key(EditorTool::Select, false, false, false),
+            canvas_cursor_key(EditorTool::Select, false, false, false, false),
             "select"
         );
         assert_eq!(
-            canvas_cursor_key(EditorTool::Line, false, false, false),
+            canvas_cursor_key(EditorTool::Line, false, false, false, false),
             "draw"
         );
         assert_eq!(
-            canvas_cursor_key(EditorTool::Select, true, false, false),
+            canvas_cursor_key(EditorTool::Select, true, false, false, false),
             "constraint"
         );
         assert_eq!(
-            canvas_cursor_key(EditorTool::Select, false, true, false),
+            canvas_cursor_key(EditorTool::Select, false, true, false, false),
             "fillet"
         );
-        assert_eq!(canvas_cursor_key(EditorTool::Line, true, true, true), "pan");
+        assert_eq!(
+            canvas_cursor_key(EditorTool::Line, true, true, true, true),
+            "pan"
+        );
+        assert_eq!(
+            canvas_cursor_key(EditorTool::Select, false, false, true, false),
+            "offset"
+        );
     }
 
     fn m77_rational_coordinator(weight: f64) -> (RetainedEditorCoordinator, CurveSpan) {
@@ -9273,6 +9949,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 hover,
                 None,
             ),
@@ -9281,6 +9958,7 @@ mod tests {
         assert_eq!(
             canvas_cursor_key_with_curve_control(
                 EditorTool::Select,
+                false,
                 false,
                 false,
                 false,
@@ -9295,6 +9973,7 @@ mod tests {
         assert_eq!(
             canvas_cursor_key_with_curve_control(
                 EditorTool::Select,
+                false,
                 false,
                 false,
                 true,
@@ -10440,22 +11119,27 @@ mod tests {
     #[test]
     fn feature_authoring_routes_uncaptured_hover_and_keeps_its_captured_radius_gesture() {
         assert_eq!(
-            canvas_pointer_move_owner(false, false, false),
+            canvas_pointer_move_owner(false, false, false, false),
             CanvasPointerMoveOwner::Editor,
         );
         assert_eq!(
-            canvas_pointer_move_owner(true, false, false),
+            canvas_pointer_move_owner(true, false, false, false),
             CanvasPointerMoveOwner::OrdinaryAuthoring,
         );
         assert_eq!(
-            canvas_pointer_move_owner(false, true, false),
+            canvas_pointer_move_owner(false, true, false, false),
             CanvasPointerMoveOwner::FeatureAuthoring,
             "an uncaptured Fillet-authoring move must reach its native authoring-owner resolver",
         );
         assert_eq!(
-            canvas_pointer_move_owner(false, true, true),
+            canvas_pointer_move_owner(false, true, false, true),
             CanvasPointerMoveOwner::Editor,
             "the editor must continue an already captured Fillet-radius gesture",
+        );
+        assert_eq!(
+            canvas_pointer_move_owner(false, false, true, false),
+            CanvasPointerMoveOwner::OffsetAuthoring,
+            "an uncaptured Offset move must reach its exact shared hover/click resolver",
         );
     }
 
@@ -10731,6 +11415,7 @@ mod tests {
                 OptionOverlayKind::Dimension(DimensionKind::OrientedAngle),
             ),
             ("fillet", OptionOverlayKind::Fillet),
+            ("offset", OptionOverlayKind::Offset),
             (
                 "construction-display",
                 OptionOverlayKind::ConstructionDisplay,
@@ -10784,7 +11469,7 @@ mod tests {
             "role=\"dialog\" aria-modal=\"false\""
         )));
         assert!(html.contains("data-wb-action=\"options-close\""));
-        assert_eq!(html.matches("class=\"wb-palette-option-tool\"").count(), 9);
+        assert_eq!(html.matches("class=\"wb-palette-option-tool\"").count(), 10);
         assert!(!html.contains("wb-palette-option-trigger"));
         assert!(!html.contains("-options-trigger"));
         assert!(html.contains("id=\"wb-tool-select\""));
@@ -10811,6 +11496,7 @@ mod tests {
             "wb-authoring-diameter-tool",
             "wb-authoring-oriented-angle-tool",
             "wb-feature-fillet-trigger",
+            "wb-offset-trigger",
             "wb-construction-display-trigger",
         ] {
             let button = html
@@ -10961,6 +11647,83 @@ mod tests {
         assert!(normal.pending().is_empty());
 
         assert!(owns_authoring_pick(AuthoringItemInput::TreeClick));
+    }
+
+    #[test]
+    fn offset_tree_and_keyboard_activation_route_once_and_preserve_typed_presentation() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let start = document.add_point("start", [-2.0, 0.0]).unwrap();
+        let end = document.add_point("end", [2.0, 0.0]).unwrap();
+        let line = CurveSpan::line(
+            document
+                .add_curve(
+                    "line",
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let controls = [
+            document.add_point("q0", [-2.0, 3.0]).unwrap(),
+            document.add_point("q1", [0.0, 5.0]).unwrap(),
+            document.add_point("q2", [2.0, 3.0]).unwrap(),
+        ];
+        let unsupported = CurveSpan::line(
+            document
+                .add_curve("quadratic", CurveDefinition::QuadraticBezier { controls })
+                .unwrap(),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let mut coordinator = RetainedEditorCoordinator::new(session).unwrap();
+        let mut authoring = OffsetAuthoringState::default();
+        let _ = coordinator
+            .activate_offset_authoring(&mut authoring)
+            .expect("complete Offset index");
+
+        assert!(!offset_click_owns_semantic_pick(true, true));
+        assert!(offset_click_owns_semantic_pick(false, true));
+        assert!(offset_click_owns_semantic_pick(true, false));
+        let target = offset_target_for_selection(SelectionItem::Curve(line))
+            .expect("tree/keyboard curve target");
+        assert!(matches!(
+            authoring.pick_target(target),
+            OffsetAuthoringOutcome::OperandChanged { .. }
+        ));
+        let presentation = offset_canvas_presentation(&authoring);
+        assert_eq!(presentation.pending, vec![SelectionItem::Curve(line)]);
+        assert!(presentation.unavailable.is_empty());
+        assert_eq!(
+            presentation.chain.as_ref().map(|chain| chain.spans[0].span),
+            Some(line)
+        );
+        assert!(offset_operand_status(&authoring).contains("ordered edge"));
+
+        let _ = authoring.reset();
+        let unsupported_target = offset_target_for_selection(SelectionItem::Curve(unsupported))
+            .expect("unsupported native curve remains a typed target");
+        assert!(matches!(
+            authoring.pick_target(unsupported_target),
+            OffsetAuthoringOutcome::Warning(OffsetAuthoringWarning {
+                kind: OffsetAuthoringWarningKind::UnsupportedOperand,
+                ..
+            })
+        ));
+        let presentation = offset_canvas_presentation(&authoring);
+        assert!(presentation.pending.is_empty());
+        assert_eq!(
+            presentation.unavailable,
+            vec![SelectionItem::Curve(unsupported)]
+        );
+        assert!(offset_operand_status(&authoring).starts_with("Unavailable ·"));
+        assert!(offset_target_for_selection(SelectionItem::Point(start)).is_none());
     }
 
     #[test]

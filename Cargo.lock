@@ -585,6 +585,8 @@ version = "0.2.0"
 dependencies = [
  "geosolve-sketch",
  "geosolve-sketch-features",
+ "geosolve-sketch-ops",
+ "geosolve-sketch-topology",
  "proptest",
  "thiserror 2.0.18",
  "wasm-bindgen-test",
@@ -680,6 +682,7 @@ version = "0.2.0"
 dependencies = [
  "geosolve-geometry",
  "geosolve-sketch",
+ "geosolve-sketch-topology",
  "serde_json",
  "thiserror 2.0.18",
 ]

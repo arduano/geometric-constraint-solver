@@ -3,24 +3,26 @@
 //! Retained-design lifecycle coordination for presentation adapters.
 
 use std::collections::{BTreeSet, HashSet};
+use std::sync::Arc;
 
 use geosolve_sketch::{
     ContactBranchEdit, ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveId,
     CurveSpan, DesignPointId, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
-    DocumentCommandEffect, DocumentConstraintDefinition, DocumentCurveContinuity,
-    DocumentCurveControlAvailability, DocumentCurveControlError, DocumentCurveControlId,
-    DocumentCurveControlProjection, DocumentCurveControlTarget,
+    DocumentCommandEffect, DocumentConstraintDefinition, DocumentConstraintId,
+    DocumentCurveContinuity, DocumentCurveControlAvailability, DocumentCurveControlError,
+    DocumentCurveControlId, DocumentCurveControlProjection, DocumentCurveControlTarget,
     DocumentCurveControlWithholdingReason, DocumentCurveCurvatureRelation,
     DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
     DocumentDragLocalityPlan, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
-    DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentMeasurementCatalog,
-    DocumentMeasurementProvenance, DocumentMeasurementValue, DocumentObjectId,
-    DocumentParameterTarget, DocumentRationalConicControl, DocumentRuntimeMap,
+    DocumentFaceOffsetDirection, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch,
+    DocumentLineSide, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
+    DocumentMeasurementValue, DocumentObjectId, DocumentParameterTarget, DocumentProfileOffsetIds,
+    DocumentProfileOffsetOperand, DocumentRationalConicControl, DocumentRuntimeMap,
     DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
     ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
     GeometryRoleEdit, OperationCheckpoint, OperationControl, OperationController, OperationLimits,
-    OperationOutcome, OperationReport, OperationWork, ParameterBatch, PreparedSketchInput,
-    PreparedSketchOperation, PreparedSketchPatch, PreparedSketchSnapshot,
+    OperationOutcome, OperationReport, OperationWork, ParameterBatch, PreparedSketchCommit,
+    PreparedSketchInput, PreparedSketchOperation, PreparedSketchPatch, PreparedSketchSnapshot,
     RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
     SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDatum,
@@ -41,6 +43,14 @@ use geosolve_sketch_features::{
     ComputedFilletParentIndex, ContinuedComputedFilletCorner, NativeCurveSpanSource,
     NewComputedFilletCorner,
 };
+use geosolve_sketch_ops::{
+    SketchOperationRequest, SketchOperationResult, SketchOperationSnapshot,
+    SketchProfileOffsetOperand,
+};
+use geosolve_sketch_topology::{
+    OffsetOperandIndex, OffsetOperandRequest, PreparedOffsetOperandQuery, TopologyError,
+    TopologySnapshotError,
+};
 use thiserror::Error;
 
 use crate::feature_authoring::resolve_feature_item_picks;
@@ -54,8 +64,9 @@ use crate::{
     DimensionActionRequest, DimensionKind, DraftAuthoringInput, DraftInferenceInput, EditorEffect,
     EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
     FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
-    GeometryInteractionPolicy, PickTolerance, PointGestureSnapshot, PointerInput,
-    ProjectedDragRequestDisposition, ResolvedConstraintKind, SceneFilletAction,
+    GeometryInteractionPolicy, OffsetAuthoringCandidate, OffsetAuthoringOperand,
+    OffsetAuthoringOutcome, OffsetAuthoringState, PickTolerance, PointGestureSnapshot,
+    PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind, SceneFilletAction,
     SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
     ScreenPoint, SelectionItem,
 };
@@ -1397,6 +1408,45 @@ pub struct FeatureAuthoringTransaction {
     pub preview: Option<FeatureAuthoringPreviewMetadata>,
 }
 
+/// Stable public identity of one exact independently accepted Offset preview.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OffsetAuthoringPreviewMetadata {
+    pub base_input: PreparedSketchInput,
+    pub proposed_commit: PreparedSketchCommit,
+    pub dimension: DocumentDimensionId,
+    pub distance: DesignScalarId,
+    pub source_spans: Vec<CurveSpan>,
+    pub target_spans: Vec<CurveSpan>,
+    pub provisional_points: Vec<DesignPointId>,
+    pub provisional_constraints: Vec<DocumentConstraintId>,
+}
+
+/// Exact prepared native Offset candidate. The held patch is the only value that may publish the
+/// geometry rendered by this preview; neither the browser nor Apply reconstructs it.
+#[derive(Debug)]
+pub struct OffsetAuthoringPreview {
+    candidate: OffsetAuthoringCandidate,
+    edit: DocumentEdit,
+    patch: PreparedSketchPatch,
+    metadata: OffsetAuthoringPreviewMetadata,
+    computed_input: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    computed_snapshot: ComputedFeatureSnapshot,
+    computed_allocator: ComputedEvaluationAllocator,
+    next_operand_index: Arc<OffsetOperandIndex>,
+}
+
+impl OffsetAuthoringPreview {
+    #[must_use]
+    pub const fn metadata(&self) -> &OffsetAuthoringPreviewMetadata {
+        &self.metadata
+    }
+
+    #[must_use]
+    pub const fn candidate(&self) -> &OffsetAuthoringCandidate {
+        &self.candidate
+    }
+}
+
 /// Coordinator-owned result of one pointer press while computed-feature
 /// authoring is active.
 ///
@@ -1514,6 +1564,35 @@ pub struct DimensionTargetMetadata {
     pub display_value: f64,
     pub display_unit: DimensionTargetDisplayUnit,
     pub mode: DocumentDimensionMode,
+}
+
+/// Explicit persisted direction of one selected native Profile Offset association.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProfileOffsetDirectionState {
+    Outward,
+    Inward,
+    Left,
+    Right,
+}
+
+impl ProfileOffsetDirectionState {
+    /// Returns the opposite direction within the same face or open-chain family.
+    #[must_use]
+    pub const fn opposite(self) -> Self {
+        match self {
+            Self::Outward => Self::Inward,
+            Self::Inward => Self::Outward,
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+        }
+    }
+}
+
+/// Selection-scoped direction metadata for one accepted native Profile Offset association.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProfileOffsetDirectionMetadata {
+    pub dimension: DocumentDimensionId,
+    pub direction: ProfileOffsetDirectionState,
 }
 
 /// Stable selected-curve family used by presentation-neutral inspectors.
@@ -1824,6 +1903,26 @@ pub enum CoordinatorError {
     ComputedFeatureAuthoring(#[from] ComputedFeatureAuthoringError),
     #[error(transparent)]
     ComputedFeatureReanchor(#[from] ComputedFeatureReanchorError),
+    #[error(transparent)]
+    OffsetTopologySnapshot(#[from] TopologySnapshotError),
+    #[error(transparent)]
+    OffsetTopology(#[from] TopologyError),
+    #[error(transparent)]
+    OffsetOperation(#[from] geosolve_sketch_ops::SketchOperationError),
+    #[error("offset operand discovery stopped before a complete index was available")]
+    OffsetOperandWorkStopped,
+    #[error("offset operand discovery completed without a complete authoring index")]
+    OffsetOperandIndexIncomplete,
+    #[error("offset preparation is unavailable: {0}")]
+    OffsetOperationUnavailable(String),
+    #[error("offset authoring has no complete current candidate")]
+    OffsetCandidateIncomplete,
+    #[error("offset authoring candidate or prepared patch is stale")]
+    OffsetPreviewMismatch,
+    #[error("offset preview did not publish an independently accepted candidate")]
+    OffsetPreviewRejected,
+    #[error("prepared Offset created an unexpected persistent identity set")]
+    OffsetPreviewIdentityMismatch,
     #[error("selected operands cannot construct the requested dimension")]
     IncompatibleDimension,
     #[error("invalid typed action input: {0}")]
@@ -1906,6 +2005,7 @@ pub struct RetainedEditorCoordinator {
     projected_drag_work: Option<ProjectedDragWorkEvidence>,
     feature_authoring_preview: Option<FeatureAuthoringPreview>,
     next_feature_authoring_preview_token: u64,
+    offset_authoring_preview: Option<Box<OffsetAuthoringPreview>>,
 }
 
 /// Fully prepared, infallibly publishable state for one accepted inferred
@@ -2135,6 +2235,7 @@ impl RetainedEditorCoordinator {
             projected_drag_work: None,
             feature_authoring_preview: None,
             next_feature_authoring_preview_token: 1,
+            offset_authoring_preview: None,
         };
         coordinator.refresh_computed_features();
         coordinator.history.push(checkpoint(
@@ -2162,6 +2263,9 @@ impl RetainedEditorCoordinator {
     /// rather than falling back to base output.
     #[must_use]
     pub fn computed_snapshot(&self) -> Option<&ComputedFeatureSnapshot> {
+        if let Some(preview) = self.offset_authoring_preview.as_ref() {
+            return Some(&preview.computed_snapshot);
+        }
         if let Some(preview) = self.feature_authoring_preview.as_ref() {
             return Some(&preview.snapshot);
         }
@@ -2178,6 +2282,12 @@ impl RetainedEditorCoordinator {
     /// paired with the currently visible native sketch.
     #[must_use]
     pub fn computed_scene_state(&self) -> ComputedSceneState<'_> {
+        if let Some(preview) = self.offset_authoring_preview.as_ref() {
+            return ComputedSceneState::Current {
+                expected: &preview.computed_input,
+                snapshot: &preview.computed_snapshot,
+            };
+        }
         if let Some(preview) = self.feature_authoring_preview.as_ref() {
             return ComputedSceneState::Current {
                 expected: &preview.metadata.input,
@@ -2794,6 +2904,315 @@ impl RetainedEditorCoordinator {
     #[must_use]
     pub const fn feature_authoring_preview(&self) -> Option<&FeatureAuthoringPreview> {
         self.feature_authoring_preview.as_ref()
+    }
+
+    /// Builds and installs the complete exact operand index used by one Offset authoring session.
+    /// Incomplete, cancelled, or exhausted topology work never activates a partial collector.
+    ///
+    /// # Errors
+    ///
+    /// Rejects missing/currently rejected accepted state, bounded topology failure, or an
+    /// incomplete production-profile analysis.
+    pub fn activate_offset_authoring(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+    ) -> Result<OffsetAuthoringOutcome, CoordinatorError> {
+        let query =
+            PreparedOffsetOperandQuery::capture(&self.session, OffsetOperandRequest::default())?;
+        let OperationOutcome::Completed { value, .. } = query.execute(bounded_geometry_control())?
+        else {
+            return Err(CoordinatorError::OffsetOperandWorkStopped);
+        };
+        let index = value
+            .operand_index
+            .map(Arc::new)
+            .ok_or(CoordinatorError::OffsetOperandIndexIncomplete)?;
+        let model_scale = self.session.design_document().model_scale();
+        self.clear_transient();
+        Ok(state.activate(index, model_scale))
+    }
+
+    /// Exact currently held native Offset preview, if any.
+    #[must_use]
+    pub fn offset_authoring_preview(&self) -> Option<&OffsetAuthoringPreview> {
+        self.offset_authoring_preview.as_deref()
+    }
+
+    /// Whether Apply would consume the exact patch currently rendered for this collector state.
+    #[must_use]
+    pub fn offset_authoring_preview_matches(&self, state: &OffsetAuthoringState) -> bool {
+        self.offset_authoring_preview
+            .as_ref()
+            .zip(state.candidate().as_ref())
+            .is_some_and(|(preview, candidate)| {
+                preview.candidate == *candidate
+                    && preview.patch.base_input() == self.session.prepared_input()
+                    && preview
+                        .metadata
+                        .proposed_commit
+                        .accepted_state_identity()
+                        .is_some()
+            })
+    }
+
+    /// Prepares, solves, independently validates, and retains one exact Offset patch. Failure is
+    /// state-neutral and deliberately leaves the previous last-valid ghost installed.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale/incomplete operands, unsupported exact geometry, construction/solve failure,
+    /// incomplete computed output, or incomplete post-candidate topology authentication.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "operation authentication, exact patch preparation, computed parity and next-index capture form one publication boundary"
+    )]
+    pub fn prepare_offset_authoring_preview(
+        &mut self,
+        state: &OffsetAuthoringState,
+        label: impl Into<String>,
+    ) -> Result<OffsetAuthoringPreviewMetadata, CoordinatorError> {
+        let candidate = state
+            .candidate()
+            .ok_or(CoordinatorError::OffsetCandidateIncomplete)?;
+        let index = state
+            .index()
+            .cloned()
+            .ok_or(CoordinatorError::OffsetCandidateIncomplete)?;
+        if candidate.input != self.session.prepared_input()
+            || index.validate_current(&self.session).is_err()
+        {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+
+        let operand = sketch_profile_offset_operand(&candidate.operand);
+        let operation = SketchOperationSnapshot::capture(&self.session).prepare(
+            SketchOperationRequest::ProfileOffset {
+                label: label.into(),
+                distance: candidate.distance,
+                operand,
+                operand_index: index,
+            },
+        );
+        let OperationOutcome::Completed { value, .. } =
+            operation.execute(bounded_geometry_control())?
+        else {
+            return Err(CoordinatorError::OffsetOperandWorkStopped);
+        };
+        let proposal = match value {
+            SketchOperationResult::Proposed(proposal) => proposal,
+            SketchOperationResult::Unsupported(reason) => {
+                return Err(CoordinatorError::OffsetOperationUnavailable(format!(
+                    "{:?}",
+                    reason.reason
+                )));
+            }
+            SketchOperationResult::Incomplete(reason) => {
+                return Err(CoordinatorError::OffsetOperationUnavailable(format!(
+                    "{:?}",
+                    reason.reason
+                )));
+            }
+            _ => {
+                return Err(CoordinatorError::OffsetOperationUnavailable(
+                    "unknown operation outcome".into(),
+                ));
+            }
+        };
+        if proposal.input() != candidate.input {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        let edit = proposal
+            .profile_offset_document_edit()
+            .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
+        let job = self
+            .session
+            .prepared_snapshot()
+            .prepare(PreparedSketchOperation::Apply(edit.clone()));
+        if job.input() != candidate.input {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        let OperationOutcome::Completed { value: patch, .. } =
+            job.execute(bounded_geometry_control())?
+        else {
+            return Err(CoordinatorError::OffsetOperandWorkStopped);
+        };
+        if patch.proposed_commit().accepted_state_identity().is_none() {
+            return Err(CoordinatorError::OffsetPreviewRejected);
+        }
+        let candidate_session = patch
+            .preview()
+            .accepted_session()
+            .ok_or(CoordinatorError::OffsetPreviewRejected)?;
+        let metadata = offset_preview_metadata(&self.session, &patch)?;
+
+        let mut computed_allocator = self.computed_evaluation_allocator.clone();
+        let evaluated = evaluate_computed_features_continuing(
+            candidate_session,
+            &self.features,
+            &mut computed_allocator,
+            bounded_geometry_control(),
+            self.computed_snapshot.as_ref(),
+        )?;
+        let OperationOutcome::Completed {
+            value: computed_snapshot,
+            ..
+        } = evaluated
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if self.computed_snapshot.as_ref().is_some_and(|previous| {
+            !computed_feature_preview_invalidations(&self.features, previous, &computed_snapshot)
+                .is_empty()
+        }) {
+            return Err(CoordinatorError::ComputedFeaturePreviewInvalidated);
+        }
+        let candidate_input = candidate_session
+            .accepted_prepared_input()
+            .ok_or(CoordinatorError::OffsetPreviewRejected)?;
+        if computed_snapshot.input().sketch != candidate_input
+            || computed_snapshot.input().features != self.features.identity()
+        {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+
+        let next_query = PreparedOffsetOperandQuery::capture(
+            candidate_session,
+            OffsetOperandRequest::default(),
+        )?;
+        let OperationOutcome::Completed { value, .. } =
+            next_query.execute(bounded_geometry_control())?
+        else {
+            return Err(CoordinatorError::OffsetOperandWorkStopped);
+        };
+        let next_operand_index = value
+            .operand_index
+            .map(Arc::new)
+            .ok_or(CoordinatorError::OffsetOperandIndexIncomplete)?;
+        let computed_input = computed_snapshot.input();
+        let proposed = patch.proposed_commit();
+
+        self.clear_transient();
+        self.transient = Some(TransientLifecycle::SolvedPreview {
+            attempt: proposed.attempt_identity(),
+            accepted: proposed
+                .accepted_state_identity()
+                .ok_or(CoordinatorError::OffsetPreviewRejected)?,
+        });
+        self.offset_authoring_preview = Some(Box::new(OffsetAuthoringPreview {
+            candidate,
+            edit,
+            patch,
+            metadata: metadata.clone(),
+            computed_input,
+            computed_snapshot,
+            computed_allocator,
+            next_operand_index,
+        }));
+        Ok(metadata)
+    }
+
+    /// Drops one provisional Offset patch without changing retained sketch or identity state.
+    pub fn clear_offset_authoring_preview(&mut self) {
+        if self.offset_authoring_preview.take().is_some() {
+            self.transient = None;
+            self.computed_preview_snapshot = None;
+            self.computed_preview_input = None;
+            self.computed_preview_evaluation_problem = None;
+        }
+    }
+
+    /// Cancels Offset and its exact preview while preserving only collector-local distance memory.
+    pub fn cancel_offset_authoring(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+    ) -> OffsetAuthoringOutcome {
+        self.clear_offset_authoring_preview();
+        state.cancel()
+    }
+
+    /// Commits the exact patch currently rendered for `state` through compare-and-swap, records one
+    /// checkpoint/replay step, and installs the already-authenticated next operand index so Offset
+    /// remains active without reusing stale source identity.
+    ///
+    /// # Errors
+    ///
+    /// Rejects missing/mismatched preview authority, stale CAS input, or checkpoint failure.
+    pub fn apply_offset_authoring_preview(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        let candidate = state
+            .candidate()
+            .ok_or(CoordinatorError::OffsetCandidateIncomplete)?;
+        let preview = self
+            .offset_authoring_preview
+            .as_ref()
+            .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
+        if preview.candidate != candidate
+            || preview.patch.base_input() != self.session.prepared_input()
+            || preview.metadata.base_input != self.session.prepared_input()
+        {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        let proposed = preview.patch.proposed_commit();
+        let candidate_session = preview
+            .patch
+            .preview()
+            .accepted_session()
+            .ok_or(CoordinatorError::OffsetPreviewRejected)?;
+        if preview.computed_input != preview.computed_snapshot.input()
+            || preview.computed_input.sketch
+                != candidate_session
+                    .accepted_prepared_input()
+                    .ok_or(CoordinatorError::OffsetPreviewRejected)?
+        {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        let next = checkpoint(
+            candidate_session,
+            &self.features,
+            &preview.computed_allocator,
+        )?;
+        let expected = self.session.design_identity();
+        let replay = ReplayAction::Edit {
+            expected,
+            edit: preview.edit.clone(),
+            computed_features: None,
+        };
+        let effect =
+            DocumentCommandEffect::CreatedProfileOffset(Box::new(DocumentProfileOffsetIds {
+                target: preview.metadata.distance,
+                dimension: preview.metadata.dimension,
+            }));
+
+        let preview = self
+            .offset_authoring_preview
+            .take()
+            .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
+        let committed = match self.session.commit_prepared_patch(preview.patch) {
+            Ok(committed) => committed,
+            Err(error) => {
+                self.clear_transient();
+                return Err(error.into());
+            }
+        };
+        if committed != proposed {
+            self.clear_transient();
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        self.computed_evaluation_allocator = preview.computed_allocator;
+        self.computed_input = Some(preview.computed_input);
+        self.computed_snapshot = Some(preview.computed_snapshot);
+        self.computed_evaluation_problem = None;
+        let model_scale = self.session.design_document().model_scale();
+        let _ = state.activate(preview.next_operand_index, model_scale);
+        self.record_feature_mutation(next, replay);
+        Ok(MutationOutcome {
+            value: effect,
+            design: committed.design_identity(),
+            attempt: committed.attempt_identity(),
+            published_accepted: committed.accepted_state_identity(),
+        })
     }
 
     /// Applies native semantic items to a trial authoring state and commits the
@@ -4434,6 +4853,9 @@ impl RetainedEditorCoordinator {
     /// Returns the independently accepted drag preview visible to a presentation adapter.
     #[must_use]
     pub fn visible_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
+        if let Some(preview) = self.offset_authoring_preview.as_ref() {
+            return preview.patch.preview().accepted_session();
+        }
         self.solved_preview_session()
     }
 
@@ -5364,6 +5786,7 @@ impl RetainedEditorCoordinator {
         self.curve_control_continuation = None;
         self.projected_drag_work = None;
         self.clear_feature_authoring_preview();
+        self.offset_authoring_preview = None;
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
         self.computed_fillet_preview = None;
@@ -7619,6 +8042,104 @@ impl RetainedEditorCoordinator {
     #[must_use]
     pub fn selected_dimension_target_metadata(&self) -> Option<DimensionTargetMetadata> {
         self.dimension_target_metadata_for(self.editor.selection())
+    }
+
+    /// Returns explicit direction metadata for exactly one selected native Profile Offset.
+    #[must_use]
+    pub fn profile_offset_direction_metadata_for(
+        &self,
+        selection: &[SelectionItem],
+    ) -> Option<ProfileOffsetDirectionMetadata> {
+        let [SelectionItem::Dimension(id)] = selection else {
+            return None;
+        };
+        let dimension = self
+            .session
+            .design_document()
+            .dimensions()
+            .iter()
+            .find(|dimension| dimension.id == *id)?;
+        let DocumentDimensionDefinition::ProfileOffset { operand, .. } = &dimension.definition
+        else {
+            return None;
+        };
+        let direction = match operand {
+            DocumentProfileOffsetOperand::Face { direction, .. } => match direction {
+                DocumentFaceOffsetDirection::Outward => ProfileOffsetDirectionState::Outward,
+                DocumentFaceOffsetDirection::Inward => ProfileOffsetDirectionState::Inward,
+            },
+            DocumentProfileOffsetOperand::OpenChain { side, .. } => match side {
+                DocumentLineSide::Left => ProfileOffsetDirectionState::Left,
+                DocumentLineSide::Right => ProfileOffsetDirectionState::Right,
+            },
+        };
+        Some(ProfileOffsetDirectionMetadata {
+            dimension: *id,
+            direction,
+        })
+    }
+
+    /// Returns explicit direction metadata for the current application selection.
+    #[must_use]
+    pub fn selected_profile_offset_direction_metadata(
+        &self,
+    ) -> Option<ProfileOffsetDirectionMetadata> {
+        self.profile_offset_direction_metadata_for(self.editor.selection())
+    }
+
+    /// Flips only the explicit direction of one selected accepted Profile Offset association.
+    /// Ordered paths, edge pairs, traversals, junction ownership, local miter/tangent branches,
+    /// and open-terminal policies are retained byte-for-byte through ordinary history.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stale-design, incompatible-selection, document-validation, retained-session or
+    /// checkpoint error without publishing a partial edit.
+    pub fn flip_selected_profile_offset_direction(
+        &mut self,
+        expected: SketchDesignIdentity,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let metadata = self.selected_profile_offset_direction_metadata().ok_or(
+            CoordinatorError::ActionUnavailable(DisabledReason::WrongOperandKind),
+        )?;
+        let dimension = self
+            .session
+            .design_document()
+            .dimensions()
+            .iter()
+            .find(|dimension| dimension.id == metadata.dimension)
+            .ok_or(CoordinatorError::ActionUnavailable(
+                DisabledReason::MissingObject,
+            ))?;
+        let DocumentDimensionDefinition::ProfileOffset { operand, .. } = &dimension.definition
+        else {
+            return Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::WrongOperandKind,
+            ));
+        };
+        let mut operand = operand.clone();
+        match &mut operand {
+            DocumentProfileOffsetOperand::Face { direction, .. } => {
+                *direction = match *direction {
+                    DocumentFaceOffsetDirection::Outward => DocumentFaceOffsetDirection::Inward,
+                    DocumentFaceOffsetDirection::Inward => DocumentFaceOffsetDirection::Outward,
+                };
+            }
+            DocumentProfileOffsetOperand::OpenChain { side, .. } => {
+                *side = match *side {
+                    DocumentLineSide::Left => DocumentLineSide::Right,
+                    DocumentLineSide::Right => DocumentLineSide::Left,
+                };
+            }
+        }
+        self.apply_edit(
+            expected,
+            DocumentEdit::SetProfileOffsetOperand {
+                dimension: metadata.dimension,
+                operand,
+            },
+        )
     }
 
     /// Retains one finite target edit through ordinary document history.
@@ -10435,7 +10956,8 @@ const fn dimension_target_scalar(
         | DocumentDimensionDefinition::Diameter { target, .. }
         | DocumentDimensionDefinition::OrientedAngle { target, .. }
         | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
-        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. }
+        | DocumentDimensionDefinition::ProfileOffset { target, .. } => *target,
     }
 }
 
@@ -10483,6 +11005,111 @@ fn curve_control_projection_edit(
         }
         _ => None,
     }
+}
+
+fn sketch_profile_offset_operand(operand: &OffsetAuthoringOperand) -> SketchProfileOffsetOperand {
+    match operand {
+        OffsetAuthoringOperand::Face { key, direction } => SketchProfileOffsetOperand::Face {
+            key: key.clone(),
+            direction: *direction,
+        },
+        OffsetAuthoringOperand::OpenChain { spans, side } => {
+            SketchProfileOffsetOperand::OpenChain {
+                spans: spans.clone(),
+                side: *side,
+            }
+        }
+    }
+}
+
+fn offset_preview_metadata(
+    base: &RetainedSketchDocumentSession,
+    patch: &PreparedSketchPatch,
+) -> Result<OffsetAuthoringPreviewMetadata, CoordinatorError> {
+    let preview = patch.preview();
+    let candidate = preview
+        .accepted_document()
+        .ok_or(CoordinatorError::OffsetPreviewRejected)?;
+    let base_dimension_ids = base
+        .design_document()
+        .dimensions()
+        .iter()
+        .map(|dimension| dimension.id)
+        .collect::<BTreeSet<_>>();
+    let mut created_dimensions = candidate
+        .dimensions()
+        .iter()
+        .filter(|dimension| !base_dimension_ids.contains(&dimension.id));
+    let dimension = created_dimensions
+        .next()
+        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?;
+    if created_dimensions.next().is_some() {
+        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
+    }
+    let DocumentDimensionDefinition::ProfileOffset { target, operand } = &dimension.definition
+    else {
+        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
+    };
+
+    let mut source_spans = Vec::new();
+    let mut target_spans = Vec::new();
+    let mut push_path = |edges: &[geosolve_sketch::DocumentProfileOffsetEdgePair]| {
+        for edge in edges {
+            source_spans.push(edge.source.curve);
+            target_spans.push(edge.target.curve);
+        }
+    };
+    match operand {
+        DocumentProfileOffsetOperand::Face { outer, holes, .. } => {
+            push_path(&outer.edges);
+            for hole in holes {
+                push_path(&hole.edges);
+            }
+        }
+        DocumentProfileOffsetOperand::OpenChain { chain, .. } => push_path(&chain.edges),
+    }
+    source_spans.sort_unstable();
+    source_spans.dedup();
+    target_spans.sort_unstable();
+    target_spans.dedup();
+    if source_spans.is_empty() || source_spans.len() != target_spans.len() {
+        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
+    }
+
+    let base_points = base
+        .design_document()
+        .points()
+        .iter()
+        .map(|point| point.id)
+        .collect::<BTreeSet<_>>();
+    let provisional_points = candidate
+        .points()
+        .iter()
+        .filter_map(|point| (!base_points.contains(&point.id)).then_some(point.id))
+        .collect();
+    let base_constraints = base
+        .design_document()
+        .constraints()
+        .iter()
+        .map(|constraint| constraint.id)
+        .collect::<BTreeSet<_>>();
+    let provisional_constraints = candidate
+        .constraints()
+        .iter()
+        .filter_map(|constraint| {
+            (!base_constraints.contains(&constraint.id)).then_some(constraint.id)
+        })
+        .collect();
+    Ok(OffsetAuthoringPreviewMetadata {
+        base_input: patch.base_input(),
+        proposed_commit: patch.proposed_commit(),
+        dimension: dimension.id,
+        distance: *target,
+        source_spans,
+        target_spans,
+        provisional_points,
+        provisional_constraints,
+    })
 }
 
 fn curve_control_command_effect(
@@ -11628,7 +12255,8 @@ mod tests {
     use crate::{
         AuthoringOutcome, AuthoringState, ConstructionPoint, EditorScene, EditorTool,
         FeatureAuthoringOutcome, FeatureAuthoringStage, FeatureAuthoringState, Modifiers,
-        PickTolerance, PointerInput, ScreenPoint, Viewport,
+        OffsetAuthoringWarning, OffsetAuthoringWarningKind, PickTolerance, PointerInput,
+        ScreenPoint, Viewport,
     };
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, DocumentBSplineForm, DocumentConstraintDefinition,
@@ -11689,6 +12317,671 @@ mod tests {
         assert!(consumed.dense_kernel_columns <= PROJECTED_DRAG_MAX_DENSE_DIMENSION);
         assert!(consumed.diagnostic_candidates <= PROJECTED_DRAG_MAX_DIAGNOSTIC_CANDIDATES);
         assert!(consumed.diagnostic_trials <= PROJECTED_DRAG_MAX_DIAGNOSTIC_TRIALS);
+    }
+
+    fn add_profile_offset_test_line(
+        document: &mut SketchDocument,
+        label: &str,
+        start: DesignPointId,
+        end: DesignPointId,
+    ) -> CurveSpan {
+        let start_position = document.point(start).expect("start point").position;
+        let end_position = document.point(end).expect("end point").position;
+        let delta = [
+            end_position[0] - start_position[0],
+            end_position[1] - start_position[1],
+        ];
+        let length = delta[0].hypot(delta[1]);
+        CurveSpan::line(
+            document
+                .add_curve(
+                    label,
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [delta[0] / length, delta[1] / length],
+                    },
+                )
+                .expect("profile line"),
+        )
+    }
+
+    fn profile_offset_rectangle_fixture() -> (RetainedEditorCoordinator, EditorScene, [CurveSpan; 4])
+    {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let points = [
+            document.add_point("bottom left", [-2.0, -1.0]).unwrap(),
+            document.add_point("bottom right", [2.0, -1.0]).unwrap(),
+            document.add_point("top right", [2.0, 1.0]).unwrap(),
+            document.add_point("top left", [-2.0, 1.0]).unwrap(),
+        ];
+        let spans = [
+            add_profile_offset_test_line(&mut document, "bottom", points[0], points[1]),
+            add_profile_offset_test_line(&mut document, "right", points[1], points[2]),
+            add_profile_offset_test_line(&mut document, "top", points[2], points[3]),
+            add_profile_offset_test_line(&mut document, "left", points[3], points[0]),
+        ];
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("rectangle session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted rectangle");
+        let viewport = Viewport::new([800.0, 600.0], [0.0, 0.0], 80.0).expect("viewport");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.25,
+        )
+        .expect("scene")
+        .with_retained_session(coordinator.session())
+        .expect("authenticated scene");
+        (coordinator, scene, spans)
+    }
+
+    fn select_profile_offset_rectangle(
+        coordinator: &mut RetainedEditorCoordinator,
+        state: &mut OffsetAuthoringState,
+        scene: &EditorScene,
+    ) {
+        assert!(matches!(
+            coordinator
+                .activate_offset_authoring(state)
+                .expect("complete operand index"),
+            OffsetAuthoringOutcome::ModeEntered(_)
+        ));
+        assert!(matches!(
+            state.pick_at(
+                scene,
+                scene.viewport.model_to_screen([0.0, 0.0]),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ),
+            OffsetAuthoringOutcome::OperandChanged {
+                operand: Some(OffsetAuthoringOperand::Face { .. }),
+                ..
+            }
+        ));
+    }
+
+    fn profile_offset_line_arc_fixture() -> (RetainedEditorCoordinator, EditorScene) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let line_start = document.add_point("line start", [-2.0, 0.0]).unwrap();
+        let line_end = document.add_point("line end", [0.0, 0.0]).unwrap();
+        add_profile_offset_test_line(&mut document, "line", line_start, line_end);
+        let center = document.add_point("arc center", [0.0, 1.0]).unwrap();
+        let radius = document
+            .add_scalar(
+                "arc radius",
+                1.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let start_angle = document
+            .add_scalar(
+                "arc start",
+                -std::f64::consts::FRAC_PI_2,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let end_angle = document
+            .add_scalar("arc end", 0.0, ScalarUnit::Angle, ScalarDomain::Finite)
+            .unwrap();
+        let arc = CurveSpan::line(
+            document
+                .add_curve(
+                    "arc",
+                    CurveDefinition::CircularArc {
+                        center,
+                        radius,
+                        start_angle,
+                        end_angle,
+                        sweep: DocumentArcSweep::CounterClockwise,
+                    },
+                )
+                .unwrap(),
+        );
+        let arc_start = document
+            .add_curve_contact(
+                "arc start endpoint",
+                arc,
+                0.0,
+                0,
+                ContactNeighborhood::Start,
+                None,
+            )
+            .unwrap();
+        document
+            .add_constraint(
+                "line arc join",
+                DocumentConstraintDefinition::PointOnCurve {
+                    point: line_end,
+                    contact: arc_start,
+                },
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("line/arc session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted line/arc chain");
+        let viewport = Viewport::new([800.0, 600.0], [0.0, 0.0], 80.0).expect("viewport");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.25,
+        )
+        .expect("scene")
+        .with_retained_session(coordinator.session())
+        .expect("authenticated scene");
+        (coordinator, scene)
+    }
+
+    fn select_profile_offset_line_arc_chain(
+        coordinator: &mut RetainedEditorCoordinator,
+        state: &mut OffsetAuthoringState,
+        scene: &EditorScene,
+    ) {
+        assert!(matches!(
+            coordinator
+                .activate_offset_authoring(state)
+                .expect("complete operand index"),
+            OffsetAuthoringOutcome::ModeEntered(_)
+        ));
+        for point in [
+            [-1.0, 0.0],
+            [
+                std::f64::consts::FRAC_1_SQRT_2,
+                1.0 - std::f64::consts::FRAC_1_SQRT_2,
+            ],
+        ] {
+            assert!(matches!(
+                state.pick_at(
+                    scene,
+                    scene.viewport.model_to_screen(point),
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                ),
+                OffsetAuthoringOutcome::OperandChanged { .. }
+            ));
+        }
+        assert!(matches!(
+            state.operand(),
+            Some(OffsetAuthoringOperand::OpenChain { spans, .. }) if spans.len() == 2
+        ));
+    }
+
+    #[test]
+    fn profile_offset_preview_is_state_neutral_and_cancel_preserves_allocator_and_history() {
+        let (mut coordinator, scene, source_spans) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let input = coordinator.session().prepared_input();
+        let design = coordinator.session().design_identity();
+        let high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+        let history_len = coordinator.history_len();
+        let history_cursor = coordinator.history_cursor();
+        let base_document = checkpoint_document_to_json(coordinator.session().design_document())
+            .expect("base payload");
+
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Rectangle offset")
+            .expect("accepted preview");
+        assert_eq!(metadata.base_input, input);
+        assert_eq!(metadata.source_spans.len(), source_spans.len());
+        assert_eq!(metadata.target_spans.len(), source_spans.len());
+        assert_eq!(metadata.provisional_points.len(), source_spans.len());
+        assert!(coordinator.offset_authoring_preview_matches(&state));
+        assert!(coordinator.visible_preview_session().is_some());
+        assert_eq!(coordinator.session().design_identity(), design);
+        assert_eq!(coordinator.history_len(), history_len);
+        assert_eq!(coordinator.history_cursor(), history_cursor);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("unchanged payload"),
+            base_document
+        );
+
+        assert!(matches!(
+            coordinator.cancel_offset_authoring(&mut state),
+            OffsetAuthoringOutcome::ModeExited
+        ));
+        assert!(coordinator.offset_authoring_preview().is_none());
+        assert!(coordinator.visible_preview_session().is_none());
+        assert_eq!(coordinator.session().design_identity(), design);
+        assert_eq!(coordinator.history_len(), history_len);
+        assert_eq!(coordinator.history_cursor(), history_cursor);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+    }
+
+    #[test]
+    fn profile_offset_preview_metadata_marks_every_created_target_constraint_provisional() {
+        let (mut coordinator, scene) = profile_offset_line_arc_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_line_arc_chain(&mut coordinator, &mut state, &scene);
+        assert!(matches!(
+            state.set_distance(0.25),
+            OffsetAuthoringOutcome::DistanceChanged { .. }
+        ));
+        let base_constraints = coordinator
+            .session()
+            .design_document()
+            .constraints()
+            .iter()
+            .map(|constraint| constraint.id)
+            .collect::<BTreeSet<_>>();
+
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Line arc offset")
+            .expect("accepted preview");
+        let created_constraints = coordinator
+            .visible_preview_session()
+            .expect("candidate session")
+            .design_document()
+            .constraints()
+            .iter()
+            .filter_map(|constraint| {
+                (!base_constraints.contains(&constraint.id)).then_some(constraint.id)
+            })
+            .collect::<Vec<_>>();
+        assert!(!created_constraints.is_empty());
+        assert_eq!(metadata.provisional_constraints, created_constraints);
+    }
+
+    #[test]
+    fn profile_offset_apply_commits_the_rendered_patch_once_and_undo_redo_restore_it() {
+        let (mut coordinator, scene, source_spans) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let history_len = coordinator.history_len();
+        let history_cursor = coordinator.history_cursor();
+        let base_curves = coordinator.session().design_document().curves().len();
+        let base_dimensions = coordinator.session().design_document().dimensions().len();
+
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Rectangle offset")
+            .expect("accepted preview");
+        let preview_payload = checkpoint_document_to_json(
+            coordinator
+                .visible_preview_session()
+                .expect("visible candidate")
+                .design_document(),
+        )
+        .expect("preview payload");
+        let outcome = coordinator
+            .apply_offset_authoring_preview(&mut state)
+            .expect("exact patch commit");
+        assert!(matches!(
+            outcome.value,
+            DocumentCommandEffect::CreatedProfileOffset(ids)
+                if *ids == DocumentProfileOffsetIds {
+                    target: metadata.distance,
+                    dimension: metadata.dimension,
+                }
+        ));
+        assert!(outcome.published_accepted.is_some());
+        assert!(state.is_active());
+        assert!(state.operand().is_none());
+        assert!(coordinator.offset_authoring_preview().is_none());
+        assert_eq!(coordinator.history_len(), history_len + 1);
+        assert_eq!(coordinator.history_cursor(), history_cursor + 1);
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("committed payload"),
+            preview_payload,
+            "Apply must publish the exact document rendered by the held patch"
+        );
+        assert_eq!(
+            coordinator.session().design_document().curves().len(),
+            base_curves + source_spans.len()
+        );
+        assert_eq!(
+            coordinator.session().design_document().dimensions().len(),
+            base_dimensions + 1
+        );
+
+        coordinator.undo().expect("single-step Undo");
+        assert_eq!(coordinator.history_cursor(), history_cursor);
+        assert_eq!(
+            coordinator.session().design_document().curves().len(),
+            base_curves
+        );
+        assert_eq!(
+            coordinator.session().design_document().dimensions().len(),
+            base_dimensions
+        );
+        coordinator.redo().expect("single-step Redo");
+        assert_eq!(coordinator.history_cursor(), history_cursor + 1);
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("redone payload"),
+            preview_payload
+        );
+
+        coordinator.set_selection([SelectionItem::Dimension(metadata.dimension)]);
+        coordinator
+            .set_selected_suppressed(coordinator.session().design_identity(), true)
+            .expect("suppress only the grouped association");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .dimension(metadata.dimension)
+                .expect("retained grouped dimension")
+                .suppressed
+        );
+        assert!(metadata.target_spans.iter().all(|span| {
+            coordinator
+                .session()
+                .design_document()
+                .curve(span.curve)
+                .is_some()
+        }));
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some(),
+            "detached ordinary target geometry remains a finite accepted sketch"
+        );
+        coordinator.undo().expect("undo association suppression");
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("unsuppressed payload"),
+            preview_payload
+        );
+    }
+
+    #[test]
+    fn selected_profile_offset_direction_flip_preserves_operand_branches_and_undo_redo() {
+        let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Rectangle offset")
+            .expect("accepted preview");
+        coordinator
+            .apply_offset_authoring_preview(&mut state)
+            .expect("accepted association");
+        coordinator.set_selection([SelectionItem::Dimension(metadata.dimension)]);
+
+        let operand = |coordinator: &RetainedEditorCoordinator| {
+            let dimension = coordinator
+                .session()
+                .design_document()
+                .dimension(metadata.dimension)
+                .expect("profile offset dimension");
+            let DocumentDimensionDefinition::ProfileOffset { operand, .. } = &dimension.definition
+            else {
+                panic!("expected ProfileOffset definition");
+            };
+            operand.clone()
+        };
+        let original_operand = operand(&coordinator);
+        let DocumentProfileOffsetOperand::Face { outer, holes, .. } = &original_operand else {
+            panic!("rectangle offset must retain a face operand");
+        };
+        assert!(!outer.junctions.is_empty());
+        assert!(holes.is_empty());
+        assert_eq!(
+            coordinator.selected_profile_offset_direction_metadata(),
+            Some(ProfileOffsetDirectionMetadata {
+                dimension: metadata.dimension,
+                direction: ProfileOffsetDirectionState::Outward,
+            })
+        );
+        let original_payload = checkpoint_document_to_json(coordinator.session().design_document())
+            .expect("original payload");
+        let history_len = coordinator.history_len();
+        let history_cursor = coordinator.history_cursor();
+
+        let outcome = coordinator
+            .flip_selected_profile_offset_direction(coordinator.session().design_identity())
+            .expect("accepted direction flip");
+        assert_eq!(
+            outcome.value,
+            DocumentCommandEffect::UpdatedProfileOffset(metadata.dimension)
+        );
+        assert!(outcome.published_accepted.is_some());
+        assert_eq!(coordinator.history_len(), history_len + 1);
+        assert_eq!(coordinator.history_cursor(), history_cursor + 1);
+        assert_eq!(
+            coordinator.selected_profile_offset_direction_metadata(),
+            Some(ProfileOffsetDirectionMetadata {
+                dimension: metadata.dimension,
+                direction: ProfileOffsetDirectionState::Inward,
+            })
+        );
+
+        let mut expected_flipped_operand = original_operand.clone();
+        let DocumentProfileOffsetOperand::Face { direction, .. } = &mut expected_flipped_operand
+        else {
+            unreachable!("fixture is a face");
+        };
+        *direction = DocumentFaceOffsetDirection::Inward;
+        assert_eq!(
+            operand(&coordinator),
+            expected_flipped_operand,
+            "direction is the only operand field allowed to change"
+        );
+        let flipped_payload = checkpoint_document_to_json(coordinator.session().design_document())
+            .expect("flipped payload");
+        assert_ne!(flipped_payload, original_payload);
+
+        coordinator.undo().expect("Undo direction flip");
+        assert_eq!(coordinator.history_cursor(), history_cursor);
+        assert_eq!(operand(&coordinator), original_operand);
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("undone payload"),
+            original_payload
+        );
+
+        coordinator.redo().expect("Redo direction flip");
+        assert_eq!(coordinator.history_cursor(), history_cursor + 1);
+        assert_eq!(operand(&coordinator), expected_flipped_operand);
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("redone payload"),
+            flipped_payload
+        );
+    }
+
+    #[test]
+    fn profile_offset_invalid_input_retains_last_valid_ghost_but_scene_change_revokes_authority() {
+        let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let first = coordinator
+            .prepare_offset_authoring_preview(&state, "Rectangle offset")
+            .expect("first valid preview");
+        let history_cursor = coordinator.history_cursor();
+
+        assert!(matches!(
+            state.set_distance(0.0),
+            OffsetAuthoringOutcome::Warning(OffsetAuthoringWarning {
+                kind: OffsetAuthoringWarningKind::InvalidDistance,
+                ..
+            })
+        ));
+        assert!(coordinator.offset_authoring_preview().is_some());
+        assert!(!coordinator.offset_authoring_preview_matches(&state));
+        assert!(matches!(
+            coordinator.prepare_offset_authoring_preview(&state, "invalid"),
+            Err(CoordinatorError::OffsetCandidateIncomplete)
+        ));
+        assert_eq!(
+            coordinator
+                .offset_authoring_preview()
+                .expect("last valid ghost retained")
+                .metadata(),
+            &first
+        );
+        assert_eq!(coordinator.history_cursor(), history_cursor);
+
+        let _ = state.set_distance(0.25);
+        coordinator
+            .prepare_offset_authoring_preview(&state, "replacement")
+            .expect("replacement preview");
+        assert!(coordinator.offset_authoring_preview_matches(&state));
+        let point = coordinator.session().design_document().points()[0].id;
+        let expected = coordinator.session().design_identity();
+        coordinator
+            .apply_edit(
+                expected,
+                DocumentEdit::SetPointPosition {
+                    point,
+                    position: [-2.25, -1.0],
+                },
+            )
+            .expect("independent accepted edit");
+        assert!(coordinator.offset_authoring_preview().is_none());
+        assert!(coordinator.visible_preview_session().is_none());
+        assert!(!coordinator.offset_authoring_preview_matches(&state));
+        assert!(matches!(
+            coordinator.prepare_offset_authoring_preview(&state, "stale"),
+            Err(CoordinatorError::OffsetPreviewMismatch)
+        ));
+    }
+
+    #[test]
+    fn profile_offset_topology_barrier_retains_last_valid_ghost_and_recovers_in_place() {
+        let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        assert!(matches!(
+            state.flip(),
+            OffsetAuthoringOutcome::OperandChanged {
+                operand: Some(OffsetAuthoringOperand::Face {
+                    direction: geosolve_sketch::DocumentFaceOffsetDirection::Inward,
+                    ..
+                }),
+                ..
+            }
+        ));
+        let _ = state.set_distance(0.5);
+        let valid = coordinator
+            .prepare_offset_authoring_preview(&state, "Valid inward rectangle offset")
+            .expect("valid topology-cell preview");
+        let base_input = coordinator.session().prepared_input();
+        let base_document = checkpoint_document_to_json(coordinator.session().design_document())
+            .expect("base document");
+        let history_cursor = coordinator.history_cursor();
+        let high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+
+        let _ = state.set_distance(1.25);
+        assert!(
+            coordinator
+                .prepare_offset_authoring_preview(&state, "Collapsed inward rectangle offset")
+                .is_err(),
+            "crossing the rectangle-collapse barrier must not produce an applicable patch"
+        );
+        assert_eq!(
+            coordinator
+                .offset_authoring_preview()
+                .expect("last valid ghost")
+                .metadata(),
+            &valid
+        );
+        assert!(!coordinator.offset_authoring_preview_matches(&state));
+        assert_eq!(coordinator.session().prepared_input(), base_input);
+        assert_eq!(coordinator.history_cursor(), history_cursor);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("unchanged document"),
+            base_document
+        );
+
+        let _ = state.set_distance(0.75);
+        coordinator
+            .prepare_offset_authoring_preview(&state, "Recovered inward rectangle offset")
+            .expect("same collector recovers after returning to the valid topology cell");
+        assert!(coordinator.offset_authoring_preview_matches(&state));
+    }
+
+    #[test]
+    fn profile_offset_one_line_chain_uses_the_same_exact_preview_commit_seam() {
+        let (mut coordinator, scene, spans) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        assert!(matches!(
+            coordinator
+                .activate_offset_authoring(&mut state)
+                .expect("complete operand index"),
+            OffsetAuthoringOutcome::ModeEntered(_)
+        ));
+        assert!(matches!(
+            state.pick_at(
+                &scene,
+                scene.viewport.model_to_screen([0.0, -1.0]),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ),
+            OffsetAuthoringOutcome::OperandChanged {
+                operand: Some(OffsetAuthoringOperand::OpenChain {
+                    spans: ref collected,
+                    ..
+                }),
+                ..
+            } if collected.len() == 1
+        ));
+        let OffsetAuthoringOperand::OpenChain {
+            spans: selected, ..
+        } = state.operand().expect("open chain")
+        else {
+            unreachable!()
+        };
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].span, spans[0]);
+
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "One-line offset")
+            .expect("one-line preview");
+        assert_eq!(metadata.source_spans, vec![spans[0]]);
+        assert_eq!(metadata.target_spans.len(), 1);
+        assert_eq!(metadata.provisional_points.len(), 2);
+        assert!(coordinator.offset_authoring_preview_matches(&state));
+        coordinator
+            .apply_offset_authoring_preview(&mut state)
+            .expect("one-line commit");
+        assert!(state.is_active());
+        assert!(state.operand().is_none());
+        assert_eq!(coordinator.history_cursor(), 1);
     }
 
     fn circle_drag_fixture() -> (

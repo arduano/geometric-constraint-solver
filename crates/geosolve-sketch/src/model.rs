@@ -33,6 +33,8 @@ new_key_type! {
     pub struct SketchConstraintId;
     /// Stable identity of a driving or reference dimension.
     pub struct SketchDimensionId;
+    /// Stable runtime identity of one grouped profile-offset association.
+    pub struct ProfileOffsetId;
 }
 
 /// Errors produced while editing, compiling, or solving a sketch.
@@ -73,6 +75,8 @@ pub enum SketchError {
     UnknownConstraint(SketchConstraintId),
     #[error("unknown or stale sketch dimension ID {0:?}")]
     UnknownDimension(SketchDimensionId),
+    #[error("unknown or stale profile-offset ID {0:?}")]
+    UnknownProfileOffset(ProfileOffsetId),
     #[error("point {0:?} is still referenced by sketch geometry")]
     PointInUse(PointId),
     #[error("segment {0:?} is still referenced by a constraint or dimension")]
@@ -150,6 +154,10 @@ pub enum SketchError {
     InvalidAngle(f64),
     #[error("the requested entity combination repeats the same entity")]
     RepeatedEntity,
+    #[error("invalid grouped profile offset: {0}")]
+    InvalidProfileOffset(&'static str),
+    #[error("a grouped profile offset must remain a driving dimension")]
+    ProfileOffsetRequiresDriving,
     #[error("constraint {0:?} has no editable contact state")]
     NoContactState(SketchConstraintId),
     #[error("constraint {0:?} is not a circle-circle tangency")]
@@ -798,6 +806,11 @@ pub enum DimensionKind {
         side: LineSide,
         orientation: LineOffsetOrientation,
     },
+    /// One grouped exact profile-offset association and its positive distance.
+    ProfileOffset {
+        profile: ProfileOffsetId,
+        target: f64,
+    },
 }
 
 #[doc(hidden)]
@@ -856,6 +869,7 @@ pub struct Sketch {
     pub(crate) nurbs: StableStore<NurbsId, crate::nurbs::NurbsCurve>,
     pub(crate) constraints: StableStore<SketchConstraintId, SketchConstraint>,
     pub(crate) dimensions: StableStore<SketchDimensionId, SketchDimension>,
+    pub(crate) profile_offsets: StableStore<ProfileOffsetId, crate::ProfileOffsetAssociation>,
     pub(crate) source_order: Vec<PersistentSource>,
 }
 
@@ -879,6 +893,7 @@ impl Sketch {
             nurbs: StableStore::new(),
             constraints: StableStore::new(),
             dimensions: StableStore::new(),
+            profile_offsets: StableStore::new(),
             source_order: Vec::new(),
         })
     }
@@ -1158,7 +1173,7 @@ impl Sketch {
             || self
                 .dimensions
                 .iter()
-                .any(|(_, dimension)| dimension_references_segment(dimension.kind, segment))
+                .any(|(_, dimension)| dimension_references_segment(dimension.kind, segment, self))
         {
             return Err(SketchError::SegmentInUse(segment));
         }
@@ -1821,10 +1836,16 @@ impl Sketch {
         dimension: SketchDimensionId,
         mode: DimensionMode,
     ) -> Result<(), SketchError> {
-        self.dimensions
+        let dimension = self
+            .dimensions
             .get_mut(dimension)
-            .ok_or(SketchError::UnknownDimension(dimension))?
-            .mode = mode;
+            .ok_or(SketchError::UnknownDimension(dimension))?;
+        if matches!(dimension.kind, DimensionKind::ProfileOffset { .. })
+            && mode != DimensionMode::Driving
+        {
+            return Err(SketchError::ProfileOffsetRequiresDriving);
+        }
+        dimension.mode = mode;
         Ok(())
     }
 
@@ -1889,6 +1910,9 @@ impl Sketch {
             }
             | DimensionKind::ExactTranslatedSegmentOffset {
                 target: current, ..
+            }
+            | DimensionKind::ProfileOffset {
+                target: current, ..
             } => *current = target,
         }
         Ok(())
@@ -1903,9 +1927,16 @@ impl Sketch {
         &mut self,
         dimension: SketchDimensionId,
     ) -> Result<SketchDimension, SketchError> {
-        self.dimensions
+        let removed = self
+            .dimensions
             .remove(dimension)
-            .ok_or(SketchError::UnknownDimension(dimension))
+            .ok_or(SketchError::UnknownDimension(dimension))?;
+        if let DimensionKind::ProfileOffset { profile, .. } = removed.kind {
+            self.profile_offsets
+                .remove(profile)
+                .ok_or(SketchError::UnknownProfileOffset(profile))?;
+        }
+        Ok(removed)
     }
 
     pub(crate) fn point_position(&self, point: PointId) -> Result<Point2<f64>, SketchError> {
@@ -2050,6 +2081,7 @@ impl Sketch {
                         - source_direction.y * (target_start.x - source_start.x))
                     / source_length
             }
+            DimensionKind::ProfileOffset { target, .. } => target,
         };
         validate_finite(value, "reference dimension value")?;
         Ok(value)
@@ -2483,6 +2515,10 @@ fn dimension_references_point(kind: DimensionKind, point: PointId, sketch: &Sket
             .into_iter()
             .filter_map(|segment| sketch.segment_endpoints(segment).ok())
             .any(|(start, end)| start == point || end == point),
+        DimensionKind::ProfileOffset { profile, .. } => sketch
+            .profile_offsets
+            .get(profile)
+            .is_some_and(|association| association.references_point(sketch, point)),
     }
 }
 
@@ -2558,7 +2594,7 @@ impl SketchCurve {
     }
 }
 
-fn dimension_references_segment(kind: DimensionKind, segment: SegmentId) -> bool {
+fn dimension_references_segment(kind: DimensionKind, segment: SegmentId, sketch: &Sketch) -> bool {
     match kind {
         DimensionKind::SegmentLength { segment: id, .. } => id == segment,
         DimensionKind::OrientedAngle { first, second, .. } => first == segment || second == segment,
@@ -2572,6 +2608,12 @@ fn dimension_references_segment(kind: DimensionKind, segment: SegmentId) -> bool
             target_segment,
             ..
         } => source == segment || target_segment == segment,
+        DimensionKind::ProfileOffset { profile, .. } => sketch
+            .profile_offsets
+            .get(profile)
+            .is_some_and(|association| {
+                association.references_curve(crate::ProfileOffsetCurve::Line(segment))
+            }),
         _ => false,
     }
 }

@@ -15,6 +15,7 @@ mod curve_controls;
 mod feature_authoring;
 mod geometry_tools;
 mod inference;
+mod offset_authoring;
 
 pub use annotations::{
     AnnotationLayoutEntry, AnnotationLayoutKey, AnnotationLayoutState, AnnotationPlacement,
@@ -43,9 +44,10 @@ pub use coordinator::{
     EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome,
     FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
     FeatureAuthoringTransaction, GeometryRoleSelectionState, LifecycleDto, LifecycleStatus,
-    MeasurementPublication, MutationOutcome, ProblemsDto, ProjectedDragRejectionStage,
-    ProjectedDragWorkEvidence, RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator, SelectedCurvePropertyMetadata, display_dimension_target,
+    MeasurementPublication, MutationOutcome, ProblemsDto, ProfileOffsetDirectionMetadata,
+    ProfileOffsetDirectionState, ProjectedDragRejectionStage, ProjectedDragWorkEvidence,
+    RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    SelectedCurvePropertyMetadata, display_dimension_target,
 };
 pub use curve_controls::{
     SceneCurveControl, SceneCurveControlGripGeometry, SceneCurveControlGuide,
@@ -74,7 +76,16 @@ pub use geosolve_sketch_features::{
     ComputedFilletContact, ComputedFilletCorner, ComputedFilletParentIndex, ComputedFilletSet,
     ComputedSourceInterval, NativeCurveSpanSource, NewComputedFilletCorner,
 };
+pub use geosolve_sketch_topology::{
+    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetTraversal,
+};
 pub use inference::*;
+pub use offset_authoring::{
+    OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,
+    OffsetAuthoringGuidance, OffsetAuthoringHover, OffsetAuthoringOperand, OffsetAuthoringOutcome,
+    OffsetAuthoringStage, OffsetAuthoringState, OffsetAuthoringTarget,
+    OffsetAuthoringTargetAvailability, OffsetAuthoringWarning, OffsetAuthoringWarningKind,
+};
 use std::cmp::Ordering;
 
 use geosolve_sketch::{

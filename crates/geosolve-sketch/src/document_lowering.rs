@@ -1646,6 +1646,10 @@ fn lower_constraint(
     Ok((runtime, contacts))
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive dimension lowering dispatcher keeps public definition coverage closed"
+)]
 fn lower_dimension(
     document: &SketchDocument,
     sketch: &mut Sketch,
@@ -1664,7 +1668,7 @@ fn lower_dimension(
             |binding| Ok(binding.value),
         )
     };
-    let runtime = match dimension.definition {
+    let runtime = match dimension.definition.clone() {
         D::PointDistance {
             first,
             second,
@@ -1747,8 +1751,140 @@ fn lower_dimension(
             document_line_offset_orientation(orientation),
             mode,
         )?,
+        D::ProfileOffset { target, operand } => {
+            if mode != DimensionMode::Driving {
+                return invalid_runtime("profile offset dimensions must remain driving");
+            }
+            let association = lower_profile_offset_operand(mappings, operand)?;
+            sketch
+                .add_profile_offset(association, target_value(target)?)?
+                .1
+        }
     };
     Ok(runtime)
+}
+
+fn lower_profile_offset_operand(
+    mappings: &DocumentRuntimeMap,
+    operand: crate::DocumentProfileOffsetOperand,
+) -> Result<crate::ProfileOffsetAssociation, DocumentError> {
+    let operand = match operand {
+        crate::DocumentProfileOffsetOperand::Face {
+            direction,
+            outer,
+            holes,
+        } => crate::ProfileOffsetOperand::Face {
+            direction: match direction {
+                crate::DocumentFaceOffsetDirection::Outward => crate::FaceOffsetDirection::Outward,
+                crate::DocumentFaceOffsetDirection::Inward => crate::FaceOffsetDirection::Inward,
+            },
+            outer: lower_profile_offset_loop(mappings, outer)?,
+            holes: holes
+                .into_iter()
+                .map(|value| lower_profile_offset_loop(mappings, value))
+                .collect::<Result<Vec<_>, _>>()?,
+        },
+        crate::DocumentProfileOffsetOperand::OpenChain { side, chain } => {
+            crate::ProfileOffsetOperand::OpenChain {
+                side: document_line_side(side),
+                chain: crate::ProfileOffsetChain {
+                    edges: chain
+                        .edges
+                        .into_iter()
+                        .map(|value| lower_profile_offset_edge(mappings, value))
+                        .collect::<Result<Vec<_>, _>>()?,
+                    junctions: chain
+                        .junctions
+                        .into_iter()
+                        .map(|value| lower_profile_offset_branch(value.branch))
+                        .collect(),
+                    start_terminal: lower_profile_offset_terminal(chain.start_terminal),
+                    end_terminal: lower_profile_offset_terminal(chain.end_terminal),
+                },
+            }
+        }
+    };
+    Ok(crate::ProfileOffsetAssociation { operand })
+}
+
+const fn lower_profile_offset_terminal(
+    value: crate::DocumentProfileOffsetTerminalPolicy,
+) -> crate::ProfileOffsetTerminalPolicy {
+    match value {
+        crate::DocumentProfileOffsetTerminalPolicy::NormalTranslation => {
+            crate::ProfileOffsetTerminalPolicy::NormalTranslation
+        }
+    }
+}
+
+fn lower_profile_offset_loop(
+    mappings: &DocumentRuntimeMap,
+    value: crate::DocumentProfileOffsetLoop,
+) -> Result<crate::ProfileOffsetLoop, DocumentError> {
+    Ok(crate::ProfileOffsetLoop {
+        edges: value
+            .edges
+            .into_iter()
+            .map(|value| lower_profile_offset_edge(mappings, value))
+            .collect::<Result<Vec<_>, _>>()?,
+        junctions: value
+            .junctions
+            .into_iter()
+            .map(|value| lower_profile_offset_branch(value.branch))
+            .collect(),
+    })
+}
+
+fn lower_profile_offset_edge(
+    mappings: &DocumentRuntimeMap,
+    value: crate::DocumentProfileOffsetEdgePair,
+) -> Result<crate::ProfileOffsetEdgePair, DocumentError> {
+    Ok(crate::ProfileOffsetEdgePair {
+        source: lower_directed_profile_offset_curve(mappings, value.source)?,
+        target: lower_directed_profile_offset_curve(mappings, value.target)?,
+    })
+}
+
+fn lower_directed_profile_offset_curve(
+    mappings: &DocumentRuntimeMap,
+    value: crate::DocumentDirectedProfileOffsetCurve,
+) -> Result<crate::DirectedProfileOffsetCurve, DocumentError> {
+    let curve = match mappings
+        .runtime_curve(value.curve.curve)
+        .ok_or_else(|| unknown_runtime("profile offset curve", value.curve.curve.0))?
+    {
+        RuntimeCurve::Line(_) | RuntimeCurve::Polyline(_) => {
+            crate::ProfileOffsetCurve::Line(runtime_segment(mappings, value.curve)?)
+        }
+        RuntimeCurve::Circle(circle) => crate::ProfileOffsetCurve::Circle(*circle),
+        RuntimeCurve::CircularArc(arc) => crate::ProfileOffsetCurve::CircularArc(*arc),
+        _ => return invalid_runtime("unsupported profile offset curve family"),
+    };
+    Ok(crate::DirectedProfileOffsetCurve {
+        curve,
+        traversal: match value.traversal {
+            crate::DocumentOffsetTraversal::Forward => crate::OffsetTraversal::Forward,
+            crate::DocumentOffsetTraversal::Reverse => crate::OffsetTraversal::Reverse,
+        },
+    })
+}
+
+const fn lower_profile_offset_branch(
+    branch: crate::DocumentProfileOffsetJunctionBranch,
+) -> crate::ProfileOffsetJunctionBranch {
+    match branch {
+        crate::DocumentProfileOffsetJunctionBranch::Miter { turn } => {
+            crate::ProfileOffsetJunctionBranch::Miter {
+                turn: match turn {
+                    crate::DocumentProfileOffsetTurn::Left => crate::ProfileOffsetTurn::Left,
+                    crate::DocumentProfileOffsetTurn::Right => crate::ProfileOffsetTurn::Right,
+                },
+            }
+        }
+        crate::DocumentProfileOffsetJunctionBranch::Tangent => {
+            crate::ProfileOffsetJunctionBranch::Tangent
+        }
+    }
 }
 
 const fn document_line_offset_orientation(

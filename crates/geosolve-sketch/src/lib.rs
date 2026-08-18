@@ -39,6 +39,8 @@ mod generic_curves;
 mod m38;
 mod model;
 mod nurbs;
+mod offsets;
+mod profile_offset_construction;
 mod profiles;
 mod residuals;
 mod scenarios;
@@ -109,14 +111,19 @@ pub use document::{
     DocumentCurveDirectionRelation, DocumentCurveEvaluationError, DocumentCurveMeasurementError,
     DocumentCurveMeasurementKind, DocumentCurveNormalSide, DocumentCurveSpanRef,
     DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentDirectionRef, DocumentDirectionSense, DocumentElementActivity,
-    DocumentElementId, DocumentEndpointRef, DocumentError, DocumentExternalBinding,
-    DocumentExternalBindingId, DocumentExternalLineSupportRef, DocumentExternalPointRef,
+    DocumentDimensionMode, DocumentDirectedProfileOffsetCurve, DocumentDirectionRef,
+    DocumentDirectionSense, DocumentElementActivity, DocumentElementId, DocumentEndpointRef,
+    DocumentError, DocumentExternalBinding, DocumentExternalBindingId,
+    DocumentExternalLineSupportRef, DocumentExternalPointRef, DocumentFaceOffsetDirection,
     DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId,
     DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef,
-    DocumentMirroredBSplineInsertion, DocumentNurbsInsertion, DocumentObjectId, DocumentParameter,
-    DocumentParameterBinding, DocumentParameterId, DocumentParameterKind, DocumentParameterOutput,
-    DocumentParameterTarget, DocumentPointRef, DocumentRationalConicControl,
+    DocumentMirroredBSplineInsertion, DocumentNurbsInsertion, DocumentObjectId,
+    DocumentOffsetTraversal, DocumentParameter, DocumentParameterBinding, DocumentParameterId,
+    DocumentParameterKind, DocumentParameterOutput, DocumentParameterTarget, DocumentPointRef,
+    DocumentProfileOffsetChain, DocumentProfileOffsetEdgePair, DocumentProfileOffsetIds,
+    DocumentProfileOffsetJunction, DocumentProfileOffsetJunctionBranch,
+    DocumentProfileOffsetJunctionOwner, DocumentProfileOffsetLoop, DocumentProfileOffsetOperand,
+    DocumentProfileOffsetTerminalPolicy, DocumentProfileOffsetTurn, DocumentRationalConicControl,
     DocumentRationalConicControlMode, DocumentSourceId, DocumentSourceOwner, DocumentSourceRef,
     DocumentTrimBoundary, DocumentTrimParameter, DocumentTrimProjection,
     DocumentTrimProjectionError, DocumentVisibleCurveInterval, EffectiveActivity,
@@ -175,11 +182,22 @@ pub use model::{
     CoordinateAxis, CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation,
     CurveDirectionRelation, CurveMeasurementKind, CurveNormalSide, CurveTangentOrientation,
     DimensionKind, DimensionMode, ExternalConstraintProvenance, FilletEndpointOrder, LineSegment,
-    M38ConicProperty, NurbsId, PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch,
-    SketchConstraint, SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact,
-    SketchDimension, SketchDimensionId, SketchError, SketchPoint, SketchScalarRef,
+    M38ConicProperty, NurbsId, PointId, ProfileOffsetId, SegmentBranch, SegmentEndpoint, SegmentId,
+    Sketch, SketchConstraint, SketchConstraintId, SketchConstraintKind, SketchCurve,
+    SketchCurveContact, SketchDimension, SketchDimensionId, SketchError, SketchPoint,
+    SketchScalarRef,
 };
 pub use nurbs::NurbsCurve;
+pub use offsets::{
+    DirectedProfileOffsetCurve, FaceOffsetDirection, OffsetTraversal, ProfileOffsetAssociation,
+    ProfileOffsetChain, ProfileOffsetCurve, ProfileOffsetEdgePair, ProfileOffsetJunctionBranch,
+    ProfileOffsetLoop, ProfileOffsetOperand, ProfileOffsetTerminalPolicy, ProfileOffsetTurn,
+};
+pub use profile_offset_construction::{
+    DocumentPreparedProfileOffsetGeometry, DocumentProfileOffsetCreationJunction,
+    DocumentProfileOffsetCreationOperand, DocumentProfileOffsetCreationPath,
+    DocumentProfileOffsetCreationRequest,
+};
 pub use profiles::{
     LineCurveFilletBranchCellError, VisualProfileAnalysis, VisualProfileBudgetCounter,
     VisualProfileBudgetReport, VisualProfileContour, VisualProfileCurveFamily, VisualProfileEdge,

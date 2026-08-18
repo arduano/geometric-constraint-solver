@@ -20,6 +20,17 @@ use geosolve_sketch::{
 };
 use thiserror::Error;
 
+mod offset_operands;
+
+pub use offset_operands::{
+    OffsetContourKey, OffsetDirectedSpan, OffsetEndpointAdjacency, OffsetEndpointCandidate,
+    OffsetEndpointEligibility, OffsetEndpointRef, OffsetEndpointRole, OffsetFaceCandidate,
+    OffsetFaceKey, OffsetFaceLookup, OffsetJoinOwner, OffsetOperandConsumptionError,
+    OffsetOperandCurveFamily, OffsetOperandEligibility, OffsetOperandIndex,
+    OffsetOperandIneligibility, OffsetOperandRequest, OffsetOperandResult, OffsetSpanCandidate,
+    OffsetTraversal, PreparedOffsetOperandQuery,
+};
+
 /// Native curve-role scope declared by one production query.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TopologyNativeGeometryScope {

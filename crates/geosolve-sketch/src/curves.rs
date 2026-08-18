@@ -1648,7 +1648,10 @@ impl Sketch {
                 DimensionKind::CircleRadius { circle: id, .. }
                     | DimensionKind::CircleDiameter { circle: id, .. }
                     if id == circle
-            )
+            ) || matches!(dimension.kind(), DimensionKind::ProfileOffset { profile, .. }
+            if self.profile_offsets.get(profile).is_some_and(|association| {
+                association.references_curve(crate::ProfileOffsetCurve::Circle(circle))
+            }))
         })
     }
 
@@ -1673,7 +1676,10 @@ impl Sketch {
                 DimensionKind::ArcRadius { arc: id, .. }
                     | DimensionKind::ArcDiameter { arc: id, .. }
                     if id == arc
-            )
+            ) || matches!(dimension.kind(), DimensionKind::ProfileOffset { profile, .. }
+            if self.profile_offsets.get(profile).is_some_and(|association| {
+                association.references_curve(crate::ProfileOffsetCurve::CircularArc(arc))
+            }))
         })
     }
 }

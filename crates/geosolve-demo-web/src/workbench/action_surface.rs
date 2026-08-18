@@ -48,6 +48,9 @@ pub(crate) const DIMENSION_ACTIONS: [(&str, &str, DimensionKind); 5] = [
 pub(crate) const FEATURE_ACTIONS: [(&str, &str, FeatureAuthoringTool); 1] =
     [("fillet", "Fillet", FeatureAuthoringTool::Fillet)];
 
+/// Native Modify actions that deliberately do not share computed-feature authoring.
+pub(crate) const OFFSET_ACTIONS: [(&str, &str); 1] = [("offset", "Offset")];
+
 pub(crate) fn constraint_from_key(key: &str) -> Option<ConstraintIntent> {
     CONSTRAINT_ACTIONS
         .iter()
@@ -80,6 +83,12 @@ pub(crate) fn feature_tool_from_key(key: &str) -> Option<FeatureAuthoringTool> {
         .find_map(|(candidate, _, tool)| (*candidate == key).then_some(*tool))
 }
 
+pub(crate) fn is_offset_tool_key(key: &str) -> bool {
+    OFFSET_ACTIONS
+        .iter()
+        .any(|(candidate, _)| *candidate == key)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -87,8 +96,9 @@ mod tests {
     use geosolve_constraint_editor::{ConstraintIntent, DimensionKind, FeatureAuthoringTool};
 
     use super::{
-        CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, FEATURE_ACTIONS, authoring_tool_from_key,
-        constraint_from_key, dimension_from_key, dimension_key, feature_tool_from_key,
+        CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, FEATURE_ACTIONS, OFFSET_ACTIONS,
+        authoring_tool_from_key, constraint_from_key, dimension_from_key, dimension_key,
+        feature_tool_from_key, is_offset_tool_key,
     };
 
     #[test]
@@ -199,6 +209,9 @@ mod tests {
             assert_eq!(feature_tool_from_key(key), Some(tool));
         }
         assert_eq!(feature_tool_from_key("unknown"), None);
+        assert_eq!(OFFSET_ACTIONS, [("offset", "Offset")]);
+        assert!(is_offset_tool_key("offset"));
+        assert!(!is_offset_tool_key("fillet"));
     }
 
     #[test]
@@ -256,7 +269,7 @@ mod tests {
     }
 
     #[test]
-    fn modify_palette_exposes_fillet_authoring_controls() {
+    fn modify_palette_exposes_fillet_and_native_offset_authoring_controls() {
         let html = include_str!("../../index.html");
         for (key, _, _) in FEATURE_ACTIONS {
             assert!(
@@ -268,8 +281,19 @@ mod tests {
             html.matches("class=\"wb-feature-icon\"").count(),
             FEATURE_ACTIONS.len()
         );
+        for (key, _) in OFFSET_ACTIONS {
+            assert!(
+                html.contains(&format!("data-wb-offset=\"{key}\"")),
+                "missing native Modify action {key}"
+            );
+        }
+        assert_eq!(html.matches("class=\"wb-offset-icon\"").count(), 1);
         assert!(html.contains("<strong>Modify</strong>"));
         assert!(html.contains("data-wb-action=\"feature-apply\""));
+        assert!(html.contains("data-wb-action=\"offset-apply\""));
+        assert!(html.contains("data-wb-action=\"offset-flip\""));
+        assert!(html.contains("data-wb-action=\"offset-cancel\""));
+        assert!(html.contains("id=\"wb-option-panel-offset\""));
         assert!(html.contains("id=\"wb-fillet-actions-panel\""));
         assert!(html.contains("aria-label=\"Fillet branch actions\""));
         assert!(html.contains("Select a preview arc to use its explicit retained-direction"));
@@ -284,5 +308,24 @@ mod tests {
                 "obsolete raw branch UI `{obsolete}`"
             );
         }
+    }
+
+    #[test]
+    fn accepted_profile_offset_direction_flip_is_selection_scoped_in_the_inspector() {
+        let html = include_str!("../../index.html");
+        let inspector = html
+            .split("id=\"wb-dimension-target-editor\"")
+            .nth(1)
+            .and_then(|markup| markup.split("id=\"wb-branch-editor\"").next())
+            .expect("dimension inspector section");
+        assert!(inspector.contains(
+            "id=\"wb-profile-offset-flip\" type=\"button\" data-wb-action=\"profile-offset-flip\" hidden"
+        ));
+        assert_eq!(
+            html.matches("data-wb-action=\"profile-offset-flip\"")
+                .count(),
+            1
+        );
+        assert_eq!(html.matches("data-wb-action=\"offset-flip\"").count(), 1);
     }
 }
