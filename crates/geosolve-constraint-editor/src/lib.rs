@@ -4575,8 +4575,19 @@ struct PendingConstructionCommit {
     token: ConstructionCommitToken,
     expected: Box<PreparedSketchInput>,
     plan: ConstructionCommitPlan,
+    /// Auto-direction relation indexes that belong to a candidate bundle with
+    /// stronger positional intent.  The retained coordinator may omit one of
+    /// these only after an exact accepted trial proves that complete source is
+    /// redundant and every other inferred source remains useful.
+    droppable_redundant_direction_relations: Vec<usize>,
     recovery_inference_engine: DraftInferenceEngine,
     published: bool,
+}
+
+#[derive(Clone, Debug)]
+struct ConstructionPlanAssembly {
+    plan: ConstructionCommitPlan,
+    droppable_redundant_direction_relations: Vec<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -7853,8 +7864,8 @@ impl ConstraintEditor {
         recovery_inference_engine: DraftInferenceEngine,
         resolution: Option<DraftInferenceResolution>,
     ) -> Vec<EditorEffect> {
-        let plan = match construction_commit_plan(draft, proposal) {
-            Ok(plan) => plan,
+        let assembly = match construction_commit_plan(draft, proposal) {
+            Ok(assembly) => assembly,
             Err(error) => {
                 self.draft_inference_engine = recovery_inference_engine;
                 self.draft_issue = Some(match error {
@@ -7868,6 +7879,7 @@ impl ConstraintEditor {
                 return Vec::new();
             }
         };
+        let plan = assembly.plan;
         let Some(prepared_input) = draft
             .prepared_input
             .filter(|input| input.design_identity() == expected)
@@ -7885,6 +7897,8 @@ impl ConstraintEditor {
             token,
             expected: Box::new(prepared_input),
             plan: plan.clone(),
+            droppable_redundant_direction_relations: assembly
+                .droppable_redundant_direction_relations,
             recovery_inference_engine,
             published: false,
         });
@@ -7920,6 +7934,20 @@ impl ConstraintEditor {
                     && pending.expected.as_ref() == expected
                     && pending.plan == *plan
             })
+    }
+
+    pub(crate) fn authenticated_droppable_redundant_direction_relations(
+        &self,
+        token: ConstructionCommitToken,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+    ) -> Option<&[usize]> {
+        if !self.authenticates_construction_commit(token, expected, plan) {
+            return None;
+        }
+        self.pending_construction_commit
+            .as_ref()
+            .map(|pending| pending.droppable_redundant_direction_relations.as_slice())
     }
 
     pub(crate) fn pending_construction_plan_matches(
@@ -8428,6 +8456,47 @@ enum ConstructionPlanError {
     IncompatibleConstraintIntent,
 }
 
+fn confirmed_inference_has_strong_positional_intent(relations: &[DraftInferenceRelation]) -> bool {
+    let direct_anchor = relations.iter().any(|relation| {
+        matches!(
+            relation,
+            DraftInferenceRelation::PointIdentity { .. }
+                | DraftInferenceRelation::CoincidentWithOrigin
+                | DraftInferenceRelation::PointOnDatumAxis { .. }
+                | DraftInferenceRelation::PointOnCurve { .. }
+                | DraftInferenceRelation::PointOnCreatedCurve { .. }
+                | DraftInferenceRelation::Midpoint { .. }
+                | DraftInferenceRelation::Concentric { .. }
+        )
+    });
+    let horizontal_tracking = relations.iter().any(|relation| {
+        matches!(
+            relation,
+            DraftInferenceRelation::HorizontalPoints { .. }
+                | DraftInferenceRelation::HorizontalPointToMidpoint { .. }
+        )
+    });
+    let vertical_tracking = relations.iter().any(|relation| {
+        matches!(
+            relation,
+            DraftInferenceRelation::VerticalPoints { .. }
+                | DraftInferenceRelation::VerticalPointToMidpoint { .. }
+        )
+    });
+    direct_anchor || (horizontal_tracking && vertical_tracking)
+}
+
+const fn inference_relation_is_directional(relation: DraftInferenceRelation) -> bool {
+    matches!(
+        relation,
+        DraftInferenceRelation::Horizontal
+            | DraftInferenceRelation::Vertical
+            | DraftInferenceRelation::Parallel { .. }
+            | DraftInferenceRelation::Perpendicular { .. }
+            | DraftInferenceRelation::Collinear { .. }
+    )
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "one exhaustive lowering keeps every authenticated inference relation in a single atomic construction plan"
@@ -8435,10 +8504,12 @@ enum ConstructionPlanError {
 fn construction_commit_plan(
     draft: &Draft,
     proposal: ConstructionProposal,
-) -> Result<ConstructionCommitPlan, ConstructionPlanError> {
+) -> Result<ConstructionPlanAssembly, ConstructionPlanError> {
     let mut definitions =
         recipe_relations(draft).ok_or(ConstructionPlanError::InvalidDraftState)?;
+    let recipe_relation_count = definitions.len();
     let mut relations = Vec::new();
+    let mut droppable_direction_ordinals = Vec::new();
     for confirmed in draft.confirmed_inferences() {
         if confirmed.candidate_id.get() == 0 {
             return Err(ConstructionPlanError::InvalidDraftState);
@@ -8452,7 +8523,11 @@ fn construction_commit_plan(
             draft.variant,
             confirmed.stage_index,
         );
+        let strong_positional_intent =
+            confirmed_inference_has_strong_positional_intent(&confirmed.relations);
         for relation in confirmed.relations.iter().copied() {
+            let auto_relation_ordinal = relations.len();
+            let directional = inference_relation_is_directional(relation);
             match relation {
                 DraftInferenceRelation::PointIdentity { point: expected } => {
                     let point = draft_point_slot(draft, confirmed.stage_index)
@@ -8591,6 +8666,12 @@ fn construction_commit_plan(
                     });
                 }
             }
+            if strong_positional_intent
+                && directional
+                && relations.len() == auto_relation_ordinal + 1
+            {
+                droppable_direction_ordinals.push(auto_relation_ordinal);
+            }
         }
     }
     definitions.extend(
@@ -8599,10 +8680,16 @@ fn construction_commit_plan(
             .map(ConstructionRelationDefinition::auto_inference),
     );
     let curve_roles = construction_curve_roles(&proposal, draft.geometry_role);
-    Ok(ConstructionCommitPlan {
-        proposal,
-        curve_roles,
-        relations: definitions,
+    Ok(ConstructionPlanAssembly {
+        plan: ConstructionCommitPlan {
+            proposal,
+            curve_roles,
+            relations: definitions,
+        },
+        droppable_redundant_direction_relations: droppable_direction_ordinals
+            .into_iter()
+            .map(|ordinal| recipe_relation_count + ordinal)
+            .collect(),
     })
 }
 

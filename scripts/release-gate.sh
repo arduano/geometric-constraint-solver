@@ -35,6 +35,9 @@ env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
 env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
   cargo test --locked -p geosolve-constraint-editor --test m77_curve_control_parity \
   --target wasm32-unknown-unknown
+env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+  cargo test --locked -p geosolve-constraint-editor --test m79_inference_lifecycle \
+  --target wasm32-unknown-unknown
 cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
 cargo bench --locked --workspace --all-features --no-run

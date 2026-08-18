@@ -6744,7 +6744,45 @@ impl RetainedEditorCoordinator {
         let design = expected.design_identity();
         let mut trial = self.session.clone();
         let outcome = trial.transact(design, |document| plan.apply(document))?;
-        self.publish_construction_plan_trial(expected, plan, trial, &outcome)
+        self.publish_construction_plan_trial(expected, plan, plan, trial, &outcome)
+    }
+
+    fn apply_authenticated_construction_plan(
+        &mut self,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+        droppable_direction_relations: &[usize],
+    ) -> Result<MutationOutcome<ConstructionCommitResult>, CoordinatorError> {
+        self.ensure_pending_construction_plan_compatible(expected, plan)?;
+        self.ensure_construction_plan_input(expected)?;
+        plan.validate_relation_count()?;
+        let design = expected.design_identity();
+        let mut trial = self.session.clone();
+        let outcome = trial.transact(design, |document| plan.apply(document))?;
+        match Self::validate_construction_plan_trial(&trial, &outcome) {
+            Ok(_) => self.publish_construction_plan_trial(expected, plan, plan, trial, &outcome),
+            Err(error @ CoordinatorError::RedundantInferredConstruction { .. }) => {
+                let Some(effective_plan) = Self::plan_without_fully_redundant_directions(
+                    &trial,
+                    &outcome,
+                    plan,
+                    droppable_direction_relations,
+                ) else {
+                    return Err(error);
+                };
+                let mut effective_trial = self.session.clone();
+                let effective_outcome =
+                    effective_trial.transact(design, |document| effective_plan.apply(document))?;
+                self.publish_construction_plan_trial(
+                    expected,
+                    &effective_plan,
+                    plan,
+                    effective_trial,
+                    &effective_outcome,
+                )
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Controlled counterpart to [`Self::apply_construction_plan`].
@@ -6799,17 +6837,25 @@ impl RetainedEditorCoordinator {
     fn publish_construction_plan_trial(
         &mut self,
         expected: &PreparedSketchInput,
-        plan: &ConstructionCommitPlan,
+        effective_plan: &ConstructionCommitPlan,
+        authenticated_plan: &ConstructionCommitPlan,
         trial: RetainedSketchDocumentSession,
         outcome: &geosolve_sketch::RetainedDocumentTransactionOutcome<ConstructionCommitResult>,
     ) -> Result<MutationOutcome<ConstructionCommitResult>, CoordinatorError> {
         let result = Self::validate_construction_plan_trial(&trial, outcome)?;
         let staged = self.stage_construction_publication(trial)?;
+        if effective_plan != authenticated_plan
+            && !self
+                .editor
+                .mark_construction_commit_published(expected, authenticated_plan)
+        {
+            return Err(CoordinatorError::InferredConstructionCommitMismatch);
+        }
         self.publish_staged_construction(
             staged,
             ReplayAction::ConstructionPlan {
                 expected: Box::new(*expected),
-                plan: plan.clone(),
+                plan: effective_plan.clone(),
             },
         );
         Ok(result)
@@ -6846,6 +6892,54 @@ impl RetainedEditorCoordinator {
             });
         }
         Ok(mutation_from(outcome))
+    }
+
+    fn plan_without_fully_redundant_directions(
+        trial: &RetainedSketchDocumentSession,
+        outcome: &geosolve_sketch::RetainedDocumentTransactionOutcome<ConstructionCommitResult>,
+        plan: &ConstructionCommitPlan,
+        droppable_direction_relations: &[usize],
+    ) -> Option<ConstructionCommitPlan> {
+        let accepted = trial.accepted_state_for_current_input()?;
+        let redundancy = accepted.accepted_redundancy();
+        let droppable = droppable_direction_relations
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let mut remove = BTreeSet::new();
+        for constraint in outcome.value().constraints.iter().filter(|constraint| {
+            constraint.provenance == ConstructionRelationProvenance::AutoInference
+        }) {
+            let fully_redundant = redundancy
+                .fully_redundant_sources()
+                .contains(&constraint.source);
+            let contains_redundant_rows = redundancy
+                .sources_containing_redundant_rows()
+                .contains(&constraint.source);
+            if !fully_redundant && !contains_redundant_rows {
+                continue;
+            }
+            if !fully_redundant || !droppable.contains(&constraint.relation_index) {
+                return None;
+            }
+            let definition = plan.relations.get(constraint.relation_index)?;
+            if definition.provenance != ConstructionRelationProvenance::AutoInference {
+                return None;
+            }
+            remove.insert(constraint.relation_index);
+        }
+        if remove.is_empty() {
+            return None;
+        }
+        let mut effective = plan.clone();
+        effective.relations = plan
+            .relations
+            .iter()
+            .copied()
+            .enumerate()
+            .filter_map(|(index, definition)| (!remove.contains(&index)).then_some(definition))
+            .collect();
+        Some(effective)
     }
 
     fn ensure_construction_plan_input(
@@ -8555,13 +8649,22 @@ impl RetainedEditorCoordinator {
                 token,
                 plan,
             } => {
-                if !self
+                let Some(droppable_direction_relations) = self
                     .editor
-                    .authenticates_construction_commit(*token, expected.as_ref(), plan)
-                {
+                    .authenticated_droppable_redundant_direction_relations(
+                        *token,
+                        expected.as_ref(),
+                        plan,
+                    )
+                    .map(<[usize]>::to_vec)
+                else {
                     return Err(CoordinatorError::InferredConstructionCommitMismatch);
-                }
-                let outcome = self.apply_construction_plan(expected.as_ref(), plan)?;
+                };
+                let outcome = self.apply_authenticated_construction_plan(
+                    expected.as_ref(),
+                    plan,
+                    &droppable_direction_relations,
+                )?;
                 Ok(Some(MutationOutcome {
                     value: EditorMutation::InferredConstruction(outcome.value),
                     design: outcome.design,

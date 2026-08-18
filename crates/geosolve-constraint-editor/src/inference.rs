@@ -1169,6 +1169,37 @@ pub struct DraftInferenceResolution {
     pub guides: Vec<DraftGuide>,
 }
 
+impl DraftInferenceResolution {
+    /// Returns the next candidate in this exact published cohort.
+    ///
+    /// Resolved cohorts advance after the selected candidate and wrap. An
+    /// ambiguous cohort starts at its first deterministic ranked candidate.
+    /// Singleton, stale, suppressed, resource-limited and empty publications
+    /// deliberately provide no cycle action.
+    #[must_use]
+    pub fn next_cycle_candidate_id(&self) -> Option<DraftInferenceCandidateId> {
+        if self.completeness != DraftInferenceCompleteness::Complete || self.candidates.len() < 2 {
+            return None;
+        }
+        match &self.status {
+            DraftInferenceStatus::Resolved { candidate } => {
+                let current = self
+                    .candidates
+                    .iter()
+                    .position(|value| value.id == *candidate)?;
+                self.candidates
+                    .get((current + 1) % self.candidates.len())
+                    .map(|value| value.id)
+            }
+            DraftInferenceStatus::Ambiguous { .. } => self.candidates.first().map(|value| value.id),
+            DraftInferenceStatus::None
+            | DraftInferenceStatus::Suppressed
+            | DraftInferenceStatus::ResourceLimited
+            | DraftInferenceStatus::StalePreferredCandidate { .. } => None,
+        }
+    }
+}
+
 /// Typed input/policy/resource failure.  The engine never turns malformed
 /// coordinates into a no-inference success.
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
@@ -1301,6 +1332,16 @@ struct CandidateWork {
     candidate: DraftInferenceCandidate,
 }
 
+/// Immutable candidates and non-candidate guides from one exact normalized
+/// frame. Explicit selection reads this seal instead of regenerating work and
+/// therefore cannot perturb automatic hover/hysteresis state.
+#[derive(Clone, Debug, PartialEq)]
+struct SealedCandidateCohort {
+    frame: DraftInferenceFrame,
+    candidates: Vec<DraftInferenceCandidate>,
+    standalone_guides: Vec<DraftGuide>,
+}
+
 /// Stateful, bounded drafting-inference resolver.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DraftInferenceEngine {
@@ -1314,6 +1355,7 @@ pub struct DraftInferenceEngine {
     active_point_tracking: BTreeSet<PointTrackingKey>,
     candidate_ids: Vec<(CandidateKey, DraftInferenceCandidateId)>,
     next_candidate_id: u64,
+    sealed_candidate_cohort: Option<Box<SealedCandidateCohort>>,
 }
 
 impl Default for DraftInferenceEngine {
@@ -1329,6 +1371,7 @@ impl Default for DraftInferenceEngine {
             active_point_tracking: BTreeSet::new(),
             candidate_ids: Vec::new(),
             next_candidate_id: 1,
+            sealed_candidate_cohort: None,
         }
     }
 }
@@ -1388,6 +1431,7 @@ impl DraftInferenceEngine {
         if !reference.is_valid() {
             return Err(DraftInferenceError::InvalidFrame);
         }
+        self.sealed_candidate_cohort = None;
         if reference.is_reusable_reference() {
             self.remember_valid_reference(reference);
         }
@@ -1404,6 +1448,7 @@ impl DraftInferenceEngine {
         self.active_concentric = None;
         self.active_point_tracking.clear();
         self.candidate_ids.clear();
+        self.sealed_candidate_cohort = None;
     }
 
     /// Clears every session stamp and transient identity.
@@ -1495,6 +1540,47 @@ impl DraftInferenceEngine {
             ));
         }
         frame.validate_relevant_anchors()?;
+
+        if let Some(preferred) = input.preferred_candidate {
+            let sealed_resolution = self
+                .sealed_candidate_cohort
+                .as_ref()
+                .filter(|sealed| sealed.frame == *frame)
+                .and_then(|sealed| {
+                    let selected = sealed
+                        .candidates
+                        .iter()
+                        .find(|candidate| candidate.id == preferred)?;
+                    let mut guides = sealed.standalone_guides.clone();
+                    guides.extend(selected.guides.iter().copied());
+                    Some(DraftInferenceResolution {
+                        status: DraftInferenceStatus::Resolved {
+                            candidate: preferred,
+                        },
+                        completeness: DraftInferenceCompleteness::Complete,
+                        raw_model_position: selected.raw_model_position,
+                        adjusted_model_position: selected.adjusted_model_position,
+                        raw_screen_position: selected.raw_screen_position,
+                        adjusted_screen_position: selected.adjusted_screen_position,
+                        candidates: sealed.candidates.clone(),
+                        guides,
+                    })
+                });
+            if let Some(resolution) = sealed_resolution {
+                return Ok(resolution);
+            }
+            self.clear_stage();
+            return Ok(empty_resolution(
+                DraftInferenceStatus::StalePreferredCandidate { preferred },
+                raw_model,
+                raw_screen,
+            ));
+        }
+
+        // An ordinary unpreferred observation owns a fresh automatic cohort.
+        // If generation fails or yields no candidates, a former seal must not
+        // remain available at another pointer coordinate within the same scene.
+        self.sealed_candidate_cohort = None;
 
         let mut eligible_anchors = self.eligible_anchors(frame, raw_screen);
         deduplicate_anchor_works(&mut eligible_anchors, frame.geometry_policy.scope);
@@ -1682,55 +1768,44 @@ impl DraftInferenceEngine {
             });
         }
 
-        let selected_index = if let Some(preferred) = input.preferred_candidate {
-            let Some(index) = works.iter().position(|work| work.candidate.id == preferred) else {
-                self.clear_stage();
-                return Ok(DraftInferenceResolution {
-                    status: DraftInferenceStatus::StalePreferredCandidate { preferred },
-                    completeness: DraftInferenceCompleteness::Complete,
-                    raw_model_position: raw_model,
-                    adjusted_model_position: raw_model,
-                    raw_screen_position: raw_screen,
-                    adjusted_screen_position: raw_screen,
-                    candidates: works.into_iter().map(|work| work.candidate).collect(),
-                    guides: standalone_guides,
-                });
-            };
-            index
-        } else {
-            let best = works[0].candidate.ranking;
-            let tied: Vec<_> = works
-                .iter()
-                .take_while(|work| {
-                    work.candidate
-                        .ranking
-                        .compare_for_subject(best, frame.sample.subject)
-                        == Ordering::Equal
-                })
-                .map(|work| work.candidate.id)
-                .collect();
-            if tied.len() > 1 {
-                self.active_anchor = None;
-                self.active_datum = None;
-                self.active_direction = None;
-                self.active_concentric = None;
-                let mut guides = standalone_guides;
-                for work in works.iter().take(tied.len()) {
-                    guides.extend(work.candidate.guides.iter().copied());
-                }
-                return Ok(DraftInferenceResolution {
-                    status: DraftInferenceStatus::Ambiguous { candidates: tied },
-                    completeness: DraftInferenceCompleteness::Complete,
-                    raw_model_position: raw_model,
-                    adjusted_model_position: raw_model,
-                    raw_screen_position: raw_screen,
-                    adjusted_screen_position: raw_screen,
-                    candidates: works.into_iter().map(|work| work.candidate).collect(),
-                    guides,
-                });
+        self.sealed_candidate_cohort = Some(Box::new(SealedCandidateCohort {
+            frame: frame.clone(),
+            candidates: works.iter().map(|work| work.candidate.clone()).collect(),
+            standalone_guides: standalone_guides.clone(),
+        }));
+
+        let best = works[0].candidate.ranking;
+        let tied: Vec<_> = works
+            .iter()
+            .take_while(|work| {
+                work.candidate
+                    .ranking
+                    .compare_for_subject(best, frame.sample.subject)
+                    == Ordering::Equal
+            })
+            .map(|work| work.candidate.id)
+            .collect();
+        if tied.len() > 1 {
+            self.active_anchor = None;
+            self.active_datum = None;
+            self.active_direction = None;
+            self.active_concentric = None;
+            let mut guides = standalone_guides;
+            for work in works.iter().take(tied.len()) {
+                guides.extend(work.candidate.guides.iter().copied());
             }
-            0
-        };
+            return Ok(DraftInferenceResolution {
+                status: DraftInferenceStatus::Ambiguous { candidates: tied },
+                completeness: DraftInferenceCompleteness::Complete,
+                raw_model_position: raw_model,
+                adjusted_model_position: raw_model,
+                raw_screen_position: raw_screen,
+                adjusted_screen_position: raw_screen,
+                candidates: works.into_iter().map(|work| work.candidate).collect(),
+                guides,
+            });
+        }
+        let selected_index = 0;
 
         let selected_key = works[selected_index].key;
         let selected = &works[selected_index].candidate;
@@ -7723,6 +7798,177 @@ mod tests {
         assert!(engine.remembered_references().is_empty());
         assert!(engine.active_point_tracking.is_empty());
         assert!(engine.candidate_ids.is_empty());
+    }
+
+    #[test]
+    fn exact_stationary_cohort_cycles_ranked_candidates_twice_without_state_churn() {
+        let view = viewport(100.0);
+        let target = [2.0, 0.0];
+        let input_frame = frame(
+            view,
+            view.model_to_screen(target),
+            Some([0.0, 0.0]),
+            vec![point_anchor(790, target)],
+        );
+        let mut engine = DraftInferenceEngine::default();
+        let automatic = engine
+            .resolve(&input_frame, DraftInferenceInput::default())
+            .expect("ranked automatic cohort");
+        assert!(automatic.candidates.len() >= 3);
+        assert!(matches!(
+            automatic.status,
+            DraftInferenceStatus::Resolved { .. }
+        ));
+        let DraftInferenceStatus::Resolved {
+            candidate: automatic_candidate,
+        } = &automatic.status
+        else {
+            unreachable!("automatic cohort was resolved")
+        };
+        let automatic_candidate = *automatic_candidate;
+        let sealed_engine = engine.clone();
+        let sealed_candidates = automatic.candidates.clone();
+        let mut current = automatic;
+        let mut first_wrap = Vec::new();
+        let mut first_publications = Vec::new();
+
+        for step in 0..(sealed_candidates.len() * 2) {
+            let next = current
+                .next_cycle_candidate_id()
+                .expect("ranked cohort remains cycleable");
+            current = engine
+                .resolve(
+                    &input_frame,
+                    DraftInferenceInput {
+                        suppressed: false,
+                        preferred_candidate: Some(next),
+                    },
+                )
+                .expect("sealed explicit selection");
+            assert_eq!(engine, sealed_engine);
+            assert_eq!(current.candidates, sealed_candidates);
+            assert!(matches!(
+                current.status,
+                DraftInferenceStatus::Resolved { candidate } if candidate == next
+            ));
+            if step < sealed_candidates.len() {
+                first_wrap.push(next);
+                first_publications.push(current.clone());
+            } else {
+                assert_eq!(next, first_wrap[step - sealed_candidates.len()]);
+                assert_eq!(current, first_publications[step - sealed_candidates.len()]);
+            }
+        }
+        let automatic_index = sealed_candidates
+            .iter()
+            .position(|candidate| candidate.id == automatic_candidate)
+            .expect("automatic candidate in cohort");
+        assert_eq!(
+            first_wrap,
+            (1..=sealed_candidates.len())
+                .map(|offset| {
+                    sealed_candidates[(automatic_index + offset) % sealed_candidates.len()].id
+                })
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn equal_candidates_cycle_a_b_a_and_foreign_preference_is_noncycleable() {
+        let view = viewport(50.0);
+        let target = [0.0, 0.0];
+        let input_frame = frame(
+            view,
+            view.model_to_screen(target),
+            None,
+            vec![point_anchor(791, target), point_anchor(792, target)],
+        );
+        let mut engine = DraftInferenceEngine::default();
+        let ambiguous = engine
+            .resolve(&input_frame, DraftInferenceInput::default())
+            .expect("equal automatic cohort");
+        let DraftInferenceStatus::Ambiguous { candidates } = &ambiguous.status else {
+            panic!("equal point identities must remain ambiguous")
+        };
+        assert_eq!(candidates.len(), 2);
+        let first = ambiguous
+            .next_cycle_candidate_id()
+            .expect("ambiguous cohort starts at A");
+        assert_eq!(first, ambiguous.candidates[0].id);
+        let sealed_engine = engine.clone();
+        let selected_a = engine
+            .resolve(
+                &input_frame,
+                DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate: Some(first),
+                },
+            )
+            .expect("select A");
+        assert_eq!(engine, sealed_engine);
+        let second = selected_a
+            .next_cycle_candidate_id()
+            .expect("A advances to B");
+        assert_eq!(second, ambiguous.candidates[1].id);
+        let selected_b = engine
+            .resolve(
+                &input_frame,
+                DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate: Some(second),
+                },
+            )
+            .expect("select B");
+        assert_eq!(engine, sealed_engine);
+        assert_eq!(
+            selected_b.next_cycle_candidate_id(),
+            Some(first),
+            "B wraps to A"
+        );
+
+        let mut foreign_frame = input_frame.clone();
+        foreign_frame.sample.raw_screen_position.x += 1.0;
+        let stale = engine
+            .resolve(
+                &foreign_frame,
+                DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate: Some(first),
+                },
+            )
+            .expect("foreign-frame preference fails closed");
+        assert_eq!(
+            stale.status,
+            DraftInferenceStatus::StalePreferredCandidate { preferred: first }
+        );
+        assert!(stale.candidates.is_empty());
+        assert!(stale.guides.is_empty());
+        assert_eq!(stale.next_cycle_candidate_id(), None);
+        assert!(engine.sealed_candidate_cohort.is_none());
+        assert!(engine.candidate_ids.is_empty());
+        assert!(engine.remembered_references.is_empty());
+
+        let refreshed = engine
+            .resolve(&foreign_frame, DraftInferenceInput::default())
+            .expect("one ordinary unpreferred refresh");
+        assert!(!matches!(
+            refreshed.status,
+            DraftInferenceStatus::StalePreferredCandidate { .. }
+        ));
+
+        for status in [
+            DraftInferenceStatus::None,
+            DraftInferenceStatus::Suppressed,
+            DraftInferenceStatus::ResourceLimited,
+            DraftInferenceStatus::StalePreferredCandidate { preferred: first },
+        ] {
+            let mut noncycleable = ambiguous.clone();
+            noncycleable.status = status;
+            assert_eq!(noncycleable.next_cycle_candidate_id(), None);
+        }
+        let mut singleton = selected_a;
+        singleton.candidates.truncate(1);
+        assert_eq!(singleton.next_cycle_candidate_id(), None);
     }
 
     #[test]
