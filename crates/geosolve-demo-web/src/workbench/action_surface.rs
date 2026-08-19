@@ -290,6 +290,14 @@ mod tests {
         assert_eq!(html.matches("class=\"wb-offset-icon\"").count(), 1);
         assert!(html.contains("<strong>Modify</strong>"));
         assert!(html.contains("data-wb-action=\"feature-apply\""));
+        assert!(html.contains(
+            "id=\"wb-guide-apply-native\" type=\"button\" data-wb-action=\"feature-apply-native\" aria-describedby=\"wb-guide-apply-native-reason\""
+        ));
+        assert!(html.contains(">Apply computed</button>"));
+        assert!(html.contains(">Apply native profile</button>"));
+        assert!(html.contains(
+            "id=\"wb-guide-apply-native-reason\" class=\"wb-guide-action-reason\" role=\"status\""
+        ));
         assert!(html.contains("data-wb-action=\"offset-apply\""));
         assert!(html.contains("data-wb-action=\"offset-flip\""));
         assert!(html.contains("data-wb-action=\"offset-cancel\""));

@@ -138,7 +138,9 @@
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>
           <span id="wb-draft-guide-text">Click to add the next point</span>
           <button id="wb-guide-finish" type="button" data-wb-action="finish">Finish curve</button>
-          <button id="wb-guide-apply" type="button" data-wb-action="feature-apply" hidden>Apply</button>
+          <button id="wb-guide-apply" type="button" data-wb-action="feature-apply" hidden>Apply computed</button>
+          <button id="wb-guide-apply-native" type="button" data-wb-action="feature-apply-native" aria-describedby="wb-guide-apply-native-reason" hidden>Apply native profile</button>
+          <small id="wb-guide-apply-native-reason" class="wb-guide-action-reason" role="status" hidden></small>
           <button type="button" data-wb-action="cancel">Cancel</button>
         </div>
         <div id="wb-canvas-overlay-stack" class="wb-canvas-overlay-stack">
@@ -166,7 +168,7 @@
             <div id="wb-option-panel-fillet" class="wb-option-panel" data-wb-option-panel="fillet" hidden>
               <label>Shared radius<input id="wb-feature-fillet-radius" type="number" min="0" step="any" /></label>
               <p class="wb-option-help">Select a preview arc to use its explicit retained-direction and local-alternative controls on the canvas or in the Inspector.</p>
-              <p class="wb-option-help">Pick one or more corners, then Apply. Every corner in this batch shares the radius.</p>
+              <p class="wb-option-help">Pick one or more corners; every corner in the batch shares the radius. Apply computed keeps the associative Fillet set. Apply native profile materializes one eligible standalone line-line corner as ordinary offset-ready geometry.</p>
             </div>
             <div id="wb-option-panel-offset" class="wb-option-panel" data-wb-option-panel="offset" hidden>
               <div class="wb-offset-status"><span>Operand</span><strong id="wb-offset-operand-status">Select a face or curve</strong></div>

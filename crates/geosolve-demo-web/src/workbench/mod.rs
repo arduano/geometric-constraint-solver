@@ -1876,6 +1876,106 @@ fn observe_feature_authoring_preview_lifecycle(
     }
 }
 
+/// Browser presentation for the second, explicitly native Fillet publication choice.
+///
+/// Visibility follows the ordinary complete-preview action, while enabled state comes only from
+/// the coordinator's exact held-preview/topology authentication. The adapter never guesses from
+/// curve labels or browser paint state.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct NativeFilletApplyPresentation {
+    visible: bool,
+    disabled: bool,
+    reason: Option<String>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn native_fillet_apply_presentation(
+    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
+    candidate: Option<&geosolve_constraint_editor::FeatureAuthoringCandidate>,
+    stage: geosolve_constraint_editor::FeatureAuthoringStage,
+) -> NativeFilletApplyPresentation {
+    let Some(candidate) = candidate
+        .filter(|_| stage == geosolve_constraint_editor::FeatureAuthoringStage::PreviewReady)
+    else {
+        return NativeFilletApplyPresentation {
+            visible: false,
+            disabled: true,
+            reason: None,
+        };
+    };
+    let availability = coordinator
+        .feature_authoring_preview()
+        .ok_or_else(|| "the exact current Fillet preview is unavailable".to_owned())
+        .and_then(|preview| {
+            coordinator
+                .native_feature_authoring_availability(preview.metadata().token, candidate)
+                .map_err(|error| concise_native_fillet_unavailable(&error.to_string()))
+        });
+    match availability {
+        Ok(()) => NativeFilletApplyPresentation {
+            visible: true,
+            disabled: false,
+            reason: None,
+        },
+        Err(reason) => NativeFilletApplyPresentation {
+            visible: true,
+            disabled: true,
+            reason: Some(reason),
+        },
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn concise_native_fillet_unavailable(message: &str) -> String {
+    message
+        .strip_prefix("native Fillet output is unavailable: ")
+        .unwrap_or(message)
+        .to_owned()
+}
+
+/// A successful feature publication hides its invoking guide control and exits authoring. Move
+/// keyboard focus to the newly active Select tool; a rejected publication keeps its authoring
+/// surface and current focus intact.
+#[cfg(any(target_arch = "wasm32", test))]
+fn feature_apply_returns_focus_to_select(action: &str, feature_authoring_active: bool) -> bool {
+    matches!(action, "feature-apply" | "feature-apply-native") && !feature_authoring_active
+}
+
+/// Publishes the exact held preview as native Profile geometry and performs the complete shared
+/// workbench success transition. Any error preserves the authoring candidate, overlay and
+/// selection so a stale or unsupported click is presentation-neutral.
+#[cfg(any(target_arch = "wasm32", test))]
+fn apply_native_fillet_profile(
+    coordinator: &mut geosolve_constraint_editor::RetainedEditorCoordinator,
+    authoring: &mut geosolve_constraint_editor::FeatureAuthoringState,
+    candidate: &mut Option<geosolve_constraint_editor::FeatureAuthoringCandidate>,
+    pending: &mut Vec<geosolve_constraint_editor::FeatureAuthoringPick>,
+    overlay: &mut OptionOverlayState,
+) -> Result<Vec<geosolve_constraint_editor::EditorEffect>, String> {
+    let candidate_value = candidate
+        .as_ref()
+        .ok_or_else(|| "the exact current Fillet candidate is unavailable".to_owned())?;
+    let preview = coordinator
+        .feature_authoring_preview()
+        .map(|preview| preview.metadata().clone())
+        .ok_or_else(|| "the exact current Fillet preview is unavailable".to_owned())?;
+    let mutation = coordinator
+        .apply_feature_authoring_native_profile(preview.token, candidate_value)
+        .map_err(|error| error.to_string())?;
+    let effects = coordinator
+        .editor_mut()
+        .activate_tool(geosolve_constraint_editor::EditorTool::Select);
+    coordinator.set_selection([geosolve_constraint_editor::SelectionItem::Curve(
+        geosolve_sketch::CurveSpan::line(mutation.value.arc),
+    )]);
+    let _ = authoring.publication_succeeded();
+    candidate.take();
+    pending.clear();
+    overlay.close();
+    Ok(effects)
+}
+
 /// Runs the state-changing half of a reproduction load only after the complete
 /// replacement has been decoded and independently validated.
 #[cfg(any(target_arch = "wasm32", test))]
@@ -2665,6 +2765,10 @@ pub(crate) mod wasm {
                     focus_select = true;
                 }
                 perform_action(&callback_document, &mut wb, &action);
+                focus_select |= super::feature_apply_returns_focus_to_select(
+                    &action,
+                    wb.feature_authoring.active_tool().is_some(),
+                );
                 focus_reproduction_text =
                     matches!(action.as_str(), "reproduction-open" | "reproduction-select");
                 focus_reproduction_return = super::reproduction_focus_target_after_action(
@@ -4982,6 +5086,36 @@ pub(crate) mod wasm {
                 handle_feature_outcome(wb, outcome);
                 Ok(())
             }
+            "feature-apply-native" => {
+                let result = {
+                    let Workbench {
+                        coordinator,
+                        feature_authoring,
+                        feature_candidate,
+                        feature_pending,
+                        option_overlay,
+                        ..
+                    } = wb;
+                    super::apply_native_fillet_profile(
+                        coordinator,
+                        feature_authoring,
+                        feature_candidate,
+                        feature_pending,
+                        option_overlay,
+                    )
+                };
+                match result {
+                    Ok(effects) => {
+                        dispatch_effects(wb, effects);
+                        wb.notice =
+                            "Native Profile Fillet accepted; arc selected; Select active".into();
+                        Ok(())
+                    }
+                    Err(error) => Err(format!(
+                        "Native Profile Fillet was not applied; accepted geometry is unchanged: {error}"
+                    )),
+                }
+            }
             "offset-flip" => {
                 let outcome = wb.offset_authoring.flip();
                 let rebuild = matches!(&outcome, OffsetAuthoringOutcome::OperandChanged { .. });
@@ -5145,6 +5279,7 @@ pub(crate) mod wasm {
                 | "dimension-target"
                 | "profile-offset-flip"
                 | "feature-apply"
+                | "feature-apply-native"
                 | "offset-flip"
                 | "offset-apply"
                 | "offset-cancel"
@@ -6771,15 +6906,41 @@ pub(crate) mod wasm {
         } else {
             required(document, "wb-guide-finish")?.remove_attribute("hidden")?;
         }
+        let complete_feature_candidate = wb.feature_candidate.is_some()
+            && wb.feature_authoring.guidance().stage == FeatureAuthoringStage::PreviewReady;
         let apply = required(document, "wb-guide-apply")?;
-        if wb.feature_candidate.is_some()
-            && wb.feature_authoring.guidance().stage == FeatureAuthoringStage::PreviewReady
-        {
-            apply.remove_attribute("hidden")?;
-            set_disabled(&apply, false)?;
+        set_hidden(&apply, !complete_feature_candidate)?;
+        set_disabled(&apply, !complete_feature_candidate)?;
+        let native_presentation = super::native_fillet_apply_presentation(
+            coordinator,
+            wb.feature_candidate.as_ref(),
+            wb.feature_authoring.guidance().stage,
+        );
+        let native_apply = required(document, "wb-guide-apply-native")?;
+        set_hidden(&native_apply, !native_presentation.visible)?;
+        set_disabled(&native_apply, native_presentation.disabled)?;
+        native_apply.set_attribute(
+            "data-native-fillet-availability",
+            if !native_presentation.visible {
+                "inactive"
+            } else if native_presentation.disabled {
+                "unavailable"
+            } else {
+                "applicable"
+            },
+        )?;
+        let native_reason = required(document, "wb-guide-apply-native-reason")?;
+        if let Some(reason) = native_presentation.reason.as_deref() {
+            let message = format!("Native output unavailable: {reason}");
+            if native_reason.text_content().as_deref() != Some(message.as_str()) {
+                native_reason.set_text_content(Some(&message));
+            }
+            native_reason.remove_attribute("hidden")?;
+            native_apply.set_attribute("title", reason)?;
         } else {
-            apply.set_attribute("hidden", "")?;
-            set_disabled(&apply, true)?;
+            native_reason.set_text_content(None);
+            native_reason.set_attribute("hidden", "")?;
+            native_apply.remove_attribute("title")?;
         }
         required(document, "wb-tool-select")?.set_attribute(
             "aria-pressed",
@@ -8348,10 +8509,10 @@ mod tests {
         DraftInferenceCandidateId, DraftInferenceCompleteness, DraftInferenceResolution,
         DraftInferenceStatus, EditorHoverState, EditorHoverTarget, EditorProblemScope, EditorScene,
         EditorTool, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-        FeatureAuthoringPreviewMetadata, FeatureAuthoringState, FeatureAuthoringTool,
-        GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus, GeometryInteractionPolicy,
-        GeometryPickScope, GeometryToolVariant, GeometryVisibility, Modifiers,
-        OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringWarning,
+        FeatureAuthoringPreviewMetadata, FeatureAuthoringStage, FeatureAuthoringState,
+        FeatureAuthoringTool, GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus,
+        GeometryInteractionPolicy, GeometryPickScope, GeometryToolVariant, GeometryVisibility,
+        Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringWarning,
         OffsetAuthoringWarningKind, PickTolerance, PointerInput, RetainedEditorCoordinator,
         SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationOccurrence,
         SceneAnnotationVisibility, SceneConstraintGlyph, SceneCurveOrigin, ScreenPoint,
@@ -8375,13 +8536,14 @@ mod tests {
         DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
         ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
         PointerMoveQueue, ReproductionFocusReturn, annotation_family_name,
-        annotation_inspector_presentation, apply_validated_reproduction, canvas_cursor_key,
-        canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
-        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
-        coordinate_hud, current_problem_items, curve_control_inspector_detail,
-        curve_control_inspector_markup, draft_inference_preference_is_stale,
+        annotation_inspector_presentation, apply_native_fillet_profile,
+        apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
+        canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
+        compose_editor_scene, coordinate_hud, current_problem_items,
+        curve_control_inspector_detail, curve_control_inspector_markup,
+        draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
         foreground_overlay_escape_owner, geometry_sweep_flip_available,
-        geometry_variant_keyboard_target, history_shortcut,
+        geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
         observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
         offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
         owns_authoring_pick, rational_conic_construction_copy,
@@ -10900,6 +11062,344 @@ mod tests {
             )
             .expect("prepare grouped computed preview");
         (candidate, metadata)
+    }
+
+    fn native_line_fillet_fixture() -> (
+        RetainedEditorCoordinator,
+        FeatureAuthoringState,
+        FeatureAuthoringCandidate,
+        FeatureAuthoringPreviewMetadata,
+        [CurveSpan; 2],
+        DesignPointId,
+    ) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let start = document
+            .add_point("horizontal start", [0.0, 0.0])
+            .expect("start");
+        let corner = document
+            .add_point("sharp corner", [3.0, 0.0])
+            .expect("corner");
+        let end = document.add_point("vertical end", [3.0, 3.0]).expect("end");
+        let lines = [
+            CurveSpan::line(
+                document
+                    .add_curve(
+                        "horizontal parent",
+                        CurveDefinition::Line {
+                            start,
+                            end: corner,
+                            branch_direction: [1.0, 0.0],
+                        },
+                    )
+                    .expect("horizontal line"),
+            ),
+            CurveSpan::line(
+                document
+                    .add_curve(
+                        "vertical parent",
+                        CurveDefinition::Line {
+                            start: corner,
+                            end,
+                            branch_direction: [0.0, 1.0],
+                        },
+                    )
+                    .expect("vertical line"),
+            ),
+        ];
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted line corner");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("line-corner coordinator");
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("current feature-authoring snapshot");
+        let accepted_document = snapshot.sketch_document().clone();
+        let picks = coordinator
+            .feature_authoring_picks_for_item(SelectionItem::Point(corner), None)
+            .expect("standalone line-line corner picks");
+        let mut state = FeatureAuthoringState::default();
+        let _ = state.activate(
+            &snapshot,
+            &accepted_document,
+            FeatureAuthoringTool::Fillet,
+            &[],
+        );
+        assert!(matches!(
+            state.set_options(
+                &snapshot,
+                FeatureAuthoringOptions {
+                    fillet_radius: Some(0.5),
+                    ..FeatureAuthoringOptions::default()
+                },
+            ),
+            FeatureAuthoringOutcome::Collecting { .. }
+        ));
+        let FeatureAuthoringOutcome::PreviewRequested {
+            candidate,
+            guidance,
+        } = state.pick_many(&snapshot, picks)
+        else {
+            panic!("one standalone line-line corner should request a preview");
+        };
+        assert_eq!(guidance.completed_corners, 1);
+        let metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "Native profile preview",
+            )
+            .expect("exact held line-line preview");
+        (coordinator, state, candidate, metadata, lines, corner)
+    }
+
+    fn high_valence_native_line_fillet_fixture()
+    -> (RetainedEditorCoordinator, FeatureAuthoringCandidate) {
+        let (base, _, _, _, lines, corner) = native_line_fillet_fixture();
+        let mut document = base.session().design_document().clone();
+        let branch_end = document
+            .add_point("branch end", [1.5, 1.5])
+            .expect("branch endpoint");
+        document
+            .add_curve(
+                "third corner owner",
+                CurveDefinition::Line {
+                    start: corner,
+                    end: branch_end,
+                    branch_direction: [
+                        -std::f64::consts::FRAC_1_SQRT_2,
+                        std::f64::consts::FRAC_1_SQRT_2,
+                    ],
+                },
+            )
+            .expect("third incident line");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted high-valence corner");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("high-valence coordinator");
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("current feature-authoring snapshot");
+        let accepted_document = snapshot.sketch_document().clone();
+        let picks = [(lines[0], 0.75), (lines[1], 0.25)]
+            .into_iter()
+            .flat_map(|(line, parameter)| {
+                coordinator
+                    .feature_authoring_picks_for_item(SelectionItem::Curve(line), Some(parameter))
+                    .expect("explicit selected-line Fillet pick")
+            })
+            .collect::<Vec<_>>();
+        let mut state = FeatureAuthoringState::default();
+        let _ = state.activate(
+            &snapshot,
+            &accepted_document,
+            FeatureAuthoringTool::Fillet,
+            &[],
+        );
+        assert!(matches!(
+            state.set_options(
+                &snapshot,
+                FeatureAuthoringOptions {
+                    fillet_radius: Some(0.5),
+                    ..FeatureAuthoringOptions::default()
+                },
+            ),
+            FeatureAuthoringOutcome::Collecting { .. }
+        ));
+        let FeatureAuthoringOutcome::PreviewRequested { candidate, .. } =
+            state.pick_many(&snapshot, picks)
+        else {
+            panic!("the explicitly selected line pair should request a computed preview");
+        };
+        coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "High-valence native profile preview",
+            )
+            .expect("computed Fillet preview remains valid");
+        (coordinator, candidate)
+    }
+
+    #[test]
+    fn native_profile_apply_action_uses_exact_headless_availability_reason() {
+        let (coordinator, _, candidate, _, _, _) = native_line_fillet_fixture();
+        let applicable = native_fillet_apply_presentation(
+            &coordinator,
+            Some(&candidate),
+            FeatureAuthoringStage::PreviewReady,
+        );
+        assert!(applicable.visible);
+        assert!(!applicable.disabled);
+        assert_eq!(applicable.reason, None);
+
+        let (mut grouped, _, points) = grouped_fillet_fixture();
+        let mut grouped_state = FeatureAuthoringState::default();
+        let (grouped_candidate, _) =
+            prepare_grouped_fillet(&mut grouped, &mut grouped_state, [points[1], points[2]]);
+        let unavailable = native_fillet_apply_presentation(
+            &grouped,
+            Some(&grouped_candidate),
+            FeatureAuthoringStage::PreviewReady,
+        );
+        assert!(unavailable.visible);
+        assert!(unavailable.disabled);
+        assert_eq!(
+            unavailable.reason.as_deref(),
+            Some("Native profile output currently requires exactly one line-line corner")
+        );
+
+        let (high_valence, high_valence_candidate) = high_valence_native_line_fillet_fixture();
+        let high_valence_unavailable = native_fillet_apply_presentation(
+            &high_valence,
+            Some(&high_valence_candidate),
+            FeatureAuthoringStage::PreviewReady,
+        );
+        assert!(high_valence_unavailable.visible);
+        assert!(high_valence_unavailable.disabled);
+        assert_eq!(
+            high_valence_unavailable.reason.as_deref(),
+            Some("shared corner must be owned only by the two selected source lines")
+        );
+
+        let inactive = native_fillet_apply_presentation(
+            &coordinator,
+            None,
+            FeatureAuthoringStage::PickFirstFilletCurve,
+        );
+        assert!(!inactive.visible);
+        assert!(inactive.disabled);
+        assert_eq!(inactive.reason, None);
+    }
+
+    #[test]
+    fn completed_computed_and_native_feature_apply_return_focus_to_select() {
+        for action in ["feature-apply", "feature-apply-native"] {
+            assert!(
+                feature_apply_returns_focus_to_select(action, false),
+                "a successful {action} hides its invoking guide control"
+            );
+            assert!(
+                !feature_apply_returns_focus_to_select(action, true),
+                "a rejected {action} keeps the active Fillet surface and its focus"
+            );
+        }
+        assert!(!feature_apply_returns_focus_to_select(
+            "offset-apply",
+            false
+        ));
+    }
+
+    #[test]
+    fn native_profile_apply_selects_arc_closes_fillet_and_keeps_computed_apply_separate() {
+        let (mut coordinator, mut state, candidate, _, lines, corner) =
+            native_line_fillet_fixture();
+        let history_before = coordinator.history_len();
+        let mut candidate = Some(candidate);
+        let mut pending = Vec::new();
+        let mut overlay = OptionOverlayState::default();
+        overlay.open(OptionOverlayKind::Fillet);
+
+        let effects = apply_native_fillet_profile(
+            &mut coordinator,
+            &mut state,
+            &mut candidate,
+            &mut pending,
+            &mut overlay,
+        )
+        .expect("native Profile Fillet publication");
+        assert!(effects.is_empty(), "Fillet authoring already owns Select");
+        assert_eq!(coordinator.editor().tool(), EditorTool::Select);
+        assert!(state.active_tool().is_none());
+        assert!(candidate.is_none());
+        assert!(pending.is_empty());
+        assert_eq!(overlay.open, None);
+        assert_eq!(coordinator.history_len(), history_before + 1);
+        assert!(
+            coordinator.feature_document().features().is_empty(),
+            "native publication must not create a computed FilletSet"
+        );
+        let [SelectionItem::Curve(arc)] = coordinator.editor().selection() else {
+            panic!("the created native arc should be the sole selection");
+        };
+        let document = coordinator.session().design_document();
+        assert!(matches!(
+            document.curve(arc.curve).map(|curve| &curve.definition),
+            Some(CurveDefinition::CircularArc { .. })
+        ));
+        assert_eq!(arc.segment, 0);
+        assert!(document.point(corner).is_none());
+        for line in lines {
+            assert!(
+                document.curve(line.curve).is_some(),
+                "native output preserves both source line identities"
+            );
+        }
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn stale_native_profile_apply_is_ui_and_document_neutral() {
+        let (mut coordinator, mut state, _, metadata, lines, _) = native_line_fillet_fixture();
+        coordinator.set_selection([SelectionItem::Curve(lines[0])]);
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("current authoring snapshot");
+        let FeatureAuthoringOutcome::PreviewRequested {
+            candidate: changed, ..
+        } = state.set_options(
+            &snapshot,
+            FeatureAuthoringOptions {
+                fillet_radius: Some(0.75),
+                ..state.options()
+            },
+        )
+        else {
+            panic!("radius change should produce a distinct complete candidate");
+        };
+        let design_before = coordinator.session().design_identity();
+        let history_before = coordinator.history_len();
+        let selection_before = coordinator.editor().selection().to_vec();
+        let mut candidate = Some(changed.clone());
+        let mut pending = Vec::new();
+        let mut overlay = OptionOverlayState::default();
+        overlay.open(OptionOverlayKind::Fillet);
+
+        let error = apply_native_fillet_profile(
+            &mut coordinator,
+            &mut state,
+            &mut candidate,
+            &mut pending,
+            &mut overlay,
+        )
+        .expect_err("a changed candidate cannot consume the older exact preview");
+        assert!(error.contains("stale"));
+        assert_eq!(coordinator.session().design_identity(), design_before);
+        assert_eq!(coordinator.history_len(), history_before);
+        assert_eq!(coordinator.editor().selection(), selection_before);
+        assert_eq!(candidate.as_ref(), Some(&changed));
+        assert_eq!(overlay.open, Some(OptionOverlayKind::Fillet));
+        assert_eq!(state.active_tool(), Some(FeatureAuthoringTool::Fillet));
+        assert_eq!(
+            coordinator
+                .feature_authoring_preview()
+                .expect("failed application keeps the held preview")
+                .metadata()
+                .token,
+            metadata.token
+        );
     }
 
     #[test]

@@ -1004,6 +1004,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   left: 50%;
   z-index: 2;
   display: flex;
+  max-width: min(46rem, calc(100% - 1.5rem));
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.6rem 0.5rem 0.75rem;
@@ -1016,6 +1018,13 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   transform: translateX(-50%);
 }
 .wb-draft-guide button { padding: 0.32rem 0.5rem; }
+.wb-guide-action-reason {
+  flex-basis: 100%;
+  color: #b9aaa0;
+  font-size: 0.64rem;
+  line-height: 1.35;
+  text-align: center;
+}
 .wb-annotation { cursor: pointer; outline: none; }
 .wb-dimension text { text-anchor: middle; }
 .wb-dimension-label-mask {
