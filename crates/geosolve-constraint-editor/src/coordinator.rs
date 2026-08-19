@@ -2,7 +2,7 @@
 
 //! Retained-design lifecycle coordination for presentation adapters.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use geosolve_sketch::{
@@ -16,17 +16,17 @@ use geosolve_sketch::{
     DocumentDragLocalityPlan, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
     DocumentFaceOffsetDirection, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch,
     DocumentLineSide, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
-    DocumentMeasurementValue, DocumentObjectId, DocumentParameterTarget, DocumentProfileOffsetIds,
-    DocumentProfileOffsetOperand, DocumentRationalConicControl, DocumentRuntimeMap,
-    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
-    ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
-    GeometryRoleEdit, OperationCheckpoint, OperationControl, OperationController, OperationLimits,
-    OperationOutcome, OperationReport, OperationWork, ParameterBatch, PreparedSketchCommit,
-    PreparedSketchInput, PreparedSketchOperation, PreparedSketchPatch, PreparedSketchSnapshot,
-    RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
-    SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
-    SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDatum,
-    SketchDesignIdentity, SketchDocument, SketchLifecycleRevisionHighWater,
+    DocumentMeasurementValue, DocumentNativeLineFilletIds, DocumentObjectId,
+    DocumentParameterTarget, DocumentProfileOffsetIds, DocumentProfileOffsetOperand,
+    DocumentRationalConicControl, DocumentRuntimeMap, DocumentSessionError, DocumentSolveRequest,
+    DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1, ExternalSnapshotSet,
+    ExternalTopologyDigest, GeometryRole, GeometryRoleEdit, OperationCheckpoint, OperationControl,
+    OperationController, OperationLimits, OperationOutcome, OperationReport, OperationWork,
+    ParameterBatch, PreparedSketchCommit, PreparedSketchInput, PreparedSketchOperation,
+    PreparedSketchPatch, PreparedSketchSnapshot, RetainedSketchDocumentSession, RuntimeCurve,
+    ScalarDomain, ScalarUnit, SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity,
+    SketchAttemptFailure, SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound,
+    SketchDatum, SketchDesignIdentity, SketchDocument, SketchLifecycleRevisionHighWater,
     SketchPersistentIdentityHighWater, SketchSolveResult, SketchSource, SolveRejection,
     TangentOrientation,
 };
@@ -1503,6 +1503,63 @@ struct FeatureAuthoringRadiusOrigin {
     metadata: FeatureAuthoringPreviewMetadata,
 }
 
+/// Complete native-Fillet publication staged beside one exact held computed preview. The prepared
+/// sketch patch is intentionally single-owner: Apply may consume this value, but cannot clone,
+/// reconstruct, or re-solve it from presentation state.
+#[derive(Debug)]
+struct PreparedNativeFilletPublication {
+    base_input: PreparedSketchInput,
+    base_computed_allocator: ComputedEvaluationAllocatorHighWater,
+    proposed: PreparedSketchCommit,
+    ids: DocumentNativeLineFilletIds,
+    edit: DocumentEdit,
+    patch: PreparedSketchPatch,
+    computed_snapshot: ComputedFeatureSnapshot,
+    computed_allocator: ComputedEvaluationAllocator,
+    checkpoint: RestoreCheckpoint,
+}
+
+#[derive(Debug)]
+enum NativeFilletPreviewCache {
+    Prepared(Box<PreparedNativeFilletPublication>),
+    Unavailable(NativeFilletPreviewFailure),
+}
+
+#[derive(Debug)]
+enum NativeFilletPreviewFailure {
+    Unavailable(String),
+    WorkStopped,
+    Rejected,
+    ComputedWorkStopped,
+    ComputedPreviewInvalidated,
+    Other(String),
+}
+
+impl NativeFilletPreviewFailure {
+    fn coordinator_error(&self) -> CoordinatorError {
+        match self {
+            Self::Unavailable(reason) | Self::Other(reason) => {
+                CoordinatorError::NativeFilletUnavailable(reason.clone())
+            }
+            Self::WorkStopped => CoordinatorError::NativeFilletWorkStopped,
+            Self::Rejected => CoordinatorError::NativeFilletRejected,
+            Self::ComputedWorkStopped => CoordinatorError::ComputedFeatureWorkStopped,
+            Self::ComputedPreviewInvalidated => CoordinatorError::ComputedFeaturePreviewInvalidated,
+        }
+    }
+
+    fn from_coordinator_error(error: CoordinatorError) -> Self {
+        match error {
+            CoordinatorError::NativeFilletUnavailable(reason) => Self::Unavailable(reason),
+            CoordinatorError::NativeFilletWorkStopped => Self::WorkStopped,
+            CoordinatorError::NativeFilletRejected => Self::Rejected,
+            CoordinatorError::ComputedFeatureWorkStopped => Self::ComputedWorkStopped,
+            CoordinatorError::ComputedFeaturePreviewInvalidated => Self::ComputedPreviewInvalidated,
+            error => Self::Other(error.to_string()),
+        }
+    }
+}
+
 impl FeatureAuthoringPreview {
     #[must_use]
     pub const fn metadata(&self) -> &FeatureAuthoringPreviewMetadata {
@@ -1931,6 +1988,14 @@ pub enum CoordinatorError {
     OffsetPreviewRejected,
     #[error("prepared Offset created an unexpected persistent identity set")]
     OffsetPreviewIdentityMismatch,
+    #[error("native Fillet output is unavailable: {0}")]
+    NativeFilletUnavailable(String),
+    #[error("native Fillet preparation stopped before a complete candidate was available")]
+    NativeFilletWorkStopped,
+    #[error("native Fillet did not publish an independently accepted candidate")]
+    NativeFilletRejected,
+    #[error("native Fillet candidate or prepared patch is stale")]
+    NativeFilletPreviewMismatch,
     #[error("selected operands cannot construct the requested dimension")]
     IncompatibleDimension,
     #[error("invalid typed action input: {0}")]
@@ -2012,6 +2077,7 @@ pub struct RetainedEditorCoordinator {
     curve_control_continuation: Option<CurveControlContinuation>,
     projected_drag_work: Option<ProjectedDragWorkEvidence>,
     feature_authoring_preview: Option<FeatureAuthoringPreview>,
+    native_fillet_previews: HashMap<FeatureAuthoringPreviewToken, NativeFilletPreviewCache>,
     next_feature_authoring_preview_token: u64,
     offset_authoring_preview: Option<Box<OffsetAuthoringPreview>>,
     offset_authoring_distance_origin: Option<Box<OffsetAuthoringDistanceOrigin>>,
@@ -2243,6 +2309,7 @@ impl RetainedEditorCoordinator {
             curve_control_continuation: None,
             projected_drag_work: None,
             feature_authoring_preview: None,
+            native_fillet_previews: HashMap::new(),
             next_feature_authoring_preview_token: 1,
             offset_authoring_preview: None,
             offset_authoring_distance_origin: None,
@@ -3645,6 +3712,7 @@ impl RetainedEditorCoordinator {
             };
             preview.radius_origin_state = Some(Box::new(state.clone()));
             preview.accepted_contact_sample = None;
+            self.retain_current_native_fillet_previews();
             return Ok(FeatureAuthoringPointerDownOutcome::RadiusGesture { effects });
         }
 
@@ -3848,8 +3916,7 @@ impl RetainedEditorCoordinator {
             snapshot: snapshot.clone(),
             metadata: metadata.clone(),
         });
-        self.clear_feature_authoring_preview();
-        self.feature_authoring_preview = Some(FeatureAuthoringPreview {
+        let preview = FeatureAuthoringPreview {
             candidate: candidate.clone(),
             expected,
             features,
@@ -3859,7 +3926,13 @@ impl RetainedEditorCoordinator {
             radius_origin,
             radius_origin_state: None,
             accepted_contact_sample: None,
-        });
+        };
+        let native_fillet = self.stage_native_fillet_preview(&preview);
+        self.clear_feature_authoring_preview();
+        self.feature_authoring_preview = Some(preview);
+        self.native_fillet_previews
+            .insert(metadata.token, native_fillet);
+        self.retain_current_native_fillet_previews();
         Ok(metadata)
     }
 
@@ -3945,7 +4018,7 @@ impl RetainedEditorCoordinator {
             feature_identity: features.identity(),
             input: snapshot.input(),
         };
-        self.feature_authoring_preview = Some(FeatureAuthoringPreview {
+        let preview = FeatureAuthoringPreview {
             candidate: candidate.clone(),
             expected,
             features,
@@ -3955,7 +4028,12 @@ impl RetainedEditorCoordinator {
             radius_origin,
             radius_origin_state,
             accepted_contact_sample,
-        });
+        };
+        let native_fillet = self.stage_native_fillet_preview(&preview);
+        self.feature_authoring_preview = Some(preview);
+        self.native_fillet_previews
+            .insert(metadata.token, native_fillet);
+        self.retain_current_native_fillet_previews();
         Ok(metadata)
     }
 
@@ -3983,6 +4061,7 @@ impl RetainedEditorCoordinator {
             snapshot: preview.snapshot.clone(),
             metadata: preview.metadata.clone(),
         };
+        self.retain_current_native_fillet_previews();
         Ok(())
     }
 
@@ -3996,18 +4075,27 @@ impl RetainedEditorCoordinator {
         expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
         feature: ComputedFeatureId,
     ) -> Result<(), CoordinatorError> {
-        let preview = self
-            .feature_authoring_preview
-            .as_mut()
-            .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
-        if preview.metadata.feature != feature || !preview.accepts_radius_input(&expected) {
-            return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+        let restored_token = {
+            let preview = self
+                .feature_authoring_preview
+                .as_mut()
+                .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+            if preview.metadata.feature != feature || !preview.accepts_radius_input(&expected) {
+                return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+            }
+            let origin = preview.radius_origin.as_ref();
+            preview.candidate = origin.candidate.clone();
+            preview.features = origin.features.clone();
+            preview.snapshot = origin.snapshot.clone();
+            preview.metadata = origin.metadata.clone();
+            preview.metadata.token
+        };
+        if self.native_fillet_previews.contains_key(&restored_token) {
+            self.refresh_restored_native_fillet_parity(restored_token);
+            self.retain_current_native_fillet_previews();
+        } else {
+            self.restage_current_native_fillet_preview();
         }
-        let origin = preview.radius_origin.as_ref();
-        preview.candidate = origin.candidate.clone();
-        preview.features = origin.features.clone();
-        preview.snapshot = origin.snapshot.clone();
-        preview.metadata = origin.metadata.clone();
         Ok(())
     }
 
@@ -4097,6 +4185,7 @@ impl RetainedEditorCoordinator {
                     .accept_computed_feature_radius_preview(expected, *feature, *radius)
                 {
                     self.feature_authoring_preview = prior_preview;
+                    self.restage_current_native_fillet_preview();
                     return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
                 }
                 *state = trial;
@@ -4274,6 +4363,7 @@ impl RetainedEditorCoordinator {
                     expected, *owner, *parent, *source, *parameter,
                 ) {
                     self.feature_authoring_preview = prior_preview;
+                    self.restage_current_native_fillet_preview();
                     return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
                 }
                 *state = trial;
@@ -4312,6 +4402,7 @@ impl RetainedEditorCoordinator {
                     preview.radius_origin_state = None;
                     preview.accepted_contact_sample = None;
                 }
+                self.retain_current_native_fillet_previews();
                 Ok(())
             }
             EditorEffect::RestoreComputedFeatureContact {
@@ -4403,7 +4494,416 @@ impl RetainedEditorCoordinator {
         })
     }
 
+    /// Checks whether the exact held one-corner Fillet preview can be materialized as ordinary
+    /// native Profile geometry without changing retained state or identity high-water.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stale-preview or typed native-topology eligibility failure.
+    pub fn native_feature_authoring_availability(
+        &self,
+        token: FeatureAuthoringPreviewToken,
+        candidate: &FeatureAuthoringCandidate,
+    ) -> Result<(), CoordinatorError> {
+        self.authenticate_native_fillet_preview(token, candidate)?;
+        match self.native_fillet_previews.get(&token) {
+            Some(NativeFilletPreviewCache::Prepared(_)) => Ok(()),
+            Some(NativeFilletPreviewCache::Unavailable(failure)) => {
+                Err(failure.coordinator_error())
+            }
+            None => Err(CoordinatorError::NativeFilletPreviewMismatch),
+        }
+    }
+
+    /// Materializes the exact held one-corner Fillet preview as two shortened persistent lines,
+    /// one ordinary circular arc, two endpoint tangencies, and one driving radius dimension.
+    ///
+    /// The computed Fillet feature document is deliberately unchanged. The native edit is solved,
+    /// independently accepted, checked against unrelated computed features, then committed with one
+    /// checkpoint/replay entry and one sketch Undo step.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale preview authority, unsupported/dependent topology, stopped work, an invalid
+    /// solve, computed-feature invalidation, or compare-and-swap mismatch without publishing a
+    /// prefix.
+    pub fn apply_feature_authoring_native_profile(
+        &mut self,
+        token: FeatureAuthoringPreviewToken,
+        candidate: &FeatureAuthoringCandidate,
+    ) -> Result<MutationOutcome<DocumentNativeLineFilletIds>, CoordinatorError> {
+        self.authenticate_native_fillet_preview(token, candidate)?;
+        let current_input = self.session.prepared_input();
+        match self.native_fillet_previews.get(&token) {
+            Some(NativeFilletPreviewCache::Prepared(publication))
+                if publication.base_input == current_input
+                    && publication.base_computed_allocator
+                        == self.computed_evaluation_allocator.high_water()
+                    && publication.patch.base_input() == publication.base_input
+                    && publication.patch.proposed_commit() == publication.proposed => {}
+            Some(NativeFilletPreviewCache::Prepared(_)) | None => {
+                return Err(CoordinatorError::NativeFilletPreviewMismatch);
+            }
+            Some(NativeFilletPreviewCache::Unavailable(failure)) => {
+                return Err(failure.coordinator_error());
+            }
+        }
+        let Some(NativeFilletPreviewCache::Prepared(publication)) =
+            self.native_fillet_previews.remove(&token)
+        else {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        };
+        let PreparedNativeFilletPublication {
+            base_input,
+            base_computed_allocator: _,
+            proposed,
+            ids,
+            edit,
+            patch,
+            computed_snapshot,
+            computed_allocator,
+            checkpoint,
+        } = *publication;
+        let replay = ReplayAction::Edit {
+            expected: base_input.design_identity(),
+            edit,
+            computed_features: None,
+        };
+        let committed = match self.session.commit_prepared_patch(patch) {
+            Ok(committed) => committed,
+            Err(error) => {
+                self.clear_transient();
+                return Err(error.into());
+            }
+        };
+        if committed != proposed {
+            self.clear_transient();
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        self.computed_evaluation_allocator = computed_allocator;
+        self.computed_input = Some(computed_snapshot.input());
+        self.computed_snapshot = Some(computed_snapshot);
+        self.computed_evaluation_problem = None;
+        self.clear_feature_authoring_preview();
+        self.record_feature_mutation(checkpoint, replay);
+        Ok(MutationOutcome {
+            value: ids,
+            design: committed.design_identity(),
+            attempt: committed.attempt_identity(),
+            published_accepted: committed.accepted_state_identity(),
+        })
+    }
+
+    fn authenticate_native_fillet_preview(
+        &self,
+        token: FeatureAuthoringPreviewToken,
+        candidate: &FeatureAuthoringCandidate,
+    ) -> Result<&FeatureAuthoringPreview, CoordinatorError> {
+        let preview = self
+            .feature_authoring_preview
+            .as_ref()
+            .ok_or(CoordinatorError::NativeFilletPreviewMismatch)?;
+        if preview.metadata.token != token
+            || preview.candidate != *candidate
+            || self.features.identity() != preview.expected
+            || self.session.accepted_prepared_input() != Some(candidate.sketch_input())
+            || self
+                .session
+                .accepted_state_for_current_input()
+                .is_none_or(|accepted| accepted.identity() != candidate.accepted_state_identity())
+            || preview.metadata.feature_identity != preview.features.identity()
+            || preview.metadata.input != preview.snapshot.input()
+            || preview.snapshot.input().features != preview.features.identity()
+            || preview.snapshot.input().sketch != candidate.sketch_input()
+        {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        require_current_feature_authoring_evaluation(&preview.snapshot, preview.metadata.feature)?;
+        Ok(preview)
+    }
+
+    fn stage_native_fillet_preview(
+        &self,
+        preview: &FeatureAuthoringPreview,
+    ) -> NativeFilletPreviewCache {
+        match self.stage_native_fillet_publication(preview) {
+            Ok(publication) => NativeFilletPreviewCache::Prepared(Box::new(publication)),
+            Err(error) => NativeFilletPreviewCache::Unavailable(
+                NativeFilletPreviewFailure::from_coordinator_error(error),
+            ),
+        }
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one preview-preparation boundary stages the exact native patch, computed parity and post-publication checkpoint before availability can be advertised"
+    )]
+    fn stage_native_fillet_publication(
+        &self,
+        preview: &FeatureAuthoringPreview,
+    ) -> Result<PreparedNativeFilletPublication, CoordinatorError> {
+        if self.features.identity() != preview.expected
+            || self.session.accepted_prepared_input() != Some(preview.candidate.sketch_input())
+            || self
+                .session
+                .accepted_state_for_current_input()
+                .is_none_or(|accepted| {
+                    accepted.identity() != preview.candidate.accepted_state_identity()
+                })
+            || preview.snapshot.input().features != preview.features.identity()
+            || preview.snapshot.input().sketch != preview.candidate.sketch_input()
+        {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        require_current_feature_authoring_evaluation(&preview.snapshot, preview.metadata.feature)?;
+        let candidate = &preview.candidate;
+        let bindings = preview.corner_bindings();
+        let [binding] = bindings.as_slice() else {
+            return Err(CoordinatorError::NativeFilletUnavailable(
+                "Native profile output currently requires exactly one line-line corner".into(),
+            ));
+        };
+        let [candidate_corner] = candidate.corners() else {
+            return Err(CoordinatorError::NativeFilletUnavailable(
+                "Native profile output currently requires exactly one line-line corner".into(),
+            ));
+        };
+        let rendered_arc = preview
+            .snapshot
+            .fillet_arc_edge(binding.owner)
+            .and_then(|edge| match &edge.geometry {
+                geosolve_sketch_features::ComputedEdgeGeometry::CircularArc(arc) => Some(arc),
+                _ => None,
+            })
+            .ok_or(CoordinatorError::NativeFilletPreviewMismatch)?;
+        if rendered_arc != &candidate_corner.arc {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        let request = candidate
+            .native_line_fillet_request(format!("{} native", preview.label))
+            .map_err(|reason| CoordinatorError::NativeFilletUnavailable(reason.message().into()))?;
+        let source_spans = [request.first.curve, request.second.curve];
+        if self.features.features().iter().any(|feature| {
+            let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+                &feature.definition;
+            fillet.corners.iter().any(|corner| {
+                source_spans.contains(&corner.first.source.span)
+                    || source_spans.contains(&corner.second.source.span)
+            })
+        }) {
+            return Err(CoordinatorError::NativeFilletUnavailable(
+                "A source line is already owned by a persistent computed Fillet".into(),
+            ));
+        }
+        let accepted = self
+            .session
+            .accepted_state_for_current_input()
+            .ok_or(CoordinatorError::NativeFilletPreviewMismatch)?;
+        if accepted.document().dimensions().iter().any(|dimension| {
+            matches!(
+                &dimension.definition,
+                DocumentDimensionDefinition::ProfileOffset { operand, .. }
+                    if profile_offset_operand_contains_any(operand, source_spans)
+            )
+        }) {
+            return Err(CoordinatorError::NativeFilletUnavailable(
+                "A source line already participates in a Profile Offset association".into(),
+            ));
+        }
+        let prepared = accepted
+            .document()
+            .prepare_native_line_fillet_geometry(request)
+            .map_err(|error| CoordinatorError::NativeFilletUnavailable(error.to_string()))?;
+        let ids = prepared.expected_ids().clone();
+        let edit = DocumentEdit::CreatePreparedNativeLineFilletGeometry {
+            prepared: Box::new(prepared),
+        };
+        let base_input = self.session.prepared_input();
+        let base_computed_allocator = self.computed_evaluation_allocator.high_water();
+        let job = self
+            .session
+            .prepared_snapshot()
+            .prepare(PreparedSketchOperation::Apply(edit.clone()));
+        if job.input() != base_input {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        let OperationOutcome::Completed { value: patch, .. } =
+            job.execute(bounded_geometry_control())?
+        else {
+            return Err(CoordinatorError::NativeFilletWorkStopped);
+        };
+        let proposed = patch.proposed_commit();
+        if proposed.accepted_state_identity().is_none() {
+            return Err(CoordinatorError::NativeFilletRejected);
+        }
+        let patch_preview = patch.preview();
+        let candidate_session = patch_preview
+            .accepted_session()
+            .ok_or(CoordinatorError::NativeFilletRejected)?;
+        let accepted_document = patch_preview
+            .accepted_document()
+            .ok_or(CoordinatorError::NativeFilletRejected)?;
+        if !native_fillet_ids_exist(accepted_document, &ids) {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        let previous = self
+            .computed_snapshot
+            .as_ref()
+            .filter(|snapshot| snapshot.input().features == self.features.identity());
+        let mut computed_allocator = self.computed_evaluation_allocator.clone();
+        let evaluated = evaluate_computed_features_continuing(
+            candidate_session,
+            &self.features,
+            &mut computed_allocator,
+            bounded_geometry_control(),
+            previous,
+        )?;
+        let OperationOutcome::Completed {
+            value: computed_snapshot,
+            ..
+        } = evaluated
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if previous.is_some_and(|previous| {
+            !computed_feature_preview_invalidations(&self.features, previous, &computed_snapshot)
+                .is_empty()
+        }) {
+            return Err(CoordinatorError::ComputedFeaturePreviewInvalidated);
+        }
+        let candidate_input = candidate_session
+            .accepted_prepared_input()
+            .ok_or(CoordinatorError::NativeFilletRejected)?;
+        if computed_snapshot.input().sketch != candidate_input
+            || computed_snapshot.input().features != self.features.identity()
+        {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        let checkpoint = checkpoint(candidate_session, &self.features, &computed_allocator)?;
+        Ok(PreparedNativeFilletPublication {
+            base_input,
+            base_computed_allocator,
+            proposed,
+            ids,
+            edit,
+            patch,
+            computed_snapshot,
+            computed_allocator,
+            checkpoint,
+        })
+    }
+
+    fn retain_current_native_fillet_previews(&mut self) {
+        let Some(preview) = self.feature_authoring_preview.as_ref() else {
+            self.native_fillet_previews.clear();
+            return;
+        };
+        let current = preview.metadata.token;
+        let origin = preview.radius_origin.metadata.token;
+        self.native_fillet_previews
+            .retain(|token, _| *token == current || *token == origin);
+    }
+
+    /// Keeps the origin's single-owner sketch patch while renewing only its revision-local
+    /// computed-scene parity after a discarded radius sample advanced the live evaluation
+    /// allocator. Reusing the old computed revision would violate allocator monotonicity; solving
+    /// another sketch patch would violate exact pointer-down rollback authority.
+    fn refresh_restored_native_fillet_parity(&mut self, token: FeatureAuthoringPreviewToken) {
+        let Some(cache) = self.native_fillet_previews.remove(&token) else {
+            return;
+        };
+        let NativeFilletPreviewCache::Prepared(mut publication) = cache else {
+            self.native_fillet_previews.insert(token, cache);
+            return;
+        };
+        let current_allocator = self.computed_evaluation_allocator.high_water();
+        if publication.base_computed_allocator == current_allocator {
+            self.native_fillet_previews
+                .insert(token, NativeFilletPreviewCache::Prepared(publication));
+            return;
+        }
+        let refreshed = self.refresh_native_fillet_computed_parity(&mut publication);
+        let cache = match refreshed {
+            Ok(()) => NativeFilletPreviewCache::Prepared(publication),
+            Err(error) => NativeFilletPreviewCache::Unavailable(
+                NativeFilletPreviewFailure::from_coordinator_error(error),
+            ),
+        };
+        self.native_fillet_previews.insert(token, cache);
+    }
+
+    fn refresh_native_fillet_computed_parity(
+        &self,
+        publication: &mut PreparedNativeFilletPublication,
+    ) -> Result<(), CoordinatorError> {
+        let candidate_session = publication
+            .patch
+            .preview()
+            .accepted_session()
+            .ok_or(CoordinatorError::NativeFilletRejected)?;
+        if publication.base_input != self.session.prepared_input()
+            || publication.patch.base_input() != publication.base_input
+            || publication.patch.proposed_commit() != publication.proposed
+        {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        let previous = self
+            .computed_snapshot
+            .as_ref()
+            .filter(|snapshot| snapshot.input().features == self.features.identity());
+        let mut computed_allocator = self.computed_evaluation_allocator.clone();
+        let evaluated = evaluate_computed_features_continuing(
+            candidate_session,
+            &self.features,
+            &mut computed_allocator,
+            bounded_geometry_control(),
+            previous,
+        )?;
+        let OperationOutcome::Completed {
+            value: computed_snapshot,
+            ..
+        } = evaluated
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if previous.is_some_and(|previous| {
+            !computed_feature_preview_invalidations(&self.features, previous, &computed_snapshot)
+                .is_empty()
+        }) {
+            return Err(CoordinatorError::ComputedFeaturePreviewInvalidated);
+        }
+        let candidate_input = candidate_session
+            .accepted_prepared_input()
+            .ok_or(CoordinatorError::NativeFilletRejected)?;
+        if computed_snapshot.input().sketch != candidate_input
+            || computed_snapshot.input().features != self.features.identity()
+        {
+            return Err(CoordinatorError::NativeFilletPreviewMismatch);
+        }
+        let checkpoint = checkpoint(candidate_session, &self.features, &computed_allocator)?;
+        publication.base_computed_allocator = self.computed_evaluation_allocator.high_water();
+        publication.computed_snapshot = computed_snapshot;
+        publication.computed_allocator = computed_allocator;
+        publication.checkpoint = checkpoint;
+        Ok(())
+    }
+
+    /// Rebuilds the non-cloneable native publication status after a gesture rollback restores a
+    /// cloned computed preview. The restored candidate remains authoritative even if full native
+    /// preparation now reports a typed unavailable state.
+    fn restage_current_native_fillet_preview(&mut self) {
+        let Some(preview) = self.feature_authoring_preview.as_ref() else {
+            self.native_fillet_previews.clear();
+            return;
+        };
+        let token = preview.metadata.token;
+        let staged = self.stage_native_fillet_preview(preview);
+        self.native_fillet_previews.insert(token, staged);
+        self.retain_current_native_fillet_previews();
+    }
+
     pub fn clear_feature_authoring_preview(&mut self) {
+        self.native_fillet_previews.clear();
         let Some(preview) = self.feature_authoring_preview.take() else {
             return;
         };
@@ -12726,6 +13226,58 @@ fn source_availability(
     }
 }
 
+fn profile_offset_operand_contains_any(
+    operand: &DocumentProfileOffsetOperand,
+    spans: [CurveSpan; 2],
+) -> bool {
+    let edge_matches = |edge: &geosolve_sketch::DocumentProfileOffsetEdgePair| {
+        spans.contains(&edge.source.curve) || spans.contains(&edge.target.curve)
+    };
+    match operand {
+        DocumentProfileOffsetOperand::Face { outer, holes, .. } => {
+            outer.edges.iter().any(edge_matches)
+                || holes.iter().flat_map(|hole| &hole.edges).any(edge_matches)
+        }
+        DocumentProfileOffsetOperand::OpenChain { chain, .. } => {
+            chain.edges.iter().any(edge_matches)
+        }
+    }
+}
+
+fn native_fillet_ids_exist(document: &SketchDocument, ids: &DocumentNativeLineFilletIds) -> bool {
+    ids.source_lines
+        .iter()
+        .all(|curve| document.curve(*curve).is_some())
+        && document.point(ids.removed_corner).is_none()
+        && ids
+            .contact_points
+            .iter()
+            .all(|point| document.point(*point).is_some())
+        && document.curve(ids.arc).is_some()
+        && document.point(ids.center).is_some()
+        && [
+            ids.radius,
+            ids.start_angle,
+            ids.end_angle,
+            ids.radius_target,
+        ]
+        .into_iter()
+        .all(|scalar| document.scalar(scalar).is_some())
+        && ids
+            .contacts
+            .iter()
+            .all(|contact| document.contact(*contact).is_some())
+        && ids
+            .contact_parameters
+            .iter()
+            .all(|scalar| document.scalar(*scalar).is_some())
+        && ids
+            .tangencies
+            .iter()
+            .all(|constraint| document.constraint(*constraint).is_some())
+        && document.dimension(ids.radius_dimension).is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -12741,9 +13293,9 @@ mod tests {
         DocumentMeasurementDefinition, DocumentParameterKind, DocumentPointRef,
         ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
         ExternalSnapshotFeatureV1, ExternalSnapshotInputError, ExternalSnapshotResourcesV1,
-        ExternalSnapshotSet, OperationStopReason, OperationWorkCounter, ParameterBatch,
-        ParameterBatchEntry, ParameterValue, PersistentId, SolverConfig, alpha_scenario,
-        cancellation_pair,
+        ExternalSnapshotSet, FeatureEndpoint, OperationStopReason, OperationWorkCounter,
+        ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId, SolverConfig,
+        alpha_scenario, cancellation_pair,
     };
     use geosolve_sketch_features::{
         ComputedFeatureDefinition, ComputedFilletAuthoringOptions,
@@ -21081,6 +21633,1206 @@ mod tests {
             .apply_feature_authoring_preview(metadata.token, candidate)
             .expect("computed publication")
             .value
+    }
+
+    struct StandaloneNativeFilletFixture {
+        coordinator: RetainedEditorCoordinator,
+        first_outer: DesignPointId,
+        corner: DesignPointId,
+        second_outer: DesignPointId,
+        source_spans: [CurveSpan; 2],
+    }
+
+    fn standalone_native_fillet_fixture() -> StandaloneNativeFilletFixture {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let first_outer = document
+            .add_point("first outer", [0.0, 0.0])
+            .expect("first outer");
+        let corner = document
+            .add_point("sharp corner", [4.0, 0.0])
+            .expect("corner");
+        let second_outer = document
+            .add_point("second outer", [4.0, 4.0])
+            .expect("second outer");
+        let source_spans = [
+            add_profile_offset_test_line(&mut document, "first line", first_outer, corner),
+            add_profile_offset_test_line(&mut document, "second line", corner, second_outer),
+        ];
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("accepted standalone corner");
+        StandaloneNativeFilletFixture {
+            coordinator: RetainedEditorCoordinator::new(session).expect("coordinator"),
+            first_outer,
+            corner,
+            second_outer,
+            source_spans,
+        }
+    }
+
+    fn retain_exhausted_sketch_identity_high_water(document: &mut SketchDocument) {
+        let mut encoded = document.to_canonical_json().expect("canonical sketch");
+        let value_start = encoded
+            .find("\"next_id\":\"")
+            .map(|index| index + "\"next_id\":\"".len())
+            .expect("canonical sketch carries the allocator cursor");
+        let value_end = encoded[value_start..]
+            .find('"')
+            .map(|offset| value_start + offset)
+            .expect("allocator cursor is a quoted persistent ID");
+        encoded.replace_range(
+            value_start..value_end,
+            &PersistentId::from_u128(u128::MAX).to_string(),
+        );
+        *document = SketchDocument::from_json(&encoded).expect("valid exhausted allocator cursor");
+    }
+
+    struct NativeFilletDurableSnapshot {
+        checkpoint: RestoreCheckpoint,
+        design: SketchDesignIdentity,
+        accepted: Option<SketchAcceptedStateIdentity>,
+        history_len: usize,
+        history_cursor: usize,
+        transcript: Vec<ReplayAction>,
+    }
+
+    fn native_fillet_durable_snapshot(
+        coordinator: &RetainedEditorCoordinator,
+    ) -> NativeFilletDurableSnapshot {
+        NativeFilletDurableSnapshot {
+            checkpoint: coordinator
+                .persistence_checkpoint()
+                .expect("persistable durable coordinator state"),
+            design: coordinator.session().design_identity(),
+            accepted: coordinator
+                .session()
+                .accepted_state()
+                .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+            history_len: coordinator.history_len(),
+            history_cursor: coordinator.history_cursor(),
+            transcript: coordinator.transcript().to_vec(),
+        }
+    }
+
+    fn assert_native_fillet_rejection_is_state_neutral(
+        coordinator: &RetainedEditorCoordinator,
+        retained: &NativeFilletDurableSnapshot,
+    ) {
+        let current = coordinator
+            .persistence_checkpoint()
+            .expect("persistable coordinator state after rejection");
+        assert_eq!(coordinator.session().design_identity(), retained.design);
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+            retained.accepted
+        );
+        assert_eq!(current.design_json(), retained.checkpoint.design_json());
+        assert_eq!(
+            current.design_uses_draft_v5(),
+            retained.checkpoint.design_uses_draft_v5()
+        );
+        assert_eq!(current.accepted_json(), retained.checkpoint.accepted_json());
+        assert_eq!(
+            current.accepted_uses_draft_v5(),
+            retained.checkpoint.accepted_uses_draft_v5()
+        );
+        assert_eq!(
+            current.accepted_belongs_to_current_design(),
+            retained.checkpoint.accepted_belongs_to_current_design()
+        );
+        assert_eq!(current.revisions(), retained.checkpoint.revisions());
+        assert_eq!(
+            current.sketch_identity_high_water(),
+            retained.checkpoint.sketch_identity_high_water()
+        );
+        assert_eq!(current.feature_json(), retained.checkpoint.feature_json());
+        assert_eq!(
+            current.feature_lifecycle_high_water(),
+            retained.checkpoint.feature_lifecycle_high_water()
+        );
+        assert_eq!(
+            current.computed_evaluation_high_water(),
+            retained.checkpoint.computed_evaluation_high_water()
+        );
+        assert_eq!(coordinator.history_len(), retained.history_len);
+        assert_eq!(coordinator.history_cursor(), retained.history_cursor);
+        assert_eq!(coordinator.transcript(), retained.transcript);
+    }
+
+    #[test]
+    fn native_fillet_persistent_id_exhaustion_is_cached_and_state_neutral() {
+        let fixture = standalone_native_fillet_fixture();
+        let mut document = fixture.coordinator.session().design_document().clone();
+        retain_exhausted_sketch_identity_high_water(&mut document);
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("accepted corner with exhausted persistent allocator");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let candidate = grouped_fillet_candidate(&coordinator, [fixture.corner]);
+        let metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "exhausted native corner",
+            )
+            .expect("computed preview remains valid without sketch allocation");
+        let held = coordinator
+            .feature_authoring_preview()
+            .expect("held computed preview");
+        assert!(matches!(
+            computed_feature_state(&held.snapshot, metadata.feature),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+        let retained = native_fillet_durable_snapshot(&coordinator);
+
+        for attempt in ["availability", "apply"] {
+            let error = if attempt == "availability" {
+                coordinator
+                    .native_feature_authoring_availability(metadata.token, &candidate)
+                    .expect_err("exhausted native allocation must be unavailable")
+            } else {
+                coordinator
+                    .apply_feature_authoring_native_profile(metadata.token, &candidate)
+                    .expect_err("exhausted native allocation must not publish")
+            };
+            assert!(matches!(
+                error,
+                CoordinatorError::NativeFilletUnavailable(ref reason)
+                    if reason == "persistent ID space is exhausted"
+            ));
+            assert_native_fillet_rejection_is_state_neutral(&coordinator, &retained);
+            let held = coordinator
+                .feature_authoring_preview()
+                .expect("cached allocation failure retains the computed preview");
+            assert_eq!(held.metadata(), &metadata);
+            assert_eq!(held.candidate(), &candidate);
+            assert!(matches!(
+                computed_feature_state(&held.snapshot, metadata.feature),
+                ComputedFeatureEvaluationState::Current { .. }
+            ));
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one coordinator regression keeps the invalid native solve, cached error, computed preview, and complete durable-state neutrality together"
+    )]
+    fn native_fillet_invalid_native_solve_retains_current_computed_preview_atomically() {
+        let fixture = standalone_native_fillet_fixture();
+        let mut document = fixture.coordinator.session().design_document().clone();
+        for (label, point, target) in [
+            ("fixed first outer", fixture.first_outer, [0.0, 0.0]),
+            ("fixed second outer", fixture.second_outer, [4.0, 4.0]),
+        ] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("fixed remote endpoint");
+        }
+        for (label, definition) in [
+            (
+                "horizontal first source",
+                DocumentConstraintDefinition::Horizontal {
+                    line: fixture.source_spans[0],
+                },
+            ),
+            (
+                "vertical second source",
+                DocumentConstraintDefinition::Vertical {
+                    line: fixture.source_spans[1],
+                },
+            ),
+        ] {
+            document
+                .add_constraint(label, definition)
+                .expect("fixed source direction");
+        }
+        for (label, span) in [
+            ("first source length", fixture.source_spans[0]),
+            ("second source length", fixture.source_spans[1]),
+        ] {
+            let target = document
+                .add_scalar(
+                    format!("{label} target"),
+                    4.0,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+                .expect("source length target");
+            document
+                .add_dimension(
+                    label,
+                    DocumentDimensionDefinition::CurveLength {
+                        curve: span,
+                        target,
+                    },
+                    DocumentDimensionMode::Driving,
+                )
+                .expect("driving source length");
+        }
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("sharp constrained corner is independently accepted");
+        let original_report = session
+            .accepted_state_for_current_input()
+            .expect("accepted sharp corner")
+            .solve_result()
+            .unstable_core_report();
+        assert!(
+            original_report.hard_residuals_validated,
+            "{original_report:#?}"
+        );
+        assert!(
+            original_report.hard_residual_max <= 1.0e-9,
+            "{original_report:#?}"
+        );
+
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let candidate = grouped_fillet_candidate(&coordinator, [fixture.corner]);
+        let metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "solve-invalid native corner",
+            )
+            .expect("computed Fillet preview remains independently valid");
+        let held = coordinator
+            .feature_authoring_preview()
+            .expect("held computed preview");
+        assert!(matches!(
+            computed_feature_state(&held.snapshot, metadata.feature),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+        let retained = native_fillet_durable_snapshot(&coordinator);
+
+        for attempt in ["availability", "apply"] {
+            let error = if attempt == "availability" {
+                coordinator
+                    .native_feature_authoring_availability(metadata.token, &candidate)
+                    .expect_err("solve-invalid native patch must be unavailable")
+            } else {
+                coordinator
+                    .apply_feature_authoring_native_profile(metadata.token, &candidate)
+                    .expect_err("solve-invalid native patch must not publish")
+            };
+            assert!(matches!(error, CoordinatorError::NativeFilletRejected));
+            assert_native_fillet_rejection_is_state_neutral(&coordinator, &retained);
+            let held = coordinator
+                .feature_authoring_preview()
+                .expect("cached native rejection retains the computed preview");
+            assert_eq!(held.metadata(), &metadata);
+            assert_eq!(held.candidate(), &candidate);
+            assert!(matches!(
+                computed_feature_state(&held.snapshot, metadata.feature),
+                ComputedFeatureEvaluationState::Current { .. }
+            ));
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one coordinator-owner regression keeps exact preview authority, native publication, computed-feature neutrality, and paired history together"
+    )]
+    fn native_fillet_apply_uses_exact_held_preview_and_one_atomic_history_step() {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let first_outer = document
+            .add_point("first outer", [1.5, -2.598_076_211_353_316])
+            .expect("first outer");
+        let corner = document
+            .add_point("sharp corner", [0.0, 0.0])
+            .expect("corner");
+        let second_outer = document
+            .add_point("second outer", [0.0, 3.0])
+            .expect("second outer");
+        let first_line = document
+            .add_curve(
+                "first line",
+                CurveDefinition::Line {
+                    start: first_outer,
+                    end: corner,
+                    branch_direction: [0.5, 0.866_025_403_784_438_6],
+                },
+            )
+            .expect("first line");
+        let second_line = document
+            .add_curve(
+                "second line",
+                CurveDefinition::Line {
+                    start: corner,
+                    end: second_outer,
+                    branch_direction: [0.0, 1.0],
+                },
+            )
+            .expect("second line");
+        document
+            .add_constraint(
+                "move first source in accepted geometry",
+                DocumentConstraintDefinition::FixedPoint {
+                    point: first_outer,
+                    target: [-3.0, 0.0],
+                },
+            )
+            .expect("accepted-source constraint");
+        let original_design = document.clone();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("accepted session");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        let accepted_before = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("current accepted state")
+            .document();
+        let raw_tangent = {
+            let start = original_design
+                .point(first_outer)
+                .expect("raw outer")
+                .position;
+            let end = original_design.point(corner).expect("raw corner").position;
+            let delta = [end[0] - start[0], end[1] - start[1]];
+            let length = delta[0].hypot(delta[1]);
+            [delta[0] / length, delta[1] / length]
+        };
+        let accepted_tangent = {
+            let start = accepted_before
+                .point(first_outer)
+                .expect("accepted outer")
+                .position;
+            let end = accepted_before
+                .point(corner)
+                .expect("accepted corner")
+                .position;
+            let delta = [end[0] - start[0], end[1] - start[1]];
+            let length = delta[0].hypot(delta[1]);
+            [delta[0] / length, delta[1] / length]
+        };
+        assert!(
+            raw_tangent[0] * accepted_tangent[0] + raw_tangent[1] * accepted_tangent[1] < 0.0,
+            "fixture must reverse raw versus accepted tangent orientation"
+        );
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let selection = [(SelectionItem::Point(corner), None)];
+        let mut authoring = FeatureAuthoringState::default();
+        let candidate = feature_candidate(authoring.activate(
+            &snapshot,
+            snapshot.sketch_document(),
+            FeatureAuthoringTool::Fillet,
+            &selection,
+        ));
+        assert_eq!(candidate.persistent_corners().len(), 1);
+
+        let first_metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "native corner",
+            )
+            .expect("first held preview");
+        let current_metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "native corner",
+            )
+            .expect("replacement held preview");
+        assert_ne!(first_metadata.token, current_metadata.token);
+        let retained = retained_state_snapshot(&coordinator);
+        let high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+        assert!(matches!(
+            coordinator.native_feature_authoring_availability(first_metadata.token, &candidate),
+            Err(CoordinatorError::NativeFilletPreviewMismatch)
+        ));
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        assert_eq!(
+            coordinator
+                .feature_authoring_preview()
+                .expect("stale token retains held preview")
+                .metadata(),
+            &current_metadata
+        );
+
+        let resized = feature_candidate(authoring.set_options(
+            &snapshot,
+            FeatureAuthoringOptions {
+                fillet_radius: Some(candidate.radius() * 0.75),
+                ..authoring.options()
+            },
+        ));
+        assert!(matches!(
+            coordinator.native_feature_authoring_availability(current_metadata.token, &resized),
+            Err(CoordinatorError::NativeFilletPreviewMismatch)
+        ));
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        coordinator
+            .native_feature_authoring_availability(current_metadata.token, &candidate)
+            .expect("exact held one-corner preview is native-eligible");
+        let prepared = match coordinator
+            .native_fillet_previews
+            .get(&current_metadata.token)
+            .expect("native status staged beside the computed preview")
+        {
+            NativeFilletPreviewCache::Prepared(prepared) => prepared,
+            NativeFilletPreviewCache::Unavailable(failure) => {
+                panic!("expected complete native publication, got {failure:?}")
+            }
+        };
+        assert_eq!(prepared.base_input, coordinator.session().prepared_input());
+        assert_eq!(
+            prepared.base_computed_allocator,
+            coordinator.computed_evaluation_allocator.high_water()
+        );
+        assert_eq!(prepared.patch.base_input(), prepared.base_input);
+        assert_eq!(prepared.patch.proposed_commit(), prepared.proposed);
+        assert!(
+            prepared
+                .patch
+                .preview()
+                .accepted_session()
+                .is_some_and(|session| session.accepted_state_for_current_input().is_some())
+        );
+        let rendered_arc = &candidate
+            .corners()
+            .first()
+            .expect("one rendered corner")
+            .arc;
+        let staged_preview = prepared.patch.preview();
+        let staged_document = staged_preview
+            .accepted_document()
+            .expect("accepted staged native document");
+        assert_eq!(
+            staged_document
+                .point(prepared.ids.center)
+                .expect("staged native center")
+                .position
+                .map(f64::to_bits),
+            rendered_arc.center.map(f64::to_bits)
+        );
+        for (point, contact) in prepared
+            .ids
+            .contact_points
+            .iter()
+            .zip(&rendered_arc.contacts)
+        {
+            assert_eq!(
+                staged_document
+                    .point(*point)
+                    .expect("staged native contact")
+                    .position
+                    .map(f64::to_bits),
+                contact.position.map(f64::to_bits)
+            );
+        }
+        assert_eq!(
+            staged_document
+                .scalar(prepared.ids.radius)
+                .expect("staged native radius")
+                .value
+                .to_bits(),
+            rendered_arc.radius.to_bits()
+        );
+        assert_eq!(
+            staged_document
+                .scalar(prepared.ids.start_angle)
+                .expect("staged native start angle")
+                .value
+                .to_bits(),
+            rendered_arc.start_angle.to_bits()
+        );
+        assert_eq!(
+            staged_document
+                .scalar(prepared.ids.end_angle)
+                .expect("staged native end angle")
+                .value
+                .to_bits(),
+            rendered_arc.end_angle.to_bits()
+        );
+        assert!(matches!(
+            staged_document.curve(prepared.ids.arc),
+            Some(curve)
+                if matches!(
+                    curve.definition,
+                    CurveDefinition::CircularArc { sweep, .. }
+                        if sweep == rendered_arc.sweep
+                )
+        ));
+        assert_eq!(
+            prepared.computed_snapshot.input().sketch,
+            prepared
+                .patch
+                .preview()
+                .accepted_session()
+                .and_then(RetainedSketchDocumentSession::accepted_prepared_input)
+                .expect("accepted prepared native input")
+        );
+        let held_proposed = prepared.proposed;
+        let held_evaluation = prepared.computed_snapshot.evaluation_revision();
+        let held_allocator = prepared.computed_allocator.high_water();
+
+        let feature_identity = coordinator.feature_document().identity();
+        let history = (coordinator.history_len(), coordinator.history_cursor());
+        let published = coordinator
+            .apply_feature_authoring_native_profile(current_metadata.token, &candidate)
+            .expect("native Fillet publication");
+        let ids = published.value;
+        assert_eq!(published.design, held_proposed.design_identity());
+        assert_eq!(published.attempt, held_proposed.attempt_identity());
+        assert_eq!(
+            published.published_accepted,
+            held_proposed.accepted_state_identity()
+        );
+        assert_eq!(
+            coordinator
+                .computed_snapshot()
+                .expect("held computed-parity snapshot installed")
+                .evaluation_revision(),
+            held_evaluation
+        );
+        assert_eq!(
+            coordinator.computed_evaluation_allocator.high_water(),
+            held_allocator
+        );
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            (history.0 + 1, history.1 + 1)
+        );
+        assert_eq!(coordinator.feature_document().identity(), feature_identity);
+        assert!(coordinator.feature_document().features().is_empty());
+        assert!(coordinator.feature_authoring_preview().is_none());
+        let native = coordinator.session().design_document();
+        assert_eq!(
+            native
+                .point(first_outer)
+                .expect("retained remote source")
+                .position
+                .map(f64::to_bits),
+            original_design
+                .point(first_outer)
+                .expect("original retained remote source")
+                .position
+                .map(f64::to_bits),
+            "native publication must not overwrite retained source seeds with accepted values"
+        );
+        assert_eq!(ids.source_lines, [first_line, second_line]);
+        assert!(native.curve(first_line).is_some());
+        assert!(native.curve(second_line).is_some());
+        assert!(native.point(corner).is_none());
+        assert!(native.curve(ids.arc).is_some());
+        assert!(matches!(
+            native.curve(first_line),
+            Some(curve)
+                if matches!(
+                    &curve.definition,
+                    CurveDefinition::Line { start, end, .. }
+                        if *start == first_outer && *end == ids.contact_points[0]
+                )
+        ));
+        assert!(matches!(
+            native.curve(second_line),
+            Some(curve)
+                if matches!(
+                    &curve.definition,
+                    CurveDefinition::Line { start, end, .. }
+                        if *start == ids.contact_points[1] && *end == second_outer
+                )
+        ));
+        assert!(matches!(
+            native.curve(ids.arc),
+            Some(curve)
+                if matches!(
+                    &curve.definition,
+                    CurveDefinition::CircularArc { center, radius, .. }
+                        if *center == ids.center && *radius == ids.radius
+                )
+        ));
+        for (index, (line, endpoint)) in [
+            (CurveSpan::line(first_line), FeatureEndpoint::End),
+            (CurveSpan::line(second_line), FeatureEndpoint::Start),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert!(matches!(
+                native.constraint(ids.tangencies[index]),
+                Some(constraint)
+                    if constraint.definition
+                        == DocumentConstraintDefinition::LineCurveTangency {
+                            line,
+                            endpoint,
+                            curve_contact: ids.contacts[index],
+                        }
+            ));
+        }
+        let radius = native
+            .dimension(ids.radius_dimension)
+            .expect("ordinary Radius dimension");
+        assert_eq!(radius.mode, DocumentDimensionMode::Driving);
+        assert!(matches!(
+            radius.definition,
+            DocumentDimensionDefinition::Radius { curve, target }
+                if curve == ids.arc && target == ids.radius_target
+        ));
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted native");
+        let report = accepted
+            .diagnostics()
+            .solve
+            .expect("independently accepted native diagnostics");
+        assert_eq!(
+            report.hard_validity,
+            geosolve_sketch::SketchHardValidity::Valid,
+            "{report:#?}"
+        );
+        assert!(
+            report
+                .maximum_normalized_hard_residual
+                .is_some_and(|maximum| maximum <= 1.0e-9),
+            "{report:#?}"
+        );
+
+        coordinator.undo().expect("undo native Fillet");
+        assert_eq!(coordinator.history_len(), history.0 + 1);
+        assert_eq!(coordinator.history_cursor(), history.1);
+        assert!(coordinator.feature_document().features().is_empty());
+        let undone = coordinator.session().design_document();
+        // Undo restores topology and retained values, while the persistent-ID high-water remains
+        // monotonic across the publication as required by the document allocator contract.
+        assert_eq!(
+            undone
+                .point(first_outer)
+                .expect("undone first outer")
+                .position
+                .map(f64::to_bits),
+            original_design
+                .point(first_outer)
+                .expect("original first outer")
+                .position
+                .map(f64::to_bits)
+        );
+        assert_eq!(
+            undone
+                .curve(first_line)
+                .expect("undone first line")
+                .definition,
+            original_design
+                .curve(first_line)
+                .expect("original first line")
+                .definition
+        );
+        assert_eq!(
+            undone
+                .curve(second_line)
+                .expect("undone second line")
+                .definition,
+            original_design
+                .curve(second_line)
+                .expect("original second line")
+                .definition
+        );
+        assert!(undone.point(corner).is_some());
+        assert!(undone.curve(ids.arc).is_none());
+        assert!(undone.curve(first_line).is_some());
+        assert!(undone.curve(second_line).is_some());
+
+        coordinator.redo().expect("redo native Fillet");
+        assert_eq!(coordinator.history_cursor(), history.1 + 1);
+        assert!(coordinator.feature_document().features().is_empty());
+        let redone = coordinator.session().design_document();
+        assert!(redone.point(corner).is_none());
+        assert!(redone.curve(ids.arc).is_some());
+        assert!(
+            ids.tangencies
+                .iter()
+                .all(|constraint| redone.constraint(*constraint).is_some())
+        );
+        assert!(redone.dimension(ids.radius_dimension).is_some());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact refresh/restore authority regression keeps its complete standalone corner fixture local"
+    )]
+    fn native_fillet_preparation_tracks_radius_refresh_and_exact_origin_restore() {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let first_outer = document
+            .add_point("first outer", [0.0, 0.0])
+            .expect("first outer");
+        let corner = document
+            .add_point("sharp corner", [4.0, 0.0])
+            .expect("corner");
+        let second_outer = document
+            .add_point("second outer", [4.0, 4.0])
+            .expect("second outer");
+        document
+            .add_curve(
+                "first line",
+                CurveDefinition::Line {
+                    start: first_outer,
+                    end: corner,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("first line");
+        document
+            .add_curve(
+                "second line",
+                CurveDefinition::Line {
+                    start: corner,
+                    end: second_outer,
+                    branch_direction: [0.0, 1.0],
+                },
+            )
+            .expect("second line");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("accepted session");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut authoring = FeatureAuthoringState::default();
+        let initial = feature_candidate(authoring.activate(
+            &snapshot,
+            coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[(SelectionItem::Point(corner), None)],
+        ));
+        let initial_metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &initial,
+                "restorable native corner",
+            )
+            .expect("initial preview");
+        coordinator
+            .native_feature_authoring_availability(initial_metadata.token, &initial)
+            .expect("initial native preparation");
+        let origin_publication = match coordinator
+            .native_fillet_previews
+            .get(&initial_metadata.token)
+            .expect("initial native cache")
+        {
+            NativeFilletPreviewCache::Prepared(publication) => {
+                std::ptr::from_ref(publication.as_ref())
+            }
+            NativeFilletPreviewCache::Unavailable(failure) => {
+                panic!("initial native preparation unexpectedly unavailable: {failure:?}")
+            }
+        };
+        coordinator
+            .accept_feature_authoring_radius_preview(
+                initial_metadata.input,
+                initial_metadata.feature,
+            )
+            .expect("retain gesture origin");
+
+        let resized = feature_candidate(authoring.set_options(
+            &snapshot,
+            FeatureAuthoringOptions {
+                fillet_radius: Some(initial.radius() * 0.75),
+                ..authoring.options()
+            },
+        ));
+        let resized_metadata = coordinator
+            .refresh_feature_authoring_preview(initial_metadata.input, &resized)
+            .expect("resized preview");
+        assert_ne!(initial_metadata.token, resized_metadata.token);
+        coordinator
+            .native_feature_authoring_availability(resized_metadata.token, &resized)
+            .expect("resized native preparation");
+        assert!(matches!(
+            coordinator.native_feature_authoring_availability(initial_metadata.token, &initial),
+            Err(CoordinatorError::NativeFilletPreviewMismatch)
+        ));
+        let allocator_before_restore = coordinator.computed_evaluation_allocator.high_water();
+
+        coordinator
+            .restore_feature_authoring_radius_preview(
+                resized_metadata.input,
+                resized_metadata.feature,
+            )
+            .expect("restore exact gesture origin");
+        let restored = coordinator
+            .feature_authoring_preview()
+            .expect("restored preview");
+        assert_eq!(restored.metadata(), &initial_metadata);
+        assert_eq!(restored.candidate(), &initial);
+        coordinator
+            .native_feature_authoring_availability(initial_metadata.token, &initial)
+            .expect("restored exact origin preparation remains available");
+        let (restored_publication, restored_allocator) = match coordinator
+            .native_fillet_previews
+            .get(&initial_metadata.token)
+            .expect("restored native cache")
+        {
+            NativeFilletPreviewCache::Prepared(publication) => {
+                assert_eq!(
+                    publication.base_computed_allocator, allocator_before_restore,
+                    "restored parity must authenticate the allocator revision advanced by the discarded sample"
+                );
+                (
+                    std::ptr::from_ref(publication.as_ref()),
+                    publication.computed_allocator.high_water(),
+                )
+            }
+            NativeFilletPreviewCache::Unavailable(failure) => {
+                panic!("restored native preparation unexpectedly unavailable: {failure:?}")
+            }
+        };
+        assert!(
+            std::ptr::eq(restored_publication, origin_publication),
+            "gesture rollback must retain the exact non-cloneable origin patch"
+        );
+        coordinator
+            .apply_feature_authoring_native_profile(initial_metadata.token, &initial)
+            .expect("restored origin patch remains directly publishable");
+        assert_eq!(
+            coordinator.computed_evaluation_allocator.high_water(),
+            restored_allocator,
+            "publication must consume the renewed computed parity without reusing a discarded revision"
+        );
+        assert!(coordinator.feature_authoring_preview().is_none());
+        assert!(coordinator.native_fillet_previews.is_empty());
+        assert!(matches!(
+            coordinator.native_feature_authoring_availability(resized_metadata.token, &resized),
+            Err(CoordinatorError::NativeFilletPreviewMismatch)
+        ));
+    }
+
+    #[test]
+    fn native_fillet_cached_unavailable_attempts_preserve_the_exact_held_preview() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "unsupported polyline native corner",
+            )
+            .expect("computed Fillet preview remains valid");
+        let retained = retained_state_snapshot(&fixture.coordinator);
+        let sketch_high_water = fixture
+            .coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+        let computed_high_water = fixture
+            .coordinator
+            .computed_evaluation_allocator
+            .high_water();
+        let feature_identity = fixture.coordinator.feature_document().identity();
+
+        for _ in 0..2 {
+            assert!(matches!(
+                fixture
+                    .coordinator
+                    .native_feature_authoring_availability(metadata.token, &candidate),
+                Err(CoordinatorError::NativeFilletUnavailable(_))
+            ));
+            assert!(matches!(
+                fixture
+                    .coordinator
+                    .apply_feature_authoring_native_profile(metadata.token, &candidate),
+                Err(CoordinatorError::NativeFilletUnavailable(_))
+            ));
+            assert_retained_state_snapshot(&fixture.coordinator, &retained);
+            assert_eq!(
+                fixture
+                    .coordinator
+                    .session()
+                    .persistent_identity_high_water(),
+                &sketch_high_water
+            );
+            assert_eq!(
+                fixture
+                    .coordinator
+                    .computed_evaluation_allocator
+                    .high_water(),
+                computed_high_water
+            );
+            assert_eq!(
+                fixture.coordinator.feature_document().identity(),
+                feature_identity
+            );
+            let held = fixture
+                .coordinator
+                .feature_authoring_preview()
+                .expect("cached-unavailable attempt retains preview");
+            assert_eq!(held.metadata(), &metadata);
+            assert_eq!(held.candidate(), &candidate);
+        }
+    }
+
+    #[test]
+    fn native_fillet_profile_offset_source_claim_is_cached_and_state_neutral() {
+        let (mut coordinator, scene, source_spans) = profile_offset_rectangle_fixture();
+        let mut offset = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut offset, &scene);
+        coordinator
+            .prepare_offset_authoring_preview(&offset, "claimed rectangle")
+            .expect("accepted Profile Offset preview");
+        coordinator
+            .apply_offset_authoring_preview(&mut offset)
+            .expect("accepted Profile Offset association");
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("current accepted Profile Offset")
+                .document()
+                .dimensions()
+                .iter()
+                .any(|dimension| matches!(
+                    &dimension.definition,
+                    DocumentDimensionDefinition::ProfileOffset { operand, .. }
+                        if profile_offset_operand_contains_any(
+                            operand,
+                            [source_spans[0], source_spans[1]],
+                        )
+                ))
+        );
+
+        let corner = match &coordinator
+            .session()
+            .design_document()
+            .curve(source_spans[0].curve)
+            .expect("claimed source line")
+            .definition
+        {
+            CurveDefinition::Line { end, .. } => *end,
+            other => panic!("expected standalone source line, got {other:?}"),
+        };
+        let candidate = grouped_fillet_candidate(&coordinator, [corner]);
+        let metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "Profile Offset claimed corner",
+            )
+            .expect("computed Fillet preview remains valid");
+        let retained = native_fillet_durable_snapshot(&coordinator);
+
+        for attempt in ["availability", "apply"] {
+            let error = if attempt == "availability" {
+                coordinator
+                    .native_feature_authoring_availability(metadata.token, &candidate)
+                    .expect_err("claimed source must be unavailable")
+            } else {
+                coordinator
+                    .apply_feature_authoring_native_profile(metadata.token, &candidate)
+                    .expect_err("claimed source must not publish")
+            };
+            assert!(matches!(
+                error,
+                CoordinatorError::NativeFilletUnavailable(ref reason)
+                    if reason == "A source line already participates in a Profile Offset association"
+            ));
+            assert_native_fillet_rejection_is_state_neutral(&coordinator, &retained);
+            let held = coordinator
+                .feature_authoring_preview()
+                .expect("cached source-claim failure retains the computed preview");
+            assert_eq!(held.metadata(), &metadata);
+            assert_eq!(held.candidate(), &candidate);
+        }
+    }
+
+    #[test]
+    fn native_fillet_suppressed_persisted_fillet_claim_is_cached_and_state_neutral() {
+        let mut fixture = standalone_native_fillet_fixture();
+        let original = grouped_fillet_candidate(&fixture.coordinator, [fixture.corner]);
+        let persisted = apply_grouped_fillet(&mut fixture.coordinator, &original);
+        fixture
+            .coordinator
+            .set_computed_feature_suppressed(
+                fixture.coordinator.feature_document().identity(),
+                persisted,
+                true,
+            )
+            .expect("suppress persisted computed Fillet");
+        assert!(
+            fixture
+                .coordinator
+                .feature_document()
+                .feature(persisted)
+                .is_some_and(|feature| feature.suppressed)
+        );
+        assert!(matches!(
+            computed_feature_state(
+                fixture
+                    .coordinator
+                    .computed_snapshot()
+                    .expect("suppressed computed output"),
+                persisted,
+            ),
+            ComputedFeatureEvaluationState::Suppressed
+        ));
+
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.corner]);
+        let metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "suppressed Fillet claimed corner",
+            )
+            .expect("replacement computed Fillet preview remains valid");
+        let retained = native_fillet_durable_snapshot(&fixture.coordinator);
+
+        for attempt in ["availability", "apply"] {
+            let error = if attempt == "availability" {
+                fixture
+                    .coordinator
+                    .native_feature_authoring_availability(metadata.token, &candidate)
+                    .expect_err("persisted source claim must be unavailable")
+            } else {
+                fixture
+                    .coordinator
+                    .apply_feature_authoring_native_profile(metadata.token, &candidate)
+                    .expect_err("persisted source claim must not publish")
+            };
+            assert!(matches!(
+                error,
+                CoordinatorError::NativeFilletUnavailable(ref reason)
+                    if reason == "A source line is already owned by a persistent computed Fillet"
+            ));
+            assert_native_fillet_rejection_is_state_neutral(&fixture.coordinator, &retained);
+            assert!(
+                fixture
+                    .coordinator
+                    .feature_document()
+                    .feature(persisted)
+                    .is_some_and(|feature| feature.suppressed)
+            );
+            let held = fixture
+                .coordinator
+                .feature_authoring_preview()
+                .expect("cached persisted-claim failure retains the computed preview");
+            assert_eq!(held.metadata(), &metadata);
+            assert_eq!(held.candidate(), &candidate);
+        }
+    }
+
+    #[test]
+    fn native_fillet_intervening_accepted_edit_revokes_old_patch_atomically() {
+        let mut fixture = standalone_native_fillet_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.corner]);
+        let metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "soon stale native corner",
+            )
+            .expect("held native Fillet preview");
+        fixture
+            .coordinator
+            .native_feature_authoring_availability(metadata.token, &candidate)
+            .expect("old preview starts native-eligible");
+
+        let edited = fixture
+            .coordinator
+            .apply_edit(
+                fixture.coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: fixture.first_outer,
+                    position: [-1.0, 0.0],
+                },
+            )
+            .expect("intervening accepted sketch edit");
+        assert!(edited.published_accepted.is_some());
+        assert!(fixture.coordinator.feature_authoring_preview().is_none());
+        assert!(fixture.coordinator.native_fillet_previews.is_empty());
+        let retained = native_fillet_durable_snapshot(&fixture.coordinator);
+
+        assert!(matches!(
+            fixture
+                .coordinator
+                .native_feature_authoring_availability(metadata.token, &candidate),
+            Err(CoordinatorError::NativeFilletPreviewMismatch)
+        ));
+        assert_native_fillet_rejection_is_state_neutral(&fixture.coordinator, &retained);
+        assert!(matches!(
+            fixture
+                .coordinator
+                .apply_feature_authoring_native_profile(metadata.token, &candidate),
+            Err(CoordinatorError::NativeFilletPreviewMismatch)
+        ));
+        assert_native_fillet_rejection_is_state_neutral(&fixture.coordinator, &retained);
+
+        let current = fixture
+            .coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("intervening edit remains current and independently accepted");
+        let report = current.solve_result().unstable_core_report();
+        assert!(report.hard_residuals_validated, "{report:#?}");
+        assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+        assert!(fixture.source_spans.iter().all(|span| {
+            fixture
+                .coordinator
+                .session()
+                .design_document()
+                .curve(span.curve)
+                .is_some()
+        }));
+        assert!(
+            fixture
+                .coordinator
+                .session()
+                .design_document()
+                .point(fixture.corner)
+                .is_some()
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .session()
+                .design_document()
+                .curves()
+                .len(),
+            2,
+            "a stale native Apply must not publish even an arc prefix"
+        );
     }
 
     fn seed_failed_no_history_temporary_attempt(coordinator: &mut RetainedEditorCoordinator) {

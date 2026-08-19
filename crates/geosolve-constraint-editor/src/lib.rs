@@ -58,7 +58,7 @@ pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
     FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringStage,
     FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarning,
-    FeatureAuthoringWarningKind,
+    FeatureAuthoringWarningKind, NativeFilletAuthoringUnavailable,
 };
 pub use geometry_tools::{GeometryToolFamily, GeometryToolVariant};
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
@@ -16375,6 +16375,7 @@ mod tests {
             end_angle: std::f64::consts::FRAC_PI_2,
             sweep: DocumentArcSweep::CounterClockwise,
             contacts: [contact, contact],
+            tangent_orientations: [TangentOrientation::Aligned; 2],
         };
         let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
         let points = tessellate_computed_arc(&arc, viewport, 1.0e6).expect("computed arc");
@@ -16498,6 +16499,7 @@ mod tests {
             end_angle: std::f64::consts::FRAC_PI_2,
             sweep: DocumentArcSweep::CounterClockwise,
             contacts,
+            tangent_orientations: [TangentOrientation::Aligned, TangentOrientation::Opposed],
         };
         scene.computed_curves.push(SceneComputedCurve {
             edge: ComputedEdgeId {
@@ -17163,6 +17165,7 @@ mod tests {
             end_angle: curve.end_angle,
             sweep: curve.sweep,
             contacts: curve.contacts,
+            tangent_orientations: [TangentOrientation::Aligned; 2],
         };
         assert!(
             fixture

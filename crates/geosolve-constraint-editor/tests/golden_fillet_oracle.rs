@@ -12,15 +12,16 @@ use std::io::{BufWriter, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use geosolve_constraint_editor::{
-    FeatureAuthoringOutcome, FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
-    RetainedEditorCoordinator, SelectionItem,
+    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringStage, FeatureAuthoringState,
+    FeatureAuthoringTool, RetainedEditorCoordinator, SelectionItem,
 };
 use geosolve_sketch::{
     ContactNeighborhood, CurveDefinition, CurveSpan, DesignPointId, DocumentArcSweep,
-    DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentFilletEndpointOrder,
-    DocumentFilletTrimEndpoint, DocumentId, DocumentSolveRequest, DocumentTrimParameter,
-    OperationControl, OperationOutcome, PersistentId, RetainedSketchDocumentSession, ScalarDomain,
-    ScalarUnit, SketchDocument, SketchHardValidity, SolverConfig,
+    DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentId,
+    DocumentSolveRequest, DocumentTrimParameter, GeometryRole, OperationControl, OperationOutcome,
+    PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+    SketchHardValidity, SolverConfig,
 };
 use geosolve_sketch_features::{
     ComputedCornerRef, ComputedEdgeGeometry, ComputedEvaluationAllocator,
@@ -33,9 +34,10 @@ use geosolve_sketch_features::{
 
 const FAMILY: &str = "feature.fillet";
 const TSV_HEADER: &str = "case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint";
-const CASE_IDS: [&str; 5] = [
+const CASE_IDS: [&str; 6] = [
     "feature.fillet.authoring.coincident-closure.curve-pair",
     "feature.fillet.authoring.coincident-closure.point",
+    "feature.fillet.authoring.native-profile.line-line",
     "feature.fillet.evaluation.line-circle.same-cell-lower",
     "feature.fillet.evaluation.line-circle.same-cell-seam",
     "feature.fillet.evaluation.line-circle.source-rotation.retained-start",
@@ -134,7 +136,7 @@ impl SurveyRow {
 
 #[test]
 fn golden_fillet_oracle_inventory_and_tsv_schema_are_exhaustive() {
-    assert_eq!(CASE_IDS.len(), 5);
+    assert_eq!(CASE_IDS.len(), 6);
     assert_eq!(TSV_HEADER.split('\t').count(), 6);
     assert_eq!(
         CASE_IDS.into_iter().collect::<BTreeSet<_>>().len(),
@@ -180,6 +182,7 @@ fn observe(case_id: &str) -> Observation {
         "feature.fillet.authoring.coincident-closure.curve-pair" => {
             observe_coincident_closure(ClosureRoute::CurvePair)
         }
+        "feature.fillet.authoring.native-profile.line-line" => observe_native_profile_line_line(),
         "feature.fillet.evaluation.line-circle.same-cell-lower" => {
             observe_line_circle(LineCircleRow::LOWER)
         }
@@ -429,6 +432,375 @@ fn observe_coincident_closure(route: ClosureRoute) -> Observation {
             ))
         },
     }
+}
+
+struct NativeProfileVariant {
+    document: SketchDocument,
+    corner: DesignPointId,
+    spans: [CurveSpan; 2],
+    tag: &'static str,
+}
+
+fn transform_native_profile_point(
+    point: [f64; 2],
+    scale: f64,
+    rotation: f64,
+    translation: [f64; 2],
+) -> [f64; 2] {
+    let (sin, cos) = rotation.sin_cos();
+    [
+        translation[0] + scale * (cos * point[0] - sin * point[1]),
+        translation[1] + scale * (sin * point[0] + cos * point[1]),
+    ]
+}
+
+fn transform_native_profile_direction(direction: [f64; 2], rotation: f64) -> [f64; 2] {
+    let (sin, cos) = rotation.sin_cos();
+    [
+        cos * direction[0] - sin * direction[1],
+        sin * direction[0] + cos * direction[1],
+    ]
+}
+
+fn add_native_profile_line(
+    document: &mut SketchDocument,
+    label: &'static str,
+    start: DesignPointId,
+    end: DesignPointId,
+    branch_direction: [f64; 2],
+) -> CurveSpan {
+    CurveSpan::line(
+        document
+            .add_curve(
+                label,
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction,
+                },
+            )
+            .expect("golden native Profile line"),
+    )
+}
+
+fn native_profile_variant(
+    ordinal: u128,
+    tag: &'static str,
+    scale: f64,
+    rotation: f64,
+    translation: [f64; 2],
+    reverse_creation: bool,
+) -> NativeProfileVariant {
+    let mut document = SketchDocument::with_id(
+        4.0 * scale,
+        DocumentId(PersistentId::from_u128(
+            0x6e61_7469_7665_5f66_696c_6c65_7400_0100 + ordinal,
+        )),
+    )
+    .expect("golden native Profile document");
+    let first_outer = document
+        .add_point(
+            "first outer",
+            transform_native_profile_point([-3.0, 0.0], scale, rotation, translation),
+        )
+        .expect("first outer");
+    let corner = document
+        .add_point(
+            "sharp corner",
+            transform_native_profile_point([0.0, 0.0], scale, rotation, translation),
+        )
+        .expect("sharp corner");
+    let second_outer = document
+        .add_point(
+            "second outer",
+            transform_native_profile_point([0.0, 3.0], scale, rotation, translation),
+        )
+        .expect("second outer");
+    let first_direction = transform_native_profile_direction([1.0, 0.0], rotation);
+    let second_direction = transform_native_profile_direction([0.0, 1.0], rotation);
+    let (first, second) = if reverse_creation {
+        let second = add_native_profile_line(
+            &mut document,
+            "second line",
+            corner,
+            second_outer,
+            second_direction,
+        );
+        let first = add_native_profile_line(
+            &mut document,
+            "first line",
+            first_outer,
+            corner,
+            first_direction,
+        );
+        (first, second)
+    } else {
+        let first = add_native_profile_line(
+            &mut document,
+            "first line",
+            first_outer,
+            corner,
+            first_direction,
+        );
+        let second = add_native_profile_line(
+            &mut document,
+            "second line",
+            corner,
+            second_outer,
+            second_direction,
+        );
+        (first, second)
+    };
+    NativeProfileVariant {
+        document,
+        corner,
+        spans: [first, second],
+        tag,
+    }
+}
+
+fn observe_native_profile_line_line() -> Observation {
+    let variants = vec![
+        native_profile_variant(0, "base", 1.0, 0.0, [0.0, 0.0], false),
+        native_profile_variant(
+            1,
+            "tiny-translated-rotated",
+            1.0e-6,
+            0.47,
+            [2.0e-6, -1.0e-6],
+            false,
+        ),
+        native_profile_variant(
+            2,
+            "large-translated-rotated-reversed",
+            1.0e6,
+            -1.13,
+            [-2.0e6, 1.5e6],
+            true,
+        ),
+    ];
+    let mut input_parts = Vec::with_capacity(variants.len() * 2);
+    for variant in &variants {
+        input_parts.push(variant.tag.to_owned());
+        input_parts.push(
+            variant
+                .document
+                .to_canonical_json()
+                .expect("native Profile golden input JSON"),
+        );
+    }
+    let input_refs = input_parts.iter().map(String::as_str).collect::<Vec<_>>();
+    let input_fingerprint = input_fingerprint(&input_refs);
+    for variant in variants {
+        if let Err(failure) = validate_native_profile_variant(variant) {
+            return Observation {
+                input_fingerprint,
+                outcome: Err(failure),
+            };
+        }
+    }
+    Observation {
+        input_fingerprint,
+        outcome: Ok(()),
+    }
+}
+
+fn validate_native_profile_variant(variant: NativeProfileVariant) -> OracleResult {
+    let model_scale = variant.document.model_scale();
+    let session = retained(variant.document);
+    assert_current_accepted(&session);
+    let mut coordinator = RetainedEditorCoordinator::new(session).expect("native coordinator");
+    let snapshot = coordinator
+        .feature_authoring_snapshot()
+        .expect("native authoring snapshot");
+    let mut state = FeatureAuthoringState::default();
+    if !matches!(
+        state.activate(
+            &snapshot,
+            snapshot.sketch_document(),
+            FeatureAuthoringTool::Fillet,
+            &[],
+        ),
+        FeatureAuthoringOutcome::ModeEntered(_)
+    ) {
+        return Err(defect(
+            "fillet.native.authoring",
+            format!("{}: Fillet mode did not activate", variant.tag),
+        ));
+    }
+    if matches!(
+        state.set_options(
+            &snapshot,
+            FeatureAuthoringOptions {
+                fillet_radius: Some(0.25 * model_scale),
+                ..FeatureAuthoringOptions::default()
+            },
+        ),
+        FeatureAuthoringOutcome::Warning(_)
+    ) {
+        return Err(defect(
+            "fillet.native.authoring",
+            format!("{}: transformed radius was rejected", variant.tag),
+        ));
+    }
+    let transaction = coordinator
+        .transact_feature_authoring_pick_items(
+            &mut state,
+            &[(SelectionItem::Point(variant.corner), None)],
+            format!("{} native Profile", variant.tag),
+        )
+        .map_err(|error| {
+            defect(
+                "fillet.native.authoring",
+                format!("{}: corner collection failed: {error}", variant.tag),
+            )
+        })?;
+    let FeatureAuthoringOutcome::PreviewRequested { candidate, .. } = transaction.outcome else {
+        return Err(defect(
+            "fillet.native.authoring",
+            format!("{}: corner did not produce one preview", variant.tag),
+        ));
+    };
+    let Some(preview) = transaction.preview else {
+        return Err(defect(
+            "fillet.native.authority",
+            format!("{}: candidate had no exact held preview", variant.tag),
+        ));
+    };
+    let [corner_preview] = candidate.corners() else {
+        return Err(defect(
+            "fillet.native.authoring",
+            format!("{}: native candidate was not one corner", variant.tag),
+        ));
+    };
+    coordinator
+        .native_feature_authoring_availability(preview.token, &candidate)
+        .map_err(|error| {
+            defect(
+                "fillet.native.eligibility",
+                format!(
+                    "{}: eligible transformed corner was unavailable: {error}",
+                    variant.tag
+                ),
+            )
+        })?;
+    let expected_orientations = corner_preview.arc.tangent_orientations;
+    let history_before = coordinator.history_len();
+    let mutation = coordinator
+        .apply_feature_authoring_native_profile(preview.token, &candidate)
+        .map_err(|error| {
+            defect(
+                "fillet.native.publication",
+                format!("{}: exact native publication failed: {error}", variant.tag),
+            )
+        })?;
+    let ids = mutation.value;
+    assert_current_accepted(coordinator.session());
+    let document = coordinator.session().design_document();
+    let expected_sources = variant
+        .spans
+        .into_iter()
+        .map(|span| span.curve)
+        .collect::<BTreeSet<_>>();
+    let published_sources = ids.source_lines.into_iter().collect::<BTreeSet<_>>();
+    let source_lines_exist = ids.source_lines.iter().all(|line| {
+        matches!(
+            document.curve(*line).map(|curve| &curve.definition),
+            Some(CurveDefinition::Line { .. })
+        )
+    });
+    let arc_is_native = matches!(
+        document.curve(ids.arc).map(|curve| &curve.definition),
+        Some(CurveDefinition::CircularArc { .. })
+    ) && document.geometry_role(ids.arc) == Some(GeometryRole::Profile);
+    let tangencies_match = ids
+        .tangencies
+        .iter()
+        .enumerate()
+        .all(|(index, constraint)| {
+            matches!(
+                document.constraint(*constraint).map(|value| &value.definition),
+                Some(DocumentConstraintDefinition::LineCurveTangency { curve_contact, .. })
+                    if *curve_contact == ids.contacts[index]
+            ) && document
+                .contact(ids.contacts[index])
+                .is_some_and(|contact| {
+                    contact.tangent_orientation == Some(expected_orientations[index])
+                })
+        });
+    let radius_matches = document
+        .dimension(ids.radius_dimension)
+        .is_some_and(|dimension| {
+            dimension.mode == DocumentDimensionMode::Driving
+                && matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::Radius { curve, target }
+                        if curve == ids.arc && target == ids.radius_target
+                )
+        });
+    if expected_sources != published_sources
+        || !source_lines_exist
+        || document.point(variant.corner).is_some()
+        || !arc_is_native
+        || !tangencies_match
+        || !radius_matches
+        || !coordinator.feature_document().features().is_empty()
+        || coordinator.history_len() != history_before + 1
+    {
+        return Err(defect(
+            "fillet.native.publication",
+            format!(
+                "{}: publication lost native lines/arc/tangencies/Radius, branch state, or one-step history",
+                variant.tag
+            ),
+        ));
+    }
+    coordinator.undo().map_err(|error| {
+        defect(
+            "fillet.native.lifecycle",
+            format!("{}: Undo failed: {error}", variant.tag),
+        )
+    })?;
+    if coordinator
+        .session()
+        .design_document()
+        .curve(ids.arc)
+        .is_some()
+        || coordinator
+            .session()
+            .design_document()
+            .point(variant.corner)
+            .is_none()
+    {
+        return Err(defect(
+            "fillet.native.lifecycle",
+            format!("{}: Undo did not restore the sharp corner", variant.tag),
+        ));
+    }
+    coordinator.redo().map_err(|error| {
+        defect(
+            "fillet.native.lifecycle",
+            format!("{}: Redo failed: {error}", variant.tag),
+        )
+    })?;
+    assert_current_accepted(coordinator.session());
+    if coordinator
+        .session()
+        .design_document()
+        .curve(ids.arc)
+        .is_none()
+        || coordinator
+            .session()
+            .design_document()
+            .point(variant.corner)
+            .is_some()
+    {
+        return Err(defect(
+            "fillet.native.lifecycle",
+            format!("{}: Redo did not restore native identities", variant.tag),
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy)]

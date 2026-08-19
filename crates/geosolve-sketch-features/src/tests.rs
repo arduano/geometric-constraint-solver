@@ -2060,6 +2060,43 @@ fn authoring_owns_root_selection_and_rejects_fabricated_pick_positions() {
 }
 
 #[test]
+fn reverse_line_pick_order_keeps_canonical_parents_and_preview_contacts_aligned() {
+    let fixture = polyline_fixture();
+    let session = retained(fixture.document.clone());
+    let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+    let forward_request = first_corner_authoring_request(&fixture.document, fixture.spans);
+    let mut reverse_request = forward_request;
+    std::mem::swap(&mut reverse_request.first, &mut reverse_request.second);
+
+    let resolve = |request| {
+        complete(
+            authoring
+                .resolve_fillet_corner(
+                    request,
+                    0.5,
+                    ComputedFeatureEvaluationPolicy::default(),
+                    OperationControl::unlimited(),
+                )
+                .unwrap(),
+        )
+    };
+    let forward = resolve(forward_request);
+    let reverse = resolve(reverse_request);
+
+    assert_eq!(reverse.corner, forward.corner);
+    for resolved in [forward, reverse] {
+        assert_eq!(
+            resolved.arc.contacts[0].source,
+            resolved.corner.first.source
+        );
+        assert_eq!(
+            resolved.arc.contacts[1].source,
+            resolved.corner.second.source
+        );
+    }
+}
+
+#[test]
 fn absolute_radius_continuation_preserves_branch_and_round_trips_line_line() {
     let fixture = polyline_fixture();
     let session = retained(fixture.document.clone());

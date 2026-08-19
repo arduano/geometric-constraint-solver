@@ -3,8 +3,10 @@
 //! Grouped, presentation-independent authoring for computed sketch features.
 
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DesignPointId, DocumentFilletTrimEndpoint, OperationControl,
-    OperationOutcome, PreparedSketchInput, SketchAcceptedStateIdentity, SketchDocument,
+    CurveDefinition, CurveSpan, DesignPointId, DocumentFilletTrimEndpoint,
+    DocumentNativeLineFilletCreationRequest, DocumentNativeLineFilletParent, FeatureEndpoint,
+    OperationControl, OperationOutcome, PreparedSketchInput, SketchAcceptedStateIdentity,
+    SketchDocument,
 };
 use geosolve_sketch_features::{
     ComputedCircularArc, ComputedFeatureAuthoringError, ComputedFeatureAuthoringSnapshot,
@@ -153,6 +155,28 @@ pub struct FeatureAuthoringCandidate {
     accepted: SketchAcceptedStateIdentity,
 }
 
+/// Typed reason why a computed Fillet preview cannot be materialized as one native line Fillet.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum NativeFilletAuthoringUnavailable {
+    MultipleCorners,
+    PreviewContactMismatch,
+}
+
+impl NativeFilletAuthoringUnavailable {
+    #[must_use]
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::MultipleCorners => {
+                "Native profile output currently requires exactly one line-line corner"
+            }
+            Self::PreviewContactMismatch => {
+                "The current Fillet preview no longer matches its retained source branches"
+            }
+        }
+    }
+}
+
 impl FeatureAuthoringCandidate {
     #[must_use]
     pub const fn tool(&self) -> FeatureAuthoringTool {
@@ -182,6 +206,59 @@ impl FeatureAuthoringCandidate {
     #[must_use]
     pub fn persistent_corners(&self) -> Vec<NewComputedFilletCorner> {
         self.corners.iter().map(|value| value.corner).collect()
+    }
+
+    /// Converts the exact one-corner preview into an accepted-geometry native construction
+    /// request. The sketch owner still authenticates line family, role, complete-span topology,
+    /// shared-corner ownership, dependencies, and every finite branch predicate.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed unavailable reason unless the candidate contains exactly one internally
+    /// consistent computed Fillet corner and its authenticated branch geometry.
+    pub fn native_line_fillet_request(
+        &self,
+        label: impl Into<String>,
+    ) -> Result<DocumentNativeLineFilletCreationRequest, NativeFilletAuthoringUnavailable> {
+        let [preview] = self.corners.as_slice() else {
+            return Err(NativeFilletAuthoringUnavailable::MultipleCorners);
+        };
+        let corner = preview.corner;
+        let arc = &preview.arc;
+        if arc.contacts[0].source != corner.first.source
+            || arc.contacts[1].source != corner.second.source
+            || arc.radius.to_bits() != self.radius.to_bits()
+            || arc.sweep != corner.sweep
+        {
+            return Err(NativeFilletAuthoringUnavailable::PreviewContactMismatch);
+        }
+        let endpoint = |endpoint| match endpoint {
+            DocumentFilletTrimEndpoint::Start => FeatureEndpoint::Start,
+            DocumentFilletTrimEndpoint::End => FeatureEndpoint::End,
+        };
+        Ok(DocumentNativeLineFilletCreationRequest {
+            label: label.into(),
+            first: DocumentNativeLineFilletParent {
+                curve: corner.first.source.span,
+                endpoint: endpoint(corner.first.retained_endpoint),
+                normal_side: corner.first.normal_side,
+                tangent_orientation: arc.tangent_orientations[0],
+                contact_position: arc.contacts[0].position,
+            },
+            second: DocumentNativeLineFilletParent {
+                curve: corner.second.source.span,
+                endpoint: endpoint(corner.second.retained_endpoint),
+                normal_side: corner.second.normal_side,
+                tangent_orientation: arc.tangent_orientations[1],
+                contact_position: arc.contacts[1].position,
+            },
+            endpoint_order: corner.endpoint_order,
+            center: arc.center,
+            radius: arc.radius,
+            start_angle: arc.start_angle,
+            end_angle: arc.end_angle,
+            sweep: arc.sweep,
+        })
     }
 }
 
@@ -1691,6 +1768,16 @@ mod tests {
             reverse_candidate.persistent_corners(),
             "parent order must canonicalize without changing endpoint semantics"
         );
+        for candidate in [&forward_candidate, &reverse_candidate] {
+            let [preview] = candidate.corners() else {
+                panic!("one line-line corner expected");
+            };
+            assert_eq!(preview.arc.contacts[0].source, preview.corner.first.source);
+            assert_eq!(preview.arc.contacts[1].source, preview.corner.second.source);
+            candidate
+                .native_line_fillet_request("reverse-order native Fillet")
+                .expect("canonical preview must remain native-publication eligible");
+        }
         assert_eq!(
             fixture.spans[1],
             resized.corners()[1].corner.first.source.span

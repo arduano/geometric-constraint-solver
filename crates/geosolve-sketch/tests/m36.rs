@@ -225,8 +225,8 @@ fn spline_and_nurbs_controls_are_persistent_point_features() {
 
 #[test]
 fn current_command_effect_and_measurement_characterization_is_exhaustive_and_stable() {
-    assert_eq!(CurrentDocumentCommandKind::ALL.len(), 44);
-    assert_eq!(CurrentDocumentEffectKind::ALL.len(), 40);
+    assert_eq!(CurrentDocumentCommandKind::ALL.len(), 45);
+    assert_eq!(CurrentDocumentEffectKind::ALL.len(), 41);
     assert_eq!(CurrentMeasurementKind::ALL.len(), 17);
 
     let command_codes = CurrentDocumentCommandKind::ALL

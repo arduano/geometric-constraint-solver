@@ -38,6 +38,7 @@ mod document_session;
 mod generic_curves;
 mod m38;
 mod model;
+mod native_fillet_construction;
 mod nurbs;
 mod offsets;
 mod profile_offset_construction;
@@ -186,6 +187,10 @@ pub use model::{
     Sketch, SketchConstraint, SketchConstraintId, SketchConstraintKind, SketchCurve,
     SketchCurveContact, SketchDimension, SketchDimensionId, SketchError, SketchPoint,
     SketchScalarRef,
+};
+pub use native_fillet_construction::{
+    DocumentNativeLineFilletCreationRequest, DocumentNativeLineFilletIds,
+    DocumentNativeLineFilletParent, DocumentPreparedNativeLineFilletGeometry,
 };
 pub use nurbs::NurbsCurve;
 pub use offsets::{

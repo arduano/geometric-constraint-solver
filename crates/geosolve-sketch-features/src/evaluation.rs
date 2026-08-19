@@ -8,7 +8,7 @@ use geosolve_sketch::{
     DocumentTrimBoundary, DocumentTrimParameter, GeometryRole, OperationCheckpoint,
     OperationControl, OperationController, OperationOutcome, OperationWorkCounter,
     PreparedSketchInput, RetainedSketchDocumentSession, SketchAcceptedStateIdentity,
-    SketchDocument,
+    SketchDocument, TangentOrientation,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -1129,6 +1129,8 @@ pub struct ComputedCircularArc {
     pub end_angle: f64,
     pub sweep: DocumentArcSweep,
     pub contacts: [ComputedFilletContact; 2],
+    /// Source-derivative versus arc-derivative branch at each first/second contact.
+    pub tangent_orientations: [TangentOrientation; 2],
 }
 
 /// Geometry carried by one generated edge. The vector result permits future
@@ -2788,7 +2790,7 @@ fn resolve_authoring_corner(
         endpoint_order,
         sweep: DocumentArcSweep::CounterClockwise,
     };
-    let arc = build_and_validate_arc(
+    let mut arc = build_and_validate_arc(
         sketch,
         persistent_parents,
         solution,
@@ -2798,9 +2800,14 @@ fn resolve_authoring_corner(
         ArcBranchValidation::PersistedCell,
     )
     .map_err(map_arc_authoring_failure)?;
+    let canonical_corner = corner.canonicalized();
+    if canonical_corner.first.source != corner.first.source {
+        arc.contacts.swap(0, 1);
+        arc.tangent_orientations.swap(0, 1);
+    }
     Ok(AuthoringCornerResolution::Completed(Box::new(
         ResolvedAuthoringCorner {
-            corner: corner.canonicalized(),
+            corner: canonical_corner,
             arc,
         },
     )))
@@ -5190,6 +5197,7 @@ fn build_and_validate_arc(
     }
     let mut contacts = Vec::with_capacity(2);
     let mut angles = [0.0; 2];
+    let mut tangent_orientations = [TangentOrientation::Aligned; 2];
     let mut offset_derivatives = [[0.0; 2]; 2];
     let tolerance = (sketch.model_scale() * GEOMETRY_TOLERANCE_FACTOR).max(1.0e-10);
     for index in 0..2 {
@@ -5238,6 +5246,22 @@ fn build_and_validate_arc(
         {
             return Err(ArcValidationFailure::Invalid);
         }
+        let arc_tangent = match sweep {
+            DocumentArcSweep::CounterClockwise => [-radial[1], radial[0]],
+            DocumentArcSweep::Clockwise => [radial[1], -radial[0]],
+        };
+        let tangent_dot = jet
+            .first_derivative
+            .x
+            .mul_add(arc_tangent[0], jet.first_derivative.y * arc_tangent[1]);
+        if !tangent_dot.is_finite() || tangent_dot.abs() <= f64::EPSILON * radius * tangent_length {
+            return Err(ArcValidationFailure::Invalid);
+        }
+        tangent_orientations[index] = if tangent_dot.is_sign_positive() {
+            TangentOrientation::Aligned
+        } else {
+            TangentOrientation::Opposed
+        };
         angles[index] = radial[1].atan2(radial[0]);
         let (parameter, winding) = normalize_parameter(topology.domain, solution.parameters[index])
             .ok_or(ArcValidationFailure::Invalid)?;
@@ -5278,6 +5302,7 @@ fn build_and_validate_arc(
         end_angle,
         sweep,
         contacts: [first, second],
+        tangent_orientations,
     })
 }
 

@@ -34,6 +34,7 @@ characterized_enum!(CurrentDocumentCommandKind {
     CreateDimension => "create_dimension",
     CreateProfileOffset => "create_profile_offset",
     CreateProfileOffsetGeometry => "create_profile_offset_geometry",
+    CreateNativeLineFilletGeometry => "create_native_line_fillet_geometry",
     CreateParameter => "create_parameter",
     AddParameterBinding => "add_parameter_binding",
     RemoveParameterBinding => "remove_parameter_binding",
@@ -80,6 +81,7 @@ characterized_enum!(CurrentDocumentEffectKind {
     CreatedConstraint => "created_constraint",
     CreatedDimension => "created_dimension",
     CreatedProfileOffset => "created_profile_offset",
+    CreatedNativeLineFillet => "created_native_line_fillet",
     CreatedParameter => "created_parameter",
     AddedParameterBinding => "added_parameter_binding",
     RemovedParameterBinding => "removed_parameter_binding",
@@ -150,6 +152,9 @@ impl DocumentEdit {
             Self::CreateProfileOffsetGeometry { .. }
             | Self::CreatePreparedProfileOffsetGeometry { .. } => {
                 CurrentDocumentCommandKind::CreateProfileOffsetGeometry
+            }
+            Self::CreatePreparedNativeLineFilletGeometry { .. } => {
+                CurrentDocumentCommandKind::CreateNativeLineFilletGeometry
             }
             Self::CreateParameter { .. } => CurrentDocumentCommandKind::CreateParameter,
             Self::AddParameterBinding { .. } => CurrentDocumentCommandKind::AddParameterBinding,
@@ -231,6 +236,7 @@ impl DocumentCommandEffect {
             Self::CreatedConstraint(_) => CurrentDocumentEffectKind::CreatedConstraint,
             Self::CreatedDimension(_) => CurrentDocumentEffectKind::CreatedDimension,
             Self::CreatedProfileOffset(_) => CurrentDocumentEffectKind::CreatedProfileOffset,
+            Self::CreatedNativeLineFillet(_) => CurrentDocumentEffectKind::CreatedNativeLineFillet,
             Self::CreatedParameter(_) => CurrentDocumentEffectKind::CreatedParameter,
             Self::AddedParameterBinding { .. } => CurrentDocumentEffectKind::AddedParameterBinding,
             Self::RemovedParameterBinding { .. } => {

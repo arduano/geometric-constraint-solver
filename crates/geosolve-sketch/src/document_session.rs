@@ -34,7 +34,10 @@ use crate::{
     DocumentMeasurementProvenance, DocumentScalarUnit, SketchSession, SketchSessionError,
     SketchSolveRequest, SketchSolveResult, SketchSource, SolveRejection,
 };
-use crate::{DocumentPreparedProfileOffsetGeometry, DocumentProfileOffsetCreationRequest};
+use crate::{
+    DocumentNativeLineFilletIds, DocumentPreparedNativeLineFilletGeometry,
+    DocumentPreparedProfileOffsetGeometry, DocumentProfileOffsetCreationRequest,
+};
 
 /// Unstable pre-M62 external snapshot wire version.
 pub const EXTERNAL_SNAPSHOT_SET_VERSION_V1: u32 = 1;
@@ -1797,6 +1800,11 @@ pub enum DocumentEdit {
     CreatePreparedProfileOffsetGeometry {
         prepared: Box<DocumentPreparedProfileOffsetGeometry>,
     },
+    /// Materializes one accepted-preview line-line Fillet as ordinary shortened native lines,
+    /// one native circular arc, endpoint tangencies, and a driving radius dimension.
+    CreatePreparedNativeLineFilletGeometry {
+        prepared: Box<DocumentPreparedNativeLineFilletGeometry>,
+    },
     CreateParameter {
         label: String,
         kind: DocumentParameterKind,
@@ -1990,6 +1998,7 @@ pub enum DocumentCommandEffect {
     CreatedConstraint(DocumentConstraintId),
     CreatedDimension(DocumentDimensionId),
     CreatedProfileOffset(Box<DocumentProfileOffsetIds>),
+    CreatedNativeLineFillet(Box<DocumentNativeLineFilletIds>),
     CreatedParameter(DocumentParameterId),
     AddedParameterBinding {
         parameter: DocumentParameterId,
@@ -2133,6 +2142,10 @@ pub enum DocumentSessionError {
         expected: Box<PreparedSketchInput>,
         actual: Box<PreparedSketchInput>,
     },
+    #[error("accepted-derived native Fillet publication requires a current accepted state")]
+    NativeFilletAcceptedSeedUnavailable,
+    #[error("native Fillet edit produced different retained and accepted-seed identities")]
+    NativeFilletSeedEffectMismatch,
 }
 
 fn complete_exact_preview_release<T>(
@@ -4453,6 +4466,7 @@ impl RetainedSketchDocumentSession {
     {
         self.check_design_identity(expected)?;
         let mut candidate = self.design.clone();
+        let mut accepted_seed = None;
         let (effect, command_drag) = match edit {
             DocumentEdit::SetPointPosition { point, position } => {
                 candidate.set_point_position(point, position)?;
@@ -4464,10 +4478,37 @@ impl RetainedSketchDocumentSession {
                     }),
                 )
             }
+            DocumentEdit::CreatePreparedNativeLineFilletGeometry { prepared } => {
+                let mut seed = self
+                    .accepted_state_for_current_input()
+                    .ok_or(DocumentSessionError::NativeFilletAcceptedSeedUnavailable)?
+                    .document()
+                    .clone();
+                let seed_prepared = prepared.as_ref().clone();
+                let effect = apply_edit(
+                    &mut candidate,
+                    DocumentEdit::CreatePreparedNativeLineFilletGeometry { prepared },
+                )?;
+                let seed_effect = apply_edit(
+                    &mut seed,
+                    DocumentEdit::CreatePreparedNativeLineFilletGeometry {
+                        prepared: Box::new(seed_prepared),
+                    },
+                )?;
+                if effect != seed_effect {
+                    return Err(DocumentSessionError::NativeFilletSeedEffectMismatch);
+                }
+                accepted_seed = Some(seed);
+                (effect, None)
+            }
             edit => (apply_edit(&mut candidate, edit)?, None),
         };
         candidate.validate()?;
-        self.retain_candidate(candidate, effect, command_drag)
+        if let Some(seed) = accepted_seed {
+            self.retain_candidate_with_seed(candidate, effect, command_drag, &seed)
+        } else {
+            self.retain_candidate(candidate, effect, command_drag)
+        }
     }
 
     /// Retains one point-position edit while seeding its final solve from an exact
@@ -4824,6 +4865,7 @@ impl RetainedSketchDocumentSession {
         self.check_design_identity(expected)?;
         let mut candidate = self.design.clone();
         candidate.defer_mutation_validation();
+        let mut accepted_seed = None;
         let (effect, command_drag) = match edit {
             DocumentEdit::SetPointPosition { point, position } => {
                 candidate.set_point_position(point, position)?;
@@ -4835,12 +4877,46 @@ impl RetainedSketchDocumentSession {
                     }),
                 )
             }
+            DocumentEdit::CreatePreparedNativeLineFilletGeometry { prepared } => {
+                let mut seed = self
+                    .accepted_state_for_current_input()
+                    .ok_or(DocumentSessionError::NativeFilletAcceptedSeedUnavailable)?
+                    .document()
+                    .clone();
+                seed.defer_mutation_validation();
+                let seed_prepared = prepared.as_ref().clone();
+                let effect = apply_edit(
+                    &mut candidate,
+                    DocumentEdit::CreatePreparedNativeLineFilletGeometry { prepared },
+                )?;
+                let seed_effect = apply_edit(
+                    &mut seed,
+                    DocumentEdit::CreatePreparedNativeLineFilletGeometry {
+                        prepared: Box::new(seed_prepared),
+                    },
+                )?;
+                if effect != seed_effect {
+                    return Err(DocumentSessionError::NativeFilletSeedEffectMismatch);
+                }
+                seed.resume_mutation_validation();
+                accepted_seed = Some(seed);
+                (effect, None)
+            }
             edit => (apply_edit(&mut candidate, edit)?, None),
         };
         candidate.resume_mutation_validation();
-        let Some(value) =
+        let value = if let Some(seed) = accepted_seed {
+            self.retain_candidate_with_seed_controlled(
+                candidate,
+                effect,
+                command_drag,
+                seed,
+                &mut controller,
+            )?
+        } else {
             self.retain_candidate_controlled(candidate, effect, command_drag, &mut controller)?
-        else {
+        };
+        let Some(value) = value else {
             return Ok(controller.outcome_unchecked());
         };
         Ok(controller.outcome(value))
@@ -6090,9 +6166,47 @@ impl RetainedSketchDocumentSession {
 
     fn retain_candidate_controlled<T>(
         &mut self,
+        candidate: SketchDocument,
+        value: T,
+        command_drag: Option<DocumentDragTarget>,
+        controller: &mut OperationController,
+    ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError> {
+        self.retain_candidate_with_optional_seed_controlled(
+            candidate,
+            value,
+            command_drag,
+            None,
+            controller,
+        )
+    }
+
+    fn retain_candidate_with_seed_controlled<T>(
+        &mut self,
+        candidate: SketchDocument,
+        value: T,
+        command_drag: Option<DocumentDragTarget>,
+        seed: SketchDocument,
+        controller: &mut OperationController,
+    ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError> {
+        self.retain_candidate_with_optional_seed_controlled(
+            candidate,
+            value,
+            command_drag,
+            Some(seed),
+            controller,
+        )
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "controlled validation, accepted-seed selection, solve, independent publication and atomic lifecycle commit remain one auditable retained-session boundary"
+    )]
+    fn retain_candidate_with_optional_seed_controlled<T>(
+        &mut self,
         mut candidate: SketchDocument,
         value: T,
         command_drag: Option<DocumentDragTarget>,
+        explicit_seed: Option<SketchDocument>,
         controller: &mut OperationController,
     ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError> {
         if candidate.id() != self.design_identity.document {
@@ -6131,31 +6245,57 @@ impl RetainedSketchDocumentSession {
             &self.parameter_batch,
             &self.external_snapshots,
         );
-        let execution = match seed_from_accepted_parent_controlled(
-            &candidate,
-            self.accepted.as_ref(),
-            controller,
-        ) {
-            Ok(Some(seed)) => {
-                let Some(execution) = run_retained_attempt_controlled(
-                    &seed,
-                    &self.parameter_batch,
-                    &self.external_snapshots,
-                    self.request,
-                    command_drag,
-                    self.config,
-                    self.accepted.as_ref(),
-                    controller,
-                ) else {
-                    return Ok(None);
-                };
-                execution
+        let execution = if let Some(mut seed) = explicit_seed {
+            if seed.id() != candidate.id() {
+                return Err(DocumentSessionError::ForeignDesign {
+                    expected: candidate.id(),
+                    actual: seed.id(),
+                });
             }
-            Ok(None) => return Ok(None),
-            Err(error) => RetainedAttemptExecution::failure(
-                SketchAttemptFailureKind::AcceptedSession,
-                error.to_string(),
-            ),
+            seed.retain_persistent_identity_high_water(&persistent_identity_high_water)?;
+            if !seed.validate_with_controller(Some(controller))? {
+                return Ok(None);
+            }
+            let Some(execution) = run_retained_attempt_controlled(
+                &seed,
+                &self.parameter_batch,
+                &self.external_snapshots,
+                self.request,
+                command_drag,
+                self.config,
+                self.accepted.as_ref(),
+                controller,
+            ) else {
+                return Ok(None);
+            };
+            execution
+        } else {
+            match seed_from_accepted_parent_controlled(
+                &candidate,
+                self.accepted.as_ref(),
+                controller,
+            ) {
+                Ok(Some(seed)) => {
+                    let Some(execution) = run_retained_attempt_controlled(
+                        &seed,
+                        &self.parameter_batch,
+                        &self.external_snapshots,
+                        self.request,
+                        command_drag,
+                        self.config,
+                        self.accepted.as_ref(),
+                        controller,
+                    ) else {
+                        return Ok(None);
+                    };
+                    execution
+                }
+                Ok(None) => return Ok(None),
+                Err(error) => RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::AcceptedSession,
+                    error.to_string(),
+                ),
+            }
         };
         let (attempt, accepted) = publish_retained_attempt(
             &candidate,
@@ -7877,6 +8017,11 @@ fn apply_edit(
         DocumentEdit::CreateCurveCurveFillet { label, request } => {
             DocumentCommandEffect::CreatedCurveCurveFillet(Box::new(
                 document.add_curve_curve_fillet(&label, request)?,
+            ))
+        }
+        DocumentEdit::CreatePreparedNativeLineFilletGeometry { prepared } => {
+            DocumentCommandEffect::CreatedNativeLineFillet(Box::new(
+                document.create_prepared_native_line_fillet_geometry(*prepared)?,
             ))
         }
         DocumentEdit::SetPointPosition { point, position } => {

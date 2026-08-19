@@ -83,6 +83,7 @@ authoring_cases=(
 fillet_cases=(
   feature.fillet.authoring.coincident-closure.curve-pair
   feature.fillet.authoring.coincident-closure.point
+  feature.fillet.authoring.native-profile.line-line
   feature.fillet.evaluation.line-circle.same-cell-lower
   feature.fillet.evaluation.line-circle.same-cell-seam
   feature.fillet.evaluation.line-circle.source-rotation.retained-start
