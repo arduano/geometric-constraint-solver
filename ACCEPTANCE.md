@@ -2636,11 +2636,11 @@ remain pending**. The first candidate is withdrawn; GitHub Pages remains on acce
   multi-edge and tangent chains, both directions/sides, source and target edits, traversal reversal,
   association deletion/suppression, topology barriers, stale preview, atomic failure, persistence,
   rank/DOF, audit ordering and native/WASM parity.
-- Current development evidence passes exactly 21 sketch, 16 topology, 17 operations, 11
-  Offset-authoring, 390 full-editor, 7 focused direct-drag, 150 demo and 6 native plus 6 WASM
+- Current development evidence passes exactly 21 sketch, 16 topology, 18 operations, 12
+  Offset-authoring, 391 full-editor, 7 focused direct-drag, 150 demo and 6 native plus 6 WASM
   annotation-parity tests. The 270-row golden
   survey is all `PASS`, and `--check` plus `--require-clean` exactly match reviewed authority.
-  `M80-F001`-`M80-F007` have focused owner regressions. A successful ordinary point edit remains
+  `M80-F001`-`M80-F008` have focused owner regressions. A successful ordinary point edit remains
   current for fresh Offset capture/preview/Apply; every persistent source and target support must
   remain Profile geometry; ambient junction arms remain outside a selected path; and direct
   provisional dragging preserves exact rerendered hover/click, last-valid, cancel and history

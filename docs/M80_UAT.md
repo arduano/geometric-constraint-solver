@@ -90,7 +90,9 @@ At a T-junction, select exactly two incident edges that make one continuous path
 must preview/apply while the third unselected arm stays outside the highlight, target and
 association. Reset and try to include all three arms: that selected set must report branching and
 retain the prior complete operand. Repeat once with an isolated edge and a selected closed loop to
-confirm their distinct typed refusals remain intact.
+confirm their distinct typed refusals remain intact. Include a bounded arc whose own Start and End
+are joined by ordinary G0 continuity: it is already closed and must not masquerade as a one-edge
+open chain.
 
 ## U4 — ordinary target geometry and association lifecycle
 

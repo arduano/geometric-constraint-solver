@@ -213,6 +213,16 @@ revocation; all pass together with the collateral suites below. Hover authentica
 candidate input before resolving or publishing a grab target, so a superseded frame clears both
 collector and editor hover exactly where the same press rejects.
 
+### M80-F008 — one self-adjacent span masqueraded as an open chain
+
+Owners: `geosolve-constraint-editor` chain collection and `geosolve-sketch-ops` operation planning.
+The multi-span closure check did not cover one bounded span whose Start and End were explicitly
+joined by ordinary endpoint continuity. Such a span is already topologically closed and therefore
+cannot be an open-chain operand, regardless of its non-periodic curve family. Both owners now
+reject that self-adjacency as `WouldCloseChain`/`ProfileOffsetClosedChain` before proposal or
+allocation. Focused editor and operation regressions use a regular near-full circular arc with an
+authenticated G0 Start/End join and prove exact state neutrality.
+
 ### Pre-nomination interaction audit refinements
 
 The final editor/web audit also froze four cross-adapter behaviors without broadening mathematical
@@ -233,13 +243,13 @@ cargo test --locked -p geosolve-sketch --test m80_offset
 cargo test --locked -p geosolve-sketch-topology --test m80_offset_operands
   # 16 passed
 cargo test --locked -p geosolve-sketch-ops --test m80_profile_offset
-  # 17 passed
+  # 18 passed
 cargo test --locked -p geosolve-constraint-editor --lib offset_authoring::tests
-  # 11 passed
+  # 12 passed
 cargo test --locked -p geosolve-constraint-editor --lib m80_f007
   # 7 passed
 cargo test --locked -p geosolve-constraint-editor --lib
-  # 390 passed
+  # 391 passed
 cargo test --locked -p geosolve-demo-web --lib
   # 150 passed on the ordinary default test stack
 cargo test --locked -p geosolve-constraint-editor --test m76_annotation_parity

@@ -2741,6 +2741,17 @@ hoverable immediately.
 Status: fixed at the headless interaction and thin browser owners; focused and collateral
 mechanical qualification passes. Replacement clean nomination is pending.
 
+### M80-F008 - A self-adjacent span is closed, not a one-edge open chain
+
+Create a regular bounded circular arc whose exact Start and End contacts are joined by an ordinary
+G0 endpoint-continuity constraint. Even though the curve family is non-periodic, its authenticated
+topology is already closed. Offset chain collection must report `WouldCloseChain`, direct operation
+planning must report `ProfileOffsetClosedChain`, and neither path may allocate a target or mutate
+retained state. A genuinely open single arc remains eligible.
+
+Status: fixed at the editor and operation-planning owners; focused mechanical qualification passes.
+Replacement clean nomination is pending.
+
 ### M72-R1 - Recoverable public workbench bulk fixes
 
 In the ordinary editable workspace, create an incompatible driving dimension that publishes a

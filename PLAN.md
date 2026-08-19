@@ -5356,11 +5356,11 @@ scorecard.
 - [x] Regress closed linear/circular/mixed/holed faces, one-/multi-edge open chains, edits from both
   sides, direction/traversal retention, topology barriers, persistence/history, stale/cancelled/
   exhausted atomicity, Jacobians/audits/rank/DOF, native/WASM parity and thin demo behavior.
-- [x] Pass focused and broad pre-nomination qualification: sketch 21, topology 16, operations 17,
-  Offset authoring 11, full editor 390, focused direct-drag 7, demo 150 and annotation parity 6
+- [x] Pass focused and broad pre-nomination qualification: sketch 21, topology 16, operations 18,
+  Offset authoring 12, full editor 391, focused direct-drag 7, demo 150 and annotation parity 6
   native/6 WASM; formatting,
   warnings-denied workspace Clippy, locked all-feature workspace tests and exact 270-row golden
-  survey/check/require-clean all pass. `M80-F001`-`M80-F007` are frozen in owner regressions,
+  survey/check/require-clean all pass. `M80-F001`-`M80-F008` are frozen in owner regressions,
   including fresh Offset capture after accepted point edits and the persistent Profile-role
   invariant across creation, mutation and draft restore. The selected-set branch rule and exact
   provisional-distance gesture additionally preserve unselected geometry, exact hover/click

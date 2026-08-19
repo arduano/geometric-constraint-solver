@@ -1903,12 +1903,9 @@ fn plan_profile_offset_operand(
             }
             let mut seen = BTreeSet::new();
             let chain = plan_profile_offset_path(document, index, spans, false, &mut seen)?;
-            if spans.len() > 1
-                && index
-                    .adjacent_endpoints(directed_offset_endpoint(spans[0], true))
-                    .any(|endpoint| {
-                        endpoint == directed_offset_endpoint(spans[spans.len() - 1], false)
-                    })
+            if index
+                .adjacent_endpoints(directed_offset_endpoint(spans[0], true))
+                .any(|endpoint| endpoint == directed_offset_endpoint(spans[spans.len() - 1], false))
             {
                 return Err(ProfileOffsetPlanFailure::Incomplete(
                     SketchOperationIncompleteReason::ProfileOffsetClosedChain,

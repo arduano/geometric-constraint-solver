@@ -656,6 +656,23 @@ impl OffsetAuthoringState {
                 "A full circle must be selected as a face, not collected as an open chain",
             );
         }
+        let native_start = OffsetEndpointRef {
+            span,
+            endpoint: OffsetEndpointRole::Start,
+        };
+        let native_end = OffsetEndpointRef {
+            span,
+            endpoint: OffsetEndpointRole::End,
+        };
+        if index
+            .adjacent_endpoints(native_start)
+            .any(|adjacent| adjacent == native_end)
+        {
+            return self.warning(
+                OffsetAuthoringWarningKind::WouldCloseChain,
+                "This curve is already a closed operand; select the bounded face instead",
+            );
+        }
         let current = match self.operand.as_ref() {
             None => {
                 let side = if std::mem::take(&mut self.pending_direction_flip) {
@@ -725,14 +742,6 @@ impl OffsetAuthoringState {
 
         let front = directed_endpoint(current[0], true);
         let back = directed_endpoint(current[current.len() - 1], false);
-        let native_start = OffsetEndpointRef {
-            span,
-            endpoint: OffsetEndpointRole::Start,
-        };
-        let native_end = OffsetEndpointRef {
-            span,
-            endpoint: OffsetEndpointRole::End,
-        };
         let mut attachments = Vec::new();
         for (end, selected_terminal, at_front, traversal) in [
             (native_end, front, true, OffsetTraversal::Forward),
@@ -885,8 +894,10 @@ fn selected_branch_endpoint(
 mod tests {
     use super::*;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DocumentFilletTrimEndpoint, DocumentSolveRequest,
-        OperationControl, OperationOutcome, RetainedSketchDocumentSession, SketchDocument,
+        ContactNeighborhood, CurveDefinition, CurveSpan, DocumentArcSweep,
+        DocumentConstraintDefinition, DocumentCurveContinuity, DocumentFilletTrimEndpoint,
+        DocumentSolveRequest, OperationControl, OperationOutcome, RetainedSketchDocumentSession,
+        ScalarDomain, ScalarUnit, SketchDocument,
     };
     use geosolve_sketch_topology::{
         OffsetEndpointEligibility, OffsetOperandRequest, PreparedOffsetOperandQuery,
@@ -1259,6 +1270,82 @@ mod tests {
                     && spans[0].span == first
                     && spans[1].span == second
         ));
+    }
+
+    #[test]
+    fn m80_f008_one_span_self_adjacent_arc_is_not_an_open_chain() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let center = document.add_point("center", [0.0, 0.0]).unwrap();
+        let radius = document
+            .add_scalar("radius", 2.0, ScalarUnit::Length, ScalarDomain::Positive)
+            .unwrap();
+        let start_angle = document
+            .add_scalar("start angle", 0.0, ScalarUnit::Angle, ScalarDomain::Finite)
+            .unwrap();
+        let end_angle = document
+            .add_scalar(
+                "end angle",
+                std::f64::consts::TAU - 1.0e-12,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let arc = CurveSpan::line(
+            document
+                .add_curve(
+                    "self-adjacent arc",
+                    CurveDefinition::CircularArc {
+                        center,
+                        radius,
+                        start_angle,
+                        end_angle,
+                        sweep: DocumentArcSweep::CounterClockwise,
+                    },
+                )
+                .unwrap(),
+        );
+        let start = document
+            .add_curve_contact("arc start", arc, 0.0, 0, ContactNeighborhood::Start, None)
+            .unwrap();
+        let end = document
+            .add_curve_contact("arc end", arc, 1.0, 0, ContactNeighborhood::End, None)
+            .unwrap();
+        document
+            .add_constraint(
+                "closed arc endpoints",
+                DocumentConstraintDefinition::EndpointContinuity {
+                    first_contact: start,
+                    second_contact: end,
+                    continuity: DocumentCurveContinuity::G0,
+                },
+            )
+            .unwrap();
+        let (_, index, _) = fixture(document);
+        let native_start = OffsetEndpointRef {
+            span: arc,
+            endpoint: OffsetEndpointRole::Start,
+        };
+        let native_end = OffsetEndpointRef {
+            span: arc,
+            endpoint: OffsetEndpointRole::End,
+        };
+        assert!(
+            index
+                .adjacent_endpoints(native_start)
+                .any(|adjacent| adjacent == native_end),
+            "the explicit endpoint-continuity source must authenticate self-adjacency"
+        );
+
+        let mut state = OffsetAuthoringState::default();
+        let _ = state.activate(index, 10.0);
+        assert!(matches!(
+            state.pick_target(OffsetAuthoringTarget::Span(arc)),
+            OffsetAuthoringOutcome::Warning(OffsetAuthoringWarning {
+                kind: OffsetAuthoringWarningKind::WouldCloseChain,
+                ..
+            })
+        ));
+        assert!(state.operand().is_none());
     }
 
     #[test]
