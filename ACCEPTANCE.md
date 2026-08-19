@@ -2562,8 +2562,8 @@ Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte 
 
 ## M80 acceptance: native topology-preserving Profile Offset
 
-Status: **amended implementation, clean release qualification and immutable Tailscale nomination
-complete; UAT, publication and final acceptance are pending**. The pre-amendment
+Status: **implementation, clean release qualification and immutable Tailscale nomination pass;
+supervising-human UAT is accepted and final Pages publication remains pending**. The pre-amendment
 implementation and clean Tailscale nominations remain historical evidence, and `M80-F016`
 withdraws the `05b8b3b` candidate from acceptance. Exact replacement source `29d8e41`, tree `44ecb95`,
 is the current mechanically nominated candidate at `http://100.94.63.83:8080/`. GitHub Pages
@@ -2700,8 +2700,8 @@ remains on accepted M79.
   Tailscale.
 - All prior Tailscale candidates are historical. Exact sources `05b8b3b`, `b83dad2` and their
   immutable snapshots are no longer served; they cannot receive final M80 acceptance. Only the
-  replacement `29d8e41` candidate recorded in `docs/M80_UAT.md` may receive human acceptance. GitHub
-  Pages publication and hosted-byte verification occur only after that decision and before
+  replacement `29d8e41` candidate recorded in `docs/M80_UAT.md` received supervising-human
+  acceptance on 2026-08-20. GitHub Pages publication and hosted-byte verification remain before
   milestone closure.
 
 F016 replacement mechanical nomination (2026-08-19): exact product source
@@ -2719,7 +2719,20 @@ passed exact proxy-disabled, identity-encoded HTTP 200 media/length/body checks 
 content encoding, first under temporary PID `1030585` at `:18080`, then under PID `1031421` at
 `:8080`; root equals `index.html`. Evidence is `/tmp/geosolve-m80-f016-temp-verify.vWAgyX` and
 `/tmp/geosolve-m80-f016-final-verify.2T6bqX`. The temporary listener is stopped; PID `1031421`
-serves the replacement for pending human UAT. GitHub Pages remains on accepted M79.
+serves the accepted replacement. GitHub Pages remains on accepted M79 until M80 publication.
+
+Scoped acceptance checkpoint (2026-08-20): the supervising caller stated, “woak very nice. Please
+validate this milestone and finish it off. We did multiple things here so ensure each feature is
+fairly distinctly clean.” This explicitly accepts U1–U7 for source `29d8e41`, tree `44ecb95` and
+the immutable snapshot above without reporting a new finding; it does not invent a separately
+logged row-by-row replay. Fresh closeout validation passes these distinct cohorts: 21 Profile
+Offset equation/audit tests, 16 operand-topology tests, 18 deterministic construction/topology-
+barrier tests, 9 native-Fillet sketch tests, 1 native-Fillet topology test, 2 unchanged-Offset
+consumption tests, 1 retained accepted-preview authority test, 12 Offset-authoring tests, 9
+retained native-Fillet authority tests and 154 thin-demo tests. All 271 stable golden rows are
+`PASS`, and exact `--check` plus `--require-clean`, formatting and diff hygiene pass. The earlier
+complete clean gate remains exact product qualification. Final acceptance awaits only Pages
+publication and hosted-byte verification.
 
 Withdrawn pre-F016 amended mechanical nomination (2026-08-19): exact product source
 `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree

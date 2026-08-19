@@ -78,7 +78,7 @@ hosted-byte verification without replacing the qualified product source.
 M80 is the active native topology-preserving Profile Offset milestone under amended ADR 0037. Its
 native line-line Fillet publication amendment and `M80-F016` arc-angle propagation repair pass
 clean release qualification and immutable served nomination at exact source `29d8e41`, tree
-`44ecb95`.
+`44ecb95`. Supervising-human UAT is accepted; final Pages publication remains before closure.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
 but those candidates are withdrawn from acceptance and are no longer served; human UAT,
 publication and closure remain pending.
@@ -5312,8 +5312,8 @@ public-byte authority. No byte identity between those separately built distribut
 
 ### M80: native topology-preserving Profile Offset
 
-Status: **amended implementation, clean release qualification and immutable Tailscale nomination
-complete; UAT, publication and closure remain pending**. The pre-amendment
+Status: **implementation, clean release qualification and immutable Tailscale nomination pass;
+supervising-human UAT is accepted and final Pages publication remains pending**. The pre-amendment
 implementation and clean Tailscale nomination remain historical evidence, but that candidate is
 withdrawn from acceptance. The first candidate was withdrawn by `M80-F006` through `M80-F009`;
 the replacement `b83dad2` candidate is superseded by the native line-line Fillet amendment, and the
@@ -5321,7 +5321,7 @@ post-amendment `05b8b3b` candidate is withdrawn by `M80-F016`. Exact replacement
 tree `44ecb95`, is the current mechanically
 nominated candidate at `http://100.94.63.83:8080/`. GitHub Pages remains on accepted M79. ADR 0037
 and `docs/M80_GOALS.md` own the amended contract; `docs/M80_IMPLEMENTATION.md` is the live ledger
-and `docs/M80_UAT.md` is the pending human scorecard.
+and `docs/M80_UAT.md` records the accepted human scorecard.
 
 - [x] Add one grouped driving-only `ProfileOffset` dimension with one positive shared length
   scalar, explicit face Outward/Inward or open-chain Left/Right state and no reference mode.
@@ -5426,8 +5426,10 @@ and `docs/M80_UAT.md` is the pending human scorecard.
   `75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`, verify it first at
   `:18080`, then serve and exact-verify the same bytes at `http://100.94.63.83:8080/` under PID
   `1031421`.
-- [ ] Receive explicit human UAT acceptance, publish the accepted descendant through GitHub Pages,
-  verify the hosted artifact exactly and close M80.
+- [x] Receive explicit supervising-human UAT acceptance for U1–U7 over exact product source
+  `29d8e41`, tree `44ecb95`, without reporting another finding.
+- [ ] Publish the documentation-only approval descendant through GitHub Pages, verify the hosted
+  artifact exactly and close M80.
 
 Nomination evidence (2026-08-19): the complete clean gate ran from 20:55:13 through 21:14:59 AEST;
 its 269,339-byte, 3,498-line log `/tmp/geosolve-m80-clean-gate.05b8b3b.nix.log` has SHA-256
@@ -5454,6 +5456,17 @@ with evidence `/tmp/geosolve-m80-f016-temp-verify.vWAgyX`; final PID `1031421` p
 checks at `:8080` with evidence `/tmp/geosolve-m80-f016-final-verify.2T6bqX`. Root equals
 `index.html`; every response is HTTP 200 with exact media/length/body and no redirect or content
 encoding. The temporary listener is stopped and PID `1031421` remains live for human UAT.
+
+Scoped human acceptance and distinct-feature validation (2026-08-20): the supervising caller
+praised the final behavior and explicitly requested validation and closeout. This accepts U1–U7
+without claiming a separately logged row-by-row replay. A fresh closeout matrix passes Offset
+equations/audits 21, operand topology 16, deterministic Offset operations 18, native Fillet sketch
+9, native-Fillet topology 1, native-Fillet Offset operations 2, retained accepted-preview authority
+1, Offset authoring 12, retained native-Fillet authority 9 and thin demo 154. The stable golden
+survey is 271/271 `PASS`; `--check` and `--require-clean` match reviewed authority. Formatting and
+diff hygiene pass. These cohorts distinctly cover face/hole and open-chain association, exact
+topology barriers, draggable authoring/lifecycle, native Fillet materialization/Undo/Redo,
+unchanged Offset consumption and both supplied F016 angle-propagation reproductions.
 
 Gate: every accepted source edge retains exactly one same-family native target edge under one
 positive grouped distance and explicit direction/traversal/junction branch; every success passes

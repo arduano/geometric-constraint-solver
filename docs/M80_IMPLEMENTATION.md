@@ -2,8 +2,8 @@
 
 # M80 implementation — native topology-preserving Profile Offset
 
-Status: **amended implementation, clean release qualification and immutable Tailscale nomination
-complete; human UAT, GitHub Pages publication and closure remain pending**. The
+Status: **implementation, clean release qualification and immutable Tailscale nomination pass;
+supervising-human UAT is accepted and GitHub Pages publication remains pending**. The
 completed Profile Offset implementation and prior nomination records remain valid historical
 evidence, but `M80-F016` withdraws the `05b8b3b` snapshot from acceptance and it is no longer
 served. Exact replacement source `29d8e41`, tree `44ecb95`, is the current mechanically nominated
@@ -160,9 +160,9 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 - [x] Copy the exact amended gate-produced distribution without rebuilding, freeze and byte-verify
   it on temporary Tailscale port `18080`, then serve and reverify those same bytes on `:8080`.
   Record the exact source/tree/gate/manifest/server authority here and in `docs/M80_UAT.md`.
-- [ ] Receive explicit amended-candidate UAT/scoped-close direction, publish the approved
-  descendant through GitHub Pages, verify hosted bytes and only then mark M80 complete across all
-  milestone records.
+- [x] Receive explicit supervising-human UAT/scoped-close direction for the F016 replacement.
+- [ ] Publish the approval descendant through GitHub Pages, verify hosted bytes and only then mark
+  M80 complete across all milestone records.
 
 ## Required focused matrix
 
@@ -556,7 +556,7 @@ content-encoding checks; root equalled `index.html`. Evidence is
 `/tmp/geosolve-m80-f016-temp-verify.vWAgyX`. Only then was PID `704439` retired and PID `1031421`
 started the same snapshot at `http://100.94.63.83:8080/`; identical final verification passed into
 `/tmp/geosolve-m80-f016-final-verify.2T6bqX` before the temporary listener stopped. GitHub Pages
-remains on accepted M79 and human M80 UAT remains pending.
+remains on accepted M79 until the accepted M80 descendant publishes.
 
 This exact replacement withdraws `05b8b3b` from current UAT. Later documentation-only commits do
 not replace `29d8e41` as product-source authority.

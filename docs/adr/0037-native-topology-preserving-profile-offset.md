@@ -2,11 +2,11 @@
 
 # ADR 0037: Native topology-preserving Profile Offset
 
-Status: accepted, amended and implemented for M80. The original Profile Offset decision and its
-pre-amendment qualification pass; the native line-line Fillet publication amendment and amended
-development qualification also pass. Exact amended source `05b8b3b`, tree `4b66560`, passes the
-clean replacement gate and immutable Tailscale nomination. The previously frozen candidates are
-withdrawn from acceptance; human UAT and publication remain pending.
+Status: accepted, amended and implemented for M80. Exact product source `29d8e41`, tree `44ecb95`,
+passes the clean replacement gate, immutable Tailscale nomination and supervising-human UAT. The
+Profile Offset, native line-line Fillet publication and F016 ordinary arc-angle propagation
+contracts are separately qualified. Previously frozen candidates remain withdrawn; final GitHub
+Pages publication is the only remaining closeout step.
 
 ## Context
 
@@ -408,10 +408,13 @@ The scope amendment withdraws those bytes from final acceptance; they are no lon
 Exact amended source `05b8b3b`, tree `4b66560`, passes the complete clean gate. Its no-rebuild
 output is frozen at `/tmp/geosolve-m80-uat.kJj5JB` with ordered-manifest aggregate
 `8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215` and exact temporary/final
-HTTP verification; it is the current candidate at `http://100.94.63.83:8080/`.
-`docs/M80_UAT.md` must be run against that exact replacement.
-GitHub Pages publication and milestone closure occur only after the supervising human accepts that
-focused scorecard or explicitly records another scoped close decision.
+HTTP verification; F016 later withdraws it from current UAT. Replacement source `29d8e41`, tree
+`44ecb95`, activates ordinary circular-arc Start/End variables under line-arc tangency without a
+new residual or Fillet-specific relation. Its complete clean gate, focused centre/remote-endpoint
+regressions and no-rebuild snapshot `/tmp/geosolve-m80-uat.CPuVgx` pass, with aggregate
+`75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`. `docs/M80_UAT.md`
+records supervising-human acceptance of this exact replacement. GitHub Pages publication and
+hosted-byte verification remain before closure.
 
 ## Scope boundary
 

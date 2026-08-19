@@ -2,10 +2,10 @@
 
 # M80 focused UAT — native topology-preserving Profile Offset
 
-Status: **amended implementation, clean release qualification and immutable Tailscale nomination
-complete; focused human UAT is pending**. Mechanical evidence does not pass any UAT row. Run this
-scorecard only against the exact current candidate below; all prior snapshots remain
-withdrawn historical evidence and must not be used to score final M80 acceptance.
+Status: **accepted 2026-08-20; clean qualification and immutable Tailscale evidence pass, with
+final GitHub Pages publication pending**. The supervising caller approved the qualified candidate,
+praised the final F016 behavior and explicitly requested milestone validation and closeout. All
+prior snapshots remain withdrawn historical evidence.
 
 Product source: `29d8e4144b6b1eba1146e5add9e8d93b2f61dee3`
 
@@ -31,7 +31,7 @@ PID `1031421` started on `:8080`. Root plus every file returned HTTP 200 with ex
 length and bytes, zero redirects, no content encoding and the frozen manifest aggregate; `/` equals
 `index.html`. The temporary listener is stopped.
 
-GitHub Pages remains on accepted M79; M80 publication is not authorized before human acceptance.
+GitHub Pages remains on accepted M79 until the accepted M80 descendant publishes successfully.
 
 ## Withdrawn nomination history
 
@@ -257,8 +257,15 @@ Fillet to confirm an eligible corner recovers without refresh.
 
 ## Acceptance record
 
-Pending explicit supervising-human decision on the nominated `29d8e41` candidate.
-Mechanical qualification or a live Tailscale server does not itself pass any UAT row and does not
-close M80. The superseded `05b8b3b` and `b83dad2` snapshots cannot receive acceptance. After acceptance, record
-the UAT decision here; then perform the normal GitHub Pages publication and hosted-byte
-verification before marking the milestone complete.
+On 2026-08-20 the supervising caller stated, “woak very nice. Please validate this milestone and
+finish it off. We did multiple things here so ensure each feature is fairly distinctly clean.” That
+explicit milestone-level decision accepts U1–U7 for product source `29d8e41`, tree `44ecb95`,
+snapshot `/tmp/geosolve-m80-uat.CPuVgx` and aggregate
+`75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`, without reporting a new
+finding. It accepts the separately qualified Profile Offset equations/topology, face/hole and open-
+chain construction, authoring/drag/lifecycle behavior, native line-line Fillet publication,
+unchanged Offset consumption and F016 arc-angle propagation. It does not invent an unlogged row-by-
+row replay. The superseded `05b8b3b` and `b83dad2` snapshots remain ineligible for acceptance.
+
+Final closure now requires only the standard Pages publication and hosted-byte verification of the
+documentation-only approval descendant.
