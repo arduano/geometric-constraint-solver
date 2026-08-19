@@ -76,7 +76,7 @@ Tailscale nomination, human UAT and closeout approval pass. Documentation-only a
 `a6d504e` passes Pages run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact
 hosted-byte verification without replacing the qualified product source.
 M80 is the active native topology-preserving Profile Offset milestone under ADR 0037. Its
-implementation and broad pre-nomination qualification pass; clean candidate nomination, human
+implementation, clean replacement qualification and immutable Tailscale nomination pass; human
 UAT, publication and closure remain pending.
 M76's
 implementation,
@@ -5308,12 +5308,11 @@ public-byte authority. No byte identity between those separately built distribut
 
 ### M80: native topology-preserving Profile Offset
 
-Status: **post-nomination amendments implemented and development-qualified; replacement clean
-release qualification, immutable Tailscale nomination, human UAT, publication and closure
-pending**. The first candidate is withdrawn by `M80-F006` and `M80-F007`; GitHub Pages remains on
-accepted M79. ADR 0037 and `docs/M80_GOALS.md` own the approved one-to-one native association;
-`docs/M80_IMPLEMENTATION.md` is the live ledger and `docs/M80_UAT.md` is the active human
-scorecard.
+Status: **post-nomination amendments clean-qualified and immutably nominated on Tailscale; human
+UAT, publication and closure pending**. The first candidate is withdrawn by `M80-F006` through
+`M80-F009`; GitHub Pages remains on accepted M79. ADR 0037 and `docs/M80_GOALS.md` own the approved
+one-to-one native association; `docs/M80_IMPLEMENTATION.md` is the live ledger and
+`docs/M80_UAT.md` is the active human scorecard.
 
 - [x] Add one grouped driving-only `ProfileOffset` dimension with one positive shared length
   scalar, explicit face Outward/Inward or open-chain Left/Right state and no reference mode.
@@ -5369,9 +5368,12 @@ scorecard.
 - [x] The withdrawn first candidate passed its complete clean release gate and remains historical
   evidence only: source `949c3db`, tree `23a6f8d`, snapshot `/tmp/geosolve-m80-uat.Nnxsu7` and
   aggregate `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`.
-- [ ] Pass the replacement complete clean release gate, freeze its exact output without rebuilding,
+- [x] Pass the replacement complete clean release gate, freeze its exact output without rebuilding,
   byte-verify it on a temporary Tailscale endpoint, and only then replace the withdrawn bytes at
-  `http://100.94.63.83:8080/` for focused human UAT.
+  `http://100.94.63.83:8080/` for focused human UAT. Exact product source `b83dad2`, tree `440d66e`,
+  snapshot `/tmp/geosolve-m80-uat.hggNdd` and ordered-manifest aggregate
+  `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37` are the replacement
+  mechanical nomination authority; final PID `3837538` serves those verified bytes.
 - [ ] Receive explicit human UAT acceptance, publish the accepted descendant through GitHub Pages,
   verify the hosted artifact exactly and close M80.
 

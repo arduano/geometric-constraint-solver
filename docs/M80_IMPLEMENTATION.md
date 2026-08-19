@@ -2,9 +2,9 @@
 
 # M80 implementation — native topology-preserving Profile Offset
 
-Status: **post-nomination amendments implemented and development-qualified**. The first candidate
-is withdrawn by `M80-F006` and `M80-F007`; replacement clean release qualification, immutable
-Tailscale nomination and human UAT remain pending. GitHub Pages stays on accepted M79.
+Status: **post-nomination amendments clean-qualified and immutably nominated on Tailscale**. The
+first candidate is withdrawn by `M80-F006` through `M80-F009`; human UAT, GitHub Pages publication
+and closure remain pending. GitHub Pages stays on accepted M79.
 
 Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 
@@ -90,17 +90,17 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
   while reproduction copy/load deliberately omits and ignores it.
 - [x] Keep the tool active after Apply; explicit close/Cancel returns to Select.
 
-### 5. Qualification, UAT and closeout — replacement nomination pending
+### 5. Qualification, UAT and closeout — replacement nominated; UAT pending
 
 - [x] Pass focused owner tests, native/WASM parity, unchanged historical persistence/golden checks,
   formatting, warnings-denied workspace Clippy and locked all-feature workspace tests.
-- [ ] Re-pass the exact clean release gate from committed replacement source, including Rustdoc,
+- [x] Re-pass the exact clean release gate from committed replacement source, including Rustdoc,
   demo WASM and Trunk, and record its complete log.
-- [ ] Copy the exact replacement gate-produced distribution without rebuilding, freeze it
+- [x] Copy the exact replacement gate-produced distribution without rebuilding, freeze it
   read-only, verify
   every file locally, then keep it running and byte-verified on the shared Tailscale endpoint until
   the supervising human accepts or replaces the candidate.
-- [ ] Record exact replacement source/tree/log/manifest/server evidence in this file and
+- [x] Record exact replacement source/tree/log/manifest/server evidence in this file and
   `docs/M80_UAT.md`.
 - [ ] Receive explicit UAT/scoped-close direction, publish the approved descendant through GitHub
   Pages, verify hosted bytes and only then mark M80 complete across all milestone records.
@@ -284,6 +284,51 @@ cargo test --locked --workspace --all-features
 
 Historical M1-M79 evidence remains unchanged.
 
+## Replacement nomination evidence
+
+Exact product source `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`, tree
+`440d66ef07b7df963164e69ebed4b75509f56bd6`, ran the complete clean gate inside the repository's
+pinned `shell.nix` from 2026-08-19 13:38:33 through 13:50:00 AEST. The 262,051-byte, 3,416-line log
+`/tmp/geosolve-m80-clean-gate.b83dad2.nix.log` has SHA-256
+`3e44403e3f2038467aa0c06193030feb6c099cd53634b315a8308ca111113fa0`. It passes formatting,
+warnings-denied workspace Clippy and Rustdoc, locked all-feature workspace tests, unchanged
+270/270 golden `--require-clean` authority, all seven native/WASM parity suites, demo WASM,
+benchmark compilation, M14/M32 budgets, the 120.97-second 256-body sparse crossover,
+licence/package checks and the release Trunk assembly.
+
+An earlier direct-shell invocation reached the matching 270-row oracle and then stopped before its
+first WASM test because `wasm-bindgen-test-runner` was absent from that ambient `PATH`; its retained
+log is `/tmp/geosolve-m80-clean-gate.b83dad2.log`. The WASM binary never executed, the source tree
+remained clean and unchanged, and the pinned-Nix gate above is the sole passing release claim.
+
+Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was copied to
+`/tmp/geosolve-m80-uat.hggNdd`, byte-compared before and after freezing the directory `0555` and all
+seven regular non-symlink files `0444`. Freeze evidence is
+`/tmp/geosolve-m80-freeze-evidence.1S2bfA`; the C-locale ordered `sha256sum *` manifest aggregate is
+`d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`:
+
+```text
+12861ad65e947547f3ac9b3566717cd228bb7c7177c7138b6340b6005b624d88  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+7edcf614931091f70fcb718e7a5653168f47cf4fa8702f240281ff13bfcea4aa  geosolve-demo-web-ffbd27c03aa5ac90.js
+23dc7f48d992f73d6714cefd22757f2cfb4240190751e78c56b7515cfeced2af  geosolve-demo-web-ffbd27c03aa5ac90_bg.wasm
+438bd2732d52b23388be0fba1b7eaa061f1819d363e1fb911cf14197c6d711ea  index.html
+696181924c67ef61038f01c91c5c091eb7686160a24e10b833f22f9b13eabd38  styles-d9987f1e32f4927.css
+```
+
+Temporary service PID `3831926` first served only that snapshot on `100.94.63.83:18080`. Root plus
+all seven assets passed proxy-disabled, cache-bypassed identity requests before former PID
+`1946736` was retired. Final service `geosolve-m80-uat.service`, PID `3837538`, now serves the same
+snapshot at `http://100.94.63.83:8080/`; the temporary service was retained until the final ledger
+passed and is now stopped. Temporary evidence `/tmp/geosolve-m80-temp-verify.mGxuDM/results.tsv`
+has SHA-256 `1628a6c2e87ab519351598371712ace67584616d1573f510c80fbe48f3cd9bea`;
+final evidence `/tmp/geosolve-m80-final-verify.M0ThFH/results.tsv` has SHA-256
+`03e93b8fcd4d53231d7e3bafd95c6b4315ba2a12515bb8a4f763a91abc8c0b28`. Every request returned
+HTTP 200 from `100.94.63.83` with zero redirects, no `Location` or `Content-Encoding`, exact media
+type and length, snapshot-identical bytes and the same manifest aggregate; `/` equals
+`index.html`. GitHub Pages remains on accepted M79 until explicit human UAT acceptance.
+
 ## Withdrawn first nomination evidence
 
 Exact source `949c3dbde769cb7de41a9fd97ba0a40094bea14a`, tree
@@ -314,17 +359,17 @@ ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
 
 M80 first ran on temporary Tailscale port `18080` under PID `1940172`. Root and every file passed
 proxy-disabled, cache-bypassed identity requests before M79 PID `40049` was retired. Final PID
-`1946736` now serves the unchanged snapshot at `http://100.94.63.83:8080/`. Both temporary and
-final eight-request ledgers have SHA-256
+`1946736` served the unchanged snapshot at `http://100.94.63.83:8080/` until the replacement passed
+temporary verification. Both temporary and final eight-request ledgers have SHA-256
 `af8eb2f377450feaa7a12baef23f8d06ff034c739421bd80cdeaf4e9ad7c88fa`; evidence lives at
 `/tmp/geosolve-m80-temp-verify.f6vjdf` and `/tmp/geosolve-m80-final-verify.crUf79`. Every response
 is HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected media type and
 length, snapshot-identical body, root equality and the same fetched aggregate. The temporary unit
 was retired only after final verification.
 
-This was mechanical nomination, not human acceptance. `M80-F006` and `M80-F007` withdrew this
-snapshot before UAT acceptance. It remains historical while the replacement is qualified; GitHub
-Pages remains on accepted M79.
+This was mechanical nomination, not human acceptance. `M80-F006` through `M80-F009` withdrew this
+snapshot before UAT acceptance. It remains historical and is no longer served; GitHub Pages
+remains on accepted M79.
 
 ## Known limitations
 

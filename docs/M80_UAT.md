@@ -2,35 +2,39 @@
 
 # M80 focused UAT — native topology-preserving Profile Offset
 
-Status: **the first clean-qualified candidate is withdrawn by post-nomination findings M80-F006
-through M80-F009; replacement implementation and development qualification pass, while clean
-nomination is pending**. Do not score the former bytes below for final acceptance. Mechanical
-evidence does not pass any UAT row.
+Status: **the post-M80-F006 through M80-F009 replacement is clean-qualified, immutably frozen and
+byte-verified on Tailscale; focused human UAT is ready and pending**. Mechanical evidence does not
+pass any UAT row.
 
-Withdrawn product source: `949c3dbde769cb7de41a9fd97ba0a40094bea14a`
+Product source: `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`
 
-Withdrawn candidate tree: `23a6f8df89e16bb1ae3a74ee0bd4d90d2cd9245a`
+Candidate tree: `440d66ef07b7df963164e69ebed4b75509f56bd6`
 
-Historical Tailscale endpoint while replacement work proceeds:
-`http://100.94.63.83:8080/` (PID `1946736`)
+Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m80-uat.service`, PID `3837538`)
 
-Immutable snapshot: `/tmp/geosolve-m80-uat.Nnxsu7` (directory `0555`; seven regular non-symlink
+Immutable snapshot: `/tmp/geosolve-m80-uat.hggNdd` (directory `0555`; seven regular non-symlink
 files `0444`)
 
 Ordered-manifest aggregate:
-`18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`
+`d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`
 
-Clean gate: 2026-08-19 02:58:27–03:11:36 AEST;
-`/tmp/geosolve-m80-clean-gate.949c3db.log` (263,727 bytes, 3,427 lines, SHA-256
-`389f590c52fba4bc436c4910056e2610d34d6d0fbf1b10dd4b960d985bd8c962`)
+Clean gate: 2026-08-19 13:38:33–13:50:00 AEST;
+`/tmp/geosolve-m80-clean-gate.b83dad2.nix.log` (262,051 bytes, 3,416 lines, SHA-256
+`3e44403e3f2038467aa0c06193030feb6c099cd53634b315a8308ca111113fa0`)
 
-Freeze/HTTP evidence: `/tmp/geosolve-m80-freeze-evidence.GWHVEQ`,
-`/tmp/geosolve-m80-temp-verify.f6vjdf` and `/tmp/geosolve-m80-final-verify.crUf79`. Temporary and
-final eight-request ledgers have SHA-256
-`af8eb2f377450feaa7a12baef23f8d06ff034c739421bd80cdeaf4e9ad7c88fa`; root plus every file
-returned HTTP 200 with exact media/length/bytes, no redirects and no content encoding. M79 remained
-live until the temporary candidate passed and the temporary M80 listener remained live until final
-`:8080` verification passed.
+Freeze/HTTP evidence: `/tmp/geosolve-m80-freeze-evidence.1S2bfA`,
+`/tmp/geosolve-m80-temp-verify.mGxuDM` and `/tmp/geosolve-m80-final-verify.M0ThFH`. The temporary and
+final eight-request result ledgers have respective SHA-256
+`1628a6c2e87ab519351598371712ace67584616d1573f510c80fbe48f3cd9bea` and
+`03e93b8fcd4d53231d7e3bafd95c6b4315ba2a12515bb8a4f763a91abc8c0b28`; root plus every file
+returned HTTP 200 with exact media/length/bytes, no redirects or content encoding and the exact
+frozen manifest aggregate. The withdrawn listener remained live until temporary verification
+passed, and the temporary replacement remained live until final `:8080` verification passed.
+
+Withdrawn predecessor: source `949c3db`, tree `23a6f8d`, snapshot
+`/tmp/geosolve-m80-uat.Nnxsu7`, aggregate
+`18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`. It is historical, no
+longer served and must not be used for scoring.
 
 Keep the exact no-rebuild snapshot running locally over Tailscale until the supervising human
 accepts it or an M80 finding explicitly withdraws it. A replacement candidate gets new source,

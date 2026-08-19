@@ -307,8 +307,10 @@ self-closure rejection, including per-gesture authentication against delayed pre
 effects from an earlier drag over the same provisional proposal.
 
 Focused native/WASM and workbench tests, unchanged historical persistence bytes and the stable
-golden gate pass as pre-nomination evidence. The complete clean release gate must pass before the
-exact no-rebuild output is frozen read-only and byte-verified on the shared Tailscale endpoint.
+golden gate pass as pre-nomination evidence. Exact source `b83dad2`, tree `440d66e`, then passes the
+complete clean release gate; its no-rebuild output is frozen read-only at
+`/tmp/geosolve-m80-uat.hggNdd` and byte-verified on the shared Tailscale endpoint with aggregate
+`d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`.
 `docs/M80_UAT.md` must be run against that exact candidate. GitHub Pages publication and milestone
 closure occur only after the supervising human accepts the focused scorecard or explicitly records
 another scoped close decision.

@@ -2659,11 +2659,12 @@ Focused native/WASM/presentation tests and the complete clean gate precede a no-
 snapshot kept byte-verified on `http://100.94.63.83:8080/` through `docs/M80_UAT.md`; Pages and
 closure require an explicit human decision.
 
-Status: post-nomination amendments pass development qualification. The former exact source
-`949c3db`, tree `23a6f8d`, snapshot `/tmp/geosolve-m80-uat.Nnxsu7` and ordered-manifest aggregate
-`18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9` remain withdrawn historical
-evidence at `http://100.94.63.83:8080/` until a replacement passes the complete clean gate and
-temporary-port byte verification. Human UAT, Pages publication and closure remain pending.
+Status: clean replacement source `b83dad2`, tree `440d66e`, snapshot
+`/tmp/geosolve-m80-uat.hggNdd` and ordered-manifest aggregate
+`d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37` pass the complete gate,
+temporary-port verification and final byte verification at `http://100.94.63.83:8080/`. The former
+`949c3db` snapshot is withdrawn and no longer served. Human UAT, Pages publication and closure
+remain pending.
 
 ### M80-F001 - Computed Fillet fragments cannot impersonate native operands
 
@@ -2722,7 +2723,7 @@ unchanged and outside the association. Selecting all three incident arms reports
 branch; disconnected and closed selections keep their existing typed failures and no state mutates.
 
 Status: fixed at the editor and operation-planning owners; focused and collateral mechanical
-qualification passes. Replacement clean nomination is pending together with F007.
+qualification and replacement mechanical nomination pass; human UAT remains pending.
 
 ### M80-F007 - Provisional shared distance has a direct authoring gesture
 
@@ -2741,7 +2742,7 @@ advertising a grab which the identical authenticated press rejects; the current 
 hoverable immediately.
 
 Status: fixed at the headless interaction and thin browser owners; focused and collateral
-mechanical qualification passes. Replacement clean nomination is pending.
+mechanical qualification and replacement nomination pass; human UAT remains pending.
 
 ### M80-F008 - A self-adjacent span is closed, not a one-edge open chain
 
@@ -2752,7 +2753,7 @@ planning must report `ProfileOffsetClosedChain`, and neither path may allocate a
 retained state. A genuinely open single arc remains eligible.
 
 Status: fixed at the editor and operation-planning owners; focused mechanical qualification passes.
-Replacement clean nomination is pending.
+Replacement mechanical nomination passes; human UAT remains pending.
 
 ### M80-F009 - Delayed Offset effects cannot consume a newer distance drag
 
@@ -2765,7 +2766,7 @@ preserving the second state, visible payload, pointer capture and epoch. Cancell
 must emit its distinct epoch and restore its exact pointer-down state and payload.
 
 Status: fixed at the retained editor/coordinator owner; focused mechanical qualification passes.
-Replacement clean nomination is pending.
+Replacement mechanical nomination passes; human UAT remains pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

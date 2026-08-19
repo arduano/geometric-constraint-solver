@@ -2,10 +2,10 @@
 
 # M80 — native topology-preserving Profile Offset
 
-Status: **implementation and broad pre-nomination qualification complete; clean nomination,
-human UAT, publication and closure pending**. ADR 0037 owns the architecture. M80 adds the narrow
-constraint-friendly Offset and deliberately leaves topology-changing Offset for a later computed-
-feature milestone.
+Status: **implementation, clean replacement qualification and immutable Tailscale nomination
+complete; human UAT, publication and closure pending**. ADR 0037 owns the architecture. M80 adds
+the narrow constraint-friendly Offset and deliberately leaves topology-changing Offset for a later
+computed-feature milestone.
 
 ## Product outcome
 

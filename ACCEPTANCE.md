@@ -2562,9 +2562,9 @@ Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte 
 
 ## M80 acceptance: native topology-preserving Profile Offset
 
-Status: **post-nomination amendments implemented and development-qualified; replacement clean
-release qualification, immutable Tailscale nomination, human UAT, publication and final acceptance
-remain pending**. The first candidate is withdrawn; GitHub Pages remains on accepted M79.
+Status: **post-nomination amendments clean-qualified and immutably nominated on Tailscale; human
+UAT, publication and final acceptance remain pending**. The first candidate is withdrawn; GitHub
+Pages remains on accepted M79.
 
 - One Apply creates exactly one grouped driving-only `ProfileOffset` over one positive finite
   length scalar and either one complete bounded face including all holes or one manually ordered
@@ -2649,10 +2649,27 @@ remain pending**. The first candidate is withdrawn; GitHub Pages remains on acce
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
   unchanged historical persistence/golden authority, Trunk and the complete release gate pass
   before a no-rebuild distribution is frozen and byte-verified over Tailscale.
-- The withdrawn first Tailscale candidate stays historical until a clean replacement is frozen and
-  byte-verified before service replacement. Only the exact replacement recorded in
+- The withdrawn first Tailscale candidate stays historical and is no longer served. Only exact
+  replacement source `b83dad2`, tree `440d66e`, and the immutable candidate recorded in
   `docs/M80_UAT.md` may receive human acceptance. GitHub Pages publication and hosted-byte
   verification occur only after that decision and before milestone closure.
+
+Replacement mechanical nomination (2026-08-19): exact product source
+`b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`, tree
+`440d66ef07b7df963164e69ebed4b75509f56bd6`, passes the pinned-Nix complete clean release gate
+from 13:38:33 through 13:50:00 AEST. Its 262,051-byte, 3,416-line log
+`/tmp/geosolve-m80-clean-gate.b83dad2.nix.log` has SHA-256
+`3e44403e3f2038467aa0c06193030feb6c099cd53634b315a8308ca111113fa0` and includes the 392-test
+editor suite, unchanged 270/270 golden authority, all native/WASM parity, warnings-denied
+Clippy/Rustdoc, the 120.97-second sparse crossover, licence/package checks and release Trunk build.
+The no-rebuild seven-file snapshot `/tmp/geosolve-m80-uat.hggNdd` is read-only (`0555` directory,
+`0444` regular non-symlink files) with ordered-manifest aggregate
+`d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`. Temporary and final
+proxy-disabled eight-request verification at `100.94.63.83:18080` and `:8080` returned HTTP 200,
+zero redirects, no content encoding and snapshot-identical bytes. Evidence is
+`/tmp/geosolve-m80-freeze-evidence.1S2bfA`, `/tmp/geosolve-m80-temp-verify.mGxuDM` and
+`/tmp/geosolve-m80-final-verify.M0ThFH`; final PID `3837538` serves the exact snapshot at
+`http://100.94.63.83:8080/`. This is mechanical nomination only; human UAT remains pending.
 
 Withdrawn first mechanical nomination (2026-08-19): exact source
 `949c3dbde769cb7de41a9fd97ba0a40094bea14a`, tree
@@ -2666,11 +2683,12 @@ Trunk 0.21.14.
 The exact no-rebuild seven-file snapshot `/tmp/geosolve-m80-uat.Nnxsu7` is read-only (`0555`
 directory, `0444` regular non-symlink files) with ordered-manifest aggregate
 `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`. It passed temporary-port
-verification before replacing M79; PID `1946736` serves it at
-`http://100.94.63.83:8080/`. Root plus all seven files return HTTP 200 with zero redirects or
-content encoding, exact media types/lengths and snapshot-identical bytes. `M80-F006` and
-`M80-F007` withdrew these bytes before human acceptance. This evidence remains historical only and
-authorizes no UAT acceptance or GitHub Pages publication.
+verification before replacing M79; former PID `1946736` served it at
+`http://100.94.63.83:8080/` until the replacement passed temporary verification. Root plus all
+seven files returned HTTP 200 with zero redirects or content encoding, exact media types/lengths
+and snapshot-identical bytes. `M80-F006` through `M80-F009` withdrew these bytes before human
+acceptance. This evidence remains historical only and authorizes no UAT acceptance or GitHub Pages
+publication.
 
 M80 acceptance explicitly excludes topology-changing/computed Offset, trimming or loop removal,
 variable output cardinality, unsupported-curve approximation, canonical v5 support, Bake/Explode,
