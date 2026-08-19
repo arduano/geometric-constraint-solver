@@ -4246,6 +4246,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one SVG contract binds provisional identity, hover and accessibility surfaces"
+    )]
     fn provisional_offset_geometry_and_annotation_have_no_selectable_dom_identity() {
         let mut document = SketchDocument::new(8.0).expect("document");
         let rectangle = document
@@ -4346,6 +4350,85 @@ mod tests {
         }
         assert!(!constraint_element.contains(&constraint.to_string()));
         assert!(!dimension_element.contains(&dimension.to_string()));
+
+        let curve_hover = EditorHoverState {
+            target: Some(EditorHoverTarget::Geometry(SelectionItem::Curve(curve))),
+            context_owner: Some(SelectionItem::Curve(curve)),
+        };
+        let curve_hover_markup =
+            svg_markup_with_computed_context_action_stamp_display_and_provisional(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                &[],
+                &[],
+                &provisional,
+                curve_hover,
+                None,
+                None,
+                None,
+                None,
+                None,
+                GeometryInteractionPolicy::default(),
+                CanvasDisplayOptions::default(),
+                None,
+                viewport,
+            );
+        let curve_identity = format!("data-persistent-id=\"{}\"", curve.curve);
+        let curve_identity_start = curve_hover_markup
+            .find(&curve_identity)
+            .expect("hovered provisional curve identity");
+        let curve_start = curve_hover_markup[..curve_identity_start]
+            .rfind('<')
+            .expect("hovered provisional curve start");
+        let curve_end = curve_identity_start
+            + curve_hover_markup[curve_identity_start..]
+                .find('>')
+                .expect("hovered provisional curve end")
+            + 1;
+        let hovered_curve = &curve_hover_markup[curve_start..curve_end];
+        assert!(hovered_curve.contains("geometry-hovered"));
+        assert!(hovered_curve.contains("offset-provisional"));
+        assert!(!hovered_curve.contains("data-editor-item"));
+
+        let annotation_hover = EditorHoverState {
+            target: Some(EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                item: SelectionItem::Dimension(dimension),
+                marker_index: None,
+            })),
+            context_owner: None,
+        };
+        let annotation_hover_markup =
+            svg_markup_with_computed_context_action_stamp_display_and_provisional(
+                Some(&scene),
+                Some(accepted),
+                &[],
+                &[],
+                &[],
+                &provisional,
+                annotation_hover,
+                None,
+                None,
+                None,
+                None,
+                None,
+                GeometryInteractionPolicy::default(),
+                CanvasDisplayOptions::default(),
+                None,
+                viewport,
+            );
+        let hovered_annotation = annotation_hover_markup
+            .match_indices("<g class=\"wb-annotation")
+            .find_map(|(start, _)| {
+                let end = start + annotation_hover_markup[start..].find('>')? + 1;
+                let element = &annotation_hover_markup[start..end];
+                (element.contains("wb-dimension") && element.contains("offset-provisional"))
+                    .then_some(element)
+            })
+            .expect("hovered provisional dimension annotation");
+        assert!(hovered_annotation.contains(" hovered"));
+        assert!(!hovered_annotation.contains("data-editor-item"));
+        assert!(!hovered_annotation.contains("data-persistent-id"));
     }
 
     #[test]

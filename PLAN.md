@@ -5308,9 +5308,10 @@ public-byte authority. No byte identity between those separately built distribut
 
 ### M80: native topology-preserving Profile Offset
 
-Status: **implementation, complete clean release qualification and immutable byte-verified
-Tailscale nomination complete; human UAT, publication and closure pending**. ADR 0037 and
-`docs/M80_GOALS.md` own the approved one-to-one native association;
+Status: **post-nomination amendments implemented and development-qualified; replacement clean
+release qualification, immutable Tailscale nomination, human UAT, publication and closure
+pending**. The first candidate is withdrawn by `M80-F006` and `M80-F007`; GitHub Pages remains on
+accepted M79. ADR 0037 and `docs/M80_GOALS.md` own the approved one-to-one native association;
 `docs/M80_IMPLEMENTATION.md` is the live ledger and `docs/M80_UAT.md` is the active human
 scorecard.
 
@@ -5347,20 +5348,29 @@ scorecard.
   process-local valid-distance memory and one movable disposable-cache annotation. Preserve a
   negative pre-operand direction, typed unavailable hover/click, ordered arrows/terminals and
   common pointer/tree/keyboard semantic picking.
+- [x] Complete the post-nomination UAT amendments: make provisional target geometry a
+  headless-authenticated, Fillet-like shared-distance drag surface with threshold/capture,
+  last-valid recovery and history-neutral release; and admit an explicitly selected continuous
+  path through an ambient high-valence junction without absorbing unselected incident edges or
+  accepting a branch inside the selected set.
 - [x] Regress closed linear/circular/mixed/holed faces, one-/multi-edge open chains, edits from both
   sides, direction/traversal retention, topology barriers, persistence/history, stale/cancelled/
   exhausted atomicity, Jacobians/audits/rank/DOF, native/WASM parity and thin demo behavior.
-- [x] Pass focused and broad pre-nomination qualification: sketch 21, topology 16, operations 16,
-  Offset authoring 10, coordinator 8, demo 150 and annotation parity 6 native/6 WASM; formatting,
+- [x] Pass focused and broad pre-nomination qualification: sketch 21, topology 16, operations 17,
+  Offset authoring 11, full editor 390, focused direct-drag 7, demo 150 and annotation parity 6
+  native/6 WASM; formatting,
   warnings-denied workspace Clippy, locked all-feature workspace tests and exact 270-row golden
-  survey/check/require-clean all pass. `M80-F001`-`M80-F005` are frozen in owner regressions,
+  survey/check/require-clean all pass. `M80-F001`-`M80-F007` are frozen in owner regressions,
   including fresh Offset capture after accepted point edits and the persistent Profile-role
-  invariant across creation, mutation and draft restore.
-- [x] Pass the complete clean release gate, freeze its exact output without rebuilding and keep it
-  byte-verified on the shared Tailscale endpoint through focused human UAT. Exact source
-  `949c3db`, tree `23a6f8d`, snapshot `/tmp/geosolve-m80-uat.Nnxsu7` and ordered-manifest
-  aggregate `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9` are current
-  nomination authority at `http://100.94.63.83:8080/`.
+  invariant across creation, mutation and draft restore. The selected-set branch rule and exact
+  provisional-distance gesture additionally preserve unselected geometry, exact hover/click
+  authority across candidate rerenders, last-valid/cancel state, history and retained IDs.
+- [x] The withdrawn first candidate passed its complete clean release gate and remains historical
+  evidence only: source `949c3db`, tree `23a6f8d`, snapshot `/tmp/geosolve-m80-uat.Nnxsu7` and
+  aggregate `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`.
+- [ ] Pass the replacement complete clean release gate, freeze its exact output without rebuilding,
+  byte-verify it on a temporary Tailscale endpoint, and only then replace the withdrawn bytes at
+  `http://100.94.63.83:8080/` for focused human UAT.
 - [ ] Receive explicit human UAT acceptance, publish the accepted descendant through GitHub Pages,
   verify the hosted artifact exactly and close M80.
 

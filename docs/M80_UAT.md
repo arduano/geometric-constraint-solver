@@ -2,14 +2,17 @@
 
 # M80 focused UAT — native topology-preserving Profile Offset
 
-Status: **exact clean-qualified candidate nominated; human UAT not started**. Run this scorecard
-only against the immutable candidate entered below. Mechanical evidence does not pass any UAT row.
+Status: **the first clean-qualified candidate is withdrawn by post-nomination findings M80-F006
+and M80-F007; replacement implementation and development qualification pass, while clean
+nomination is pending**. Do not score the former bytes below for final acceptance. Mechanical
+evidence does not pass any UAT row.
 
-Product source: `949c3dbde769cb7de41a9fd97ba0a40094bea14a`
+Withdrawn product source: `949c3dbde769cb7de41a9fd97ba0a40094bea14a`
 
-Candidate tree: `23a6f8df89e16bb1ae3a74ee0bd4d90d2cd9245a`
+Withdrawn candidate tree: `23a6f8df89e16bb1ae3a74ee0bd4d90d2cd9245a`
 
-Tailscale endpoint: `http://100.94.63.83:8080/` (PID `1946736`)
+Historical Tailscale endpoint while replacement work proceeds:
+`http://100.94.63.83:8080/` (PID `1946736`)
 
 Immutable snapshot: `/tmp/geosolve-m80-uat.Nnxsu7` (directory `0555`; seven regular non-symlink
 files `0444`)
@@ -83,6 +86,12 @@ source control and an eligible target control. Connectivity and the shared offse
 and source order must not reverse after Undo/Redo or reload. Disconnected, branching or closed-
 circle chain picks should retain a clear unavailable hover/reason rather than being guessed.
 
+At a T-junction, select exactly two incident edges that make one continuous path. The selected pair
+must preview/apply while the third unselected arm stays outside the highlight, target and
+association. Reset and try to include all three arms: that selected set must report branching and
+retain the prior complete operand. Repeat once with an isolated edge and a selected closed loop to
+confirm their distinct typed refusals remain intact.
+
 ## U4 — ordinary target geometry and association lifecycle
 
 Inspect the created objects: target curves are ordinary native Profile geometry, target joins use
@@ -120,6 +129,10 @@ canvas click. Preview geometry must not intercept selection or masquerade as acc
 Change accepted geometry with Undo/Redo or another edit while an Offset preview is live; the stale
 preview must revoke and cannot apply to the new scene.
 
+While changing Distance quickly, a superseded provisional frame must not retain a grab highlight
+that the same press refuses. Hover and press should agree on the current target immediately after
+each rerender, without requiring the pointer to leave and re-enter.
+
 Separately, complete an ordinary accepted point move first and then activate Offset on the edited
 face without refreshing. Hover/selection, preview and Apply should work immediately against that
 current scene; consumed drag guidance must not make the new Offset session appear stale.
@@ -128,6 +141,18 @@ After a successful Apply, Offset should remain active and remember the last vali
 The previous face/chain must not remain secretly selected. Repeat all core checks at both viewport
 sizes and zoom levels, including keyboard focus, concise disabled reasons and absence of clipped or
 blur-dismissed controls.
+
+Before Apply, hover a provisional target edge and its grouped distance presentation. Both should
+communicate the same distance-drag owner without becoming ordinarily selectable. Press without
+moving, move less than 3 px, then drag normally: only the normal drag should change Distance and the
+whole provisional result. Try a topology-invalid distance, return to a valid position, and release;
+the last complete valid preview must stay visible and recover without restarting. Repeat and cancel
+through Escape, capture loss and zoom/tool change: the pointer-down distance/preview must return and
+history must remain unchanged. A normal release retains the final candidate but adds no history;
+Apply must remain unavailable while the drag is captured, then the later Apply adds exactly one
+step and must publish the geometry that was visible at release.
+For a circular face, drag the grouped annotation along its displayed source-to-target radial line;
+the distance must increase toward the target side rather than responding from the opposite side.
 
 ## Acceptance record
 

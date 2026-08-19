@@ -6,12 +6,13 @@
 //! accepted-input-stamped topology index and resolves hover and pointer-down through the same
 //! bounded target resolver.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use geosolve_sketch::{DocumentFaceOffsetDirection, DocumentLineSide, PreparedSketchInput};
 use geosolve_sketch_topology::{
-    OffsetDirectedSpan, OffsetEndpointEligibility, OffsetEndpointRef, OffsetEndpointRole,
-    OffsetFaceKey, OffsetFaceLookup, OffsetOperandIndex, OffsetTraversal,
+    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetFaceKey, OffsetFaceLookup,
+    OffsetOperandIndex, OffsetTraversal,
 };
 
 use crate::{
@@ -265,6 +266,11 @@ impl OffsetAuthoringState {
     #[must_use]
     pub const fn hover(&self) -> Option<&OffsetAuthoringHover> {
         self.hover.as_ref()
+    }
+
+    /// Clears presentation-only operand hover when a higher-priority provisional surface wins.
+    pub(crate) fn clear_hover(&mut self) {
+        self.hover = None;
     }
 
     #[must_use]
@@ -705,6 +711,17 @@ impl OffsetAuthoringState {
                 "An Offset chain may contain at most 256 spans",
             );
         }
+        let prospective_spans = current
+            .iter()
+            .map(|directed| directed.span)
+            .chain(std::iter::once(span))
+            .collect::<BTreeSet<_>>();
+        if selected_branch_endpoint(index, &prospective_spans).is_some() {
+            return self.warning(
+                OffsetAuthoringWarningKind::BranchingJoin,
+                "The selected curves would branch instead of forming one continuous chain",
+            );
+        }
 
         let front = directed_endpoint(current[0], true);
         let back = directed_endpoint(current[current.len() - 1], false);
@@ -756,15 +773,7 @@ impl OffsetAuthoringState {
                 },
             );
         }
-        let (at_front, traversal, new_endpoint, selected_terminal) = attachments[0];
-        if endpoint_is_branched(index, new_endpoint)
-            || endpoint_is_branched(index, selected_terminal)
-        {
-            return self.warning(
-                OffsetAuthoringWarningKind::BranchingJoin,
-                "Offset chain collection stops at branching geometry",
-            );
-        }
+        let (at_front, traversal, _, _) = attachments[0];
         self.addition_history.push(current.clone());
         if let Some(OffsetAuthoringOperand::OpenChain { spans, .. }) = &mut self.operand {
             let directed = OffsetDirectedSpan { span, traversal };
@@ -845,22 +854,6 @@ const fn directed_endpoint(span: OffsetDirectedSpan, start: bool) -> OffsetEndpo
     }
 }
 
-fn endpoint_is_branched(index: &OffsetOperandIndex, endpoint: OffsetEndpointRef) -> bool {
-    index
-        .span(endpoint.span)
-        .and_then(|span| {
-            span.endpoints
-                .iter()
-                .find(|candidate| candidate.endpoint == endpoint)
-        })
-        .is_some_and(|candidate| {
-            matches!(
-                candidate.eligibility,
-                OffsetEndpointEligibility::Branched { .. }
-            )
-        })
-}
-
 fn endpoint_position(index: &OffsetOperandIndex, endpoint: OffsetEndpointRef) -> Option<[f64; 2]> {
     index
         .span(endpoint.span)?
@@ -870,6 +863,24 @@ fn endpoint_position(index: &OffsetOperandIndex, endpoint: OffsetEndpointRef) ->
         .map(|candidate| candidate.position)
 }
 
+/// Finds a branch inside the proposed operand; incident unselected geometry does not contribute.
+fn selected_branch_endpoint(
+    index: &OffsetOperandIndex,
+    selected_spans: &BTreeSet<geosolve_sketch::CurveSpan>,
+) -> Option<OffsetEndpointRef> {
+    selected_spans.iter().find_map(|span| {
+        index.span(*span)?.endpoints.iter().find_map(|candidate| {
+            (index
+                .adjacent_endpoints(candidate.endpoint)
+                .filter(|adjacent| selected_spans.contains(&adjacent.span))
+                .take(2)
+                .count()
+                > 1)
+            .then_some(candidate.endpoint)
+        })
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -877,7 +888,9 @@ mod tests {
         CurveDefinition, CurveSpan, DocumentFilletTrimEndpoint, DocumentSolveRequest,
         OperationControl, OperationOutcome, RetainedSketchDocumentSession, SketchDocument,
     };
-    use geosolve_sketch_topology::{OffsetOperandRequest, PreparedOffsetOperandQuery};
+    use geosolve_sketch_topology::{
+        OffsetEndpointEligibility, OffsetOperandRequest, PreparedOffsetOperandQuery,
+    };
 
     use crate::{
         ComputedConstructionFragmentId, ComputedConstructionFragmentProvenance, ComputedCornerRef,
@@ -1162,6 +1175,90 @@ mod tests {
             state.operand().map(OffsetAuthoringOperand::span_count),
             Some(2)
         );
+    }
+
+    #[test]
+    fn m80_f006_unselected_incident_branch_does_not_block_a_continuous_chain() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).unwrap();
+        let junction = document.add_point("junction", [2.0, 0.0]).unwrap();
+        let end = document.add_point("end", [2.0, 2.0]).unwrap();
+        let branch_end = document.add_point("branch end", [4.0, 0.0]).unwrap();
+        let isolated_start = document.add_point("isolated start", [6.0, 0.0]).unwrap();
+        let isolated_end = document.add_point("isolated end", [8.0, 0.0]).unwrap();
+        let first = add_line(&mut document, "first", start, junction);
+        let second = add_line(&mut document, "second", junction, end);
+        let closing = add_line(&mut document, "closing", end, start);
+        let branch = add_line(&mut document, "unselected branch", junction, branch_end);
+        let isolated = add_line(&mut document, "isolated", isolated_start, isolated_end);
+        let (_, index, _) = fixture(document);
+
+        let first_end = index
+            .span(first)
+            .expect("first span")
+            .endpoints
+            .iter()
+            .find(|candidate| candidate.endpoint.endpoint == OffsetEndpointRole::End)
+            .expect("first end");
+        assert_eq!(
+            first_end.eligibility,
+            OffsetEndpointEligibility::Branched { adjacent: 2 },
+            "the topology index must retain the truthful global junction degree"
+        );
+
+        let mut state = OffsetAuthoringState::default();
+        let _ = state.activate(index, 10.0);
+        assert!(matches!(
+            state.pick_target(OffsetAuthoringTarget::Span(first)),
+            OffsetAuthoringOutcome::OperandChanged { .. }
+        ));
+        assert!(matches!(
+            state.pick_target(OffsetAuthoringTarget::Span(second)),
+            OffsetAuthoringOutcome::OperandChanged { .. }
+        ));
+        assert!(matches!(
+            state.operand(),
+            Some(OffsetAuthoringOperand::OpenChain { spans, .. })
+                if spans == &vec![
+                    OffsetDirectedSpan {
+                        span: first,
+                        traversal: OffsetTraversal::Forward,
+                    },
+                    OffsetDirectedSpan {
+                        span: second,
+                        traversal: OffsetTraversal::Forward,
+                    },
+                ]
+        ));
+
+        assert!(matches!(
+            state.pick_target(OffsetAuthoringTarget::Span(branch)),
+            OffsetAuthoringOutcome::Warning(OffsetAuthoringWarning {
+                kind: OffsetAuthoringWarningKind::BranchingJoin,
+                ..
+            })
+        ));
+        assert!(matches!(
+            state.pick_target(OffsetAuthoringTarget::Span(closing)),
+            OffsetAuthoringOutcome::Warning(OffsetAuthoringWarning {
+                kind: OffsetAuthoringWarningKind::WouldCloseChain,
+                ..
+            })
+        ));
+        assert!(matches!(
+            state.pick_target(OffsetAuthoringTarget::Span(isolated)),
+            OffsetAuthoringOutcome::Warning(OffsetAuthoringWarning {
+                kind: OffsetAuthoringWarningKind::DisconnectedSpan,
+                ..
+            })
+        ));
+        assert!(matches!(
+            state.operand(),
+            Some(OffsetAuthoringOperand::OpenChain { spans, .. })
+                if spans.len() == 2
+                    && spans[0].span == first
+                    && spans[1].span == second
+        ));
     }
 
     #[test]

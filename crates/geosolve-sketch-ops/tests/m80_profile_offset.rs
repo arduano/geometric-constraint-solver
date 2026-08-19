@@ -18,8 +18,8 @@ use geosolve_sketch_ops::{
     SketchOperationSnapshot, SketchOperationUnsupportedReason, SketchProfileOffsetOperand,
 };
 use geosolve_sketch_topology::{
-    OffsetDirectedSpan, OffsetOperandIndex, OffsetOperandIneligibility, OffsetOperandRequest,
-    OffsetTraversal, PreparedOffsetOperandQuery,
+    OffsetDirectedSpan, OffsetEndpointRole, OffsetOperandIndex, OffsetOperandIneligibility,
+    OffsetOperandRequest, OffsetTraversal, PreparedOffsetOperandQuery,
 };
 
 fn session(document: SketchDocument) -> RetainedSketchDocumentSession {
@@ -1230,6 +1230,126 @@ fn ordered_open_chain_preserves_side_traversal_joins_and_terminal_policy() {
         })
         .expect("delete association");
     assert_eq!(session.design_document().curves().len(), 4);
+}
+
+#[test]
+fn m80_f006_selected_path_ignores_unselected_incident_branches_but_cannot_absorb_them() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let start = document.add_point("start", [0.0, 0.0]).unwrap();
+    let junction = document.add_point("junction", [4.0, 0.0]).unwrap();
+    let end = document.add_point("end", [4.0, 3.0]).unwrap();
+    let branch_end = document.add_point("branch end", [7.0, 0.0]).unwrap();
+    let first = line(&mut document, "first", start, junction);
+    let second = line(&mut document, "second", junction, end);
+    let closing = line(&mut document, "closing", end, start);
+    let branch = line(&mut document, "unselected branch", junction, branch_end);
+    let mut session = session(document);
+    let index = operand_index(&session);
+    let selected = vec![
+        OffsetDirectedSpan {
+            span: first,
+            traversal: OffsetTraversal::Forward,
+        },
+        OffsetDirectedSpan {
+            span: second,
+            traversal: OffsetTraversal::Forward,
+        },
+    ];
+
+    let before = session.design_document().clone();
+    let selected_branch = execute(
+        &session,
+        SketchOperationRequest::ProfileOffset {
+            label: "selected branch".into(),
+            distance: 0.5,
+            operand: SketchProfileOffsetOperand::OpenChain {
+                spans: selected
+                    .iter()
+                    .copied()
+                    .chain(std::iter::once(OffsetDirectedSpan {
+                        span: branch,
+                        traversal: OffsetTraversal::Forward,
+                    }))
+                    .collect(),
+                side: DocumentLineSide::Left,
+            },
+            operand_index: Arc::clone(&index),
+        },
+    );
+    assert!(matches!(
+        selected_branch,
+        SketchOperationResult::Incomplete(incomplete)
+            if matches!(
+                incomplete.reason,
+                SketchOperationIncompleteReason::ProfileOffsetBranchedJoin { endpoint }
+                    if endpoint.span == first
+                        && endpoint.endpoint == OffsetEndpointRole::End
+            )
+    ));
+    assert_eq!(session.design_document(), &before);
+
+    let selected_closed_loop = execute(
+        &session,
+        SketchOperationRequest::ProfileOffset {
+            label: "selected closed loop".into(),
+            distance: 0.5,
+            operand: SketchProfileOffsetOperand::OpenChain {
+                spans: selected
+                    .iter()
+                    .copied()
+                    .chain(std::iter::once(OffsetDirectedSpan {
+                        span: closing,
+                        traversal: OffsetTraversal::Forward,
+                    }))
+                    .collect(),
+                side: DocumentLineSide::Left,
+            },
+            operand_index: Arc::clone(&index),
+        },
+    );
+    assert!(matches!(
+        selected_closed_loop,
+        SketchOperationResult::Incomplete(incomplete)
+            if incomplete.reason == SketchOperationIncompleteReason::ProfileOffsetClosedChain
+    ));
+    assert_eq!(session.design_document(), &before);
+
+    let offset = proposal(
+        &session,
+        SketchOperationRequest::ProfileOffset {
+            label: "continuous path through junction".into(),
+            distance: 0.5,
+            operand: SketchProfileOffsetOperand::OpenChain {
+                spans: selected.clone(),
+                side: DocumentLineSide::Left,
+            },
+            operand_index: index,
+        },
+    );
+    let outcome = offset.apply(&mut session).expect("continuous chain offset");
+    assert!(outcome.published_accepted_identity().is_some());
+    assert_current_hard_valid(&session);
+
+    let DocumentProfileOffsetOperand::OpenChain { chain, .. } =
+        profile_offset_operand(session.design_document())
+    else {
+        panic!("open-chain operand expected");
+    };
+    assert_eq!(chain.edges.len(), 2);
+    assert_eq!(chain.junctions.len(), 1);
+    assert_eq!(
+        chain
+            .edges
+            .iter()
+            .map(|edge| edge.source.curve)
+            .collect::<Vec<_>>(),
+        selected
+            .iter()
+            .map(|directed| directed.span)
+            .collect::<Vec<_>>()
+    );
+    assert!(session.design_document().curve(branch.curve).is_some());
+    assert!(session.design_document().curve(closing.curve).is_some());
 }
 
 #[test]

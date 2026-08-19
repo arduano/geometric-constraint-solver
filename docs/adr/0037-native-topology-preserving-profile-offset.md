@@ -67,6 +67,13 @@ An open chain uses the explicit collection order and traversal stored at authori
 must never reverse a collected chain or reinterpret its side. A single line segment or circular
 arc is a valid one-edge chain. A full circle is closed and is therefore face-only.
 
+Chain continuity is scoped to the explicitly selected spans. Each selected internal junction has
+exactly one selected predecessor and successor, and the selected set must admit one ordered,
+non-branching traversal. Additional unselected Profile edges may meet the same authenticated
+junction: they remain ordinary unrelated geometry, do not veto the selected path and are never
+implicitly absorbed into it. A selected set that itself branches, disconnects or closes remains
+ineligible as an open chain.
+
 Every multi-edge source loop/chain is connected by authenticated persistent provenance, never by
 coordinate coincidence. Each junction records either a shared persistent point or the active
 ordinary endpoint-contact constraint that owns the connection. The generated target uses ordinary
@@ -230,10 +237,14 @@ camera movement do not close it. Explicit close or Cancel returns to Select. A n
 entered before selection supplies transient direction intent for the next face/chain. Unsupported
 or dynamically invalid targets preserve typed unavailable hover/click feedback; ordered chains
 render traversal arrows and Start/End terminals; pointer, tree and keyboard activation share one
-semantic pick. The preview is visibly
-provisional and non-selectable, and Apply remains unavailable until a complete solve plus the
-independent topology validation passes. Any scene/history/import/tool change invalidates stale
-selection and preview authority.
+semantic pick. The preview remains visibly provisional and unavailable to ordinary selection, but
+its target edges and grouped distance presentation form one explicit authoring-only distance-drag
+surface. That gesture uses the shared three-pixel threshold, pointer capture, an exact
+pointer-down-stamped source/target rail, absolute sampling, last-valid preview retention and
+cancel-to-origin behavior. Pointer release updates only the held authoring candidate; Apply remains
+the sole durable transaction. Apply is unavailable until a complete solve plus the independent
+topology validation passes. Any scene/history/import/tool change invalidates stale selection,
+gesture and preview authority.
 
 Publication creates every target curve, ordinary target connectivity constraint, positive scalar
 and one grouped driving dimension in one retained transaction and one Undo step. Invalid, stale,
@@ -288,10 +299,10 @@ and target edits; deletion/suppression retention; topology barriers; Undo/Redo a
 workspace/repro round trips; stale/cancelled/resource-limited atomicity; source mapping, rank/DOF,
 structured audits and finite-difference Jacobians at scales `1e-6`, `1` and `1e6`.
 
-`docs/M80_IMPLEMENTATION.md` records the focused counts and the `M80-F001`-`M80-F005` owner
+`docs/M80_IMPLEMENTATION.md` records the focused counts and the `M80-F001`-`M80-F007` owner
 regressions for native-origin authentication, bidirectional arc gauges, exact endpoint-contact
 ownership, current accepted-state capture after point edits and the persistent Profile-role
-invariant.
+invariant, selected-set branch scope and exact provisional-distance gesture authority.
 
 Focused native/WASM and workbench tests, unchanged historical persistence bytes and the stable
 golden gate pass as pre-nomination evidence. The complete clean release gate must pass before the

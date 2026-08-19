@@ -2562,8 +2562,9 @@ Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte 
 
 ## M80 acceptance: native topology-preserving Profile Offset
 
-Status: **implementation, complete clean release qualification and immutable byte-verified
-Tailscale nomination pass; human UAT, publication and final acceptance remain pending**.
+Status: **post-nomination amendments implemented and development-qualified; replacement clean
+release qualification, immutable Tailscale nomination, human UAT, publication and final acceptance
+remain pending**. The first candidate is withdrawn; GitHub Pages remains on accepted M79.
 
 - One Apply creates exactly one grouped driving-only `ProfileOffset` over one positive finite
   length scalar and either one complete bounded face including all holes or one manually ordered
@@ -2580,6 +2581,9 @@ Tailscale nomination pass; human UAT, publication and final acceptance remain pe
   provenance. Internal joins persist either a nonzero left/right miter turn or Tangent branch;
   open terminals persist normal translation. Coordinate coincidence cannot supply connectivity or
   select a branch.
+- Open-chain eligibility is scoped to the selected spans. A selected ordered path may traverse an
+  authenticated high-valence junction while additional unselected incident edges remain untouched;
+  a selected set that itself branches, disconnects or closes still rejects atomically.
 - One runtime/core source may own many ordered residual blocks while remaining one grouped source
   in audit and diagnostics. Line pairs use supporting-line rows; radial pairs use equal-center and
   signed-radius rows; open terminals and tangent joins use tangential anchors.
@@ -2614,6 +2618,12 @@ Tailscale nomination pass; human UAT, publication and final acceptance remain pe
   operand status, Distance, Flip, Apply and Cancel. Hover predicts the exact clicked face/edge;
   preview is non-selectable; accepted-scene/topology/history/import changes revoke stale authority;
   close/Cancel returns to Select.
+- Provisional target edges and the grouped distance presentation remain authoring-only drag
+  surfaces even though ordinary selection cannot acquire them. Distance dragging uses the shared
+  three-pixel threshold and platform capture, samples absolutely from one frozen pointer-down rail,
+  keeps the last complete valid preview across invalid samples, restores the pointer-down candidate
+  on cancellation, keeps Apply unavailable while captured and adds no history until the exact held
+  preview is later applied.
 - A negative Distance entered before operand selection preserves transient direction intent for the
   next face/chain. Unsupported or dynamically invalid targets retain typed unavailable hover and
   click reasons. Ordered chains expose traversal arrows and Start/End terminals, and pointer, tree
@@ -2626,34 +2636,40 @@ Tailscale nomination pass; human UAT, publication and final acceptance remain pe
   multi-edge and tangent chains, both directions/sides, source and target edits, traversal reversal,
   association deletion/suppression, topology barriers, stale preview, atomic failure, persistence,
   rank/DOF, audit ordering and native/WASM parity.
-- Pre-nomination evidence passes exactly 21 sketch, 16 topology, 16 operations, 10 Offset-authoring,
-  8 coordinator, 150 demo and 6 native plus 6 WASM annotation-parity tests. The 270-row golden
+- Current development evidence passes exactly 21 sketch, 16 topology, 17 operations, 11
+  Offset-authoring, 390 full-editor, 7 focused direct-drag, 150 demo and 6 native plus 6 WASM
+  annotation-parity tests. The 270-row golden
   survey is all `PASS`, and `--check` plus `--require-clean` exactly match reviewed authority.
-  `M80-F001`-`M80-F005` have focused owner regressions. A successful ordinary point edit remains
-  current for fresh Offset capture/preview/Apply, and every persistent source and target support
-  must remain Profile geometry across creation, role mutation and draft restore.
+  `M80-F001`-`M80-F007` have focused owner regressions. A successful ordinary point edit remains
+  current for fresh Offset capture/preview/Apply; every persistent source and target support must
+  remain Profile geometry; ambient junction arms remain outside a selected path; and direct
+  provisional dragging preserves exact rerendered hover/click, last-valid, cancel and history
+  authority.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
   unchanged historical persistence/golden authority, Trunk and the complete release gate pass
   before a no-rebuild distribution is frozen and byte-verified over Tailscale.
-- The exact frozen Tailscale candidate stays available for `docs/M80_UAT.md` until explicit human
-  acceptance or withdrawal. GitHub Pages publication and hosted-byte verification occur only after
-  that decision and before milestone closure.
+- The withdrawn first Tailscale candidate stays historical until a clean replacement is frozen and
+  byte-verified before service replacement. Only the exact replacement recorded in
+  `docs/M80_UAT.md` may receive human acceptance. GitHub Pages publication and hosted-byte
+  verification occur only after that decision and before milestone closure.
 
-Mechanical nomination (2026-08-19): exact source
+Withdrawn first mechanical nomination (2026-08-19): exact source
 `949c3dbde769cb7de41a9fd97ba0a40094bea14a`, tree
 `23a6f8df89e16bb1ae3a74ee0bd4d90d2cd9245a`, passes the complete clean release gate from
 02:58:27 through 03:11:36 AEST. The retained 263,727-byte, 3,427-line log
 `/tmp/geosolve-m80-clean-gate.949c3db.log` has SHA-256
-`389f590c52fba4bc436c4910056e2610d34d6d0fbf1b10dd4b960d985bd8c962`; it includes the focused
-M80 counts above, unchanged 270/270 golden authority, relevant native/WASM parity, warnings-denied
-Clippy/Rustdoc, the 113.70-second sparse crossover, licence/package checks and Trunk 0.21.14.
+`389f590c52fba4bc436c4910056e2610d34d6d0fbf1b10dd4b960d985bd8c962`; it includes the then-current
+pre-amendment M80 suites, unchanged 270/270 golden authority, relevant native/WASM parity,
+warnings-denied Clippy/Rustdoc, the 113.70-second sparse crossover, licence/package checks and
+Trunk 0.21.14.
 The exact no-rebuild seven-file snapshot `/tmp/geosolve-m80-uat.Nnxsu7` is read-only (`0555`
 directory, `0444` regular non-symlink files) with ordered-manifest aggregate
 `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`. It passed temporary-port
 verification before replacing M79; PID `1946736` serves it at
 `http://100.94.63.83:8080/`. Root plus all seven files return HTTP 200 with zero redirects or
-content encoding, exact media types/lengths and snapshot-identical bytes. This evidence nominates
-the candidate only; it disposes no human UAT item and authorizes no GitHub Pages publication.
+content encoding, exact media types/lengths and snapshot-identical bytes. `M80-F006` and
+`M80-F007` withdrew these bytes before human acceptance. This evidence remains historical only and
+authorizes no UAT acceptance or GitHub Pages publication.
 
 M80 acceptance explicitly excludes topology-changing/computed Offset, trimming or loop removal,
 variable output cardinality, unsupported-curve approximation, canonical v5 support, Bake/Explode,

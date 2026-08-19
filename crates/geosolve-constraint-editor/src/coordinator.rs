@@ -65,10 +65,10 @@ use crate::{
     EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
     FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
     GeometryInteractionPolicy, OffsetAuthoringCandidate, OffsetAuthoringOperand,
-    OffsetAuthoringOutcome, OffsetAuthoringState, PickTolerance, PointGestureSnapshot,
-    PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind, SceneFilletAction,
-    SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
-    ScreenPoint, SelectionItem,
+    OffsetAuthoringOutcome, OffsetAuthoringState, OffsetDistanceGestureSeed, PickTolerance,
+    PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind,
+    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionControlGeometry,
+    SceneFilletActionId, ScreenPoint, SelectionItem,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -1426,6 +1426,7 @@ pub struct OffsetAuthoringPreviewMetadata {
 #[derive(Debug)]
 pub struct OffsetAuthoringPreview {
     candidate: OffsetAuthoringCandidate,
+    label: String,
     edit: DocumentEdit,
     patch: PreparedSketchPatch,
     metadata: OffsetAuthoringPreviewMetadata,
@@ -1433,6 +1434,12 @@ pub struct OffsetAuthoringPreview {
     computed_snapshot: ComputedFeatureSnapshot,
     computed_allocator: ComputedEvaluationAllocator,
     next_operand_index: Arc<OffsetOperandIndex>,
+}
+
+#[derive(Debug)]
+struct OffsetAuthoringDistanceOrigin {
+    state: OffsetAuthoringState,
+    preview: Box<OffsetAuthoringPreview>,
 }
 
 impl OffsetAuthoringPreview {
@@ -2006,6 +2013,7 @@ pub struct RetainedEditorCoordinator {
     feature_authoring_preview: Option<FeatureAuthoringPreview>,
     next_feature_authoring_preview_token: u64,
     offset_authoring_preview: Option<Box<OffsetAuthoringPreview>>,
+    offset_authoring_distance_origin: Option<Box<OffsetAuthoringDistanceOrigin>>,
 }
 
 /// Fully prepared, infallibly publishable state for one accepted inferred
@@ -2236,6 +2244,7 @@ impl RetainedEditorCoordinator {
             feature_authoring_preview: None,
             next_feature_authoring_preview_token: 1,
             offset_authoring_preview: None,
+            offset_authoring_distance_origin: None,
         };
         coordinator.refresh_computed_features();
         coordinator.history.push(checkpoint(
@@ -2257,13 +2266,21 @@ impl RetainedEditorCoordinator {
         &self.features
     }
 
+    fn effective_offset_authoring_preview(&self) -> Option<&OffsetAuthoringPreview> {
+        self.offset_authoring_preview.as_deref().or_else(|| {
+            self.offset_authoring_distance_origin
+                .as_deref()
+                .map(|origin| origin.preview.as_ref())
+        })
+    }
+
     /// Current exact computed output. During a solved source-drag preview this
     /// returns the preview-local output rather than stale base geometry. If a
     /// visible source preview has no paired computed result, this returns `None`
     /// rather than falling back to base output.
     #[must_use]
     pub fn computed_snapshot(&self) -> Option<&ComputedFeatureSnapshot> {
-        if let Some(preview) = self.offset_authoring_preview.as_ref() {
+        if let Some(preview) = self.effective_offset_authoring_preview() {
             return Some(&preview.computed_snapshot);
         }
         if let Some(preview) = self.feature_authoring_preview.as_ref() {
@@ -2282,7 +2299,7 @@ impl RetainedEditorCoordinator {
     /// paired with the currently visible native sketch.
     #[must_use]
     pub fn computed_scene_state(&self) -> ComputedSceneState<'_> {
-        if let Some(preview) = self.offset_authoring_preview.as_ref() {
+        if let Some(preview) = self.effective_offset_authoring_preview() {
             return ComputedSceneState::Current {
                 expected: &preview.computed_input,
                 snapshot: &preview.computed_snapshot,
@@ -2935,14 +2952,17 @@ impl RetainedEditorCoordinator {
     /// Exact currently held native Offset preview, if any.
     #[must_use]
     pub fn offset_authoring_preview(&self) -> Option<&OffsetAuthoringPreview> {
-        self.offset_authoring_preview.as_deref()
+        self.effective_offset_authoring_preview()
     }
 
     /// Whether Apply would consume the exact patch currently rendered for this collector state.
     #[must_use]
     pub fn offset_authoring_preview_matches(&self, state: &OffsetAuthoringState) -> bool {
+        if self.offset_authoring_distance_origin.is_some() {
+            return false;
+        }
         self.offset_authoring_preview
-            .as_ref()
+            .as_deref()
             .zip(state.candidate().as_ref())
             .is_some_and(|(preview, candidate)| {
                 preview.candidate == *candidate
@@ -2953,6 +2973,300 @@ impl RetainedEditorCoordinator {
                         .accepted_state_identity()
                         .is_some()
             })
+    }
+
+    /// Resolves the dedicated provisional Offset-distance hover surface before native operands.
+    /// The returned target remains non-selectable; this only publishes headless hover state.
+    ///
+    /// # Errors
+    ///
+    /// This resolver currently consumes stale or mismatched preview authority by clearing hover
+    /// and returns no error. The result shape matches the fallible pointer-down owner.
+    pub fn hover_offset_authoring_distance(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Result<Option<Vec<EditorEffect>>, CoordinatorError> {
+        if self.offset_authoring_distance_origin.is_some() {
+            return Ok(Some(Vec::new()));
+        }
+        let Some(preview) = self.offset_authoring_preview.as_deref() else {
+            return Ok(None);
+        };
+        if scene.authenticated_prepared_input() != Some(preview.patch.preview().candidate_input()) {
+            state.clear_hover();
+            return Ok(Some(self.editor.pointer_leave()));
+        }
+        let Some(hit) = scene.offset_distance_hit(
+            position,
+            tolerance,
+            policy,
+            preview.metadata.dimension,
+            &preview.metadata.target_spans,
+        ) else {
+            return Ok(None);
+        };
+        if !state.index().is_some_and(|index| {
+            index.input() == preview.candidate.input
+                && state.operand() == Some(&preview.candidate.operand)
+        }) {
+            state.clear_hover();
+            return Ok(Some(self.editor.pointer_leave()));
+        }
+        state.clear_hover();
+        Ok(Some(self.editor.set_offset_distance_hover(Some(hit.item))))
+    }
+
+    /// Starts one provisional-only Offset distance gesture. A target hit owns the press even if
+    /// rail derivation fails, so it can never click through into source-chain collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an Offset preview or operation error when a hit provisional surface is stale,
+    /// lacks exact source/target provenance, or cannot supply a finite distance rail.
+    pub fn pointer_down_offset_authoring_distance(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+    ) -> Result<Option<Vec<EditorEffect>>, CoordinatorError> {
+        if self.offset_authoring_distance_origin.is_some() {
+            return Ok(Some(Vec::new()));
+        }
+        let seed = {
+            let Some(preview) = self.offset_authoring_preview.as_deref() else {
+                return Ok(None);
+            };
+            if scene.authenticated_prepared_input()
+                != Some(preview.patch.preview().candidate_input())
+            {
+                state.clear_hover();
+                let _ = self.editor.pointer_leave();
+                return Err(CoordinatorError::OffsetPreviewMismatch);
+            }
+            let Some(hit) = scene.offset_distance_hit(
+                input.position,
+                tolerance,
+                policy,
+                preview.metadata.dimension,
+                &preview.metadata.target_spans,
+            ) else {
+                return Ok(None);
+            };
+            // The provisional surface owns this press even when a later exact-rail check fails.
+            // Clear collector-local source hover before any fallible provenance work so a
+            // consumed press cannot leave an underlying operand highlighted.
+            state.clear_hover();
+            if !state.index().is_some_and(|index| {
+                index.input() == preview.candidate.input
+                    && state.operand() == Some(&preview.candidate.operand)
+            }) {
+                return Err(CoordinatorError::OffsetPreviewMismatch);
+            }
+            let (target, parameter) = match hit.item {
+                SelectionItem::Curve(target) => (
+                    target,
+                    hit.curve_parameter
+                        .filter(|value| value.is_finite())
+                        .ok_or_else(|| {
+                            CoordinatorError::OffsetOperationUnavailable(
+                                "the provisional target has no finite curve parameter".into(),
+                            )
+                        })?,
+                ),
+                SelectionItem::Dimension(dimension) if dimension == preview.metadata.dimension => {
+                    offset_distance_annotation_sample(preview)?
+                }
+                _ => return Err(CoordinatorError::OffsetPreviewMismatch),
+            };
+            let origin_scene_input = preview.patch.preview().candidate_input();
+            let model_derivative = offset_distance_rail(preview, target, parameter)?;
+            OffsetDistanceGestureSeed {
+                base_input: preview.metadata.base_input,
+                proposed_commit: preview.metadata.proposed_commit,
+                origin_scene_input,
+                target: hit.item,
+                origin_distance: preview.candidate.distance,
+                model_derivative,
+            }
+        };
+        if !self
+            .editor
+            .begin_offset_distance_gesture(scene, input, &seed)
+        {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        let preview = self
+            .offset_authoring_preview
+            .take()
+            .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
+        self.offset_authoring_distance_origin = Some(Box::new(OffsetAuthoringDistanceOrigin {
+            state: state.clone(),
+            preview,
+        }));
+        Ok(Some(
+            self.editor.set_offset_distance_hover(Some(seed.target)),
+        ))
+    }
+
+    /// Authenticates a rerendered accepted provisional candidate for the already-live gesture.
+    ///
+    /// # Errors
+    ///
+    /// Returns an Offset preview mismatch when no live pointer-down checkpoint exists or the
+    /// supplied scene is not the exact currently rendered provisional candidate.
+    pub fn retain_offset_distance_interaction_origin(
+        &self,
+        scene: &mut EditorScene,
+    ) -> Result<(), CoordinatorError> {
+        let origin = self
+            .offset_authoring_distance_origin
+            .as_deref()
+            .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
+        let preview = self
+            .effective_offset_authoring_preview()
+            .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
+        if scene.authenticated_prepared_input() != Some(preview.patch.preview().candidate_input()) {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        scene
+            .set_offset_distance_interaction_origin(
+                &origin.preview.metadata.base_input,
+                origin.preview.metadata.proposed_commit,
+            )
+            .map_err(CoordinatorError::Editor)
+    }
+
+    /// Applies one editor-emitted provisional Offset-distance transition. No arm publishes the
+    /// retained document; Apply remains the sole exact patch commit and history action.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed mismatch or candidate error for stale/out-of-order effects and for sampled
+    /// distances that cannot produce a complete independently accepted provisional patch.
+    pub fn apply_offset_authoring_editor_effect(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        effect: &EditorEffect,
+    ) -> Result<(), CoordinatorError> {
+        match effect {
+            EditorEffect::PreviewOffsetAuthoringDistance {
+                base_input,
+                proposed_commit,
+                distance,
+            } => {
+                let origin = self
+                    .offset_authoring_distance_origin
+                    .as_deref()
+                    .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
+                if origin.preview.metadata.base_input != *base_input
+                    || origin.preview.metadata.proposed_commit != *proposed_commit
+                    || !self.editor.offset_distance_preview_request_is_current(
+                        base_input,
+                        *proposed_commit,
+                        *distance,
+                    )
+                {
+                    return Err(CoordinatorError::OffsetPreviewMismatch);
+                }
+                let mut trial = origin.state.clone();
+                if !matches!(
+                    trial.set_distance(*distance),
+                    OffsetAuthoringOutcome::DistanceChanged { distance: accepted, .. }
+                        if accepted.to_bits() == distance.to_bits()
+                ) {
+                    self.editor.reject_offset_distance_preview(
+                        base_input,
+                        *proposed_commit,
+                        *distance,
+                    );
+                    return Err(CoordinatorError::OffsetCandidateIncomplete);
+                }
+                let label = origin.preview.label.clone();
+                let prior = self.offset_authoring_preview.take();
+                if let Err(error) = self.prepare_offset_authoring_preview(&trial, label) {
+                    self.offset_authoring_preview = prior;
+                    self.sync_offset_preview_transient();
+                    self.editor.reject_offset_distance_preview(
+                        base_input,
+                        *proposed_commit,
+                        *distance,
+                    );
+                    return Err(error);
+                }
+                if !self.editor.accept_offset_distance_preview(
+                    base_input,
+                    *proposed_commit,
+                    *distance,
+                ) {
+                    self.offset_authoring_preview = prior;
+                    self.sync_offset_preview_transient();
+                    return Err(CoordinatorError::OffsetPreviewMismatch);
+                }
+                *state = trial;
+                Ok(())
+            }
+            EditorEffect::FinishOffsetAuthoringDistance {
+                base_input,
+                proposed_commit,
+            } => self.finish_offset_authoring_distance(state, base_input, *proposed_commit, false),
+            EditorEffect::RestoreOffsetAuthoringDistance {
+                base_input,
+                proposed_commit,
+            } => self.finish_offset_authoring_distance(state, base_input, *proposed_commit, true),
+            _ => Err(CoordinatorError::OffsetPreviewMismatch),
+        }
+    }
+
+    fn finish_offset_authoring_distance(
+        &mut self,
+        state: &mut OffsetAuthoringState,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
+        restore: bool,
+    ) -> Result<(), CoordinatorError> {
+        let origin = self
+            .offset_authoring_distance_origin
+            .take()
+            .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
+        if origin.preview.metadata.base_input != *base_input
+            || origin.preview.metadata.proposed_commit != proposed_commit
+        {
+            self.offset_authoring_distance_origin = Some(origin);
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        let keep_current = !restore
+            && self
+                .offset_authoring_preview
+                .as_ref()
+                .zip(state.candidate().as_ref())
+                .is_some_and(|(preview, candidate)| preview.candidate == *candidate);
+        if !keep_current {
+            self.offset_authoring_preview = Some(origin.preview);
+            *state = origin.state;
+        }
+        self.sync_offset_preview_transient();
+        Ok(())
+    }
+
+    fn sync_offset_preview_transient(&mut self) {
+        self.transient = self
+            .effective_offset_authoring_preview()
+            .and_then(|preview| {
+                preview
+                    .metadata
+                    .proposed_commit
+                    .accepted_state_identity()
+                    .map(|accepted| TransientLifecycle::SolvedPreview {
+                        attempt: preview.metadata.proposed_commit.attempt_identity(),
+                        accepted,
+                    })
+            });
     }
 
     /// Prepares, solves, independently validates, and retains one exact Offset patch. Failure is
@@ -2971,6 +3285,7 @@ impl RetainedEditorCoordinator {
         state: &OffsetAuthoringState,
         label: impl Into<String>,
     ) -> Result<OffsetAuthoringPreviewMetadata, CoordinatorError> {
+        let label = label.into();
         let candidate = state
             .candidate()
             .ok_or(CoordinatorError::OffsetCandidateIncomplete)?;
@@ -2987,7 +3302,7 @@ impl RetainedEditorCoordinator {
         let operand = sketch_profile_offset_operand(&candidate.operand);
         let operation = SketchOperationSnapshot::capture(&self.session).prepare(
             SketchOperationRequest::ProfileOffset {
-                label: label.into(),
+                label: label.clone(),
                 distance: candidate.distance,
                 operand,
                 operand_index: index,
@@ -3091,7 +3406,7 @@ impl RetainedEditorCoordinator {
         let computed_input = computed_snapshot.input();
         let proposed = patch.proposed_commit();
 
-        self.clear_transient();
+        self.clear_transient_for_offset_preview();
         self.transient = Some(TransientLifecycle::SolvedPreview {
             attempt: proposed.attempt_identity(),
             accepted: proposed
@@ -3100,6 +3415,7 @@ impl RetainedEditorCoordinator {
         });
         self.offset_authoring_preview = Some(Box::new(OffsetAuthoringPreview {
             candidate,
+            label,
             edit,
             patch,
             metadata: metadata.clone(),
@@ -3111,9 +3427,27 @@ impl RetainedEditorCoordinator {
         Ok(metadata)
     }
 
+    fn clear_transient_for_offset_preview(&mut self) {
+        self.transient = None;
+        self.solved_preview = None;
+        self.drag_continuation = None;
+        self.curve_control_continuation = None;
+        self.projected_drag_work = None;
+        self.clear_feature_authoring_preview();
+        self.offset_authoring_preview = None;
+        self.computed_preview_snapshot = None;
+        self.computed_preview_input = None;
+        self.computed_fillet_preview = None;
+        self.computed_preview_evaluation_problem = None;
+    }
+
     /// Drops one provisional Offset patch without changing retained sketch or identity state.
     pub fn clear_offset_authoring_preview(&mut self) {
-        if self.offset_authoring_preview.take().is_some() {
+        let had_current = self.offset_authoring_preview.take().is_some();
+        let had_origin = self.offset_authoring_distance_origin.take().is_some();
+        let had_preview = had_current || had_origin;
+        self.editor.discard_offset_distance_gesture();
+        if had_preview {
             self.transient = None;
             self.computed_preview_snapshot = None;
             self.computed_preview_input = None;
@@ -3141,6 +3475,9 @@ impl RetainedEditorCoordinator {
         &mut self,
         state: &mut OffsetAuthoringState,
     ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        if self.offset_authoring_distance_origin.is_some() {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
         let candidate = state
             .candidate()
             .ok_or(CoordinatorError::OffsetCandidateIncomplete)?;
@@ -4853,7 +5190,7 @@ impl RetainedEditorCoordinator {
     /// Returns the independently accepted drag preview visible to a presentation adapter.
     #[must_use]
     pub fn visible_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
-        if let Some(preview) = self.offset_authoring_preview.as_ref() {
+        if let Some(preview) = self.effective_offset_authoring_preview() {
             return preview.patch.preview().accepted_session();
         }
         self.solved_preview_session()
@@ -5787,6 +6124,8 @@ impl RetainedEditorCoordinator {
         self.projected_drag_work = None;
         self.clear_feature_authoring_preview();
         self.offset_authoring_preview = None;
+        self.offset_authoring_distance_origin = None;
+        self.editor.discard_offset_distance_gesture();
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
         self.computed_fillet_preview = None;
@@ -9144,6 +9483,11 @@ impl RetainedEditorCoordinator {
                 self.clear_computed_feature_preview();
                 Ok(None)
             }
+            EditorEffect::PreviewOffsetAuthoringDistance { .. }
+            | EditorEffect::FinishOffsetAuthoringDistance { .. }
+            | EditorEffect::RestoreOffsetAuthoringDistance { .. } => {
+                Err(CoordinatorError::OffsetPreviewMismatch)
+            }
             EditorEffect::CommitComputedFilletAction { target } => {
                 if self.feature_authoring_preview.is_some() {
                     return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
@@ -11022,6 +11366,117 @@ fn sketch_profile_offset_operand(operand: &OffsetAuthoringOperand) -> SketchProf
     }
 }
 
+fn preview_profile_offset_edges(
+    preview: &OffsetAuthoringPreview,
+) -> Result<Vec<geosolve_sketch::DocumentProfileOffsetEdgePair>, CoordinatorError> {
+    let patch_preview = preview.patch.preview();
+    let document = patch_preview
+        .accepted_document()
+        .ok_or(CoordinatorError::OffsetPreviewRejected)?;
+    let dimension = document
+        .dimension(preview.metadata.dimension)
+        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?;
+    let DocumentDimensionDefinition::ProfileOffset { target, operand } = &dimension.definition
+    else {
+        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
+    };
+    if *target != preview.metadata.distance {
+        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
+    }
+    let edges = match operand {
+        DocumentProfileOffsetOperand::Face { outer, holes, .. } => outer
+            .edges
+            .iter()
+            .chain(holes.iter().flat_map(|hole| &hole.edges))
+            .copied()
+            .collect::<Vec<_>>(),
+        DocumentProfileOffsetOperand::OpenChain { chain, .. } => chain.edges.clone(),
+    };
+    if edges.is_empty() {
+        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
+    }
+    Ok(edges)
+}
+
+fn offset_distance_annotation_sample(
+    preview: &OffsetAuthoringPreview,
+) -> Result<(CurveSpan, f64), CoordinatorError> {
+    let patch_preview = preview.patch.preview();
+    let document = patch_preview
+        .accepted_document()
+        .ok_or(CoordinatorError::OffsetPreviewRejected)?;
+    let edges = preview_profile_offset_edges(preview)?;
+    let edge = edges[0];
+    let parameter = match document
+        .curve(edge.target.curve.curve)
+        .map(|curve| &curve.definition)
+    {
+        Some(CurveDefinition::Circle { .. }) => std::f64::consts::PI,
+        Some(CurveDefinition::Line { .. } | CurveDefinition::CircularArc { .. }) => 0.5,
+        _ => {
+            return Err(CoordinatorError::OffsetOperationUnavailable(
+                "the grouped Offset annotation has no exact supported target rail".into(),
+            ));
+        }
+    };
+    Ok((edge.target.curve, parameter))
+}
+
+fn offset_distance_rail(
+    preview: &OffsetAuthoringPreview,
+    target: CurveSpan,
+    parameter: f64,
+) -> Result<[f64; 2], CoordinatorError> {
+    if !parameter.is_finite() {
+        return Err(CoordinatorError::OffsetOperationUnavailable(
+            "the provisional Offset rail parameter is not finite".into(),
+        ));
+    }
+    let patch_preview = preview.patch.preview();
+    let document = patch_preview
+        .accepted_document()
+        .ok_or(CoordinatorError::OffsetPreviewRejected)?;
+    let edges = preview_profile_offset_edges(preview)?;
+    let mut matching = edges.into_iter().filter(|edge| edge.target.curve == target);
+    let edge = matching
+        .next()
+        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?;
+    if matching.next().is_some() {
+        return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
+    }
+    let source = document
+        .evaluate_curve_jet(edge.source.curve, parameter)
+        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
+    let target = document
+        .evaluate_curve_jet(edge.target.curve, parameter)
+        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
+    let differential = source
+        .differential()
+        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
+    let normal = [differential.left_normal.x, differential.left_normal.y];
+    let separation = [
+        target.position.x - source.position.x,
+        target.position.y - source.position.y,
+    ];
+    let projection = separation[0].mul_add(normal[0], separation[1] * normal[1]);
+    let scale = separation[0]
+        .hypot(separation[1])
+        .max(preview.candidate.distance)
+        .max(document.model_scale().abs())
+        .max(1.0);
+    if !projection.is_finite() || projection.abs() <= 64.0 * f64::EPSILON * scale {
+        return Err(CoordinatorError::OffsetOperationUnavailable(
+            "the provisional Offset target has no finite normal-distance rail".into(),
+        ));
+    }
+    let sign = if projection.is_sign_positive() {
+        1.0
+    } else {
+        -1.0
+    };
+    Ok([normal[0] * sign, normal[1] * sign])
+}
+
 fn offset_preview_metadata(
     base: &RetainedSketchDocumentSession,
     patch: &PreparedSketchPatch,
@@ -12412,6 +12867,106 @@ mod tests {
         ));
     }
 
+    fn profile_offset_preview_scene(coordinator: &RetainedEditorCoordinator) -> EditorScene {
+        let source = coordinator
+            .visible_preview_session()
+            .expect("visible Offset candidate");
+        let accepted = source
+            .accepted_state_for_current_input()
+            .expect("current accepted Offset candidate");
+        let viewport = Viewport::new([800.0, 600.0], [0.0, 0.0], 80.0).expect("viewport");
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            source.design_identity(),
+            accepted.document(),
+            source.design_document(),
+            viewport,
+            0.25,
+        )
+        .expect("candidate scene")
+        .with_retained_session(source)
+        .expect("authenticated candidate scene");
+        if matches!(
+            coordinator.editor().active_pointer_gesture(),
+            Some(crate::ActivePointerGesture {
+                kind: crate::ActivePointerGestureKind::OffsetDistance,
+                ..
+            })
+        ) {
+            coordinator
+                .retain_offset_distance_interaction_origin(&mut scene)
+                .expect("live Offset gesture stamp");
+        }
+        scene
+    }
+
+    fn offset_annotation_anchor(
+        scene: &EditorScene,
+        dimension: DocumentDimensionId,
+    ) -> ScreenPoint {
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Dimension(dimension))
+            .expect("provisional grouped Offset annotation");
+        let crate::SceneAnnotationGeometry::LinearDimension { label_anchor, .. } =
+            annotation.geometry
+        else {
+            panic!("Profile Offset uses a linear grouped annotation")
+        };
+        label_anchor
+    }
+
+    fn pointer_along_offset_rail(
+        scene: &EditorScene,
+        origin: ScreenPoint,
+        derivative: [f64; 2],
+        distance_delta: f64,
+    ) -> ScreenPoint {
+        let model = scene.viewport.screen_to_model(origin);
+        scene.viewport.model_to_screen([
+            derivative[0].mul_add(distance_delta, model[0]),
+            derivative[1].mul_add(distance_delta, model[1]),
+        ])
+    }
+
+    fn offset_pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
+        PointerInput {
+            pointer_id,
+            position,
+            modifiers: Modifiers::default(),
+        }
+    }
+
+    fn provisional_offset_span_point(
+        coordinator: &RetainedEditorCoordinator,
+        scene: &EditorScene,
+        span: CurveSpan,
+        parameter: f64,
+    ) -> ScreenPoint {
+        let accepted = coordinator
+            .visible_preview_session()
+            .and_then(RetainedSketchDocumentSession::accepted_state_for_current_input)
+            .expect("current accepted Offset candidate");
+        let position = accepted
+            .document()
+            .evaluate_curve_jet(span, parameter)
+            .expect("supported provisional span jet")
+            .position;
+        scene.viewport.model_to_screen([position.x, position.y])
+    }
+
+    fn visible_offset_payload(coordinator: &RetainedEditorCoordinator) -> String {
+        checkpoint_document_to_json(
+            coordinator
+                .visible_preview_session()
+                .expect("visible Offset candidate")
+                .design_document(),
+        )
+        .expect("Offset candidate payload")
+        .0
+    }
+
     fn profile_offset_line_arc_fixture() -> (RetainedEditorCoordinator, EditorScene) {
         let mut document = SketchDocument::new(10.0).expect("document");
         let line_start = document.add_point("line start", [-2.0, 0.0]).unwrap();
@@ -12494,6 +13049,48 @@ mod tests {
         .with_retained_session(coordinator.session())
         .expect("authenticated scene");
         (coordinator, scene)
+    }
+
+    fn profile_offset_circle_fixture() -> (RetainedEditorCoordinator, EditorScene, CurveSpan) {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let center = document.add_point("circle center", [0.0, 0.0]).unwrap();
+        let radius = document
+            .add_scalar(
+                "circle radius",
+                2.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let circle = CurveSpan::line(
+            document
+                .add_curve("circle", CurveDefinition::Circle { center, radius })
+                .unwrap(),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("circle session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted circle");
+        let viewport = Viewport::new([800.0, 600.0], [0.0, 0.0], 80.0).expect("viewport");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.25,
+        )
+        .expect("scene")
+        .with_retained_session(coordinator.session())
+        .expect("authenticated scene");
+        (coordinator, scene, circle)
     }
 
     fn select_profile_offset_line_arc_chain(
@@ -13036,6 +13633,927 @@ mod tests {
         assert!(state.is_active());
         assert!(state.operand().is_none());
         assert_eq!(coordinator.history_cursor(), 1);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one owner regression binds provisional hit surfaces, sampling and atomic Apply"
+    )]
+    fn m80_f007_provisional_offset_distance_drag_is_thresholded_and_apply_remains_atomic() {
+        let (mut coordinator, scene, spans) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        assert!(matches!(
+            coordinator.activate_offset_authoring(&mut state),
+            Ok(OffsetAuthoringOutcome::ModeEntered(_))
+        ));
+        assert!(matches!(
+            state.pick_at(
+                &scene,
+                scene.viewport.model_to_screen([0.0, -1.0]),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ),
+            OffsetAuthoringOutcome::OperandChanged {
+                operand: Some(OffsetAuthoringOperand::OpenChain { .. }),
+                ..
+            }
+        ));
+        let origin_distance = state.distance().expect("remembered positive distance");
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Draggable line offset")
+            .expect("one-line preview");
+        assert_eq!(metadata.source_spans, vec![spans[0]]);
+        let target = metadata.target_spans[0];
+        let preview_scene = profile_offset_preview_scene(&coordinator);
+        let press = provisional_offset_span_point(&coordinator, &preview_scene, target, 0.5);
+        let rail = offset_distance_rail(
+            coordinator.offset_authoring_preview().expect("preview"),
+            target,
+            0.5,
+        )
+        .expect("line distance rail");
+        let base_payload = checkpoint_document_to_json(coordinator.session().design_document())
+            .expect("base payload");
+        let history = (coordinator.history_len(), coordinator.history_cursor());
+        let high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+
+        let _ = state.hover_at(
+            &scene,
+            scene.viewport.model_to_screen([2.0, 0.0]),
+            PickTolerance::default(),
+            GeometryInteractionPolicy::default(),
+        );
+        assert!(
+            state.hover_target().is_some(),
+            "adjacent source hover is the stale-highlight precondition"
+        );
+
+        assert!(
+            coordinator
+                .hover_offset_authoring_distance(
+                    &mut state,
+                    &preview_scene,
+                    press,
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("target hover")
+                .is_some()
+        );
+        assert!(
+            state.hover_target().is_none(),
+            "the higher-priority provisional owner must clear collector-local source hover"
+        );
+        assert!(matches!(
+            coordinator.editor().hover_state().target,
+            Some(crate::EditorHoverTarget::Geometry(SelectionItem::Curve(hit))) if hit == target
+        ));
+        assert!(
+            coordinator
+                .pointer_down_offset_authoring_distance(
+                    &mut state,
+                    &preview_scene,
+                    offset_pointer(701, press),
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("target press")
+                .is_some()
+        );
+        assert_eq!(
+            coordinator.editor().active_pointer_gesture(),
+            Some(crate::ActivePointerGesture {
+                pointer_id: 701,
+                kind: crate::ActivePointerGestureKind::OffsetDistance,
+            })
+        );
+        assert!(
+            !coordinator.offset_authoring_preview_matches(&state),
+            "Apply availability must agree with the coordinator's active-gesture rejection"
+        );
+        assert!(matches!(
+            coordinator.apply_offset_authoring_preview(&mut state),
+            Err(CoordinatorError::OffsetPreviewMismatch)
+        ));
+
+        let below_threshold = pointer_along_offset_rail(
+            &preview_scene,
+            press,
+            rail,
+            2.0 / preview_scene.viewport.pixels_per_model_unit,
+        );
+        assert!(
+            coordinator
+                .editor_mut()
+                .pointer_move(&preview_scene, offset_pointer(701, below_threshold))
+                .is_empty()
+        );
+        assert_eq!(state.distance(), Some(origin_distance));
+
+        let first_position = pointer_along_offset_rail(&preview_scene, press, rail, 0.2);
+        let first = coordinator
+            .editor_mut()
+            .pointer_move(&preview_scene, offset_pointer(701, first_position));
+        let [
+            first @ EditorEffect::PreviewOffsetAuthoringDistance {
+                distance: first_distance,
+                ..
+            },
+        ] = first.as_slice()
+        else {
+            panic!("one Offset distance preview expected, got {first:?}")
+        };
+        assert!((*first_distance - (origin_distance + 0.2)).abs() <= 1.0e-12);
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, first)
+            .expect("first accepted distance");
+
+        let rerendered = profile_offset_preview_scene(&coordinator);
+        let second_position = pointer_along_offset_rail(&rerendered, press, rail, 0.3);
+        let second = coordinator
+            .editor_mut()
+            .pointer_move(&rerendered, offset_pointer(701, second_position));
+        let [
+            second @ EditorEffect::PreviewOffsetAuthoringDistance {
+                distance: second_distance,
+                ..
+            },
+        ] = second.as_slice()
+        else {
+            panic!("one absolute Offset sample expected, got {second:?}")
+        };
+        assert!(
+            (*second_distance - (origin_distance + 0.3)).abs() <= 1.0e-12,
+            "sampling must remain absolute from pointer-down rather than accumulating"
+        );
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, second)
+            .expect("rerendered candidate accepted");
+        assert!(
+            state
+                .distance()
+                .is_some_and(|distance| (distance - (origin_distance + 0.3)).abs() <= 1.0e-12)
+        );
+        let released_payload = visible_offset_payload(&coordinator);
+        let release_scene = profile_offset_preview_scene(&coordinator);
+        let expected = coordinator.session().design_identity();
+        let release = coordinator.editor_mut().pointer_up(
+            &release_scene,
+            expected,
+            offset_pointer(701, second_position),
+        );
+        let [finish @ EditorEffect::FinishOffsetAuthoringDistance { .. }] = release.as_slice()
+        else {
+            panic!("history-neutral Offset finish expected, got {release:?}")
+        };
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, finish)
+            .expect("finish accepted candidate");
+        assert!(coordinator.offset_authoring_preview_matches(&state));
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            history
+        );
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("unchanged base payload"),
+            base_payload
+        );
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+
+        let annotation_scene = profile_offset_preview_scene(&coordinator);
+        let annotation_press = offset_annotation_anchor(&annotation_scene, metadata.dimension);
+        assert!(
+            coordinator
+                .hover_offset_authoring_distance(
+                    &mut state,
+                    &annotation_scene,
+                    annotation_press,
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("annotation hover")
+                .is_some()
+        );
+        assert!(matches!(
+            coordinator.editor().hover_state().target,
+            Some(crate::EditorHoverTarget::Annotation(occurrence))
+                if occurrence.item == SelectionItem::Dimension(metadata.dimension)
+        ));
+        assert!(
+            coordinator
+                .pointer_down_offset_authoring_distance(
+                    &mut state,
+                    &annotation_scene,
+                    offset_pointer(702, annotation_press),
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("annotation press")
+                .is_some()
+        );
+        let cancel = coordinator.editor_mut().cancel();
+        let restore = cancel
+            .iter()
+            .find(|effect| matches!(effect, EditorEffect::RestoreOffsetAuthoringDistance { .. }))
+            .expect("annotation cancel restores pointer-down patch");
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, restore)
+            .expect("annotation restore");
+        assert_eq!(visible_offset_payload(&coordinator), released_payload);
+
+        let applied = coordinator
+            .apply_offset_authoring_preview(&mut state)
+            .expect("Apply exact released ghost");
+        assert!(applied.published_accepted.is_some());
+        assert_eq!(coordinator.history_len(), history.0 + 1);
+        assert_eq!(coordinator.history_cursor(), history.1 + 1);
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("applied payload")
+                .0,
+            released_payload,
+            "Apply must publish exactly the candidate visible at release"
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one stale-scene regression binds hover revocation, press rejection and current recovery"
+    )]
+    fn m80_f007_stale_provisional_scene_cannot_advertise_a_distance_drag() {
+        let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let first = coordinator
+            .prepare_offset_authoring_preview(&state, "First Offset candidate")
+            .expect("first preview");
+        let target = first.target_spans[0];
+        let stale_scene = profile_offset_preview_scene(&coordinator);
+        let stale_position = provisional_offset_span_point(&coordinator, &stale_scene, target, 0.5);
+
+        assert!(
+            coordinator
+                .hover_offset_authoring_distance(
+                    &mut state,
+                    &stale_scene,
+                    stale_position,
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("current candidate hover")
+                .is_some()
+        );
+        assert!(matches!(
+            coordinator.editor().hover_state().target,
+            Some(crate::EditorHoverTarget::Geometry(SelectionItem::Curve(hit))) if hit == target
+        ));
+
+        let replacement_distance = state.distance().expect("distance") + 0.25;
+        let _ = state.set_distance(replacement_distance);
+        let replacement = coordinator
+            .prepare_offset_authoring_preview(&state, "Replacement Offset candidate")
+            .expect("replacement preview");
+        assert_eq!(
+            replacement.target_spans, first.target_spans,
+            "provisional target identities remain stable across distance samples"
+        );
+        assert_ne!(
+            stale_scene.authenticated_prepared_input(),
+            Some(
+                coordinator
+                    .offset_authoring_preview()
+                    .expect("replacement preview")
+                    .patch
+                    .preview()
+                    .candidate_input()
+            ),
+            "the former rendered candidate must be observably stale"
+        );
+
+        let _ = state.hover_at(
+            &scene,
+            scene.viewport.model_to_screen([2.0, 0.0]),
+            PickTolerance::default(),
+            GeometryInteractionPolicy::default(),
+        );
+        assert!(state.hover_target().is_some());
+        assert!(
+            coordinator
+                .hover_offset_authoring_distance(
+                    &mut state,
+                    &stale_scene,
+                    stale_scene.viewport.model_to_screen([20.0, 20.0]),
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("a stale scene is consumed before fallthrough")
+                .is_some()
+        );
+        assert!(state.hover_target().is_none());
+        assert!(coordinator.editor().hover_state().target.is_none());
+
+        let _ = state.hover_at(
+            &scene,
+            scene.viewport.model_to_screen([2.0, 0.0]),
+            PickTolerance::default(),
+            GeometryInteractionPolicy::default(),
+        );
+        assert!(state.hover_target().is_some());
+        assert!(
+            coordinator
+                .hover_offset_authoring_distance(
+                    &mut state,
+                    &stale_scene,
+                    stale_position,
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("stale provisional hover is consumed")
+                .is_some()
+        );
+        assert!(
+            state.hover_target().is_none(),
+            "a stale provisional surface must clear lower-priority collector hover"
+        );
+        assert!(
+            coordinator.editor().hover_state().target.is_none(),
+            "a stale provisional surface must never advertise a draggable target"
+        );
+
+        let current_scene = profile_offset_preview_scene(&coordinator);
+        let current_position =
+            provisional_offset_span_point(&coordinator, &current_scene, target, 0.5);
+        assert!(
+            coordinator
+                .hover_offset_authoring_distance(
+                    &mut state,
+                    &current_scene,
+                    current_position,
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("current replacement hover before stale press")
+                .is_some()
+        );
+        let _ = state.hover_at(
+            &scene,
+            scene.viewport.model_to_screen([2.0, 0.0]),
+            PickTolerance::default(),
+            GeometryInteractionPolicy::default(),
+        );
+        assert!(state.hover_target().is_some());
+        assert!(coordinator.editor().hover_state().target.is_some());
+        assert!(matches!(
+            coordinator.pointer_down_offset_authoring_distance(
+                &mut state,
+                &stale_scene,
+                offset_pointer(704, stale_position),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ),
+            Err(CoordinatorError::OffsetPreviewMismatch)
+        ));
+        assert!(state.hover_target().is_none());
+        assert!(coordinator.editor().hover_state().target.is_none());
+
+        assert!(
+            coordinator
+                .hover_offset_authoring_distance(
+                    &mut state,
+                    &current_scene,
+                    current_position,
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("current replacement hover")
+                .is_some()
+        );
+        assert!(matches!(
+            coordinator.editor().hover_state().target,
+            Some(crate::EditorHoverTarget::Geometry(SelectionItem::Curve(hit))) if hit == target
+        ));
+    }
+
+    #[test]
+    fn m80_f007_consumed_unavailable_rail_clears_collector_hover() {
+        let (mut coordinator, scene, spans) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        assert!(matches!(
+            coordinator.activate_offset_authoring(&mut state),
+            Ok(OffsetAuthoringOutcome::ModeEntered(_))
+        ));
+        assert!(matches!(
+            state.pick_at(
+                &scene,
+                scene.viewport.model_to_screen([0.0, -1.0]),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ),
+            OffsetAuthoringOutcome::OperandChanged {
+                operand: Some(OffsetAuthoringOperand::OpenChain { .. }),
+                ..
+            }
+        ));
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Unavailable rail")
+            .expect("one-line preview");
+        let preview_scene = profile_offset_preview_scene(&coordinator);
+        let source = metadata.source_spans[0];
+        assert_eq!(source, spans[0]);
+        let source_point = provisional_offset_span_point(&coordinator, &preview_scene, source, 0.5);
+        let _ = state.hover_at(
+            &scene,
+            source_point,
+            PickTolerance::default(),
+            GeometryInteractionPolicy::default(),
+        );
+        assert!(state.hover_target().is_some());
+
+        // Model a stale/malformed provisional target identity after the coordinate hit has
+        // already established ownership. Exact rail derivation must reject, without leaving the
+        // lower-priority source collector highlighted or starting a gesture.
+        coordinator
+            .offset_authoring_preview
+            .as_deref_mut()
+            .expect("preview")
+            .metadata
+            .target_spans = vec![source];
+        assert!(matches!(
+            coordinator.pointer_down_offset_authoring_distance(
+                &mut state,
+                &preview_scene,
+                offset_pointer(703, source_point),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ),
+            Err(CoordinatorError::OffsetPreviewIdentityMismatch)
+        ));
+        assert!(state.hover_target().is_none());
+        assert!(coordinator.editor().active_pointer_gesture().is_none());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one transactional regression binds invalid recovery and exact non-Clone rollback"
+    )]
+    fn m80_f007_invalid_inward_drag_keeps_last_accepted_and_cancel_restores_origin() {
+        let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        assert!(matches!(
+            state.flip(),
+            OffsetAuthoringOutcome::OperandChanged { .. }
+        ));
+        let _ = state.set_distance(0.5);
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Inward drag")
+            .expect("valid inward preview");
+        let target = metadata.target_spans[0];
+        let preview_scene = profile_offset_preview_scene(&coordinator);
+        let press = provisional_offset_span_point(&coordinator, &preview_scene, target, 0.5);
+        let rail = offset_distance_rail(
+            coordinator.offset_authoring_preview().expect("preview"),
+            target,
+            0.5,
+        )
+        .expect("inward line rail");
+        let base_payload = checkpoint_document_to_json(coordinator.session().design_document())
+            .expect("base payload");
+        let history = (coordinator.history_len(), coordinator.history_cursor());
+        let high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+        coordinator
+            .pointer_down_offset_authoring_distance(
+                &mut state,
+                &preview_scene,
+                offset_pointer(711, press),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            )
+            .expect("distance press")
+            .expect("provisional target owns press");
+
+        let valid_position = pointer_along_offset_rail(&preview_scene, press, rail, 0.25);
+        let valid = coordinator
+            .editor_mut()
+            .pointer_move(&preview_scene, offset_pointer(711, valid_position));
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, &valid[0])
+            .expect("valid sample");
+        assert_eq!(state.distance(), Some(0.75));
+        let last_valid_payload = visible_offset_payload(&coordinator);
+
+        let current_scene = profile_offset_preview_scene(&coordinator);
+        let invalid_position = pointer_along_offset_rail(&current_scene, press, rail, 0.75);
+        let invalid = coordinator
+            .editor_mut()
+            .pointer_move(&current_scene, offset_pointer(711, invalid_position));
+        assert!(
+            coordinator
+                .apply_offset_authoring_editor_effect(&mut state, &invalid[0])
+                .is_err()
+        );
+        assert_eq!(state.distance(), Some(0.75));
+        assert_eq!(visible_offset_payload(&coordinator), last_valid_payload);
+
+        let recovery_scene = profile_offset_preview_scene(&coordinator);
+        let recovery_position = pointer_along_offset_rail(&recovery_scene, press, rail, 0.15);
+        let recovery = coordinator
+            .editor_mut()
+            .pointer_move(&recovery_scene, offset_pointer(711, recovery_position));
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, &recovery[0])
+            .expect("recovery sample");
+        assert!(
+            state
+                .distance()
+                .is_some_and(|distance| (distance - 0.65).abs() <= 1.0e-12)
+        );
+        let recovered_payload = visible_offset_payload(&coordinator);
+
+        let terminal_scene = profile_offset_preview_scene(&coordinator);
+        let terminal_invalid = coordinator
+            .editor_mut()
+            .pointer_move(&terminal_scene, offset_pointer(711, invalid_position));
+        assert!(
+            coordinator
+                .apply_offset_authoring_editor_effect(&mut state, &terminal_invalid[0])
+                .is_err()
+        );
+        let expected = coordinator.session().design_identity();
+        let finish = coordinator.editor_mut().pointer_up(
+            &terminal_scene,
+            expected,
+            offset_pointer(711, invalid_position),
+        );
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, &finish[0])
+            .expect("release retains coordinator-accepted candidate");
+        assert!(
+            state
+                .distance()
+                .is_some_and(|distance| (distance - 0.65).abs() <= 1.0e-12)
+        );
+        assert_eq!(visible_offset_payload(&coordinator), recovered_payload);
+
+        let second_scene = profile_offset_preview_scene(&coordinator);
+        let second_press = provisional_offset_span_point(&coordinator, &second_scene, target, 0.5);
+        let second_rail = offset_distance_rail(
+            coordinator
+                .offset_authoring_preview()
+                .expect("second preview"),
+            target,
+            0.5,
+        )
+        .expect("second rail");
+        let pointer_down_state = state.clone();
+        let pointer_down_payload = visible_offset_payload(&coordinator);
+        coordinator
+            .pointer_down_offset_authoring_distance(
+                &mut state,
+                &second_scene,
+                offset_pointer(712, second_press),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            )
+            .expect("second press")
+            .expect("target owns second press");
+        let changed_position =
+            pointer_along_offset_rail(&second_scene, second_press, second_rail, -0.1);
+        let changed = coordinator
+            .editor_mut()
+            .pointer_move(&second_scene, offset_pointer(712, changed_position));
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, &changed[0])
+            .expect("second valid sample");
+        assert_ne!(visible_offset_payload(&coordinator), pointer_down_payload);
+        let canceled = coordinator.editor_mut().invalidate_draft_inference();
+        let restore = canceled
+            .iter()
+            .find(|effect| matches!(effect, EditorEffect::RestoreOffsetAuthoringDistance { .. }))
+            .expect("camera invalidation restores Offset origin");
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, restore)
+            .expect("exact pointer-down restore");
+        assert_eq!(state, pointer_down_state);
+        assert_eq!(visible_offset_payload(&coordinator), pointer_down_payload);
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            history
+        );
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("unchanged retained payload"),
+            base_payload
+        );
+    }
+
+    #[test]
+    fn m80_f007_foreign_pointer_and_stale_scene_fail_closed_to_exact_origin() {
+        let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Stale-safe Offset")
+            .expect("preview");
+        let preview_scene = profile_offset_preview_scene(&coordinator);
+        let target = metadata.target_spans[0];
+        let press = provisional_offset_span_point(&coordinator, &preview_scene, target, 0.5);
+        let pointer_down_payload = visible_offset_payload(&coordinator);
+        coordinator
+            .pointer_down_offset_authoring_distance(
+                &mut state,
+                &preview_scene,
+                offset_pointer(721, press),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            )
+            .expect("owner press")
+            .expect("target owner");
+        let pointer_down_state = state.clone();
+
+        assert_eq!(
+            coordinator
+                .pointer_down_offset_authoring_distance(
+                    &mut state,
+                    &preview_scene,
+                    offset_pointer(722, press),
+                    PickTolerance::default(),
+                    GeometryInteractionPolicy::default(),
+                )
+                .expect("foreign press is consumed"),
+            Some(Vec::new()),
+            "a captured Offset gesture must never fall through into operand collection"
+        );
+        assert!(
+            coordinator
+                .editor_mut()
+                .pointer_move(
+                    &preview_scene,
+                    offset_pointer(
+                        722,
+                        ScreenPoint {
+                            x: press.x + 20.0,
+                            y: press.y
+                        }
+                    )
+                )
+                .is_empty()
+        );
+        let expected = coordinator.session().design_identity();
+        assert!(
+            coordinator
+                .editor_mut()
+                .pointer_up(&preview_scene, expected, offset_pointer(722, press),)
+                .is_empty()
+        );
+        assert_eq!(state, pointer_down_state);
+        assert_eq!(visible_offset_payload(&coordinator), pointer_down_payload);
+
+        let stale_effects = coordinator.editor_mut().pointer_move(
+            &scene,
+            offset_pointer(
+                721,
+                ScreenPoint {
+                    x: press.x + 20.0,
+                    y: press.y,
+                },
+            ),
+        );
+        let [restore @ EditorEffect::RestoreOffsetAuthoringDistance { .. }] =
+            stale_effects.as_slice()
+        else {
+            panic!("stale scene must restore the exact origin, got {stale_effects:?}")
+        };
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, restore)
+            .expect("stale restore");
+        assert_eq!(state, pointer_down_state);
+        assert_eq!(visible_offset_payload(&coordinator), pointer_down_payload);
+        assert!(coordinator.editor().active_pointer_gesture().is_none());
+    }
+
+    #[test]
+    fn m80_f007_circle_grouped_annotation_drag_follows_its_displayed_radial_side() {
+        let (mut coordinator, scene, _) = profile_offset_circle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        assert!(matches!(
+            coordinator.activate_offset_authoring(&mut state),
+            Ok(OffsetAuthoringOutcome::ModeEntered(_))
+        ));
+        assert!(matches!(
+            state.pick_at(
+                &scene,
+                scene.viewport.model_to_screen([0.0, 0.0]),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ),
+            OffsetAuthoringOutcome::OperandChanged {
+                operand: Some(OffsetAuthoringOperand::Face { .. }),
+                ..
+            }
+        ));
+        let origin_distance = state.distance().expect("positive circle distance");
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Circle annotation rail")
+            .expect("circle preview");
+        let preview_scene = profile_offset_preview_scene(&coordinator);
+        let annotation = preview_scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Dimension(metadata.dimension))
+            .expect("grouped circle Offset annotation");
+        let crate::SceneAnnotationGeometry::LinearDimension {
+            measured_first,
+            measured_second,
+            label_anchor,
+            ..
+        } = annotation.geometry
+        else {
+            panic!("Profile Offset uses a linear grouped annotation")
+        };
+        let displayed_delta = [
+            measured_second.x - measured_first.x,
+            measured_second.y - measured_first.y,
+        ];
+        let displayed_length = displayed_delta[0].hypot(displayed_delta[1]);
+        assert!(displayed_length.is_finite() && displayed_length > 0.0);
+        let distance_delta = 0.25;
+        let moved = ScreenPoint {
+            x: label_anchor.x
+                + displayed_delta[0] / displayed_length
+                    * distance_delta
+                    * preview_scene.viewport.pixels_per_model_unit,
+            y: label_anchor.y
+                + displayed_delta[1] / displayed_length
+                    * distance_delta
+                    * preview_scene.viewport.pixels_per_model_unit,
+        };
+
+        coordinator
+            .pointer_down_offset_authoring_distance(
+                &mut state,
+                &preview_scene,
+                offset_pointer(731, label_anchor),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            )
+            .expect("annotation press")
+            .expect("annotation owns the press");
+        let effects = coordinator
+            .editor_mut()
+            .pointer_move(&preview_scene, offset_pointer(731, moved));
+        let [effect @ EditorEffect::PreviewOffsetAuthoringDistance { distance, .. }] =
+            effects.as_slice()
+        else {
+            panic!("one circle annotation distance preview expected, got {effects:?}")
+        };
+        assert!(
+            (*distance - (origin_distance + distance_delta)).abs() <= 1.0e-12,
+            "dragging along the displayed source-to-target radial direction must increase distance"
+        );
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, effect)
+            .expect("display-aligned circle annotation sample");
+        assert!(state.distance().is_some_and(|distance| {
+            (distance - (origin_distance + distance_delta)).abs() <= 1.0e-12
+        }));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact rail matrix covers all admitted curve and junction families"
+    )]
+    fn m80_f007_finite_signed_rails_cover_miter_lines_circular_arc_and_circle() {
+        let assert_rail = |preview: &OffsetAuthoringPreview, target: CurveSpan, parameter: f64| {
+            let rail = offset_distance_rail(preview, target, parameter).expect("finite rail");
+            assert!(rail.into_iter().all(f64::is_finite));
+            assert!((rail[0].hypot(rail[1]) - 1.0).abs() <= 1.0e-12);
+            let edge = preview_profile_offset_edges(preview)
+                .expect("exact pairs")
+                .into_iter()
+                .find(|edge| edge.target.curve == target)
+                .expect("target pair");
+            let patch_preview = preview.patch.preview();
+            let document = patch_preview
+                .accepted_document()
+                .expect("accepted candidate");
+            let source = document
+                .evaluate_curve_jet(edge.source.curve, parameter)
+                .expect("source jet");
+            let target = document
+                .evaluate_curve_jet(edge.target.curve, parameter)
+                .expect("target jet");
+            let separation = [
+                target.position.x - source.position.x,
+                target.position.y - source.position.y,
+            ];
+            let signed = separation[0].mul_add(rail[0], separation[1] * rail[1]);
+            assert!(signed.is_finite() && signed > 0.0);
+            assert!((signed - preview.candidate.distance).abs() <= 1.0e-8);
+        };
+
+        let (mut rectangle, rectangle_scene, _) = profile_offset_rectangle_fixture();
+        let mut rectangle_state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut rectangle, &mut rectangle_state, &rectangle_scene);
+        let rectangle_metadata = rectangle
+            .prepare_offset_authoring_preview(&rectangle_state, "Miter rails")
+            .expect("rectangle preview");
+        let rectangle_preview = rectangle.offset_authoring_preview().expect("preview");
+        let rectangle_patch_preview = rectangle_preview.patch.preview();
+        let document = rectangle_patch_preview
+            .accepted_document()
+            .expect("candidate document");
+        let DocumentDimensionDefinition::ProfileOffset {
+            operand: DocumentProfileOffsetOperand::Face { outer, .. },
+            ..
+        } = &document
+            .dimension(rectangle_metadata.dimension)
+            .expect("grouped dimension")
+            .definition
+        else {
+            panic!("rectangle face operand expected")
+        };
+        assert!(outer.junctions.iter().all(|junction| matches!(
+            junction.branch,
+            geosolve_sketch::DocumentProfileOffsetJunctionBranch::Miter { .. }
+        )));
+        for target in rectangle_metadata.target_spans {
+            assert_rail(rectangle_preview, target, 0.5);
+        }
+
+        let (mut mixed, mixed_scene) = profile_offset_line_arc_fixture();
+        let mut mixed_state = OffsetAuthoringState::default();
+        select_profile_offset_line_arc_chain(&mut mixed, &mut mixed_state, &mixed_scene);
+        let _ = mixed_state.set_distance(0.25);
+        let mixed_metadata = mixed
+            .prepare_offset_authoring_preview(&mixed_state, "Line/arc rails")
+            .expect("mixed preview");
+        let mixed_preview = mixed.offset_authoring_preview().expect("mixed preview");
+        let mixed_patch_preview = mixed_preview.patch.preview();
+        let mixed_document = mixed_patch_preview
+            .accepted_document()
+            .expect("mixed candidate");
+        assert!(mixed_metadata.target_spans.iter().any(|span| matches!(
+            mixed_document.curve(span.curve).map(|curve| &curve.definition),
+            Some(CurveDefinition::CircularArc { .. })
+        )));
+        for target in mixed_metadata.target_spans {
+            assert_rail(mixed_preview, target, 0.5);
+        }
+
+        let (mut circle, circle_scene, _) = profile_offset_circle_fixture();
+        let mut circle_state = OffsetAuthoringState::default();
+        assert!(matches!(
+            circle.activate_offset_authoring(&mut circle_state),
+            Ok(OffsetAuthoringOutcome::ModeEntered(_))
+        ));
+        assert!(matches!(
+            circle_state.pick_at(
+                &circle_scene,
+                circle_scene.viewport.model_to_screen([0.0, 0.0]),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            ),
+            OffsetAuthoringOutcome::OperandChanged {
+                operand: Some(OffsetAuthoringOperand::Face { .. }),
+                ..
+            }
+        ));
+        let circle_metadata = circle
+            .prepare_offset_authoring_preview(&circle_state, "Circle rail")
+            .expect("circle preview");
+        let circle_preview = circle.offset_authoring_preview().expect("circle preview");
+        assert_eq!(circle_metadata.target_spans.len(), 1);
+        let circle_target = circle_metadata.target_spans[0];
+        let circle_patch_preview = circle_preview.patch.preview();
+        let circle_document = circle_patch_preview
+            .accepted_document()
+            .expect("circle candidate");
+        assert!(matches!(
+            circle_document
+                .curve(circle_target.curve)
+                .map(|curve| &curve.definition),
+            Some(CurveDefinition::Circle { .. })
+        ));
+        assert_rail(circle_preview, circle_target, 0.0);
     }
 
     fn circle_drag_fixture() -> (

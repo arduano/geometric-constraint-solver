@@ -95,9 +95,9 @@ use geosolve_sketch::{
     DocumentCurveControlId, DocumentCurveCurvatureRelation, DocumentCurveNormalSide,
     DocumentCurveSpanRef, DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense,
     DocumentEndpointRef, DocumentHyperbolaBranch, DocumentObjectId, FeatureEndpoint, GeometryRole,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDatum, SketchDesignIdentity, SketchDocument,
-    TangentOrientation,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchCommit, PreparedSketchInput,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDatum, SketchDesignIdentity,
+    SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -1020,6 +1020,7 @@ pub struct EditorScene {
     pub feature_identity: Option<geosolve_sketch_features::ComputedFeatureDocumentIdentity>,
     pub computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
     fillet_interaction_origin: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    offset_distance_interaction_origin: Option<(PreparedSketchInput, PreparedSketchCommit)>,
     curve_control_interaction_origin: Option<CurveControlInteractionOrigin>,
     /// Explicit direct-manipulation affordances supplied for current Fillet corners.
     pub fillet_affordances: Vec<SceneFilletCornerAffordances>,
@@ -1281,6 +1282,7 @@ impl EditorScene {
             feature_identity: None,
             computed_input: None,
             fillet_interaction_origin: None,
+            offset_distance_interaction_origin: None,
             curve_control_interaction_origin: None,
             fillet_affordances: Vec::new(),
             computed_fillet_continuation_statuses: Vec::new(),
@@ -1846,6 +1848,31 @@ impl EditorScene {
     ) -> bool {
         self.computed_input.as_ref() == Some(expected)
             || self.fillet_interaction_origin.as_ref() == Some(expected)
+    }
+
+    /// Retains the pointer-down Offset preview authority while rendering a newer accepted
+    /// provisional candidate from the same live distance gesture.
+    pub(crate) fn set_offset_distance_interaction_origin(
+        &mut self,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
+    ) -> Result<(), EditorError> {
+        if self.authenticated_prepared_input().is_none()
+            || proposed_commit.design_identity().document()
+                != base_input.design_identity().document()
+            || proposed_commit.accepted_state_identity().is_none()
+        {
+            return Err(EditorError::StalePreparedSketchInput);
+        }
+        self.offset_distance_interaction_origin = Some((*base_input, proposed_commit));
+        Ok(())
+    }
+
+    fn accepts_offset_distance_gesture(&self, gesture: &OffsetDistanceGesture) -> bool {
+        self.viewport == gesture.viewport
+            && (self.authenticated_prepared_input() == Some(gesture.origin_scene_input)
+                || self.offset_distance_interaction_origin
+                    == Some((gesture.base_input, gesture.proposed_commit)))
     }
 
     /// Attaches one independently derived Fillet-radius continuation rail.
@@ -2597,6 +2624,67 @@ impl EditorScene {
         Ok(ordered)
     }
 
+    /// Resolves only the exact provisional target spans of the held Offset candidate.
+    ///
+    /// These curves intentionally have no ordinary selectable DOM identity. This bounded
+    /// coordinate resolver is the sole direct-manipulation surface and therefore runs before
+    /// underlying native operand collection.
+    pub(crate) fn offset_distance_hit(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        policy: GeometryInteractionPolicy,
+        dimension: DocumentDimensionId,
+        target_spans: &[CurveSpan],
+    ) -> Option<Hit> {
+        if !position.is_finite()
+            || !tolerance.is_valid()
+            || target_spans.is_empty()
+            || target_spans.windows(2).any(|pair| pair[0] >= pair[1])
+        {
+            return None;
+        }
+        let curve_hit = self
+            .curves
+            .iter()
+            .filter(|curve| {
+                target_spans.binary_search(&curve.span).is_ok() && curve.is_pickable(policy)
+            })
+            .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels))
+            .min_by(|first, second| {
+                first
+                    .distance_pixels
+                    .total_cmp(&second.distance_pixels)
+                    .then_with(|| first.item.cmp(&second.item))
+                    .then_with(|| match (first.curve_parameter, second.curve_parameter) {
+                        (Some(first), Some(second)) => first.total_cmp(&second),
+                        (Some(_), None) => Ordering::Less,
+                        (None, Some(_)) => Ordering::Greater,
+                        (None, None) => Ordering::Equal,
+                    })
+            });
+        if curve_hit.is_some() {
+            return curve_hit;
+        }
+        self.annotations
+            .iter()
+            .filter(|annotation| {
+                annotation.item == SelectionItem::Dimension(dimension)
+                    && annotation.kind == SceneAnnotationKind::ProfileOffset
+            })
+            .filter_map(|annotation| {
+                annotation
+                    .proximity_hit(position, tolerance.annotation_pixels)
+                    .map(|(_, distance_pixels)| Hit {
+                        item: annotation.item,
+                        distance_pixels,
+                        curve_parameter: None,
+                        geometry: None,
+                    })
+            })
+            .min_by(|first, second| first.distance_pixels.total_cmp(&second.distance_pixels))
+    }
+
     /// Returns the ordinary best visible geometry hit only when that exact
     /// persistent item still exists in `source`.
     ///
@@ -2988,6 +3076,7 @@ pub enum ActivePointerGestureKind {
     Annotation,
     FilletRadius,
     FilletContact,
+    OffsetDistance,
 }
 
 /// Minimal pointer-capture signal for a presentation adapter.
@@ -3095,6 +3184,23 @@ pub enum EditorEffect {
         parameter: f64,
     },
     ClearComputedFeatureContactPreview,
+    /// Requests a fully prepared replacement for the provisional native Offset candidate.
+    PreviewOffsetAuthoringDistance {
+        base_input: PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
+        distance: f64,
+    },
+    /// Ends direct Offset authoring while retaining only the last independently accepted ghost.
+    /// Apply remains the sole retained publication and history step.
+    FinishOffsetAuthoringDistance {
+        base_input: PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
+    },
+    /// Restores the exact non-cloneable pointer-down Offset patch and collector state.
+    RestoreOffsetAuthoringDistance {
+        base_input: PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
+    },
     /// The exact applicable branch alternative currently previewed by canvas
     /// hover or accessible focus. This is presentation state only; it carries
     /// no authority to mutate feature intent.
@@ -4280,6 +4386,32 @@ struct FeatureRadiusGesture {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+struct OffsetDistanceGesture {
+    pointer_id: u64,
+    base_input: PreparedSketchInput,
+    proposed_commit: PreparedSketchCommit,
+    origin_scene_input: PreparedSketchInput,
+    viewport: Viewport,
+    origin: ScreenPoint,
+    origin_model: [f64; 2],
+    model_derivative: [f64; 2],
+    moved: bool,
+    origin_distance: f64,
+    last_sampled_distance: Option<f64>,
+    last_requested_distance: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct OffsetDistanceGestureSeed {
+    pub(crate) base_input: PreparedSketchInput,
+    pub(crate) proposed_commit: PreparedSketchCommit,
+    pub(crate) origin_scene_input: PreparedSketchInput,
+    pub(crate) target: SelectionItem,
+    pub(crate) origin_distance: f64,
+    pub(crate) model_derivative: [f64; 2],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct FeatureContactGesture {
     pointer_id: u64,
     owner: geosolve_sketch_features::ComputedCornerRef,
@@ -4738,6 +4870,7 @@ pub struct ConstraintEditor {
     annotation_layout: AnnotationLayoutState,
     feature_radius_gesture: Option<FeatureRadiusGesture>,
     feature_contact_gesture: Option<FeatureContactGesture>,
+    offset_distance_gesture: Option<OffsetDistanceGesture>,
     computed_fillet_continuation_status: Option<ComputedFilletContinuationStatus>,
     fillet_branch_preview: Option<SceneFilletActionTarget>,
     tool: EditorTool,
@@ -4778,6 +4911,7 @@ impl Default for ConstraintEditor {
             annotation_layout: AnnotationLayoutState::default(),
             feature_radius_gesture: None,
             feature_contact_gesture: None,
+            offset_distance_gesture: None,
             computed_fillet_continuation_status: None,
             fillet_branch_preview: None,
             tool: EditorTool::Select,
@@ -4859,6 +4993,7 @@ impl ConstraintEditor {
         effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
+        effects.extend(self.cancel_offset_distance_gesture());
         effects.extend(self.clear_fillet_branch_preview());
         if leaving_select {
             effects.extend(self.invalidate_pointer_context());
@@ -4927,6 +5062,7 @@ impl ConstraintEditor {
         effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
+        effects.extend(self.cancel_offset_distance_gesture());
         effects.extend(self.clear_fillet_branch_preview());
         effects.extend(self.clear_hover_for_geometry_policy_change());
         effects
@@ -4992,6 +5128,7 @@ impl ConstraintEditor {
         }
         let mut effects = self.cancel_curve_control_gesture();
         effects.extend(self.cancel_annotation_gesture());
+        effects.extend(self.cancel_offset_distance_gesture());
         effects.extend(self.invalidate_pointer_context());
         effects.extend(self.clear_draft_inference_publication());
         effects
@@ -5155,6 +5292,12 @@ impl ConstraintEditor {
     /// the editor's own pointer-ID checks remain authoritative.
     #[must_use]
     pub const fn active_pointer_gesture(&self) -> Option<ActivePointerGesture> {
+        if let Some(gesture) = self.offset_distance_gesture {
+            return Some(ActivePointerGesture {
+                pointer_id: gesture.pointer_id,
+                kind: ActivePointerGestureKind::OffsetDistance,
+            });
+        }
         if let Some(gesture) = self.feature_contact_gesture {
             return Some(ActivePointerGesture {
                 pointer_id: gesture.pointer_id,
@@ -5836,6 +5979,65 @@ impl ConstraintEditor {
             .map(|hit| hit.item)
     }
 
+    pub(crate) fn set_offset_distance_hover(
+        &mut self,
+        target: Option<SelectionItem>,
+    ) -> Vec<EditorEffect> {
+        let target = target.map(|item| match item {
+            SelectionItem::Dimension(_) => {
+                EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                    item,
+                    marker_index: None,
+                })
+            }
+            _ => EditorHoverTarget::Geometry(item),
+        });
+        self.set_hover_state(target, None)
+    }
+
+    pub(crate) fn begin_offset_distance_gesture(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        seed: &OffsetDistanceGestureSeed,
+    ) -> bool {
+        let derivative_norm_squared = seed.model_derivative[0]
+            .mul_add(seed.model_derivative[0], seed.model_derivative[1].powi(2));
+        if self.tool != EditorTool::Select
+            || self.active_pointer_gesture().is_some()
+            || !input.position.is_finite()
+            || !seed.origin_distance.is_finite()
+            || seed.origin_distance <= 0.0
+            || !seed.model_derivative.into_iter().all(f64::is_finite)
+            || !derivative_norm_squared.is_finite()
+            || derivative_norm_squared <= 0.0
+            || scene.authenticated_prepared_input() != Some(seed.origin_scene_input)
+        {
+            return false;
+        }
+        self.offset_distance_gesture = Some(OffsetDistanceGesture {
+            pointer_id: input.pointer_id,
+            base_input: seed.base_input,
+            proposed_commit: seed.proposed_commit,
+            origin_scene_input: seed.origin_scene_input,
+            viewport: scene.viewport,
+            origin: input.position,
+            origin_model: scene.viewport.screen_to_model(input.position),
+            model_derivative: seed.model_derivative,
+            moved: false,
+            origin_distance: seed.origin_distance,
+            last_sampled_distance: Some(seed.origin_distance),
+            last_requested_distance: None,
+        });
+        self.feature_radius_gesture = None;
+        self.feature_contact_gesture = None;
+        self.point_gesture = None;
+        self.curve_control_gesture = None;
+        self.annotation_gesture = None;
+        self.last_valid_drag_preview = None;
+        true
+    }
+
     fn resolve_feature_radius_hit(
         &self,
         scene: &EditorScene,
@@ -6096,6 +6298,10 @@ impl ConstraintEditor {
         let mut effects = self.clear_fillet_branch_preview();
         if self.tool != EditorTool::Select {
             effects.extend(self.draft_move(scene, input, authoring));
+            return effects;
+        }
+        if self.offset_distance_gesture.is_some() {
+            effects.extend(self.move_offset_distance_gesture(scene, input));
             return effects;
         }
         if self.feature_contact_gesture.is_some() {
@@ -6409,6 +6615,80 @@ impl ConstraintEditor {
         }]
     }
 
+    fn move_offset_distance_gesture(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Vec<EditorEffect> {
+        let Some(mut gesture) = self.offset_distance_gesture else {
+            return Vec::new();
+        };
+        if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+            return Vec::new();
+        }
+        if !scene.accepts_offset_distance_gesture(&gesture) {
+            self.offset_distance_gesture = None;
+            return vec![EditorEffect::RestoreOffsetAuthoringDistance {
+                base_input: gesture.base_input,
+                proposed_commit: gesture.proposed_commit,
+            }];
+        }
+        gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
+        if !gesture.moved {
+            self.offset_distance_gesture = Some(gesture);
+            return Vec::new();
+        }
+        let Some(distance) = Self::offset_distance_sample(scene, &gesture, input.position) else {
+            gesture.last_sampled_distance = None;
+            gesture.last_requested_distance = None;
+            self.offset_distance_gesture = Some(gesture);
+            return Vec::new();
+        };
+        if gesture
+            .last_sampled_distance
+            .is_some_and(|sampled| sampled.to_bits() == distance.to_bits())
+        {
+            self.offset_distance_gesture = Some(gesture);
+            return Vec::new();
+        }
+        gesture.last_sampled_distance = Some(distance);
+        gesture.last_requested_distance = Some(distance);
+        self.offset_distance_gesture = Some(gesture);
+        vec![EditorEffect::PreviewOffsetAuthoringDistance {
+            base_input: gesture.base_input,
+            proposed_commit: gesture.proposed_commit,
+            distance,
+        }]
+    }
+
+    fn offset_distance_sample(
+        scene: &EditorScene,
+        gesture: &OffsetDistanceGesture,
+        position: ScreenPoint,
+    ) -> Option<f64> {
+        if !position.is_finite() || !scene.accepts_offset_distance_gesture(gesture) {
+            return None;
+        }
+        let position = gesture.viewport.screen_to_model(position);
+        let pointer_delta = [
+            position[0] - gesture.origin_model[0],
+            position[1] - gesture.origin_model[1],
+        ];
+        let derivative_norm_squared = gesture.model_derivative[0].mul_add(
+            gesture.model_derivative[0],
+            gesture.model_derivative[1].powi(2),
+        );
+        if !derivative_norm_squared.is_finite() || derivative_norm_squared <= 0.0 {
+            return None;
+        }
+        let delta = pointer_delta[0].mul_add(
+            gesture.model_derivative[0],
+            pointer_delta[1] * gesture.model_derivative[1],
+        ) / derivative_norm_squared;
+        let distance = gesture.origin_distance + delta;
+        (distance.is_finite() && distance > 0.0).then_some(distance)
+    }
+
     fn feature_contact_sample(
         scene: &EditorScene,
         gesture: &FeatureContactGesture,
@@ -6614,6 +6894,66 @@ impl ConstraintEditor {
         true
     }
 
+    pub(crate) fn offset_distance_preview_request_is_current(
+        &self,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
+        distance: f64,
+    ) -> bool {
+        self.offset_distance_gesture.is_some_and(|gesture| {
+            gesture.base_input == *base_input
+                && gesture.proposed_commit == proposed_commit
+                && gesture
+                    .last_requested_distance
+                    .is_some_and(|requested| requested.to_bits() == distance.to_bits())
+        })
+    }
+
+    pub(crate) fn accept_offset_distance_preview(
+        &mut self,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
+        distance: f64,
+    ) -> bool {
+        let Some(mut gesture) = self.offset_distance_gesture else {
+            return false;
+        };
+        if gesture.base_input != *base_input
+            || gesture.proposed_commit != proposed_commit
+            || gesture
+                .last_requested_distance
+                .is_none_or(|requested| requested.to_bits() != distance.to_bits())
+        {
+            return false;
+        }
+        gesture.last_requested_distance = None;
+        self.offset_distance_gesture = Some(gesture);
+        true
+    }
+
+    pub(crate) fn reject_offset_distance_preview(
+        &mut self,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
+        distance: f64,
+    ) -> bool {
+        let Some(mut gesture) = self.offset_distance_gesture else {
+            return false;
+        };
+        if gesture.base_input != *base_input
+            || gesture.proposed_commit != proposed_commit
+            || gesture
+                .last_requested_distance
+                .is_none_or(|requested| requested.to_bits() != distance.to_bits())
+        {
+            return false;
+        }
+        gesture.last_sampled_distance = None;
+        gesture.last_requested_distance = None;
+        self.offset_distance_gesture = Some(gesture);
+        true
+    }
+
     /// Records a typed failure for the exact latest radius sample while retaining
     /// the coordinator's previous last-current preview.
     ///
@@ -6742,6 +7082,23 @@ impl ConstraintEditor {
     ) -> Vec<EditorEffect> {
         if self.tool != EditorTool::Select {
             return Vec::new();
+        }
+        if let Some(gesture) = self.offset_distance_gesture {
+            if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+                return Vec::new();
+            }
+            self.offset_distance_gesture = None;
+            return if scene.accepts_offset_distance_gesture(&gesture) {
+                vec![EditorEffect::FinishOffsetAuthoringDistance {
+                    base_input: gesture.base_input,
+                    proposed_commit: gesture.proposed_commit,
+                }]
+            } else {
+                vec![EditorEffect::RestoreOffsetAuthoringDistance {
+                    base_input: gesture.base_input,
+                    proposed_commit: gesture.proposed_commit,
+                }]
+            };
         }
         if self
             .annotation_gesture
@@ -6890,6 +7247,7 @@ impl ConstraintEditor {
         effects.extend(self.cancel_annotation_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.cancel_feature_contact_gesture());
+        effects.extend(self.cancel_offset_distance_gesture());
         effects.extend(self.clear_fillet_branch_preview());
         effects.extend(self.invalidate_pointer_context());
         effects
@@ -6937,6 +7295,21 @@ impl ConstraintEditor {
                 parameter: gesture.origin_parameter,
             }]
         })
+    }
+
+    fn cancel_offset_distance_gesture(&mut self) -> Vec<EditorEffect> {
+        self.offset_distance_gesture
+            .take()
+            .map_or_else(Vec::new, |gesture| {
+                vec![EditorEffect::RestoreOffsetAuthoringDistance {
+                    base_input: gesture.base_input,
+                    proposed_commit: gesture.proposed_commit,
+                }]
+            })
+    }
+
+    pub(crate) fn discard_offset_distance_gesture(&mut self) {
+        self.offset_distance_gesture = None;
     }
 
     /// Supplies the result of a host-projected temporary drag request. Rejection
@@ -7216,6 +7589,7 @@ impl ConstraintEditor {
             || self.annotation_gesture.is_some()
             || self.feature_radius_gesture.is_some()
             || self.feature_contact_gesture.is_some()
+            || self.offset_distance_gesture.is_some()
         {
             self.cancel()
         } else if self.tool != EditorTool::Select {
@@ -8048,6 +8422,7 @@ impl ConstraintEditor {
     pub(crate) fn invalidate_for_retained_state_change(&mut self, force: bool) {
         let _ = self.invalidate_pointer_context();
         self.curve_control_gesture = None;
+        self.offset_distance_gesture = None;
         let preserve_pending_ack = !force && self.pending_construction_commit.is_some();
         if force {
             self.pending_construction_commit = None;

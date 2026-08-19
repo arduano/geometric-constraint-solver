@@ -51,7 +51,8 @@ The following are unavailable and reject before target allocation:
 - arrangement-derived partial fragments;
 - ellipses and elliptical arcs, rational conics, Beziers, B-splines and NURBS;
 - approximation or sampled conversion of any unsupported curve;
-- unbounded/open faces, closed full-circle chain collection and disconnected or branching chains;
+- unbounded/open faces, closed full-circle chain collection and selected span sets that are
+  disconnected, closed or internally branching;
 - any offset that would collapse an edge or loop, self-intersect, split, merge, contact another
   contour, lose or invert a hole, change nesting or cross a persisted miter/tangent branch barrier.
 
@@ -99,12 +100,23 @@ no prior operand identity is remembered. Hover and click share the same authenti
 owner, including typed unavailable targets. Ordered chain presentation includes traversal arrows
 and Start/End terminals, while pointer, tree and keyboard activation use the same semantic pick.
 
-Preview geometry is visibly provisional and non-selectable. Apply is enabled only for a complete,
-finite, solved and topology-valid candidate. Cancel, stale accepted scene/topology, failed solve,
-invalid target, resource exhaustion or a topology barrier changes no document, accepted scene,
-history, transcript or persistent-ID high-water. A successful Apply creates all target geometry,
-ordinary target connectivity, the scalar and grouped dimension in one transaction and one Undo
-step, then keeps Offset active for repeated work.
+An open chain is non-branching with respect to its selected span set. It may pass through an
+authenticated junction that also has unselected incident geometry: those edges neither veto nor
+join the operand. Selecting a set that itself branches, disconnects or closes remains a typed local
+rejection.
+
+Preview geometry is visibly provisional and non-selectable by ordinary tools, while its target
+edges and grouped distance presentation remain one explicit authoring-only drag surface. Dragging
+uses the common three-pixel threshold, pointer capture, frozen pointer-down rail and absolute
+sampling. Invalid samples retain the last complete preview; Escape, capture loss, camera/tool
+change or stale scene restores/cancels without history. Pointer release changes only the candidate
+distance; Apply stays unavailable during the captured gesture and is enabled after release only
+for a complete, finite, solved and topology-valid candidate.
+Cancel, stale accepted scene/topology, failed solve, invalid target, resource exhaustion or a
+topology barrier changes no document, accepted scene, history, transcript or persistent-ID
+high-water. A successful Apply creates all target geometry, ordinary target connectivity, the
+scalar and grouped dimension in one transaction and one Undo step, then keeps Offset active for
+repeated work.
 
 The accepted association has one production-quality movable `ProfileOffset` annotation. Its
 placement offset is retained only in M76's disposable scene annotation cache and is safely

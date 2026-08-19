@@ -398,6 +398,10 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .workbench[data-canvas-cursor="fillet"] #wb-viewport * { cursor: crosshair !important; }
 .workbench[data-canvas-cursor="offset"] #wb-viewport,
 .workbench[data-canvas-cursor="offset"] #wb-viewport * { cursor: crosshair !important; }
+.workbench[data-canvas-cursor="offset-distance"] #wb-viewport,
+.workbench[data-canvas-cursor="offset-distance"] #wb-viewport * { cursor: grab !important; }
+.workbench[data-canvas-cursor="offset-distance-active"] #wb-viewport,
+.workbench[data-canvas-cursor="offset-distance-active"] #wb-viewport * { cursor: grabbing !important; }
 .workbench[data-canvas-cursor="pan"] #wb-viewport,
 .workbench[data-canvas-cursor="pan"] #wb-viewport * { cursor: grabbing !important; }
 .workbench[data-canvas-cursor="curve-control"] #wb-viewport,

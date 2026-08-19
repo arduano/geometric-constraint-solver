@@ -2,9 +2,9 @@
 
 # M80 implementation — native topology-preserving Profile Offset
 
-Status: **implementation, complete clean release qualification and immutable byte-verified
-Tailscale nomination complete**. The nominated candidate is awaiting human UAT; it is not yet
-accepted, published to GitHub Pages or closed.
+Status: **post-nomination amendments implemented and development-qualified**. The first candidate
+is withdrawn by `M80-F006` and `M80-F007`; replacement clean release qualification, immutable
+Tailscale nomination and human UAT remain pending. GitHub Pages stays on accepted M79.
 
 Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 
@@ -65,6 +65,9 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
   snapshot; reject partial, external, Construction, computed and unsupported edges.
 - [x] Collect one ordered non-branching open chain, preserving explicit traversal and accepting one
   line or one circular arc.
+- [x] Define non-branching over the selected span set: allow a selected continuous path through a
+  high-valence junction, never auto-absorb unselected incident geometry, and retain typed selected-
+  branch, disconnected and closed-path rejection.
 - [x] Construct same-family target seeds deterministically: offset supports plus persisted miter
   intersections, tangent normal translations and open terminal normal translations.
 - [x] Trial all target geometry, ordinary junction constraints, scalar and grouped dimension in one
@@ -78,21 +81,27 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
   process-local valid-distance memory and `0.1 * model_scale` fallback.
 - [x] Render exact headless face/chain hover, collection, provisional target and local rejection
   status without browser-owned geometry decisions.
+- [x] Add direct authoring-only shared-distance dragging over the provisional target/grouped
+  presentation with exact preview authentication, the common threshold and pointer capture,
+  absolute frozen-rail sampling, last-valid invalid/recovery behavior and cancel-to-origin. Pointer
+  release remains history-neutral; Apply consumes the exact held patch later.
 - [x] Add one movable grouped Profile Offset annotation with disposable cache placement, selection,
   editing and safe cache-loss recomputation; retain compatible placement in workspace-v6 only,
   while reproduction copy/load deliberately omits and ignores it.
 - [x] Keep the tool active after Apply; explicit close/Cancel returns to Select.
 
-### 5. Qualification, UAT and closeout — mechanical nomination complete
+### 5. Qualification, UAT and closeout — replacement nomination pending
 
 - [x] Pass focused owner tests, native/WASM parity, unchanged historical persistence/golden checks,
   formatting, warnings-denied workspace Clippy and locked all-feature workspace tests.
-- [x] Pass the exact clean release gate from committed source, including Rustdoc, demo WASM and
-  Trunk, and record its complete log.
-- [x] Copy the exact gate-produced distribution without rebuilding, freeze it read-only, verify
+- [ ] Re-pass the exact clean release gate from committed replacement source, including Rustdoc,
+  demo WASM and Trunk, and record its complete log.
+- [ ] Copy the exact replacement gate-produced distribution without rebuilding, freeze it
+  read-only, verify
   every file locally, then keep it running and byte-verified on the shared Tailscale endpoint until
   the supervising human accepts or replaces the candidate.
-- [x] Record exact source/tree/log/manifest/server evidence in this file and `docs/M80_UAT.md`.
+- [ ] Record exact replacement source/tree/log/manifest/server evidence in this file and
+  `docs/M80_UAT.md`.
 - [ ] Receive explicit UAT/scoped-close direction, publish the approved descendant through GitHub
   Pages, verify hosted bytes and only then mark M80 complete across all milestone records.
 
@@ -176,6 +185,34 @@ dimension before changing the source role. This deliberately detaches the native
 so the fixture can still prove that an old prepared edit rejects after a source-role change without
 asking an active association to violate the new central Profile-only invariant.
 
+### M80-F006 — global junction degree vetoed a valid selected path
+
+Owners: `geosolve-constraint-editor` chain collection and `geosolve-sketch-ops` operation planning.
+At a T-junction, selecting two connected arms reproduced a `BranchingJoin` solely because an
+unselected third arm raised the topology endpoint's global degree. Both owners now measure degree
+inside the proposed selected span set. The topology index still publishes the truthful global
+`Branched { adjacent: 2 }`; the selected pair previews and applies, while adding the third selected
+arm remains `BranchingJoin`, an isolated arm remains disconnected and a selected loop remains
+closed. Focused editor and operations regressions preserve exact two-edge publication, finite
+independent hard validation and unchanged unselected geometry.
+
+### M80-F007 — provisional distance had no direct authoring gesture
+
+Owner: presentation-independent Offset interaction in `geosolve-constraint-editor`, with a thin
+`geosolve-demo-web` platform adapter. At the nominated source, provisional curves deliberately had
+no ordinary selection identity and Offset pointer-down/move only ran base operand pick/hover.
+Consequently the visible target could never acquire a distance gesture. The replacement adds an
+authoring-only exact-preview owner with a frozen source/target rail, absolute distance samples, the
+shared three-pixel threshold, one captured pointer, last-valid rejection/recovery, current-rerender
+continuity and cancel-to-origin. Pointer-up finalizes only the candidate value; Apply remains the
+single retained transaction and stays unavailable while the gesture is captured. Seven focused
+gesture regressions cover threshold/release/Apply,
+invalid recovery and exact rollback, foreign/stale input, unavailable-rail cleanup, finite signed
+line/miter/arc/circle rails, full-circle annotation/display-side agreement and stale rendered-hover
+revocation; all pass together with the collateral suites below. Hover authenticates the rendered
+candidate input before resolving or publishing a grab target, so a superseded frame clears both
+collector and editor hover exactly where the same press rejects.
+
 ### Pre-nomination interaction audit refinements
 
 The final editor/web audit also froze four cross-adapter behaviors without broadening mathematical
@@ -196,13 +233,13 @@ cargo test --locked -p geosolve-sketch --test m80_offset
 cargo test --locked -p geosolve-sketch-topology --test m80_offset_operands
   # 16 passed
 cargo test --locked -p geosolve-sketch-ops --test m80_profile_offset
-  # 16 passed
-cargo test --locked -p geosolve-constraint-editor --lib profile_offset_
-  # 8 passed
+  # 17 passed
 cargo test --locked -p geosolve-constraint-editor --lib offset_authoring::tests
-  # 10 passed
+  # 11 passed
+cargo test --locked -p geosolve-constraint-editor --lib m80_f007
+  # 7 passed
 cargo test --locked -p geosolve-constraint-editor --lib
-  # 382 passed
+  # 390 passed
 cargo test --locked -p geosolve-demo-web --lib
   # 150 passed on the ordinary default test stack
 cargo test --locked -p geosolve-constraint-editor --test m76_annotation_parity
@@ -222,7 +259,7 @@ cargo test --locked --workspace --all-features
 
 Historical M1-M79 evidence remains unchanged.
 
-## Clean nomination evidence
+## Withdrawn first nomination evidence
 
 Exact source `949c3dbde769cb7de41a9fd97ba0a40094bea14a`, tree
 `23a6f8df89e16bb1ae3a74ee0bd4d90d2cd9245a`, ran the required clean command with
@@ -260,8 +297,9 @@ is HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expe
 length, snapshot-identical body, root equality and the same fetched aggregate. The temporary unit
 was retired only after final verification.
 
-This is mechanical nomination, not human acceptance. The snapshot stays available until the
-supervising human accepts it or a finding withdraws it. GitHub Pages remains on accepted M79.
+This was mechanical nomination, not human acceptance. `M80-F006` and `M80-F007` withdrew this
+snapshot before UAT acceptance. It remains historical while the replacement is qualified; GitHub
+Pages remains on accepted M79.
 
 ## Known limitations
 

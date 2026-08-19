@@ -25,9 +25,8 @@ use geosolve_sketch::{
     SketchAcceptedStateIdentity, SketchDesignIdentity, SketchDocument,
 };
 use geosolve_sketch_topology::{
-    OffsetDirectedSpan, OffsetEndpointEligibility, OffsetEndpointRef, OffsetEndpointRole,
-    OffsetFaceKey, OffsetJoinOwner, OffsetOperandEligibility, OffsetOperandIndex,
-    OffsetOperandIneligibility, OffsetTraversal,
+    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetFaceKey, OffsetJoinOwner,
+    OffsetOperandEligibility, OffsetOperandIndex, OffsetOperandIneligibility, OffsetTraversal,
 };
 use thiserror::Error;
 
@@ -1954,6 +1953,17 @@ fn plan_profile_offset_path(
             traversal: document_offset_traversal(directed.traversal),
         });
     }
+    if !closed {
+        let selected_spans = spans
+            .iter()
+            .map(|directed| directed.span)
+            .collect::<BTreeSet<_>>();
+        if let Some(endpoint) = selected_branch_endpoint(index, &selected_spans) {
+            return Err(ProfileOffsetPlanFailure::Incomplete(
+                SketchOperationIncompleteReason::ProfileOffsetBranchedJoin { endpoint },
+            ));
+        }
+    }
     let junction_count = if closed && !is_periodic_offset_path(index, spans) {
         spans.len()
     } else {
@@ -1964,10 +1974,6 @@ fn plan_profile_offset_path(
         let next = (current + 1) % spans.len();
         let incoming_endpoint = directed_offset_endpoint(spans[current], false);
         let outgoing_endpoint = directed_offset_endpoint(spans[next], true);
-        if !closed {
-            ensure_offset_endpoint_not_branched(index, incoming_endpoint)?;
-            ensure_offset_endpoint_not_branched(index, outgoing_endpoint)?;
-        }
         let adjacency = find_offset_adjacency(index, incoming_endpoint, outgoing_endpoint)
             .ok_or_else(|| {
                 ProfileOffsetPlanFailure::Incomplete(
@@ -2023,32 +2029,6 @@ fn is_periodic_offset_path(index: &OffsetOperandIndex, spans: &[OffsetDirectedSp
             .is_some_and(|candidate| candidate.periodic)
 }
 
-fn ensure_offset_endpoint_not_branched(
-    index: &OffsetOperandIndex,
-    endpoint: OffsetEndpointRef,
-) -> Result<(), ProfileOffsetPlanFailure> {
-    let branched = index
-        .span(endpoint.span)
-        .and_then(|span| {
-            span.endpoints
-                .iter()
-                .find(|candidate| candidate.endpoint == endpoint)
-        })
-        .is_some_and(|candidate| {
-            matches!(
-                candidate.eligibility,
-                OffsetEndpointEligibility::Branched { .. }
-            )
-        });
-    if branched {
-        Err(ProfileOffsetPlanFailure::Incomplete(
-            SketchOperationIncompleteReason::ProfileOffsetBranchedJoin { endpoint },
-        ))
-    } else {
-        Ok(())
-    }
-}
-
 fn find_offset_adjacency(
     index: &OffsetOperandIndex,
     first: OffsetEndpointRef,
@@ -2063,6 +2043,24 @@ fn find_offset_adjacency(
         .adjacencies()
         .iter()
         .find(|adjacency| adjacency.endpoints == endpoints)
+}
+
+/// Finds a branch inside the proposed operand; incident unselected geometry does not contribute.
+fn selected_branch_endpoint(
+    index: &OffsetOperandIndex,
+    selected_spans: &BTreeSet<CurveSpan>,
+) -> Option<OffsetEndpointRef> {
+    selected_spans.iter().find_map(|span| {
+        index.span(*span)?.endpoints.iter().find_map(|candidate| {
+            (index
+                .adjacent_endpoints(candidate.endpoint)
+                .filter(|adjacent| selected_spans.contains(&adjacent.span))
+                .take(2)
+                .count()
+                > 1)
+            .then_some(candidate.endpoint)
+        })
+    })
 }
 
 const fn document_profile_offset_owner(

@@ -2584,6 +2584,11 @@ contact source; coordinate coincidence is insufficient. Store the same provenanc
 target junctions, one explicit left/right miter turn or Tangent branch at internal joins and normal-
 translation policy at both terminals.
 
+Non-branching is evaluated over the selected spans. A deliberate selected path may traverse a
+junction with additional unselected incident Profile edges; those edges remain outside the
+operand and unchanged. A selected set with more than one continuation at a selected endpoint,
+with no continuous order, or with a closed traversal remains invalid.
+
 Target connectivity, terminal translation, same-family pairing and collection order survive edits
 inside the cell. A disconnected edge, branch, reversed tangent, cusp, miter-to-tangent transition,
 turn reversal or deleted junction owner rejects locally and leaves the last complete accepted scene
@@ -2629,6 +2634,15 @@ hover and pointer-down. A separate Offset authoring state owns Distance, Flip, c
 scene/topology stamp and Apply/Cancel. Preview target geometry is provisional and non-selectable;
 scene/history/import/tool changes revoke it, and the browser does not calculate supports, miters,
 branches or topology validity.
+
+The provisional target edges and grouped distance presentation are nevertheless an explicit
+authoring-only distance surface. A press on that exact held preview captures one pointer; movement
+starts at the shared 3 px threshold and samples the positive distance absolutely along a frozen
+headless source/target rail. A rejected or topology-invalid sample keeps the prior complete
+preview, a later valid sample recovers, release changes no history, and Escape, capture loss,
+camera/tool change or stale authority restores/cancels the pointer-down candidate. Apply remains
+unavailable while the pointer is captured and alone publishes the final exact held patch after
+release.
 
 Modify → Offset uses the persistent bottom-left panel, remembers only the last valid process-local
 distance with `0.1 * model_scale` fallback and returns to Select on explicit close/Cancel. A
@@ -2695,6 +2709,37 @@ strict restoration. One central document invariant owns all three entry paths; n
 filter may make invalid persistent state acceptable.
 
 Status: fixed and mechanically passing.
+
+### M80-F006 - Ambient junction degree does not make the selected chain branch
+
+At a T-junction, explicitly select two connected incident spans that form one ordered traversal
+and leave the third span unselected. The topology index continues to report the truthful global
+degree, but collection and operation planning consider only selected continuations. The two-span
+operand previews and applies with one persisted junction while the third curve remains ordinary,
+unchanged and outside the association. Selecting all three incident arms reports a selected-set
+branch; disconnected and closed selections keep their existing typed failures and no state mutates.
+
+Status: fixed at the editor and operation-planning owners; focused and collateral mechanical
+qualification passes. Replacement clean nomination is pending together with F007.
+
+### M80-F007 - Provisional shared distance has a direct authoring gesture
+
+After one face or chain produces a current provisional target, hover and press a target edge or
+its grouped distance presentation. The pre-F007 path treated every provisional item as wholly
+non-interactive, so pointer-down fell through to base operand collection and no gesture could
+begin. The corrected headless owner authenticates the exact held preview and source/target pair,
+captures one pointer and changes the positive distance only after the shared threshold. Absolute
+sampling, current rerenders, invalid/valid recovery, cancellation, stale scenes and foreign
+pointers preserve one last-valid candidate. Release is history-neutral; the later Apply publishes
+that exact preview in one step. A full-circle grouped annotation samples the same displayed radial
+side as its source-to-target dimension line, rather than the antipodal circle parameter. The
+browser supplies only normalized events, capture and paint. A superseded rendered candidate that
+retains the same provisional target IDs clears both operand and editor hover rather than
+advertising a grab which the identical authenticated press rejects; the current rerender becomes
+hoverable immediately.
+
+Status: fixed at the headless interaction and thin browser owners; focused and collateral
+mechanical qualification passes. Replacement clean nomination is pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

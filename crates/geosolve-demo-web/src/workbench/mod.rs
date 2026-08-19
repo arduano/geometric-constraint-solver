@@ -39,6 +39,7 @@ enum CanvasPointerCaptureKind {
     CurveControl,
     Annotation,
     Fillet,
+    OffsetDistance,
     Pan,
 }
 
@@ -54,6 +55,13 @@ enum CanvasPointerOwnership {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CanvasPanPointerDownRoute {
     BeginPan,
+    PreserveCapturedInteraction,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanvasPrimaryPointerDownRoute {
+    Dispatch,
     PreserveCapturedInteraction,
 }
 
@@ -175,6 +183,17 @@ fn route_canvas_pan_pointer_down(captures: &CanvasPointerCaptures) -> CanvasPanP
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+fn route_canvas_primary_pointer_down(
+    captures: &CanvasPointerCaptures,
+) -> CanvasPrimaryPointerDownRoute {
+    if captures.is_empty() {
+        CanvasPrimaryPointerDownRoute::Dispatch
+    } else {
+        CanvasPrimaryPointerDownRoute::PreserveCapturedInteraction
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 const fn canvas_pointer_capture_kind(
     kind: geosolve_constraint_editor::ActivePointerGestureKind,
 ) -> CanvasPointerCaptureKind {
@@ -191,6 +210,9 @@ const fn canvas_pointer_capture_kind(
         geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
         | geosolve_constraint_editor::ActivePointerGestureKind::FilletContact => {
             CanvasPointerCaptureKind::Fillet
+        }
+        geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance => {
+            CanvasPointerCaptureKind::OffsetDistance
         }
     }
 }
@@ -781,10 +803,28 @@ fn canvas_cursor_key_with_curve_control(
     hover: geosolve_constraint_editor::EditorHoverState,
     active: Option<geosolve_constraint_editor::ActivePointerGesture>,
 ) -> &'static str {
-    if panning
-        || authoring_active
+    if panning {
+        return "pan";
+    }
+    if offset_authoring_active {
+        if active.is_some_and(|gesture| {
+            gesture.kind == geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance
+        }) {
+            return "offset-distance-active";
+        }
+        if matches!(
+            hover.target,
+            Some(
+                geosolve_constraint_editor::EditorHoverTarget::Geometry(_)
+                    | geosolve_constraint_editor::EditorHoverTarget::Annotation(_)
+            )
+        ) {
+            return "offset-distance";
+        }
+        return "offset";
+    }
+    if authoring_active
         || feature_authoring_active
-        || offset_authoring_active
         || tool != geosolve_constraint_editor::EditorTool::Select
     {
         return canvas_cursor_key(
@@ -2002,6 +2042,17 @@ fn compose_editor_scene(
         .editor()
         .populate_curve_controls(&mut scene)
         .ok()?;
+    if matches!(
+        coordinator.editor().active_pointer_gesture(),
+        Some(geosolve_constraint_editor::ActivePointerGesture {
+            kind: geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance,
+            ..
+        })
+    ) {
+        coordinator
+            .retain_offset_distance_interaction_origin(&mut scene)
+            .ok()?;
+    }
     if prepared_curve_preview {
         coordinator
             .retain_curve_control_preview_interaction_origin(&mut scene)
@@ -3197,14 +3248,39 @@ pub(crate) mod wasm {
                 }
                 super::CanvasPointerMoveOwner::OffsetAuthoring => {
                     let policy = wb.coordinator.editor().geometry_interaction_policy();
-                    let outcome = wb.offset_authoring.hover_at(
-                        &scene,
-                        sample.input.position,
-                        PickTolerance::default(),
-                        policy,
-                    );
-                    handle_offset_outcome(&mut wb, outcome);
-                    wb.coordinator.editor_mut().pointer_leave()
+                    let provisional = {
+                        let Workbench {
+                            coordinator,
+                            offset_authoring,
+                            ..
+                        } = &mut *wb;
+                        coordinator.hover_offset_authoring_distance(
+                            offset_authoring,
+                            &scene,
+                            sample.input.position,
+                            PickTolerance::default(),
+                            policy,
+                        )
+                    };
+                    match provisional {
+                        Ok(Some(effects)) => effects,
+                        Ok(None) => {
+                            let outcome = wb.offset_authoring.hover_at(
+                                &scene,
+                                sample.input.position,
+                                PickTolerance::default(),
+                                policy,
+                            );
+                            handle_offset_outcome(&mut wb, outcome);
+                            wb.coordinator.editor_mut().pointer_leave()
+                        }
+                        Err(error) => {
+                            wb.notice = format!(
+                                "Offset distance hover is unavailable; the last valid preview is retained: {error}"
+                            );
+                            wb.coordinator.editor_mut().pointer_leave()
+                        }
+                    }
                 }
             };
             dispatch_effects(&mut wb, effects);
@@ -3703,8 +3779,19 @@ pub(crate) mod wasm {
         let callback_workbench = Rc::clone(workbench);
         let callback_viewport = viewport.clone();
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+            let painted_action = pointer_event_fillet_action(&event);
+            let mut wb = callback_workbench.borrow_mut();
+            if wb.pan_gesture.is_some() {
+                return;
+            }
+            if event.button() != 0 {
+                return;
+            }
+            match super::route_canvas_primary_pointer_down(&wb.pointer_captures) {
+                super::CanvasPrimaryPointerDownRoute::Dispatch => {}
+                super::CanvasPrimaryPointerDownRoute::PreserveCapturedInteraction => return,
+            }
             if event_targets_problem_marker(&event) {
-                let mut wb = callback_workbench.borrow_mut();
                 wb.pointer_moves
                     .borrow_mut()
                     .invalidate_before_immediate_action();
@@ -3712,14 +3799,6 @@ pub(crate) mod wasm {
                     drop(wb);
                     let _ = render(&callback_document, &callback_workbench);
                 }
-                return;
-            }
-            let painted_action = pointer_event_fillet_action(&event);
-            let mut wb = callback_workbench.borrow_mut();
-            if wb.pan_gesture.is_some() {
-                return;
-            }
-            if event.button() != 0 {
                 return;
             }
             let Some(scene) = editor_scene(&wb) else {
@@ -3805,6 +3884,52 @@ pub(crate) mod wasm {
             }
             if wb.offset_authoring.is_active() {
                 let geometry_policy = wb.coordinator.editor().geometry_interaction_policy();
+                let distance_gesture = {
+                    let Workbench {
+                        coordinator,
+                        offset_authoring,
+                        ..
+                    } = &mut *wb;
+                    coordinator.pointer_down_offset_authoring_distance(
+                        offset_authoring,
+                        &scene,
+                        input,
+                        PickTolerance::default(),
+                        geometry_policy,
+                    )
+                };
+                match distance_gesture {
+                    Ok(Some(effects)) => {
+                        dispatch_effects(&mut wb, effects);
+                        if capture_active_editor_pointer(
+                            &callback_viewport,
+                            &mut wb,
+                            event.pointer_id(),
+                        )
+                        .is_err()
+                        {
+                            let effects = wb.coordinator.editor_mut().cancel();
+                            dispatch_effects(&mut wb, effects);
+                            wb.notice =
+                                "Offset distance edit canceled because pointer capture failed"
+                                    .into();
+                        }
+                        save(&wb);
+                        drop(wb);
+                        let _ = render(&callback_document, &callback_workbench);
+                        return;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        wb.notice = format!(
+                            "Offset distance edit is unavailable; the source operand was not changed: {error}"
+                        );
+                        save(&wb);
+                        drop(wb);
+                        let _ = render(&callback_document, &callback_workbench);
+                        return;
+                    }
+                }
                 let outcome = wb.offset_authoring.pick_at(
                     &scene,
                     input.position,
@@ -4604,6 +4729,55 @@ pub(crate) mod wasm {
                                 format!("Curve-control preview could not be cleared: {error}");
                         }
                     }
+                }
+                EditorEffect::PreviewOffsetAuthoringDistance { distance, .. } => {
+                    let result = {
+                        let Workbench {
+                            coordinator,
+                            offset_authoring,
+                            ..
+                        } = &mut *wb;
+                        coordinator.apply_offset_authoring_editor_effect(offset_authoring, &effect)
+                    };
+                    wb.notice = match result {
+                        Ok(()) => format!("Offset distance preview {distance:.4}"),
+                        Err(error) => format!(
+                            "Offset distance sample was rejected; the last valid preview is retained: {error}"
+                        ),
+                    };
+                }
+                EditorEffect::FinishOffsetAuthoringDistance { .. } => {
+                    let result = {
+                        let Workbench {
+                            coordinator,
+                            offset_authoring,
+                            ..
+                        } = &mut *wb;
+                        coordinator.apply_offset_authoring_editor_effect(offset_authoring, &effect)
+                    };
+                    wb.notice = match result {
+                        Ok(()) => format!(
+                            "Offset distance ready at {:.4}; Apply to retain",
+                            wb.offset_authoring.distance().unwrap_or_default()
+                        ),
+                        Err(error) => format!("Offset distance release was rejected: {error}"),
+                    };
+                }
+                EditorEffect::RestoreOffsetAuthoringDistance { .. } => {
+                    let result = {
+                        let Workbench {
+                            coordinator,
+                            offset_authoring,
+                            ..
+                        } = &mut *wb;
+                        coordinator.apply_offset_authoring_editor_effect(offset_authoring, &effect)
+                    };
+                    wb.notice = match result {
+                        Ok(()) => {
+                            "Offset distance edit canceled; pointer-down preview restored".into()
+                        }
+                        Err(error) => format!("Offset distance restore was rejected: {error}"),
+                    };
                 }
                 EditorEffect::PreviewComputedFeatureRadius { radius, .. } => {
                     match apply_computed_feature_editor_effect(wb, &effect) {
@@ -7278,6 +7452,13 @@ pub(crate) mod wasm {
         coordinator: &RetainedEditorCoordinator,
         authoring: &OffsetAuthoringState,
     ) -> Result<(), JsValue> {
+        let distance_drag_active = matches!(
+            coordinator.editor().active_pointer_gesture(),
+            Some(geosolve_constraint_editor::ActivePointerGesture {
+                kind: geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance,
+                ..
+            })
+        );
         required(document, "wb-offset-operand-status")?
             .set_text_content(Some(&super::offset_operand_status(authoring)));
         required(document, "wb-offset-direction")?
@@ -7294,14 +7475,14 @@ pub(crate) mod wasm {
         let apply = required(document, "wb-offset-apply")?;
         set_disabled(
             &apply,
-            !coordinator.offset_authoring_preview_matches(authoring),
+            distance_drag_active || !coordinator.offset_authoring_preview_matches(authoring),
         )?;
         if let Some(flip) = document.query_selector("[data-wb-action=\"offset-flip\"]")? {
-            set_disabled(&flip, authoring.operand().is_none())?;
+            set_disabled(&flip, distance_drag_active || authoring.operand().is_none())?;
         }
         set_disabled(
             &required(document, "wb-offset-distance")?,
-            !authoring.is_active(),
+            distance_drag_active || !authoring.is_active(),
         )?;
         Ok(())
     }
@@ -8190,16 +8371,17 @@ mod tests {
         CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
         CanvasPointerCaptures, CanvasPointerContextRoute, CanvasPointerMoveOwner,
         CanvasPointerOwnership, CanvasPointerTerminal, CanvasPointerTerminalDisposition,
-        CapturedCanvasPointer, DismissibleDisclosure, DraftingPointerSample,
-        FilletActionRenderAuthority, FinishDoubleClickTracker, ForegroundOverlayEscapeOwner,
-        HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
-        ReproductionFocusReturn, annotation_family_name, annotation_inspector_presentation,
-        apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
-        canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
-        compose_editor_scene, coordinate_hud, current_problem_items,
-        curve_control_inspector_detail, curve_control_inspector_markup,
-        draft_inference_preference_is_stale, foreground_overlay_escape_owner,
-        geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
+        CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, DismissibleDisclosure,
+        DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
+        ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
+        PointerMoveQueue, ReproductionFocusReturn, annotation_family_name,
+        annotation_inspector_presentation, apply_validated_reproduction, canvas_cursor_key,
+        canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
+        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
+        coordinate_hud, current_problem_items, curve_control_inspector_detail,
+        curve_control_inspector_markup, draft_inference_preference_is_stale,
+        foreground_overlay_escape_owner, geometry_sweep_flip_available,
+        geometry_variant_keyboard_target, history_shortcut,
         observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
         offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
         owns_authoring_pick, rational_conic_construction_copy,
@@ -8207,7 +8389,7 @@ mod tests {
         reproduction_overlay_presentation, reproduction_payload_size_label,
         resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
         revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
-        should_route_stationary_draft_inference,
+        route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
     };
 
     fn rejected_constraint_fixture() -> (
@@ -9365,6 +9547,10 @@ mod tests {
                 "radius and higher-priority contact overlap routes share exact Fillet capture"
             );
         }
+        assert_eq!(
+            canvas_pointer_capture_kind(ActivePointerGestureKind::OffsetDistance),
+            CanvasPointerCaptureKind::OffsetDistance,
+        );
 
         let terminals = [
             (
@@ -9403,6 +9589,7 @@ mod tests {
             CanvasPointerCaptureKind::CurveControl,
             CanvasPointerCaptureKind::Annotation,
             CanvasPointerCaptureKind::Fillet,
+            CanvasPointerCaptureKind::OffsetDistance,
             CanvasPointerCaptureKind::Pan,
         ] {
             for (terminal, disposition, release_platform_capture) in terminals {
@@ -9869,6 +10056,55 @@ mod tests {
             canvas_cursor_key(EditorTool::Select, false, false, true, false),
             "offset"
         );
+        let (coordinator, spans, _, _) = rejected_constraint_fixture();
+        let annotation =
+            SelectionItem::Constraint(coordinator.session().design_document().constraints()[0].id);
+        for hover in [
+            EditorHoverState {
+                target: Some(EditorHoverTarget::Geometry(SelectionItem::Curve(spans[0]))),
+                context_owner: Some(SelectionItem::Curve(spans[0])),
+            },
+            EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                    item: annotation,
+                    marker_index: None,
+                })),
+                context_owner: None,
+            },
+        ] {
+            assert_eq!(
+                canvas_cursor_key_with_curve_control(
+                    EditorTool::Select,
+                    false,
+                    false,
+                    true,
+                    false,
+                    hover,
+                    None,
+                ),
+                "offset-distance",
+            );
+        }
+        assert_eq!(
+            canvas_cursor_key_with_curve_control(
+                EditorTool::Select,
+                false,
+                false,
+                true,
+                false,
+                EditorHoverState::default(),
+                Some(ActivePointerGesture {
+                    pointer_id: 9,
+                    kind: ActivePointerGestureKind::OffsetDistance,
+                }),
+            ),
+            "offset-distance-active",
+        );
+        let css = include_str!("../../styles.css");
+        assert!(css.contains("[data-canvas-cursor=\"offset-distance\"]"));
+        assert!(css.contains("[data-canvas-cursor=\"offset-distance-active\"]"));
+        assert!(css.contains("cursor: grab !important;"));
+        assert!(css.contains("cursor: grabbing !important;"));
     }
 
     fn m77_rational_coordinator(weight: f64) -> (RetainedEditorCoordinator, CurveSpan) {
@@ -10516,11 +10752,15 @@ mod tests {
     }
 
     #[test]
-    fn canvas_pan_pointer_down_preserves_every_existing_capture() {
+    fn canvas_pointer_down_preserves_every_existing_capture() {
         let empty = CanvasPointerCaptures::default();
         assert_eq!(
             route_canvas_pan_pointer_down(&empty),
             CanvasPanPointerDownRoute::BeginPan
+        );
+        assert_eq!(
+            route_canvas_primary_pointer_down(&empty),
+            CanvasPrimaryPointerDownRoute::Dispatch
         );
 
         for kind in [
@@ -10528,6 +10768,7 @@ mod tests {
             CanvasPointerCaptureKind::CurveControl,
             CanvasPointerCaptureKind::Annotation,
             CanvasPointerCaptureKind::Fillet,
+            CanvasPointerCaptureKind::OffsetDistance,
             CanvasPointerCaptureKind::Pan,
         ] {
             let mut route_machine = CanvasPointerCaptures::default();
@@ -10539,6 +10780,11 @@ mod tests {
                 route_canvas_pan_pointer_down(&route_machine),
                 CanvasPanPointerDownRoute::PreserveCapturedInteraction,
                 "foreign middle-button pointerdown must not steal {kind:?} capture"
+            );
+            assert_eq!(
+                route_canvas_primary_pointer_down(&route_machine),
+                CanvasPrimaryPointerDownRoute::PreserveCapturedInteraction,
+                "a second primary pointerdown must not reach selection or authoring for {kind:?}",
             );
             assert!(route_machine.contains(11));
             assert_eq!(route_machine.ownership(12), CanvasPointerOwnership::Foreign);
@@ -11140,6 +11386,11 @@ mod tests {
             canvas_pointer_move_owner(false, false, true, false),
             CanvasPointerMoveOwner::OffsetAuthoring,
             "an uncaptured Offset move must reach its exact shared hover/click resolver",
+        );
+        assert_eq!(
+            canvas_pointer_move_owner(false, false, true, true),
+            CanvasPointerMoveOwner::Editor,
+            "a captured Offset distance gesture must stay with the headless editor",
         );
     }
 
