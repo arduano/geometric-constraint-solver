@@ -10188,7 +10188,7 @@ impl SketchDocument {
         Ok(())
     }
 
-    fn validate_after_mutation(&self) -> Result<(), DocumentError> {
+    pub(crate) fn validate_after_mutation(&self) -> Result<(), DocumentError> {
         if self.mutation_validation_deferred {
             Ok(())
         } else {

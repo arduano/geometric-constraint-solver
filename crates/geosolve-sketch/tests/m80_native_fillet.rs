@@ -5,7 +5,7 @@ use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentArcSweep,
     DocumentCommand, DocumentCommandEffect, DocumentConstraintDefinition, DocumentCurveNormalSide,
     DocumentCurveTrimView, DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit,
-    DocumentFilletEndpointOrder, DocumentNativeLineFilletCreationRequest,
+    DocumentError, DocumentFilletEndpointOrder, DocumentNativeLineFilletCreationRequest,
     DocumentNativeLineFilletIds, DocumentNativeLineFilletParent, DocumentObjectId,
     DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter, FeatureEndpoint,
     GeometryRole, OperationControl, OperationLimits, OperationOutcome, PreparedSketchOperation,
@@ -382,11 +382,16 @@ fn invalid_or_ineligible_native_fillet_requests_reject_without_mutation() {
         )
         .unwrap();
     let before = dependent.clone();
-    assert!(
-        dependent
-            .create_native_line_fillet_geometry(fixture.request.clone())
-            .is_err()
-    );
+    let error = dependent
+        .create_native_line_fillet_geometry(fixture.request.clone())
+        .expect_err("a point-based dependent must reject native publication");
+    assert!(matches!(
+        error,
+        DocumentError::InvalidField {
+            field: "native fillet corner",
+            ref message,
+        } if message == "shared corner must be owned only by the two selected source lines"
+    ));
     assert_eq!(dependent, before);
 
     let mut high_valence = fixture.document.clone();
@@ -402,11 +407,16 @@ fn invalid_or_ineligible_native_fillet_requests_reject_without_mutation() {
         )
         .unwrap();
     let before = high_valence.clone();
-    assert!(
-        high_valence
-            .create_native_line_fillet_geometry(fixture.request.clone())
-            .is_err()
-    );
+    let error = high_valence
+        .create_native_line_fillet_geometry(fixture.request.clone())
+        .expect_err("a third incident line must reject native publication");
+    assert!(matches!(
+        error,
+        DocumentError::InvalidField {
+            field: "native fillet corner",
+            ref message,
+        } if message == "shared corner must be owned only by the two selected source lines"
+    ));
     assert_eq!(high_valence, before);
 
     let mut construction = fixture.document.clone();
@@ -486,6 +496,22 @@ fn invalid_or_ineligible_native_fillet_requests_reject_without_mutation() {
 #[test]
 fn controlled_native_fillet_preparation_exhaustion_is_state_neutral() {
     let fixture = native_fillet_fixture();
+    let document_before = fixture.document.clone();
+    let mut limits = OperationLimits::unlimited();
+    limits.document_validation_items = 0;
+    let preparation = fixture
+        .document
+        .prepare_native_line_fillet_geometry_controlled(
+            fixture.request.clone(),
+            OperationControl::new(geosolve_core::CancellationToken::default(), limits),
+        )
+        .unwrap();
+    assert!(matches!(
+        preparation,
+        OperationOutcome::WorkExhausted { .. }
+    ));
+    assert_eq!(fixture.document, document_before);
+
     let session = RetainedSketchDocumentSession::new(
         fixture.document,
         DocumentSolveRequest::default(),

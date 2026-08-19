@@ -13,20 +13,21 @@ use geosolve_sketch::{
     DocumentCurveControlId, DocumentCurveControlProjection, DocumentCurveControlTarget,
     DocumentCurveControlWithholdingReason, DocumentCurveCurvatureRelation,
     DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
-    DocumentDragLocalityPlan, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
-    DocumentFaceOffsetDirection, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch,
-    DocumentLineSide, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
-    DocumentMeasurementValue, DocumentNativeLineFilletIds, DocumentObjectId,
-    DocumentParameterTarget, DocumentProfileOffsetIds, DocumentProfileOffsetOperand,
-    DocumentRationalConicControl, DocumentRuntimeMap, DocumentSessionError, DocumentSolveRequest,
-    DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1, ExternalSnapshotSet,
-    ExternalTopologyDigest, GeometryRole, GeometryRoleEdit, OperationCheckpoint, OperationControl,
-    OperationController, OperationLimits, OperationOutcome, OperationReport, OperationWork,
-    ParameterBatch, PreparedSketchCommit, PreparedSketchInput, PreparedSketchOperation,
-    PreparedSketchPatch, PreparedSketchSnapshot, RetainedSketchDocumentSession, RuntimeCurve,
-    ScalarDomain, ScalarUnit, SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity,
-    SketchAttemptFailure, SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound,
-    SketchDatum, SketchDesignIdentity, SketchDocument, SketchLifecycleRevisionHighWater,
+    DocumentDragLocalityPlan, DocumentEdit, DocumentElementId, DocumentError,
+    DocumentExternalBindingId, DocumentFaceOffsetDirection, DocumentFilletTrimEndpoint,
+    DocumentHyperbolaBranch, DocumentLineSide, DocumentMeasurementCatalog,
+    DocumentMeasurementProvenance, DocumentMeasurementValue, DocumentNativeLineFilletIds,
+    DocumentObjectId, DocumentParameterTarget, DocumentProfileOffsetIds,
+    DocumentProfileOffsetOperand, DocumentRationalConicControl, DocumentRuntimeMap,
+    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
+    ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
+    GeometryRoleEdit, OperationCheckpoint, OperationControl, OperationController, OperationLimits,
+    OperationOutcome, OperationReport, OperationWork, ParameterBatch, PreparedSketchCommit,
+    PreparedSketchInput, PreparedSketchOperation, PreparedSketchPatch, PreparedSketchSnapshot,
+    RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
+    SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
+    SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDatum,
+    SketchDesignIdentity, SketchDocument, SketchLifecycleRevisionHighWater,
     SketchPersistentIdentityHighWater, SketchSolveResult, SketchSource, SolveRejection,
     TangentOrientation,
 };
@@ -3881,10 +3882,11 @@ impl RetainedEditorCoordinator {
             candidate.radius(),
             candidate.persistent_corners(),
         )?;
+        let mut candidate_allocator = self.computed_evaluation_allocator.clone();
         let outcome = evaluate_computed_features(
             &self.session,
             &features,
-            &mut self.computed_evaluation_allocator,
+            &mut candidate_allocator,
             bounded_geometry_control(),
         )?;
         let OperationOutcome::Completed {
@@ -3904,6 +3906,7 @@ impl RetainedEditorCoordinator {
         self.next_feature_authoring_preview_token = token_value
             .checked_add(1)
             .ok_or(CoordinatorError::FeatureAuthoringPreviewTokenExhausted)?;
+        self.computed_evaluation_allocator = candidate_allocator;
         let metadata = FeatureAuthoringPreviewMetadata {
             token: FeatureAuthoringPreviewToken(token_value),
             feature,
@@ -3988,10 +3991,11 @@ impl RetainedEditorCoordinator {
         if feature != previous_feature {
             return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
         }
+        let mut candidate_allocator = self.computed_evaluation_allocator.clone();
         let outcome = evaluate_computed_features(
             &self.session,
             &features,
-            &mut self.computed_evaluation_allocator,
+            &mut candidate_allocator,
             bounded_geometry_control(),
         )?;
         let OperationOutcome::Completed {
@@ -4012,6 +4016,7 @@ impl RetainedEditorCoordinator {
         self.next_feature_authoring_preview_token = token_value
             .checked_add(1)
             .ok_or(CoordinatorError::FeatureAuthoringPreviewTokenExhausted)?;
+        self.computed_evaluation_allocator = candidate_allocator;
         let metadata = FeatureAuthoringPreviewMetadata {
             token: FeatureAuthoringPreviewToken(token_value),
             feature,
@@ -4712,8 +4717,14 @@ impl RetainedEditorCoordinator {
         }
         let prepared = accepted
             .document()
-            .prepare_native_line_fillet_geometry(request)
-            .map_err(|error| CoordinatorError::NativeFilletUnavailable(error.to_string()))?;
+            .prepare_native_line_fillet_geometry_controlled(request, bounded_geometry_control())
+            .map_err(native_fillet_document_unavailable)?;
+        let OperationOutcome::Completed {
+            value: prepared, ..
+        } = prepared
+        else {
+            return Err(CoordinatorError::NativeFilletWorkStopped);
+        };
         let ids = prepared.expected_ids().clone();
         let edit = DocumentEdit::CreatePreparedNativeLineFilletGeometry {
             prepared: Box::new(prepared),
@@ -13278,6 +13289,16 @@ fn native_fillet_ids_exist(document: &SketchDocument, ids: &DocumentNativeLineFi
         && document.dimension(ids.radius_dimension).is_some()
 }
 
+fn native_fillet_document_unavailable(error: DocumentError) -> CoordinatorError {
+    let reason = match error {
+        DocumentError::InvalidField { field, message } if field.starts_with("native fillet") => {
+            message
+        }
+        error => error.to_string(),
+    };
+    CoordinatorError::NativeFilletUnavailable(reason)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -21766,6 +21787,63 @@ mod tests {
     }
 
     #[test]
+    fn native_fillet_high_valence_disabled_reason_omits_document_error_boilerplate() {
+        let fixture = standalone_native_fillet_fixture();
+        let mut document = fixture.coordinator.session().design_document().clone();
+        let branch_end = document
+            .add_point("branch end", [2.0, 2.0])
+            .expect("branch endpoint");
+        document
+            .add_curve(
+                "third corner owner",
+                CurveDefinition::Line {
+                    start: fixture.corner,
+                    end: branch_end,
+                    branch_direction: [-std::f64::consts::FRAC_1_SQRT_2; 2],
+                },
+            )
+            .expect("third incident line");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("accepted high-valence corner");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut authoring = FeatureAuthoringState::default();
+        let candidate = feature_candidate(authoring.activate(
+            &snapshot,
+            snapshot.sketch_document(),
+            FeatureAuthoringTool::Fillet,
+            &[
+                (SelectionItem::Curve(fixture.source_spans[0]), Some(0.75)),
+                (SelectionItem::Curve(fixture.source_spans[1]), Some(0.25)),
+            ],
+        ));
+        let metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "high-valence native corner",
+            )
+            .expect("computed Fillet preview remains valid");
+
+        let error = coordinator
+            .native_feature_authoring_availability(metadata.token, &candidate)
+            .expect_err("the native action must be disabled at a three-way junction");
+        let CoordinatorError::NativeFilletUnavailable(reason) = error else {
+            panic!("expected a concise native-Fillet disabled reason, got {error:?}");
+        };
+        assert_eq!(
+            reason,
+            "shared corner must be owned only by the two selected source lines"
+        );
+    }
+
+    #[test]
     fn native_fillet_persistent_id_exhaustion_is_cached_and_state_neutral() {
         let fixture = standalone_native_fillet_fixture();
         let mut document = fixture.coordinator.session().design_document().clone();
@@ -22536,6 +22614,93 @@ mod tests {
             coordinator.native_feature_authoring_availability(resized_metadata.token, &resized),
             Err(CoordinatorError::NativeFilletPreviewMismatch)
         ));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one authority regression keeps a rejected replacement evaluation, the last valid native action, allocator parity and atomic Apply together"
+    )]
+    fn rejected_feature_preview_replacement_keeps_last_valid_native_apply_authoritative() {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let points = [
+            document.add_point("first outer", [0.0, 0.0]).unwrap(),
+            document.add_point("first corner", [4.0, 0.0]).unwrap(),
+            document.add_point("second corner", [4.0, 4.0]).unwrap(),
+            document.add_point("second outer", [8.0, 4.0]).unwrap(),
+        ];
+        for (index, endpoints) in points.windows(2).enumerate() {
+            add_profile_offset_test_line(
+                &mut document,
+                &format!("standalone line {}", index + 1),
+                endpoints[0],
+                endpoints[1],
+            );
+        }
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("accepted standalone chain");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let initial = grouped_fillet_candidate(&coordinator, [points[1]]);
+        let initial_metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &initial,
+                "last valid native corner",
+            )
+            .expect("initial native preview");
+        coordinator
+            .native_feature_authoring_availability(initial_metadata.token, &initial)
+            .expect("initial native action");
+        let allocator_before_rejection = coordinator.computed_evaluation_allocator.high_water();
+
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut crossed_authoring = FeatureAuthoringState::default();
+        let _ = crossed_authoring.activate(
+            &snapshot,
+            coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[
+                (SelectionItem::Point(points[1]), None),
+                (SelectionItem::Point(points[2]), None),
+            ],
+        );
+        let crossed = feature_candidate(crossed_authoring.set_options(
+            &snapshot,
+            FeatureAuthoringOptions {
+                fillet_radius: Some(3.0),
+                ..crossed_authoring.options()
+            },
+        ));
+        coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &crossed,
+                "crossed replacement batch",
+            )
+            .expect_err("crossed shared-span trims must reject the replacement preview");
+
+        assert_eq!(
+            coordinator.computed_evaluation_allocator.high_water(),
+            allocator_before_rejection,
+            "a rejected replacement must not consume the live computed revision"
+        );
+        let held = coordinator
+            .feature_authoring_preview()
+            .expect("rejected replacement retains the last valid preview");
+        assert_eq!(held.metadata(), &initial_metadata);
+        assert_eq!(held.candidate(), &initial);
+        coordinator
+            .native_feature_authoring_availability(initial_metadata.token, &initial)
+            .expect("the visible last-valid native action remains enabled");
+        coordinator
+            .apply_feature_authoring_native_profile(initial_metadata.token, &initial)
+            .expect("enabled last-valid native action must remain directly publishable");
     }
 
     #[test]
@@ -26025,6 +26190,10 @@ mod tests {
             grouped_fillet_candidate(&fixture.coordinator, fixture.points[1..=2].iter().copied());
         let feature_identity = fixture.coordinator.feature_document().identity();
         let history = fixture.coordinator.history_len();
+        let computed_high_water = fixture
+            .coordinator
+            .computed_evaluation_allocator
+            .high_water();
         fixture.coordinator.next_feature_authoring_preview_token = u64::MAX;
         assert!(matches!(
             fixture.coordinator.prepare_feature_authoring_preview(
@@ -26039,6 +26208,14 @@ mod tests {
             feature_identity
         );
         assert_eq!(fixture.coordinator.history_len(), history);
+        assert_eq!(
+            fixture
+                .coordinator
+                .computed_evaluation_allocator
+                .high_water(),
+            computed_high_water,
+            "token exhaustion must not publish the candidate evaluation allocator"
+        );
         assert!(fixture.coordinator.feature_authoring_preview().is_none());
 
         fixture

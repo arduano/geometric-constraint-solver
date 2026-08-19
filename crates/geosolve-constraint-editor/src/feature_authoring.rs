@@ -1785,6 +1785,104 @@ mod tests {
     }
 
     #[test]
+    fn standalone_native_requests_keep_reverse_pick_branches_through_radius_edit() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let first_outer = document
+            .add_point("first outer", [0.0, 0.0])
+            .expect("first outer");
+        let corner = document
+            .add_point("shared corner", [4.0, 0.0])
+            .expect("shared corner");
+        let second_outer = document
+            .add_point("second outer", [4.0, 4.0])
+            .expect("second outer");
+        document
+            .add_curve(
+                "forward first line",
+                CurveDefinition::Line {
+                    start: first_outer,
+                    end: corner,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("first standalone line");
+        document
+            .add_curve(
+                "reversed second line",
+                CurveDefinition::Line {
+                    start: second_outer,
+                    end: corner,
+                    branch_direction: [0.0, -1.0],
+                },
+            )
+            .expect("second standalone line");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("accepted standalone corner");
+        let snapshot =
+            ComputedFeatureAuthoringSnapshot::capture(&session).expect("authoring snapshot");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("current accepted sketch")
+            .document();
+        let forward_picks = resolve_feature_corner_point(&snapshot, accepted, corner)
+            .expect("standalone corner picks");
+        let mut reverse_picks = forward_picks.clone();
+        reverse_picks.reverse();
+
+        let mut resized_candidates = Vec::new();
+        let mut resized_requests = Vec::new();
+        for picks in [forward_picks, reverse_picks] {
+            let mut authoring = FeatureAuthoringState::default();
+            let initial = candidate(authoring.activate_picks(
+                &snapshot,
+                accepted,
+                FeatureAuthoringTool::Fillet,
+                picks,
+            ));
+            let initial_request = initial
+                .native_line_fillet_request("initial native Fillet")
+                .expect("initial standalone preview must form a native request");
+            accepted
+                .prepare_native_line_fillet_geometry(initial_request)
+                .expect("sketch owner must authenticate the initial native request");
+
+            let resized = candidate(authoring.set_options(
+                &snapshot,
+                FeatureAuthoringOptions {
+                    fillet_radius: Some(0.75),
+                    ..authoring.options()
+                },
+            ));
+            let resized_request = resized
+                .native_line_fillet_request("resized native Fillet")
+                .expect("resized standalone preview must form a native request");
+            accepted
+                .prepare_native_line_fillet_geometry(resized_request.clone())
+                .expect("sketch owner must authenticate the resized native request");
+            assert_ne!(
+                resized_request.first.tangent_orientation,
+                resized_request.second.tangent_orientation,
+                "the editor fixture must distinguish orientation co-permutation"
+            );
+            resized_candidates.push(resized);
+            resized_requests.push(resized_request);
+        }
+
+        assert_eq!(
+            resized_candidates[0], resized_candidates[1],
+            "radius edits from either manual pick order must preserve one canonical preview"
+        );
+        assert_eq!(
+            resized_requests[0], resized_requests[1],
+            "native requests must retain the same parent/contact/orientation pairing"
+        );
+    }
+
+    #[test]
     fn absolute_radius_travel_preserves_completed_branches_and_batch_order() {
         let fixture = adjacent_corner_fixture();
         let snapshot = ComputedFeatureAuthoringSnapshot::capture(&fixture.session)

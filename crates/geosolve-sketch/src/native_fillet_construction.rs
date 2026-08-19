@@ -10,6 +10,7 @@ use crate::{
     DocumentObjectId, FeatureEndpoint, GeometryRole, ScalarDomain, ScalarUnit, SketchDocument,
     TangentOrientation,
 };
+use geosolve_core::{OperationCheckpoint, OperationControl, OperationController, OperationOutcome};
 
 const NATIVE_FILLET_GEOMETRY_EPSILON: f64 = 1.0e-9;
 
@@ -92,11 +93,72 @@ impl SketchDocument {
     ///
     /// Rejects non-line, non-Profile, trimmed, disconnected, dependent, non-interior, stale, or
     /// geometrically inconsistent requests.
+    pub fn prepare_native_line_fillet_geometry(
+        &self,
+        request: DocumentNativeLineFilletCreationRequest,
+    ) -> Result<DocumentPreparedNativeLineFilletGeometry, DocumentError> {
+        let outcome = self.prepare_native_line_fillet_geometry_controlled(
+            request,
+            OperationControl::unlimited(),
+        )?;
+        let OperationOutcome::Completed { value, .. } = outcome else {
+            unreachable!("unlimited native Fillet preparation cannot be interrupted");
+        };
+        Ok(value)
+    }
+
+    /// Authenticates and trials one accepted line-line Fillet preview under deterministic work
+    /// and cancellation control without mutating the document.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same semantic validation errors as
+    /// [`Self::prepare_native_line_fillet_geometry`]. Interrupted work returns a typed incomplete
+    /// outcome and retains the exact source document and allocator state.
+    pub fn prepare_native_line_fillet_geometry_controlled(
+        &self,
+        request: DocumentNativeLineFilletCreationRequest,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<DocumentPreparedNativeLineFilletGeometry>, DocumentError> {
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let mut prepared = self.prepare_native_line_fillet_geometry_untrialed(request)?;
+        let corner = prepared.corner;
+        let mut trial = self.clone();
+        trial.defer_mutation_validation();
+        let expected = match trial.create_prepared_native_line_fillet_geometry(prepared.clone()) {
+            Err(DocumentError::ObjectInUse(id)) if id == corner.0 => {
+                return native_fillet_error(
+                    "native fillet corner",
+                    "shared corner must be owned only by the two selected source lines",
+                );
+            }
+            result => result?,
+        };
+        trial.resume_mutation_validation();
+        if !trial.validate_with_controller(Some(&mut controller))? {
+            return Ok(controller.outcome_unchecked());
+        }
+        if controller
+            .checkpoint(OperationCheckpoint::AfterFinalValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        prepared.expected_ids = Some(expected);
+        Ok(controller.outcome(prepared))
+    }
+
     #[allow(
         clippy::too_many_lines,
         reason = "source authentication and the complete explicit Fillet branch are intentionally checked at one preparation boundary"
     )]
-    pub fn prepare_native_line_fillet_geometry(
+    fn prepare_native_line_fillet_geometry_untrialed(
         &self,
         request: DocumentNativeLineFilletCreationRequest,
     ) -> Result<DocumentPreparedNativeLineFilletGeometry, DocumentError> {
@@ -240,21 +302,14 @@ impl SketchDocument {
                 )
             })?;
 
-        // Prove the sharp point has no semantic owner beyond these two endpoint references. The
-        // same mutation is replayed later against the retained design, so this accepted-document
-        // trial is only an eligibility proof and consumes no live identity.
-        let mut prepared = DocumentPreparedNativeLineFilletGeometry {
+        Ok(DocumentPreparedNativeLineFilletGeometry {
             request,
             source_definitions,
             accepted_line_tangents,
             corner,
             tangent_orientations,
             expected_ids: None,
-        };
-        let mut trial = self.clone();
-        let expected = trial.create_prepared_native_line_fillet_geometry(prepared.clone())?;
-        prepared.expected_ids = Some(expected);
-        Ok(prepared)
+        })
     }
 
     /// Creates one ordinary shortened-line/arc/shortened-line Fillet atomically.
@@ -431,7 +486,7 @@ impl SketchDocument {
             },
             DocumentDimensionMode::Driving,
         )?;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         let contacts: [ContactId; 2] = contacts.try_into().map_err(|_| {
             native_fillet_error_value(
                 "native fillet contacts",

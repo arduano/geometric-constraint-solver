@@ -2061,10 +2061,45 @@ fn authoring_owns_root_selection_and_rejects_fabricated_pick_positions() {
 
 #[test]
 fn reverse_line_pick_order_keeps_canonical_parents_and_preview_contacts_aligned() {
-    let fixture = polyline_fixture();
-    let session = retained(fixture.document.clone());
+    let mut document = SketchDocument::with_id(
+        10.0,
+        geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(0x1011)),
+    )
+    .unwrap();
+    let first_outer = document.add_point("first outer", [0.0, 0.0]).unwrap();
+    let corner = document.add_point("shared corner", [4.0, 0.0]).unwrap();
+    let second_outer = document.add_point("second outer", [4.0, 4.0]).unwrap();
+    let first = CurveSpan::line(
+        document
+            .add_curve(
+                "forward first line",
+                CurveDefinition::Line {
+                    start: first_outer,
+                    end: corner,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap(),
+    );
+    let second = CurveSpan::line(
+        document
+            .add_curve(
+                "reversed second line",
+                CurveDefinition::Line {
+                    start: second_outer,
+                    end: corner,
+                    branch_direction: [0.0, -1.0],
+                },
+            )
+            .unwrap(),
+    );
+    let forward_request = ComputedFilletCornerAuthoringRequest {
+        first: curve_pick(&document, first, 0.75, DocumentFilletTrimEndpoint::End),
+        second: curve_pick(&document, second, 0.75, DocumentFilletTrimEndpoint::End),
+        options: ComputedFilletAuthoringOptions::default(),
+    };
+    let session = retained(document);
     let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
-    let forward_request = first_corner_authoring_request(&fixture.document, fixture.spans);
     let mut reverse_request = forward_request;
     std::mem::swap(&mut reverse_request.first, &mut reverse_request.second);
 
@@ -2084,6 +2119,14 @@ fn reverse_line_pick_order_keeps_canonical_parents_and_preview_contacts_aligned(
     let reverse = resolve(reverse_request);
 
     assert_eq!(reverse.corner, forward.corner);
+    assert_ne!(
+        forward.arc.tangent_orientations[0], forward.arc.tangent_orientations[1],
+        "the regression fixture must distinguish a missing orientation co-permutation"
+    );
+    assert_eq!(
+        reverse.arc, forward.arc,
+        "canonical parent order must co-permute contacts and tangent orientations without changing the resolved arc"
+    );
     for resolved in [forward, reverse] {
         assert_eq!(
             resolved.arc.contacts[0].source,
