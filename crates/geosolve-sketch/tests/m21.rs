@@ -3,12 +3,65 @@
 use geosolve_core::{HardValidity, SolverConfig};
 use geosolve_geometry::{BSplineForm, Point2, Vector2};
 use geosolve_sketch::{
-    ContactNeighborhood, CurveContactNeighborhood, CurveDefinition, CurveSpan,
+    ArcSweep, ContactNeighborhood, CurveContactNeighborhood, CurveDefinition, CurveSpan,
     CurveTangentOrientation, DocumentBSplineForm, DocumentBSplineSpanDirection, DocumentCommand,
     DocumentCommandEffect, DocumentConstraintDefinition, DocumentEdit, DocumentError,
     DocumentSolveRequest, RuntimeCurve, Sketch, SketchCurve, SketchCurveContact, SketchDocument,
     SketchDocumentSession, SketchError, SketchSolveRequest, TangentOrientation,
 };
+
+#[test]
+fn line_arc_tangency_activates_arc_angles_and_matches_finite_differences() {
+    let mut sketch = Sketch::new(4.0).unwrap();
+    let outer = sketch
+        .add_point(Point2::new(1.356_127_064_091_652_7, -2.944_921_788_410_946))
+        .unwrap();
+    let contact = sketch
+        .add_point(Point2::new(
+            1.947_570_879_993_241_2,
+            -0.618_939_369_596_958_4,
+        ))
+        .unwrap();
+    let center = sketch.add_point(Point2::new(0.3, -0.2)).unwrap();
+    let line = sketch.add_segment(outer, contact).unwrap();
+    let arc = sketch
+        .add_named_arc(
+            "native arc",
+            center,
+            1.7,
+            -1.1,
+            1.2,
+            ArcSweep::CounterClockwise,
+        )
+        .unwrap();
+    let tangency = sketch
+        .add_line_curve_tangency(
+            line,
+            geosolve_sketch::SegmentEndpoint::End,
+            SketchCurveContact {
+                curve: SketchCurve::Arc(arc),
+                parameter: 0.37,
+                neighborhood: CurveContactNeighborhood::Local {
+                    lower: 0.2,
+                    upper: 0.7,
+                },
+            },
+            CurveTangentOrientation::Aligned,
+        )
+        .unwrap();
+
+    let compiled = sketch.compile(SketchSolveRequest::default()).unwrap();
+    assert_eq!(compiled.arc_angle_variables().len(), 2);
+    let source = compiled
+        .source_mappings()
+        .iter()
+        .find(|mapping| mapping.source == geosolve_sketch::SketchSource::Constraint(tangency))
+        .unwrap();
+    let residual = compiled.problem().residual(source.residual_ids[0]).unwrap();
+    assert_eq!(residual.incident_variables().len(), 7);
+    let jacobians = compiled.problem().check_jacobians(1.0e-6).unwrap();
+    assert!(jacobians.max_absolute_error() <= 1.0e-6, "{jacobians:#?}");
+}
 
 #[test]
 fn runtime_bspline_contacts_use_only_active_support_and_match_finite_differences() {

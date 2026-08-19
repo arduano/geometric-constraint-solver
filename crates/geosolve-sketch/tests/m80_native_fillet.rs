@@ -747,3 +747,117 @@ fn native_fillet_radius_and_remote_endpoint_remain_ordinary_editable_state() {
     assert!(report.hard_residuals_validated, "{report:#?}");
     assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
 }
+
+#[test]
+fn m80_f016_native_fillet_center_drag_propagates_both_arc_angles() {
+    let fixture = native_fillet_fixture();
+    let mut document = fixture.document;
+    let ids = document
+        .create_native_line_fillet_geometry(fixture.request)
+        .unwrap();
+    let request = DocumentSolveRequest::default().without_previous_state_preferences();
+    let session =
+        RetainedSketchDocumentSession::new(document, request, SolverConfig::default()).unwrap();
+    let plan = session.drag_locality_plan(ids.center).unwrap();
+    let accepted = session.accepted_state().unwrap();
+    let before = [ids.start_angle, ids.end_angle]
+        .map(|angle| accepted.document().scalar(angle).unwrap().value);
+    let target = [-0.75, 1.25];
+    let mut preview = session.clone();
+    let outcome = preview
+        .reattempt_with_drag_locality_controlled(
+            preview.design_identity(),
+            request
+                .with_previous_state_preferences()
+                .with_drag(ids.center, target),
+            &plan,
+            OperationControl::unlimited(),
+        )
+        .unwrap();
+    assert!(matches!(outcome, OperationOutcome::Completed { .. }));
+    let accepted = preview
+        .accepted_state()
+        .expect("center drag must publish an accepted preview");
+    let center = accepted.document().point(ids.center).unwrap().position;
+    assert!(
+        (center[0] - target[0]).hypot(center[1] - target[1]) <= 1.0e-8,
+        "requested={target:?}, accepted={center:?}, report={:#?}",
+        accepted.solve_result().unstable_core_report()
+    );
+    let after = [ids.start_angle, ids.end_angle]
+        .map(|angle| accepted.document().scalar(angle).unwrap().value);
+    for (before, after) in before.into_iter().zip(after) {
+        assert!(
+            (after - before).abs() > 1.0e-4,
+            "before={before}, after={after}"
+        );
+    }
+    let report = accepted.solve_result().unstable_core_report();
+    assert_eq!(report.hard_validity, HardValidity::Valid, "{report:#?}");
+    assert!(report.hard_residuals_validated, "{report:#?}");
+    assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+}
+
+#[test]
+fn m80_f016_native_fillet_remote_endpoint_drag_propagates_arc_angle() {
+    let fixture = native_fillet_fixture();
+    let mut document = fixture.document;
+    let ids = document
+        .create_native_line_fillet_geometry(fixture.request)
+        .unwrap();
+    document
+        .add_constraint(
+            "fixed native center",
+            DocumentConstraintDefinition::FixedPoint {
+                point: ids.center,
+                target: [-1.0, 1.0],
+            },
+        )
+        .unwrap();
+    let request = DocumentSolveRequest::default().without_previous_state_preferences();
+    let session =
+        RetainedSketchDocumentSession::new(document, request, SolverConfig::default()).unwrap();
+    let plan = session.drag_locality_plan(fixture.first_outer).unwrap();
+    let before = session
+        .accepted_state()
+        .unwrap()
+        .document()
+        .scalar(ids.start_angle)
+        .unwrap()
+        .value;
+    let target = [-3.0, 0.25];
+    let mut preview = session.clone();
+    let outcome = preview
+        .reattempt_with_drag_locality_controlled(
+            preview.design_identity(),
+            request
+                .with_previous_state_preferences()
+                .with_drag(fixture.first_outer, target),
+            &plan,
+            OperationControl::unlimited(),
+        )
+        .unwrap();
+    assert!(matches!(outcome, OperationOutcome::Completed { .. }));
+    let accepted = preview
+        .accepted_state()
+        .expect("line-angle drag must publish an accepted preview");
+    let endpoint = accepted
+        .document()
+        .point(fixture.first_outer)
+        .unwrap()
+        .position;
+    assert!(
+        (endpoint[0] - target[0]).hypot(endpoint[1] - target[1]) <= 1.0e-8,
+        "requested={target:?}, accepted={endpoint:?}, report={:#?}",
+        accepted.solve_result().unstable_core_report()
+    );
+    let after = accepted.document().scalar(ids.start_angle).unwrap().value;
+    assert!(
+        (after - before).abs() > 1.0e-4,
+        "before={before}, after={after}"
+    );
+    let report = accepted.solve_result().unstable_core_report();
+    assert_eq!(report.hard_validity, HardValidity::Valid, "{report:#?}");
+    assert!(report.hard_residuals_validated, "{report:#?}");
+    assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+}

@@ -1754,7 +1754,15 @@ impl Sketch {
                     };
                     match constraint.kind() {
                         SketchConstraintKind::CurveCurveFillet { arc, .. } => vec![(arc, true)],
-                        SketchConstraintKind::FixedArcAngle { arc, .. }
+                        SketchConstraintKind::LineCurveTangency {
+                            contact:
+                                SketchCurveContact {
+                                    curve: SketchCurve::Arc(arc),
+                                    ..
+                                },
+                            ..
+                        }
+                        | SketchConstraintKind::FixedArcAngle { arc, .. }
                         | SketchConstraintKind::FixedScalar {
                             property: SketchScalarRef::ArcAngle { arc, .. },
                             ..
