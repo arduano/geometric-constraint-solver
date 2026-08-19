@@ -2,15 +2,14 @@
 
 # M80 — native topology-preserving Profile Offset
 
-Status: **implementation, complete clean qualification and immutable Tailscale nomination pass;
-supervising-human UAT is accepted and final GitHub Pages publication remains pending**. Prior
+Status: **complete and closed; implementation, clean qualification, immutable Tailscale evidence,
+supervising-human UAT and exact GitHub Pages publication pass**. Prior
 candidate evidence remains valid history but is withdrawn from acceptance. Exact qualified product
-source `29d8e41`, tree `44ecb95`, is the accepted candidate at
-`http://100.94.63.83:8080/`. ADR 0037 owns the
+source `29d8e41`, tree `44ecb95`, remains product authority. ADR 0037 owns the
 architecture. M80 adds the narrow constraint-friendly Offset plus one explicit native line-line
 Fillet publication path, and deliberately leaves topology-changing Offset for a later computed-
-feature milestone. The accepted documentation descendant is published next; M79 remains current
-Pages authority until that succeeds.
+feature milestone. Approval descendant `ece6c3c` passes Pages run `32262792440`, artifact
+`9369119336` and exact hosted-byte verification.
 
 ## Product outcome
 
@@ -225,9 +224,10 @@ not change; workspace v6 and `GEOSOLVE_REPRO_V1` continue to use the strict draf
   verified at the shared Tailscale endpoint. This passes for source `29d8e41`, tree `44ecb95`,
   snapshot `/tmp/geosolve-m80-uat.CPuVgx` and ordered-manifest aggregate
   `75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`. Human UAT in
-  `docs/M80_UAT.md` explicitly accepts that candidate; Pages publication and exact hosted-byte
-  verification remain before closure. Previously nominated snapshots cannot receive final M80
-  acceptance.
+  `docs/M80_UAT.md` explicitly accepts that candidate. Approval descendant `ece6c3c` passes Pages
+  run `32262792440`, artifact `9369119336` and exact hosted-byte verification. Previously
+  nominated snapshots cannot receive final M80 acceptance; retired PID `1031421` no longer serves
+  the accepted Tailscale snapshot.
 
 ## Explicit deferrals
 

@@ -2,12 +2,12 @@
 
 # M80 implementation — native topology-preserving Profile Offset
 
-Status: **implementation, clean release qualification and immutable Tailscale nomination pass;
-supervising-human UAT is accepted and GitHub Pages publication remains pending**. The
+Status: **complete and closed; implementation, clean qualification, immutable Tailscale evidence,
+supervising-human UAT and exact GitHub Pages publication pass**. The
 completed Profile Offset implementation and prior nomination records remain valid historical
 evidence, but `M80-F016` withdraws the `05b8b3b` snapshot from acceptance and it is no longer
-served. Exact replacement source `29d8e41`, tree `44ecb95`, is the current mechanically nominated
-candidate at `http://100.94.63.83:8080/`. Pages stays on accepted M79.
+served. Exact replacement source `29d8e41`, tree `44ecb95`, remains qualified product authority;
+Pages is final public-byte authority.
 
 Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 
@@ -161,8 +161,8 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
   it on temporary Tailscale port `18080`, then serve and reverify those same bytes on `:8080`.
   Record the exact source/tree/gate/manifest/server authority here and in `docs/M80_UAT.md`.
 - [x] Receive explicit supervising-human UAT/scoped-close direction for the F016 replacement.
-- [ ] Publish the approval descendant through GitHub Pages, verify hosted bytes and only then mark
-  M80 complete across all milestone records.
+- [x] Publish approval descendant `ece6c3c` through Pages run `32262792440`, verify artifact
+  `9369119336` and every hosted byte, retire the UAT listener and mark M80 complete.
 
 ## Required focused matrix
 
@@ -555,11 +555,33 @@ root passed proxy-disabled identity-encoded HTTP 200, exact media/length/body, n
 content-encoding checks; root equalled `index.html`. Evidence is
 `/tmp/geosolve-m80-f016-temp-verify.vWAgyX`. Only then was PID `704439` retired and PID `1031421`
 started the same snapshot at `http://100.94.63.83:8080/`; identical final verification passed into
-`/tmp/geosolve-m80-f016-final-verify.2T6bqX` before the temporary listener stopped. GitHub Pages
-remains on accepted M79 until the accepted M80 descendant publishes.
+`/tmp/geosolve-m80-f016-final-verify.2T6bqX` before the temporary listener stopped. PID `1031421`
+served the accepted snapshot through human UAT and was retired after exact Pages publication.
 
 This exact replacement withdraws `05b8b3b` from current UAT. Later documentation-only commits do
 not replace `29d8e41` as product-source authority.
+
+## Final acceptance and public publication
+
+The 2026-08-20 supervising-human decision accepts U1-U7 without a new finding. Fresh closeout
+validation keeps the major deliverables distinct: Offset equations/audits 21, operand topology 16,
+deterministic construction/topology barriers 18, native Fillet sketch 9, native-Fillet topology 1,
+unchanged Offset consumption 2, accepted-preview authority 1, Offset authoring 12, retained native-
+Fillet authority 9 and demo 154 all pass. The stable 271-row golden survey is entirely `PASS` and
+exact check/clean modes, formatting and diff hygiene pass.
+
+Documentation-only approval descendant `ece6c3c6f29bb444864c9499868a817e5712951c`, tree
+`34111e0255b987907017c3503aa19000ffc8b020`, passes Pages run `32262792440`, assembly job
+`96099838917` in 4m57s and deploy job `96101539654` in 10s. Artifact `9369119336` is 2,650,327
+bytes with API SHA-256 `6a7fd10ab361f106a49f56e28e397f5be6464ecd94c0a81a53ab79b50e177b93`;
+its sole 7,761,920-byte tar has SHA-256
+`4d6c4b2325f76a542c4b09f086b0e434aecfe59066b0f3b573e5ae86b5943f3c` and exact seven-file
+aggregate `5d4343d4f85aa0290f92c6fc473cc193c451b50334bb1d104ccf2af5a9bebf56`.
+Proxy-disabled cache-busted identity requests to
+`https://arduano.github.io/geometric-constraint-solver/` and all seven paths return HTTP 200 with
+no redirect/content encoding, expected media types/lengths and artifact-identical bodies; root
+equals `index.html`. Evidence is `/tmp/geosolve-m80-pages-verify.Pp2jgp`. Pages is final public-byte
+authority, the frozen Tailscale snapshot remains accepted evidence and PID `1031421` is retired.
 
 ## Withdrawn pre-F016 amended nomination evidence
 
@@ -653,10 +675,12 @@ final historical evidence `/tmp/geosolve-m80-final-verify.M0ThFH/results.tsv` ha
 `03e93b8fcd4d53231d7e3bafd95c6b4315ba2a12515bb8a4f763a91abc8c0b28`. Every request returned
 HTTP 200 from `100.94.63.83` with zero redirects, no `Location` or `Content-Encoding`, exact media
 type and length, snapshot-identical bytes and the same manifest aggregate; `/` equals
-`index.html`. GitHub Pages remains on accepted M79. The native-Fillet scope amendment withdraws
+`index.html`. At that historical checkpoint GitHub Pages remained on accepted M79. The native-
+Fillet scope amendment withdraws
 this candidate from acceptance even though its recorded gate and bytes remain valid. The recorded
 PID `3837538` has exited and the historical snapshot is not served; the service name is now reused
-only by current candidate PID `1031421` and immutable directory `/tmp/geosolve-m80-uat.CPuVgx` above.
+only by the later accepted candidate and immutable directory `/tmp/geosolve-m80-uat.CPuVgx` above;
+that final listener has also now been retired after Pages publication.
 The historical snapshot may not receive final human UAT acceptance.
 
 ## Withdrawn first nomination evidence

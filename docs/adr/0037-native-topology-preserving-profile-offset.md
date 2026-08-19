@@ -2,11 +2,12 @@
 
 # ADR 0037: Native topology-preserving Profile Offset
 
-Status: accepted, amended and implemented for M80. Exact product source `29d8e41`, tree `44ecb95`,
-passes the clean replacement gate, immutable Tailscale nomination and supervising-human UAT. The
-Profile Offset, native line-line Fillet publication and F016 ordinary arc-angle propagation
-contracts are separately qualified. Previously frozen candidates remain withdrawn; final GitHub
-Pages publication is the only remaining closeout step.
+Status: accepted, amended, implemented and closed for M80. Exact product source `29d8e41`, tree
+`44ecb95`, passes the clean replacement gate, immutable Tailscale nomination and supervising-human
+UAT. The Profile Offset, native line-line Fillet publication and F016 ordinary arc-angle
+propagation contracts are separately qualified. Previously frozen candidates remain withdrawn;
+approval descendant `ece6c3c`, Pages run `32262792440` and artifact `9369119336` pass exact hosted-
+byte verification.
 
 ## Context
 
@@ -413,8 +414,9 @@ HTTP verification; F016 later withdraws it from current UAT. Replacement source 
 new residual or Fillet-specific relation. Its complete clean gate, focused centre/remote-endpoint
 regressions and no-rebuild snapshot `/tmp/geosolve-m80-uat.CPuVgx` pass, with aggregate
 `75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`. `docs/M80_UAT.md`
-records supervising-human acceptance of this exact replacement. GitHub Pages publication and
-hosted-byte verification remain before closure.
+records supervising-human acceptance of this exact replacement. Approval descendant `ece6c3c`,
+Pages run `32262792440` and artifact `9369119336` pass exact hosted-byte verification; M80 is
+closed.
 
 ## Scope boundary
 

@@ -75,13 +75,13 @@ centre-drag repair passes owning-layer regressions; replacement clean qualificat
 Tailscale nomination, human UAT and closeout approval pass. Documentation-only approval descendant
 `a6d504e` passes Pages run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact
 hosted-byte verification without replacing the qualified product source.
-M80 is the active native topology-preserving Profile Offset milestone under amended ADR 0037. Its
+M80 is complete under amended ADR 0037. Its
 native line-line Fillet publication amendment and `M80-F016` arc-angle propagation repair pass
 clean release qualification and immutable served nomination at exact source `29d8e41`, tree
-`44ecb95`. Supervising-human UAT is accepted; final Pages publication remains before closure.
+`44ecb95`. Supervising-human UAT and exact GitHub Pages publication pass.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
-but those candidates are withdrawn from acceptance and are no longer served; human UAT,
-publication and closure remain pending.
+but those candidates are withdrawn from acceptance and are no longer served. M1–M80 are complete;
+the next milestone has not been started.
 M76's
 implementation,
 feature refinements,
@@ -5312,14 +5312,14 @@ public-byte authority. No byte identity between those separately built distribut
 
 ### M80: native topology-preserving Profile Offset
 
-Status: **implementation, clean release qualification and immutable Tailscale nomination pass;
-supervising-human UAT is accepted and final Pages publication remains pending**. The pre-amendment
+Status: **complete and closed; implementation, clean qualification, immutable Tailscale evidence,
+supervising-human UAT and exact GitHub Pages publication pass**. The pre-amendment
 implementation and clean Tailscale nomination remain historical evidence, but that candidate is
 withdrawn from acceptance. The first candidate was withdrawn by `M80-F006` through `M80-F009`;
 the replacement `b83dad2` candidate is superseded by the native line-line Fillet amendment, and the
 post-amendment `05b8b3b` candidate is withdrawn by `M80-F016`. Exact replacement source `29d8e41`,
-tree `44ecb95`, is the current mechanically
-nominated candidate at `http://100.94.63.83:8080/`. GitHub Pages remains on accepted M79. ADR 0037
+tree `44ecb95`, remains qualified product authority. Approval descendant `ece6c3c`, Pages run
+`32262792440` and artifact `9369119336` pass exact public-byte verification. ADR 0037
 and `docs/M80_GOALS.md` own the amended contract; `docs/M80_IMPLEMENTATION.md` is the live ledger
 and `docs/M80_UAT.md` records the accepted human scorecard.
 
@@ -5425,11 +5425,11 @@ and `docs/M80_UAT.md` records the accepted human scorecard.
   `/tmp/geosolve-m80-uat.CPuVgx` with ordered-manifest aggregate
   `75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`, verify it first at
   `:18080`, then serve and exact-verify the same bytes at `http://100.94.63.83:8080/` under PID
-  `1031421`.
+  `1031421`, subsequently retired after accepted Pages publication.
 - [x] Receive explicit supervising-human UAT acceptance for U1–U7 over exact product source
   `29d8e41`, tree `44ecb95`, without reporting another finding.
-- [ ] Publish the documentation-only approval descendant through GitHub Pages, verify the hosted
-  artifact exactly and close M80.
+- [x] Publish approval descendant `ece6c3c` through GitHub Pages run `32262792440`, exact-verify
+  artifact `9369119336` and every hosted file, retire the UAT listener and close M80.
 
 Nomination evidence (2026-08-19): the complete clean gate ran from 20:55:13 through 21:14:59 AEST;
 its 269,339-byte, 3,498-line log `/tmp/geosolve-m80-clean-gate.05b8b3b.nix.log` has SHA-256
@@ -5455,7 +5455,8 @@ and Trunk 0.21.14. The exact gate output is frozen at `/tmp/geosolve-m80-uat.CPu
 with evidence `/tmp/geosolve-m80-f016-temp-verify.vWAgyX`; final PID `1031421` passed the same
 checks at `:8080` with evidence `/tmp/geosolve-m80-f016-final-verify.2T6bqX`. Root equals
 `index.html`; every response is HTTP 200 with exact media/length/body and no redirect or content
-encoding. The temporary listener is stopped and PID `1031421` remains live for human UAT.
+encoding. The temporary listener is stopped; PID `1031421` was retained through human UAT and then
+retired after accepted Pages publication.
 
 Scoped human acceptance and distinct-feature validation (2026-08-20): the supervising caller
 praised the final behavior and explicitly requested validation and closeout. This accepts U1–U7
@@ -5467,6 +5468,20 @@ survey is 271/271 `PASS`; `--check` and `--require-clean` match reviewed authori
 diff hygiene pass. These cohorts distinctly cover face/hole and open-chain association, exact
 topology barriers, draggable authoring/lifecycle, native Fillet materialization/Undo/Redo,
 unchanged Offset consumption and both supplied F016 angle-propagation reproductions.
+
+Final publication and closeout (2026-08-20): documentation-only approval descendant
+`ece6c3c6f29bb444864c9499868a817e5712951c`, tree
+`34111e0255b987907017c3503aa19000ffc8b020`, passes Pages run `32262792440`. Assembly job
+`96099838917` passes in 4m57s and deploy job `96101539654` passes in 10s at
+`https://arduano.github.io/geometric-constraint-solver/`. Artifact `9369119336` is 2,650,327 bytes
+with API SHA-256 `6a7fd10ab361f106a49f56e28e397f5be6464ecd94c0a81a53ab79b50e177b93`; its sole 7,761,920-byte
+tar has SHA-256 `4d6c4b2325f76a542c4b09f086b0e434aecfe59066b0f3b573e5ae86b5943f3c` and seven-file aggregate
+`5d4343d4f85aa0290f92c6fc473cc193c451b50334bb1d104ccf2af5a9bebf56`. Proxy-disabled,
+cache-busted identity requests for `/` and all seven paths returned HTTP 200, no redirect or
+content encoding, exact media/length/body matches and root equality. Evidence is
+`/tmp/geosolve-m80-pages-verify.Pp2jgp`. Product authority remains `29d8e41`; the separately built
+Tailscale snapshot remains accepted evidence, while Pages is final public-byte authority. PID
+`1031421` is retired. M80 is closed.
 
 Gate: every accepted source edge retains exactly one same-family native target edge under one
 positive grouped distance and explicit direction/traversal/junction branch; every success passes

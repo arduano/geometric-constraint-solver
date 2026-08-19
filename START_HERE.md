@@ -194,7 +194,7 @@ approval descendant `2560ca5`, tree `bad5662`, passes Pages run `32116835502`, a
 aggregate `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. The Pages rebuild is
 final public-byte authority while the separately built Tailscale snapshot remains accepted UAT
 evidence. M79 is complete; `6874aa1` remains exact qualified product authority.
-M80 is now active under amended ADR 0037. It adds one native topology-preserving Profile Offset dimension
+M80 is complete under amended ADR 0037. It adds one native topology-preserving Profile Offset dimension
 for an authenticated bounded face including holes or a manually ordered open chain. Exact line,
 circle and circular-arc source/target pairs share one positive distance and explicit direction,
 traversal, connectivity and miter/tangent branch state. Any collapse, self-intersection, contour
@@ -210,9 +210,11 @@ preparation is cooperatively bounded and dependent/high-valence corners expose c
 free disabled copy. `M80-F016` additionally activates the circular-arc endpoint angles already
 owned by ordinary line-arc tangency, restoring centre and remote-line-angle propagation without a
 Fillet-specific residual. Replacement development and clean release qualification are complete.
-Exact source `29d8e41`, tree `44ecb95`, now serves its no-rebuild immutable candidate at
-`http://100.94.63.83:8080/` after temporary- and final-port byte verification. Supervising-human
-UAT is accepted; final Pages publication remains before closure. The superseded snapshots are historical
+Exact product source `29d8e41`, tree `44ecb95`, passes clean qualification and its no-rebuild
+immutable Tailscale candidate passed temporary- and final-port byte verification before the
+listener was retired. Supervising-human UAT is accepted. Approval descendant `ece6c3c` passes
+Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification; Pages is final
+public-byte authority. The superseded snapshots are historical
 evidence and are no longer served; this now includes the withdrawn pre-F016 `05b8b3b` snapshot.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
@@ -609,12 +611,13 @@ aggregate `bcf95289a347760a805da392d3064ef1b372b22505f3f150a4236b270b66c51f`; qu
 authority remains `793e9de`.
 M79 subsequently completed exact stationary inference cohorts, deterministic full-list cycling,
 browser-context retirement and the authenticated redundant-direction retry. Exact qualified source
-`6874aa1` remains product authority and Pages publication is byte-verified. M80 is the only active
-milestone: amended ADR 0037's grouped native Profile Offset and explicit native line-line Fillet
-publication plus the F016 arc-angle propagation repair now pass clean qualification and immutable
-Tailscale nomination at exact source `29d8e41`. Supervising-human UAT is accepted; publish and
-exact-verify the approval descendant next. Do not route Offset through
-computed features or admit a topology-changing fallback.
+`6874aa1` remains product authority and Pages publication is byte-verified. M80 subsequently
+completed amended ADR 0037's grouped native Profile Offset, explicit native line-line Fillet
+publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
+qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
+`ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
+M1-M80 are complete and no next milestone is active. Do not route Offset through computed features
+or admit a topology-changing fallback.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-

@@ -2562,12 +2562,12 @@ Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte 
 
 ## M80 acceptance: native topology-preserving Profile Offset
 
-Status: **implementation, clean release qualification and immutable Tailscale nomination pass;
-supervising-human UAT is accepted and final Pages publication remains pending**. The pre-amendment
+Status: **complete and closed; implementation, clean qualification, immutable Tailscale evidence,
+supervising-human UAT and exact GitHub Pages publication pass**. The pre-amendment
 implementation and clean Tailscale nominations remain historical evidence, and `M80-F016`
 withdraws the `05b8b3b` candidate from acceptance. Exact replacement source `29d8e41`, tree `44ecb95`,
-is the current mechanically nominated candidate at `http://100.94.63.83:8080/`. GitHub Pages
-remains on accepted M79.
+is exact qualified product authority. Its accepted Tailscale snapshot is retained as evidence and
+GitHub Pages is final public-byte authority.
 
 - One Apply creates exactly one grouped driving-only `ProfileOffset` over one positive finite
   length scalar and either one complete bounded face including all holes or one manually ordered
@@ -2701,8 +2701,8 @@ remains on accepted M79.
 - All prior Tailscale candidates are historical. Exact sources `05b8b3b`, `b83dad2` and their
   immutable snapshots are no longer served; they cannot receive final M80 acceptance. Only the
   replacement `29d8e41` candidate recorded in `docs/M80_UAT.md` received supervising-human
-  acceptance on 2026-08-20. GitHub Pages publication and hosted-byte verification remain before
-  milestone closure.
+  acceptance on 2026-08-20. Approval descendant `ece6c3c`, Pages run `32262792440`, artifact
+  `9369119336` and exact hosted-byte verification pass. M80 is closed.
 
 F016 replacement mechanical nomination (2026-08-19): exact product source
 `29d8e4144b6b1eba1146e5add9e8d93b2f61dee3`, tree
@@ -2719,7 +2719,7 @@ passed exact proxy-disabled, identity-encoded HTTP 200 media/length/body checks 
 content encoding, first under temporary PID `1030585` at `:18080`, then under PID `1031421` at
 `:8080`; root equals `index.html`. Evidence is `/tmp/geosolve-m80-f016-temp-verify.vWAgyX` and
 `/tmp/geosolve-m80-f016-final-verify.2T6bqX`. The temporary listener is stopped; PID `1031421`
-serves the accepted replacement. GitHub Pages remains on accepted M79 until M80 publication.
+served the accepted replacement through UAT and has now been retired after Pages publication.
 
 Scoped acceptance checkpoint (2026-08-20): the supervising caller stated, “woak very nice. Please
 validate this milestone and finish it off. We did multiple things here so ensure each feature is
@@ -2731,8 +2731,23 @@ barrier tests, 9 native-Fillet sketch tests, 1 native-Fillet topology test, 2 un
 consumption tests, 1 retained accepted-preview authority test, 12 Offset-authoring tests, 9
 retained native-Fillet authority tests and 154 thin-demo tests. All 271 stable golden rows are
 `PASS`, and exact `--check` plus `--require-clean`, formatting and diff hygiene pass. The earlier
-complete clean gate remains exact product qualification. Final acceptance awaits only Pages
-publication and hosted-byte verification.
+complete clean gate remains exact product qualification.
+
+Final publication evidence (2026-08-20): documentation-only approval descendant
+`ece6c3c6f29bb444864c9499868a817e5712951c`, tree
+`34111e0255b987907017c3503aa19000ffc8b020`, passes Pages run `32262792440`, assembly job
+`96099838917` in 4m57s and deploy job `96101539654` in 10s at
+`https://arduano.github.io/geometric-constraint-solver/`. Artifact `9369119336` is 2,650,327 bytes
+with API SHA-256 `6a7fd10ab361f106a49f56e28e397f5be6464ecd94c0a81a53ab79b50e177b93`;
+its sole 7,761,920-byte tar has SHA-256
+`4d6c4b2325f76a542c4b09f086b0e434aecfe59066b0f3b573e5ae86b5943f3c`. Exactly seven flat
+regular files have C-locale manifest aggregate
+`5d4343d4f85aa0290f92c6fc473cc193c451b50334bb1d104ccf2af5a9bebf56`. Proxy-disabled,
+cache-busted identity requests for root and all seven hosted paths returned HTTP 200 with zero
+redirects, no `Location` or `Content-Encoding`, expected media types/lengths and artifact-identical
+bodies; root equals `index.html`. Evidence is `/tmp/geosolve-m80-pages-verify.Pp2jgp`. Product
+authority remains `29d8e41`; Pages is final M80 public-byte authority. All M80 acceptance gates
+pass.
 
 Withdrawn pre-F016 amended mechanical nomination (2026-08-19): exact product source
 `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree

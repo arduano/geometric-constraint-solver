@@ -2,8 +2,8 @@
 
 # M80 focused UAT — native topology-preserving Profile Offset
 
-Status: **accepted 2026-08-20; clean qualification and immutable Tailscale evidence pass, with
-final GitHub Pages publication pending**. The supervising caller approved the qualified candidate,
+Status: **accepted and closed 2026-08-20; clean qualification, immutable Tailscale evidence and
+exact GitHub Pages publication pass**. The supervising caller approved the qualified candidate,
 praised the final F016 behavior and explicitly requested milestone validation and closeout. All
 prior snapshots remain withdrawn historical evidence.
 
@@ -11,7 +11,8 @@ Product source: `29d8e4144b6b1eba1146e5add9e8d93b2f61dee3`
 
 Candidate tree: `44ecb9542992606e5d337dd6c35ee5c9340de305`
 
-Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m80-uat.service`, PID `1031421`)
+Historical accepted Tailscale endpoint: `http://100.94.63.83:8080/`
+(`geosolve-m80-uat.service`, retired PID `1031421`)
 
 Immutable snapshot: `/tmp/geosolve-m80-uat.CPuVgx` (directory `0555`; seven regular non-symlink
 files `0444`)
@@ -31,7 +32,7 @@ PID `1031421` started on `:8080`. Root plus every file returned HTTP 200 with ex
 length and bytes, zero redirects, no content encoding and the frozen manifest aggregate; `/` equals
 `index.html`. The temporary listener is stopped.
 
-GitHub Pages remains on accepted M79 until the accepted M80 descendant publishes successfully.
+GitHub Pages now serves the accepted M80 descendant and is final public-byte authority.
 
 ## Withdrawn nomination history
 
@@ -267,5 +268,16 @@ chain construction, authoring/drag/lifecycle behavior, native line-line Fillet p
 unchanged Offset consumption and F016 arc-angle propagation. It does not invent an unlogged row-by-
 row replay. The superseded `05b8b3b` and `b83dad2` snapshots remain ineligible for acceptance.
 
-Final closure now requires only the standard Pages publication and hosted-byte verification of the
-documentation-only approval descendant.
+Documentation-only approval descendant `ece6c3c6f29bb444864c9499868a817e5712951c`, tree
+`34111e0255b987907017c3503aa19000ffc8b020`, passes Pages run `32262792440`. Assembly job
+`96099838917` passes in 4m57s and deploy job `96101539654` passes in 10s at
+`https://arduano.github.io/geometric-constraint-solver/`. Artifact `9369119336` is 2,650,327 bytes
+with API SHA-256 `6a7fd10ab361f106a49f56e28e397f5be6464ecd94c0a81a53ab79b50e177b93`;
+its sole 7,761,920-byte tar has SHA-256
+`4d6c4b2325f76a542c4b09f086b0e434aecfe59066b0f3b573e5ae86b5943f3c`. Its seven flat files have
+ordered-manifest aggregate
+`5d4343d4f85aa0290f92c6fc473cc193c451b50334bb1d104ccf2af5a9bebf56`. Proxy-disabled,
+cache-busted identity requests for root and all seven paths returned HTTP 200 with no redirect or
+content encoding, exact expected media types/lengths and artifact-identical bodies; root equals
+`index.html`. Evidence is `/tmp/geosolve-m80-pages-verify.Pp2jgp`. The accepted Tailscale snapshot
+remains frozen evidence; PID `1031421` has been retired. M80 is closed.
