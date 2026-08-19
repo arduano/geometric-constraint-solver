@@ -2562,10 +2562,12 @@ Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte 
 
 ## M80 acceptance: native topology-preserving Profile Offset
 
-Status: **amended implementation and development qualification complete; the clean replacement
-gate, frozen nomination, UAT, publication and final acceptance are pending**. The pre-amendment
+Status: **amended implementation, clean release qualification and immutable Tailscale nomination
+complete; UAT, publication and final acceptance are pending**. The pre-amendment
 implementation and clean Tailscale nomination remain historical evidence, but that candidate is
-withdrawn from acceptance and is no longer served. GitHub Pages remains on accepted M79.
+withdrawn from acceptance and is no longer served. Exact amended source `05b8b3b`, tree `4b66560`,
+is the current mechanically nominated candidate at `http://100.94.63.83:8080/`. GitHub Pages
+remains on accepted M79.
 
 - One Apply creates exactly one grouped driving-only `ProfileOffset` over one positive finite
   length scalar and either one complete bounded face including all holes or one manually ordered
@@ -2688,13 +2690,37 @@ withdrawn from acceptance and is no longer served. GitHub Pages remains on accep
   `M80-F012` retains the exact patch through radius rollback while renewing only computed parity;
   `M80-F013` makes rejected preview replacement allocator-neutral; `M80-F014` freezes the concise
   dependency/high-valence reason; and `M80-F015` controls native preparation work itself.
-- Warnings-denied Rustdoc, Trunk and the complete release gate must pass from committed clean
-  source before a no-rebuild distribution is frozen and byte-verified over Tailscale.
+- Warnings-denied Rustdoc, Trunk and the complete release gate pass from committed clean source
+  `05b8b3b`, tree `4b66560`; its no-rebuild distribution is frozen and byte-verified over
+  Tailscale.
 - Both prior Tailscale candidates are historical. Exact source `b83dad2`, tree `440d66e`, and its
   immutable snapshot are no longer served; they cannot receive final M80 acceptance. Only the
-  future amended candidate
-  recorded in `docs/M80_UAT.md` may receive human acceptance. GitHub Pages publication and hosted-
-  byte verification occur only after that decision and before milestone closure.
+  amended `05b8b3b` candidate recorded in `docs/M80_UAT.md` may receive human acceptance. GitHub
+  Pages publication and hosted-byte verification occur only after that decision and before
+  milestone closure.
+
+Amended mechanical nomination (2026-08-19): exact product source
+`05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree
+`4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`, passes the pinned-Nix complete clean release gate
+from 20:55:13 through 21:14:59 AEST. Its 269,339-byte, 3,498-line log
+`/tmp/geosolve-m80-clean-gate.05b8b3b.nix.log` has SHA-256
+`df1bdd31f2bbafe949f2340e6ec93a23c730feac34a1e39cebe36ad56fee578a` and includes formatting,
+warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, unchanged reviewed 271-row
+golden authority, all seven native/WASM parity binaries, demo WASM, benchmark compilation,
+M14/M32 budgets, the 107.35-second sparse crossover, licence/package checks and Trunk 0.21.14.
+The exact no-rebuild seven-file snapshot `/tmp/geosolve-m80-uat.kJj5JB` is read-only (`0555`
+directory, `0444` regular non-symlink files) with ordered-manifest aggregate
+`8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`. Proxy-disabled,
+identity-encoded requests for root and all seven files passed exact status, redirect, encoding,
+media-type, length and byte checks first at `100.94.63.83:18080` and then at `:8080`; `/` equals
+`index.html`. Evidence is `/tmp/geosolve-m80-freeze-evidence.nfn0t9`,
+`/tmp/geosolve-m80-temp-verify.XAdkcr` and `/tmp/geosolve-m80-final-verify.a7QGvU`; the temporary and
+final result ledgers have respective SHA-256
+`239a8f3c793aa6bf62d8dfdda8e98cdc16e2f0f32a473d8a51a3b1cf135078b1` and
+`a8e44bae9a5c23ad952c69b2b402505fb836324956669dc45a71b555feeb82a4`. Temporary service
+`geosolve-m80-temp.service`, PID `701584`, is stopped. Final service `geosolve-m80-uat.service`, PID
+`704439`, serves the exact frozen candidate at `http://100.94.63.83:8080/`. This passes mechanical
+nomination only. Human UAT, Pages publication and final acceptance remain pending.
 
 Withdrawn pre-amendment replacement nomination (2026-08-19): exact product source
 `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`, tree
@@ -2712,8 +2738,9 @@ zero redirects, no content encoding and snapshot-identical bytes. Evidence is
 `/tmp/geosolve-m80-freeze-evidence.1S2bfA`, `/tmp/geosolve-m80-temp-verify.mGxuDM` and
 `/tmp/geosolve-m80-final-verify.M0ThFH`; final historical PID `3837538` served the exact snapshot at
 `http://100.94.63.83:8080/`. This remains valid pre-amendment mechanical evidence, but the native-
-Fillet scope amendment withdraws it from acceptance. That PID has exited, no service remains and no
-human UAT row may be accepted against these bytes.
+Fillet scope amendment withdraws it from acceptance. That PID has exited and those historical bytes
+are no longer served; the current candidate above now uses the service name. No human UAT row may
+be accepted against the historical bytes.
 
 Withdrawn first mechanical nomination (2026-08-19): exact source
 `949c3dbde769cb7de41a9fd97ba0a40094bea14a`, tree

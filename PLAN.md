@@ -76,10 +76,11 @@ Tailscale nomination, human UAT and closeout approval pass. Documentation-only a
 `a6d504e` passes Pages run `32096209036`, artifact `9310104202`, deployment `5955688918` and exact
 hosted-byte verification without replacing the qualified product source.
 M80 is the active native topology-preserving Profile Offset milestone under amended ADR 0037. Its
-native line-line Fillet publication amendment and development qualification are complete.
+native line-line Fillet publication amendment, clean release qualification and immutable served
+nomination are complete at exact source `05b8b3b`, tree `4b66560`.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
-but that candidate is withdrawn from acceptance and is no longer served; the clean replacement
-gate, frozen nomination, UAT, publication and closure remain pending.
+but those candidates are withdrawn from acceptance and are no longer served; human UAT,
+publication and closure remain pending.
 M76's
 implementation,
 feature refinements,
@@ -5310,14 +5311,15 @@ public-byte authority. No byte identity between those separately built distribut
 
 ### M80: native topology-preserving Profile Offset
 
-Status: **amended implementation and development qualification complete; the clean replacement
-gate, frozen nomination, UAT, publication and closure remain pending**. The pre-amendment
+Status: **amended implementation, clean release qualification and immutable Tailscale nomination
+complete; UAT, publication and closure remain pending**. The pre-amendment
 implementation and clean Tailscale nomination remain historical evidence, but that candidate is
 withdrawn from acceptance. The first candidate was withdrawn by `M80-F006` through `M80-F009`;
 the replacement `b83dad2` candidate is now superseded by the native line-line Fillet amendment and
-is no longer served. GitHub Pages remains on accepted M79. ADR 0037 and `docs/M80_GOALS.md` own the amended
-contract; `docs/M80_IMPLEMENTATION.md` is the live ledger and `docs/M80_UAT.md` is the pending human
-scorecard.
+is no longer served. Exact amended source `05b8b3b`, tree `4b66560`, is the current mechanically
+nominated candidate at `http://100.94.63.83:8080/`. GitHub Pages remains on accepted M79. ADR 0037
+and `docs/M80_GOALS.md` own the amended contract; `docs/M80_IMPLEMENTATION.md` is the live ledger
+and `docs/M80_UAT.md` is the pending human scorecard.
 
 - [x] Add one grouped driving-only `ProfileOffset` dimension with one positive shared length
   scalar, explicit face Outward/Inward or open-chain Left/Right state and no reference mode.
@@ -5408,13 +5410,29 @@ scorecard.
   snapshot `/tmp/geosolve-m80-uat.hggNdd` and ordered-manifest aggregate
   `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37` remain historical
   mechanical evidence. The amendment withdraws them from acceptance; recorded PID `3837538` has
-  exited, no service remains and those bytes are no longer served.
-- [ ] Pass the complete clean release gate from the committed replacement source; copy its exact
-  output without rebuilding, freeze and byte-verify
-  it on a temporary Tailscale endpoint, and only then replace the superseded bytes at
-  `http://100.94.63.83:8080/` for focused human UAT.
+  exited and those bytes are no longer served; the current candidate below reuses the service name
+  with a different PID and immutable directory.
+- [x] Pass the complete clean release gate from committed source `05b8b3b`, tree `4b66560`; copy
+  its exact output without rebuilding to `/tmp/geosolve-m80-uat.kJj5JB`, freeze it read-only with
+  ordered-manifest aggregate `8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`,
+  byte-verify it first at temporary port `18080`, then nominate those same bytes at
+  `http://100.94.63.83:8080/` under PID `704439`.
 - [ ] Receive explicit human UAT acceptance, publish the accepted descendant through GitHub Pages,
   verify the hosted artifact exactly and close M80.
+
+Nomination evidence (2026-08-19): the complete clean gate ran from 20:55:13 through 21:14:59 AEST;
+its 269,339-byte, 3,498-line log `/tmp/geosolve-m80-clean-gate.05b8b3b.nix.log` has SHA-256
+`df1bdd31f2bbafe949f2340e6ec93a23c730feac34a1e39cebe36ad56fee578a`. Freeze evidence is
+`/tmp/geosolve-m80-freeze-evidence.nfn0t9`. Temporary service `geosolve-m80-temp.service`, PID
+`701584`, passed all eight proxy-disabled exact-byte requests at `:18080`; its
+`/tmp/geosolve-m80-temp-verify.XAdkcr/results.tsv` has SHA-256
+`239a8f3c793aa6bf62d8dfdda8e98cdc16e2f0f32a473d8a51a3b1cf135078b1`. Final service
+`geosolve-m80-uat.service`, PID `704439`, then passed the same ledger at `:8080`;
+`/tmp/geosolve-m80-final-verify.a7QGvU/results.tsv` has SHA-256
+`a8e44bae9a5c23ad952c69b2b402505fb836324956669dc45a71b555feeb82a4`. Root equals
+`index.html`; every request returned HTTP 200 with zero redirects, no content encoding, exact media
+type/length and snapshot-identical bytes. The temporary listener is stopped; PID `704439` remains
+live for human UAT.
 
 Gate: every accepted source edge retains exactly one same-family native target edge under one
 positive grouped distance and explicit direction/traversal/junction branch; every success passes

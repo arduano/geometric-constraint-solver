@@ -2526,7 +2526,7 @@ finite and offset-associated, independent normalized hard residual is at most `1
 match the grouped equations rather than a hidden lock. Suppress/delete only the dimension and prove
 the target curves plus ordinary shared-point connectivity remain and become freely editable.
 
-Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+Status: implemented; focused, broad and clean-nomination mechanical evidence passes.
 
 ### M80-O2 - Circular and mixed line/arc face offset
 
@@ -2541,7 +2541,7 @@ Each line block reuses the supporting-line Jacobian; each circular block's equal
 radius rows and every tangent anchor pass central finite differences at scales `1e-6`, `1` and
 `1e6`. Structured audits retain deterministic high-level source/edge/join attribution.
 
-Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+Status: implemented; focused, broad and clean-nomination mechanical evidence passes.
 
 ### M80-O3 - One face carries all holes with material semantics
 
@@ -2555,7 +2555,7 @@ Increase distance to the first outer/hole contact, hole/hole contact, hole colla
 barrier. Independent topology validation rejects the whole candidate atomically: it may not trim,
 drop a hole, split a loop or publish a partially valid subset.
 
-Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+Status: implemented; focused, broad and clean-nomination mechanical evidence passes.
 
 ### M80-O4 - Exact one-edge open chains
 
@@ -2574,7 +2574,7 @@ Flip and signed negative authoring input change only the durable direction while
 positive scalar. Canonicalization, insertion order changes, Undo/Redo and reload never reverse the
 stored source or target traversal.
 
-Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+Status: implemented; focused, broad and clean-nomination mechanical evidence passes.
 
 ### M80-O5 - Ordered multi-edge open chains and junction provenance
 
@@ -2594,7 +2594,7 @@ inside the cell. A disconnected edge, branch, reversed tangent, cusp, miter-to-t
 turn reversal or deleted junction owner rejects locally and leaves the last complete accepted scene
 and all history/IDs unchanged.
 
-Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+Status: implemented; focused, broad and clean-nomination mechanical evidence passes.
 
 ### M80-O6 - Unsupported provenance and topology barriers are atomic
 
@@ -2610,7 +2610,7 @@ history/transcript, source diagnostics and persistent high-water with the exact 
 state. Recovery at a later valid distance publishes normally without refresh, stale global error or
 partial target geometry.
 
-Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+Status: implemented; focused, broad and clean-nomination mechanical evidence passes.
 
 ### M80-O7 - Persistence and compatibility remain explicit
 
@@ -2625,7 +2625,7 @@ ordinary strict atomic path.
 Undo/Redo, deletion/suppression, stale exact-CAS, cancellation and forced allocation/resource
 failure preserve identity non-reuse and one-step transaction semantics.
 
-Status: implemented; focused and broad pre-nomination mechanical evidence passes.
+Status: implemented; focused, broad and clean-nomination mechanical evidence passes.
 
 ### M80-O8 - Headless authoring, preview and Tailscale UAT
 
@@ -2659,14 +2659,17 @@ Focused native/WASM/presentation tests and the complete clean gate precede a no-
 snapshot kept byte-verified on `http://100.94.63.83:8080/` through `docs/M80_UAT.md`; Pages and
 closure require an explicit human decision.
 
-Status: pre-amendment source `b83dad2`, tree `440d66e`, snapshot
+Historical pre-amendment source `b83dad2`, tree `440d66e`, snapshot
 `/tmp/geosolve-m80-uat.hggNdd` and ordered-manifest aggregate
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37` pass the complete gate,
 temporary-port verification and final byte verification at `http://100.94.63.83:8080/`. The former
 `949c3db` snapshot is withdrawn and no longer served. The native-Fillet scope amendment withdraws
 `b83dad2` from acceptance; its recorded server has exited and the snapshot is no longer served.
-Amended development qualification passes. The clean replacement gate, frozen nomination, human
-UAT, Pages publication and closure remain pending.
+Status: amended source `05b8b3b`, tree `4b66560`, snapshot `/tmp/geosolve-m80-uat.kJj5JB` and
+ordered-manifest aggregate `8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`
+pass the clean replacement gate, immutable freeze and exact temporary/final HTTP verification.
+PID `704439` serves those bytes at `http://100.94.63.83:8080/`. Human UAT, Pages publication and
+closure remain pending.
 
 ### M80-O9 - Explicit native line-line Fillet publishes ordinary Offset-ready topology
 
@@ -2696,9 +2699,10 @@ Polyline-owned, line-circle/other-curve, batched, dependent/high-valence, stale 
 published computed-Fillet conversion attempts reject before allocation and preserve exact
 document/scene/history/transcript/high-water state.
 
-Status: implemented; focused and broad amended development qualification pass. The clean
-replacement release gate and frozen nomination remain pending. The superseded `b83dad2` candidate
-contains no Apply native profile action and cannot satisfy this scenario.
+Status: implemented; focused and broad amended qualification, the clean replacement release gate
+and frozen nomination pass at exact source `05b8b3b`, tree `4b66560`. Human UAT remains pending.
+The superseded `b83dad2` candidate contains no Apply native profile action and cannot satisfy this
+scenario.
 
 ### M80-F001 - Computed Fillet fragments cannot impersonate native operands
 
@@ -2758,8 +2762,8 @@ branch; disconnected and closed selections keep their existing typed failures an
 
 Status: fixed at the editor and operation-planning owners; focused and collateral mechanical
 qualification and pre-amendment mechanical nomination pass. That candidate is superseded by the
-native-Fillet amendment; amended development qualification now passes, while clean nomination and
-human UAT remain pending.
+native-Fillet amendment; amended clean qualification and immutable nomination now pass at
+`05b8b3b`, while human UAT remains pending.
 
 ### M80-F007 - Provisional shared distance has a direct authoring gesture
 
@@ -2779,8 +2783,8 @@ hoverable immediately.
 
 Status: fixed at the headless interaction and thin browser owners; focused and collateral
 mechanical qualification and pre-amendment nomination pass. That candidate is superseded by the
-native-Fillet amendment; amended development qualification now passes, while clean nomination and
-human UAT remain pending.
+native-Fillet amendment; amended clean qualification and immutable nomination now pass at
+`05b8b3b`, while human UAT remains pending.
 
 ### M80-F008 - A self-adjacent span is closed, not a one-edge open chain
 
@@ -2792,8 +2796,8 @@ retained state. A genuinely open single arc remains eligible.
 
 Status: fixed at the editor and operation-planning owners; focused mechanical qualification passes.
 Pre-amendment mechanical nomination passes, but that candidate is superseded by the native-Fillet
-amendment; amended development qualification now passes, while clean nomination and human UAT
-remain pending.
+amendment; amended clean qualification and immutable nomination now pass at `05b8b3b`, while human
+UAT remains pending.
 
 ### M80-F009 - Delayed Offset effects cannot consume a newer distance drag
 
@@ -2807,8 +2811,8 @@ must emit its distinct epoch and restore its exact pointer-down state and payloa
 
 Status: fixed at the retained editor/coordinator owner; focused mechanical qualification passes.
 Pre-amendment mechanical nomination passes, but that candidate is superseded by the native-Fillet
-amendment; amended development qualification now passes, while clean nomination and human UAT
-remain pending.
+amendment; amended clean qualification and immutable nomination now pass at `05b8b3b`, while human
+UAT remains pending.
 
 ### M80-F010 - Native Fillet publication consumes the exact accepted preview
 
@@ -2823,7 +2827,7 @@ document, accepted state, history, transcript or allocator high-water.
 
 Status: fixed at the retained sketch session and coordinator preview-authority owners. Focused
 accepted-versus-retained, cache/CAS, native topology and unchanged Offset chain/face regressions
-pass; amended clean nomination and human UAT remain pending.
+pass; amended clean nomination passes at `05b8b3b` and human UAT remains pending.
 
 ### M80-F011 - Reverse manual line pick keeps canonical parents and preview branches aligned
 
@@ -2839,8 +2843,7 @@ requests from both pick orders and retains the corner branches through a Radius 
 equation, Jacobian, priority, persistence format or golden-row expansion changed.
 
 Status: fixed at the computed-Fillet evaluation owner; focused owner and editor regressions pass.
-Amended development qualification passes; the clean committed-source release gate, frozen
-nomination and human UAT remain pending.
+Amended clean qualification and frozen nomination pass at `05b8b3b`; human UAT remains pending.
 
 ### M80-F012 - Restored radius origin remains natively publishable without revision reuse
 
@@ -2859,8 +2862,7 @@ native arc bit-for-bit. A parity-refresh failure remains a typed cached native-u
 without invalidating the still-current computed preview or mutating durable sketch state.
 
 Status: fixed at the retained coordinator preview-authority owner; focused regression passes.
-Amended development qualification passes; the clean committed-source release gate, frozen
-nomination and human UAT remain pending.
+Amended clean qualification and frozen nomination pass at `05b8b3b`; human UAT remains pending.
 
 ### M80-F013 - Rejected preview replacement preserves the live allocator and native action
 
@@ -2875,8 +2877,8 @@ retained coordinator boundary. Computed evaluation uses a candidate allocator an
 high-water only after a Current replacement succeeds, so failure cannot silently stale retained
 authority.
 
-Status: fixed and mechanically passing. The clean committed-source release gate, frozen nomination
-and human UAT remain pending.
+Status: fixed and mechanically passing through the clean `05b8b3b` nomination; human UAT remains
+pending.
 
 ### M80-F014 - Native dependency refusal is concise and identity-free
 
@@ -2890,8 +2892,8 @@ The sketch-domain invalid/ineligible matrix freezes the dependency and high-vale
 coordinator regression `native_fillet_high_valence_disabled_reason_omits_document_error_boilerplate`
 and the demo presentation regression require the same exact sentence across the adapter.
 
-Status: fixed and mechanically passing. The clean committed-source release gate, frozen nomination
-and human UAT remain pending.
+Status: fixed and mechanically passing through the clean `05b8b3b` nomination; human UAT remains
+pending.
 
 ### M80-F015 - Native preparation itself obeys cooperative work control
 
@@ -2905,8 +2907,8 @@ equivalent for ordinary callers, while the coordinator maps incomplete bounded p
 preparation and during the subsequent prepared job. Final trial validation shares the same
 controller; no complete uncontrolled validation may run before bounded work begins.
 
-Status: fixed and mechanically passing. The clean committed-source release gate, frozen nomination
-and human UAT remain pending.
+Status: fixed and mechanically passing through the clean `05b8b3b` nomination; human UAT remains
+pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 

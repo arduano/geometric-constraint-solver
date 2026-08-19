@@ -60,9 +60,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   unchanged topology is an independent acceptance condition. Explicit **Apply native profile**
   additionally materializes one eligible line-line Fillet as ordinary shortened lines, a native
   arc, endpoint tangencies and a driving Radius; Offset consumes that topology without computed-
-  feature ownership. Amended implementation and development qualification are complete, but M80
-  remains outside the accepted baseline until the clean replacement gate, frozen nomination,
-  human UAT, publication and closure.
+  feature ownership. Amended implementation, clean release qualification and immutable Tailscale
+  nomination pass at exact source `05b8b3b`, tree `4b66560`. M80 remains outside the accepted
+  baseline until human UAT, publication and closure.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -180,9 +180,9 @@ A target statement must not be exposed as an implemented capability before its m
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
 current accepted ownership is the completed M10-M79 sequence, including the completed M70B
-reproduction cut, listed in section 15. M80's amended implementation and development qualification
-are complete, but it cannot be described as accepted baseline behavior until its remaining clean
-replacement gate, frozen nomination, human UAT, publication and closure gate passes.
+reproduction cut, listed in section 15. M80's amended implementation, clean release qualification
+and immutable served nomination are complete, but it cannot be described as accepted baseline
+behavior until human UAT, publication and closure pass.
 
 ## 3. Crate responsibilities
 
@@ -1518,8 +1518,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   survive association removal. Topology-changing computed Offset, unsupported-curve approximation
   and canonical-v5 promotion are excluded. Explicit native line-line Fillet publication supplies
   ordinary rounded Profile topology without changing the computed Fillet default or teaching
-  Offset about computed features. Amended implementation and development qualification are
-  complete. Retained preview replacement is allocator-transactional, native construction
-  preparation is cooperatively bounded and dependency refusal remains identity-free across the
-  demo adapter; the clean replacement gate, frozen nomination, human UAT, publication and closure
-  remain pending.
+  Offset about computed features. Amended implementation, clean release qualification and
+  immutable served nomination pass at exact source `05b8b3b`, tree `4b66560`. Retained preview
+  replacement is allocator-transactional, native construction preparation is cooperatively bounded
+  and dependency refusal remains identity-free across the demo adapter; human UAT, publication and
+  closure remain pending.

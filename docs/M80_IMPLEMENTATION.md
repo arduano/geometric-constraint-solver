@@ -2,11 +2,12 @@
 
 # M80 implementation — native topology-preserving Profile Offset
 
-Status: **amended implementation and development qualification complete; the clean replacement
-gate, frozen nomination, human UAT, GitHub Pages publication and closure remain pending**. The
+Status: **amended implementation, clean release qualification and immutable Tailscale nomination
+complete; human UAT, GitHub Pages publication and closure remain pending**. The
 completed Profile Offset implementation and both prior nomination records remain valid historical
 evidence, but the `b83dad2` snapshot is withdrawn from acceptance by this amendment and is no
-longer served. Pages stays on accepted M79.
+longer served. Exact amended source `05b8b3b`, tree `4b66560`, is the current mechanically nominated
+candidate at `http://100.94.63.83:8080/`. Pages stays on accepted M79.
 
 Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 
@@ -139,7 +140,7 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 - [x] Add and review one native-profile Fillet authoring family plus deterministic transforms in
   the stable golden matrix; never bless new or changed rows without row-by-row review.
 
-### 6. Qualification, UAT and closeout — amended development qualification complete
+### 6. Qualification, UAT and closeout — immutable nomination complete
 
 - [x] Pass the pre-amendment focused owner tests, native/WASM parity, unchanged historical
   persistence/golden checks, formatting, warnings-denied workspace Clippy and locked all-feature
@@ -154,11 +155,11 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 - [x] Pass all focused amended owner/collateral tests, formatting, warnings-denied workspace
   Clippy, locked all-feature workspace tests, relevant native/WASM/golden/persistence parity and
   the reviewed 271-row clean oracle from the development worktree.
-- [ ] Pass warnings-denied Rustdoc, Trunk and the exact complete clean release gate from committed
-  replacement source.
-- [ ] Copy the exact amended gate-produced distribution without rebuilding, freeze and byte-verify
-  it on a temporary Tailscale port, and replace `:8080` only after that temporary verification
-  passes. Record the new source/tree/log/manifest/server authority here and in `docs/M80_UAT.md`.
+- [x] Pass warnings-denied Rustdoc, Trunk and the exact complete clean release gate from committed
+  replacement source `05b8b3b`, tree `4b66560`.
+- [x] Copy the exact amended gate-produced distribution without rebuilding, freeze and byte-verify
+  it on temporary Tailscale port `18080`, then serve and reverify those same bytes on `:8080`.
+  Record the exact source/tree/log/manifest/server authority here and in `docs/M80_UAT.md`.
 - [ ] Receive explicit amended-candidate UAT/scoped-close direction, publish the approved
   descendant through GitHub Pages, verify hosted bytes and only then mark M80 complete across all
   milestone records.
@@ -458,9 +459,8 @@ Historical M1-M79 evidence remains unchanged.
 ## Amended development qualification evidence
 
 The final amended development worktree, including `M80-F010`-`M80-F015`, passed the following
-commands. These are development evidence only; warnings-denied Rustdoc, Trunk and the complete
-clean committed-source release gate remain pending until the replacement commits below are
-created:
+commands before nomination. The clean committed-source release evidence in the next section now
+supersedes their former development-only status:
 
 ```text
 cargo test --locked -p geosolve-sketch --test m80_native_fillet
@@ -498,6 +498,54 @@ Focused `M80-F013` and user-facing `M80-F014` tests also passed individually. Th
 native-Fillet filter tests, separately named F013 regression and accepted-versus-retained
 integration test total eleven retained/coordinator authority regressions. The stable golden bytes
 remain unchanged at 271 rows; these isolated findings did not add a systemic golden dimension.
+
+## Amended replacement nomination evidence
+
+Exact product source `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree
+`4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`, ran the complete clean gate inside the repository's
+pinned `shell.nix` from 2026-08-19 20:55:13 through 21:14:59 AEST. The 269,339-byte, 3,498-line log
+`/tmp/geosolve-m80-clean-gate.05b8b3b.nix.log` has SHA-256
+`df1bdd31f2bbafe949f2340e6ec93a23c730feac34a1e39cebe36ad56fee578a`. The gate passes formatting
+and diff hygiene, warnings-denied workspace Clippy and Rustdoc, locked all-feature workspace tests,
+the 403-test editor and 154-test demo suites, all seven native/WASM parity binaries, the unchanged
+reviewed 271-row golden `--require-clean` authority, demo all-feature WASM, benchmark compilation,
+M14/M32 performance budgets, the 107.35-second 256-body sparse crossover, licence/package checks
+and Trunk 0.21.14 release assembly. The only diagnostics are the longstanding non-failing Cargo
+notices for packages declaring both `license` and `license-file`.
+
+Without rebuilding, the exact gate-produced `crates/geosolve-demo-web/dist` was copied to
+`/tmp/geosolve-m80-uat.kJj5JB`, byte-compared before and after freezing the directory `0555` and all
+seven regular non-symlink files `0444`. Freeze evidence is
+`/tmp/geosolve-m80-freeze-evidence.nfn0t9`; the C-locale ordered manifest has aggregate SHA-256
+`8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 27,327 | `12861ad65e947547f3ac9b3566717cd228bb7c7177c7138b6340b6005b624d88` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-abeac0a70befff59.js` | 33,750 | `a38e64303db375907a421cf466acb7af1cc194b0f7a3cb345e1e9e86095f4e66` |
+| `geosolve-demo-web-abeac0a70befff59_bg.wasm` | 7,578,089 | `1a8baaf2c4e32a701a286142e3310155f3760795fe2a447f4f67c0fda99170df` |
+| `index.html` | 31,033 | `1b726dc66a5239664c37297eca27b9e7170fd1da9668847c14485399be278736` |
+| `styles-a41d7984178d1121.css` | 38,291 | `957c7809eab90b61a2a72266af8f8660390b8c04fcce7b6c9e06398582097bbf` |
+
+Temporary service `geosolve-m80-temp.service`, PID `701584`, first served only that snapshot on
+`100.94.63.83:18080`. Proxy-disabled, cache-bypassed, identity-encoded requests for `/` and every
+file returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact media type
+and length, snapshot-identical bodies and `/` equal to `index.html`. Only after that proof did
+`geosolve-m80-uat.service`, PID `704439`, start the same immutable snapshot at
+`http://100.94.63.83:8080/`; the complete final ledger passed before the temporary listener was
+retired. Temporary evidence `/tmp/geosolve-m80-temp-verify.XAdkcr/results.tsv` has SHA-256
+`239a8f3c793aa6bf62d8dfdda8e98cdc16e2f0f32a473d8a51a3b1cf135078b1`; final evidence
+`/tmp/geosolve-m80-final-verify.a7QGvU/results.tsv` has SHA-256
+`a8e44bae9a5c23ad952c69b2b402505fb836324956669dc45a71b555feeb82a4`. Both fetched manifests
+have the frozen aggregate above. PID `704439` remains the sole M80 listener for focused human UAT;
+GitHub Pages remains on accepted M79.
+
+This is mechanical nomination, not human acceptance. Later documentation-only evidence commits do
+not replace `05b8b3b` as exact product-source authority. No GitHub Pages publication or milestone
+closure is authorized until the supervising human accepts `docs/M80_UAT.md` or explicitly records
+another scoped decision.
 
 ## Withdrawn pre-amendment replacement nomination evidence
 
@@ -545,8 +593,9 @@ HTTP 200 from `100.94.63.83` with zero redirects, no `Location` or `Content-Enco
 type and length, snapshot-identical bytes and the same manifest aggregate; `/` equals
 `index.html`. GitHub Pages remains on accepted M79. The native-Fillet scope amendment withdraws
 this candidate from acceptance even though its recorded gate and bytes remain valid. The recorded
-PID `3837538` has exited and no `geosolve-m80-uat.service` exists; the snapshot is not currently
-served and may not receive final human UAT acceptance.
+PID `3837538` has exited and the historical snapshot is not served; the service name is now reused
+only by current candidate PID `704439` and immutable directory `/tmp/geosolve-m80-uat.kJj5JB` above.
+The historical snapshot may not receive final human UAT acceptance.
 
 ## Withdrawn first nomination evidence
 

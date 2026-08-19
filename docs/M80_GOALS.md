@@ -2,13 +2,14 @@
 
 # M80 — native topology-preserving Profile Offset
 
-Status: **amended implementation and development qualification complete; the clean replacement
-gate, frozen nomination, human UAT, publication and closure remain pending**. The pre-amendment
+Status: **amended implementation, clean release qualification and immutable Tailscale nomination
+complete; human UAT, publication and closure remain pending**. The pre-amendment
 implementation and qualification remain valid historical evidence, but their frozen candidate is
-withdrawn from acceptance and is no longer served. ADR 0037 owns the architecture. M80 adds the
-narrow constraint-friendly Offset plus one explicit native line-line Fillet publication path, and
-deliberately leaves topology-changing Offset for a later computed-feature milestone. GitHub Pages
-remains on accepted M79.
+withdrawn from acceptance and is no longer served. Exact amended source `05b8b3b`, tree `4b66560`,
+is the current mechanically nominated candidate at `http://100.94.63.83:8080/`. ADR 0037 owns the
+architecture. M80 adds the narrow constraint-friendly Offset plus one explicit native line-line
+Fillet publication path, and deliberately leaves topology-changing Offset for a later computed-
+feature milestone. GitHub Pages remains on accepted M79.
 
 ## Product outcome
 
@@ -220,9 +221,12 @@ not change; workspace v6 and `GEOSOLVE_REPRO_V1` continue to use the strict draf
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
   unchanged historical persistence/golden authority, Trunk and the complete release gate pass.
 - The exact gate-produced distribution is copied without rebuilding, frozen read-only and byte-
-  verified at the shared Tailscale endpoint. Human UAT in `docs/M80_UAT.md` explicitly accepts that
-  replacement candidate before Pages publication and milestone closure. The previously nominated
-  `b83dad2` snapshot is pre-amendment evidence and cannot receive final M80 acceptance.
+  verified at the shared Tailscale endpoint. This passes for source `05b8b3b`, tree `4b66560`,
+  snapshot `/tmp/geosolve-m80-uat.kJj5JB` and ordered-manifest aggregate
+  `8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`. Human UAT in
+  `docs/M80_UAT.md` must explicitly accept that candidate before Pages publication and milestone
+  closure. The previously nominated `b83dad2` snapshot is pre-amendment evidence and cannot receive
+  final M80 acceptance.
 
 ## Explicit deferrals
 

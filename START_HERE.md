@@ -207,9 +207,11 @@ arc topology that the unchanged Offset path consumes as a chain or face. Amended
 complete; exact preview publication, reverse-pick branch pairing and radius-origin rollback now
 have focused authority regressions. Rejected replacement previews are allocator-neutral, native
 preparation is cooperatively bounded and dependent/high-valence corners expose concise identity-
-free disabled copy. Amended development qualification is complete; the clean
-release gate, frozen replacement nomination, human UAT, Pages publication and closure remain
-pending. The superseded pre-amendment snapshot is historical evidence and is no longer served.
+free disabled copy. Amended development and clean release qualification are complete. Exact source
+`05b8b3b`, tree `4b66560`, now serves its no-rebuild immutable candidate at
+`http://100.94.63.83:8080/` after temporary- and final-port byte verification. Human UAT, Pages
+publication and closure remain pending. The superseded pre-amendment snapshots are historical
+evidence and are no longer served.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -238,7 +240,7 @@ support and physics remain outside future acceptance.
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
 16. `docs/M80_GOALS.md`, `docs/M80_IMPLEMENTATION.md` and `docs/M80_UAT.md` — implemented native
     topology-preserving Profile Offset plus native line-line Fillet publication contract,
-    amended development-qualification and pending clean-nomination ledger, and prepared scorecard.
+    clean-qualified immutable nomination ledger, and live focused scorecard.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -606,9 +608,9 @@ authority remains `793e9de`.
 M79 subsequently completed exact stationary inference cohorts, deterministic full-list cycling,
 browser-context retirement and the authenticated redundant-direction retry. Exact qualified source
 `6874aa1` remains product authority and Pages publication is byte-verified. M80 is the only active
-milestone: qualify amended ADR 0037's implemented grouped native Profile Offset and explicit native
-line-line Fillet publication from clean source, replace the superseded Tailscale candidate only
-after temporary byte verification, then run the prepared focused UAT. Do not route Offset through
+milestone: amended ADR 0037's grouped native Profile Offset and explicit native line-line Fillet
+publication now pass clean qualification and immutable Tailscale nomination at exact source
+`05b8b3b`; run the prepared focused UAT against those bytes next. Do not route Offset through
 computed features or admit a topology-changing fallback.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
@@ -702,8 +704,8 @@ Durable milestone and cleanup records:
 - `docs/M79_UAT.md` (accepted focused stationary-cycling scorecard and public evidence)
 - `docs/adr/0037-native-topology-preserving-profile-offset.md`
 - `docs/M80_GOALS.md` (implemented native face/open-chain Profile Offset and native Fillet contract)
-- `docs/M80_IMPLEMENTATION.md` (amended development-qualification and pending clean-nomination ledger)
-- `docs/M80_UAT.md` (prepared focused Tailscale scorecard; not yet run)
+- `docs/M80_IMPLEMENTATION.md` (clean-qualified immutable nomination and finding ledger)
+- `docs/M80_UAT.md` (live focused Tailscale scorecard; human rows not yet accepted)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

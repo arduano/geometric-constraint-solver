@@ -4,8 +4,9 @@
 
 Status: accepted, amended and implemented for M80. The original Profile Offset decision and its
 pre-amendment qualification pass; the native line-line Fillet publication amendment and amended
-development qualification also pass. The previously frozen candidate is withdrawn from acceptance,
-so the clean replacement gate, frozen nomination, human UAT and publication are pending.
+development qualification also pass. Exact amended source `05b8b3b`, tree `4b66560`, passes the
+clean replacement gate and immutable Tailscale nomination. The previously frozen candidates are
+withdrawn from acceptance; human UAT and publication remain pending.
 
 ## Context
 
@@ -404,7 +405,11 @@ complete clean release gate; its no-rebuild output remains frozen read-only at
 `/tmp/geosolve-m80-uat.hggNdd` and byte-verified on the shared Tailscale endpoint with aggregate
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`.
 The scope amendment withdraws those bytes from final acceptance; they are no longer served.
-`docs/M80_UAT.md` must be run against the future exact replacement.
+Exact amended source `05b8b3b`, tree `4b66560`, passes the complete clean gate. Its no-rebuild
+output is frozen at `/tmp/geosolve-m80-uat.kJj5JB` with ordered-manifest aggregate
+`8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215` and exact temporary/final
+HTTP verification; it is the current candidate at `http://100.94.63.83:8080/`.
+`docs/M80_UAT.md` must be run against that exact replacement.
 GitHub Pages publication and milestone closure occur only after the supervising human accepts that
 focused scorecard or explicitly records another scoped close decision.
 

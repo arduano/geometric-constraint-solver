@@ -2,26 +2,52 @@
 
 # M80 focused UAT — native topology-preserving Profile Offset
 
-Status: **amended implementation and development qualification complete; clean replacement
-nomination and focused human UAT are pending**. The pre-amendment candidate is withdrawn from
-acceptance. Its snapshot remains immutable historical evidence but is no longer served. Mechanical
-evidence does not pass any UAT row, and the pre-amendment bytes must not be used to score final M80
-acceptance.
+Status: **amended implementation, clean release qualification and immutable Tailscale nomination
+complete; focused human UAT is pending**. Mechanical evidence does not pass any UAT row. Run this
+scorecard only against the exact current candidate below; both pre-amendment snapshots remain
+withdrawn historical evidence and must not be used to score final M80 acceptance.
+
+Product source: `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`
+
+Candidate tree: `4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`
+
+Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m80-uat.service`, PID `704439`)
+
+Immutable snapshot: `/tmp/geosolve-m80-uat.kJj5JB` (directory `0555`; seven regular non-symlink
+files `0444`)
+
+Ordered-manifest aggregate:
+`8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`
+
+Clean gate: 2026-08-19 20:55:13–21:14:59 AEST;
+`/tmp/geosolve-m80-clean-gate.05b8b3b.nix.log` (269,339 bytes, 3,498 lines, SHA-256
+`df1bdd31f2bbafe949f2340e6ec93a23c730feac34a1e39cebe36ad56fee578a`)
+
+Freeze/HTTP evidence: `/tmp/geosolve-m80-freeze-evidence.nfn0t9`,
+`/tmp/geosolve-m80-temp-verify.XAdkcr` and `/tmp/geosolve-m80-final-verify.a7QGvU`. Temporary PID
+`701584` first served the exact snapshot at `:18080`; only after its eight-request proof passed did
+PID `704439` serve the same directory at `:8080`. The temporary and final `results.tsv` ledgers have
+respective SHA-256 `239a8f3c793aa6bf62d8dfdda8e98cdc16e2f0f32a473d8a51a3b1cf135078b1` and
+`a8e44bae9a5c23ad952c69b2b402505fb836324956669dc45a71b555feeb82a4`. Root plus every file
+returned HTTP 200 with exact media type, length and bytes, zero redirects, no content encoding and
+the frozen manifest aggregate; `/` equals `index.html`. The temporary listener is stopped.
+
+GitHub Pages remains on accepted M79; M80 publication is not authorized before human acceptance.
+
+## Withdrawn nomination history
 
 Superseded pre-amendment product source: `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`
 
 Superseded candidate tree: `440d66ef07b7df963164e69ebed4b75509f56bd6`
 
-Historical Tailscale endpoint: `http://100.94.63.83:8080/` (recorded PID `3837538` has exited; no
-`geosolve-m80-uat.service` currently exists)
+Historical service used `http://100.94.63.83:8080/`; recorded PID `3837538` has exited and those
+bytes are no longer served.
 
 Immutable snapshot: `/tmp/geosolve-m80-uat.hggNdd` (directory `0555`; seven regular non-symlink
 files `0444`)
 
 Ordered-manifest aggregate:
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`
-
-Amended replacement source/tree/snapshot/manifest: **pending**.
 
 Superseded pre-amendment clean gate: 2026-08-19 13:38:33–13:50:00 AEST;
 `/tmp/geosolve-m80-clean-gate.b83dad2.nix.log` (262,051 bytes, 3,416 lines, SHA-256
@@ -41,10 +67,10 @@ Withdrawn predecessor: source `949c3db`, tree `23a6f8d`, snapshot
 `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`. It is historical, no
 longer served and must not be used for scoring.
 
-Leave the shared Tailscale endpoint unserved until the amended replacement passes its clean gate,
-freeze and temporary-port byte verification. Start `:8080` only after that proof. The replacement
-gets new source, tree, snapshot and evidence; withdrawn bytes remain historical and are never
-silently overwritten. Run every UAT row below only against that future amended candidate.
+The amended replacement passed its clean gate, immutable freeze and temporary-port verification
+before taking over `:8080`. Withdrawn bytes remain historical and are never silently overwritten.
+Run every UAT row below only against exact source `05b8b3b`, tree `4b66560`, and the immutable
+snapshot recorded above.
 
 Use the ordinary editable workbench at approximately `1440x900` and `1024x720`, with coarse and
 fine zoom. Direct tests, not visual judgment, own exact residual thresholds, branch bytes,
@@ -217,9 +243,8 @@ Fillet to confirm an eligible corner recovers without refresh.
 
 ## Acceptance record
 
-Pending clean committed-source release qualification, frozen replacement nomination and explicit
-supervising-human decision.
+Pending explicit supervising-human decision on the nominated `05b8b3b` candidate.
 Mechanical qualification or a live Tailscale server does not itself pass any UAT row and does not
-close M80. The superseded `b83dad2` snapshot cannot receive acceptance. After acceptance, record the
-exact replacement source, tree, immutable manifest and decision here; then perform the normal
-GitHub Pages publication and hosted-byte verification before marking the milestone complete.
+close M80. The superseded `b83dad2` snapshot cannot receive acceptance. After acceptance, record
+the UAT decision here; then perform the normal GitHub Pages publication and hosted-byte
+verification before marking the milestone complete.
