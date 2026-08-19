@@ -2,15 +2,18 @@
 
 # M80 focused UAT — native topology-preserving Profile Offset
 
-Status: **the post-M80-F006 through M80-F009 replacement is clean-qualified, immutably frozen and
-byte-verified on Tailscale; focused human UAT is ready and pending**. Mechanical evidence does not
-pass any UAT row.
+Status: **amended implementation and development qualification complete; clean replacement
+nomination and focused human UAT are pending**. The pre-amendment candidate is withdrawn from
+acceptance. Its snapshot remains immutable historical evidence but is no longer served. Mechanical
+evidence does not pass any UAT row, and the pre-amendment bytes must not be used to score final M80
+acceptance.
 
-Product source: `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`
+Superseded pre-amendment product source: `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`
 
-Candidate tree: `440d66ef07b7df963164e69ebed4b75509f56bd6`
+Superseded candidate tree: `440d66ef07b7df963164e69ebed4b75509f56bd6`
 
-Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m80-uat.service`, PID `3837538`)
+Historical Tailscale endpoint: `http://100.94.63.83:8080/` (recorded PID `3837538` has exited; no
+`geosolve-m80-uat.service` currently exists)
 
 Immutable snapshot: `/tmp/geosolve-m80-uat.hggNdd` (directory `0555`; seven regular non-symlink
 files `0444`)
@@ -18,11 +21,13 @@ files `0444`)
 Ordered-manifest aggregate:
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`
 
-Clean gate: 2026-08-19 13:38:33–13:50:00 AEST;
+Amended replacement source/tree/snapshot/manifest: **pending**.
+
+Superseded pre-amendment clean gate: 2026-08-19 13:38:33–13:50:00 AEST;
 `/tmp/geosolve-m80-clean-gate.b83dad2.nix.log` (262,051 bytes, 3,416 lines, SHA-256
 `3e44403e3f2038467aa0c06193030feb6c099cd53634b315a8308ca111113fa0`)
 
-Freeze/HTTP evidence: `/tmp/geosolve-m80-freeze-evidence.1S2bfA`,
+Superseded pre-amendment freeze/HTTP evidence: `/tmp/geosolve-m80-freeze-evidence.1S2bfA`,
 `/tmp/geosolve-m80-temp-verify.mGxuDM` and `/tmp/geosolve-m80-final-verify.M0ThFH`. The temporary and
 final eight-request result ledgers have respective SHA-256
 `1628a6c2e87ab519351598371712ace67584616d1573f510c80fbe48f3cd9bea` and
@@ -36,9 +41,10 @@ Withdrawn predecessor: source `949c3db`, tree `23a6f8d`, snapshot
 `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`. It is historical, no
 longer served and must not be used for scoring.
 
-Keep the exact no-rebuild snapshot running locally over Tailscale until the supervising human
-accepts it or an M80 finding explicitly withdraws it. A replacement candidate gets new source,
-tree, snapshot and evidence; withdrawn bytes remain historical and are never silently overwritten.
+Leave the shared Tailscale endpoint unserved until the amended replacement passes its clean gate,
+freeze and temporary-port byte verification. Start `:8080` only after that proof. The replacement
+gets new source, tree, snapshot and evidence; withdrawn bytes remain historical and are never
+silently overwritten. Run every UAT row below only against that future amended candidate.
 
 Use the ordinary editable workbench at approximately `1440x900` and `1024x720`, with coarse and
 fine zoom. Direct tests, not visual judgment, own exact residual thresholds, branch bytes,
@@ -164,9 +170,56 @@ second drag. A delayed update, release or cancel from the first gesture must nev
 or restore the second gesture; its own cancel must return exactly to the second pointer-down
 candidate without refresh.
 
+## U7 — explicit native line-line Fillet and unchanged Offset consumption
+
+Create exactly two standalone untrimmed native Profile Lines sharing one endpoint and author one
+ordinary line-line Fillet preview. Confirm the primary action is labelled **Apply computed** and the
+separate action is labelled **Apply native profile**. Cancel, re-enter Fillet, recreate the same
+preview and choose Apply native profile. It should visibly complete as one atomic edit: both
+original lines are shortened, one ordinary circular arc appears, the two tangent joins are shown
+consistently, one editable driving Radius owns the arc, the Fillet panel closes and focus returns to
+Select.
+
+Repeat the same manual two-line corner collection with the line parents picked first in forward
+order and then in reverse order. Before Apply, each preview must keep the canonical parent order
+while its arc contacts and tangent directions remain attached to their matching parents. Apply
+native profile from both orders, then edit Radius once: both resulting ordinary corners must retain
+the same visible tangent branches without a swapped contact, branch jump or blank scene.
+
+On another eligible preview, begin dragging the provisional Radius, move far enough to show a
+different valid radius, then press Escape to restore the exact pointer-down preview. Without
+leaving Fillet or recreating the corner, **Apply native profile** must remain enabled and publish
+that visibly restored radius. It must not report a stale-preview error or reuse the discarded
+sample's generated identity.
+
+While an eligible native action is visible, attempt to add a second corner whose trims cross the
+first and are rejected. The last valid preview should remain visible, and its native action must
+still apply directly rather than becoming stale because the rejected replacement consumed hidden
+revision state.
+
+Edit the Radius and an eligible outer line endpoint; the visible accepted result should remain
+finite and tangent without a branch jump or blank scene. One Undo must restore the original shared
+line-line corner and remove the arc/tangency/Radius output together; one Redo must restore the same
+rounded result in one step.
+
+Activate Modify → Offset and collect the resulting native line-arc-line path as one ordered open
+chain, including once in reverse traversal. Preview, distance drag and Apply should behave exactly
+like any other mixed native chain, with no Fillet-specific label, dependency or refusal. Separately
+create a normal computed Fillet and confirm its generated arc/discarded fragments remain visibly
+unavailable to Offset.
+
+Try a line-circle corner, more than one pending Fillet corner and a shared endpoint with a third
+incident Profile edge. Apply native profile should be disabled with the concise reason `shared
+corner must be owned only by the two selected source lines` for the third-owner case, without a
+persistent ID or document-error prefix. Attempting an unavailable path must leave the visible
+geometry and Undo stack unchanged and must not leave a stale global Problem. Cancel and re-enter
+Fillet to confirm an eligible corner recovers without refresh.
+
 ## Acceptance record
 
-Pending explicit supervising-human decision. Mechanical qualification or a live Tailscale server
-does not itself pass any UAT row and does not close M80. After acceptance, record the exact source,
-tree, immutable manifest and decision here; then perform the normal GitHub Pages publication and
-hosted-byte verification before marking the milestone complete.
+Pending clean committed-source release qualification, frozen replacement nomination and explicit
+supervising-human decision.
+Mechanical qualification or a live Tailscale server does not itself pass any UAT row and does not
+close M80. The superseded `b83dad2` snapshot cannot receive acceptance. After acceptance, record the
+exact replacement source, tree, immutable manifest and decision here; then perform the normal
+GitHub Pages publication and hosted-byte verification before marking the milestone complete.

@@ -2562,9 +2562,10 @@ Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte 
 
 ## M80 acceptance: native topology-preserving Profile Offset
 
-Status: **post-nomination amendments clean-qualified and immutably nominated on Tailscale; human
-UAT, publication and final acceptance remain pending**. The first candidate is withdrawn; GitHub
-Pages remains on accepted M79.
+Status: **amended implementation and development qualification complete; the clean replacement
+gate, frozen nomination, UAT, publication and final acceptance are pending**. The pre-amendment
+implementation and clean Tailscale nomination remain historical evidence, but that candidate is
+withdrawn from acceptance and is no longer served. GitHub Pages remains on accepted M79.
 
 - One Apply creates exactly one grouped driving-only `ProfileOffset` over one positive finite
   length scalar and either one complete bounded face including all holes or one manually ordered
@@ -2607,6 +2608,31 @@ Pages remains on accepted M79.
   transcript and identity high-water.
 - `geosolve-sketch-ops` owns deterministic same-family construction and the immutable exact-stamped
   proposal; the retained coordinator alone consumes it through the ordinary exact-CAS transaction.
+- Ordinary **Apply computed** remains the unchanged default ADR 0031 computed-feature path. Computed
+  Fillet arcs and discarded fragments remain unavailable Profile Offset operands; Offset gains no
+  computed-feature lookup, Fillet-special equation or revision-local dependency.
+- Explicit **Apply native profile** is available only for one current independently valid line-line Fillet
+  preview whose parents are two distinct standalone, untrimmed native Profile Lines sharing
+  exactly one persistent endpoint. The sharp point has exactly those two direct curve owners and
+  no other point-based dependent; neither line already participates in a Profile Offset or is
+  claimed by persisted computed-feature intent. Polyline-owned, dependent or high-valence corners,
+  line-circle/other-curve pairs, multiple/batched corners and conversion of an already published
+  computed Fillet remain typed unavailable cases and allocate nothing.
+- One successful Apply native profile physically shortens the two existing line parents, inserts one
+  ordinary native `CircularArc`, creates two exact endpoint `LineCurveTangency` owners and one
+  ordinary driving Radius dimension. It authenticates parent/end order and both normal sides, then
+  materializes their meaning into shortened endpoints, arc Start/End mapping and sweep, and
+  persistent contact tangent orientations; no Fillet-specific provenance survives.
+- The complete materialized corner must have finite regular geometry, independently revalidated
+  exact incidence/tangency/radius and branch semantics, and normalized hard residual at most
+  `1e-9`. It publishes atomically as one retained transaction and one Undo step; invalid, stale,
+  ambiguous or exhausted work preserves the exact document, accepted scene, history, transcript
+  and persistent-ID high-water. Undo restores the original corner exactly while high-water remains
+  monotonic; Redo restores the same native identities and branch state.
+- The published line-arc-line topology enters the existing Profile Offset native face/open-chain
+  authentication and proposal path unchanged. Its eligibility comes only from ordinary persistent
+  Line/CircularArc/Profile/connectivity definitions, never from remembered Fillet provenance.
+  Apply native profile creates no `FilletSet` and leaves the computed-feature sidecar unchanged.
 - Deleting or suppressing only the `ProfileOffset` association leaves every generated native target
   curve and its ordinary connectivity. Undo/Redo restores the same association and persistent
   identities; target geometry is not computed/revision-local output.
@@ -2637,7 +2663,7 @@ Pages remains on accepted M79.
   multi-edge and tangent chains, both directions/sides, source and target edits, traversal reversal,
   association deletion/suppression, topology barriers, stale preview, atomic failure, persistence,
   rank/DOF, audit ordering and native/WASM parity.
-- Current development evidence passes exactly 21 sketch, 16 topology, 18 operations, 12
+- Pre-amendment development evidence passes exactly 21 sketch, 16 topology, 18 operations, 12
   Offset-authoring, 392 full-editor, 7 focused direct-drag, 150 demo and 6 native plus 6 WASM
   annotation-parity tests. The 270-row golden
   survey is all `PASS`, and `--check` plus `--require-clean` exactly match reviewed authority.
@@ -2645,16 +2671,32 @@ Pages remains on accepted M79.
   current for fresh Offset capture/preview/Apply; every persistent source and target support must
   remain Profile geometry; ambient junction arms remain outside a selected path; and direct
   provisional dragging preserves exact rerendered hover/click, last-valid, cancel, per-gesture
-  effect and history authority.
-- Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
-  unchanged historical persistence/golden authority, Trunk and the complete release gate pass
-  before a no-rebuild distribution is frozen and byte-verified over Tailscale.
-- The withdrawn first Tailscale candidate stays historical and is no longer served. Only exact
-  replacement source `b83dad2`, tree `440d66e`, and the immutable candidate recorded in
-  `docs/M80_UAT.md` may receive human acceptance. GitHub Pages publication and hosted-byte
-  verification occur only after that decision and before milestone closure.
+  effect and history authority. This evidence remains valid for the unchanged Offset contract but
+  does not qualify Apply native profile.
+- Amended implementation and development qualification add focused owner coverage for eligibility, deterministic native
+  output/identities, exact tangency/Radius/branch semantics, independent residual validation,
+  atomicity, one-step Undo/Redo and direct unchanged Offset consumption, including relevant native/
+  WASM and thin-demo parity. One reviewed native-profile Fillet authoring family plus deterministic
+  transforms extends the stable golden matrix to 271 rows; the new row is reviewed explicitly at
+  fingerprint `input-cca82b1b78cd75c1`. Native Fillet sketch 7, topology 1, operations 2,
+  coordinator native-Fillet 9 plus rejected-replacement authority 1, external accepted-versus-
+  retained authority 1, demo native action 3, full editor 403, demo 154 and features 46 pass.
+  Formatting, warnings-denied workspace
+  Clippy, locked all-feature workspace tests, relevant WASM and the reviewed 271-row golden
+  survey/check/require-clean pass. `M80-F010` preserves exact accepted-preview patch authority;
+  `M80-F011` preserves canonical parent/contact/orientation pairing for reverse manual picks;
+  `M80-F012` retains the exact patch through radius rollback while renewing only computed parity;
+  `M80-F013` makes rejected preview replacement allocator-neutral; `M80-F014` freezes the concise
+  dependency/high-valence reason; and `M80-F015` controls native preparation work itself.
+- Warnings-denied Rustdoc, Trunk and the complete release gate must pass from committed clean
+  source before a no-rebuild distribution is frozen and byte-verified over Tailscale.
+- Both prior Tailscale candidates are historical. Exact source `b83dad2`, tree `440d66e`, and its
+  immutable snapshot are no longer served; they cannot receive final M80 acceptance. Only the
+  future amended candidate
+  recorded in `docs/M80_UAT.md` may receive human acceptance. GitHub Pages publication and hosted-
+  byte verification occur only after that decision and before milestone closure.
 
-Replacement mechanical nomination (2026-08-19): exact product source
+Withdrawn pre-amendment replacement nomination (2026-08-19): exact product source
 `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`, tree
 `440d66ef07b7df963164e69ebed4b75509f56bd6`, passes the pinned-Nix complete clean release gate
 from 13:38:33 through 13:50:00 AEST. Its 262,051-byte, 3,416-line log
@@ -2668,8 +2710,10 @@ The no-rebuild seven-file snapshot `/tmp/geosolve-m80-uat.hggNdd` is read-only (
 proxy-disabled eight-request verification at `100.94.63.83:18080` and `:8080` returned HTTP 200,
 zero redirects, no content encoding and snapshot-identical bytes. Evidence is
 `/tmp/geosolve-m80-freeze-evidence.1S2bfA`, `/tmp/geosolve-m80-temp-verify.mGxuDM` and
-`/tmp/geosolve-m80-final-verify.M0ThFH`; final PID `3837538` serves the exact snapshot at
-`http://100.94.63.83:8080/`. This is mechanical nomination only; human UAT remains pending.
+`/tmp/geosolve-m80-final-verify.M0ThFH`; final historical PID `3837538` served the exact snapshot at
+`http://100.94.63.83:8080/`. This remains valid pre-amendment mechanical evidence, but the native-
+Fillet scope amendment withdraws it from acceptance. That PID has exited, no service remains and no
+human UAT row may be accepted against these bytes.
 
 Withdrawn first mechanical nomination (2026-08-19): exact source
 `949c3dbde769cb7de41a9fd97ba0a40094bea14a`, tree
@@ -2693,7 +2737,9 @@ publication.
 M80 acceptance explicitly excludes topology-changing/computed Offset, trimming or loop removal,
 variable output cardinality, unsupported-curve approximation, canonical v5 support, Bake/Explode,
 mobile layout, B-rep/surface offset and 3D sketch behavior. None of these exclusions may be
-silently implemented as a fallback for an invalid native Profile Offset.
+silently implemented as a fallback for an invalid native Profile Offset. Native Fillet publication
+also excludes polyline-owned corners, line-circle and other curve pairs, batches, dependent or
+high-valence corners and conversion of existing published computed Fillets.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -53,13 +53,16 @@ construction/NURBS UAT and certified all-family visual profiles.
   `5959116526` and exact hosted-byte aggregate
   `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca` without replacing exact
   product authority `6874aa1`. M79 is complete.
-- **Active target:** M80 implements ADR 0037's native, topology-preserving Profile Offset. One
+- **Active target:** M80 implements amended ADR 0037's native, topology-preserving Profile Offset. One
   grouped driving dimension associates one authenticated bounded face (outer plus holes) or one
   manually ordered open chain with one-to-one exact line-family/circle/circular-arc target geometry.
   Explicit direction, traversal, junction provenance and miter/tangent branch state are persistent;
-  unchanged topology is an independent acceptance condition. Implementation and broad pre-
-  nomination qualification pass, but M80 remains outside the accepted baseline until clean
-  nomination, human UAT, publication and closure.
+  unchanged topology is an independent acceptance condition. Explicit **Apply native profile**
+  additionally materializes one eligible line-line Fillet as ordinary shortened lines, a native
+  arc, endpoint tangencies and a driving Radius; Offset consumes that topology without computed-
+  feature ownership. Amended implementation and development qualification are complete, but M80
+  remains outside the accepted baseline until the clean replacement gate, frozen nomination,
+  human UAT, publication and closure.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -177,9 +180,9 @@ A target statement must not be exposed as an implemented capability before its m
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
 current accepted ownership is the completed M10-M79 sequence, including the completed M70B
-reproduction cut, listed in section 15. M80's implementation exists and passes broad pre-
-nomination qualification, but it cannot be described as accepted baseline behavior until its
-remaining clean nomination, human UAT, publication and closure gate passes.
+reproduction cut, listed in section 15. M80's amended implementation and development qualification
+are complete, but it cannot be described as accepted baseline behavior until its remaining clean
+replacement gate, frozen nomination, human UAT, publication and closure gate passes.
 
 ## 3. Crate responsibilities
 
@@ -389,6 +392,20 @@ Both persist ordered source-target same-family edge pairs, exact shared-point/en
 junction provenance and explicit miter-turn or tangent branch state. Open terminals additionally
 own normal-translation policy. Full circles are face-only; single lines and circular arcs are valid
 open chains.
+
+The ADR 0037 amendment adds a separate native publication terminal to ordinary Fillet authoring.
+**Apply computed** remains ADR 0031's default and its revision-local fragments remain unavailable
+to Offset. **Apply native profile** is limited to one authenticated standalone line-line corner. It
+preserves the two line identities, replaces their sharp shared endpoint with two tangent contacts,
+adds one ordinary Profile `CircularArc`, two endpoint `LineCurveTangency` constraints and one
+driving Radius dimension. The held preview carries explicit sweep, endpoint mapping and tangent
+orientations; the coordinator prepares the complete independently accepted patch beside that exact
+preview and Apply only stamp-authenticates and consumes it. No `FilletSet` or Fillet provenance
+survives, so Profile Offset later sees only ordinary native line/arc topology.
+Radius-gesture rollback retains that exact single-owner sketch patch. Because discarded radius
+samples advance revision-local computed IDs, the coordinator renews only the restored patch's
+computed-scene parity and checkpoint from the current monotonic allocator; it does not reconstruct
+or re-solve the native edit.
 
 The runtime keeps `DimensionKind: Copy` by storing a `ProfileOffsetId` into a sketch-local arena.
 One document dimension lowers to one source whose `SketchSourceMapping::residual_ids` names all
@@ -1494,10 +1511,15 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   run `32116835502`, artifact `9317131695`, deployment `5959116526` and exact hosted-byte aggregate
   `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. M79 is part of the
   accepted baseline; `6874aa1` remains its exact qualified product authority.
-- M80: active under ADR 0037. The target is one grouped driving native Profile Offset over one
+- M80: active under amended ADR 0037. The target is one grouped driving native Profile Offset over one
   bounded face (outer plus holes) or one manually ordered open chain, exact same-family line/
   circle/circular-arc pairs, persistent traversal/connectivity/miter-or-tangent branch state and
   independent unchanged-topology validation. Generated target curves and ordinary connectivity
   survive association removal. Topology-changing computed Offset, unsupported-curve approximation
-  and canonical-v5 promotion are excluded. Implementation and broad pre-nomination qualification
-  pass; clean nomination, human UAT, publication and closure remain pending.
+  and canonical-v5 promotion are excluded. Explicit native line-line Fillet publication supplies
+  ordinary rounded Profile topology without changing the computed Fillet default or teaching
+  Offset about computed features. Amended implementation and development qualification are
+  complete. Retained preview replacement is allocator-transactional, native construction
+  preparation is cooperatively bounded and dependency refusal remains identity-free across the
+  demo adapter; the clean replacement gate, frozen nomination, human UAT, publication and closure
+  remain pending.

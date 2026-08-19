@@ -2,9 +2,11 @@
 
 # M80 implementation — native topology-preserving Profile Offset
 
-Status: **post-nomination amendments clean-qualified and immutably nominated on Tailscale**. The
-first candidate is withdrawn by `M80-F006` through `M80-F009`; human UAT, GitHub Pages publication
-and closure remain pending. GitHub Pages stays on accepted M79.
+Status: **amended implementation and development qualification complete; the clean replacement
+gate, frozen nomination, human UAT, GitHub Pages publication and closure remain pending**. The
+completed Profile Offset implementation and both prior nomination records remain valid historical
+evidence, but the `b83dad2` snapshot is withdrawn from acceptance by this amendment and is no
+longer served. Pages stays on accepted M79.
 
 Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 
@@ -26,9 +28,20 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 - `geosolve-demo-web` owns only Modify-menu/panel presentation, platform events, rendering and the
   disposable annotation-placement cache. It contains no offset equation, intersection, branch or
   topology-validity policy.
-- `geosolve-sketch-features` and ADR 0031 remain unchanged. M80 is not a computed feature.
+- ADR 0031 persistence, equations and default computed Apply remain unchanged. The transient
+  `geosolve-sketch-features::ComputedCircularArc` preview DTO now carries its independently
+  validated tangent orientations so native publication never infers them from a later seed or
+  solved result. M80 itself is not a computed feature.
+- Ordinary **Apply computed** remains the unchanged/default ADR 0031 computed-feature path. The
+  amended explicit **Apply native profile** action is a headless authoring/coordinator transaction that produces only
+  ordinary `geosolve-sketch` geometry and definitions. Offset continues to reject all computed
+  output and consumes the resulting native line-arc-line profile through its existing path.
+- `geosolve-sketch` owns exact native line-line eligibility, deterministic document construction,
+  ordinary tangency/Radius definitions and complete candidate validation. The headless editor owns
+  translation of one authenticated current Fillet preview into that request; the retained
+  coordinator owns the cloned-session trial, exact publication token and one-step history boundary.
 
-## Planned implementation slices
+## Implementation slices
 
 ### 1. Domain and wire compatibility — implemented
 
@@ -90,20 +103,65 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
   while reproduction copy/load deliberately omits and ignores it.
 - [x] Keep the tool active after Apply; explicit close/Cancel returns to Select.
 
-### 5. Qualification, UAT and closeout — replacement nominated; UAT pending
+### 5. Explicit native line-line Fillet publication — implemented
 
-- [x] Pass focused owner tests, native/WASM parity, unchanged historical persistence/golden checks,
-  formatting, warnings-denied workspace Clippy and locked all-feature workspace tests.
-- [x] Re-pass the exact clean release gate from committed replacement source, including Rustdoc,
-  demo WASM and Trunk, and record its complete log.
-- [x] Copy the exact replacement gate-produced distribution without rebuilding, freeze it
-  read-only, verify
-  every file locally, then keep it running and byte-verified on the shared Tailscale endpoint until
-  the supervising human accepts or replaces the candidate.
-- [x] Record exact replacement source/tree/log/manifest/server evidence in this file and
-  `docs/M80_UAT.md`.
-- [ ] Receive explicit UAT/scoped-close direction, publish the approved descendant through GitHub
-  Pages, verify hosted bytes and only then mark M80 complete across all milestone records.
+- [x] Keep ordinary **Apply computed** unchanged and default. Add a separate explicit **Apply
+  native profile** terminal action only when the exact current authoring preview contains one eligible
+  line-line corner; publish a typed disabled reason for every unavailable case.
+- [x] Authenticate before allocation two distinct standalone, untrimmed native Profile `Line`
+  parents sharing exactly one persistent endpoint, exactly two direct sharp-point curve owners and
+  no other point-based dependent. Reject an existing Profile Offset or persisted computed-feature
+  claim on either source, plus polyline-owned, dependent/high-valence, line-circle/other-curve,
+  multiple/batched and already-published computed-Fillet conversion cases.
+- [x] Build one deterministic immutable native proposal that preserves the parent lines and their
+  non-corner ends where semantically possible, physically shortens both corner ends, inserts one
+  ordinary `CircularArc`, adds two exact endpoint `LineCurveTangency` definitions and adds one
+  ordinary driving Radius dimension.
+- [x] Authenticate explicit first/second parent and retained-endpoint order, both normal-side
+  choices, arc Start/End order and sweep, and both tangent orientations from the held preview. The
+  ordinary result materializes those choices into line endpoints, arc/contact mapping, sweep and
+  persistent tangent orientations; it retains no Fillet-specific provenance and never reconstructs
+  a branch from post-solve coordinates. Canonical line-parent ordering co-permutes the computed
+  arc contacts and tangent orientations, so a reverse manual pick cannot attach otherwise-correct
+  preview branch data to the wrong canonical parent.
+- [x] Trial the whole edit in one cloned retained session and independently require finite regular
+  geometry, exact endpoint incidence/tangencies/radius, matching branch state and normalized hard
+  residual at most `1e-9`. Publish only one exact transaction/history step; invalid, stale,
+  ambiguous or exhausted attempts retain exact scene/document/history/transcript/allocator state.
+- [x] Prove exact one-step Undo restores the original shared corner while allocator high-water
+  remains monotonic, Redo restores the same native identities/branch state, and the resulting
+  ordinary line-arc-line path feeds the existing Profile Offset proposal and validator unchanged.
+  Computed Fillet fragments
+  remain rejected Offset provenance; create no `FilletSet` and leave the feature sidecar unchanged.
+- [x] Add the smallest owner regressions at the sketch/operation/editor/coordinator boundaries plus
+  thin native/WASM/presentation parity where authority crosses an adapter. No residual changed or
+  was added; existing `LineCurveTangency` and Radius audit/Jacobian coverage remains authoritative.
+- [x] Add and review one native-profile Fillet authoring family plus deterministic transforms in
+  the stable golden matrix; never bless new or changed rows without row-by-row review.
+
+### 6. Qualification, UAT and closeout — amended development qualification complete
+
+- [x] Pass the pre-amendment focused owner tests, native/WASM parity, unchanged historical
+  persistence/golden checks, formatting, warnings-denied workspace Clippy and locked all-feature
+  workspace tests.
+- [x] Pass the pre-amendment exact clean release gate from committed `b83dad2` source, including
+  Rustdoc, demo WASM and Trunk, and record its complete log.
+- [x] Copy that exact pre-amendment gate-produced distribution without rebuilding, freeze it
+  read-only and verify every file locally. It remained running and byte-verified through its
+  pre-amendment nomination, then retired when the scope amendment withdrew it from acceptance.
+- [x] Record exact pre-amendment source/tree/log/manifest/server evidence in this file and
+  `docs/M80_UAT.md`; retain it as superseded evidence rather than silently overwriting it.
+- [x] Pass all focused amended owner/collateral tests, formatting, warnings-denied workspace
+  Clippy, locked all-feature workspace tests, relevant native/WASM/golden/persistence parity and
+  the reviewed 271-row clean oracle from the development worktree.
+- [ ] Pass warnings-denied Rustdoc, Trunk and the exact complete clean release gate from committed
+  replacement source.
+- [ ] Copy the exact amended gate-produced distribution without rebuilding, freeze and byte-verify
+  it on a temporary Tailscale port, and replace `:8080` only after that temporary verification
+  passes. Record the new source/tree/log/manifest/server authority here and in `docs/M80_UAT.md`.
+- [ ] Receive explicit amended-candidate UAT/scoped-close direction, publish the approved
+  descendant through GitHub Pages, verify hosted bytes and only then mark M80 complete across all
+  milestone records.
 
 ## Required focused matrix
 
@@ -118,6 +176,21 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
 | Lifecycle | Delete/suppress association, Undo/Redo, reload, workspace/repro, cache loss |
 | Atomicity | Unsupported curves/provenance, stale preview, cancellation, exhaustion, invalid solve |
 | Numerics | Finite residuals/Jacobians, scale, rank/DOF, source mapping and audit order |
+| Native Fillet | One exact eligible line-line corner; forward/reverse manual line-pick order canonicalizes parents while keeping arc contacts/tangent orientations aligned; ordinary arc/tangencies/Radius; explicit branches; one-step Undo/Redo; invalid/stale/exhausted atomicity; unchanged Offset consumption |
+
+## Scope amendment — explicit native Fillet publication
+
+This is an approved product-scope amendment, not a reproduced defect and therefore receives no
+finding ID. The computed Fillet remains unchanged and default. The explicit **Apply native
+profile** action materializes exactly one eligible standalone line-line corner into persistent
+line-arc-line Profile topology under the implemented slice above. Existing computed output remains unavailable to
+Offset; the materialized ordinary topology reaches Offset through the already implemented native
+path.
+
+The amendment supersedes the `b83dad2` frozen candidate before human acceptance. Its implementation,
+clean gate, immutable snapshot and historical served-byte ledgers remain truthful pre-amendment
+evidence. The snapshot is no longer served. No UAT row, Pages publication or milestone closure may
+use those bytes.
 
 ## Finding ledger
 
@@ -236,6 +309,103 @@ from drag one during drag two, proves exact state/payload/pointer retention, the
 own restore and proves exact pointer-down rollback. No solver equation, residual, branch or
 persistence representation changed.
 
+### M80-F010 — native publication used retained seeds instead of the accepted preview
+
+Owner: retained sketch publication and exact feature-preview authority across
+`geosolve-sketch` and `geosolve-constraint-editor`. An independently reproduced corner whose
+retained line coordinates pointed opposite its current accepted solution could advertise native
+availability, then reject Apply at `contact.tangent_orientation`; availability had staged only a
+structural edit while Apply reconstructed and solved different work. Native Fillet preparation now
+preserves every pre-existing retained point bit, gives only newly allocated contact points a
+branch-valid retained seed, and solves the identical edit from the authenticated accepted document.
+The coordinator retains the complete non-cloneable `PreparedSketchPatch`, computed-scene parity,
+expected identities and history checkpoint beside the exact preview token. Availability reads that
+held result and Apply only consumes it through compare-and-swap; it never reconstructs or solves a
+second candidate. The exact accepted-versus-retained regression, stale/cached-unavailable tests,
+Undo/Redo checks and ordinary Offset chain/face tests pass with independently validated normalized
+hard residual at most `1e-9`.
+
+### M80-F011 — reverse manual line pick misaligned canonical parents and preview branches
+
+Owner: `geosolve-sketch-features` computed-Fillet evaluation. The native proposal canonicalized
+the two line parents, but a reverse manual pick left the computed arc contacts and tangent
+orientations in the pre-canonical order. The resulting preview could therefore pair valid branch
+metadata with the wrong parent. Evaluation now swaps both contacts and both tangent orientations
+whenever it swaps the parents; it does not reorder the computed arc itself or infer a new branch.
+`reverse_line_pick_order_keeps_canonical_parents_and_preview_contacts_aligned` freezes the owner
+contract. The editor regression
+`grouped_adjacent_authoring_is_canonical_and_keeps_corner_branches_on_radius_edit` now requires
+native requests from both forward and reverse manual line-pick orders. No residual equation,
+Jacobian, priority or persistence format changed.
+
+### M80-F012 — radius rollback advertised a native patch whose computed reservation was stale
+
+Owner: retained feature-preview authority in `geosolve-constraint-editor`. Restoring the exact
+pointer-down Fillet preview after a radius sample correctly retained its original single-owner
+native sketch patch, but the discarded sample had advanced the live computed-evaluation allocator.
+Native availability only saw a prepared cache entry, while Apply additionally authenticated the
+older allocator stamp and rejected the visibly restored candidate as
+`NativeFilletPreviewMismatch`.
+
+Rollback now keeps the exact same non-cloneable sketch patch and renews only its computed-scene
+parity, allocator reservation and history checkpoint against the current monotonic evaluation
+high-water. It neither re-solves nor reconstructs the native edit. The regression
+`native_fillet_preparation_tracks_radius_refresh_and_exact_origin_restore` proves the patch's heap
+identity is unchanged, the discarded evaluation revision is not reused, availability and Apply
+agree, and the restored native corner publishes atomically. The exact-held-preview regression also
+compares the rendered centre, contacts, radius, Start/End angles and sweep bit-for-bit with the
+accepted staged native arc. No residual equation, Jacobian, branch rule or persistence format
+changed.
+
+### M80-F013 — rejected preview replacement consumed the live computed revision
+
+Owner: retained feature-preview preparation in `geosolve-constraint-editor`. A valid eligible
+native preview was held while a replacement grouped Fillet preview was attempted with crossing
+shared-span trims. Computed evaluation reserved the next allocator revision before rejecting the
+replacement, but the coordinator retained the old visible preview and native patch. Availability
+therefore still reported that patch prepared while Apply rejected its now-stale computed stamp.
+
+Preview preparation and refresh now evaluate against a cloned allocator and publish its new
+high-water only after the replacement completes and is authenticated as Current. The exact
+regression
+`rejected_feature_preview_replacement_keeps_last_valid_native_apply_authoritative` proves the
+rejected replacement consumes no live revision, the old visible preview/cache remain exact,
+availability and Apply agree, and the native edit still publishes atomically. No residual,
+branch, persistence or durable allocator rule changed. The existing preview-token exhaustion
+regression now also requires that a successfully evaluated but unpublishable candidate cannot
+advance the live computed allocator.
+
+### M80-F014 — dependent and high-valence corners leaked document internals into disabled copy
+
+Owners: native eligibility in `geosolve-sketch`, retained error presentation in
+`geosolve-constraint-editor`, and the thin demo presentation adapter. Trial removal of a sharp
+point with another point-based dependent or a third incident line correctly returned
+`ObjectInUse`, but stringification exposed the persistent ID and generic document-error framing as
+the action's disabled reason.
+
+The domain now maps `ObjectInUse` for the authenticated sharp corner to the stable reason
+`shared corner must be owned only by the two selected source lines`. The coordinator removes only
+the native-Fillet `InvalidField` wrapper, preserving every other typed error. Exact sketch,
+coordinator and demo regressions require that sentence and prove the failed attempt is mutation-
+and allocation-neutral. No eligibility case was broadened.
+
+### M80-F015 — native preparation completed an uncontrolled validation before bounded work began
+
+Owners: native document preparation in `geosolve-sketch` and retained staging in
+`geosolve-constraint-editor`. The coordinator previously performed synchronous preparation,
+including a complete trial mutation and document validation, before installing the bounded
+prepared job. The later zero-budget test could therefore stop only after all meaningful
+preparation work had already run.
+
+`prepare_native_line_fillet_geometry_controlled` now owns the trial under one
+`OperationController`: it checkpoints before validation, defers redundant mutation-time full
+validation, performs final validation through that same controller and returns a typed incomplete
+outcome without patch or allocator publication. The unlimited convenience API preserves its
+public behavior. The coordinator uses the controlled boundary and maps incomplete preparation to
+`NativeFilletWorkStopped`. `controlled_native_fillet_preparation_exhaustion_is_state_neutral`
+proves exhaustion during preparation as well as during later prepared execution. No solver row or
+validation predicate changed.
+
 ### Pre-nomination interaction audit refinements
 
 The final editor/web audit also froze four cross-adapter behaviors without broadening mathematical
@@ -245,10 +415,11 @@ ordered chains render traversal arrows plus Start/End terminals; and tree/keyboa
 the same Offset semantic pick as the pointer without a duplicate canvas click. Focused authoring,
 scene and workbench regressions own those presentation-independent contracts.
 
-## Pre-nomination evidence
+## Pre-amendment development evidence
 
 The implementation has passed the following focused and broad development qualification. These
-runs do not replace the required clean-candidate release gate:
+runs remain evidence for the unchanged Profile Offset implementation, but they do not qualify the
+new Apply native profile path or replace the required amended clean-candidate release gate:
 
 ```text
 cargo test --locked -p geosolve-sketch --test m80_offset
@@ -284,7 +455,51 @@ cargo test --locked --workspace --all-features
 
 Historical M1-M79 evidence remains unchanged.
 
-## Replacement nomination evidence
+## Amended development qualification evidence
+
+The final amended development worktree, including `M80-F010`-`M80-F015`, passed the following
+commands. These are development evidence only; warnings-denied Rustdoc, Trunk and the complete
+clean committed-source release gate remain pending until the replacement commits below are
+created:
+
+```text
+cargo test --locked -p geosolve-sketch --test m80_native_fillet
+  # 7 passed
+cargo test --locked -p geosolve-sketch-topology --test m80_native_fillet
+  # 1 passed
+cargo test --locked -p geosolve-sketch-ops --test m80_native_fillet
+  # 2 passed
+cargo test --locked -p geosolve-constraint-editor --test m80_native_fillet_authority
+  # 1 passed
+cargo test --locked -p geosolve-constraint-editor --lib native_fillet
+  # 9 passed
+cargo test --locked -p geosolve-constraint-editor --lib feature_authoring::tests::
+  # 16 passed, including forward/reverse authenticated native requests before and after Radius edit
+cargo test --locked -p geosolve-sketch-features --lib
+  # 46 passed
+cargo test --locked -p geosolve-constraint-editor --lib
+  # 403 passed
+cargo test --locked -p geosolve-demo-web --lib
+  # 154 passed, including three native-action/presentation contracts
+cargo fmt --all -- --check
+git diff --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --workspace --all-features
+cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
+./scripts/golden-authoring-scene-oracle.sh --survey
+  # all 271 rows PASS
+./scripts/golden-authoring-scene-oracle.sh --check
+  # exact reviewed oracle match
+./scripts/golden-authoring-scene-oracle.sh --require-clean
+  # exact reviewed oracle match; no known defects
+```
+
+Focused `M80-F013` and user-facing `M80-F014` tests also passed individually. The nine retained
+native-Fillet filter tests, separately named F013 regression and accepted-versus-retained
+integration test total eleven retained/coordinator authority regressions. The stable golden bytes
+remain unchanged at 271 rows; these isolated findings did not add a systemic golden dimension.
+
+## Withdrawn pre-amendment replacement nomination evidence
 
 Exact product source `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`, tree
 `440d66ef07b7df963164e69ebed4b75509f56bd6`, ran the complete clean gate inside the repository's
@@ -319,15 +534,19 @@ ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
 
 Temporary service PID `3831926` first served only that snapshot on `100.94.63.83:18080`. Root plus
 all seven assets passed proxy-disabled, cache-bypassed identity requests before former PID
-`1946736` was retired. Final service `geosolve-m80-uat.service`, PID `3837538`, now serves the same
-snapshot at `http://100.94.63.83:8080/`; the temporary service was retained until the final ledger
-passed and is now stopped. Temporary evidence `/tmp/geosolve-m80-temp-verify.mGxuDM/results.tsv`
+`1946736` was retired. Final service `geosolve-m80-uat.service`, PID `3837538`, served the same
+snapshot at the pre-amendment nomination checkpoint on `http://100.94.63.83:8080/`; the temporary
+service was retained until the final ledger passed and is now stopped. Temporary evidence
+`/tmp/geosolve-m80-temp-verify.mGxuDM/results.tsv`
 has SHA-256 `1628a6c2e87ab519351598371712ace67584616d1573f510c80fbe48f3cd9bea`;
-final evidence `/tmp/geosolve-m80-final-verify.M0ThFH/results.tsv` has SHA-256
+final historical evidence `/tmp/geosolve-m80-final-verify.M0ThFH/results.tsv` has SHA-256
 `03e93b8fcd4d53231d7e3bafd95c6b4315ba2a12515bb8a4f763a91abc8c0b28`. Every request returned
 HTTP 200 from `100.94.63.83` with zero redirects, no `Location` or `Content-Encoding`, exact media
 type and length, snapshot-identical bytes and the same manifest aggregate; `/` equals
-`index.html`. GitHub Pages remains on accepted M79 until explicit human UAT acceptance.
+`index.html`. GitHub Pages remains on accepted M79. The native-Fillet scope amendment withdraws
+this candidate from acceptance even though its recorded gate and bytes remain valid. The recorded
+PID `3837538` has exited and no `geosolve-m80-uat.service` exists; the snapshot is not currently
+served and may not receive final human UAT acceptance.
 
 ## Withdrawn first nomination evidence
 
@@ -375,4 +594,7 @@ remains on accepted M79.
 
 The exclusions in `docs/M80_GOALS.md` are deliberate scope, not open implementation defects. Any
 new defect found while implementing or testing the solver/headless association receives an M80
-finding ID, owning-layer regression and replacement-candidate record before closure.
+finding ID, owning-layer regression and replacement-candidate record before closure. Native
+Fillet publication is implemented within its deliberate boundary: M80 excludes polyline-owned,
+line-circle/other-curve, batch, dependent/high-valence and already-published computed-Fillet
+conversion cases.

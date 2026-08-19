@@ -2,8 +2,10 @@
 
 # ADR 0037: Native topology-preserving Profile Offset
 
-Status: accepted and implemented for M80; broad pre-nomination qualification passes, while clean
-candidate nomination, human UAT and publication are pending.
+Status: accepted, amended and implemented for M80. The original Profile Offset decision and its
+pre-amendment qualification pass; the native line-line Fillet publication amendment and amended
+development qualification also pass. The previously frozen candidate is withdrawn from acceptance,
+so the clean replacement gate, frozen nomination, human UAT and publication are pending.
 
 ## Context
 
@@ -23,6 +25,13 @@ truthfully create or delete variables when an offset crosses a collapse, self-in
 contour-contact barrier. Conversely, routing every regular line/circular offset through computed
 topology would prevent the target from behaving like ordinary editable sketch geometry and would
 discard the useful one-to-one association.
+
+The completed ADR 0031 Fillet deliberately has the opposite ownership shape: persistent intent
+produces revision-local generated fragments outside the native constraint graph. Offset must not
+learn to treat those fragments as persistent edges. M80 instead needs one narrow authoring bridge
+for the useful regular case: an explicit action may publish exactly one eligible line-line Fillet
+as ordinary shortened lines plus a native circular arc. Once published, that topology is an
+ordinary Profile chain and requires no Fillet-specific Offset semantics.
 
 ## Decision
 
@@ -133,6 +142,54 @@ computed-feature boundaries, arrangement-derived partial fragments and any ellip
 arc, rational conic, Bezier, B-spline or NURBS edge are rejected before target allocation. M80 does
 not approximate an unsupported curve with lines or arcs.
 
+### Explicit native line-line Fillet publication
+
+Ordinary Fillet authoring remains ADR 0031 computed-feature authoring by default. Computed Apply is
+unchanged, and both its generated arc and its discarded source fragments remain ineligible Offset
+operands. M80 adds a separate explicit **Apply native profile** terminal action; it is not an automatic
+conversion and does not change the representation of an ordinary computed Fillet.
+
+Apply native profile accepts exactly one current line-line Fillet preview. Both parents must be distinct,
+standalone, untrimmed native Profile `Line` curves with exactly one authenticated shared persistent
+endpoint. The sharp point must have exactly those two direct curve owners and no other point-based
+dependent; neither source may already participate in a Profile Offset or be claimed by persisted
+computed-feature intent. A remote line endpoint may remain connected and compatible ordinary line
+constraints may survive the full candidate trial. The corner may not be a polyline-owned span,
+high-valence junction or other dependent corner whose endpoint replacement would affect another
+owner. The exact accepted scene/input, parent identities, shared endpoint, current radius and
+complete computed-preview branch state are authenticated before allocation. Coordinate
+coincidence, a computed fragment or an already published computed Fillet cannot supply eligibility.
+
+One successful proposal preserves the two line identities and their non-corner endpoints where
+semantically possible, shortens their corner ends to the exact tangent contacts and inserts one
+ordinary native `CircularArc`. Two ordinary endpoint `LineCurveTangency` definitions own the exact
+line/arc incidence and tangency, and one ordinary driving Radius dimension owns the arc radius.
+The proposal authenticates explicit first/second parent order, retained line endpoints, both
+normal-side choices, arc Start/End order and sweep, and both tangent orientations. Ordinary output
+materializes those choices into shortened endpoints, arc/contact mapping, sweep and persistent
+tangent orientations; it retains no Fillet-specific provenance. None of those choices may be re-
+derived from post-solve coordinates. Canonicalizing the line-parent order must co-permute the
+computed arc contacts and tangent orientations, so reverse manual parent selection preserves their
+attachment rather than changing the computed arc or reconstructing a branch.
+
+The retained coordinator trials the complete proposal in one cloned session and independently
+requires finite regular geometry, exact endpoint incidence, both tangencies, the driving radius,
+the preserved branch state and normalized hard residual at most `1e-9`. Only then may it publish
+all native edits and definitions in one transaction and one history step. Any invalid, stale,
+ambiguous or exhausted attempt allocates and publishes nothing. Undo restores the exact original
+line-line corner while persistent-ID high-water remains monotonic; Redo restores the same native
+identities and branch state.
+
+The published line-arc-line path then enters Profile Offset through the existing native topology,
+operation, residual and unchanged-topology contracts in this ADR. Offset receives ordinary line,
+circular-arc and `LineCurveTangency` provenance only; it neither reads an ADR 0031 feature nor
+adds a Fillet-special residual.
+
+Apply native profile creates no `FilletSet` and does not mutate the computed-feature sidecar. The
+coordinator prepares and retains the complete independently accepted native patch beside the exact
+current provisional preview; Apply authenticates its stamp and consumes that held patch without
+reconstruction. It is not a conversion of already persistent feature intent.
+
 ### Residuals, anchors and branch validation
 
 For each line pair, M80 reuses ADR 0020's supporting-line equations. With source unit tangent `u`,
@@ -230,6 +287,13 @@ or an ordered collected chain against the exact accepted scene/topology snapshot
 distance, branch capture, preview lifecycle and one atomic construction plan. Hover and pointer-
 down use the same headless face/edge owner.
 
+The existing headless Fillet authoring owner additionally exposes Apply native profile only for its exact
+current one-corner eligible preview; computed Apply remains the default. It publishes a typed
+disabled reason for every unsupported parent/topology/dependency case. The retained coordinator,
+not the browser, authenticates the preview and branch payload, trials the native document patch and
+owns the single publication/Undo boundary. Presentation adds only the explicit action and forwards
+its exact effect.
+
 The demo exposes **Modify → Offset** through the established persistent bottom-left canvas panel.
 The panel shows operand kind/status, Distance, Flip, Apply and Cancel. A valid remembered distance
 is process-local; otherwise the initial value is `0.1 * model_scale`. Blur, canvas clicks and
@@ -267,6 +331,9 @@ reproduction capsule omits them when copied and ignores them when restored.
   deterministic and fail closed at topology barriers.
 - Removing the association leaves useful ordinary target geometry and connectivity rather than
   deleting or baking opaque output.
+- Explicit Apply native profile turns one unambiguous line-line Fillet into ordinary persistent
+  line-arc-line topology with ordinary tangency and Radius owners; the existing Offset path can
+  consume it without a computed-feature dependency or a Fillet-specific equation.
 - The admitted family is intentionally narrow; unsupported curves receive a clear refusal instead
   of an approximate or topology-changing result.
 - Draft-v5 can preserve the active demo/workspace feature without silently expanding supported
@@ -290,6 +357,15 @@ reproduction capsule omits them when copied and ignores them when restored.
   coordinate coincidence and seed-dependent intersection choice are not persistent design intent.
 - **Serialize M80 through the live v4 enum:** rejected because it would mutate the accepted language
   of historical version labels without a schema decision.
+- **Let Offset consume computed Fillet fragments:** rejected because revision-local output is not
+  persistent sketch topology and would make the association depend on a second feature evaluator.
+- **Make every Fillet native by default:** rejected because ADR 0031 computed Fillet behavior is
+  accepted, supports broader parent/batch cases and must remain unchanged. Native publication is an
+  explicit terminal action for the narrow eligible case.
+- **Convert an already published computed Fillet in place:** rejected for M80 because feature
+  dependency migration and exact history identity need a separate contract.
+- **Generalize Apply native profile to polylines, line-circle/curve pairs or batches:** rejected for this
+  amendment because endpoint replacement and branch/dependency ownership are materially broader.
 
 ## Verification
 
@@ -299,21 +375,38 @@ and target edits; deletion/suppression retention; topology barriers; Undo/Redo a
 workspace/repro round trips; stale/cancelled/resource-limited atomicity; source mapping, rank/DOF,
 structured audits and finite-difference Jacobians at scales `1e-6`, `1` and `1e6`.
 
-`docs/M80_IMPLEMENTATION.md` records the focused counts and the `M80-F001`-`M80-F009` owner
+The amendment additionally requires focused owner coverage for exact single-corner eligibility;
+deterministic native line shortening, circular-arc and definition identities; two exact endpoint
+`LineCurveTangency` owners; one driving Radius; explicit normal sides, endpoint order, sweep and
+tangent orientations; finite independent hard-residual/domain validation; atomic invalid/stale/
+exhausted rejection; exact one-step Undo/Redo; and unchanged Profile Offset consumption of the
+published line-arc-line chain.
+
+`docs/M80_IMPLEMENTATION.md` records the focused counts and the `M80-F001`-`M80-F015` owner
 regressions for native-origin authentication, bidirectional arc gauges, exact endpoint-contact
 ownership, current accepted-state capture after point edits and the persistent Profile-role
 invariant, selected-set branch scope, exact provisional-distance gesture authority and one-span
 self-closure rejection, including per-gesture authentication against delayed preview and terminal
-effects from an earlier drag over the same provisional proposal.
+effects from an earlier drag over the same provisional proposal. `M80-F011` additionally freezes
+forward/reverse manual line-pick canonicalization with paired computed arc contacts and tangent
+orientations. `M80-F012` retains the exact single-owner native sketch patch across radius-origin
+rollback while renewing only its computed-scene reservation from the current monotonic allocator;
+the restored preview cannot advertise an Apply that will reject solely because a discarded sample
+consumed an evaluation revision.
+`M80-F013` keeps a rejected replacement preview from advancing the live computed allocator beneath
+the still-visible native action. `M80-F014` maps dependent/high-valence sharp corners to one
+concise user-facing reason without persistent IDs or document-error boilerplate. `M80-F015` puts
+the complete native preparation trial and final validation under cooperative work control.
 
 Focused native/WASM and workbench tests, unchanged historical persistence bytes and the stable
-golden gate pass as pre-nomination evidence. Exact source `b83dad2`, tree `440d66e`, then passes the
-complete clean release gate; its no-rebuild output is frozen read-only at
+golden gate pass as pre-amendment evidence. Exact source `b83dad2`, tree `440d66e`, passed the
+complete clean release gate; its no-rebuild output remains frozen read-only at
 `/tmp/geosolve-m80-uat.hggNdd` and byte-verified on the shared Tailscale endpoint with aggregate
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37`.
-`docs/M80_UAT.md` must be run against that exact candidate. GitHub Pages publication and milestone
-closure occur only after the supervising human accepts the focused scorecard or explicitly records
-another scoped close decision.
+The scope amendment withdraws those bytes from final acceptance; they are no longer served.
+`docs/M80_UAT.md` must be run against the future exact replacement.
+GitHub Pages publication and milestone closure occur only after the supervising human accepts that
+focused scorecard or explicitly records another scoped close decision.
 
 ## Scope boundary
 
@@ -321,4 +414,6 @@ M80 adds no topology-changing Offset, computed Offset definition, output trimmin
 arrangement-derived fragments, computed-on-native chaining, Bake/Explode, canonical v5 support,
 curve approximation, mobile UI, B-rep offset, surface offset or 3D sketch behavior. Ellipses,
 elliptical arcs, rational conics, Beziers, B-splines and NURBS remain unsupported operands even when
-a local mathematical offset exists.
+a local mathematical offset exists. Native Fillet publication excludes polyline-owned corners,
+line-circle and other curve pairs, multi-corner batches, dependent/high-valence corners and
+conversion of already published computed Fillets.

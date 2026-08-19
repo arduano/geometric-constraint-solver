@@ -2,10 +2,13 @@
 
 # M80 — native topology-preserving Profile Offset
 
-Status: **implementation, clean replacement qualification and immutable Tailscale nomination
-complete; human UAT, publication and closure pending**. ADR 0037 owns the architecture. M80 adds
-the narrow constraint-friendly Offset and deliberately leaves topology-changing Offset for a later
-computed-feature milestone.
+Status: **amended implementation and development qualification complete; the clean replacement
+gate, frozen nomination, human UAT, publication and closure remain pending**. The pre-amendment
+implementation and qualification remain valid historical evidence, but their frozen candidate is
+withdrawn from acceptance and is no longer served. ADR 0037 owns the architecture. M80 adds the
+narrow constraint-friendly Offset plus one explicit native line-line Fillet publication path, and
+deliberately leaves topology-changing Offset for a later computed-feature milestone. GitHub Pages
+remains on accepted M79.
 
 ## Product outcome
 
@@ -19,6 +22,12 @@ One Apply accepts exactly one operand:
 
 - one bounded face, including its outer boundary and all holes; or
 - one manually collected, ordered open chain, including a valid one-line or one-circular-arc chain.
+
+M80 also adds an explicit **Apply native profile** alternative for exactly one eligible line-line
+Fillet corner. **Apply computed** remains the unchanged default and still creates ADR 0031 computed
+feature intent. Apply native profile instead materializes the current exact one-corner preview as
+ordinary persistent line-arc-line sketch topology so the existing Offset tool can consume it
+without any Fillet-specific Offset path.
 
 Face `Outward` expands the outer loop and shrinks holes; `Inward` reverses that behavior. Open-chain
 `Left`/`Right` is relative to the stored collection traversal. Flip changes only this explicit
@@ -56,8 +65,50 @@ The following are unavailable and reject before target allocation:
 - any offset that would collapse an edge or loop, self-intersect, split, merge, contact another
   contour, lose or invert a hole, change nesting or cross a persisted miter/tangent branch barrier.
 
+Computed Fillet arcs and discarded fragments remain unavailable Offset operands. Only the ordinary
+native line/circular-arc geometry produced by the explicit Apply native profile action can subsequently
+participate in a Profile Offset operand.
+
 These are intentional product boundaries, not partial implementation. Variable-cardinality
 topology change belongs to the later ADR 0031 computed Offset.
+
+## Native Fillet authoring amendment
+
+Apply native profile is available only for one current, independently valid line-line Fillet preview whose
+parents are two distinct standalone, untrimmed native Profile `Line` curves sharing exactly one
+persistent endpoint. The sharp point must have exactly those two direct curve owners and no other
+point-based dependent; neither source line may already participate in a Profile Offset or be
+claimed by persisted computed-feature intent. A remote endpoint may remain connected to ordinary
+geometry, and compatible ordinary line constraints may survive the trial. Eligibility is
+authenticated before any persistent identity is allocated; coordinate coincidence cannot
+manufacture the corner.
+
+One successful Apply native profile atomically:
+
+- physically shortens both existing line curves to the exact tangent contacts while preserving
+  their non-corner ends and line identities where semantically possible;
+- inserts one ordinary native `CircularArc` with deterministic persistent identity;
+- publishes two exact endpoint `LineCurveTangency` definitions as the ordinary incidence and
+  tangency owners;
+- publishes one ordinary driving Radius dimension for the inserted arc; and
+- authenticates explicit first/second parent order, retained line endpoints and both normal-side
+  choices, then materializes them into the shortened endpoints, arc Start/End mapping and sweep,
+  and persistent contact tangent orientations. Canonical parent ordering co-permutes computed arc
+  contacts and tangent orientations, including for reverse manual picks; no Fillet-specific
+  provenance record survives.
+
+The complete proposed document is solved and independently checked for finite geometry, exact
+incidence/tangency/radius semantics, explicit branch agreement and normalized hard residual at
+most `1e-9` before publication. Publication is one retained transaction and one Undo step. Undo
+restores the exact pre-publication corner in one history position while persistent-ID high-water
+remains monotonic; Redo restores the same native identities and branch state. Any invalid, stale,
+ambiguous or exhausted attempt changes no
+document, accepted scene, history, transcript or persistent-ID high-water.
+
+The result is ordinary persistent Profile topology. Its line-arc-line chain enters the existing
+M80 Offset authentication, construction, equation and topology-validation path unchanged; Offset
+does not read a Fillet feature, generated-fragment ID or Fillet-specific equation. Apply native profile
+creates no `FilletSet` and leaves the computed-feature sidecar unchanged.
 
 ## Persistent design intent
 
@@ -91,6 +142,13 @@ authenticated topology index. `geosolve-constraint-editor` owns a separate offse
 exact face/chain ownership, selection/traversal, distance/direction, branch capture, preview
 invalidation and atomic retained commit. The browser owns only the established bottom-left panel,
 platform events and rendering.
+
+The existing Fillet panel keeps **Apply computed** as its default. When and only when the current
+authoring state contains one eligible line-line corner, it also exposes **Apply native profile**
+with a headless disabled reason otherwise. The retained coordinator prepares and holds the exact
+solved native patch beside that preview, including independent validation and computed-feature
+parity; Apply only authenticates and consumes that held patch. The browser only renders and
+dispatches the action.
 
 The panel contains operand status, Distance, Flip, Apply and Cancel. It persists through blur,
 canvas clicks and pan/zoom; explicit close or Cancel returns to Select. The first valid default is
@@ -148,15 +206,29 @@ not change; workspace v6 and `GEOSOLVE_REPRO_V1` continue to use the strict draf
   stale preview, cancellation, allocation exhaustion and native/WASM parity pass.
 - Thin demo tests own panel persistence, accessible labels, face/edge hover-click parity,
   non-selectable preview, annotation movement/cache recovery and exact headless effect routing.
+- Native-Fillet owner tests cover exact one-corner eligibility, deterministic line shortening and
+  arc identity, two endpoint `LineCurveTangency` owners, one driving Radius, all explicit branch
+  fields, independent hard residual/domain validation, atomic rejection, exact one-step Undo/Redo
+  and direct consumption of the resulting native line-arc-line chain by unchanged Profile Offset.
+  Radius-gesture rollback retains its exact prepared native sketch patch while renewing only
+  revision-local computed parity, so availability and Apply agree without evaluation-ID reuse.
+  Rejected replacement previews consume no live computed revision, dependent/high-valence corners
+  expose one concise identity-free disabled reason, and the complete native preparation trial runs
+  under cooperative cancellation/work limits.
+- Add one reviewed native-profile Fillet authoring family to the stable golden matrix with its
+  deterministic transforms; review every new row rather than blessing changed bytes wholesale.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
   unchanged historical persistence/golden authority, Trunk and the complete release gate pass.
 - The exact gate-produced distribution is copied without rebuilding, frozen read-only and byte-
   verified at the shared Tailscale endpoint. Human UAT in `docs/M80_UAT.md` explicitly accepts that
-  candidate before Pages publication and milestone closure.
+  replacement candidate before Pages publication and milestone closure. The previously nominated
+  `b83dad2` snapshot is pre-amendment evidence and cannot receive final M80 acceptance.
 
 ## Explicit deferrals
 
 M80 adds no computed or topology-changing Offset, intersection trimming, loop removal, fragment
 generation, Bake/Explode, approximation tolerance, canonical v5 support, computed-on-computed
-chaining, mobile layout, B-rep/surface offset or 3D sketch operation. It does not broaden any
-unsupported analytic or parametric curve family.
+chaining, mobile layout, B-rep/surface offset or 3D sketch operation. Apply native profile does not cover a
+polyline-owned corner, line-circle or other curve pair, multiple/batched corners, dependent or
+high-valence corners, or conversion of an already published computed Fillet. It does not broaden
+any unsupported analytic or parametric curve family.

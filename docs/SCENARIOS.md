@@ -2659,12 +2659,46 @@ Focused native/WASM/presentation tests and the complete clean gate precede a no-
 snapshot kept byte-verified on `http://100.94.63.83:8080/` through `docs/M80_UAT.md`; Pages and
 closure require an explicit human decision.
 
-Status: clean replacement source `b83dad2`, tree `440d66e`, snapshot
+Status: pre-amendment source `b83dad2`, tree `440d66e`, snapshot
 `/tmp/geosolve-m80-uat.hggNdd` and ordered-manifest aggregate
 `d8d740fb852e793925ce4e54e8777a225b68ea5cfa39b2f36060bd3566938e37` pass the complete gate,
 temporary-port verification and final byte verification at `http://100.94.63.83:8080/`. The former
-`949c3db` snapshot is withdrawn and no longer served. Human UAT, Pages publication and closure
-remain pending.
+`949c3db` snapshot is withdrawn and no longer served. The native-Fillet scope amendment withdraws
+`b83dad2` from acceptance; its recorded server has exited and the snapshot is no longer served.
+Amended development qualification passes. The clean replacement gate, frozen nomination, human
+UAT, Pages publication and closure remain pending.
+
+### M80-O9 - Explicit native line-line Fillet publishes ordinary Offset-ready topology
+
+Start from exactly two distinct standalone, untrimmed native Profile Lines sharing one persistent
+endpoint and one independently valid single-corner Fillet preview. **Apply computed** remains the
+unchanged/default ADR 0031 computed-feature publication. **Apply native profile** authenticates the
+exact accepted input, both parent identities, shared endpoint, radius, normal sides, retained
+endpoints, parent/arc endpoint order, sweep and tangent orientations before allocating anything.
+The sharp point has exactly those two direct curve owners and no other point-based dependent;
+neither source has an existing Profile Offset or persisted computed-feature claim.
+
+The coordinator prepares and retains the exact complete solved native patch beside the held
+preview; the terminal action authenticates and consumes that patch without reconstruction. The
+native proposal physically shortens the two parent lines, inserts one ordinary persistent
+`CircularArc`, adds exactly two endpoint `LineCurveTangency` definitions and one driving Radius
+dimension, then trials the complete document. Independently require finite regular geometry, exact
+incidence/tangency/radius and branch predicates, and normalized hard residual at most `1e-9`.
+Publish all changes in one retained transaction and one history step. Undo restores the exact
+original shared corner while persistent-ID high-water remains monotonic; Redo restores the same
+native identities and explicit branch state.
+
+Feed the resulting native line-arc-line path, in both collection traversals and as a rounded face
+corner, through the existing Profile Offset proposal and validator unchanged. An ordinary computed
+Fillet arc and its discarded fragments remain rejected. Apply native profile creates no
+`FilletSet` and leaves the computed-feature sidecar unchanged.
+Polyline-owned, line-circle/other-curve, batched, dependent/high-valence, stale and already-
+published computed-Fillet conversion attempts reject before allocation and preserve exact
+document/scene/history/transcript/high-water state.
+
+Status: implemented; focused and broad amended development qualification pass. The clean
+replacement release gate and frozen nomination remain pending. The superseded `b83dad2` candidate
+contains no Apply native profile action and cannot satisfy this scenario.
 
 ### M80-F001 - Computed Fillet fragments cannot impersonate native operands
 
@@ -2723,7 +2757,9 @@ unchanged and outside the association. Selecting all three incident arms reports
 branch; disconnected and closed selections keep their existing typed failures and no state mutates.
 
 Status: fixed at the editor and operation-planning owners; focused and collateral mechanical
-qualification and replacement mechanical nomination pass; human UAT remains pending.
+qualification and pre-amendment mechanical nomination pass. That candidate is superseded by the
+native-Fillet amendment; amended development qualification now passes, while clean nomination and
+human UAT remain pending.
 
 ### M80-F007 - Provisional shared distance has a direct authoring gesture
 
@@ -2742,7 +2778,9 @@ advertising a grab which the identical authenticated press rejects; the current 
 hoverable immediately.
 
 Status: fixed at the headless interaction and thin browser owners; focused and collateral
-mechanical qualification and replacement nomination pass; human UAT remains pending.
+mechanical qualification and pre-amendment nomination pass. That candidate is superseded by the
+native-Fillet amendment; amended development qualification now passes, while clean nomination and
+human UAT remain pending.
 
 ### M80-F008 - A self-adjacent span is closed, not a one-edge open chain
 
@@ -2753,7 +2791,9 @@ planning must report `ProfileOffsetClosedChain`, and neither path may allocate a
 retained state. A genuinely open single arc remains eligible.
 
 Status: fixed at the editor and operation-planning owners; focused mechanical qualification passes.
-Replacement mechanical nomination passes; human UAT remains pending.
+Pre-amendment mechanical nomination passes, but that candidate is superseded by the native-Fillet
+amendment; amended development qualification now passes, while clean nomination and human UAT
+remain pending.
 
 ### M80-F009 - Delayed Offset effects cannot consume a newer distance drag
 
@@ -2766,7 +2806,107 @@ preserving the second state, visible payload, pointer capture and epoch. Cancell
 must emit its distinct epoch and restore its exact pointer-down state and payload.
 
 Status: fixed at the retained editor/coordinator owner; focused mechanical qualification passes.
-Replacement mechanical nomination passes; human UAT remains pending.
+Pre-amendment mechanical nomination passes, but that candidate is superseded by the native-Fillet
+amendment; amended development qualification now passes, while clean nomination and human UAT
+remain pending.
+
+### M80-F010 - Native Fillet publication consumes the exact accepted preview
+
+Create a line-line Fillet preview whose retained first-line seed points opposite the independently
+accepted solved line while preserving the same explicit line branch. Native availability must
+stage a complete independently accepted ordinary line-arc-line patch from that accepted preview;
+Apply must consume that exact held patch without reconstruction. The durable result preserves all
+pre-existing retained point bits, gives only new contacts branch-valid retained seeds, keeps both
+tangent orientations explicit, and independently validates normalized hard residual at most
+`1e-9`. Removing, superseding or making the held cache unavailable must reject without changing
+document, accepted state, history, transcript or allocator high-water.
+
+Status: fixed at the retained sketch session and coordinator preview-authority owners. Focused
+accepted-versus-retained, cache/CAS, native topology and unchanged Offset chain/face regressions
+pass; amended clean nomination and human UAT remain pending.
+
+### M80-F011 - Reverse manual line pick keeps canonical parents and preview branches aligned
+
+Author the same eligible native line-line corner by manually picking the two line parents in
+forward and reverse order. Both previews retain the same canonical parent order, but each computed
+arc contact and tangent orientation must remain paired with its corresponding canonical parent.
+The reverse path swaps those two contact/orientation entries when it canonicalizes the parents; it
+does not reorder the arc or reconstruct a branch from coordinates. The owner regression
+`reverse_line_pick_order_keeps_canonical_parents_and_preview_contacts_aligned` freezes this
+evaluation contract. The grouped editor regression
+`grouped_adjacent_authoring_is_canonical_and_keeps_corner_branches_on_radius_edit` requires native
+requests from both pick orders and retains the corner branches through a Radius edit. No residual
+equation, Jacobian, priority, persistence format or golden-row expansion changed.
+
+Status: fixed at the computed-Fillet evaluation owner; focused owner and editor regressions pass.
+Amended development qualification passes; the clean committed-source release gate, frozen
+nomination and human UAT remain pending.
+
+### M80-F012 - Restored radius origin remains natively publishable without revision reuse
+
+Prepare one eligible native line-line Fillet, capture its radius-gesture origin, preview a changed
+radius and then cancel back to the exact pointer-down candidate. The temporary sample advances the
+computed-evaluation allocator, but rollback must retain the original single-owner native sketch
+patch. It renews only that patch's computed-scene parity and checkpoint from the current monotonic
+allocator. Native availability and Apply must therefore agree on the restored preview, the
+discarded evaluation revision must not be reused, and Apply must publish the visible origin as one
+atomic history step.
+
+`native_fillet_preparation_tracks_radius_refresh_and_exact_origin_restore` freezes the patch
+identity, allocator and terminal-Apply contract. The companion exact-preview regression requires
+the held rendered centre, contacts, radius, Start/End angles and sweep to match the staged accepted
+native arc bit-for-bit. A parity-refresh failure remains a typed cached native-unavailable state
+without invalidating the still-current computed preview or mutating durable sketch state.
+
+Status: fixed at the retained coordinator preview-authority owner; focused regression passes.
+Amended development qualification passes; the clean committed-source release gate, frozen
+nomination and human UAT remain pending.
+
+### M80-F013 - Rejected preview replacement preserves the live allocator and native action
+
+Prepare one eligible native line-line Fillet preview and confirm Apply native profile is
+available. Without clearing it, attempt to replace it with a grouped preview whose shared-span
+trims cross and must reject. The rejected replacement must not advance the live computed-
+evaluation allocator. The exact prior preview, native prepared patch and metadata remain held;
+availability and Apply must still agree, and Apply publishes that visible prior corner atomically.
+
+`rejected_feature_preview_replacement_keeps_last_valid_native_apply_authoritative` freezes the
+retained coordinator boundary. Computed evaluation uses a candidate allocator and publishes its
+high-water only after a Current replacement succeeds, so failure cannot silently stale retained
+authority.
+
+Status: fixed and mechanically passing. The clean committed-source release gate, frozen nomination
+and human UAT remain pending.
+
+### M80-F014 - Native dependency refusal is concise and identity-free
+
+At an otherwise valid two-line Fillet corner, add either another point-based dependent or a third
+incident line at the sharp point. Computed preview remains available, but Apply native profile is
+disabled with exactly `shared corner must be owned only by the two selected source lines`. The
+reason must contain no persistent ID, `InvalidField` wrapper or generic document-error wording,
+and the refusal allocates or mutates nothing.
+
+The sketch-domain invalid/ineligible matrix freezes the dependency and high-valence cases. The
+coordinator regression `native_fillet_high_valence_disabled_reason_omits_document_error_boilerplate`
+and the demo presentation regression require the same exact sentence across the adapter.
+
+Status: fixed and mechanically passing. The clean committed-source release gate, frozen nomination
+and human UAT remain pending.
+
+### M80-F015 - Native preparation itself obeys cooperative work control
+
+Start native preparation with zero document-validation work. It must return typed WorkExhausted
+before completing the preparation trial, leaving the source document bit-for-bit unchanged and
+publishing no expected identities or patch. The unlimited convenience path remains behaviorally
+equivalent for ordinary callers, while the coordinator maps incomplete bounded preparation to
+`NativeFilletWorkStopped` and retains all visible/durable authority.
+
+`controlled_native_fillet_preparation_exhaustion_is_state_neutral` exercises exhaustion during
+preparation and during the subsequent prepared job. Final trial validation shares the same
+controller; no complete uncontrolled validation may run before bounded work begins.
+
+Status: fixed and mechanically passing. The clean committed-source release gate, frozen nomination
+and human UAT remain pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes
 
