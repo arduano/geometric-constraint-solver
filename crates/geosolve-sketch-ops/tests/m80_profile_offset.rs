@@ -4,13 +4,14 @@ use std::sync::Arc;
 
 use geosolve_sketch::{
     CancellationToken, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentArcSweep,
-    DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentEdit,
-    DocumentFaceOffsetDirection, DocumentLineSide, DocumentObjectId, DocumentOffsetTraversal,
-    DocumentProfileOffsetJunctionBranch, DocumentProfileOffsetJunctionOwner,
-    DocumentProfileOffsetOperand, DocumentProfileOffsetTerminalPolicy, DocumentSolveRequest,
-    GeometryRole, OperationControl, OperationLimits, OperationOutcome,
-    PreparedSketchOperation as PreparedDocumentOperation, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDocument, SolverConfig, cancellation_pair,
+    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentDimensionDefinition,
+    DocumentEdit, DocumentFaceOffsetDirection, DocumentLineSide, DocumentObjectId,
+    DocumentOffsetTraversal, DocumentProfileOffsetJunctionBranch,
+    DocumentProfileOffsetJunctionOwner, DocumentProfileOffsetOperand,
+    DocumentProfileOffsetTerminalPolicy, DocumentSolveRequest, GeometryRole, OperationControl,
+    OperationLimits, OperationOutcome, PreparedSketchOperation as PreparedDocumentOperation,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
+    cancellation_pair,
 };
 use geosolve_sketch_ops::{
     SketchOperationApplyError, SketchOperationIncompleteReason, SketchOperationKind,
@@ -1233,6 +1234,10 @@ fn ordered_open_chain_preserves_side_traversal_joins_and_terminal_policy() {
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one operation-boundary regression covers ambient branches, selected branching, closure and exact publication"
+)]
 fn m80_f006_selected_path_ignores_unselected_incident_branches_but_cannot_absorb_them() {
     let mut document = SketchDocument::new(10.0).expect("document");
     let start = document.add_point("start", [0.0, 0.0]).unwrap();
@@ -1350,6 +1355,95 @@ fn m80_f006_selected_path_ignores_unselected_incident_branches_but_cannot_absorb
     );
     assert!(session.design_document().curve(branch.curve).is_some());
     assert!(session.design_document().curve(closing.curve).is_some());
+}
+
+#[test]
+fn m80_f008_one_span_self_adjacent_arc_rejects_as_a_closed_chain() {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let center = document.add_point("center", [0.0, 0.0]).unwrap();
+    let radius = document
+        .add_scalar("radius", 2.0, ScalarUnit::Length, ScalarDomain::Positive)
+        .unwrap();
+    let start_angle = document
+        .add_scalar("start angle", 0.0, ScalarUnit::Angle, ScalarDomain::Finite)
+        .unwrap();
+    let end_angle = document
+        .add_scalar(
+            "end angle",
+            std::f64::consts::TAU - 1.0e-12,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .unwrap();
+    let arc = CurveSpan::line(
+        document
+            .add_curve(
+                "self-adjacent arc",
+                CurveDefinition::CircularArc {
+                    center,
+                    radius,
+                    start_angle,
+                    end_angle,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                },
+            )
+            .unwrap(),
+    );
+    let start = document
+        .add_curve_contact("arc start", arc, 0.0, 0, ContactNeighborhood::Start, None)
+        .unwrap();
+    let end = document
+        .add_curve_contact("arc end", arc, 1.0, 0, ContactNeighborhood::End, None)
+        .unwrap();
+    document
+        .add_constraint(
+            "closed arc endpoints",
+            DocumentConstraintDefinition::EndpointContinuity {
+                first_contact: start,
+                second_contact: end,
+                continuity: DocumentCurveContinuity::G0,
+            },
+        )
+        .unwrap();
+    let session = session(document);
+    let index = operand_index(&session);
+    let native_start = geosolve_sketch_topology::OffsetEndpointRef {
+        span: arc,
+        endpoint: OffsetEndpointRole::Start,
+    };
+    let native_end = geosolve_sketch_topology::OffsetEndpointRef {
+        span: arc,
+        endpoint: OffsetEndpointRole::End,
+    };
+    assert!(
+        index
+            .adjacent_endpoints(native_start)
+            .any(|adjacent| adjacent == native_end),
+        "the explicit endpoint-continuity source must authenticate self-adjacency"
+    );
+
+    let before = session.design_document().clone();
+    let result = execute(
+        &session,
+        SketchOperationRequest::ProfileOffset {
+            label: "invalid self-adjacent open chain".into(),
+            distance: 0.5,
+            operand: SketchProfileOffsetOperand::OpenChain {
+                spans: vec![OffsetDirectedSpan {
+                    span: arc,
+                    traversal: OffsetTraversal::Forward,
+                }],
+                side: DocumentLineSide::Left,
+            },
+            operand_index: index,
+        },
+    );
+    assert!(matches!(
+        result,
+        SketchOperationResult::Incomplete(incomplete)
+            if incomplete.reason == SketchOperationIncompleteReason::ProfileOffsetClosedChain
+    ));
+    assert_eq!(session.design_document(), &before);
 }
 
 #[test]
