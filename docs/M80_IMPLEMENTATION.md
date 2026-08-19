@@ -4,9 +4,9 @@
 
 Status: **amended implementation, clean release qualification and immutable Tailscale nomination
 complete; human UAT, GitHub Pages publication and closure remain pending**. The
-completed Profile Offset implementation and both prior nomination records remain valid historical
-evidence, but the `b83dad2` snapshot is withdrawn from acceptance by this amendment and is no
-longer served. Exact amended source `05b8b3b`, tree `4b66560`, is the current mechanically nominated
+completed Profile Offset implementation and prior nomination records remain valid historical
+evidence, but `M80-F016` withdraws the `05b8b3b` snapshot from acceptance and it is no longer
+served. Exact replacement source `29d8e41`, tree `44ecb95`, is the current mechanically nominated
 candidate at `http://100.94.63.83:8080/`. Pages stays on accepted M79.
 
 Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
@@ -156,10 +156,10 @@ Architecture owner: ADR 0037. Product owner: `docs/M80_GOALS.md`.
   Clippy, locked all-feature workspace tests, relevant native/WASM/golden/persistence parity and
   the reviewed 271-row clean oracle from the development worktree.
 - [x] Pass warnings-denied Rustdoc, Trunk and the exact complete clean release gate from committed
-  replacement source `05b8b3b`, tree `4b66560`.
+  F016 replacement source `29d8e41`, tree `44ecb95`.
 - [x] Copy the exact amended gate-produced distribution without rebuilding, freeze and byte-verify
   it on temporary Tailscale port `18080`, then serve and reverify those same bytes on `:8080`.
-  Record the exact source/tree/log/manifest/server authority here and in `docs/M80_UAT.md`.
+  Record the exact source/tree/gate/manifest/server authority here and in `docs/M80_UAT.md`.
 - [ ] Receive explicit amended-candidate UAT/scoped-close direction, publish the approved
   descendant through GitHub Pages, verify hosted bytes and only then mark M80 complete across all
   milestone records.
@@ -407,6 +407,30 @@ public behavior. The coordinator uses the controlled boundary and maps incomplet
 proves exhaustion during preparation as well as during later prepared execution. No solver row or
 validation predicate changed.
 
+### M80-F016 — line–arc tangency omitted native arc-angle variables from the solve layout
+
+The supplied native-Fillet reproductions had identities
+`GEOSOLVE_REPRO_V1:12083:cf25674611a32202` and
+`GEOSOLVE_REPRO_V1:11441:60d3d06bea383818`. In the first, dragging the circular-arc centre should
+change both line directions and both arc endpoint angles. In the second, the arc centre is fixed
+while a free remote line endpoint should retain two-dimensional motion and drive the corresponding
+arc endpoint angle. Before this repair, only direct trim-handle edits changed those angles; centre
+motion could blank/reject and remote endpoint motion collapsed to line-length-only editing.
+
+The native Fillet had no hidden lock and its representation remains ordinary: two
+`LineCurveTangency` constraints plus Radius over shortened lines and one `CircularArc`. The defect
+was in compiler incidence. Persistent arc Start/End scalars existed, but
+`LineCurveTangency` activated only points, radius and contact parameters, so neither arc-angle
+scalar entered the solve layout when tangency was its only consumer.
+
+`LineCurveTangency` against a circular arc now activates both Start and End angle variables. No new
+residual equation, Fillet-specific relation, inferred branch or persistence format was added.
+`line_arc_tangency_activates_arc_angles_and_matches_finite_differences` freezes two angle variables
+and seven-variable tangency incidence with central finite differences. The two `m80_native_fillet`
+regressions independently require finite validated hard residual at most `1e-9`, diagonal centre
+motion changing both angles, and fixed-centre remote-endpoint motion reaching the requested 2D
+target while changing its corresponding angle.
+
 ### Pre-nomination interaction audit refinements
 
 The final editor/web audit also froze four cross-adapter behaviors without broadening mathematical
@@ -458,13 +482,13 @@ Historical M1-M79 evidence remains unchanged.
 
 ## Amended development qualification evidence
 
-The final amended development worktree, including `M80-F010`-`M80-F015`, passed the following
+The replacement development worktree, including `M80-F010`-`M80-F016`, passed the following
 commands before nomination. The clean committed-source release evidence in the next section now
 supersedes their former development-only status:
 
 ```text
 cargo test --locked -p geosolve-sketch --test m80_native_fillet
-  # 7 passed
+  # 9 passed
 cargo test --locked -p geosolve-sketch-topology --test m80_native_fillet
   # 1 passed
 cargo test --locked -p geosolve-sketch-ops --test m80_native_fillet
@@ -499,7 +523,45 @@ native-Fillet filter tests, separately named F013 regression and accepted-versus
 integration test total eleven retained/coordinator authority regressions. The stable golden bytes
 remain unchanged at 271 rows; these isolated findings did not add a systemic golden dimension.
 
-## Amended replacement nomination evidence
+## F016 replacement nomination evidence
+
+Exact product source `29d8e4144b6b1eba1146e5add9e8d93b2f61dee3`, tree
+`44ecb9542992606e5d337dd6c35ee5c9340de305`, ran
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from a clean committed
+worktree and exited 0 at 2026-08-19 23:24:39 AEST. The gate passed formatting/diff hygiene,
+warnings-denied workspace Clippy and Rustdoc, locked all-feature workspace tests, all relevant
+native/WASM parity binaries, the unchanged reviewed 271-row golden authority, demo WASM, benchmark
+compilation, M14/M32 budgets, the 116.64-second 256-body sparse crossover, licence/package checks
+and Trunk 0.21.14 release assembly. The only diagnostics were the longstanding non-failing Cargo
+notices for packages declaring both `license` and `license-file`.
+
+Without rebuilding, the gate-produced `dist` was copied to `/tmp/geosolve-m80-uat.CPuVgx`,
+byte-compared, and frozen as directory `0555` with seven regular non-symlink files `0444`. Its
+C-locale ordered-manifest aggregate is
+`75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 27,327 | `12861ad65e947547f3ac9b3566717cd228bb7c7177c7138b6340b6005b624d88` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-31b56afde4878e35.js` | 33,750 | `a38e64303db375907a421cf466acb7af1cc194b0f7a3cb345e1e9e86095f4e66` |
+| `geosolve-demo-web-31b56afde4878e35_bg.wasm` | 7,578,159 | `cf549c47b4b891370c5bf5968aed325af73f79af558e2aeb34b9908c43ed7d13` |
+| `index.html` | 31,033 | `66e80630ca387574a0ee1f1bab2975656851379913e7cedb75e64575b1b925f0` |
+| `styles-a41d7984178d1121.css` | 38,291 | `957c7809eab90b61a2a72266af8f8660390b8c04fcce7b6c9e06398582097bbf` |
+
+Temporary PID `1030585` served only that snapshot at `100.94.63.83:18080`. All seven assets and
+root passed proxy-disabled identity-encoded HTTP 200, exact media/length/body, no redirect or
+content-encoding checks; root equalled `index.html`. Evidence is
+`/tmp/geosolve-m80-f016-temp-verify.vWAgyX`. Only then was PID `704439` retired and PID `1031421`
+started the same snapshot at `http://100.94.63.83:8080/`; identical final verification passed into
+`/tmp/geosolve-m80-f016-final-verify.2T6bqX` before the temporary listener stopped. GitHub Pages
+remains on accepted M79 and human M80 UAT remains pending.
+
+This exact replacement withdraws `05b8b3b` from current UAT. Later documentation-only commits do
+not replace `29d8e41` as product-source authority.
+
+## Withdrawn pre-F016 amended nomination evidence
 
 Exact product source `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree
 `4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`, ran the complete clean gate inside the repository's
@@ -539,13 +601,13 @@ retired. Temporary evidence `/tmp/geosolve-m80-temp-verify.XAdkcr/results.tsv` h
 `239a8f3c793aa6bf62d8dfdda8e98cdc16e2f0f32a473d8a51a3b1cf135078b1`; final evidence
 `/tmp/geosolve-m80-final-verify.a7QGvU/results.tsv` has SHA-256
 `a8e44bae9a5c23ad952c69b2b402505fb836324956669dc45a71b555feeb82a4`. Both fetched manifests
-have the frozen aggregate above. PID `704439` remains the sole M80 listener for focused human UAT;
-GitHub Pages remains on accepted M79.
+have the frozen aggregate above. This was the current listener before `M80-F016`; PID `704439` has
+now exited and those bytes are no longer served.
 
-This is mechanical nomination, not human acceptance. Later documentation-only evidence commits do
-not replace `05b8b3b` as exact product-source authority. No GitHub Pages publication or milestone
-closure is authorized until the supervising human accepts `docs/M80_UAT.md` or explicitly records
-another scoped decision.
+This remains historical mechanical qualification, not human acceptance. `M80-F016` replaced its
+product-source authority and UAT snapshot. No GitHub Pages publication or milestone closure is
+authorized until the supervising human accepts `docs/M80_UAT.md` or explicitly records another
+scoped decision.
 
 ## Withdrawn pre-amendment replacement nomination evidence
 
@@ -594,7 +656,7 @@ type and length, snapshot-identical bytes and the same manifest aggregate; `/` e
 `index.html`. GitHub Pages remains on accepted M79. The native-Fillet scope amendment withdraws
 this candidate from acceptance even though its recorded gate and bytes remain valid. The recorded
 PID `3837538` has exited and the historical snapshot is not served; the service name is now reused
-only by current candidate PID `704439` and immutable directory `/tmp/geosolve-m80-uat.kJj5JB` above.
+only by current candidate PID `1031421` and immutable directory `/tmp/geosolve-m80-uat.CPuVgx` above.
 The historical snapshot may not receive final human UAT acceptance.
 
 ## Withdrawn first nomination evidence

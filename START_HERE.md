@@ -207,11 +207,13 @@ arc topology that the unchanged Offset path consumes as a chain or face. Amended
 complete; exact preview publication, reverse-pick branch pairing and radius-origin rollback now
 have focused authority regressions. Rejected replacement previews are allocator-neutral, native
 preparation is cooperatively bounded and dependent/high-valence corners expose concise identity-
-free disabled copy. Amended development and clean release qualification are complete. Exact source
-`05b8b3b`, tree `4b66560`, now serves its no-rebuild immutable candidate at
+free disabled copy. `M80-F016` additionally activates the circular-arc endpoint angles already
+owned by ordinary line-arc tangency, restoring centre and remote-line-angle propagation without a
+Fillet-specific residual. Replacement development and clean release qualification are complete.
+Exact source `29d8e41`, tree `44ecb95`, now serves its no-rebuild immutable candidate at
 `http://100.94.63.83:8080/` after temporary- and final-port byte verification. Human UAT, Pages
 publication and closure remain pending. The superseded pre-amendment snapshots are historical
-evidence and are no longer served.
+evidence and are no longer served; this now includes the withdrawn pre-F016 `05b8b3b` snapshot.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -609,8 +611,9 @@ M79 subsequently completed exact stationary inference cohorts, deterministic ful
 browser-context retirement and the authenticated redundant-direction retry. Exact qualified source
 `6874aa1` remains product authority and Pages publication is byte-verified. M80 is the only active
 milestone: amended ADR 0037's grouped native Profile Offset and explicit native line-line Fillet
-publication now pass clean qualification and immutable Tailscale nomination at exact source
-`05b8b3b`; run the prepared focused UAT against those bytes next. Do not route Offset through
+publication plus the F016 arc-angle propagation repair now pass clean qualification and immutable
+Tailscale nomination at exact source `29d8e41`; run the prepared focused UAT against those bytes
+next. Do not route Offset through
 computed features or admit a topology-changing fallback.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at

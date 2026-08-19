@@ -2564,8 +2564,8 @@ Tailscale snapshot remains accepted UAT evidence and Pages is final public-byte 
 
 Status: **amended implementation, clean release qualification and immutable Tailscale nomination
 complete; UAT, publication and final acceptance are pending**. The pre-amendment
-implementation and clean Tailscale nomination remain historical evidence, but that candidate is
-withdrawn from acceptance and is no longer served. Exact amended source `05b8b3b`, tree `4b66560`,
+implementation and clean Tailscale nominations remain historical evidence, and `M80-F016`
+withdraws the `05b8b3b` candidate from acceptance. Exact replacement source `29d8e41`, tree `44ecb95`,
 is the current mechanically nominated candidate at `http://100.94.63.83:8080/`. GitHub Pages
 remains on accepted M79.
 
@@ -2680,7 +2680,7 @@ remains on accepted M79.
   atomicity, one-step Undo/Redo and direct unchanged Offset consumption, including relevant native/
   WASM and thin-demo parity. One reviewed native-profile Fillet authoring family plus deterministic
   transforms extends the stable golden matrix to 271 rows; the new row is reviewed explicitly at
-  fingerprint `input-cca82b1b78cd75c1`. Native Fillet sketch 7, topology 1, operations 2,
+  fingerprint `input-cca82b1b78cd75c1`. Native Fillet sketch 9, topology 1, operations 2,
   coordinator native-Fillet 9 plus rejected-replacement authority 1, external accepted-versus-
   retained authority 1, demo native action 3, full editor 403, demo 154 and features 46 pass.
   Formatting, warnings-denied workspace
@@ -2689,17 +2689,39 @@ remains on accepted M79.
   `M80-F011` preserves canonical parent/contact/orientation pairing for reverse manual picks;
   `M80-F012` retains the exact patch through radius rollback while renewing only computed parity;
   `M80-F013` makes rejected preview replacement allocator-neutral; `M80-F014` freezes the concise
-  dependency/high-valence reason; and `M80-F015` controls native preparation work itself.
+  dependency/high-valence reason; `M80-F015` controls native preparation work itself; and
+  `M80-F016` activates ordinary circular-arc endpoint angles for line-arc tangency. The two supplied
+  reproduction identities `GEOSOLVE_REPRO_V1:12083:cf25674611a32202` and
+  `GEOSOLVE_REPRO_V1:11441:60d3d06bea383818` now retain centre/line-angle propagation with
+  independently validated hard residual at most `1e-9`; no residual equation, Fillet-specific
+  relation, inferred branch or persistence format was added.
 - Warnings-denied Rustdoc, Trunk and the complete release gate pass from committed clean source
-  `05b8b3b`, tree `4b66560`; its no-rebuild distribution is frozen and byte-verified over
+  `29d8e41`, tree `44ecb95`; its no-rebuild distribution is frozen and byte-verified over
   Tailscale.
-- Both prior Tailscale candidates are historical. Exact source `b83dad2`, tree `440d66e`, and its
-  immutable snapshot are no longer served; they cannot receive final M80 acceptance. Only the
-  amended `05b8b3b` candidate recorded in `docs/M80_UAT.md` may receive human acceptance. GitHub
+- All prior Tailscale candidates are historical. Exact sources `05b8b3b`, `b83dad2` and their
+  immutable snapshots are no longer served; they cannot receive final M80 acceptance. Only the
+  replacement `29d8e41` candidate recorded in `docs/M80_UAT.md` may receive human acceptance. GitHub
   Pages publication and hosted-byte verification occur only after that decision and before
   milestone closure.
 
-Amended mechanical nomination (2026-08-19): exact product source
+F016 replacement mechanical nomination (2026-08-19): exact product source
+`29d8e4144b6b1eba1146e5add9e8d93b2f61dee3`, tree
+`44ecb9542992606e5d337dd6c35ee5c9340de305`, ran
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from a clean committed
+worktree and exited 0 at 23:24:39 AEST. It passes formatting/diff hygiene, warnings-denied
+Clippy/Rustdoc, locked all-feature workspace tests, native/WASM parity, unchanged reviewed 271-row
+golden authority, demo WASM, benchmark compilation, M14/M32 budgets, the 116.64-second sparse
+crossover, licence/package checks and Trunk 0.21.14. The exact no-rebuild snapshot
+`/tmp/geosolve-m80-uat.CPuVgx` is read-only (`0555` directory, seven `0444` regular non-symlink
+files) with ordered-manifest aggregate
+`75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`. All seven files and root
+passed exact proxy-disabled, identity-encoded HTTP 200 media/length/body checks without redirects or
+content encoding, first under temporary PID `1030585` at `:18080`, then under PID `1031421` at
+`:8080`; root equals `index.html`. Evidence is `/tmp/geosolve-m80-f016-temp-verify.vWAgyX` and
+`/tmp/geosolve-m80-f016-final-verify.2T6bqX`. The temporary listener is stopped; PID `1031421`
+serves the replacement for pending human UAT. GitHub Pages remains on accepted M79.
+
+Withdrawn pre-F016 amended mechanical nomination (2026-08-19): exact product source
 `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree
 `4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`, passes the pinned-Nix complete clean release gate
 from 20:55:13 through 21:14:59 AEST. Its 269,339-byte, 3,498-line log
@@ -2719,8 +2741,8 @@ final result ledgers have respective SHA-256
 `239a8f3c793aa6bf62d8dfdda8e98cdc16e2f0f32a473d8a51a3b1cf135078b1` and
 `a8e44bae9a5c23ad952c69b2b402505fb836324956669dc45a71b555feeb82a4`. Temporary service
 `geosolve-m80-temp.service`, PID `701584`, is stopped. Final service `geosolve-m80-uat.service`, PID
-`704439`, serves the exact frozen candidate at `http://100.94.63.83:8080/`. This passes mechanical
-nomination only. Human UAT, Pages publication and final acceptance remain pending.
+`704439`, served the exact frozen candidate at `http://100.94.63.83:8080/`. `M80-F016` withdrew
+this nomination; PID `704439` has exited and those bytes are no longer served.
 
 Withdrawn pre-amendment replacement nomination (2026-08-19): exact product source
 `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`, tree

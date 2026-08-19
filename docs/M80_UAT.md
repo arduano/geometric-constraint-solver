@@ -4,37 +4,43 @@
 
 Status: **amended implementation, clean release qualification and immutable Tailscale nomination
 complete; focused human UAT is pending**. Mechanical evidence does not pass any UAT row. Run this
-scorecard only against the exact current candidate below; both pre-amendment snapshots remain
+scorecard only against the exact current candidate below; all prior snapshots remain
 withdrawn historical evidence and must not be used to score final M80 acceptance.
 
-Product source: `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`
+Product source: `29d8e4144b6b1eba1146e5add9e8d93b2f61dee3`
 
-Candidate tree: `4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`
+Candidate tree: `44ecb9542992606e5d337dd6c35ee5c9340de305`
 
-Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m80-uat.service`, PID `704439`)
+Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m80-uat.service`, PID `1031421`)
 
-Immutable snapshot: `/tmp/geosolve-m80-uat.kJj5JB` (directory `0555`; seven regular non-symlink
+Immutable snapshot: `/tmp/geosolve-m80-uat.CPuVgx` (directory `0555`; seven regular non-symlink
 files `0444`)
 
 Ordered-manifest aggregate:
-`8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`
+`75ee83edc5a5985272e00c005dae95c9091851a7c928c2b55e9a7b096f328997`
 
-Clean gate: 2026-08-19 20:55:13–21:14:59 AEST;
-`/tmp/geosolve-m80-clean-gate.05b8b3b.nix.log` (269,339 bytes, 3,498 lines, SHA-256
-`df1bdd31f2bbafe949f2340e6ec93a23c730feac34a1e39cebe36ad56fee578a`)
+Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` completed with
+exit 0 at 2026-08-19 23:24:39 AEST. It included the complete locked all-feature workspace,
+native/WASM parity, warnings-denied Clippy/Rustdoc, reviewed 271-row golden, performance, licence
+and Trunk release-build gates.
 
-Freeze/HTTP evidence: `/tmp/geosolve-m80-freeze-evidence.nfn0t9`,
-`/tmp/geosolve-m80-temp-verify.XAdkcr` and `/tmp/geosolve-m80-final-verify.a7QGvU`. Temporary PID
-`701584` first served the exact snapshot at `:18080`; only after its eight-request proof passed did
-PID `704439` serve the same directory at `:8080`. The temporary and final `results.tsv` ledgers have
-respective SHA-256 `239a8f3c793aa6bf62d8dfdda8e98cdc16e2f0f32a473d8a51a3b1cf135078b1` and
-`a8e44bae9a5c23ad952c69b2b402505fb836324956669dc45a71b555feeb82a4`. Root plus every file
-returned HTTP 200 with exact media type, length and bytes, zero redirects, no content encoding and
-the frozen manifest aggregate; `/` equals `index.html`. The temporary listener is stopped.
+Freeze/HTTP evidence: temporary verification `/tmp/geosolve-m80-f016-temp-verify.vWAgyX` and final
+verification `/tmp/geosolve-m80-f016-final-verify.2T6bqX`. Temporary PID `1030585` first served the
+exact snapshot at `:18080`; only after all eight requests passed was the prior candidate retired and
+PID `1031421` started on `:8080`. Root plus every file returned HTTP 200 with exact media type,
+length and bytes, zero redirects, no content encoding and the frozen manifest aggregate; `/` equals
+`index.html`. The temporary listener is stopped.
 
 GitHub Pages remains on accepted M79; M80 publication is not authorized before human acceptance.
 
 ## Withdrawn nomination history
+
+Superseded pre-F016 product source: `05b8b3b70b4b389e25bcd5f7a085c2a40953326e`, tree
+`4b6656092fbc7682ba5f64d0ad5d26c5e7279bae`. Its snapshot
+`/tmp/geosolve-m80-uat.kJj5JB`, aggregate
+`8b6c49402c4fb9ba5dd6ba54468f0c3e3c790c3c0a679e7f6116a34edb3bd215`, and complete clean-gate
+evidence remain valid historical qualification, but `M80-F016` withdraws those bytes from current
+UAT. Recorded PID `704439` has exited and the snapshot is no longer served.
 
 Superseded pre-amendment product source: `b83dad2b18cdfbb241fc012337ac5dbfa7234a9a`
 
@@ -67,9 +73,9 @@ Withdrawn predecessor: source `949c3db`, tree `23a6f8d`, snapshot
 `18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9`. It is historical, no
 longer served and must not be used for scoring.
 
-The amended replacement passed its clean gate, immutable freeze and temporary-port verification
+The F016 replacement passed its clean gate, immutable freeze and temporary-port verification
 before taking over `:8080`. Withdrawn bytes remain historical and are never silently overwritten.
-Run every UAT row below only against exact source `05b8b3b`, tree `4b66560`, and the immutable
+Run every UAT row below only against exact source `29d8e41`, tree `44ecb95`, and the immutable
 snapshot recorded above.
 
 Use the ordinary editable workbench at approximately `1440x900` and `1024x720`, with coarse and
@@ -228,6 +234,14 @@ finite and tangent without a branch jump or blank scene. One Undo must restore t
 line-line corner and remove the arc/tangency/Radius output together; one Redo must restore the same
 rounded result in one step.
 
+Focused `M80-F016` recheck: drag the native arc centre diagonally. Both line angles and both arc
+endpoint angles should propagate, with no blank scene. Then lock the arc centre, leave an eligible
+remote line endpoint free and drag that endpoint off-axis. The line angle and corresponding arc
+endpoint angle should change; motion must not collapse to line-length-only editing. An explicit
+Horizontal or Vertical constraint on a line still legitimately retains that orientation. These
+checks correspond to supplied reproduction identities `GEOSOLVE_REPRO_V1:12083:cf25674611a32202`
+and `GEOSOLVE_REPRO_V1:11441:60d3d06bea383818`.
+
 Activate Modify → Offset and collect the resulting native line-arc-line path as one ordered open
 chain, including once in reverse traversal. Preview, distance drag and Apply should behave exactly
 like any other mixed native chain, with no Fillet-specific label, dependency or refusal. Separately
@@ -243,8 +257,8 @@ Fillet to confirm an eligible corner recovers without refresh.
 
 ## Acceptance record
 
-Pending explicit supervising-human decision on the nominated `05b8b3b` candidate.
+Pending explicit supervising-human decision on the nominated `29d8e41` candidate.
 Mechanical qualification or a live Tailscale server does not itself pass any UAT row and does not
-close M80. The superseded `b83dad2` snapshot cannot receive acceptance. After acceptance, record
+close M80. The superseded `05b8b3b` and `b83dad2` snapshots cannot receive acceptance. After acceptance, record
 the UAT decision here; then perform the normal GitHub Pages publication and hosted-byte
 verification before marking the milestone complete.
