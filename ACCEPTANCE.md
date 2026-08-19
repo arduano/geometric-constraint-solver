@@ -2622,8 +2622,9 @@ remain pending**. The first candidate is withdrawn; GitHub Pages remains on acce
   surfaces even though ordinary selection cannot acquire them. Distance dragging uses the shared
   three-pixel threshold and platform capture, samples absolutely from one frozen pointer-down rail,
   keeps the last complete valid preview across invalid samples, restores the pointer-down candidate
-  on cancellation, keeps Apply unavailable while captured and adds no history until the exact held
-  preview is later applied.
+  on cancellation, authenticates every preview/release/restore effect to one monotonic gesture
+  identity, keeps Apply unavailable while captured and adds no history until the exact held preview
+  is later applied.
 - A negative Distance entered before operand selection preserves transient direction intent for the
   next face/chain. Unsupported or dynamically invalid targets retain typed unavailable hover and
   click reasons. Ordered chains expose traversal arrows and Start/End terminals, and pointer, tree
@@ -2637,14 +2638,14 @@ remain pending**. The first candidate is withdrawn; GitHub Pages remains on acce
   association deletion/suppression, topology barriers, stale preview, atomic failure, persistence,
   rank/DOF, audit ordering and native/WASM parity.
 - Current development evidence passes exactly 21 sketch, 16 topology, 18 operations, 12
-  Offset-authoring, 391 full-editor, 7 focused direct-drag, 150 demo and 6 native plus 6 WASM
+  Offset-authoring, 392 full-editor, 7 focused direct-drag, 150 demo and 6 native plus 6 WASM
   annotation-parity tests. The 270-row golden
   survey is all `PASS`, and `--check` plus `--require-clean` exactly match reviewed authority.
-  `M80-F001`-`M80-F008` have focused owner regressions. A successful ordinary point edit remains
+  `M80-F001`-`M80-F009` have focused owner regressions. A successful ordinary point edit remains
   current for fresh Offset capture/preview/Apply; every persistent source and target support must
   remain Profile geometry; ambient junction arms remain outside a selected path; and direct
-  provisional dragging preserves exact rerendered hover/click, last-valid, cancel and history
-  authority.
+  provisional dragging preserves exact rerendered hover/click, last-valid, cancel, per-gesture
+  effect and history authority.
 - Formatting, warnings-denied Clippy/Rustdoc, locked all-feature workspace tests, relevant WASM,
   unchanged historical persistence/golden authority, Trunk and the complete release gate pass
   before a no-rebuild distribution is frozen and byte-verified over Tailscale.

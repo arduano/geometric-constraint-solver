@@ -3,7 +3,7 @@
 # M80 focused UAT — native topology-preserving Profile Offset
 
 Status: **the first clean-qualified candidate is withdrawn by post-nomination findings M80-F006
-and M80-F007; replacement implementation and development qualification pass, while clean
+through M80-F009; replacement implementation and development qualification pass, while clean
 nomination is pending**. Do not score the former bytes below for final acceptance. Mechanical
 evidence does not pass any UAT row.
 
@@ -155,6 +155,10 @@ Apply must remain unavailable while the drag is captured, then the later Apply a
 step and must publish the geometry that was visible at release.
 For a circular face, drag the grouped annotation along its displayed source-to-target radial line;
 the distance must increase toward the target side rather than responding from the opposite side.
+Immediately begin a second distance drag after releasing the first, then repeat and cancel the
+second drag. A delayed update, release or cancel from the first gesture must never stop, overwrite
+or restore the second gesture; its own cancel must return exactly to the second pointer-down
+candidate without refresh.
 
 ## Acceptance record
 

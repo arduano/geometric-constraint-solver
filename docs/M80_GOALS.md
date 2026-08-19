@@ -109,9 +109,11 @@ Preview geometry is visibly provisional and non-selectable by ordinary tools, wh
 edges and grouped distance presentation remain one explicit authoring-only drag surface. Dragging
 uses the common three-pixel threshold, pointer capture, frozen pointer-down rail and absolute
 sampling. Invalid samples retain the last complete preview; Escape, capture loss, camera/tool
-change or stale scene restores/cancels without history. Pointer release changes only the candidate
-distance; Apply stays unavailable during the captured gesture and is enabled after release only
-for a complete, finite, solved and topology-valid candidate.
+change or stale scene restores/cancels without history. Every preview, release and restore is tied
+to one monotonic gesture identity, so a delayed effect from an earlier drag cannot consume a newer
+capture over the same candidate. Pointer release changes only the candidate distance; Apply stays
+unavailable during the captured gesture and is enabled after release only for a complete, finite,
+solved and topology-valid candidate.
 Cancel, stale accepted scene/topology, failed solve, invalid target, resource exhaustion or a
 topology barrier changes no document, accepted scene, history, transcript or persistent-ID
 high-water. A successful Apply creates all target geometry, ordinary target connectivity, the

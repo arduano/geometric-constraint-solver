@@ -299,11 +299,12 @@ and target edits; deletion/suppression retention; topology barriers; Undo/Redo a
 workspace/repro round trips; stale/cancelled/resource-limited atomicity; source mapping, rank/DOF,
 structured audits and finite-difference Jacobians at scales `1e-6`, `1` and `1e6`.
 
-`docs/M80_IMPLEMENTATION.md` records the focused counts and the `M80-F001`-`M80-F008` owner
+`docs/M80_IMPLEMENTATION.md` records the focused counts and the `M80-F001`-`M80-F009` owner
 regressions for native-origin authentication, bidirectional arc gauges, exact endpoint-contact
 ownership, current accepted-state capture after point edits and the persistent Profile-role
 invariant, selected-set branch scope, exact provisional-distance gesture authority and one-span
-self-closure rejection.
+self-closure rejection, including per-gesture authentication against delayed preview and terminal
+effects from an earlier drag over the same provisional proposal.
 
 Focused native/WASM and workbench tests, unchanged historical persistence bytes and the stable
 golden gate pass as pre-nomination evidence. The complete clean release gate must pass before the

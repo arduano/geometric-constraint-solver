@@ -1438,6 +1438,7 @@ pub struct OffsetAuthoringPreview {
 
 #[derive(Debug)]
 struct OffsetAuthoringDistanceOrigin {
+    gesture_epoch: u64,
     state: OffsetAuthoringState,
     preview: Box<OffsetAuthoringPreview>,
 }
@@ -3095,17 +3096,16 @@ impl RetainedEditorCoordinator {
                 model_derivative,
             }
         };
-        if !self
+        let gesture_epoch = self
             .editor
             .begin_offset_distance_gesture(scene, input, &seed)
-        {
-            return Err(CoordinatorError::OffsetPreviewMismatch);
-        }
+            .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
         let preview = self
             .offset_authoring_preview
             .take()
             .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
         self.offset_authoring_distance_origin = Some(Box::new(OffsetAuthoringDistanceOrigin {
+            gesture_epoch,
             state: state.clone(),
             preview,
         }));
@@ -3156,6 +3156,7 @@ impl RetainedEditorCoordinator {
     ) -> Result<(), CoordinatorError> {
         match effect {
             EditorEffect::PreviewOffsetAuthoringDistance {
+                gesture_epoch,
                 base_input,
                 proposed_commit,
                 distance,
@@ -3164,9 +3165,11 @@ impl RetainedEditorCoordinator {
                     .offset_authoring_distance_origin
                     .as_deref()
                     .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
-                if origin.preview.metadata.base_input != *base_input
+                if origin.gesture_epoch != *gesture_epoch
+                    || origin.preview.metadata.base_input != *base_input
                     || origin.preview.metadata.proposed_commit != *proposed_commit
                     || !self.editor.offset_distance_preview_request_is_current(
+                        *gesture_epoch,
                         base_input,
                         *proposed_commit,
                         *distance,
@@ -3181,6 +3184,7 @@ impl RetainedEditorCoordinator {
                         if accepted.to_bits() == distance.to_bits()
                 ) {
                     self.editor.reject_offset_distance_preview(
+                        *gesture_epoch,
                         base_input,
                         *proposed_commit,
                         *distance,
@@ -3193,6 +3197,7 @@ impl RetainedEditorCoordinator {
                     self.offset_authoring_preview = prior;
                     self.sync_offset_preview_transient();
                     self.editor.reject_offset_distance_preview(
+                        *gesture_epoch,
                         base_input,
                         *proposed_commit,
                         *distance,
@@ -3200,6 +3205,7 @@ impl RetainedEditorCoordinator {
                     return Err(error);
                 }
                 if !self.editor.accept_offset_distance_preview(
+                    *gesture_epoch,
                     base_input,
                     *proposed_commit,
                     *distance,
@@ -3212,13 +3218,27 @@ impl RetainedEditorCoordinator {
                 Ok(())
             }
             EditorEffect::FinishOffsetAuthoringDistance {
+                gesture_epoch,
                 base_input,
                 proposed_commit,
-            } => self.finish_offset_authoring_distance(state, base_input, *proposed_commit, false),
+            } => self.finish_offset_authoring_distance(
+                state,
+                *gesture_epoch,
+                base_input,
+                *proposed_commit,
+                false,
+            ),
             EditorEffect::RestoreOffsetAuthoringDistance {
+                gesture_epoch,
                 base_input,
                 proposed_commit,
-            } => self.finish_offset_authoring_distance(state, base_input, *proposed_commit, true),
+            } => self.finish_offset_authoring_distance(
+                state,
+                *gesture_epoch,
+                base_input,
+                *proposed_commit,
+                true,
+            ),
             _ => Err(CoordinatorError::OffsetPreviewMismatch),
         }
     }
@@ -3226,6 +3246,7 @@ impl RetainedEditorCoordinator {
     fn finish_offset_authoring_distance(
         &mut self,
         state: &mut OffsetAuthoringState,
+        gesture_epoch: u64,
         base_input: &PreparedSketchInput,
         proposed_commit: PreparedSketchCommit,
         restore: bool,
@@ -3234,7 +3255,8 @@ impl RetainedEditorCoordinator {
             .offset_authoring_distance_origin
             .take()
             .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
-        if origin.preview.metadata.base_input != *base_input
+        if origin.gesture_epoch != gesture_epoch
+            || origin.preview.metadata.base_input != *base_input
             || origin.preview.metadata.proposed_commit != proposed_commit
         {
             self.offset_authoring_distance_origin = Some(origin);
@@ -14347,6 +14369,204 @@ mod tests {
         assert_eq!(state, pointer_down_state);
         assert_eq!(visible_offset_payload(&coordinator), pointer_down_payload);
         assert!(coordinator.editor().active_pointer_gesture().is_none());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one epoch regression binds stale preview and both terminal effects across consecutive drags"
+    )]
+    fn m80_f009_stale_terminal_effect_cannot_consume_a_new_distance_gesture() {
+        let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "Repeated Offset drag")
+            .expect("preview");
+        let target = metadata.target_spans[0];
+        let first_scene = profile_offset_preview_scene(&coordinator);
+        let first_press = provisional_offset_span_point(&coordinator, &first_scene, target, 0.5);
+        let rail = offset_distance_rail(
+            coordinator.offset_authoring_preview().expect("preview"),
+            target,
+            0.5,
+        )
+        .expect("distance rail");
+        let first_sample = pointer_along_offset_rail(&first_scene, first_press, rail, 0.2);
+        coordinator
+            .pointer_down_offset_authoring_distance(
+                &mut state,
+                &first_scene,
+                offset_pointer(726, first_press),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            )
+            .expect("first press")
+            .expect("first provisional owner");
+        let first_effects = coordinator
+            .editor_mut()
+            .pointer_move(&first_scene, offset_pointer(726, first_sample));
+        let [first_preview @ EditorEffect::PreviewOffsetAuthoringDistance { .. }] =
+            first_effects.as_slice()
+        else {
+            panic!("first preview effect expected, got {first_effects:?}")
+        };
+        let delayed_first_preview = first_preview.clone();
+        let expected = coordinator.session().design_identity();
+        let first_release = coordinator.editor_mut().pointer_up(
+            &first_scene,
+            expected,
+            offset_pointer(726, first_sample),
+        );
+        let [first_finish @ EditorEffect::FinishOffsetAuthoringDistance { .. }] =
+            first_release.as_slice()
+        else {
+            panic!("first finish expected, got {first_release:?}")
+        };
+        let delayed_first_finish = first_finish.clone();
+        let delayed_first_restore = match &delayed_first_finish {
+            EditorEffect::FinishOffsetAuthoringDistance {
+                gesture_epoch,
+                base_input,
+                proposed_commit,
+            } => EditorEffect::RestoreOffsetAuthoringDistance {
+                gesture_epoch: *gesture_epoch,
+                base_input: *base_input,
+                proposed_commit: *proposed_commit,
+            },
+            _ => unreachable!("the cloned effect was matched as an Offset finish above"),
+        };
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, first_finish)
+            .expect("first finish acknowledged");
+        assert!(coordinator.offset_authoring_preview_matches(&state));
+
+        let second_scene = profile_offset_preview_scene(&coordinator);
+        let second_press = provisional_offset_span_point(&coordinator, &second_scene, target, 0.5);
+        coordinator
+            .pointer_down_offset_authoring_distance(
+                &mut state,
+                &second_scene,
+                offset_pointer(727, second_press),
+                PickTolerance::default(),
+                GeometryInteractionPolicy::default(),
+            )
+            .expect("second press")
+            .expect("second provisional owner");
+        let second_sample = pointer_along_offset_rail(&second_scene, second_press, rail, 0.2);
+        let second_effects = coordinator
+            .editor_mut()
+            .pointer_move(&second_scene, offset_pointer(727, second_sample));
+        let [second_preview @ EditorEffect::PreviewOffsetAuthoringDistance { .. }] =
+            second_effects.as_slice()
+        else {
+            panic!("second preview effect expected, got {second_effects:?}")
+        };
+        let (second_epoch, second_base_input, second_proposed_commit, second_distance) =
+            match second_preview {
+                EditorEffect::PreviewOffsetAuthoringDistance {
+                    gesture_epoch,
+                    base_input,
+                    proposed_commit,
+                    distance,
+                } => (*gesture_epoch, *base_input, *proposed_commit, *distance),
+                _ => unreachable!("the current effect was matched as an Offset preview above"),
+            };
+        let first_epoch = match &delayed_first_finish {
+            EditorEffect::FinishOffsetAuthoringDistance { gesture_epoch, .. } => *gesture_epoch,
+            _ => unreachable!("the cloned effect was matched as an Offset finish above"),
+        };
+        assert_ne!(first_epoch, second_epoch);
+        let second_origin_payload = visible_offset_payload(&coordinator);
+        let second_origin_state = state.clone();
+        assert_eq!(
+            coordinator.editor().active_pointer_gesture(),
+            Some(crate::ActivePointerGesture {
+                pointer_id: 727,
+                kind: crate::ActivePointerGestureKind::OffsetDistance,
+            })
+        );
+        assert!(!coordinator.offset_authoring_preview_matches(&state));
+
+        assert!(matches!(
+            coordinator.apply_offset_authoring_editor_effect(&mut state, &delayed_first_preview,),
+            Err(CoordinatorError::OffsetPreviewMismatch)
+        ));
+        assert_eq!(state, second_origin_state);
+        assert_eq!(visible_offset_payload(&coordinator), second_origin_payload);
+        assert!(
+            coordinator
+                .editor()
+                .offset_distance_preview_request_is_current(
+                    second_epoch,
+                    &second_base_input,
+                    second_proposed_commit,
+                    second_distance,
+                )
+        );
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, second_preview)
+            .expect("current second-drag preview");
+        let second_current_payload = visible_offset_payload(&coordinator);
+        let second_current_state = state.clone();
+
+        assert!(matches!(
+            coordinator.apply_offset_authoring_editor_effect(&mut state, &delayed_first_finish,),
+            Err(CoordinatorError::OffsetPreviewMismatch)
+        ));
+        assert_eq!(state, second_current_state);
+        assert_eq!(visible_offset_payload(&coordinator), second_current_payload);
+        assert_eq!(
+            coordinator.editor().active_pointer_gesture(),
+            Some(crate::ActivePointerGesture {
+                pointer_id: 727,
+                kind: crate::ActivePointerGestureKind::OffsetDistance,
+            }),
+            "the current captured gesture must survive a foreign terminal acknowledgement"
+        );
+        assert!(!coordinator.offset_authoring_preview_matches(&state));
+        assert!(matches!(
+            coordinator.apply_offset_authoring_preview(&mut state),
+            Err(CoordinatorError::OffsetPreviewMismatch)
+        ));
+
+        assert!(matches!(
+            coordinator.apply_offset_authoring_editor_effect(&mut state, &delayed_first_restore),
+            Err(CoordinatorError::OffsetPreviewMismatch)
+        ));
+        assert_eq!(state, second_current_state);
+        assert_eq!(visible_offset_payload(&coordinator), second_current_payload);
+        assert_eq!(
+            coordinator.editor().active_pointer_gesture(),
+            Some(crate::ActivePointerGesture {
+                pointer_id: 727,
+                kind: crate::ActivePointerGestureKind::OffsetDistance,
+            }),
+            "a stale restore must not consume the current captured gesture"
+        );
+        assert!(!coordinator.offset_authoring_preview_matches(&state));
+        assert!(matches!(
+            coordinator.apply_offset_authoring_preview(&mut state),
+            Err(CoordinatorError::OffsetPreviewMismatch)
+        ));
+
+        let cancel_effects = coordinator.editor_mut().cancel();
+        let current_restore = cancel_effects
+            .iter()
+            .find(|effect| matches!(effect, EditorEffect::RestoreOffsetAuthoringDistance { .. }))
+            .expect("the current gesture supplies its own restore effect");
+        let restored_epoch = match current_restore {
+            EditorEffect::RestoreOffsetAuthoringDistance { gesture_epoch, .. } => *gesture_epoch,
+            _ => unreachable!("the effect was filtered as an Offset restore above"),
+        };
+        assert_eq!(restored_epoch, second_epoch);
+        coordinator
+            .apply_offset_authoring_editor_effect(&mut state, current_restore)
+            .expect("the current restore rolls back to the second pointer-down state");
+        assert_eq!(state, second_origin_state);
+        assert_eq!(visible_offset_payload(&coordinator), second_origin_payload);
+        assert!(coordinator.editor().active_pointer_gesture().is_none());
+        assert!(coordinator.offset_authoring_preview_matches(&state));
     }
 
     #[test]

@@ -2642,7 +2642,9 @@ headless source/target rail. A rejected or topology-invalid sample keeps the pri
 preview, a later valid sample recovers, release changes no history, and Escape, capture loss,
 camera/tool change or stale authority restores/cancels the pointer-down candidate. Apply remains
 unavailable while the pointer is captured and alone publishes the final exact held patch after
-release.
+release. Preview, release and restore effects carry one monotonic gesture identity; delayed effects
+from an earlier drag over the same proposal reject without touching the current captured gesture or
+its exact pointer-down rollback state.
 
 Modify → Offset uses the persistent bottom-left panel, remembers only the last valid process-local
 distance with `0.1 * model_scale` fallback and returns to Select on explicit close/Cancel. A
@@ -2657,11 +2659,11 @@ Focused native/WASM/presentation tests and the complete clean gate precede a no-
 snapshot kept byte-verified on `http://100.94.63.83:8080/` through `docs/M80_UAT.md`; Pages and
 closure require an explicit human decision.
 
-Status: headless authoring, presentation, native/WASM mechanics, complete clean qualification and
-the immutable byte-verified Tailscale nomination pass. Exact source `949c3db`, tree `23a6f8d`,
-snapshot `/tmp/geosolve-m80-uat.Nnxsu7` and ordered-manifest aggregate
-`18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9` are current authority at
-`http://100.94.63.83:8080/`. Human UAT, Pages publication and closure remain pending.
+Status: post-nomination amendments pass development qualification. The former exact source
+`949c3db`, tree `23a6f8d`, snapshot `/tmp/geosolve-m80-uat.Nnxsu7` and ordered-manifest aggregate
+`18677a4488848e56d463a90ffe2e2653e34fe6931767d25b63d3dc47b69084d9` remain withdrawn historical
+evidence at `http://100.94.63.83:8080/` until a replacement passes the complete clean gate and
+temporary-port byte verification. Human UAT, Pages publication and closure remain pending.
 
 ### M80-F001 - Computed Fillet fragments cannot impersonate native operands
 
@@ -2750,6 +2752,19 @@ planning must report `ProfileOffsetClosedChain`, and neither path may allocate a
 retained state. A genuinely open single arc remains eligible.
 
 Status: fixed at the editor and operation-planning owners; focused mechanical qualification passes.
+Replacement clean nomination is pending.
+
+### M80-F009 - Delayed Offset effects cannot consume a newer distance drag
+
+Start one provisional distance drag, retain its preview and terminal effects, finish it, then start
+a second drag over the unchanged proposal. The two gestures intentionally share the same prepared
+input, proposed commit and sampled distance, so those fields alone cannot authenticate authority.
+Every preview, finish and restore effect carries a monotonic gesture epoch. Replaying the first
+drag's preview, finish or restore during the second must return `OffsetPreviewMismatch` while
+preserving the second state, visible payload, pointer capture and epoch. Cancelling the second drag
+must emit its distinct epoch and restore its exact pointer-down state and payload.
+
+Status: fixed at the retained editor/coordinator owner; focused mechanical qualification passes.
 Replacement clean nomination is pending.
 
 ### M72-R1 - Recoverable public workbench bulk fixes

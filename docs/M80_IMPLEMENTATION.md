@@ -223,6 +223,19 @@ reject that self-adjacency as `WouldCloseChain`/`ProfileOffsetClosedChain` befor
 allocation. Focused editor and operation regressions use a regular near-full circular arc with an
 authenticated G0 Start/End join and prove exact state neutrality.
 
+### M80-F009 — delayed terminal effects could consume a newer distance drag
+
+Owner: retained Offset gesture/effect authentication in `geosolve-constraint-editor`. Consecutive
+distance drags over one unchanged provisional candidate share the same prepared input and proposed
+commit, and may request the same distance. Those proposal fields therefore could not distinguish a
+delayed preview, release or restore effect from the current capture. Offset distance gestures now
+receive monotonic epochs carried through every Preview/Finish/Restore effect and authenticated by
+the coordinator before any state or held patch changes. The regression
+`m80_f009_stale_terminal_effect_cannot_consume_a_new_distance_gesture` replays all three effects
+from drag one during drag two, proves exact state/payload/pointer retention, then applies drag two's
+own restore and proves exact pointer-down rollback. No solver equation, residual, branch or
+persistence representation changed.
+
 ### Pre-nomination interaction audit refinements
 
 The final editor/web audit also froze four cross-adapter behaviors without broadening mathematical
@@ -248,8 +261,10 @@ cargo test --locked -p geosolve-constraint-editor --lib offset_authoring::tests
   # 12 passed
 cargo test --locked -p geosolve-constraint-editor --lib m80_f007
   # 7 passed
+cargo test --locked -p geosolve-constraint-editor --lib m80_f009
+  # 1 passed
 cargo test --locked -p geosolve-constraint-editor --lib
-  # 391 passed
+  # 392 passed
 cargo test --locked -p geosolve-demo-web --lib
   # 150 passed on the ordinary default test stack
 cargo test --locked -p geosolve-constraint-editor --test m76_annotation_parity

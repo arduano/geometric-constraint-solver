@@ -3186,6 +3186,7 @@ pub enum EditorEffect {
     ClearComputedFeatureContactPreview,
     /// Requests a fully prepared replacement for the provisional native Offset candidate.
     PreviewOffsetAuthoringDistance {
+        gesture_epoch: u64,
         base_input: PreparedSketchInput,
         proposed_commit: PreparedSketchCommit,
         distance: f64,
@@ -3193,11 +3194,13 @@ pub enum EditorEffect {
     /// Ends direct Offset authoring while retaining only the last independently accepted ghost.
     /// Apply remains the sole retained publication and history step.
     FinishOffsetAuthoringDistance {
+        gesture_epoch: u64,
         base_input: PreparedSketchInput,
         proposed_commit: PreparedSketchCommit,
     },
     /// Restores the exact non-cloneable pointer-down Offset patch and collector state.
     RestoreOffsetAuthoringDistance {
+        gesture_epoch: u64,
         base_input: PreparedSketchInput,
         proposed_commit: PreparedSketchCommit,
     },
@@ -4387,6 +4390,7 @@ struct FeatureRadiusGesture {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct OffsetDistanceGesture {
+    epoch: u64,
     pointer_id: u64,
     base_input: PreparedSketchInput,
     proposed_commit: PreparedSketchCommit,
@@ -4871,6 +4875,7 @@ pub struct ConstraintEditor {
     feature_radius_gesture: Option<FeatureRadiusGesture>,
     feature_contact_gesture: Option<FeatureContactGesture>,
     offset_distance_gesture: Option<OffsetDistanceGesture>,
+    next_offset_distance_gesture_epoch: u64,
     computed_fillet_continuation_status: Option<ComputedFilletContinuationStatus>,
     fillet_branch_preview: Option<SceneFilletActionTarget>,
     tool: EditorTool,
@@ -4912,6 +4917,7 @@ impl Default for ConstraintEditor {
             feature_radius_gesture: None,
             feature_contact_gesture: None,
             offset_distance_gesture: None,
+            next_offset_distance_gesture_epoch: 0,
             computed_fillet_continuation_status: None,
             fillet_branch_preview: None,
             tool: EditorTool::Select,
@@ -6000,7 +6006,7 @@ impl ConstraintEditor {
         scene: &EditorScene,
         input: PointerInput,
         seed: &OffsetDistanceGestureSeed,
-    ) -> bool {
+    ) -> Option<u64> {
         let derivative_norm_squared = seed.model_derivative[0]
             .mul_add(seed.model_derivative[0], seed.model_derivative[1].powi(2));
         if self.tool != EditorTool::Select
@@ -6013,9 +6019,12 @@ impl ConstraintEditor {
             || derivative_norm_squared <= 0.0
             || scene.authenticated_prepared_input() != Some(seed.origin_scene_input)
         {
-            return false;
+            return None;
         }
+        let epoch = self.next_offset_distance_gesture_epoch.checked_add(1)?;
+        self.next_offset_distance_gesture_epoch = epoch;
         self.offset_distance_gesture = Some(OffsetDistanceGesture {
+            epoch,
             pointer_id: input.pointer_id,
             base_input: seed.base_input,
             proposed_commit: seed.proposed_commit,
@@ -6035,7 +6044,7 @@ impl ConstraintEditor {
         self.curve_control_gesture = None;
         self.annotation_gesture = None;
         self.last_valid_drag_preview = None;
-        true
+        Some(epoch)
     }
 
     fn resolve_feature_radius_hit(
@@ -6629,6 +6638,7 @@ impl ConstraintEditor {
         if !scene.accepts_offset_distance_gesture(&gesture) {
             self.offset_distance_gesture = None;
             return vec![EditorEffect::RestoreOffsetAuthoringDistance {
+                gesture_epoch: gesture.epoch,
                 base_input: gesture.base_input,
                 proposed_commit: gesture.proposed_commit,
             }];
@@ -6655,6 +6665,7 @@ impl ConstraintEditor {
         gesture.last_requested_distance = Some(distance);
         self.offset_distance_gesture = Some(gesture);
         vec![EditorEffect::PreviewOffsetAuthoringDistance {
+            gesture_epoch: gesture.epoch,
             base_input: gesture.base_input,
             proposed_commit: gesture.proposed_commit,
             distance,
@@ -6896,12 +6907,14 @@ impl ConstraintEditor {
 
     pub(crate) fn offset_distance_preview_request_is_current(
         &self,
+        gesture_epoch: u64,
         base_input: &PreparedSketchInput,
         proposed_commit: PreparedSketchCommit,
         distance: f64,
     ) -> bool {
         self.offset_distance_gesture.is_some_and(|gesture| {
-            gesture.base_input == *base_input
+            gesture.epoch == gesture_epoch
+                && gesture.base_input == *base_input
                 && gesture.proposed_commit == proposed_commit
                 && gesture
                     .last_requested_distance
@@ -6911,6 +6924,7 @@ impl ConstraintEditor {
 
     pub(crate) fn accept_offset_distance_preview(
         &mut self,
+        gesture_epoch: u64,
         base_input: &PreparedSketchInput,
         proposed_commit: PreparedSketchCommit,
         distance: f64,
@@ -6918,7 +6932,8 @@ impl ConstraintEditor {
         let Some(mut gesture) = self.offset_distance_gesture else {
             return false;
         };
-        if gesture.base_input != *base_input
+        if gesture.epoch != gesture_epoch
+            || gesture.base_input != *base_input
             || gesture.proposed_commit != proposed_commit
             || gesture
                 .last_requested_distance
@@ -6933,6 +6948,7 @@ impl ConstraintEditor {
 
     pub(crate) fn reject_offset_distance_preview(
         &mut self,
+        gesture_epoch: u64,
         base_input: &PreparedSketchInput,
         proposed_commit: PreparedSketchCommit,
         distance: f64,
@@ -6940,7 +6956,8 @@ impl ConstraintEditor {
         let Some(mut gesture) = self.offset_distance_gesture else {
             return false;
         };
-        if gesture.base_input != *base_input
+        if gesture.epoch != gesture_epoch
+            || gesture.base_input != *base_input
             || gesture.proposed_commit != proposed_commit
             || gesture
                 .last_requested_distance
@@ -7090,11 +7107,13 @@ impl ConstraintEditor {
             self.offset_distance_gesture = None;
             return if scene.accepts_offset_distance_gesture(&gesture) {
                 vec![EditorEffect::FinishOffsetAuthoringDistance {
+                    gesture_epoch: gesture.epoch,
                     base_input: gesture.base_input,
                     proposed_commit: gesture.proposed_commit,
                 }]
             } else {
                 vec![EditorEffect::RestoreOffsetAuthoringDistance {
+                    gesture_epoch: gesture.epoch,
                     base_input: gesture.base_input,
                     proposed_commit: gesture.proposed_commit,
                 }]
@@ -7302,6 +7321,7 @@ impl ConstraintEditor {
             .take()
             .map_or_else(Vec::new, |gesture| {
                 vec![EditorEffect::RestoreOffsetAuthoringDistance {
+                    gesture_epoch: gesture.epoch,
                     base_input: gesture.base_input,
                     proposed_commit: gesture.proposed_commit,
                 }]
