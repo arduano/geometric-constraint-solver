@@ -2,10 +2,9 @@
 
 # M81 implementation — Core architecture consolidation
 
-Status: **implementation, rotating independent review, final clean qualification and immutable
-Tailscale nomination complete; focused human UAT pending**. Product behavior remains the M80
-baseline except for reproduced transactional defect M81-F001. GitHub Pages publication and
-milestone closure are not claimed.
+Status: **implementation, rotating independent review, final clean qualification, immutable
+Tailscale nomination and supervising-human acceptance complete; GitHub Pages closeout pending**.
+Product behavior remains the M80 baseline except for reproduced transactional defect M81-F001.
 
 Nominated product source: `e4eca327fc69c92f95b1722142289302ba4f67bc`
 
@@ -286,8 +285,15 @@ SHA-256 because every asserted path/status/type/length/body hash is identical. T
 listener is retired and the retained `:8080` service remains live for focused human UAT.
 
 The documentation changes recording this evidence are descendants of `e4eca32`; they do not
-replace the nominated product source/tree or rebuild its artifact. Human acceptance and the normal
-GitHub Pages closeout remain pending.
+replace the nominated product source/tree or rebuild its artifact.
+
+## Human acceptance
+
+On 2026-08-20 the supervising caller reviewed the nature of the consolidation, the independent
+findings and M81-F001, explicitly approved the qualified milestone and requested closure. The
+scoped decision accepts M81-U1 through M81-U5 without a new finding; it does not claim a separate
+exhaustive replay of every historical M80 scenario. GitHub Pages publication and exact hosted-byte
+verification are the only remaining closeout work.
 
 ## Known limitations and deferred work
 

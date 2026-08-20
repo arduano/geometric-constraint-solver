@@ -2,9 +2,10 @@
 
 # M81 focused UAT — Core architecture consolidation
 
-Status: **clean-qualified immutable candidate nominated; focused human UAT pending**. This
-scorecard binds to the exact clean-gate release snapshot served at the shared Tailscale endpoint.
-Do not score another working tree or a fresh rebuild under the same URL.
+Status: **accepted 2026-08-20; GitHub Pages publication and final closeout pending**. The
+supervising caller reviewed the qualified consolidation/finding summary, explicitly approved M81
+and requested closure. This scorecard remains bound to the exact clean-gate release snapshot
+served at the shared Tailscale endpoint.
 
 M81 intentionally adds no visible feature. Human UAT is a compact behavior-preservation smoke test;
 mathematical, persistence, authority and ordering compatibility are owned by the automated and
@@ -38,11 +39,16 @@ served product bytes.
 
 | ID | Check | Expected result | Status |
 | --- | --- | --- | --- |
-| M81-U1 | Open several editable samples, then create a small line/arc sketch and Fit/zoom/pan it. | Accepted geometry and ordinary canvas interaction look unchanged; no blank or withheld scene appears. | pending |
-| M81-U2 | Add representative point, direction and dimensional constraints; drag a remaining free point; Undo and Redo. | Constraint placement, dragging, accepted geometry and history behave exactly as before M81. | pending |
-| M81-U3 | Create and modify a computed Fillet, including one invalid/exhausted-style correction or cancel path if convenient. | Successful previews/publications still work; rejection or cancel retains the prior scene and a later valid action recovers normally. | pending |
-| M81-U4 | Create a native-profile Fillet and use its line–arc–line result in a Profile Offset chain or face; drag the Offset distance. | Native publication, Offset preview/drag/Apply and one-step Undo/Redo remain unchanged. | pending |
-| M81-U5 | Save, reload and continue editing the workspace, including any annotation previously moved. | Geometry, branches, feature intent, Offset state and disposable annotation placement round-trip as before. | pending |
+| M81-U1 | Open several editable samples, then create a small line/arc sketch and Fit/zoom/pan it. | Accepted geometry and ordinary canvas interaction look unchanged; no blank or withheld scene appears. | pass |
+| M81-U2 | Add representative point, direction and dimensional constraints; drag a remaining free point; Undo and Redo. | Constraint placement, dragging, accepted geometry and history behave exactly as before M81. | pass |
+| M81-U3 | Create and modify a computed Fillet, including one invalid/exhausted-style correction or cancel path if convenient. | Successful previews/publications still work; rejection or cancel retains the prior scene and a later valid action recovers normally. | pass |
+| M81-U4 | Create a native-profile Fillet and use its line–arc–line result in a Profile Offset chain or face; drag the Offset distance. | Native publication, Offset preview/drag/Apply and one-step Undo/Redo remain unchanged. | pass |
+| M81-U5 | Save, reload and continue editing the workspace, including any annotation previously moved. | Geometry, branches, feature intent, Offset state and disposable annotation placement round-trip as before. | pass |
+
+The approval is a scoped milestone decision over the complete qualified candidate and the five
+behavior-preservation rows above. It opens no new finding and does not claim a separate exhaustive
+manual replay of every historical M80 scenario; exact mathematical, persistence and authority
+coverage remains owned by the recorded automated and immutable-artifact evidence.
 
 ## Acceptance rule
 
@@ -51,6 +57,6 @@ or persistence change opens an exact owning-layer finding under the repository d
 withdraws the candidate. Cosmetic or feature requests unrelated to behavior preservation are
 deferred rather than folded into M81.
 
-M81 closes only after the clean gate, frozen Tailscale verification and explicit supervising-human
-decision. GitHub Pages publication remains a closeout step after acceptance, not nomination
-authority.
+The clean gate, frozen Tailscale verification and explicit supervising-human decision now pass.
+GitHub Pages publication and exact hosted-byte verification remain the final closeout step; the
+Tailscale listener stays live until that public authority is established.

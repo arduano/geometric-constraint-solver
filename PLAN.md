@@ -5495,8 +5495,8 @@ dependent/high-valence and existing-feature conversion paths remain deferred.
 
 ### M81: core architecture consolidation
 
-Status: **implementation, final clean qualification and frozen Tailscale nomination complete;
-focused human UAT pending**.
+Status: **implementation, final clean qualification, frozen Tailscale nomination and
+supervising-human acceptance complete; GitHub Pages closeout pending**.
 `docs/M81_GOALS.md` owns the behavior-preserving contract,
 `docs/M81_IMPLEMENTATION.md` owns the implementation/finding/audit ledger and
 `docs/M81_UAT.md` owns the compact candidate scorecard.
@@ -5530,8 +5530,10 @@ focused human UAT pending**.
   workspace tests, native/WASM parity, demo adapter checks and the complete clean release gate.
 - [x] Freeze the exact no-rebuild release output, byte-verify it over the retained Tailscale
   endpoint and nominate that source/tree/artifact for focused M81 UAT.
-- [ ] Receive explicit supervising-human acceptance and perform the normal Pages closeout; do not
-  publish or start M82 before that decision.
+- [x] Receive explicit supervising-human acceptance of the bound source/tree/artifact without a
+  new M81 finding.
+- [ ] Publish the documentation-only approval descendant through GitHub Pages, exact-verify the
+  hosted bytes, retire the Tailscale listener and close M81 before starting M82.
 
 Qualification record (2026-08-20): exact source
 `e4eca327fc69c92f95b1722142289302ba4f67bc`, tree
@@ -5540,8 +5542,9 @@ Qualification record (2026-08-20): exact source
 supplemental all-nine-root selection byte-match activation. The exact no-rebuild seven-file
 snapshot `/tmp/geosolve-m81-uat.QqItRd`, ordered-manifest aggregate
 `df24deb988a31a373b3f973432081078c15e157382134f62c99aaabe96b8e49e`, passes temporary and retained
-Tailscale byte verification and remains served at `http://100.94.63.83:8080/`. Human UAT and Pages
-closeout remain pending.
+Tailscale byte verification and remains served at `http://100.94.63.83:8080/`. On 2026-08-20 the
+supervising caller accepted the qualified candidate and requested closure without opening a new
+finding. Pages publication remains pending.
 
 Gate: the package graph, selected crate-root public declaration/export lines, canonical
 persistence and reviewed golden authority remain byte-identical; every accepted state still passes

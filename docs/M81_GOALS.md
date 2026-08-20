@@ -2,11 +2,11 @@
 
 # M81 — Core architecture consolidation
 
-Status: **implementation, rotating review, final clean qualification and frozen Tailscale
-nomination complete; focused human UAT pending**. M81 is a behavior-preserving cleanup after the
-M66–M80 feature sequence. It changes private ownership and file boundaries only, except for the
-exact transactional-authority repair recorded as M81-F001. It adds no geometry, relation, solver
-policy, persistence language, public API or workbench UX.
+Status: **implementation, rotating review, final clean qualification, frozen Tailscale nomination
+and supervising-human acceptance complete; GitHub Pages closeout pending**. M81 is a behavior-
+preserving cleanup after the M66–M80 feature sequence. It changes private ownership and file
+boundaries only, except for the exact transactional-authority repair recorded as M81-F001. It adds
+no geometry, relation, solver policy, persistence language, public API or workbench UX.
 
 ## Goal
 
@@ -120,6 +120,8 @@ Final qualification satisfies this contract at exact product source
 root selected-line hash is
 `5cd55480a3d0f8a1d7175ef9359c94cc4dcd14cbf6b5d865abf1697667d1af90`. The immutable seven-file
 candidate and HTTP evidence are bound in `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md`.
+The supervising caller accepted the qualified candidate and requested closure on 2026-08-20
+without opening a new finding. GitHub Pages publication is the only remaining gate.
 
 ## Non-goals
 

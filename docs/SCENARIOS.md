@@ -4274,7 +4274,8 @@ The stable authoring/scene golden remains exactly 271 rows. M81-F001 is an isola
 regression rather than a new systemic family/lifecycle dimension, so no golden input or authority
 byte changes. Exact source `e4eca327fc69c92f95b1722142289302ba4f67bc` passes the clean release
 gate and its no-rebuild seven-file snapshot is byte-verified at the retained Tailscale endpoint;
-focused human UAT remains pending.
+the supervising caller accepts the qualified behavior-preservation scorecard and requests closure
+without opening a new finding. GitHub Pages publication remains pending.
 
 ## Frozen near-singular fixtures
 

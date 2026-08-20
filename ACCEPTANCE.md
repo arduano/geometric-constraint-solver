@@ -2820,9 +2820,10 @@ high-valence corners and conversion of existing published computed Fillets.
 
 ## M81 acceptance: core architecture consolidation
 
-Status: **implementation, final clean qualification and frozen Tailscale nomination complete;
-focused human UAT pending**. `docs/M81_GOALS.md` is authoritative for scope and
-`docs/M81_IMPLEMENTATION.md` records exact commits, audits and M81-F001.
+Status: **implementation, final clean qualification, frozen Tailscale nomination and
+supervising-human acceptance complete; GitHub Pages closeout pending**. `docs/M81_GOALS.md` is
+authoritative for scope and `docs/M81_IMPLEMENTATION.md` records exact commits, audits and
+M81-F001.
 
 - The locked no-dependency Cargo metadata and originally frozen ordered leading public
   declaration/export lines of core, sketch, linkage and editor byte-match the M80 activation
@@ -2868,8 +2869,8 @@ focused human UAT pending**. `docs/M81_GOALS.md` is authoritative for scope and
   performance/licence/package gates, release Trunk and the complete clean release gate.
 - The exact no-rebuild seven-file release output is frozen read-only and byte-verified first on a
   temporary listener, then at the retained Tailscale UAT endpoint. Human UAT checks only visible
-  M80 behavior preservation and must explicitly accept the bound source/tree/artifact before
-  Pages closeout.
+  M80 behavior preservation; the supervising caller has explicitly accepted the bound source/
+  tree/artifact without opening a new finding.
 
 M81 adds no primitive, constraint, dimension, inference, computed feature, topology behavior,
 solver equation/policy, persistence version, browser layout or generic architecture framework.
@@ -2883,9 +2884,10 @@ and release Trunk checks. Its 271,230-byte gate log has SHA-256
 snapshot `/tmp/geosolve-m81-uat.QqItRd` is read-only with seven regular non-symlink files and
 ordered-manifest aggregate
 `df24deb988a31a373b3f973432081078c15e157382134f62c99aaabe96b8e49e`. Temporary `:18080` and
-retained `http://100.94.63.83:8080/` verification both pass all eight byte/media/length/HTTP checks;
-the retained service remains live for the pending scorecard. Human acceptance and Pages closeout
-remain unchecked.
+retained `http://100.94.63.83:8080/` verification both pass all eight byte/media/length/HTTP checks.
+On 2026-08-20 the supervising caller reviewed the consolidation/finding summary, accepted M81-U1
+through M81-U5 as a scoped milestone decision and requested closure. The retained service remains
+live until the pending Pages publication and hosted-byte verification pass.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

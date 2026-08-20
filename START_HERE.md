@@ -227,9 +227,9 @@ private owners. Public APIs, package graph, persistence languages, equations and
 contract. Audit finding M81-F001 makes rejected durable feature mutations allocator-neutral by
 publishing a staged computed-output allocator only with a successful authenticated transaction.
 Implementation, rotating review, focused subsystem qualification, the complete clean release gate
-and exact frozen Tailscale nomination pass at source `e4eca32`, tree `f3ed1bf`. The immutable
-candidate remains served at `http://100.94.63.83:8080/`; focused human UAT and Pages closeout are
-pending.
+and exact frozen Tailscale nomination pass at source `e4eca32`, tree `f3ed1bf`. The supervising
+caller accepts the qualified scorecard and requests closure without a new finding. The immutable
+candidate remains served at `http://100.94.63.83:8080/` until Pages closeout passes.
 
 ## Read first
 
@@ -259,7 +259,7 @@ pending.
     clean-qualified immutable nomination ledger, and accepted closeout scorecard.
 17. `docs/M81_GOALS.md`, `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md` — active behavior-
     preserving architecture-consolidation contract, clean-qualified audit/finding ledger and
-    nominated focused scorecard.
+    accepted focused scorecard pending Pages closeout.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -631,10 +631,10 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M80 are complete and M81 is active. Its exact `e4eca32` candidate passes clean qualification
-and immutable Tailscale byte verification; focused human UAT remains pending. Do not route Offset
-through computed features, admit a topology-changing fallback or treat M81's private module moves
-as new behavior.
+M1-M80 are complete and M81 is active. Its exact `e4eca32` candidate passes clean qualification,
+immutable Tailscale byte verification and supervising-human acceptance; Pages publication remains
+the final closeout step. Do not route Offset through computed features, admit a topology-changing
+fallback or treat M81's private module moves as new behavior.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -730,9 +730,9 @@ Durable milestone and cleanup records:
 - `docs/M80_IMPLEMENTATION.md` (clean-qualified immutable nomination and finding ledger)
 - `docs/M80_UAT.md` (accepted focused scorecard and final public evidence)
 - `docs/M81_GOALS.md` (active behavior-preserving core-architecture consolidation contract)
-- `docs/M81_IMPLEMENTATION.md` (clean-qualified implementation, M81-F001, audit and nomination
-  ledger)
-- `docs/M81_UAT.md` (nominated focused behavior-preservation scorecard)
+- `docs/M81_IMPLEMENTATION.md` (clean-qualified implementation, M81-F001, audit, nomination and
+  acceptance ledger)
+- `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard pending Pages closeout)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
