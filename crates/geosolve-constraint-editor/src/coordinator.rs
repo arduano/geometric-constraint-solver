@@ -25082,7 +25082,7 @@ mod tests {
             RetainedEditorCoordinator::with_features(session, features).expect("coordinator");
         assert!(
             coordinator.computed_snapshot.is_none(),
-            "the 260-item feature evaluation must exceed the 256-item bounded envelope"
+            "the repeated feature evaluation must exceed the bounded computed-feature work envelope"
         );
 
         let retained = retained_state_snapshot(&coordinator);
