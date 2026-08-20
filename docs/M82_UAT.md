@@ -2,15 +2,33 @@
 
 # M82 focused UAT — certified computed all-family Curve Offset
 
-Status: **prepared, not executed**. Implementation and development qualification pass, but no
-clean-gate candidate source, frozen artifact or human acceptance exists yet. Automated owner tests
-certify mathematics, topology and persistence; this scorecard is for discoverability, interaction
-truthfulness and visual continuity on the eventual frozen candidate.
+Status: **frozen candidate nominated; human UAT pending**. Implementation, the clean release gate
+and immutable served-byte verification pass. Automated owner tests certify mathematics, topology
+and persistence; this scorecard is for discoverability, interaction truthfulness and visual
+continuity on the exact frozen candidate below.
 
 ## Candidate authority
 
-Pending clean-gate nomination. Record exact product source/tree, no-rebuild snapshot, ordered
-manifest, Tailscale endpoint and byte-verification evidence before beginning UAT.
+- Product source: `7fd31c0137f6979f945e5ab4d320e7adb552c03d`.
+- Product tree: `c6b6c89cecde30b2b3a7cf057ec61317a38a5634`.
+- Frozen no-rebuild snapshot: `/tmp/geosolve-m82-uat.I58j21` (directory `0555`; seven regular
+  non-symlink files at `0444`).
+- Ordered file-manifest aggregate:
+  `cb07c77de43544be251f97321bba8f978a018078a7b332d3752b39b55dff1a8e`.
+- Live Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m82-uat.service`, nominated PID
+  `1188633`).
+- Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 at
+  2026-08-20 22:57:08 AEST; log SHA-256
+  `7f4ef08a66851c1a117bf091af6bfb49a83abf33face7807e451e9b75ae064cf`.
+- Exact served-byte verification: temporary
+  `/tmp/geosolve-m82-temp-verify.QnWhyi/results.tsv` and retained
+  `/tmp/geosolve-m82-final-verify.Jlu7xZ/results.tsv`, each SHA-256
+  `1355605506f1a656e8ec883e57bc989727f8c24838172a82d46540d3b94748a6`.
+
+Both verification passes covered `/` plus all seven assets: HTTP 200, zero redirects, no
+`Location` or `Content-Encoding`, exact media type/length/body, the frozen aggregate above and
+root equality with `index.html`. The temporary `:18080` listener is retired; the retained `:8080`
+listener stays live until UAT disposition and any exact public publication are complete.
 
 ## Prepared scorecard
 

@@ -4281,11 +4281,11 @@ is closed.
 
 ## M82 certified computed Curve Offset scenarios
 
-These scenarios are **implemented with development qualification passing; final clean
-qualification and frozen-candidate human UAT remain pending**. They activate the smallest
-broadening of Offset under ADR 0038 while preserving M80 native behavior. Focused owner,
-coordinator, editor, demo/WASM and reviewed 272-row golden evidence passes; M82 remains active until
-its clean release gate, immutable nomination, human acceptance and exact public closeout pass.
+These scenarios are **implemented, clean-qualified and immutably nominated; human UAT remains
+pending**. They activate the smallest broadening of Offset under ADR 0038 while preserving M80
+native behavior. Focused owner, coordinator, editor, demo/WASM and reviewed 272-row golden evidence
+passes; exact source `7fd31c0`, tree `c6b6c89`, also passes the complete release gate and frozen
+Tailscale verification. M82 remains active until human acceptance and exact public closeout pass.
 
 ### M82-O1 — Native analytic route remains exact
 
@@ -4366,8 +4366,9 @@ The broad golden oracle adds exactly one systemic row,
 `feature.curve-offset.authoring.general-open-chain`, and now contains 272 reviewed `PASS` rows. The
 all-family kernel matrix, feature/topology/coordinator lifecycle slices, editor/demo adapters,
 workspace tests, Clippy/Rustdoc, locked WASM check and pinned release assembly pass during
-development qualification. The clean committed-tree gate and immutable served artifact remain the
-final mechanical authority before UAT.
+development qualification. The clean committed-tree gate and immutable served artifact now pass
+at exact source `7fd31c0`, tree `c6b6c89`, snapshot `/tmp/geosolve-m82-uat.I58j21` and
+`http://100.94.63.83:8080/`; human UAT remains pending.
 
 ## Frozen near-singular fixtures
 

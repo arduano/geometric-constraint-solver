@@ -238,8 +238,9 @@ use associative revision-local computed `CurveOffset` output. General parallels 
 adaptive cubic patches; cusp, self-contact, contour touch, topology change or bounded-work
 uncertainty rejects the complete feature. Implementation and development qualification pass;
 M82-F001 through F004 bind cold preview authority, tangent-endpoint locality, bounded fitting work
-and feature-identity-aware live Offset collection. Final clean qualification, frozen nomination
-and human acceptance remain pending.
+and feature-identity-aware live Offset collection. Exact source `7fd31c0`, tree `c6b6c89`, now
+passes the complete clean gate and immutable Tailscale nomination. Human acceptance and public
+closeout remain pending.
 
 ## Read first
 
@@ -271,8 +272,8 @@ and human acceptance remain pending.
     preserving architecture-consolidation contract, clean-qualified audit/finding ledger,
     accepted focused scorecard and exact public closeout.
 18. `docs/M82_GOALS.md`, `docs/M82_IMPLEMENTATION.md` and `docs/M82_UAT.md` — implemented certified
-    all-family Curve Offset contract, development evidence/finding ledger and prepared scorecard;
-    final clean qualification, frozen nomination and human acceptance remain pending.
+    all-family Curve Offset contract, clean-qualified immutable nomination/finding ledger and
+    prepared scorecard; human acceptance remains pending.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -648,8 +649,9 @@ M1-M81 are complete. M81's exact `e4eca32` candidate passes clean qualification,
 Tailscale byte verification and supervising-human acceptance; approval descendant `b582b82`
 passes exact Pages publication. M82 is active with implementation and development qualification
 complete under ADR 0038: preserve M80 native Offset routing and add a certified computed route for
-regular general-curve faces/chains. Final clean qualification, frozen nomination and human
-acceptance remain pending.
+regular general-curve faces/chains. Exact source `7fd31c0`, tree `c6b6c89`, passes clean
+qualification and immutable Tailscale nomination; human acceptance and public closeout remain
+pending.
 Do not admit topology repair, partial output or computed-on-computed chaining, and do not treat
 M81's private module moves as new behavior.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
@@ -752,8 +754,9 @@ Durable milestone and cleanup records:
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/adr/0038-certified-computed-curve-offset.md`
 - `docs/M82_GOALS.md` (implemented certified computed all-family Curve Offset contract)
-- `docs/M82_IMPLEMENTATION.md` (implementation, finding and development evidence ledger)
-- `docs/M82_UAT.md` (prepared, unexecuted focused scorecard awaiting a frozen candidate)
+- `docs/M82_IMPLEMENTATION.md` (implementation, finding, clean qualification and immutable
+  nomination evidence ledger)
+- `docs/M82_UAT.md` (prepared, unexecuted focused scorecard bound to the frozen candidate)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

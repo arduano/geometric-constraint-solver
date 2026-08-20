@@ -2,13 +2,17 @@
 
 # M82 implementation — certified computed all-family Curve Offset
 
-Status: **implementation complete; clean committed-tree release qualification, immutable
-Tailscale nomination and human UAT pending**. The implementation and focused/broad development
-qualification pass. This is not an acceptance or closure claim. Product scope is owned by
-`docs/M82_GOALS.md`; architecture is owned by ADR 0038.
+Status: **clean-qualified and immutably nominated; human UAT pending**. Implementation, focused
+and broad qualification, the exact committed-tree release gate, no-rebuild artifact freeze and
+Tailscale byte verification pass. This is not an acceptance or closure claim. Product scope is
+owned by `docs/M82_GOALS.md`; architecture is owned by ADR 0038.
 
 Activation baseline: M81 closeout commit
 `e3cbb8f2ae2800181545bb3405704bdcc3ff46a6`.
+
+Nominated product source: `7fd31c0137f6979f945e5ab4d320e7adb552c03d`.
+
+Nominated product tree: `c6b6c89cecde30b2b3a7cf057ec61317a38a5634`.
 
 ## Implementation ledger
 
@@ -72,7 +76,8 @@ if the accepted sketch identity does not.
 
 Development qualification passed the final M82 coordinator slice (16/16), the editor library
 (406/406) and the final demo library (159/159), including exact M82-F001 coverage and live Offset
-collector refresh after computed-feature-only changes. The clean-gate rerun remains pending below.
+collector refresh after computed-feature-only changes. The committed-tree clean gate repeats the
+complete coverage below and passes.
 
 ### Phase 4 — strict persistence compatibility
 
@@ -95,8 +100,8 @@ round-trips regenerate output from accepted sketch plus feature intent.
 - [x] Run focused owner suites, golden survey/check/require-clean, native/WASM parity, demo adapter,
   format/diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature workspace tests
   and a pinned Trunk release build during development qualification.
-- [ ] Run the complete release gate from the clean nominated commit and retain its exact log/hash.
-- [ ] Freeze the gate-produced distribution without rebuilding, byte-verify it over Tailscale and
+- [x] Run the complete release gate from the clean nominated commit and retain its exact log/hash.
+- [x] Freeze the gate-produced distribution without rebuilding, byte-verify it over Tailscale and
   bind `docs/M82_UAT.md` to that exact source/tree/artifact.
 
 The reviewed golden inventory increases from 271 to 272 `PASS` rows by exactly
@@ -209,8 +214,69 @@ cargo test --locked -p geosolve-demo-web --lib \
   -- --exact
 ```
 
-Results are respectively 2/2, 1/1, 1/1 and 1/1. The complete clean release gate will requalify
-the final committed tree before any UAT nomination.
+Results are respectively 2/2, 1/1, 1/1 and 1/1.
+
+## Final committed-tree qualification
+
+From clean source `7fd31c0137f6979f945e5ab4d320e7adb552c03d`, tree
+`c6b6c89cecde30b2b3a7cf057ec61317a38a5634`, this exact command completed with exit 0:
+
+```bash
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The gate ran from 2026-08-20 22:35:55 to 22:57:08 AEST. Its 285,006-byte, 3,889-line log is
+`/tmp/geosolve-m82-clean-gate.7fd31c0.nix.log`, SHA-256
+`7f4ef08a66851c1a117bf091af6bfb49a83abf33face7807e451e9b75ae064cf`. It passed
+formatting/diff hygiene, warnings-denied locked all-feature workspace Clippy, locked all-feature
+workspace tests, exact 272-row golden `--require-clean`, M70/M71/M74/M75/M76/M77/M79
+native/WASM parity, the demo WASM check, warnings-denied Rustdoc, benchmark compilation, M14 and
+M32 performance budgets, the ignored 256-moving-body sparse crossover in 116.35 seconds,
+licence/package checks and Trunk 0.21.14 release assembly.
+
+## Immutable candidate and served-byte evidence
+
+Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
+`/tmp/geosolve-m82-uat.I58j21` and byte-compared before and after freezing. The directory is
+`0555`; all seven entries are regular non-symlink files at `0444`. Its C-locale ordered
+`sha256sum *` manifest aggregate is
+`cb07c77de43544be251f97321bba8f978a018078a7b332d3752b39b55dff1a8e`:
+
+```text
+7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+097763e8b1ced1036bed0e5ecd274d5397f0ba22bea5eab5686be4e05172b2f1  geosolve-demo-web-7d599d5013bda062.js
+42785f524cb60d34c251a9ec7ae860b0039717ae25f77d75f9c8f919adc5431f  geosolve-demo-web-7d599d5013bda062_bg.wasm
+8c8608a6520ac907375b562c5f3e7936f278912198d809c14df59fdc38db8072  index.html
+cd7ea776b4f36425bd0eb23589d9540c5847ba1cad2f3d7aecb6bf49e288685a  styles-4cca540fadc7a849.css
+```
+
+| File | Bytes |
+| --- | ---: |
+| `API_COMPATIBILITY.md` | 28,079 |
+| `LICENSE` | 35,148 |
+| `THIRD_PARTY_LICENSES.md` | 3,120 |
+| `geosolve-demo-web-7d599d5013bda062.js` | 33,750 |
+| `geosolve-demo-web-7d599d5013bda062_bg.wasm` | 7,955,136 |
+| `index.html` | 31,900 |
+| `styles-4cca540fadc7a849.css` | 38,736 |
+
+Temporary service `geosolve-m82-temp-uat.service`, PID `1184609`, first served only that snapshot
+at `100.94.63.83:18080`. Proxy-disabled, cache-bypassed identity requests for `/` and all seven
+files returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected
+media type and length, and snapshot-identical bytes; `/` equals `index.html`. Evidence is
+`/tmp/geosolve-m82-temp-verify.QnWhyi/results.tsv`, SHA-256
+`1355605506f1a656e8ec883e57bc989727f8c24838172a82d46540d3b94748a6`.
+
+Only after that ledger passed, `geosolve-m82-uat.service`, PID `1188633`, began serving the same
+immutable directory at `http://100.94.63.83:8080/`. The same eight checks passed independently;
+final evidence is `/tmp/geosolve-m82-final-verify.Jlu7xZ/results.tsv`, with the same ledger hash
+because every asserted path/status/type/length/body hash is identical. The temporary listener is
+retired and the retained `:8080` service remains live for focused human UAT.
+
+This evidence-only documentation is a descendant of the nominated product source. It does not
+replace that source/tree or rebuild its artifact.
 
 ## Compatibility guardrails and remaining boundary
 
@@ -223,6 +289,5 @@ the final committed tree before any UAT nomination.
 - Computed-on-computed chaining, topology repair, trimming/splitting, loop removal, distance
   reduction and stable generated-edge naming remain explicit non-goals.
 
-The only remaining nomination work is the clean committed-tree release gate, no-rebuild immutable
-artifact freeze, exact Tailscale byte verification and the human scorecard in `docs/M82_UAT.md`.
-GitHub Pages publication and M82 closure remain blocked on explicit supervising-human acceptance.
+The only remaining acceptance work is the human scorecard in `docs/M82_UAT.md`, an explicit
+supervising-human decision, exact GitHub Pages publication and closeout. M82 remains active.

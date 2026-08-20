@@ -81,10 +81,10 @@ clean release qualification and immutable served nomination at exact source `29d
 `44ecb95`. Supervising-human UAT and exact GitHub Pages publication pass.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
 but those candidates are withdrawn from acceptance and are no longer served. M1–M81 are complete.
-M82 is active with implementation and development qualification complete: it preserves M80
-native `ProfileOffset` while adding ADR 0038's certified computed Offset route for regular
-built-in general curves, faces and chains. Final clean qualification, frozen nomination and human
-acceptance remain pending.
+M82 is active with implementation, clean qualification and immutable Tailscale nomination
+complete: it preserves M80 native `ProfileOffset` while adding ADR 0038's certified computed
+Offset route for regular built-in general curves, faces and chains. Human UAT, explicit approval,
+exact Pages publication and closeout remain pending.
 M81 remains the closed behavior-preserving core-architecture consolidation.
 M76's
 implementation,
@@ -5572,8 +5572,7 @@ abstraction.
 
 ### M82: certified computed all-family Curve Offset
 
-Status: **implementation and development qualification complete; final clean release gate,
-frozen nomination and human UAT pending**. `docs/M82_GOALS.md` owns the approved product and
+Status: **clean-qualified and immutably nominated; human UAT pending**. `docs/M82_GOALS.md` owns the approved product and
 mathematical contract, ADR 0038 owns the architecture, `docs/M82_IMPLEMENTATION.md` records actual
 evidence and `docs/M82_UAT.md` is prepared but not executed. M82 is not accepted or closed.
 
@@ -5600,9 +5599,10 @@ evidence and `docs/M82_UAT.md` is prepared but not executed. M82 is not accepted
   lifecycle/routing/persistence regressions and independently review any justified golden row.
 - [x] Pass focused native/WASM/editor/demo qualification, formatting, diff hygiene, warnings-
   denied workspace Clippy/Rustdoc, locked all-feature tests and the reviewed 272-row golden gate.
-- [ ] From a clean committed source, pass the complete release gate; freeze and byte-verify the
-  no-rebuild Tailscale candidate; execute the prepared human UAT; receive explicit approval;
-  publish exact Pages bytes and close M82 before starting another milestone.
+- [x] From a clean committed source, pass the complete release gate and freeze and byte-verify the
+  no-rebuild Tailscale candidate.
+- [ ] Execute the prepared human UAT, receive explicit approval, publish exact Pages bytes and
+  close M82 before starting another milestone.
 
 Implementation note (2026-08-20): M82-F001 makes provisional Curve Offset evaluation cold with
 respect to unrelated Fillet continuation state; M82-F002 admits only persistently owned opposite-
@@ -5612,7 +5612,9 @@ collector when computed-feature identity changes without a sketch-input change, 
 editing a computed Fillet cannot leave stale source exclusions. The reviewed golden inventory is
 exactly 272 `PASS` rows, adding only `feature.curve-offset.authoring.general-open-chain`. Focused owner,
 workspace, Clippy/Rustdoc, WASM and release-assembly development evidence passes; the exact clean
-committed-tree release record and no-rebuild artifact authority remain intentionally pending.
+committed-tree release record and no-rebuild artifact authority pass at source `7fd31c0`, tree
+`c6b6c89`, snapshot `/tmp/geosolve-m82-uat.I58j21` and
+`http://100.94.63.83:8080/`. Human UAT and explicit approval remain pending.
 
 Gate: every Current computed output is finite, certified within the recorded error bounds,
 regular and topology-preserving; any uncertainty or barrier publishes no partial output and no
