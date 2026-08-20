@@ -6,8 +6,8 @@ use super::{
     DocumentProfileOffsetCreationJunction, DocumentProfileOffsetCreationOperand,
     DocumentProfileOffsetCreationPath, DocumentProfileOffsetJunctionBranch,
     DocumentProfileOffsetJunctionOwner, DocumentProfileOffsetTurn, MAX_PROFILE_OFFSET_SPANS,
-    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetJoinOwner, OffsetOperandIndex,
-    OffsetOperandIneligibility, OffsetOperandEligibility, OffsetTraversal,
+    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetJoinOwner,
+    OffsetOperandEligibility, OffsetOperandIndex, OffsetOperandIneligibility, OffsetTraversal,
     PROFILE_OFFSET_TANGENT_CROSS_TOLERANCE, SketchDocument, SketchOperationIncompleteReason,
     SketchOperationUnsupportedReason, SketchProfileOffsetOperand, cross,
 };
