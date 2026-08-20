@@ -178,9 +178,9 @@ fn plan_profile_offset_path(
             })?;
         let owner = adjacency
             .owners
-            .first()
+            .iter()
             .copied()
-            .map(document_profile_offset_owner)
+            .find_map(document_profile_offset_owner)
             .ok_or_else(|| {
                 ProfileOffsetPlanFailure::Incomplete(
                     SketchOperationIncompleteReason::ProfileOffsetDisconnectedJoin {
@@ -258,14 +258,15 @@ fn selected_branch_endpoint(
 
 const fn document_profile_offset_owner(
     owner: OffsetJoinOwner,
-) -> DocumentProfileOffsetJunctionOwner {
+) -> Option<DocumentProfileOffsetJunctionOwner> {
     match owner {
         OffsetJoinOwner::SharedPoint(point) => {
-            DocumentProfileOffsetJunctionOwner::SharedPoint(point)
+            Some(DocumentProfileOffsetJunctionOwner::SharedPoint(point))
         }
         OffsetJoinOwner::Constraint(constraint) => {
-            DocumentProfileOffsetJunctionOwner::Constraint(constraint)
+            Some(DocumentProfileOffsetJunctionOwner::Constraint(constraint))
         }
+        OffsetJoinOwner::IntrinsicSpanBoundary => None,
     }
 }
 

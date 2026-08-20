@@ -3,17 +3,28 @@
 use std::collections::BTreeSet;
 
 use geosolve_sketch::{
-    ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentArcSweep,
-    DocumentCurveNormalSide, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
-    DocumentTrimBoundary, DocumentTrimParameter, GeometryRole, OperationCheckpoint,
-    OperationControl, OperationController, OperationOutcome, OperationWorkCounter,
-    PreparedSketchInput, RetainedSketchDocumentSession, SketchAcceptedStateIdentity,
-    SketchDocument, TangentOrientation,
+    ContactDomain, ContactNeighborhood, CurveDefinition, CurveOffsetCertificate, CurveOffsetError,
+    CurveOffsetGeometry, CurveOffsetOptions, CurveOffsetTraversal, CurveSpan, DocumentArcSweep,
+    DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveNormalSide,
+    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentTrimBoundary,
+    DocumentTrimParameter, GeometryRole, OperationCheckpoint, OperationControl,
+    OperationController, OperationOutcome, OperationWorkCounter, PreparedSketchInput,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchAcceptedStateIdentity,
+    SketchDocument, TangentOrientation, VisualProfileOptions, VisualProfileOrientation,
+    VisualProfileStatus, compute_curve_offset_with_controller,
+};
+use geosolve_sketch_topology::{
+    OffsetContourKey, OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetFaceKey,
+    OffsetJoinOwner, OffsetOperandIndex, OffsetOperandRequest, OffsetTraversal,
+    PreparedOffsetOperandQuery,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::document::{
+    ComputedCurveOffset, ComputedCurveOffsetDirectedSpan, ComputedCurveOffsetJunction,
+    ComputedCurveOffsetJunctionBranch, ComputedCurveOffsetJunctionProvenance,
+    ComputedCurveOffsetLoop, ComputedCurveOffsetOperand, ComputedCurveOffsetTraversal,
     ComputedFeature, ComputedFeatureCornerId, ComputedFeatureDefinition, ComputedFeatureDocument,
     ComputedFeatureDocumentError, ComputedFeatureDocumentIdentity, ComputedFeatureId,
     ComputedFilletCorner, ComputedFilletParent, NativeCurveSpanSource, NewComputedFilletCorner,
@@ -137,6 +148,8 @@ pub struct ComputedFeatureEvaluationSnapshot {
     input: ComputedFeatureEvaluationInput,
     sketch: SketchDocument,
     features: ComputedFeatureDocument,
+    offset_operand_index: Option<OffsetOperandIndex>,
+    offset_operand_query: Option<PreparedOffsetOperandQuery>,
     continuation_hints: Vec<ComputedFilletContinuation>,
 }
 
@@ -169,6 +182,7 @@ impl ComputedFeatureEvaluationSnapshot {
         {
             return Err(ComputedFeatureSnapshotError::AcceptedInputMismatch);
         }
+        let offset_operand_query = capture_offset_operand_query(session, features);
         Ok(Self {
             input: ComputedFeatureEvaluationInput {
                 sketch,
@@ -178,6 +192,8 @@ impl ComputedFeatureEvaluationSnapshot {
             },
             sketch: accepted.document().clone(),
             features: features.clone(),
+            offset_operand_index: None,
+            offset_operand_query,
             continuation_hints: Vec::new(),
         })
     }
@@ -247,6 +263,22 @@ impl ComputedFeatureEvaluationSnapshot {
             evaluation: allocator.allocate()?,
         })
     }
+}
+
+fn capture_offset_operand_query(
+    session: &RetainedSketchDocumentSession,
+    features: &ComputedFeatureDocument,
+) -> Option<PreparedOffsetOperandQuery> {
+    let required = features.features().iter().any(|feature| {
+        matches!(
+            &feature.definition,
+            ComputedFeatureDefinition::CurveOffset(_)
+        )
+    });
+    if !required {
+        return None;
+    }
+    PreparedOffsetOperandQuery::capture(session, OffsetOperandRequest::default()).ok()
 }
 
 /// Immutable accepted sketch used to resolve authoring picks into persistent intent.
@@ -740,9 +772,9 @@ impl PreparedComputedFeatureEvaluation {
             .features
             .features()
             .iter()
-            .map(|feature| {
-                let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
-                fillet.corners.len()
+            .map(|feature| match &feature.definition {
+                ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners.len(),
+                ComputedFeatureDefinition::CurveOffset(_) => 0,
             })
             .sum::<usize>();
         if feature_count > policy.max_features {
@@ -769,7 +801,28 @@ impl PreparedComputedFeatureEvaluation {
         {
             return Ok(None);
         }
-        let result = evaluate_snapshot(&self.snapshot, self.evaluation, controller)?;
+        let mut snapshot = self.snapshot;
+        if let Some(query) = snapshot.offset_operand_query.take() {
+            let outcome = query.execute(controller.child_control());
+            snapshot.offset_operand_index = match outcome {
+                Ok(OperationOutcome::Completed { value, report }) => {
+                    if controller.absorb_child_report(report).is_err() {
+                        return Ok(None);
+                    }
+                    value.operand_index
+                }
+                Ok(
+                    OperationOutcome::Cancelled { report }
+                    | OperationOutcome::WorkExhausted { report },
+                ) => {
+                    let _ = controller.absorb_child_report(report);
+                    return Ok(None);
+                }
+                Err(_) => None,
+                Ok(_) => return Ok(None),
+            };
+        }
+        let result = evaluate_snapshot(&snapshot, self.evaluation, controller)?;
         if controller.is_stopped() {
             return Ok(None);
         }
@@ -1152,6 +1205,7 @@ pub enum ComputedEdgeGeometry {
         interval: ComputedSourceInterval,
     },
     CircularArc(ComputedCircularArc),
+    CurveOffset(CurveOffsetGeometry),
 }
 
 /// Stable provenance for revision-local generated geometry.
@@ -1167,6 +1221,10 @@ pub enum ComputedEdgeProvenance {
     FilletArc {
         owner: ComputedCornerRef,
         sources: [NativeCurveSpanSource; 2],
+    },
+    CurveOffset {
+        owner: ComputedFeatureId,
+        source: NativeCurveSpanSource,
     },
 }
 
@@ -1243,6 +1301,17 @@ pub enum ComputedFeatureFailure {
     UncertifiedBranch { corner: ComputedFeatureCornerId },
     #[error("corner {corner:?} has parallel or near-singular parents")]
     SingularParents { corner: ComputedFeatureCornerId },
+    #[error("Curve Offset references missing native span {span_source:?}")]
+    OffsetMissingSource { span_source: NativeCurveSpanSource },
+    #[error("Curve Offset source {span_source:?} cannot produce a regular parallel curve: {kind}")]
+    OffsetCurveFailure {
+        span_source: NativeCurveSpanSource,
+        kind: &'static str,
+    },
+    #[error("Curve Offset has an invalid or unavailable {kind} junction")]
+    OffsetJunctionFailure { kind: &'static str },
+    #[error("Curve Offset output self-intersects, touches, or changes topology")]
+    OffsetTopologyChange,
     #[error("corner {corner:?} reaches a singular parent offset")]
     OffsetSingularity { corner: ComputedFeatureCornerId },
     #[error("corner {corner:?} produced non-finite or invalid geometry")]
@@ -1265,6 +1334,7 @@ pub enum ComputedFeatureFailure {
 pub enum ComputedFeatureEvaluationState {
     Current {
         corner_edges: Vec<(ComputedFeatureCornerId, ComputedEdgeId)>,
+        generated_edges: Vec<ComputedEdgeId>,
     },
     Failed {
         failure: ComputedFeatureFailure,
@@ -1345,12 +1415,25 @@ impl ComputedFeatureSnapshot {
         }
         let mut reanchored = features.clone();
         for feature in features.features() {
-            let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
             let evaluation = self
                 .features
                 .iter()
                 .find(|evaluation| evaluation.feature == feature.id)
                 .ok_or(ComputedFeatureReanchorError::IncompleteEvaluation)?;
+            let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
+                if matches!(
+                    (&evaluation.state, feature.suppressed),
+                    (ComputedFeatureEvaluationState::Suppressed, true)
+                        | (
+                            ComputedFeatureEvaluationState::Failed { .. }
+                                | ComputedFeatureEvaluationState::Current { .. },
+                            false,
+                        )
+                ) {
+                    continue;
+                }
+                return Err(ComputedFeatureReanchorError::IncompleteEvaluation);
+            };
             match (&evaluation.state, feature.suppressed) {
                 (ComputedFeatureEvaluationState::Suppressed, true)
                 | (ComputedFeatureEvaluationState::Failed { .. }, false) => {}
@@ -1567,6 +1650,31 @@ struct EvaluatedFeatureCandidate {
     corners: Vec<EvaluatedCorner>,
 }
 
+#[derive(Clone, Debug)]
+struct EvaluatedCurveOffsetEdge {
+    role: GeometryRole,
+    source: NativeCurveSpanSource,
+    geometry: CurveOffsetGeometry,
+    certificate: CurveOffsetCertificate,
+    /// Position-error bounds at each fitted patch endpoint. Fresh Hermite patches are exact at
+    /// both ends. Curved inner-miter trimming can introduce a certified nonzero error at the new
+    /// endpoint, which the mathematical error-tube validator must retain rather than silently
+    /// treating the split point as another exact Hermite boundary.
+    patch_endpoint_position_errors: Vec<[f64; 2]>,
+}
+
+#[derive(Clone, Debug)]
+struct EvaluatedCurveOffsetPath {
+    closed: bool,
+    edges: Vec<EvaluatedCurveOffsetEdge>,
+}
+
+#[derive(Clone, Debug)]
+struct EvaluatedCurveOffsetCandidate {
+    feature: ComputedFeatureId,
+    edges: Vec<EvaluatedCurveOffsetEdge>,
+}
+
 #[allow(
     clippy::too_many_lines,
     reason = "atomic feature evaluation and edge publication remain one auditable staged path"
@@ -1577,6 +1685,7 @@ fn evaluate_snapshot(
     controller: &mut OperationController,
 ) -> Result<ComputedFeatureSnapshot, ComputedFeatureEvaluationError> {
     let mut candidates = Vec::new();
+    let mut offset_candidates = Vec::new();
     let mut evaluations = Vec::new();
 
     for feature in snapshot.features.features() {
@@ -1587,14 +1696,28 @@ fn evaluate_snapshot(
             });
             continue;
         }
-        match evaluate_feature(
-            &snapshot.sketch,
-            feature,
-            &snapshot.continuation_hints,
-            snapshot.input.policy,
-            controller,
-        ) {
-            Ok(candidate) => candidates.push(candidate),
+        let evaluated = match &feature.definition {
+            ComputedFeatureDefinition::FilletSet(_) => evaluate_feature(
+                &snapshot.sketch,
+                feature,
+                &snapshot.continuation_hints,
+                snapshot.input.policy,
+                controller,
+            )
+            .map(EvaluatedCandidate::Fillet),
+            ComputedFeatureDefinition::CurveOffset(offset) => evaluate_curve_offset_feature(
+                &snapshot.sketch,
+                snapshot.offset_operand_index.as_ref(),
+                feature.id,
+                offset,
+                snapshot.input.policy,
+                controller,
+            )
+            .map(EvaluatedCandidate::CurveOffset),
+        };
+        match evaluated {
+            Ok(EvaluatedCandidate::Fillet(candidate)) => candidates.push(candidate),
+            Ok(EvaluatedCandidate::CurveOffset(candidate)) => offset_candidates.push(candidate),
             Err(EvaluateFeatureError::Stopped) => {
                 return Ok(empty_interrupted_snapshot(&snapshot.input, evaluation));
             }
@@ -1616,6 +1739,43 @@ fn evaluate_snapshot(
         });
     }
     candidates.retain(|candidate| !failed_features.contains(&candidate.feature));
+
+    // Active computed Fillets own source replacement before any computed Offset is composed.
+    // Curve Offset remains source-only in V1/V2 and therefore cannot silently consume either the
+    // discarded native interval or the revision-local Fillet arc.
+    let fillet_replaced_sources = candidates
+        .iter()
+        .flat_map(|candidate| candidate.corners.iter())
+        .flat_map(|corner| corner.claims)
+        .map(|claim| claim.source)
+        .collect::<BTreeSet<_>>();
+    let mut offset_source_conflicts = Vec::new();
+    offset_candidates.retain(|candidate| {
+        let conflict = candidate
+            .edges
+            .iter()
+            .map(|edge| edge.source)
+            .find(|source| fillet_replaced_sources.contains(source));
+        if let Some(span_source) = conflict {
+            offset_source_conflicts.push((candidate.feature, span_source));
+            false
+        } else {
+            true
+        }
+    });
+    evaluations.extend(
+        offset_source_conflicts
+            .into_iter()
+            .map(|(feature, span_source)| ComputedFeatureEvaluation {
+                feature,
+                state: ComputedFeatureEvaluationState::Failed {
+                    failure: ComputedFeatureFailure::OffsetCurveFailure {
+                        span_source,
+                        kind: "active computed Fillet source replacement",
+                    },
+                },
+            }),
+    );
 
     let compositions = compose_sources(&candidates);
     let mut edges = Vec::new();
@@ -1731,7 +1891,50 @@ fn evaluate_snapshot(
         }
         evaluations.push(ComputedFeatureEvaluation {
             feature: candidate.feature,
-            state: ComputedFeatureEvaluationState::Current { corner_edges },
+            state: ComputedFeatureEvaluationState::Current {
+                corner_edges,
+                generated_edges: Vec::new(),
+            },
+        });
+    }
+    for candidate in offset_candidates {
+        let mut generated_edges = Vec::with_capacity(candidate.edges.len());
+        for edge in candidate.edges {
+            if controller
+                .charge(
+                    OperationWorkCounter::ProfileFragments,
+                    1,
+                    OperationCheckpoint::DocumentLowering,
+                )
+                .is_err()
+            {
+                return Ok(empty_interrupted_snapshot(&snapshot.input, evaluation));
+            }
+            if edges.len() >= snapshot.input.policy.max_edges {
+                return Err(ComputedFeatureEvaluationError::PolicyLimitExceeded {
+                    resource: "edges",
+                    actual: edges.len().saturating_add(1),
+                    limit: snapshot.input.policy.max_edges,
+                });
+            }
+            let id = edge_id(evaluation, edges.len())?;
+            generated_edges.push(id);
+            edges.push(ComputedEdge {
+                id,
+                role: edge.role,
+                geometry: ComputedEdgeGeometry::CurveOffset(edge.geometry),
+                provenance: ComputedEdgeProvenance::CurveOffset {
+                    owner: candidate.feature,
+                    source: edge.source,
+                },
+            });
+        }
+        evaluations.push(ComputedFeatureEvaluation {
+            feature: candidate.feature,
+            state: ComputedFeatureEvaluationState::Current {
+                corner_edges: Vec::new(),
+                generated_edges,
+            },
         });
     }
     evaluations.sort_by_key(|evaluation| evaluation.feature);
@@ -1783,6 +1986,2490 @@ enum EvaluateFeatureError {
     Failure(ComputedFeatureFailure),
 }
 
+enum EvaluatedCandidate {
+    Fillet(EvaluatedFeatureCandidate),
+    CurveOffset(EvaluatedCurveOffsetCandidate),
+}
+
+fn authenticate_curve_offset_operand(
+    index: &OffsetOperandIndex,
+    operand: &ComputedCurveOffsetOperand,
+) -> Result<(), EvaluateFeatureError> {
+    match operand {
+        ComputedCurveOffsetOperand::Face { outer, holes, .. } => {
+            let key = OffsetFaceKey {
+                outer: offset_contour_key(outer),
+                holes: holes.iter().map(offset_contour_key).collect(),
+            };
+            let candidate = index
+                .face(&key)
+                .filter(|candidate| candidate.computed_eligibility.is_eligible())
+                .ok_or_else(offset_topology_change)?;
+            if candidate.key != key {
+                return Err(offset_topology_change());
+            }
+            authenticate_curve_offset_loop(index, outer)?;
+            for hole in holes {
+                authenticate_curve_offset_loop(index, hole)?;
+            }
+        }
+        ComputedCurveOffsetOperand::OpenChain { chain, .. } => {
+            if chain.spans.is_empty()
+                || chain.spans.iter().any(|directed| {
+                    index.span(directed.source.span).is_none_or(|candidate| {
+                        candidate.periodic || !candidate.computed_eligibility.is_eligible()
+                    })
+                })
+                || chain.junctions.len() != chain.spans.len().saturating_sub(1)
+            {
+                return Err(offset_topology_change());
+            }
+            for (pair, junction) in chain.spans.windows(2).zip(&chain.junctions) {
+                authenticate_curve_offset_junction(index, pair[0], pair[1], *junction)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn authenticate_curve_offset_loop(
+    index: &OffsetOperandIndex,
+    loop_intent: &ComputedCurveOffsetLoop,
+) -> Result<(), EvaluateFeatureError> {
+    if loop_intent.spans.is_empty()
+        || loop_intent.spans.iter().any(|directed| {
+            index
+                .span(directed.source.span)
+                .is_none_or(|candidate| !candidate.computed_eligibility.is_eligible())
+        })
+    {
+        return Err(offset_topology_change());
+    }
+    let periodic_single = loop_intent.spans.len() == 1
+        && index
+            .span(loop_intent.spans[0].source.span)
+            .is_some_and(|candidate| candidate.periodic);
+    if periodic_single {
+        return loop_intent
+            .junctions
+            .is_empty()
+            .then_some(())
+            .ok_or_else(offset_topology_change);
+    }
+    if loop_intent.junctions.len() != loop_intent.spans.len() {
+        return Err(offset_topology_change());
+    }
+    for index_in_loop in 0..loop_intent.spans.len() {
+        authenticate_curve_offset_junction(
+            index,
+            loop_intent.spans[index_in_loop],
+            loop_intent.spans[(index_in_loop + 1) % loop_intent.spans.len()],
+            loop_intent.junctions[index_in_loop],
+        )?;
+    }
+    Ok(())
+}
+
+fn offset_contour_key(loop_intent: &ComputedCurveOffsetLoop) -> OffsetContourKey {
+    OffsetContourKey {
+        spans: loop_intent
+            .spans
+            .iter()
+            .copied()
+            .map(topology_directed_span)
+            .collect(),
+    }
+}
+
+const fn topology_directed_span(directed: ComputedCurveOffsetDirectedSpan) -> OffsetDirectedSpan {
+    OffsetDirectedSpan {
+        span: directed.source.span,
+        traversal: match directed.traversal {
+            ComputedCurveOffsetTraversal::Forward => OffsetTraversal::Forward,
+            ComputedCurveOffsetTraversal::Reverse => OffsetTraversal::Reverse,
+        },
+    }
+}
+
+const fn topology_directed_endpoint(
+    directed: ComputedCurveOffsetDirectedSpan,
+    start: bool,
+) -> OffsetEndpointRef {
+    let endpoint = match (directed.traversal, start) {
+        (ComputedCurveOffsetTraversal::Forward, true)
+        | (ComputedCurveOffsetTraversal::Reverse, false) => OffsetEndpointRole::Start,
+        (ComputedCurveOffsetTraversal::Forward, false)
+        | (ComputedCurveOffsetTraversal::Reverse, true) => OffsetEndpointRole::End,
+    };
+    OffsetEndpointRef {
+        span: directed.source.span,
+        endpoint,
+    }
+}
+
+fn authenticate_curve_offset_junction(
+    index: &OffsetOperandIndex,
+    current: ComputedCurveOffsetDirectedSpan,
+    next: ComputedCurveOffsetDirectedSpan,
+    junction: ComputedCurveOffsetJunction,
+) -> Result<(), EvaluateFeatureError> {
+    let current_end = topology_directed_endpoint(current, false);
+    let next_start = topology_directed_endpoint(next, true);
+    let retained_owner = match junction.provenance {
+        ComputedCurveOffsetJunctionProvenance::SharedPoint(point) => {
+            OffsetJoinOwner::SharedPoint(point)
+        }
+        ComputedCurveOffsetJunctionProvenance::Constraint(constraint) => {
+            OffsetJoinOwner::Constraint(constraint)
+        }
+        ComputedCurveOffsetJunctionProvenance::IntrinsicSpanBoundary => {
+            OffsetJoinOwner::IntrinsicSpanBoundary
+        }
+    };
+    if index
+        .adjacency_owners(current_end, next_start)
+        .is_none_or(|owners| !owners.contains(&retained_owner))
+    {
+        return Err(offset_topology_change());
+    }
+    Ok(())
+}
+
+fn evaluate_curve_offset_feature(
+    sketch: &SketchDocument,
+    operand_index: Option<&OffsetOperandIndex>,
+    feature: ComputedFeatureId,
+    offset: &ComputedCurveOffset,
+    policy: ComputedFeatureEvaluationPolicy,
+    controller: &mut OperationController,
+) -> Result<EvaluatedCurveOffsetCandidate, EvaluateFeatureError> {
+    let mut options = CurveOffsetOptions::for_model_scale(sketch.model_scale());
+    options.max_patches = options.max_patches.min(policy.max_edges);
+    let mut paths = Vec::new();
+    match &offset.operand {
+        ComputedCurveOffsetOperand::OpenChain { side, chain } => {
+            let signed_distance = match side {
+                geosolve_sketch::DocumentLineSide::Left => offset.distance,
+                geosolve_sketch::DocumentLineSide::Right => -offset.distance,
+            };
+            paths.push(evaluate_curve_offset_path(
+                sketch,
+                &chain.spans,
+                &chain.junctions,
+                false,
+                signed_distance,
+                options,
+                controller,
+            )?);
+        }
+        ComputedCurveOffsetOperand::Face {
+            direction,
+            outer,
+            holes,
+        } => {
+            let signed_distance = match direction {
+                geosolve_sketch::DocumentFaceOffsetDirection::Outward => -offset.distance,
+                geosolve_sketch::DocumentFaceOffsetDirection::Inward => offset.distance,
+            };
+            paths.push(evaluate_curve_offset_loop(
+                sketch,
+                outer,
+                signed_distance,
+                options,
+                controller,
+            )?);
+            for hole in holes {
+                paths.push(evaluate_curve_offset_loop(
+                    sketch,
+                    hole,
+                    signed_distance,
+                    options,
+                    controller,
+                )?);
+            }
+        }
+    }
+    authenticate_curve_offset_operand(
+        operand_index.ok_or_else(offset_topology_change)?,
+        &offset.operand,
+    )?;
+    validate_curve_offset_topology(
+        &paths,
+        sketch.model_scale(),
+        matches!(offset.operand, ComputedCurveOffsetOperand::Face { .. }),
+        controller,
+    )?;
+    let edges = paths.into_iter().flat_map(|path| path.edges).collect();
+    Ok(EvaluatedCurveOffsetCandidate { feature, edges })
+}
+
+fn evaluate_curve_offset_loop(
+    sketch: &SketchDocument,
+    source: &ComputedCurveOffsetLoop,
+    signed_distance: f64,
+    options: CurveOffsetOptions,
+    controller: &mut OperationController,
+) -> Result<EvaluatedCurveOffsetPath, EvaluateFeatureError> {
+    evaluate_curve_offset_path(
+        sketch,
+        &source.spans,
+        &source.junctions,
+        true,
+        signed_distance,
+        options,
+        controller,
+    )
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the ordered source, junction and terminal transaction is clearer as one fail-closed path evaluator"
+)]
+fn evaluate_curve_offset_path(
+    sketch: &SketchDocument,
+    sources: &[ComputedCurveOffsetDirectedSpan],
+    junctions: &[ComputedCurveOffsetJunction],
+    closed: bool,
+    signed_distance: f64,
+    options: CurveOffsetOptions,
+    controller: &mut OperationController,
+) -> Result<EvaluatedCurveOffsetPath, EvaluateFeatureError> {
+    let valid_junction_count = if closed && sources.len() == 1 {
+        junctions.len() <= 1
+    } else {
+        let expected = if closed {
+            sources.len()
+        } else {
+            sources.len().saturating_sub(1)
+        };
+        junctions.len() == expected
+    };
+    if sources.is_empty() || !valid_junction_count {
+        return Err(EvaluateFeatureError::Failure(
+            ComputedFeatureFailure::OffsetJunctionFailure {
+                kind: "source topology",
+            },
+        ));
+    }
+    let mut source_edges = Vec::with_capacity(sources.len());
+    for source in sources {
+        if controller
+            .checkpoint(OperationCheckpoint::ProfileSubdivision)
+            .is_err()
+        {
+            return Err(EvaluateFeatureError::Stopped);
+        }
+        let role =
+            sketch
+                .geometry_role(source.source.span.curve)
+                .ok_or(EvaluateFeatureError::Failure(
+                    ComputedFeatureFailure::OffsetMissingSource {
+                        span_source: source.source,
+                    },
+                ))?;
+        if role != GeometryRole::Profile {
+            return Err(EvaluateFeatureError::Failure(
+                ComputedFeatureFailure::OffsetCurveFailure {
+                    span_source: source.source,
+                    kind: "non-profile source",
+                },
+            ));
+        }
+        let traversal = match source.traversal {
+            ComputedCurveOffsetTraversal::Forward => CurveOffsetTraversal::Forward,
+            ComputedCurveOffsetTraversal::Reverse => CurveOffsetTraversal::Reverse,
+        };
+        let Some(result) = compute_curve_offset_with_controller(
+            sketch,
+            source.source.span,
+            traversal,
+            signed_distance,
+            options,
+            controller,
+        )
+        .map_err(|error| {
+            EvaluateFeatureError::Failure(ComputedFeatureFailure::OffsetCurveFailure {
+                span_source: source.source,
+                kind: curve_offset_error_kind(&error),
+            })
+        })?
+        else {
+            return Err(EvaluateFeatureError::Stopped);
+        };
+        source_edges.push(EvaluatedCurveOffsetEdge {
+            role,
+            source: source.source,
+            patch_endpoint_position_errors: curve_offset_patch_endpoint_errors(&result.geometry),
+            geometry: result.geometry,
+            certificate: result.certificate,
+        });
+    }
+
+    let mut junction_edges = vec![Vec::new(); source_edges.len()];
+    for index in 0..source_edges.len() {
+        let Some(junction) = junctions.get(index) else {
+            continue;
+        };
+        let next_index = (index + 1) % source_edges.len();
+        let resolution = curve_offset_junction_edges(
+            &source_edges[index],
+            &source_edges[next_index],
+            *junction,
+            signed_distance.abs(),
+            sketch.model_scale(),
+            options,
+            controller,
+        )?;
+        if let Some(edge) = resolution.current_edge {
+            source_edges[index] = edge;
+        }
+        if let Some(edge) = resolution.next_edge {
+            source_edges[next_index] = edge;
+        }
+        junction_edges[index] = resolution.connectors;
+    }
+    let mut output = Vec::new();
+    for (edge, connectors) in source_edges.into_iter().zip(junction_edges) {
+        output.push(edge);
+        output.extend(connectors);
+    }
+    Ok(EvaluatedCurveOffsetPath {
+        closed,
+        edges: output,
+    })
+}
+
+fn curve_offset_error_kind(error: &CurveOffsetError) -> &'static str {
+    match error {
+        CurveOffsetError::InvalidDistance => "invalid distance",
+        CurveOffsetError::InvalidOptions => "invalid evaluation policy",
+        CurveOffsetError::InvalidSource => "missing or invalid source",
+        CurveOffsetError::InvalidGeometry => "non-finite or rational-pole geometry",
+        CurveOffsetError::IrregularSource => "uncertified zero-speed source",
+        CurveOffsetError::OffsetCusp => "curvature cusp",
+        CurveOffsetError::ApproximationToleranceUnmet(_) => "approximation tolerance",
+        CurveOffsetError::PatchLimitExceeded(_) => "approximation budget",
+        _ => "unsupported curve-offset failure",
+    }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "tangent and miter branch certification intentionally stays in one explicit junction dispatcher"
+)]
+fn curve_offset_junction_edges(
+    current: &EvaluatedCurveOffsetEdge,
+    next: &EvaluatedCurveOffsetEdge,
+    junction: ComputedCurveOffsetJunction,
+    distance: f64,
+    model_scale: f64,
+    options: CurveOffsetOptions,
+    controller: &mut OperationController,
+) -> Result<CurveOffsetJunctionResolution, EvaluateFeatureError> {
+    let (_, current_end, _, current_tangent) = curve_offset_terminals(&current.geometry)?;
+    let (next_start, _, next_tangent, _) = curve_offset_terminals(&next.geometry)?;
+    let scale = model_scale
+        .abs()
+        .max(distance)
+        .max(norm(current_end))
+        .max(norm(next_start))
+        .max(1.0);
+    let tolerance = 1.0e-8 * model_scale.abs() + 256.0 * f64::EPSILON * scale;
+    match junction.branch {
+        ComputedCurveOffsetJunctionBranch::Tangent => {
+            if distance_between(current_end, next_start) > tolerance
+                || dot(current_tangent, next_tangent) < 1.0 - TANGENCY_TOLERANCE
+            {
+                return Err(EvaluateFeatureError::Failure(
+                    ComputedFeatureFailure::OffsetJunctionFailure { kind: "tangent" },
+                ));
+            }
+            Ok(CurveOffsetJunctionResolution::default())
+        }
+        ComputedCurveOffsetJunctionBranch::Miter { turn } => {
+            let turn_cross = cross(current_tangent, next_tangent);
+            let turn_matches = match turn {
+                crate::ComputedCurveOffsetTurn::Left => turn_cross > TANGENCY_TOLERANCE,
+                crate::ComputedCurveOffsetTurn::Right => turn_cross < -TANGENCY_TOLERANCE,
+            };
+            let denominator = turn_cross;
+            if !turn_matches || denominator.abs() <= TANGENCY_TOLERANCE {
+                return Err(EvaluateFeatureError::Failure(
+                    ComputedFeatureFailure::OffsetJunctionFailure {
+                        kind: "miter branch",
+                    },
+                ));
+            }
+            let displacement = subtract(next_start, current_end);
+            let first_parameter = cross(displacement, next_tangent) / denominator;
+            let second_parameter = cross(displacement, current_tangent) / denominator;
+            let miter = add(current_end, scale_vector(current_tangent, first_parameter));
+            let remote_limit = 1_000.0 * distance.max(tolerance);
+            if !miter.into_iter().all(f64::is_finite)
+                || distance_between(current_end, miter) > remote_limit
+                || distance_between(next_start, miter) > remote_limit
+            {
+                return Err(EvaluateFeatureError::Failure(
+                    ComputedFeatureFailure::OffsetJunctionFailure {
+                        kind: "remote miter",
+                    },
+                ));
+            }
+            let trims_current = first_parameter < -tolerance;
+            let trims_next = second_parameter > tolerance;
+            if trims_current != trims_next {
+                return Err(EvaluateFeatureError::Failure(
+                    ComputedFeatureFailure::OffsetJunctionFailure {
+                        kind: "inconsistent miter extent",
+                    },
+                ));
+            }
+            if !trims_current {
+                let mut connectors = Vec::new();
+                if distance_between(current_end, miter) > tolerance {
+                    connectors.push(exact_offset_connector(current.source, current_end, miter));
+                }
+                if distance_between(miter, next_start) > tolerance {
+                    connectors.push(exact_offset_connector(next.source, miter, next_start));
+                }
+                return Ok(CurveOffsetJunctionResolution {
+                    current_edge: None,
+                    next_edge: None,
+                    connectors,
+                });
+            }
+
+            if matches!(current.geometry, CurveOffsetGeometry::Line { .. })
+                && matches!(next.geometry, CurveOffsetGeometry::Line { .. })
+            {
+                let CurveOffsetGeometry::Line { start, .. } = current.geometry else {
+                    unreachable!("line-line branch was checked")
+                };
+                let CurveOffsetGeometry::Line { end, .. } = next.geometry else {
+                    unreachable!("line-line branch was checked")
+                };
+                let mut current_edge = current.clone();
+                current_edge.geometry = CurveOffsetGeometry::Line { start, end: miter };
+                let mut next_edge = next.clone();
+                next_edge.geometry = CurveOffsetGeometry::Line { start: miter, end };
+                return Ok(CurveOffsetJunctionResolution {
+                    current_edge: Some(current_edge),
+                    next_edge: Some(next_edge),
+                    connectors: Vec::new(),
+                });
+            }
+
+            let intersection = certify_curved_miter_intersection(
+                current,
+                next,
+                tolerance,
+                remote_limit,
+                model_scale,
+                controller,
+            )?;
+            let current_edge = trim_curve_offset_edge(
+                current,
+                intersection.current,
+                CurveOffsetTrimSide::Prefix,
+                intersection.position,
+                tolerance,
+            )?;
+            let next_edge = trim_curve_offset_edge(
+                next,
+                intersection.next,
+                CurveOffsetTrimSide::Suffix,
+                intersection.position,
+                tolerance,
+            )?;
+            certify_trimmed_curve_offset_fit(&current_edge, options)?;
+            certify_trimmed_curve_offset_fit(&next_edge, options)?;
+            let (_, trimmed_current_end, _, _) = curve_offset_terminals(&current_edge.geometry)?;
+            let (trimmed_next_start, _, _, _) = curve_offset_terminals(&next_edge.geometry)?;
+            if distance_between(trimmed_current_end, trimmed_next_start) > tolerance {
+                return Err(EvaluateFeatureError::Failure(
+                    ComputedFeatureFailure::OffsetJunctionFailure {
+                        kind: "uncertified curved miter closure",
+                    },
+                ));
+            }
+            Ok(CurveOffsetJunctionResolution {
+                current_edge: Some(current_edge),
+                next_edge: Some(next_edge),
+                connectors: Vec::new(),
+            })
+        }
+    }
+}
+
+#[derive(Default)]
+struct CurveOffsetJunctionResolution {
+    current_edge: Option<EvaluatedCurveOffsetEdge>,
+    next_edge: Option<EvaluatedCurveOffsetEdge>,
+    connectors: Vec<EvaluatedCurveOffsetEdge>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CurveOffsetGeometryParameter {
+    part: usize,
+    parameter: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CertifiedCurvedMiterIntersection {
+    current: CurveOffsetGeometryParameter,
+    next: CurveOffsetGeometryParameter,
+    position: [f64; 2],
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CurveOffsetTrimSide {
+    Prefix,
+    Suffix,
+}
+
+fn certify_curved_miter_intersection(
+    current: &EvaluatedCurveOffsetEdge,
+    next: &EvaluatedCurveOffsetEdge,
+    tolerance: f64,
+    remote_limit: f64,
+    model_scale: f64,
+    controller: &mut OperationController,
+) -> Result<CertifiedCurvedMiterIntersection, EvaluateFeatureError> {
+    let mut document = SketchDocument::new(model_scale.abs().max(f64::MIN_POSITIVE))
+        .map_err(|_| curved_miter_failure("curved miter intersection setup"))?;
+    let current_spans = add_fitted_miter_operand(&mut document, current, 0, tolerance)?;
+    let next_spans = add_fitted_miter_operand(&mut document, next, 1, tolerance)?;
+    let span_count = current_spans
+        .len()
+        .checked_add(next_spans.len())
+        .ok_or_else(|| curved_miter_failure("curved miter intersection budget"))?;
+    let candidate_pairs = span_count
+        .checked_mul(span_count.saturating_add(1))
+        .and_then(|value| value.checked_div(2))
+        .filter(|value| *value <= 2_000_000)
+        .ok_or_else(|| curved_miter_failure("curved miter intersection budget"))?;
+    let mut options = VisualProfileOptions::default();
+    options.max_candidate_pairs = options.max_candidate_pairs.max(candidate_pairs);
+    let analysis =
+        match document.analyze_visual_profiles_controlled(options, controller.child_control()) {
+            OperationOutcome::Completed { value, report } => {
+                controller
+                    .absorb_child_report(report)
+                    .map_err(|_| EvaluateFeatureError::Stopped)?;
+                value
+            }
+            OperationOutcome::Cancelled { report } | OperationOutcome::WorkExhausted { report } => {
+                let _ = controller.absorb_child_report(report);
+                return Err(EvaluateFeatureError::Stopped);
+            }
+            _ => return Err(EvaluateFeatureError::Stopped),
+        };
+    if analysis.status != VisualProfileStatus::Complete || !analysis.issues.is_empty() {
+        return Err(curved_miter_failure(
+            "uncertified curved miter intersection",
+        ));
+    }
+
+    let mut roots = Vec::new();
+    for root in &analysis.intersections {
+        let direct = fitted_miter_parameter(
+            &current_spans,
+            root.first_span,
+            root.first_parameter_enclosure,
+        )
+        .zip(fitted_miter_parameter(
+            &next_spans,
+            root.second_span,
+            root.second_parameter_enclosure,
+        ));
+        let reverse = fitted_miter_parameter(
+            &current_spans,
+            root.second_span,
+            root.second_parameter_enclosure,
+        )
+        .zip(fitted_miter_parameter(
+            &next_spans,
+            root.first_span,
+            root.first_parameter_enclosure,
+        ));
+        match (direct, reverse) {
+            (Some(root), None) | (None, Some(root)) => roots.push(root),
+            _ => {
+                return Err(curved_miter_failure("ambiguous curved miter intersection"));
+            }
+        }
+    }
+    let [(current_parameter, next_parameter)] = roots.as_slice() else {
+        return Err(curved_miter_failure("non-unique curved miter intersection"));
+    };
+    let (current_parameter, next_parameter, current_position, next_position) =
+        refine_fitted_miter_intersection(
+            &current.geometry,
+            *current_parameter,
+            &next.geometry,
+            *next_parameter,
+            tolerance,
+        )?;
+    let current_is_fitted = matches!(current.geometry, CurveOffsetGeometry::CubicPatches(_));
+    let next_is_fitted = matches!(next.geometry, CurveOffsetGeometry::CubicPatches(_));
+    let position = match (current_is_fitted, next_is_fitted) {
+        (true, false) => next_position,
+        (false, true | false) => current_position,
+        (true, true) => scale_vector(add(current_position, next_position), 0.5),
+    };
+    let (_, current_end, _, _) = curve_offset_terminals(&current.geometry)?;
+    let (next_start, _, _, _) = curve_offset_terminals(&next.geometry)?;
+    if !position.into_iter().all(f64::is_finite)
+        || distance_between(current_position, next_position) > tolerance
+        || distance_between(current_end, position) > remote_limit
+        || distance_between(next_start, position) > remote_limit
+    {
+        return Err(curved_miter_failure("remote curved miter intersection"));
+    }
+    Ok(CertifiedCurvedMiterIntersection {
+        current: current_parameter,
+        next: next_parameter,
+        position,
+    })
+}
+
+fn add_fitted_miter_operand(
+    document: &mut SketchDocument,
+    edge: &EvaluatedCurveOffsetEdge,
+    operand: usize,
+    tolerance: f64,
+) -> Result<Vec<CurveSpan>, EvaluateFeatureError> {
+    if matches!(
+        edge.geometry,
+        CurveOffsetGeometry::CircularArc { closed: true, .. }
+    ) {
+        return Err(curved_miter_failure("closed curved miter operand"));
+    }
+    let (start, end, _, _) = curve_offset_terminals(&edge.geometry)?;
+    let start_point = document
+        .add_point(format!("curved miter operand {operand} start"), start)
+        .map_err(|_| curved_miter_failure("curved miter intersection setup"))?;
+    let end_point = document
+        .add_point(format!("curved miter operand {operand} end"), end)
+        .map_err(|_| curved_miter_failure("curved miter intersection setup"))?;
+    add_fitted_offset_geometry(
+        document,
+        &edge.geometry,
+        Some(start_point),
+        Some(end_point),
+        operand,
+        0,
+        tolerance,
+    )
+    .map_err(|error| match error {
+        EvaluateFeatureError::Stopped => EvaluateFeatureError::Stopped,
+        EvaluateFeatureError::Failure(_) => curved_miter_failure("curved miter intersection setup"),
+    })
+}
+
+fn fitted_miter_parameter(
+    spans: &[CurveSpan],
+    span: CurveSpan,
+    enclosure: [f64; 2],
+) -> Option<CurveOffsetGeometryParameter> {
+    let part = spans.iter().position(|candidate| *candidate == span)?;
+    let [lower, upper] = enclosure;
+    if !lower.is_finite() || !upper.is_finite() || lower > upper {
+        return None;
+    }
+    let parameter = lower + 0.5 * (upper - lower);
+    let parameter_tolerance = 4_096.0 * f64::EPSILON;
+    if parameter < -parameter_tolerance || parameter > 1.0 + parameter_tolerance {
+        return None;
+    }
+    Some(CurveOffsetGeometryParameter {
+        part,
+        parameter: parameter.clamp(0.0, 1.0),
+    })
+}
+
+fn refine_fitted_miter_intersection(
+    current: &CurveOffsetGeometry,
+    mut current_parameter: CurveOffsetGeometryParameter,
+    next: &CurveOffsetGeometry,
+    mut next_parameter: CurveOffsetGeometryParameter,
+    tolerance: f64,
+) -> Result<
+    (
+        CurveOffsetGeometryParameter,
+        CurveOffsetGeometryParameter,
+        [f64; 2],
+        [f64; 2],
+    ),
+    EvaluateFeatureError,
+> {
+    for _ in 0..24 {
+        let (current_position, current_derivative) =
+            curve_offset_geometry_sample(current, current_parameter)?;
+        let (next_position, next_derivative) = curve_offset_geometry_sample(next, next_parameter)?;
+        let residual = subtract(current_position, next_position);
+        let coordinate_scale = norm(current_position).max(norm(next_position)).max(1.0);
+        let root_tolerance = (4_096.0 * f64::EPSILON * coordinate_scale)
+            .min(tolerance * 1.0e-3)
+            .max(f64::MIN_POSITIVE);
+        if norm(residual) <= root_tolerance {
+            return Ok((
+                current_parameter,
+                next_parameter,
+                current_position,
+                next_position,
+            ));
+        }
+        let second_column = scale_vector(next_derivative, -1.0);
+        let determinant = cross(current_derivative, second_column);
+        let derivative_scale = norm(current_derivative)
+            .max(norm(next_derivative))
+            .max(f64::MIN_POSITIVE);
+        if !determinant.is_finite()
+            || determinant.abs() <= 4_096.0 * f64::EPSILON * derivative_scale.powi(2)
+        {
+            break;
+        }
+        let right_hand_side = scale_vector(residual, -1.0);
+        let current_step = cross(right_hand_side, second_column) / determinant;
+        let next_step = cross(current_derivative, right_hand_side) / determinant;
+        let updated_current = current_parameter.parameter + current_step;
+        let updated_next = next_parameter.parameter + next_step;
+        if !updated_current.is_finite()
+            || !updated_next.is_finite()
+            || !(-1.0e-10..=1.0 + 1.0e-10).contains(&updated_current)
+            || !(-1.0e-10..=1.0 + 1.0e-10).contains(&updated_next)
+        {
+            break;
+        }
+        current_parameter.parameter = updated_current.clamp(0.0, 1.0);
+        next_parameter.parameter = updated_next.clamp(0.0, 1.0);
+    }
+    Err(curved_miter_failure(
+        "uncertified curved miter intersection",
+    ))
+}
+
+fn curve_offset_geometry_sample(
+    geometry: &CurveOffsetGeometry,
+    parameter: CurveOffsetGeometryParameter,
+) -> Result<([f64; 2], [f64; 2]), EvaluateFeatureError> {
+    if !parameter.parameter.is_finite() || !(0.0..=1.0).contains(&parameter.parameter) {
+        return Err(curved_miter_failure("invalid curved miter parameter"));
+    }
+    let result = match geometry {
+        CurveOffsetGeometry::Line { start, end } if parameter.part == 0 => (
+            lerp_point(*start, *end, parameter.parameter),
+            subtract(*end, *start),
+        ),
+        CurveOffsetGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            sweep,
+            ..
+        } if parameter.part == 0 => {
+            let angle = sweep.mul_add(parameter.parameter, *start_angle);
+            (
+                [
+                    radius.mul_add(angle.cos(), center[0]),
+                    radius.mul_add(angle.sin(), center[1]),
+                ],
+                scale_vector([-angle.sin(), angle.cos()], radius * sweep),
+            )
+        }
+        CurveOffsetGeometry::CubicPatches(patches) => {
+            let patch = patches
+                .get(parameter.part)
+                .ok_or_else(|| curved_miter_failure("invalid curved miter patch"))?;
+            cubic_point_and_derivative(patch.controls, parameter.parameter)
+        }
+        CurveOffsetGeometry::Line { .. } | CurveOffsetGeometry::CircularArc { .. } => {
+            return Err(curved_miter_failure("invalid curved miter part"));
+        }
+    };
+    result
+        .0
+        .into_iter()
+        .chain(result.1)
+        .all(f64::is_finite)
+        .then_some(result)
+        .ok_or_else(|| curved_miter_failure("non-finite curved miter geometry"))
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "each analytic and fitted trim case must preserve one explicit all-or-nothing certificate update"
+)]
+fn trim_curve_offset_edge(
+    edge: &EvaluatedCurveOffsetEdge,
+    location: CurveOffsetGeometryParameter,
+    side: CurveOffsetTrimSide,
+    fitted_join: [f64; 2],
+    tolerance: f64,
+) -> Result<EvaluatedCurveOffsetEdge, EvaluateFeatureError> {
+    let parameter_epsilon = 4_096.0 * f64::EPSILON;
+    let mut trimmed = edge.clone();
+    match &edge.geometry {
+        CurveOffsetGeometry::Line { start, end } if location.part == 0 => {
+            let intersection = lerp_point(*start, *end, location.parameter);
+            trimmed.geometry = match side {
+                CurveOffsetTrimSide::Prefix if location.parameter > parameter_epsilon => {
+                    CurveOffsetGeometry::Line {
+                        start: *start,
+                        end: intersection,
+                    }
+                }
+                CurveOffsetTrimSide::Suffix if location.parameter < 1.0 - parameter_epsilon => {
+                    CurveOffsetGeometry::Line {
+                        start: intersection,
+                        end: *end,
+                    }
+                }
+                _ => return Err(curved_miter_failure("degenerate curved miter trim")),
+            };
+        }
+        CurveOffsetGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            sweep,
+            ..
+        } if location.part == 0 => {
+            let (trimmed_start, trimmed_sweep) = match side {
+                CurveOffsetTrimSide::Prefix if location.parameter > parameter_epsilon => {
+                    (*start_angle, sweep * location.parameter)
+                }
+                CurveOffsetTrimSide::Suffix if location.parameter < 1.0 - parameter_epsilon => (
+                    sweep.mul_add(location.parameter, *start_angle),
+                    sweep * (1.0 - location.parameter),
+                ),
+                _ => return Err(curved_miter_failure("degenerate curved miter trim")),
+            };
+            trimmed.geometry = CurveOffsetGeometry::CircularArc {
+                center: *center,
+                radius: *radius,
+                start_angle: trimmed_start,
+                sweep: trimmed_sweep,
+                closed: false,
+            };
+        }
+        CurveOffsetGeometry::CubicPatches(patches) => {
+            let endpoint_errors = &edge.patch_endpoint_position_errors;
+            if patches.is_empty()
+                || endpoint_errors.len() != patches.len()
+                || location.part >= patches.len()
+            {
+                return Err(curved_miter_failure("invalid curved miter patch"));
+            }
+            let patch = &patches[location.part];
+            let parameter = location.parameter;
+            let [mut first, mut second] = split_cubic_controls_at(patch.controls, parameter);
+            let source_middle = patch.source_parameters[0]
+                + parameter * (patch.source_parameters[1] - patch.source_parameters[0]);
+            let split_position_error = patch_position_error_at_parameter(
+                patch.maximum_position_error,
+                patch.maximum_local_derivative_error,
+                endpoint_errors[location.part],
+                parameter,
+            );
+            let (mut retained_patches, mut retained_errors, retained_patch, retained_error) =
+                match side {
+                    CurveOffsetTrimSide::Prefix
+                        if location.part > 0 || parameter > parameter_epsilon =>
+                    {
+                        let mut retained = patches[..=location.part].to_vec();
+                        let mut errors = endpoint_errors[..=location.part].to_vec();
+                        first[3] = fitted_join;
+                        let adjustment = distance_between(
+                            split_cubic_controls_at(patch.controls, parameter)[0][3],
+                            fitted_join,
+                        );
+                        let retained_patch = adjusted_trimmed_cubic_patch(
+                            patch,
+                            first,
+                            [patch.source_parameters[0], source_middle],
+                            parameter,
+                            adjustment,
+                            false,
+                        )?;
+                        let retained_error = [
+                            endpoint_errors[location.part][0],
+                            next_up(split_position_error + adjustment),
+                        ];
+                        retained.pop();
+                        errors.pop();
+                        (retained, errors, retained_patch, retained_error)
+                    }
+                    CurveOffsetTrimSide::Suffix
+                        if location.part + 1 < patches.len()
+                            || parameter < 1.0 - parameter_epsilon =>
+                    {
+                        let mut retained = patches[location.part..].to_vec();
+                        let mut errors = endpoint_errors[location.part..].to_vec();
+                        second[0] = fitted_join;
+                        let adjustment = distance_between(
+                            split_cubic_controls_at(patch.controls, parameter)[1][0],
+                            fitted_join,
+                        );
+                        let retained_patch = adjusted_trimmed_cubic_patch(
+                            patch,
+                            second,
+                            [source_middle, patch.source_parameters[1]],
+                            1.0 - parameter,
+                            adjustment,
+                            true,
+                        )?;
+                        let retained_error = [
+                            next_up(split_position_error + adjustment),
+                            endpoint_errors[location.part][1],
+                        ];
+                        retained.remove(0);
+                        errors.remove(0);
+                        (retained, errors, retained_patch, retained_error)
+                    }
+                    _ => return Err(curved_miter_failure("degenerate curved miter trim")),
+                };
+            match side {
+                CurveOffsetTrimSide::Prefix => {
+                    retained_patches.push(retained_patch);
+                    retained_errors.push(retained_error);
+                }
+                CurveOffsetTrimSide::Suffix => {
+                    retained_patches.insert(0, retained_patch);
+                    retained_errors.insert(0, retained_error);
+                }
+            }
+            trimmed.certificate.maximum_position_error =
+                trimmed.certificate.maximum_position_error.max(
+                    retained_patches
+                        .iter()
+                        .map(|patch| patch.maximum_position_error)
+                        .fold(0.0, f64::max),
+                );
+            trimmed.certificate.maximum_tangent_error_radians =
+                trimmed.certificate.maximum_tangent_error_radians.max(
+                    retained_patches
+                        .iter()
+                        .map(|patch| patch.maximum_tangent_error_radians)
+                        .fold(0.0, f64::max),
+                );
+            trimmed.geometry = CurveOffsetGeometry::CubicPatches(retained_patches);
+            trimmed.patch_endpoint_position_errors = retained_errors;
+        }
+        CurveOffsetGeometry::Line { .. } | CurveOffsetGeometry::CircularArc { .. } => {
+            return Err(curved_miter_failure("invalid curved miter part"));
+        }
+    }
+    let (start, end, _, _) = curve_offset_terminals(&trimmed.geometry)?;
+    if distance_between(start, end) <= tolerance {
+        return Err(curved_miter_failure("degenerate curved miter trim"));
+    }
+    Ok(trimmed)
+}
+
+fn certify_trimmed_curve_offset_fit(
+    edge: &EvaluatedCurveOffsetEdge,
+    options: CurveOffsetOptions,
+) -> Result<(), EvaluateFeatureError> {
+    let coordinate_scale = match &edge.geometry {
+        CurveOffsetGeometry::Line { start, end } => start
+            .iter()
+            .chain(end)
+            .fold(1.0_f64, |scale, value| scale.max(value.abs())),
+        CurveOffsetGeometry::CircularArc { center, radius, .. } => center
+            .iter()
+            .fold(radius.abs().max(1.0), |scale, value| scale.max(value.abs())),
+        CurveOffsetGeometry::CubicPatches(patches) => patches
+            .iter()
+            .flat_map(|patch| patch.controls.iter().flatten())
+            .fold(1.0_f64, |scale, value| scale.max(value.abs())),
+    };
+    let position_limit = options
+        .position_tolerance
+        .max(256.0 * f64::EPSILON * coordinate_scale);
+    let valid = edge.certificate.maximum_position_error.is_finite()
+        && edge.certificate.maximum_position_error <= position_limit
+        && edge.certificate.maximum_tangent_error_radians.is_finite()
+        && edge.certificate.maximum_tangent_error_radians <= options.tangent_tolerance_radians
+        && edge.certificate.minimum_regularity_factor.is_finite()
+        && edge.certificate.minimum_regularity_factor > options.regularity_margin;
+    valid
+        .then_some(())
+        .ok_or_else(|| curved_miter_failure("curved miter fit tolerance"))
+}
+
+fn adjusted_trimmed_cubic_patch(
+    original: &geosolve_sketch::CurveOffsetCubicPatch,
+    controls: [[f64; 2]; 4],
+    source_parameters: [f64; 2],
+    retained_fraction: f64,
+    endpoint_adjustment: f64,
+    adjusted_start: bool,
+) -> Result<geosolve_sketch::CurveOffsetCubicPatch, EvaluateFeatureError> {
+    if !retained_fraction.is_finite()
+        || retained_fraction <= 0.0
+        || !endpoint_adjustment.is_finite()
+    {
+        return Err(curved_miter_failure("invalid curved miter trim"));
+    }
+    let [old_first, old_second] = split_cubic_controls_at(
+        original.controls,
+        if adjusted_start {
+            1.0 - retained_fraction
+        } else {
+            retained_fraction
+        },
+    );
+    let old_controls = if adjusted_start {
+        old_second
+    } else {
+        old_first
+    };
+    let old_tangent = if adjusted_start {
+        subtract(old_controls[1], old_controls[0])
+    } else {
+        subtract(old_controls[3], old_controls[2])
+    };
+    let new_tangent = if adjusted_start {
+        subtract(controls[1], controls[0])
+    } else {
+        subtract(controls[3], controls[2])
+    };
+    let tangent_adjustment = angle_between_vectors(old_tangent, new_tangent)?;
+    Ok(geosolve_sketch::CurveOffsetCubicPatch {
+        source_parameters,
+        controls,
+        maximum_position_error: next_up(original.maximum_position_error + endpoint_adjustment),
+        maximum_local_derivative_error: next_up(
+            original.maximum_local_derivative_error * retained_fraction + 3.0 * endpoint_adjustment,
+        ),
+        maximum_tangent_error_radians: next_up(
+            original.maximum_tangent_error_radians + tangent_adjustment,
+        ),
+    })
+}
+
+fn patch_position_error_at_parameter(
+    maximum_position_error: f64,
+    maximum_local_derivative_error: f64,
+    endpoint_errors: [f64; 2],
+    parameter: f64,
+) -> f64 {
+    let from_start = endpoint_errors[0] + maximum_local_derivative_error * parameter;
+    let from_end = endpoint_errors[1] + maximum_local_derivative_error * (1.0 - parameter);
+    next_up(maximum_position_error.min(from_start).min(from_end))
+}
+
+fn angle_between_vectors(first: [f64; 2], second: [f64; 2]) -> Result<f64, EvaluateFeatureError> {
+    let first =
+        normalized(first).ok_or_else(|| curved_miter_failure("singular trimmed tangent"))?;
+    let second =
+        normalized(second).ok_or_else(|| curved_miter_failure("singular trimmed tangent"))?;
+    let angle = cross(first, second).atan2(dot(first, second)).abs();
+    angle
+        .is_finite()
+        .then_some(angle)
+        .ok_or_else(|| curved_miter_failure("singular trimmed tangent"))
+}
+
+fn split_cubic_controls_at(controls: [[f64; 2]; 4], parameter: f64) -> [[[f64; 2]; 4]; 2] {
+    let first_level = [
+        lerp_point(controls[0], controls[1], parameter),
+        lerp_point(controls[1], controls[2], parameter),
+        lerp_point(controls[2], controls[3], parameter),
+    ];
+    let second_level = [
+        lerp_point(first_level[0], first_level[1], parameter),
+        lerp_point(first_level[1], first_level[2], parameter),
+    ];
+    let middle = lerp_point(second_level[0], second_level[1], parameter);
+    [
+        [controls[0], first_level[0], second_level[0], middle],
+        [middle, second_level[1], first_level[2], controls[3]],
+    ]
+}
+
+fn cubic_point_and_derivative(controls: [[f64; 2]; 4], parameter: f64) -> ([f64; 2], [f64; 2]) {
+    let [first, second] = split_cubic_controls_at(controls, parameter);
+    (first[3], scale_vector(subtract(second[1], first[3]), 3.0))
+}
+
+fn lerp_point(start: [f64; 2], end: [f64; 2], parameter: f64) -> [f64; 2] {
+    [
+        (end[0] - start[0]).mul_add(parameter, start[0]),
+        (end[1] - start[1]).mul_add(parameter, start[1]),
+    ]
+}
+
+fn curved_miter_failure(kind: &'static str) -> EvaluateFeatureError {
+    EvaluateFeatureError::Failure(ComputedFeatureFailure::OffsetJunctionFailure { kind })
+}
+
+fn exact_offset_connector(
+    source: NativeCurveSpanSource,
+    start: [f64; 2],
+    end: [f64; 2],
+) -> EvaluatedCurveOffsetEdge {
+    EvaluatedCurveOffsetEdge {
+        role: GeometryRole::Profile,
+        source,
+        geometry: CurveOffsetGeometry::Line { start, end },
+        certificate: CurveOffsetCertificate {
+            maximum_position_error: 0.0,
+            maximum_tangent_error_radians: 0.0,
+            minimum_regularity_factor: 1.0,
+            subdivision_count: 0,
+        },
+        patch_endpoint_position_errors: Vec::new(),
+    }
+}
+
+fn curve_offset_patch_endpoint_errors(geometry: &CurveOffsetGeometry) -> Vec<[f64; 2]> {
+    match geometry {
+        CurveOffsetGeometry::CubicPatches(patches) => vec![[0.0, 0.0]; patches.len()],
+        CurveOffsetGeometry::Line { .. } | CurveOffsetGeometry::CircularArc { .. } => Vec::new(),
+    }
+}
+
+#[allow(
+    clippy::type_complexity,
+    reason = "the four vectors are one private start/end position-and-tangent tuple used only by certification"
+)]
+fn curve_offset_terminals(
+    geometry: &CurveOffsetGeometry,
+) -> Result<([f64; 2], [f64; 2], [f64; 2], [f64; 2]), EvaluateFeatureError> {
+    let invalid = || {
+        EvaluateFeatureError::Failure(ComputedFeatureFailure::OffsetJunctionFailure {
+            kind: "invalid generated terminal",
+        })
+    };
+    let (start, end, start_tangent, end_tangent) = match geometry {
+        CurveOffsetGeometry::Line { start, end } => {
+            let tangent = normalized(subtract(*end, *start)).ok_or_else(invalid)?;
+            (*start, *end, tangent, tangent)
+        }
+        CurveOffsetGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            sweep,
+            ..
+        } => {
+            let end_angle = start_angle + sweep;
+            let sign = sweep.signum();
+            (
+                [
+                    radius.mul_add(start_angle.cos(), center[0]),
+                    radius.mul_add(start_angle.sin(), center[1]),
+                ],
+                [
+                    radius.mul_add(end_angle.cos(), center[0]),
+                    radius.mul_add(end_angle.sin(), center[1]),
+                ],
+                [-start_angle.sin() * sign, start_angle.cos() * sign],
+                [-end_angle.sin() * sign, end_angle.cos() * sign],
+            )
+        }
+        CurveOffsetGeometry::CubicPatches(patches) => {
+            let first = patches.first().ok_or_else(invalid)?;
+            let last = patches.last().ok_or_else(invalid)?;
+            (
+                first.controls[0],
+                last.controls[3],
+                normalized(subtract(first.controls[1], first.controls[0])).ok_or_else(invalid)?,
+                normalized(subtract(last.controls[3], last.controls[2])).ok_or_else(invalid)?,
+            )
+        }
+    };
+    Ok((start, end, start_tangent, end_tangent))
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the temporary-document topology oracle is a single fail-closed certification transaction"
+)]
+fn certify_fitted_curve_offset_topology(
+    paths: &[EvaluatedCurveOffsetPath],
+    model_scale: f64,
+    face: bool,
+    controller: &mut OperationController,
+) -> Result<(), EvaluateFeatureError> {
+    let model_scale = model_scale.abs().max(f64::MIN_POSITIVE);
+    let mut document = SketchDocument::new(model_scale).map_err(|_| offset_topology_change())?;
+    let coordinate_scale = paths.iter().flat_map(|path| &path.edges).try_fold(
+        model_scale.max(1.0),
+        |scale, edge| {
+            let (start, end, _, _) = curve_offset_terminals(&edge.geometry)?;
+            Ok::<_, EvaluateFeatureError>(
+                start
+                    .into_iter()
+                    .chain(end)
+                    .fold(scale, |scale, value| scale.max(value.abs())),
+            )
+        },
+    )?;
+    let tolerance = 1.0e-8 * model_scale + 256.0 * f64::EPSILON * coordinate_scale;
+    let mut path_spans = Vec::with_capacity(paths.len());
+
+    for (path_index, path) in paths.iter().enumerate() {
+        let mut fitted_spans = BTreeSet::new();
+        let first_geometry = &path
+            .edges
+            .first()
+            .ok_or_else(offset_topology_change)?
+            .geometry;
+        if path.closed
+            && path.edges.len() == 1
+            && matches!(
+                first_geometry,
+                CurveOffsetGeometry::CircularArc { closed: true, .. }
+            )
+        {
+            fitted_spans.extend(add_fitted_offset_geometry(
+                &mut document,
+                first_geometry,
+                None,
+                None,
+                path_index,
+                0,
+                tolerance,
+            )?);
+            path_spans.push(fitted_spans);
+            continue;
+        }
+
+        let (first_position, _, _, _) = curve_offset_terminals(first_geometry)?;
+        let first_point = document
+            .add_point(format!("offset path {path_index} start"), first_position)
+            .map_err(|_| offset_topology_change())?;
+        let mut current_point = first_point;
+        let mut current_position = first_position;
+        for (edge_index, edge) in path.edges.iter().enumerate() {
+            let (start, end, _, _) = curve_offset_terminals(&edge.geometry)?;
+            if distance_between(current_position, start) > tolerance {
+                return Err(offset_topology_change());
+            }
+            let final_edge = edge_index + 1 == path.edges.len();
+            let end_point = if final_edge && path.closed {
+                if distance_between(end, first_position) > tolerance {
+                    return Err(offset_topology_change());
+                }
+                first_point
+            } else {
+                document
+                    .add_point(
+                        format!("offset path {path_index} edge {edge_index} end"),
+                        end,
+                    )
+                    .map_err(|_| offset_topology_change())?
+            };
+            fitted_spans.extend(add_fitted_offset_geometry(
+                &mut document,
+                &edge.geometry,
+                Some(current_point),
+                Some(end_point),
+                path_index,
+                edge_index,
+                tolerance,
+            )?);
+            current_point = end_point;
+            current_position = end;
+        }
+        path_spans.push(fitted_spans);
+    }
+
+    let generated_span_count = path_spans.iter().try_fold(0_usize, |count, spans| {
+        count
+            .checked_add(spans.len())
+            .ok_or_else(offset_topology_change)
+    })?;
+    // Visual-profile analysis partitions every exact full-period circle into two source pieces at
+    // its authenticated seam. Account for those extra pieces before reserving all distinct pairs
+    // plus one conservative self-contact candidate per piece. Using only the public span count
+    // under-reserved mixed fitted/closed-analytic faces once their cubic patch chain exceeded the
+    // default candidate allowance.
+    let full_periodic_splits = paths
+        .iter()
+        .flat_map(|path| &path.edges)
+        .filter(|edge| {
+            matches!(
+                edge.geometry,
+                CurveOffsetGeometry::CircularArc { closed: true, .. }
+            )
+        })
+        .count();
+    let source_piece_upper = generated_span_count
+        .checked_add(full_periodic_splits)
+        .ok_or_else(offset_topology_change)?;
+    let candidate_pairs = source_piece_upper
+        .checked_mul(source_piece_upper.saturating_add(1))
+        .and_then(|value| value.checked_div(2))
+        .filter(|value| *value <= 2_000_000)
+        .ok_or_else(offset_topology_change)?;
+    let mut topology_options = VisualProfileOptions::default();
+    topology_options.max_candidate_pairs =
+        topology_options.max_candidate_pairs.max(candidate_pairs);
+    let analysis = match document
+        .analyze_visual_profiles_controlled(topology_options, controller.child_control())
+    {
+        OperationOutcome::Completed { value, report } => {
+            controller
+                .absorb_child_report(report)
+                .map_err(|_| EvaluateFeatureError::Stopped)?;
+            value
+        }
+        OperationOutcome::Cancelled { report } | OperationOutcome::WorkExhausted { report } => {
+            let _ = controller.absorb_child_report(report);
+            return Err(EvaluateFeatureError::Stopped);
+        }
+        _ => return Err(EvaluateFeatureError::Stopped),
+    };
+    let complete = analysis.status == VisualProfileStatus::Complete
+        && analysis.issues.is_empty()
+        && analysis.intersections.is_empty();
+    let expected_shape = if face {
+        analysis
+            .faces
+            .iter()
+            .filter(|candidate| fitted_face_matches_paths(candidate, &path_spans))
+            .count()
+            == 1
+    } else {
+        analysis.faces.is_empty()
+    };
+    (complete && expected_shape)
+        .then_some(())
+        .ok_or_else(offset_topology_change)
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "the generated-curve certification adapter retains explicit path/edge provenance"
+)]
+fn add_fitted_offset_geometry(
+    document: &mut SketchDocument,
+    geometry: &CurveOffsetGeometry,
+    start_point: Option<geosolve_sketch::DesignPointId>,
+    end_point: Option<geosolve_sketch::DesignPointId>,
+    path_index: usize,
+    edge_index: usize,
+    tolerance: f64,
+) -> Result<Vec<CurveSpan>, EvaluateFeatureError> {
+    let label = |part: &str| format!("offset path {path_index} edge {edge_index} {part}");
+    let mut spans = Vec::new();
+    match geometry {
+        CurveOffsetGeometry::Line { start, end } => {
+            let start_point = start_point.ok_or_else(offset_topology_change)?;
+            let end_point = end_point.ok_or_else(offset_topology_change)?;
+            let direction = subtract(*end, *start);
+            let length = norm(direction);
+            if !length.is_finite() || length <= tolerance {
+                return Err(offset_topology_change());
+            }
+            let curve = document
+                .add_curve(
+                    label("line"),
+                    CurveDefinition::Line {
+                        start: start_point,
+                        end: end_point,
+                        branch_direction: [direction[0] / length, direction[1] / length],
+                    },
+                )
+                .map_err(|_| offset_topology_change())?;
+            spans.push(CurveSpan::line(curve));
+        }
+        CurveOffsetGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            sweep,
+            closed,
+        } => {
+            let center_point = document
+                .add_point(label("centre"), *center)
+                .map_err(|_| offset_topology_change())?;
+            let radius_scalar = document
+                .add_scalar(
+                    label("radius"),
+                    *radius,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+                .map_err(|_| offset_topology_change())?;
+            if *closed {
+                if start_point.is_some() || end_point.is_some() {
+                    return Err(offset_topology_change());
+                }
+                let curve = document
+                    .add_curve(
+                        label("circle"),
+                        CurveDefinition::Circle {
+                            center: center_point,
+                            radius: radius_scalar,
+                        },
+                    )
+                    .map_err(|_| offset_topology_change())?;
+                spans.push(CurveSpan::line(curve));
+            } else {
+                let start_point = start_point.ok_or_else(offset_topology_change)?;
+                let end_point = end_point.ok_or_else(offset_topology_change)?;
+                let start_scalar = document
+                    .add_scalar(
+                        label("start angle"),
+                        *start_angle,
+                        ScalarUnit::Angle,
+                        ScalarDomain::Finite,
+                    )
+                    .map_err(|_| offset_topology_change())?;
+                let end_scalar = document
+                    .add_scalar(
+                        label("end angle"),
+                        start_angle + sweep,
+                        ScalarUnit::Angle,
+                        ScalarDomain::Finite,
+                    )
+                    .map_err(|_| offset_topology_change())?;
+                let span = CurveSpan::line(
+                    document
+                        .add_curve(
+                            label("arc"),
+                            CurveDefinition::CircularArc {
+                                center: center_point,
+                                radius: radius_scalar,
+                                start_angle: start_scalar,
+                                end_angle: end_scalar,
+                                sweep: if *sweep > 0.0 {
+                                    DocumentArcSweep::CounterClockwise
+                                } else {
+                                    DocumentArcSweep::Clockwise
+                                },
+                            },
+                        )
+                        .map_err(|_| offset_topology_change())?,
+                );
+                add_fitted_arc_endpoint(document, span, start_point, true, &label)?;
+                add_fitted_arc_endpoint(document, span, end_point, false, &label)?;
+                spans.push(span);
+            }
+        }
+        CurveOffsetGeometry::CubicPatches(patches) => {
+            let first_patch = patches.first().ok_or_else(offset_topology_change)?;
+            let last_patch = patches.last().ok_or_else(offset_topology_change)?;
+            let start_point = start_point.ok_or_else(offset_topology_change)?;
+            let requested_end_point = end_point.ok_or_else(offset_topology_change)?;
+            if distance_between(
+                document
+                    .point(start_point)
+                    .ok_or_else(offset_topology_change)?
+                    .position,
+                first_patch.controls[0],
+            ) > tolerance
+                || distance_between(
+                    document
+                        .point(requested_end_point)
+                        .ok_or_else(offset_topology_change)?
+                        .position,
+                    last_patch.controls[3],
+                ) > tolerance
+            {
+                return Err(offset_topology_change());
+            }
+            for pair in patches.windows(2) {
+                if distance_between(pair[0].controls[3], pair[1].controls[0]) > tolerance {
+                    return Err(offset_topology_change());
+                }
+            }
+
+            // A clamped B-spline requires distinct persistent control identities. For a
+            // closed fitted loop, retain structural closure with one explicit coincidence
+            // rather than repeating the first control identity at the final endpoint.
+            let spline_end_point = if start_point == requested_end_point {
+                let duplicate = document
+                    .add_point(label("closed spline end"), last_patch.controls[3])
+                    .map_err(|_| offset_topology_change())?;
+                document
+                    .add_constraint(
+                        label("closed spline join"),
+                        DocumentConstraintDefinition::Coincident {
+                            first: duplicate,
+                            second: requested_end_point,
+                        },
+                    )
+                    .map_err(|_| offset_topology_change())?;
+                duplicate
+            } else {
+                requested_end_point
+            };
+
+            let control_count = patches
+                .len()
+                .checked_mul(3)
+                .and_then(|count| count.checked_add(1))
+                .ok_or_else(offset_topology_change)?;
+            let mut controls = Vec::with_capacity(control_count);
+            controls.push(start_point);
+            for (patch_index, patch) in patches.iter().enumerate() {
+                controls.push(
+                    document
+                        .add_point(label("first cubic control"), patch.controls[1])
+                        .map_err(|_| offset_topology_change())?,
+                );
+                controls.push(
+                    document
+                        .add_point(label("second cubic control"), patch.controls[2])
+                        .map_err(|_| offset_topology_change())?,
+                );
+                controls.push(if patch_index + 1 == patches.len() {
+                    spline_end_point
+                } else {
+                    document
+                        .add_point(label("patch end"), patch.controls[3])
+                        .map_err(|_| offset_topology_change())?
+                });
+            }
+
+            let patch_count = u32::try_from(patches.len()).map_err(|_| offset_topology_change())?;
+            let mut knots = Vec::with_capacity(
+                controls
+                    .len()
+                    .checked_add(4)
+                    .ok_or_else(offset_topology_change)?,
+            );
+            knots.extend(std::iter::repeat_n(0.0, 4));
+            for boundary in 1..patch_count {
+                knots.extend(std::iter::repeat_n(f64::from(boundary), 3));
+            }
+            knots.extend(std::iter::repeat_n(f64::from(patch_count), 4));
+            let span_ids = (0..patch_count).collect::<Vec<_>>();
+            let curve = document
+                .add_curve(
+                    label("cubic patch chain"),
+                    CurveDefinition::BSpline {
+                        form: DocumentBSplineForm::Clamped,
+                        degree: 3,
+                        controls,
+                        knots,
+                        span_ids: span_ids.clone(),
+                        next_span_id: patch_count,
+                    },
+                )
+                .map_err(|_| offset_topology_change())?;
+            spans.extend(
+                span_ids
+                    .into_iter()
+                    .map(|segment| CurveSpan { curve, segment }),
+            );
+        }
+    }
+    Ok(spans)
+}
+
+fn fitted_face_matches_paths(
+    face: &geosolve_sketch::VisualProfileFace,
+    path_spans: &[BTreeSet<CurveSpan>],
+) -> bool {
+    if path_spans.is_empty()
+        || face.contours.len() != path_spans.len()
+        || face.contours[0].orientation != VisualProfileOrientation::CounterClockwise
+        || face.contours[0]
+            .edges
+            .iter()
+            .map(|edge| edge.source_span)
+            .collect::<BTreeSet<_>>()
+            != path_spans[0]
+    {
+        return false;
+    }
+    let mut unmatched_holes = path_spans.iter().skip(1).collect::<Vec<_>>();
+    for contour in face.contours.iter().skip(1) {
+        if contour.orientation != VisualProfileOrientation::Clockwise {
+            return false;
+        }
+        let spans = contour
+            .edges
+            .iter()
+            .map(|edge| edge.source_span)
+            .collect::<BTreeSet<_>>();
+        let Some(index) = unmatched_holes
+            .iter()
+            .position(|expected| **expected == spans)
+        else {
+            return false;
+        };
+        unmatched_holes.remove(index);
+    }
+    unmatched_holes.is_empty()
+}
+
+fn add_fitted_arc_endpoint(
+    document: &mut SketchDocument,
+    span: CurveSpan,
+    point: geosolve_sketch::DesignPointId,
+    start: bool,
+    label: &impl Fn(&str) -> String,
+) -> Result<(), EvaluateFeatureError> {
+    let contact = document
+        .add_curve_contact(
+            label(if start { "arc start" } else { "arc end" }),
+            span,
+            if start { 0.0 } else { 1.0 },
+            0,
+            if start {
+                ContactNeighborhood::Start
+            } else {
+                ContactNeighborhood::End
+            },
+            None,
+        )
+        .map_err(|_| offset_topology_change())?;
+    document
+        .add_constraint(
+            label("arc endpoint join"),
+            DocumentConstraintDefinition::PointOnCurve { point, contact },
+        )
+        .map_err(|_| offset_topology_change())?;
+    Ok(())
+}
+
+fn validate_curve_offset_topology(
+    paths: &[EvaluatedCurveOffsetPath],
+    model_scale: f64,
+    face: bool,
+    controller: &mut OperationController,
+) -> Result<(), EvaluateFeatureError> {
+    if paths.is_empty()
+        || (face && paths.iter().any(|path| !path.closed))
+        || (!face && (paths.len() != 1 || paths[0].closed))
+    {
+        return Err(offset_topology_change());
+    }
+    certify_fitted_curve_offset_topology(paths, model_scale, face, controller)?;
+    certify_mathematical_curve_offset_topology(paths, model_scale, controller)
+}
+
+const OFFSET_TUBE_MAX_DEPTH: usize = 40;
+const OFFSET_TUBE_MAX_PAIR_VISITS: usize = 2_000_000;
+const OFFSET_TUBE_ARC_CELL_ANGLE: f64 = std::f64::consts::PI / 8.0;
+
+#[derive(Clone, Debug)]
+struct OffsetTubeCell {
+    path: usize,
+    ordinal: usize,
+    path_cell_count: usize,
+    path_closed: bool,
+    geometry: OffsetTubeGeometry,
+    error: Option<OffsetTubeError>,
+}
+
+#[derive(Clone, Debug)]
+enum OffsetTubeGeometry {
+    Line {
+        start: [f64; 2],
+        end: [f64; 2],
+    },
+    CircularArc {
+        center: [f64; 2],
+        radius: f64,
+        start_angle: f64,
+        sweep: f64,
+    },
+    Cubic {
+        controls: [[f64; 2]; 4],
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+struct OffsetTubeError {
+    maximum_position_error: f64,
+    maximum_local_derivative_error: f64,
+    endpoint_position_errors: [f64; 2],
+    patch_interval: [f64; 2],
+}
+
+#[derive(Clone, Copy, Debug)]
+struct OffsetTubeBounds {
+    minimum: [f64; 2],
+    maximum: [f64; 2],
+}
+
+fn certify_mathematical_curve_offset_topology(
+    paths: &[EvaluatedCurveOffsetPath],
+    model_scale: f64,
+    controller: &mut OperationController,
+) -> Result<(), EvaluateFeatureError> {
+    let coordinate_scale = paths.iter().flat_map(|path| &path.edges).try_fold(
+        model_scale.abs().max(1.0),
+        |scale, edge| {
+            let (start, end, _, _) = curve_offset_terminals(&edge.geometry)?;
+            Ok::<_, EvaluateFeatureError>(
+                start
+                    .into_iter()
+                    .chain(end)
+                    .fold(scale, |scale, value| scale.max(value.abs())),
+            )
+        },
+    )?;
+    let tolerance = 1.0e-8 * model_scale.abs() + 256.0 * f64::EPSILON * coordinate_scale.max(1.0);
+    let mut cells = Vec::new();
+    for (path_index, path) in paths.iter().enumerate() {
+        let path_start = cells.len();
+        for edge in &path.edges {
+            append_offset_tube_edge_cells(path_index, path.closed, edge, controller, &mut cells)?;
+        }
+        let path_cell_count = cells.len().saturating_sub(path_start);
+        if path_cell_count == 0 {
+            return Err(offset_topology_change());
+        }
+        for (ordinal, cell) in cells[path_start..].iter_mut().enumerate() {
+            cell.ordinal = ordinal;
+            cell.path_cell_count = path_cell_count;
+        }
+        let first = cell_start(&cells[path_start]);
+        let last = cell_end(cells.last().ok_or_else(offset_topology_change)?);
+        if path.closed != (distance_between(first, last) <= tolerance) {
+            return Err(offset_topology_change());
+        }
+    }
+
+    for cell in &cells {
+        certify_offset_tube_cell_monotone(cell)?;
+    }
+    for (path_index, path) in paths.iter().enumerate() {
+        let path_cells = cells
+            .iter()
+            .filter(|cell| cell.path == path_index)
+            .collect::<Vec<_>>();
+        for pair in path_cells.windows(2) {
+            certify_adjacent_offset_tube_cells(pair[0], pair[1], tolerance)?;
+        }
+        if path.closed {
+            certify_adjacent_offset_tube_cells(
+                path_cells.last().ok_or_else(offset_topology_change)?,
+                path_cells.first().ok_or_else(offset_topology_change)?,
+                tolerance,
+            )?;
+        }
+    }
+
+    // Sweep fitted cells by their already-inflated x enclosures. A disjoint enclosure proves
+    // separation of the mathematical parallels because the continuous fit error is included.
+    let bounds = cells
+        .iter()
+        .map(|cell| offset_tube_bounds(cell, tolerance))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut order = (0..cells.len()).collect::<Vec<_>>();
+    let mut pair_visits = 0_usize;
+    order.sort_by(|first, second| bounds[*first].minimum[0].total_cmp(&bounds[*second].minimum[0]));
+    for (order_index, first_index) in order.iter().copied().enumerate() {
+        for second_index in order.iter().copied().skip(order_index + 1) {
+            if bounds[second_index].minimum[0] > bounds[first_index].maximum[0] {
+                break;
+            }
+            if offset_tube_cells_are_adjacent(&cells[first_index], &cells[second_index])
+                || bounds[first_index].maximum[1] < bounds[second_index].minimum[1]
+                || bounds[second_index].maximum[1] < bounds[first_index].minimum[1]
+            {
+                continue;
+            }
+            certify_separated_offset_tubes(
+                &cells[first_index],
+                &cells[second_index],
+                tolerance,
+                0,
+                controller,
+                &mut pair_visits,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines,
+    reason = "finite arc sweeps are explicitly capped before their bounded deterministic cell count is used"
+)]
+fn append_offset_tube_edge_cells(
+    path: usize,
+    path_closed: bool,
+    edge: &EvaluatedCurveOffsetEdge,
+    controller: &mut OperationController,
+    cells: &mut Vec<OffsetTubeCell>,
+) -> Result<(), EvaluateFeatureError> {
+    match &edge.geometry {
+        CurveOffsetGeometry::Line { start, end } => {
+            if edge.certificate.maximum_position_error != 0.0
+                || edge.certificate.maximum_tangent_error_radians != 0.0
+            {
+                return Err(offset_topology_change());
+            }
+            append_monotone_offset_tube_cell(
+                OffsetTubeCell {
+                    path,
+                    ordinal: 0,
+                    path_cell_count: 0,
+                    path_closed,
+                    geometry: OffsetTubeGeometry::Line {
+                        start: *start,
+                        end: *end,
+                    },
+                    error: None,
+                },
+                0,
+                controller,
+                cells,
+            )
+        }
+        CurveOffsetGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            sweep,
+            ..
+        } => {
+            if edge.certificate.maximum_position_error != 0.0
+                || edge.certificate.maximum_tangent_error_radians != 0.0
+                || !radius.is_finite()
+                || *radius <= 0.0
+                || !start_angle.is_finite()
+                || !sweep.is_finite()
+                || *sweep == 0.0
+            {
+                return Err(offset_topology_change());
+            }
+            let cell_count = ((sweep.abs() / OFFSET_TUBE_ARC_CELL_ANGLE).ceil() as usize).max(1);
+            if cell_count > 4_096 {
+                return Err(offset_topology_change());
+            }
+            for index in 0..cell_count {
+                let cell_start = sweep.mul_add(index as f64 / cell_count as f64, *start_angle);
+                append_monotone_offset_tube_cell(
+                    OffsetTubeCell {
+                        path,
+                        ordinal: 0,
+                        path_cell_count: 0,
+                        path_closed,
+                        geometry: OffsetTubeGeometry::CircularArc {
+                            center: *center,
+                            radius: *radius,
+                            start_angle: cell_start,
+                            sweep: *sweep / cell_count as f64,
+                        },
+                        error: None,
+                    },
+                    0,
+                    controller,
+                    cells,
+                )?;
+            }
+            Ok(())
+        }
+        CurveOffsetGeometry::CubicPatches(patches) => {
+            if patches.is_empty() || edge.patch_endpoint_position_errors.len() != patches.len() {
+                return Err(offset_topology_change());
+            }
+            for (patch, endpoint_position_errors) in
+                patches.iter().zip(&edge.patch_endpoint_position_errors)
+            {
+                let finite = patch
+                    .controls
+                    .iter()
+                    .flatten()
+                    .all(|value| value.is_finite())
+                    && patch.maximum_position_error.is_finite()
+                    && patch.maximum_position_error >= 0.0
+                    && patch.maximum_local_derivative_error.is_finite()
+                    && patch.maximum_local_derivative_error >= 0.0
+                    && patch.maximum_tangent_error_radians.is_finite()
+                    && patch.maximum_tangent_error_radians >= 0.0
+                    && endpoint_position_errors
+                        .iter()
+                        .all(|error| error.is_finite() && *error >= 0.0);
+                if !finite
+                    || patch.maximum_position_error > edge.certificate.maximum_position_error
+                    || patch.maximum_tangent_error_radians
+                        > edge.certificate.maximum_tangent_error_radians
+                {
+                    return Err(offset_topology_change());
+                }
+                append_monotone_offset_tube_cell(
+                    OffsetTubeCell {
+                        path,
+                        ordinal: 0,
+                        path_cell_count: 0,
+                        path_closed,
+                        geometry: OffsetTubeGeometry::Cubic {
+                            controls: patch.controls,
+                        },
+                        error: Some(OffsetTubeError {
+                            maximum_position_error: patch.maximum_position_error,
+                            maximum_local_derivative_error: patch.maximum_local_derivative_error,
+                            endpoint_position_errors: *endpoint_position_errors,
+                            patch_interval: [0.0, 1.0],
+                        }),
+                    },
+                    0,
+                    controller,
+                    cells,
+                )?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn append_monotone_offset_tube_cell(
+    cell: OffsetTubeCell,
+    depth: usize,
+    controller: &mut OperationController,
+    cells: &mut Vec<OffsetTubeCell>,
+) -> Result<(), EvaluateFeatureError> {
+    if certify_offset_tube_cell_monotone(&cell).is_ok() {
+        cells.push(cell);
+        return Ok(());
+    }
+    if depth >= OFFSET_TUBE_MAX_DEPTH {
+        return Err(offset_topology_change());
+    }
+    controller
+        .charge(
+            OperationWorkCounter::ProfileSubdivisions,
+            1,
+            OperationCheckpoint::ProfileSubdivision,
+        )
+        .map_err(|_| EvaluateFeatureError::Stopped)?;
+    let [first, second] = split_offset_tube_cell(&cell);
+    append_monotone_offset_tube_cell(first, depth + 1, controller, cells)?;
+    append_monotone_offset_tube_cell(second, depth + 1, controller, cells)
+}
+
+fn certify_offset_tube_cell_monotone(cell: &OffsetTubeCell) -> Result<(), EvaluateFeatureError> {
+    let axis = normalized(cell_middle_tangent(cell)).ok_or_else(offset_topology_change)?;
+    certify_offset_tube_projection(cell, axis)
+}
+
+fn certify_adjacent_offset_tube_cells(
+    first: &OffsetTubeCell,
+    second: &OffsetTubeCell,
+    tolerance: f64,
+) -> Result<(), EvaluateFeatureError> {
+    if distance_between(cell_end(first), cell_start(second)) > tolerance {
+        return Err(offset_topology_change());
+    }
+    let first_tangent = normalized(cell_end_tangent(first)).ok_or_else(offset_topology_change)?;
+    let second_tangent =
+        normalized(cell_start_tangent(second)).ok_or_else(offset_topology_change)?;
+    let axis = normalized(add(first_tangent, second_tangent)).ok_or_else(offset_topology_change)?;
+    certify_offset_tube_projection(first, axis)?;
+    certify_offset_tube_projection(second, axis)
+}
+
+fn certify_offset_tube_projection(
+    cell: &OffsetTubeCell,
+    axis: [f64; 2],
+) -> Result<(), EvaluateFeatureError> {
+    let lower = fitted_derivative_projection_lower(cell, axis)?;
+    let derivative_error = cell_derivative_error(cell);
+    let upper = fitted_derivative_norm_upper(cell)?;
+    let numerical_margin = 4_096.0 * f64::EPSILON * upper.max(f64::MIN_POSITIVE);
+    (lower - derivative_error > numerical_margin)
+        .then_some(())
+        .ok_or_else(offset_topology_change)
+}
+
+fn offset_tube_cells_are_adjacent(first: &OffsetTubeCell, second: &OffsetTubeCell) -> bool {
+    first.path == second.path
+        && (first.ordinal.abs_diff(second.ordinal) == 1
+            || (first.path_closed
+                && ((first.ordinal == 0 && second.ordinal + 1 == second.path_cell_count)
+                    || (second.ordinal == 0 && first.ordinal + 1 == first.path_cell_count))))
+}
+
+fn certify_separated_offset_tubes(
+    first: &OffsetTubeCell,
+    second: &OffsetTubeCell,
+    tolerance: f64,
+    depth: usize,
+    controller: &mut OperationController,
+    pair_visits: &mut usize,
+) -> Result<(), EvaluateFeatureError> {
+    *pair_visits = pair_visits
+        .checked_add(1)
+        .filter(|visits| *visits <= OFFSET_TUBE_MAX_PAIR_VISITS)
+        .ok_or_else(offset_topology_change)?;
+    controller
+        .charge(
+            OperationWorkCounter::ProfileCandidatePairs,
+            1,
+            OperationCheckpoint::ProfileCandidate,
+        )
+        .map_err(|_| EvaluateFeatureError::Stopped)?;
+    let first_bounds = offset_tube_bounds(first, tolerance)?;
+    let second_bounds = offset_tube_bounds(second, tolerance)?;
+    if offset_tube_bounds_are_separated(first_bounds, second_bounds) {
+        return Ok(());
+    }
+    if depth >= OFFSET_TUBE_MAX_DEPTH {
+        return Err(offset_topology_change());
+    }
+    controller
+        .charge(
+            OperationWorkCounter::ProfileSubdivisions,
+            1,
+            OperationCheckpoint::ProfileSubdivision,
+        )
+        .map_err(|_| EvaluateFeatureError::Stopped)?;
+    let first_size = offset_tube_bounds_size(first_bounds);
+    let second_size = offset_tube_bounds_size(second_bounds);
+    if first_size >= second_size {
+        for child in split_offset_tube_cell(first) {
+            certify_separated_offset_tubes(
+                &child,
+                second,
+                tolerance,
+                depth + 1,
+                controller,
+                pair_visits,
+            )?;
+        }
+    } else {
+        for child in split_offset_tube_cell(second) {
+            certify_separated_offset_tubes(
+                first,
+                &child,
+                tolerance,
+                depth + 1,
+                controller,
+                pair_visits,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn offset_tube_bounds(
+    cell: &OffsetTubeCell,
+    tolerance: f64,
+) -> Result<OffsetTubeBounds, EvaluateFeatureError> {
+    let (mut minimum, mut maximum) = match &cell.geometry {
+        OffsetTubeGeometry::Line { start, end } => (
+            [start[0].min(end[0]), start[1].min(end[1])],
+            [start[0].max(end[0]), start[1].max(end[1])],
+        ),
+        OffsetTubeGeometry::Cubic { controls } => {
+            let mut minimum = [f64::INFINITY; 2];
+            let mut maximum = [f64::NEG_INFINITY; 2];
+            for control in controls {
+                for axis in 0..2 {
+                    minimum[axis] = minimum[axis].min(control[axis]);
+                    maximum[axis] = maximum[axis].max(control[axis]);
+                }
+            }
+            (minimum, maximum)
+        }
+        OffsetTubeGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            sweep,
+        } => arc_bounds(*center, *radius, *start_angle, *sweep)?,
+    };
+    let inflation = next_up(cell_position_error(cell) + tolerance);
+    if !inflation.is_finite() || !minimum.into_iter().chain(maximum).all(f64::is_finite) {
+        return Err(offset_topology_change());
+    }
+    for axis in 0..2 {
+        minimum[axis] = next_down(minimum[axis] - inflation);
+        maximum[axis] = next_up(maximum[axis] + inflation);
+    }
+    Ok(OffsetTubeBounds { minimum, maximum })
+}
+
+fn arc_bounds(
+    center: [f64; 2],
+    radius: f64,
+    start_angle: f64,
+    sweep: f64,
+) -> Result<([f64; 2], [f64; 2]), EvaluateFeatureError> {
+    let mut angles = vec![start_angle, start_angle + sweep];
+    let lower = start_angle.min(start_angle + sweep);
+    let upper = start_angle.max(start_angle + sweep);
+    for quarter in -8..=8 {
+        let angle = f64::from(quarter) * std::f64::consts::FRAC_PI_2;
+        if angle > lower && angle < upper {
+            angles.push(angle);
+        }
+    }
+    let mut minimum = [f64::INFINITY; 2];
+    let mut maximum = [f64::NEG_INFINITY; 2];
+    for angle in angles {
+        let point = [
+            radius.mul_add(angle.cos(), center[0]),
+            radius.mul_add(angle.sin(), center[1]),
+        ];
+        for axis in 0..2 {
+            minimum[axis] = minimum[axis].min(point[axis]);
+            maximum[axis] = maximum[axis].max(point[axis]);
+        }
+    }
+    minimum
+        .into_iter()
+        .chain(maximum)
+        .all(f64::is_finite)
+        .then_some((minimum, maximum))
+        .ok_or_else(offset_topology_change)
+}
+
+fn offset_tube_bounds_are_separated(first: OffsetTubeBounds, second: OffsetTubeBounds) -> bool {
+    first.maximum[0] < second.minimum[0]
+        || second.maximum[0] < first.minimum[0]
+        || first.maximum[1] < second.minimum[1]
+        || second.maximum[1] < first.minimum[1]
+}
+
+fn offset_tube_bounds_size(bounds: OffsetTubeBounds) -> f64 {
+    (bounds.maximum[0] - bounds.minimum[0]).hypot(bounds.maximum[1] - bounds.minimum[1])
+}
+
+fn split_offset_tube_cell(cell: &OffsetTubeCell) -> [OffsetTubeCell; 2] {
+    let (first_geometry, second_geometry) = match &cell.geometry {
+        OffsetTubeGeometry::Line { start, end } => {
+            let middle = scale_vector(add(*start, *end), 0.5);
+            (
+                OffsetTubeGeometry::Line {
+                    start: *start,
+                    end: middle,
+                },
+                OffsetTubeGeometry::Line {
+                    start: middle,
+                    end: *end,
+                },
+            )
+        }
+        OffsetTubeGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            sweep,
+        } => (
+            OffsetTubeGeometry::CircularArc {
+                center: *center,
+                radius: *radius,
+                start_angle: *start_angle,
+                sweep: *sweep * 0.5,
+            },
+            OffsetTubeGeometry::CircularArc {
+                center: *center,
+                radius: *radius,
+                start_angle: sweep.mul_add(0.5, *start_angle),
+                sweep: *sweep * 0.5,
+            },
+        ),
+        OffsetTubeGeometry::Cubic { controls } => {
+            let [first, second] = split_cubic_controls(*controls);
+            (
+                OffsetTubeGeometry::Cubic { controls: first },
+                OffsetTubeGeometry::Cubic { controls: second },
+            )
+        }
+    };
+    let (first_error, second_error) = if let Some(error) = cell.error {
+        let middle = 0.5 * (error.patch_interval[0] + error.patch_interval[1]);
+        (
+            Some(OffsetTubeError {
+                patch_interval: [error.patch_interval[0], middle],
+                ..error
+            }),
+            Some(OffsetTubeError {
+                patch_interval: [middle, error.patch_interval[1]],
+                ..error
+            }),
+        )
+    } else {
+        (None, None)
+    };
+    [
+        OffsetTubeCell {
+            geometry: first_geometry,
+            error: first_error,
+            ..cell.clone()
+        },
+        OffsetTubeCell {
+            geometry: second_geometry,
+            error: second_error,
+            ..cell.clone()
+        },
+    ]
+}
+
+fn split_cubic_controls(controls: [[f64; 2]; 4]) -> [[[f64; 2]; 4]; 2] {
+    let first_level = [
+        scale_vector(add(controls[0], controls[1]), 0.5),
+        scale_vector(add(controls[1], controls[2]), 0.5),
+        scale_vector(add(controls[2], controls[3]), 0.5),
+    ];
+    let second_level = [
+        scale_vector(add(first_level[0], first_level[1]), 0.5),
+        scale_vector(add(first_level[1], first_level[2]), 0.5),
+    ];
+    let middle = scale_vector(add(second_level[0], second_level[1]), 0.5);
+    [
+        [controls[0], first_level[0], second_level[0], middle],
+        [middle, second_level[1], first_level[2], controls[3]],
+    ]
+}
+
+fn cell_position_error(cell: &OffsetTubeCell) -> f64 {
+    let Some(error) = cell.error else {
+        return 0.0;
+    };
+    let from_start = next_up(
+        error.endpoint_position_errors[0]
+            + error.maximum_local_derivative_error * error.patch_interval[1].max(0.0),
+    );
+    let from_end = next_up(
+        error.endpoint_position_errors[1]
+            + error.maximum_local_derivative_error * (1.0 - error.patch_interval[0]).max(0.0),
+    );
+    error.maximum_position_error.min(from_start).min(from_end)
+}
+
+fn cell_derivative_error(cell: &OffsetTubeCell) -> f64 {
+    let Some(error) = cell.error else {
+        return 0.0;
+    };
+    next_up(
+        error.maximum_local_derivative_error
+            * (error.patch_interval[1] - error.patch_interval[0]).abs(),
+    )
+}
+
+fn cell_start(cell: &OffsetTubeCell) -> [f64; 2] {
+    match &cell.geometry {
+        OffsetTubeGeometry::Line { start, .. } => *start,
+        OffsetTubeGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            ..
+        } => [
+            radius.mul_add(start_angle.cos(), center[0]),
+            radius.mul_add(start_angle.sin(), center[1]),
+        ],
+        OffsetTubeGeometry::Cubic { controls } => controls[0],
+    }
+}
+
+fn cell_end(cell: &OffsetTubeCell) -> [f64; 2] {
+    match &cell.geometry {
+        OffsetTubeGeometry::Line { end, .. } => *end,
+        OffsetTubeGeometry::CircularArc {
+            center,
+            radius,
+            start_angle,
+            sweep,
+        } => {
+            let angle = start_angle + sweep;
+            [
+                radius.mul_add(angle.cos(), center[0]),
+                radius.mul_add(angle.sin(), center[1]),
+            ]
+        }
+        OffsetTubeGeometry::Cubic { controls } => controls[3],
+    }
+}
+
+fn cell_start_tangent(cell: &OffsetTubeCell) -> [f64; 2] {
+    match &cell.geometry {
+        OffsetTubeGeometry::Line { start, end } => subtract(*end, *start),
+        OffsetTubeGeometry::CircularArc {
+            radius,
+            start_angle,
+            sweep,
+            ..
+        } => scale_vector([-start_angle.sin(), start_angle.cos()], radius * sweep),
+        OffsetTubeGeometry::Cubic { controls } => {
+            scale_vector(subtract(controls[1], controls[0]), 3.0)
+        }
+    }
+}
+
+fn cell_end_tangent(cell: &OffsetTubeCell) -> [f64; 2] {
+    match &cell.geometry {
+        OffsetTubeGeometry::Line { start, end } => subtract(*end, *start),
+        OffsetTubeGeometry::CircularArc {
+            radius,
+            start_angle,
+            sweep,
+            ..
+        } => {
+            let angle = start_angle + sweep;
+            scale_vector([-angle.sin(), angle.cos()], radius * sweep)
+        }
+        OffsetTubeGeometry::Cubic { controls } => {
+            scale_vector(subtract(controls[3], controls[2]), 3.0)
+        }
+    }
+}
+
+fn cell_middle_tangent(cell: &OffsetTubeCell) -> [f64; 2] {
+    match &cell.geometry {
+        OffsetTubeGeometry::Line { start, end } => subtract(*end, *start),
+        OffsetTubeGeometry::CircularArc {
+            radius,
+            start_angle,
+            sweep,
+            ..
+        } => {
+            let angle = sweep.mul_add(0.5, *start_angle);
+            scale_vector([-angle.sin(), angle.cos()], radius * sweep)
+        }
+        OffsetTubeGeometry::Cubic { controls } => {
+            let derivatives = cubic_derivative_controls(*controls);
+            add(
+                scale_vector(add(derivatives[0], derivatives[2]), 0.25),
+                scale_vector(derivatives[1], 0.5),
+            )
+        }
+    }
+}
+
+fn cubic_derivative_controls(controls: [[f64; 2]; 4]) -> [[f64; 2]; 3] {
+    [
+        scale_vector(subtract(controls[1], controls[0]), 3.0),
+        scale_vector(subtract(controls[2], controls[1]), 3.0),
+        scale_vector(subtract(controls[3], controls[2]), 3.0),
+    ]
+}
+
+fn fitted_derivative_projection_lower(
+    cell: &OffsetTubeCell,
+    axis: [f64; 2],
+) -> Result<f64, EvaluateFeatureError> {
+    let lower = match &cell.geometry {
+        OffsetTubeGeometry::Line { start, end } => dot(subtract(*end, *start), axis),
+        OffsetTubeGeometry::Cubic { controls } => cubic_derivative_controls(*controls)
+            .into_iter()
+            .map(|derivative| dot(derivative, axis))
+            .fold(f64::INFINITY, f64::min),
+        OffsetTubeGeometry::CircularArc {
+            radius,
+            start_angle,
+            sweep,
+            ..
+        } => arc_derivative_projection_lower(*radius, *start_angle, *sweep, axis),
+    };
+    lower
+        .is_finite()
+        .then(|| next_down(lower))
+        .ok_or_else(offset_topology_change)
+}
+
+fn arc_derivative_projection_lower(
+    radius: f64,
+    start_angle: f64,
+    sweep: f64,
+    axis: [f64; 2],
+) -> f64 {
+    let end_angle = start_angle + sweep;
+    let lower = start_angle.min(end_angle);
+    let upper = start_angle.max(end_angle);
+    let value = |angle: f64| radius * sweep * (-axis[0] * angle.sin() + axis[1] * angle.cos());
+    let mut result = value(start_angle).min(value(end_angle));
+    let phase = axis[1].atan2(axis[0]);
+    for half_turn in -8..=8 {
+        let angle =
+            phase + std::f64::consts::FRAC_PI_2 + f64::from(half_turn) * std::f64::consts::PI;
+        if angle > lower && angle < upper {
+            result = result.min(value(angle));
+        }
+    }
+    result
+}
+
+fn fitted_derivative_norm_upper(cell: &OffsetTubeCell) -> Result<f64, EvaluateFeatureError> {
+    let upper = match &cell.geometry {
+        OffsetTubeGeometry::Line { start, end } => norm(subtract(*end, *start)),
+        OffsetTubeGeometry::CircularArc { radius, sweep, .. } => radius * sweep.abs(),
+        OffsetTubeGeometry::Cubic { controls } => cubic_derivative_controls(*controls)
+            .into_iter()
+            .map(norm)
+            .fold(0.0, f64::max),
+    };
+    (upper.is_finite() && upper > 0.0)
+        .then(|| next_up(upper))
+        .ok_or_else(offset_topology_change)
+}
+
+fn next_up(value: f64) -> f64 {
+    if value.is_nan() || value == f64::INFINITY {
+        return value;
+    }
+    if value == -0.0 {
+        return f64::from_bits(1);
+    }
+    if value >= 0.0 {
+        f64::from_bits(value.to_bits() + 1)
+    } else {
+        f64::from_bits(value.to_bits() - 1)
+    }
+}
+
+fn next_down(value: f64) -> f64 {
+    if value.is_nan() || value == f64::NEG_INFINITY {
+        return value;
+    }
+    if value == 0.0 {
+        return -f64::from_bits(1);
+    }
+    if value > 0.0 {
+        f64::from_bits(value.to_bits() - 1)
+    } else {
+        f64::from_bits(value.to_bits() + 1)
+    }
+}
+
+fn offset_topology_change() -> EvaluateFeatureError {
+    EvaluateFeatureError::Failure(ComputedFeatureFailure::OffsetTopologyChange)
+}
+
+fn normalized(value: [f64; 2]) -> Option<[f64; 2]> {
+    let length = norm(value);
+    (length.is_finite() && length > 0.0).then(|| scale_vector(value, length.recip()))
+}
+
+fn add(first: [f64; 2], second: [f64; 2]) -> [f64; 2] {
+    [first[0] + second[0], first[1] + second[1]]
+}
+
+fn subtract(first: [f64; 2], second: [f64; 2]) -> [f64; 2] {
+    [first[0] - second[0], first[1] - second[1]]
+}
+
+fn scale_vector(value: [f64; 2], factor: f64) -> [f64; 2] {
+    [value[0] * factor, value[1] * factor]
+}
+
+fn dot(first: [f64; 2], second: [f64; 2]) -> f64 {
+    first[0].mul_add(second[0], first[1] * second[1])
+}
+
+fn cross(first: [f64; 2], second: [f64; 2]) -> f64 {
+    first[0].mul_add(second[1], -first[1] * second[0])
+}
+
+fn norm(value: [f64; 2]) -> f64 {
+    value[0].hypot(value[1])
+}
+
+fn distance_between(first: [f64; 2], second: [f64; 2]) -> f64 {
+    norm(subtract(first, second))
+}
+
 fn evaluate_feature(
     sketch: &SketchDocument,
     feature: &ComputedFeature,
@@ -1790,7 +4477,13 @@ fn evaluate_feature(
     policy: ComputedFeatureEvaluationPolicy,
     controller: &mut OperationController,
 ) -> Result<EvaluatedFeatureCandidate, EvaluateFeatureError> {
-    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
+        return Err(EvaluateFeatureError::Failure(
+            ComputedFeatureFailure::OffsetJunctionFailure {
+                kind: "feature dispatch",
+            },
+        ));
+    };
     let mut corners = Vec::with_capacity(fillet.corners.len());
     for corner in &fillet.corners {
         if controller
@@ -2116,7 +4809,9 @@ fn continuation_matches_feature_document(
     let Some(feature) = features.feature(continuation.owner.feature) else {
         return false;
     };
-    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
+        return false;
+    };
     let Some(corner) = fillet
         .corners
         .iter()
@@ -2963,7 +5658,11 @@ fn map_continuation_failure(failure: &ComputedFeatureFailure) -> ComputedFeature
         ComputedFeatureFailure::InvalidParentState { .. }
         | ComputedFeatureFailure::InvalidGeometry { .. }
         | ComputedFeatureFailure::EndpointClaimConflict { .. }
-        | ComputedFeatureFailure::ConsumedSourceInterval { .. } => {
+        | ComputedFeatureFailure::ConsumedSourceInterval { .. }
+        | ComputedFeatureFailure::OffsetMissingSource { .. }
+        | ComputedFeatureFailure::OffsetCurveFailure { .. }
+        | ComputedFeatureFailure::OffsetJunctionFailure { .. }
+        | ComputedFeatureFailure::OffsetTopologyChange => {
             ComputedFeatureAuthoringError::InvalidContinuationState
         }
     }

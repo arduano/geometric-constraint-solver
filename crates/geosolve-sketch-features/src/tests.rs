@@ -1,26 +1,38 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_sketch::{
-    CancellationToken, CurveDefinition, CurveSpan, DocumentArcSweep, DocumentConstraintDefinition,
-    DocumentCurveNormalSide, DocumentCurveTrimView, DocumentFilletEndpointOrder,
-    DocumentFilletTrimEndpoint, DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary,
+    CancellationToken, CurveDefinition, CurveSpan, DocumentArcSweep, DocumentBSplineForm,
+    DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentCurveTrimView,
+    DocumentFaceOffsetDirection, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
+    DocumentLineSide, DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary,
     DocumentTrimParameter, GeometryRole, OperationControl, OperationLimits, OperationOutcome,
     RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SketchHardValidity,
     SolverConfig, cancellation_pair,
 };
 
 use crate::{
-    ComputedEdgeGeometry, ComputedEvaluationAllocator, ComputedEvaluationAllocatorHighWater,
-    ComputedEvaluationRevision, ComputedFeatureAllocatorHighWater, ComputedFeatureAuthoringError,
-    ComputedFeatureDefinition, ComputedFeatureDocument, ComputedFeatureDocumentError,
-    ComputedFeatureDocumentId, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
+    ComputedCurveOffsetChain, ComputedCurveOffsetDirectedSpan, ComputedCurveOffsetJunction,
+    ComputedCurveOffsetJunctionBranch, ComputedCurveOffsetJunctionProvenance,
+    ComputedCurveOffsetLoop, ComputedCurveOffsetOperand, ComputedCurveOffsetTerminalPolicy,
+    ComputedCurveOffsetTraversal, ComputedCurveOffsetTurn, ComputedEdgeGeometry,
+    ComputedEvaluationAllocator, ComputedEvaluationAllocatorHighWater, ComputedEvaluationRevision,
+    ComputedFeatureAllocatorHighWater, ComputedFeatureAuthoringError, ComputedFeatureDefinition,
+    ComputedFeatureDocument, ComputedFeatureDocumentError, ComputedFeatureDocumentId,
+    ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
     ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFeatureLifecycleHighWater,
     ComputedFeatureReanchorError, ComputedFeatureRevision, ComputedFeatureSnapshotError,
     ComputedFilletAuthoringOptions, ComputedFilletContactReseedRequest,
     ComputedFilletCornerAlternativeKind, ComputedFilletCornerAuthoringRequest,
-    ComputedFilletCurvePick, ComputedFilletParent, ComputedFilletParentIndex,
+    ComputedFilletCurvePick, ComputedFilletParent, ComputedFilletParentIndex, ComputedFilletSet,
     ContinuedComputedFilletCorner, NativeCurveSpanSource, NewComputedFilletCorner,
 };
+
+fn fillet_set(definition: &ComputedFeatureDefinition) -> &ComputedFilletSet {
+    let ComputedFeatureDefinition::FilletSet(fillet) = definition else {
+        panic!("expected a FilletSet feature");
+    };
+    fillet
+}
 
 struct PolylineFixture {
     document: SketchDocument,
@@ -80,6 +92,62 @@ fn retained(document: SketchDocument) -> RetainedSketchDocumentSession {
 
 fn source(span: CurveSpan) -> NativeCurveSpanSource {
     NativeCurveSpanSource { span }
+}
+
+fn offset_span(
+    span: CurveSpan,
+    traversal: ComputedCurveOffsetTraversal,
+) -> ComputedCurveOffsetDirectedSpan {
+    ComputedCurveOffsetDirectedSpan {
+        source: source(span),
+        traversal,
+    }
+}
+
+fn open_curve_offset_operand(
+    spans: [CurveSpan; 2],
+    join: geosolve_sketch::DesignPointId,
+) -> ComputedCurveOffsetOperand {
+    ComputedCurveOffsetOperand::OpenChain {
+        side: DocumentLineSide::Left,
+        chain: ComputedCurveOffsetChain {
+            spans: vec![
+                offset_span(spans[0], ComputedCurveOffsetTraversal::Forward),
+                offset_span(spans[1], ComputedCurveOffsetTraversal::Forward),
+            ],
+            junctions: vec![ComputedCurveOffsetJunction {
+                provenance: ComputedCurveOffsetJunctionProvenance::SharedPoint(join),
+                branch: ComputedCurveOffsetJunctionBranch::Miter {
+                    turn: ComputedCurveOffsetTurn::Left,
+                },
+            }],
+            start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+        },
+    }
+}
+
+fn single_open_curve_offset_operand(span: CurveSpan) -> ComputedCurveOffsetOperand {
+    ComputedCurveOffsetOperand::OpenChain {
+        side: DocumentLineSide::Left,
+        chain: ComputedCurveOffsetChain {
+            spans: vec![offset_span(span, ComputedCurveOffsetTraversal::Forward)],
+            junctions: Vec::new(),
+            start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+        },
+    }
+}
+
+fn single_loop_curve_offset_operand(span: CurveSpan) -> ComputedCurveOffsetOperand {
+    ComputedCurveOffsetOperand::Face {
+        direction: DocumentFaceOffsetDirection::Outward,
+        outer: ComputedCurveOffsetLoop {
+            spans: vec![offset_span(span, ComputedCurveOffsetTraversal::Forward)],
+            junctions: Vec::new(),
+        },
+        holes: Vec::new(),
+    }
 }
 
 fn curve_pick(
@@ -418,9 +486,7 @@ fn m70b_f004_fixture(
     let feature = features
         .create_fillet_set("Fillet 1", 1.0, vec![corner])
         .unwrap();
-    let persisted_corner = match &features.feature(feature).unwrap().definition {
-        ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0],
-    };
+    let persisted_corner = fillet_set(&features.feature(feature).unwrap().definition).corners[0];
     assert_eq!(
         features.digest().to_string(),
         "ddeb29c71705b33e28987876be77574c3491d8afd2559569d648fbed27c6d8e8",
@@ -1168,7 +1234,8 @@ fn arc_centers(snapshot: &crate::ComputedFeatureSnapshot) -> Vec<[u64; 2]> {
             ComputedEdgeGeometry::CircularArc(arc) => {
                 Some([arc.center[0].to_bits(), arc.center[1].to_bits()])
             }
-            ComputedEdgeGeometry::NativeSourceFragment { .. } => None,
+            ComputedEdgeGeometry::NativeSourceFragment { .. }
+            | ComputedEdgeGeometry::CurveOffset(_) => None,
         })
         .collect::<Vec<_>>();
     centers.sort_unstable();
@@ -1232,6 +1299,7 @@ fn geometry_signature(snapshot: &crate::ComputedFeatureSnapshot) -> ComputedGeom
                 }
                 arcs.push(signature);
             }
+            ComputedEdgeGeometry::CurveOffset(_) => {}
         }
     }
     sources.sort_unstable();
@@ -1268,9 +1336,7 @@ fn strict_json_digest_duplicate_pairs_and_lifecycle_high_water() {
     let first = features
         .create_fillet_set("corners", 0.5, vec![first_corner(fixture.spans)])
         .unwrap();
-    let first_corner_id = match &features.feature(first).unwrap().definition {
-        ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0].id,
-    };
+    let first_corner_id = fillet_set(&features.feature(first).unwrap().definition).corners[0].id;
     assert!(matches!(
         features.add_fillet_corners(first, vec![first_corner(fixture.spans)]),
         Err(ComputedFeatureDocumentError::InvalidField {
@@ -1300,11 +1366,909 @@ fn strict_json_digest_duplicate_pairs_and_lifecycle_high_water() {
     let replacement = restored
         .create_fillet_set("replacement", 0.5, vec![first_corner(fixture.spans)])
         .unwrap();
-    let replacement_corner = match &restored.feature(replacement).unwrap().definition {
-        ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0].id,
-    };
+    let replacement_corner =
+        fillet_set(&restored.feature(replacement).unwrap().definition).corners[0].id;
     assert!(replacement > first);
     assert!(replacement_corner > first_corner_id);
+}
+
+#[test]
+fn m82_fillet_only_v1_bytes_are_frozen_and_both_wire_versions_are_strict() {
+    let restored = ComputedFeatureDocument::from_json(M70B_F005_FEATURE_JSON)
+        .expect("frozen Fillet-only V1 fixture must decode");
+    assert_eq!(restored.to_json().unwrap(), M70B_F005_FEATURE_JSON);
+
+    let mut compatible_v2: serde_json::Value =
+        serde_json::from_str(M70B_F005_FEATURE_JSON).unwrap();
+    compatible_v2["version"] = serde_json::json!(2);
+    let compatible_v2 = serde_json::to_string(&compatible_v2).unwrap();
+    let restored_v2 = ComputedFeatureDocument::from_json(&compatible_v2)
+        .expect("strict V2 must accept unchanged Fillet intent");
+    assert_eq!(restored_v2, restored);
+    assert_eq!(restored_v2.to_json().unwrap(), M70B_F005_FEATURE_JSON);
+
+    let mut unknown: serde_json::Value = serde_json::from_str(&compatible_v2).unwrap();
+    unknown["features"][0]["definition"]["not_v2_intent"] = serde_json::json!(true);
+    assert!(matches!(
+        ComputedFeatureDocument::from_json(&serde_json::to_string(&unknown).unwrap()),
+        Err(ComputedFeatureDocumentError::Json(_))
+    ));
+}
+
+#[test]
+fn m82_curve_offset_v2_round_trip_digest_and_v1_exclusion() {
+    let fixture = polyline_fixture();
+    let mut features = ComputedFeatureDocument::with_id(
+        fixture.document.id(),
+        ComputedFeatureDocumentId::from_raw(0x8200),
+    );
+    let feature = features
+        .create_curve_offset(
+            "Curve Offset 1",
+            0.75,
+            open_curve_offset_operand([fixture.spans[0], fixture.spans[1]], fixture.points[1]),
+        )
+        .unwrap();
+    assert_eq!(feature.raw(), 1);
+    assert_eq!(features.allocator_high_water().next_corner_id.raw(), 1);
+
+    let json = features.to_json().unwrap();
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["version"], 2);
+    assert_eq!(value["features"][0]["definition"]["kind"], "curve_offset");
+    assert_eq!(
+        value["features"][0]["definition"]["operand"]["chain"]["start_terminal"],
+        "normal_translation"
+    );
+    assert_eq!(ComputedFeatureDocument::from_json(&json).unwrap(), features);
+    assert_eq!(
+        ComputedFeatureDocument::from_json(&json)
+            .unwrap()
+            .to_json()
+            .unwrap(),
+        json
+    );
+
+    let mut tampered = value.clone();
+    tampered["features"][0]["definition"]["distance"] = serde_json::json!(0.8);
+    assert!(matches!(
+        ComputedFeatureDocument::from_json(&serde_json::to_string(&tampered).unwrap()),
+        Err(ComputedFeatureDocumentError::DigestMismatch)
+    ));
+
+    let mut mislabeled_v1 = value;
+    mislabeled_v1["version"] = serde_json::json!(1);
+    assert!(matches!(
+        ComputedFeatureDocument::from_json(&serde_json::to_string(&mislabeled_v1).unwrap()),
+        Err(ComputedFeatureDocumentError::Json(_))
+    ));
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one transactional persistence test keeps the complete Curve Offset mutation inventory together"
+)]
+fn m82_curve_offset_validation_mutations_and_wrong_kind_fail_atomically() {
+    let fixture = polyline_fixture();
+    let mut features = ComputedFeatureDocument::with_id(
+        fixture.document.id(),
+        ComputedFeatureDocumentId::from_raw(0x8201),
+    );
+    let valid = open_curve_offset_operand([fixture.spans[0], fixture.spans[1]], fixture.points[1]);
+    let before_invalid_create = features.clone();
+    assert!(matches!(
+        features.create_curve_offset("invalid", f64::NAN, valid.clone()),
+        Err(ComputedFeatureDocumentError::InvalidField {
+            field: "distance",
+            ..
+        })
+    ));
+    assert_eq!(features, before_invalid_create);
+
+    let malformed = ComputedCurveOffsetOperand::OpenChain {
+        side: DocumentLineSide::Left,
+        chain: ComputedCurveOffsetChain {
+            spans: vec![
+                offset_span(fixture.spans[0], ComputedCurveOffsetTraversal::Forward),
+                offset_span(fixture.spans[1], ComputedCurveOffsetTraversal::Forward),
+            ],
+            junctions: Vec::new(),
+            start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+        },
+    };
+    assert!(matches!(
+        features.create_curve_offset("invalid", 0.5, malformed.clone()),
+        Err(ComputedFeatureDocumentError::InvalidField {
+            field: "Curve Offset junctions",
+            ..
+        })
+    ));
+    assert_eq!(features, before_invalid_create);
+
+    let duplicate_source = ComputedCurveOffsetOperand::OpenChain {
+        side: DocumentLineSide::Left,
+        chain: ComputedCurveOffsetChain {
+            spans: vec![
+                offset_span(fixture.spans[0], ComputedCurveOffsetTraversal::Forward),
+                offset_span(fixture.spans[0], ComputedCurveOffsetTraversal::Reverse),
+            ],
+            junctions: vec![ComputedCurveOffsetJunction {
+                provenance: ComputedCurveOffsetJunctionProvenance::SharedPoint(fixture.points[0]),
+                branch: ComputedCurveOffsetJunctionBranch::Tangent,
+            }],
+            start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+        },
+    };
+    assert!(matches!(
+        features.create_curve_offset("invalid", 0.5, duplicate_source),
+        Err(ComputedFeatureDocumentError::InvalidField {
+            field: "Curve Offset spans",
+            ..
+        })
+    ));
+    assert_eq!(features, before_invalid_create);
+
+    let offset = features
+        .create_curve_offset("Curve Offset", 0.5, valid)
+        .unwrap();
+    let allocator = features.allocator_high_water();
+    let revision = features.revision();
+    features.set_curve_offset_distance(offset, 0.5).unwrap();
+    assert_eq!(features.revision(), revision);
+    features.set_curve_offset_distance(offset, 0.75).unwrap();
+    assert_eq!(features.revision().raw(), revision.raw() + 1);
+    assert_eq!(features.allocator_high_water(), allocator);
+
+    let before_invalid_edit = features.clone();
+    assert!(matches!(
+        features.set_curve_offset_distance(offset, 0.0),
+        Err(ComputedFeatureDocumentError::InvalidField {
+            field: "distance",
+            ..
+        })
+    ));
+    assert!(matches!(
+        features.set_curve_offset_operand(offset, malformed),
+        Err(ComputedFeatureDocumentError::InvalidField {
+            field: "Curve Offset junctions",
+            ..
+        })
+    ));
+    assert_eq!(features, before_invalid_edit);
+
+    features.flip_curve_offset_direction(offset).unwrap();
+    let ComputedCurveOffsetOperand::OpenChain { side, .. } =
+        &features.curve_offset(offset).unwrap().operand
+    else {
+        panic!("expected an open-chain offset");
+    };
+    assert_eq!(*side, DocumentLineSide::Right);
+
+    let face = ComputedCurveOffsetOperand::Face {
+        direction: DocumentFaceOffsetDirection::Outward,
+        outer: ComputedCurveOffsetLoop {
+            spans: vec![offset_span(
+                fixture.spans[2],
+                ComputedCurveOffsetTraversal::Reverse,
+            )],
+            junctions: Vec::new(),
+        },
+        holes: Vec::new(),
+    };
+    features.set_curve_offset_operand(offset, face).unwrap();
+    features.flip_curve_offset_direction(offset).unwrap();
+    assert!(matches!(
+        &features.curve_offset(offset).unwrap().operand,
+        ComputedCurveOffsetOperand::Face {
+            direction: DocumentFaceOffsetDirection::Inward,
+            ..
+        }
+    ));
+
+    let before_wrong_kind = features.clone();
+    assert!(matches!(
+        features.set_fillet_radius(offset, 0.25),
+        Err(ComputedFeatureDocumentError::WrongFeatureKind {
+            feature,
+            expected: "FilletSet",
+            actual: "CurveOffset",
+        }) if feature == offset
+    ));
+    assert!(matches!(
+        features.add_fillet_corners(offset, Vec::new()),
+        Err(ComputedFeatureDocumentError::WrongFeatureKind { .. })
+    ));
+    assert!(matches!(
+        features.remove_corner(offset, crate::ComputedFeatureCornerId::from_raw(1)),
+        Err(ComputedFeatureDocumentError::WrongFeatureKind { .. })
+    ));
+    assert_eq!(features, before_wrong_kind);
+
+    let fillet = features
+        .create_fillet_set("Fillet", 0.25, vec![first_corner(fixture.spans)])
+        .unwrap();
+    let before_wrong_kind = features.clone();
+    assert!(matches!(
+        features.set_curve_offset_distance(fillet, 1.0),
+        Err(ComputedFeatureDocumentError::WrongFeatureKind {
+            feature,
+            expected: "CurveOffset",
+            actual: "FilletSet",
+        }) if feature == fillet
+    ));
+    assert!(matches!(
+        features.flip_curve_offset_direction(fillet),
+        Err(ComputedFeatureDocumentError::WrongFeatureKind { .. })
+    ));
+    assert_eq!(features, before_wrong_kind);
+}
+
+#[test]
+fn m82_computed_evaluator_publishes_exact_lines_and_certified_bezier_patches() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let line_start = document.add_point("line start", [0.0, 0.0]).unwrap();
+    let line_end = document.add_point("line end", [2.0, 0.0]).unwrap();
+    let line = document
+        .add_curve(
+            "line",
+            CurveDefinition::Line {
+                start: line_start,
+                end: line_end,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .unwrap();
+    let controls = [[0.0, 2.0], [0.7, 3.0], [1.3, 1.5], [2.0, 2.2]]
+        .map(|position| document.add_point("Bezier control", position).unwrap());
+    let bezier = document
+        .add_curve("Bezier", CurveDefinition::CubicBezier { controls })
+        .unwrap();
+    let session = retained(document.clone());
+    let mut features = ComputedFeatureDocument::new(document.id());
+    let line_feature = features
+        .create_curve_offset(
+            "line offset",
+            0.25,
+            single_open_curve_offset_operand(CurveSpan::line(line)),
+        )
+        .unwrap();
+    let bezier_feature = features
+        .create_curve_offset(
+            "Bezier offset",
+            0.1,
+            single_open_curve_offset_operand(CurveSpan::line(bezier)),
+        )
+        .unwrap();
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let snapshot = evaluate(&session, &features, &mut allocator);
+
+    for feature in [line_feature, bezier_feature] {
+        let state = &snapshot
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == feature)
+            .unwrap()
+            .state;
+        assert!(matches!(
+            state,
+            ComputedFeatureEvaluationState::Current {
+                generated_edges,
+                ..
+            } if generated_edges.len() == 1
+        ));
+    }
+    assert!(
+        snapshot.edges().iter().any(|edge| matches!(
+            edge.geometry,
+            ComputedEdgeGeometry::CurveOffset(geosolve_sketch::CurveOffsetGeometry::Line {
+                start,
+                end,
+            }) if start.map(f64::to_bits) == [0.0_f64.to_bits(), 0.25_f64.to_bits()]
+                && end.map(f64::to_bits) == [2.0_f64.to_bits(), 0.25_f64.to_bits()]
+        )),
+        "unexpected exact line output: {:?}",
+        snapshot.edges()
+    );
+    assert!(snapshot.edges().iter().any(|edge| matches!(
+        &edge.geometry,
+        ComputedEdgeGeometry::CurveOffset(
+            geosolve_sketch::CurveOffsetGeometry::CubicPatches(patches)
+        ) if !patches.is_empty()
+            && patches
+                .iter()
+                .flat_map(|patch| patch.controls.iter().flatten())
+                .all(|value| value.is_finite())
+    )));
+}
+
+#[test]
+fn m82_curve_offset_work_exhaustion_publishes_nothing_and_never_reuses_output_ids() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let controls = [[0.0, 0.0], [1.0, 2.0], [2.0, 0.0]]
+        .map(|position| document.add_point("quadratic control", position).unwrap());
+    let curve = document
+        .add_curve("quadratic", CurveDefinition::QuadraticBezier { controls })
+        .unwrap();
+    let session = retained(document.clone());
+    let mut features = ComputedFeatureDocument::new(document.id());
+    let feature = features
+        .create_curve_offset(
+            "bounded Curve Offset",
+            0.1,
+            single_open_curve_offset_operand(CurveSpan::line(curve)),
+        )
+        .unwrap();
+    let feature_identity = features.identity();
+    let feature_bytes = features.to_json().unwrap();
+    let captured = ComputedFeatureEvaluationSnapshot::capture(
+        &session,
+        &features,
+        ComputedFeatureEvaluationPolicy::default(),
+    )
+    .unwrap();
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let before = allocator.high_water();
+    let prepared = captured.clone().prepare(&mut allocator).unwrap();
+    let after_reservation = allocator.high_water();
+    assert!(after_reservation.next_revision > before.next_revision);
+
+    let mut limits = OperationLimits::unlimited();
+    limits.profile_subdivisions = 0;
+    let exhausted = prepared
+        .execute(OperationControl::new(CancellationToken::default(), limits))
+        .unwrap();
+    assert!(matches!(
+        exhausted,
+        OperationOutcome::WorkExhausted { ref report }
+            if report.consumed.profile_subdivisions == 0
+    ));
+    assert_eq!(features.identity(), feature_identity);
+    assert_eq!(features.to_json().unwrap(), feature_bytes);
+    assert_eq!(allocator.high_water(), after_reservation);
+
+    let completed = captured
+        .prepare(&mut allocator)
+        .unwrap()
+        .execute(OperationControl::unlimited())
+        .unwrap();
+    let OperationOutcome::Completed { value, .. } = completed else {
+        panic!("the same immutable input must recover with sufficient work");
+    };
+    assert_eq!(value.evaluation_revision(), after_reservation.next_revision);
+    assert!(matches!(
+        value
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == feature)
+            .unwrap()
+            .state,
+        ComputedFeatureEvaluationState::Current { .. }
+    ));
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one all-route fixture keeps the four representative computed-family publications comparable"
+)]
+fn m82_evaluator_routes_ellipse_bezier_bspline_and_nurbs_as_computed_curves() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let ellipse_center = document.add_point("ellipse center", [0.0, 0.0]).unwrap();
+    let ellipse_axis = document.add_point("ellipse axis", [3.0, 0.0]).unwrap();
+    let ellipse_ratio = document
+        .add_scalar(
+            "ellipse ratio",
+            0.75,
+            ScalarUnit::Parameter,
+            ScalarDomain::Bounded {
+                lower: f64::from_bits(1),
+                upper: 1.0,
+            },
+        )
+        .unwrap();
+    let ellipse = document
+        .add_curve(
+            "ellipse",
+            CurveDefinition::Ellipse {
+                center: ellipse_center,
+                major_axis_point: ellipse_axis,
+                minor_axis_ratio: ellipse_ratio,
+            },
+        )
+        .unwrap();
+    let bezier_controls = [[0.0, 5.0], [1.0, 5.2], [2.0, 5.0]]
+        .map(|position| document.add_point("Bezier control", position).unwrap());
+    let bezier = document
+        .add_curve(
+            "Bezier",
+            CurveDefinition::QuadraticBezier {
+                controls: bezier_controls,
+            },
+        )
+        .unwrap();
+    let spline_controls = [[0.0, 7.0], [1.0, 7.2], [2.0, 7.0]]
+        .map(|position| document.add_point("spline control", position).unwrap());
+    let spline = document
+        .add_curve(
+            "B-spline",
+            CurveDefinition::BSpline {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: spline_controls.to_vec(),
+                knots: vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                span_ids: vec![0],
+                next_span_id: 1,
+            },
+        )
+        .unwrap();
+    let nurbs_controls = [[0.0, 9.0], [1.0, 9.2], [2.0, 9.0]]
+        .map(|position| document.add_point("NURBS control", position).unwrap());
+    let nurbs_weights = [1.0, 0.9, 1.0].map(|weight| {
+        document
+            .add_scalar(
+                "NURBS weight",
+                weight,
+                ScalarUnit::Parameter,
+                ScalarDomain::Positive,
+            )
+            .unwrap()
+    });
+    let nurbs = document
+        .add_curve(
+            "NURBS",
+            CurveDefinition::Nurbs {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: nurbs_controls.to_vec(),
+                weights: nurbs_weights.to_vec(),
+                gauge_weight: nurbs_weights[0],
+                knots: vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                span_ids: vec![0],
+                next_span_id: 1,
+            },
+        )
+        .unwrap();
+    let session = retained(document.clone());
+    let mut features = ComputedFeatureDocument::new(document.id());
+    let ellipse_feature = features
+        .create_curve_offset(
+            "ellipse offset",
+            0.05,
+            single_loop_curve_offset_operand(CurveSpan::line(ellipse)),
+        )
+        .unwrap();
+    let mut expected = vec![ellipse_feature];
+    for (label, curve) in [("Bezier", bezier), ("B-spline", spline), ("NURBS", nurbs)] {
+        expected.push(
+            features
+                .create_curve_offset(
+                    label,
+                    0.05,
+                    single_open_curve_offset_operand(CurveSpan::line(curve)),
+                )
+                .unwrap(),
+        );
+    }
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let first = evaluate(&session, &features, &mut allocator);
+    let second = evaluate(&session, &features, &mut allocator);
+    for snapshot in [&first, &second] {
+        for feature in &expected {
+            let evaluation = snapshot
+                .feature_evaluations()
+                .iter()
+                .find(|evaluation| evaluation.feature == *feature)
+                .unwrap();
+            assert!(
+                matches!(
+                    evaluation.state,
+                    ComputedFeatureEvaluationState::Current { .. }
+                ),
+                "{evaluation:#?}"
+            );
+        }
+        assert_eq!(
+            snapshot
+                .edges()
+                .iter()
+                .filter(|edge| matches!(
+                    edge.geometry,
+                    ComputedEdgeGeometry::CurveOffset(
+                        geosolve_sketch::CurveOffsetGeometry::CubicPatches(_)
+                    )
+                ))
+                .count(),
+            4
+        );
+    }
+    let first_geometry = first
+        .edges()
+        .iter()
+        .map(|edge| &edge.geometry)
+        .collect::<Vec<_>>();
+    let second_geometry = second
+        .edges()
+        .iter()
+        .map(|edge| &edge.geometry)
+        .collect::<Vec<_>>();
+    assert_eq!(first_geometry, second_geometry);
+}
+
+#[test]
+fn m82_closed_face_with_hole_matches_the_material_face_not_nested_disk_faces() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let center = document.add_point("shared centre", [0.0, 0.0]).unwrap();
+    let outer_radius = document
+        .add_scalar(
+            "outer radius",
+            5.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let hole_radius = document
+        .add_scalar(
+            "hole radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let outer = document
+        .add_curve(
+            "outer circle",
+            CurveDefinition::Circle {
+                center,
+                radius: outer_radius,
+            },
+        )
+        .unwrap();
+    let hole = document
+        .add_curve(
+            "hole circle",
+            CurveDefinition::Circle {
+                center,
+                radius: hole_radius,
+            },
+        )
+        .unwrap();
+    let operand = ComputedCurveOffsetOperand::Face {
+        direction: DocumentFaceOffsetDirection::Outward,
+        outer: ComputedCurveOffsetLoop {
+            spans: vec![offset_span(
+                CurveSpan::line(outer),
+                ComputedCurveOffsetTraversal::Forward,
+            )],
+            junctions: Vec::new(),
+        },
+        holes: vec![ComputedCurveOffsetLoop {
+            spans: vec![offset_span(
+                CurveSpan::line(hole),
+                ComputedCurveOffsetTraversal::Reverse,
+            )],
+            junctions: Vec::new(),
+        }],
+    };
+    let session = retained(document.clone());
+    let mut features = ComputedFeatureDocument::new(document.id());
+    let feature = features
+        .create_curve_offset("holed face", 0.25, operand)
+        .unwrap();
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let snapshot = evaluate(&session, &features, &mut allocator);
+    assert!(matches!(
+        snapshot
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == feature)
+            .unwrap()
+            .state,
+        ComputedFeatureEvaluationState::Current {
+            ref generated_edges,
+            ..
+        } if generated_edges.len() == 2
+    ));
+    let radii = snapshot
+        .edges()
+        .iter()
+        .filter_map(|edge| match edge.geometry {
+            ComputedEdgeGeometry::CurveOffset(
+                geosolve_sketch::CurveOffsetGeometry::CircularArc { radius, closed, .. },
+            ) if closed => Some(radius),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(radii.len(), 2);
+    assert!(radii.iter().any(|radius| (*radius - 5.25).abs() <= 1.0e-12));
+    assert!(radii.iter().any(|radius| (*radius - 1.75).abs() <= 1.0e-12));
+}
+
+#[test]
+fn m82_miter_and_tangent_junctions_publish_continuous_nonreversing_chains() {
+    let fixture = polyline_fixture();
+    let session = retained(fixture.document.clone());
+    let mut features = ComputedFeatureDocument::new(fixture.document.id());
+    let feature = features
+        .create_curve_offset(
+            "miter",
+            0.5,
+            open_curve_offset_operand([fixture.spans[0], fixture.spans[1]], fixture.points[1]),
+        )
+        .unwrap();
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let snapshot = evaluate(&session, &features, &mut allocator);
+    assert!(matches!(
+        snapshot
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == feature)
+            .unwrap()
+            .state,
+        ComputedFeatureEvaluationState::Current {
+            ref generated_edges,
+            ..
+        } if generated_edges.len() == 2
+    ));
+    let lines = snapshot
+        .edges()
+        .iter()
+        .filter_map(|edge| match edge.geometry {
+            ComputedEdgeGeometry::CurveOffset(geosolve_sketch::CurveOffsetGeometry::Line {
+                start,
+                end,
+            }) => Some((start, end)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(lines.len(), 2);
+    assert_close(
+        (lines[0].1[0] - lines[1].0[0]).hypot(lines[0].1[1] - lines[1].0[1]),
+        0.0,
+        1.0e-12,
+    );
+    assert_close(lines[0].1[0], 3.5, 1.0e-12);
+    assert_close(lines[0].1[1], 0.5, 1.0e-12);
+
+    let mut tangent_document = SketchDocument::new(10.0).unwrap();
+    let points = [[0.0, 0.0], [2.0, 0.0], [4.0, 0.0]]
+        .map(|position| tangent_document.add_point("point", position).unwrap());
+    let curve = tangent_document
+        .add_curve(
+            "tangent polyline",
+            CurveDefinition::Polyline {
+                points: points.to_vec(),
+                closed: false,
+                branch_directions: vec![[1.0, 0.0], [1.0, 0.0]],
+            },
+        )
+        .unwrap();
+    let operand = ComputedCurveOffsetOperand::OpenChain {
+        side: DocumentLineSide::Left,
+        chain: ComputedCurveOffsetChain {
+            spans: vec![0, 1]
+                .into_iter()
+                .map(|segment| {
+                    offset_span(
+                        CurveSpan { curve, segment },
+                        ComputedCurveOffsetTraversal::Forward,
+                    )
+                })
+                .collect(),
+            junctions: vec![ComputedCurveOffsetJunction {
+                provenance: ComputedCurveOffsetJunctionProvenance::SharedPoint(points[1]),
+                branch: ComputedCurveOffsetJunctionBranch::Tangent,
+            }],
+            start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+        },
+    };
+    let session = retained(tangent_document.clone());
+    let mut features = ComputedFeatureDocument::new(tangent_document.id());
+    let feature = features
+        .create_curve_offset("tangent", 0.5, operand)
+        .unwrap();
+    let snapshot = evaluate(&session, &features, &mut allocator);
+    assert!(matches!(
+        snapshot
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == feature)
+            .unwrap()
+            .state,
+        ComputedFeatureEvaluationState::Current { .. }
+    ));
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one fail-closed regression keeps singular recovery and self-contact rejection atomic"
+)]
+fn m82_singularity_and_self_intersection_withhold_output_and_recover_atomically() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let center = document.add_point("center", [0.0, 0.0]).unwrap();
+    let radius = document
+        .add_scalar("radius", 1.0, ScalarUnit::Length, ScalarDomain::Positive)
+        .unwrap();
+    let circle = document
+        .add_curve("circle", CurveDefinition::Circle { center, radius })
+        .unwrap();
+    let session = retained(document.clone());
+    let inward = ComputedCurveOffsetOperand::Face {
+        direction: DocumentFaceOffsetDirection::Inward,
+        outer: ComputedCurveOffsetLoop {
+            spans: vec![offset_span(
+                CurveSpan::line(circle),
+                ComputedCurveOffsetTraversal::Forward,
+            )],
+            junctions: Vec::new(),
+        },
+        holes: Vec::new(),
+    };
+    let mut features = ComputedFeatureDocument::new(document.id());
+    let feature = features
+        .create_curve_offset("singular", 1.0, inward)
+        .unwrap();
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let failed = evaluate(&session, &features, &mut allocator);
+    assert!(failed.edges().is_empty());
+    assert!(matches!(
+        failed.feature_evaluations()[0].state,
+        ComputedFeatureEvaluationState::Failed {
+            failure: ComputedFeatureFailure::OffsetCurveFailure {
+                kind: "curvature cusp",
+                ..
+            }
+        }
+    ));
+    features.set_curve_offset_distance(feature, 0.5).unwrap();
+    let recovered = evaluate(&session, &features, &mut allocator);
+    assert!(matches!(
+        recovered.feature_evaluations()[0].state,
+        ComputedFeatureEvaluationState::Current { .. }
+    ));
+    assert_eq!(recovered.edges().len(), 1);
+
+    let mut annulus = SketchDocument::new(10.0).unwrap();
+    let annulus_center = annulus.add_point("annulus centre", [0.0, 0.0]).unwrap();
+    let annulus_outer_radius = annulus
+        .add_scalar(
+            "annulus outer radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let annulus_hole_radius = annulus
+        .add_scalar(
+            "annulus hole radius",
+            1.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let annulus_outer = annulus
+        .add_curve(
+            "annulus outer",
+            CurveDefinition::Circle {
+                center: annulus_center,
+                radius: annulus_outer_radius,
+            },
+        )
+        .unwrap();
+    let annulus_hole = annulus
+        .add_curve(
+            "annulus hole",
+            CurveDefinition::Circle {
+                center: annulus_center,
+                radius: annulus_hole_radius,
+            },
+        )
+        .unwrap();
+    let annulus_operand = ComputedCurveOffsetOperand::Face {
+        direction: DocumentFaceOffsetDirection::Inward,
+        outer: ComputedCurveOffsetLoop {
+            spans: vec![offset_span(
+                CurveSpan::line(annulus_outer),
+                ComputedCurveOffsetTraversal::Forward,
+            )],
+            junctions: Vec::new(),
+        },
+        holes: vec![ComputedCurveOffsetLoop {
+            spans: vec![offset_span(
+                CurveSpan::line(annulus_hole),
+                ComputedCurveOffsetTraversal::Reverse,
+            )],
+            junctions: Vec::new(),
+        }],
+    };
+    let annulus_session = retained(annulus.clone());
+    let mut annulus_features = ComputedFeatureDocument::new(annulus.id());
+    let annulus_feature = annulus_features
+        .create_curve_offset("touching annulus", 0.5, annulus_operand)
+        .unwrap();
+    let touching = evaluate(&annulus_session, &annulus_features, &mut allocator);
+    assert!(touching.edges().is_empty());
+    assert!(matches!(
+        touching.feature_evaluations()[0].state,
+        ComputedFeatureEvaluationState::Failed {
+            failure: ComputedFeatureFailure::OffsetTopologyChange
+        }
+    ));
+    annulus_features
+        .set_curve_offset_distance(annulus_feature, 0.4)
+        .unwrap();
+    let separated = evaluate(&annulus_session, &annulus_features, &mut allocator);
+    assert!(matches!(
+        separated.feature_evaluations()[0].state,
+        ComputedFeatureEvaluationState::Current { .. }
+    ));
+    assert_eq!(separated.edges().len(), 2);
+
+    let mut crossing = SketchDocument::new(10.0).unwrap();
+    let points = [[0.0, 0.0], [2.0, 2.0], [0.0, 2.0], [2.0, 0.0]]
+        .map(|position| crossing.add_point("crossing point", position).unwrap());
+    let curve = crossing
+        .add_curve(
+            "crossing polyline",
+            CurveDefinition::Polyline {
+                points: points.to_vec(),
+                closed: false,
+                branch_directions: vec![
+                    [
+                        std::f64::consts::FRAC_1_SQRT_2,
+                        std::f64::consts::FRAC_1_SQRT_2,
+                    ],
+                    [-1.0, 0.0],
+                    [
+                        std::f64::consts::FRAC_1_SQRT_2,
+                        -std::f64::consts::FRAC_1_SQRT_2,
+                    ],
+                ],
+            },
+        )
+        .unwrap();
+    let spans = [0, 1, 2].map(|segment| CurveSpan { curve, segment });
+    let operand = ComputedCurveOffsetOperand::OpenChain {
+        side: DocumentLineSide::Left,
+        chain: ComputedCurveOffsetChain {
+            spans: spans
+                .map(|span| offset_span(span, ComputedCurveOffsetTraversal::Forward))
+                .to_vec(),
+            junctions: vec![
+                ComputedCurveOffsetJunction {
+                    provenance: ComputedCurveOffsetJunctionProvenance::SharedPoint(points[1]),
+                    branch: ComputedCurveOffsetJunctionBranch::Miter {
+                        turn: ComputedCurveOffsetTurn::Left,
+                    },
+                },
+                ComputedCurveOffsetJunction {
+                    provenance: ComputedCurveOffsetJunctionProvenance::SharedPoint(points[2]),
+                    branch: ComputedCurveOffsetJunctionBranch::Miter {
+                        turn: ComputedCurveOffsetTurn::Left,
+                    },
+                },
+            ],
+            start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+        },
+    };
+    let session = retained(crossing.clone());
+    let mut features = ComputedFeatureDocument::new(crossing.id());
+    features
+        .create_curve_offset("crossing", 0.1, operand)
+        .unwrap();
+    let rejected = evaluate(&session, &features, &mut allocator);
+    assert!(rejected.edges().is_empty());
+    assert!(matches!(
+        rejected.feature_evaluations()[0].state,
+        ComputedFeatureEvaluationState::Failed {
+            failure: ComputedFeatureFailure::OffsetTopologyChange
+        }
+    ));
 }
 
 #[test]
@@ -1314,9 +2278,7 @@ fn every_revision_exhaustion_path_is_transactional() {
     let feature = base
         .create_fillet_set("first", 0.5, vec![first_corner(fixture.spans)])
         .unwrap();
-    let corner = match &base.feature(feature).unwrap().definition {
-        ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0].id,
-    };
+    let corner = fillet_set(&base.feature(feature).unwrap().definition).corners[0].id;
 
     assert_revision_exhaustion_rolls_back(base.clone(), |document| {
         document.create_fillet_set("second", 0.5, vec![second_corner(fixture.spans)])
@@ -1334,6 +2296,34 @@ fn every_revision_exhaustion_path_is_transactional() {
     });
     assert_revision_exhaustion_rolls_back(base.clone(), |document| {
         document.replace_fillet_set(feature, 0.75, vec![(corner, replacement)])
+    });
+    let offset_operand =
+        open_curve_offset_operand([fixture.spans[0], fixture.spans[1]], fixture.points[1]);
+    assert_revision_exhaustion_rolls_back(base.clone(), |document| {
+        document.create_curve_offset("offset", 0.5, offset_operand.clone())
+    });
+    let offset = base
+        .create_curve_offset("offset", 0.5, offset_operand)
+        .unwrap();
+    assert_revision_exhaustion_rolls_back(base.clone(), |document| {
+        document.set_curve_offset_distance(offset, 0.75)
+    });
+    let face = ComputedCurveOffsetOperand::Face {
+        direction: DocumentFaceOffsetDirection::Outward,
+        outer: ComputedCurveOffsetLoop {
+            spans: vec![offset_span(
+                fixture.spans[2],
+                ComputedCurveOffsetTraversal::Forward,
+            )],
+            junctions: Vec::new(),
+        },
+        holes: Vec::new(),
+    };
+    assert_revision_exhaustion_rolls_back(base.clone(), |document| {
+        document.set_curve_offset_operand(offset, face)
+    });
+    assert_revision_exhaustion_rolls_back(base.clone(), |document| {
+        document.flip_curve_offset_direction(offset)
     });
     assert_revision_exhaustion_rolls_back(base.clone(), |document| {
         document.set_suppressed(feature, true)
@@ -1391,9 +2381,9 @@ fn complete_fillet_set_replacement_is_atomic_and_identity_preserving() {
         .unwrap();
     let before_revision = features.revision();
     let before_allocator = features.allocator_high_water();
-    let before_corners = match &features.feature(feature).unwrap().definition {
-        ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners.clone(),
-    };
+    let before_corners = fillet_set(&features.feature(feature).unwrap().definition)
+        .corners
+        .clone();
     let replacements = before_corners
         .iter()
         .map(|corner| {
@@ -1407,9 +2397,7 @@ fn complete_fillet_set_replacement_is_atomic_and_identity_preserving() {
         .unwrap();
     assert_eq!(features.revision().raw(), before_revision.raw() + 1);
     assert_eq!(features.allocator_high_water(), before_allocator);
-    let after = match &features.feature(feature).unwrap().definition {
-        ComputedFeatureDefinition::FilletSet(fillet) => fillet.clone(),
-    };
+    let after = fillet_set(&features.feature(feature).unwrap().definition).clone();
     assert_eq!(after.radius.to_bits(), 0.75_f64.to_bits());
     assert_eq!(
         after
@@ -1579,7 +2567,7 @@ fn reversed_parent_order_is_canonical_without_changing_arc_endpoint_semantics() 
     let id = features
         .create_fillet_set("reverse", 0.5, vec![reversed])
         .unwrap();
-    let ComputedFeatureDefinition::FilletSet(fillet) = &features.feature(id).unwrap().definition;
+    let fillet = fillet_set(&features.feature(id).unwrap().definition);
     assert_eq!(fillet.corners[0].without_id(), original);
 
     let session = retained(fixture.document.clone());
@@ -1698,7 +2686,7 @@ fn adjacent_batch_composes_both_middle_endpoints_and_variable_output_count() {
         .state;
     assert!(matches!(
         state,
-        ComputedFeatureEvaluationState::Current { corner_edges } if corner_edges.len() == 2
+        ComputedFeatureEvaluationState::Current { corner_edges, .. } if corner_edges.len() == 2
     ));
 }
 
@@ -3026,8 +4014,7 @@ fn m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_c
 
         assert_eq!(feature.raw(), 1, "{}", row.payload_fingerprint);
         assert_eq!(corner_id.raw(), 1, "{}", row.payload_fingerprint);
-        let ComputedFeatureDefinition::FilletSet(persisted_fillet) =
-            &features.feature(feature).unwrap().definition;
+        let persisted_fillet = fillet_set(&features.feature(feature).unwrap().definition);
         assert_eq!(
             persisted_fillet.radius.to_bits(),
             1.0_f64.to_bits(),
@@ -3111,7 +4098,7 @@ fn m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_c
             .iter()
             .find(|evaluation| evaluation.feature == feature)
             .expect("payload feature evaluation");
-        let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
+        let ComputedFeatureEvaluationState::Current { corner_edges, .. } = &evaluation.state else {
             panic!(
                 "{}: unexpected persisted evaluation: {:?}",
                 row.payload_fingerprint, evaluation.state
@@ -3124,7 +4111,8 @@ fn m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_c
             .iter()
             .filter_map(|edge| match &edge.geometry {
                 ComputedEdgeGeometry::CircularArc(arc) => Some(arc),
-                ComputedEdgeGeometry::NativeSourceFragment { .. } => None,
+                ComputedEdgeGeometry::NativeSourceFragment { .. }
+                | ComputedEdgeGeometry::CurveOffset(_) => None,
             })
             .collect::<Vec<_>>();
         assert_eq!(arcs.len(), 1, "{}", row.payload_fingerprint);
@@ -3307,7 +4295,8 @@ fn m70b_f004_line_circle_persisted_evaluation_traverses_complete_radial_branch_c
             .iter()
             .filter_map(|edge| match &edge.geometry {
                 ComputedEdgeGeometry::CircularArc(arc) => Some(arc),
-                ComputedEdgeGeometry::NativeSourceFragment { .. } => None,
+                ComputedEdgeGeometry::NativeSourceFragment { .. }
+                | ComputedEdgeGeometry::CurveOffset(_) => None,
             })
             .collect::<Vec<_>>();
         assert_eq!(arcs.len(), 1, "{}", row.payload_fingerprint);
@@ -3403,7 +4392,7 @@ fn m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell() {
     assert_eq!(feature.id.raw(), 1);
     assert_eq!(feature.label, "Fillet 1");
     assert!(!feature.suppressed);
-    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    let fillet = fillet_set(&feature.definition);
     assert_eq!(fillet.radius.to_bits(), 1.0_f64.to_bits());
     assert_eq!(fillet.corners.len(), 1);
     let persisted = fillet.corners[0];
@@ -3520,7 +4509,7 @@ fn m70b_f005_line_circle_source_rotation_transports_persisted_branch_cell() {
         .iter()
         .find(|evaluation| evaluation.feature == feature.id)
         .expect("payload feature evaluation");
-    let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
+    let ComputedFeatureEvaluationState::Current { corner_edges, .. } = &evaluation.state else {
         panic!(
             "{M70B_F005_PAYLOAD_FINGERPRINT}: persisted same-branch Fillet did not remain Current: {:?}",
             evaluation.state
@@ -3747,7 +4736,7 @@ fn m70b_f005_line_circle_source_rotation_crosses_stale_seed_barrier_and_returns(
         .expect("payload-derived accepted sketch must decode");
     let features = ComputedFeatureDocument::from_json(M70B_F005_FEATURE_JSON)
         .expect("payload-derived feature intent must decode");
-    let ComputedFeatureDefinition::FilletSet(fillet) = &features.features()[0].definition;
+    let fillet = fillet_set(&features.features()[0].definition);
     let persisted = fillet.corners[0];
     let circle = persisted.first.source.span;
     let line = persisted.second.source.span;
@@ -3838,7 +4827,7 @@ fn m70b_f005_line_circle_source_rotation_crosses_stale_seed_barrier_and_returns(
                 .unwrap(),
         );
         let evaluation = &evaluated.feature_evaluations()[0];
-        let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
+        let ComputedFeatureEvaluationState::Current { corner_edges, .. } = &evaluation.state else {
             panic!(
                 "{M70B_F005_PAYLOAD_FINGERPRINT}: step {step} at {angle:.16} radians lost the regular persisted branch: {:?}",
                 evaluation.state
@@ -4725,9 +5714,7 @@ fn two_non_affine_parents_are_typed_unsupported_without_sketch_mutation() {
         )
         .unwrap();
     let feature_before = features.clone();
-    let corner = match &features.feature(feature).unwrap().definition {
-        ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0].id,
-    };
+    let corner = fillet_set(&features.feature(feature).unwrap().definition).corners[0].id;
     let mut allocator = ComputedEvaluationAllocator::default();
     let snapshot = evaluate(&session, &features, &mut allocator);
     assert!(snapshot.edges().is_empty());

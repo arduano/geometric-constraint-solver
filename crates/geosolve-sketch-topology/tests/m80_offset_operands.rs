@@ -72,6 +72,45 @@ fn add_square(
     ]
 }
 
+fn add_ellipse(
+    document: &mut SketchDocument,
+    label: &str,
+    center_position: [f64; 2],
+    semi_major: f64,
+    ratio: f64,
+) -> geosolve_sketch::CurveId {
+    let center = document
+        .add_point(format!("{label}.center"), center_position)
+        .unwrap();
+    let major_axis_point = document
+        .add_point(
+            format!("{label}.major"),
+            [center_position[0] + semi_major, center_position[1]],
+        )
+        .unwrap();
+    let minor_axis_ratio = document
+        .add_scalar(
+            format!("{label}.ratio"),
+            ratio,
+            ScalarUnit::Parameter,
+            ScalarDomain::Bounded {
+                lower: f64::from_bits(1),
+                upper: 1.0,
+            },
+        )
+        .unwrap();
+    document
+        .add_curve(
+            label,
+            CurveDefinition::Ellipse {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+            },
+        )
+        .unwrap()
+}
+
 fn completed(
     session: &RetainedSketchDocumentSession,
     request: OffsetOperandRequest,
@@ -181,6 +220,7 @@ fn complete_index_retains_square_beside_open_and_unsupported_geometry() {
         .filter(|face| face.eligibility.is_eligible())
         .collect::<Vec<_>>();
     assert_eq!(eligible_faces.len(), 1);
+    assert!(eligible_faces[0].computed_eligibility.is_eligible());
     assert_eq!(eligible_faces[0].key.outer.spans.len(), 4);
     let minimum = square.into_iter().map(CurveSpan::line).min().unwrap();
     assert_eq!(eligible_faces[0].key.outer.spans[0].span, minimum);
@@ -205,6 +245,8 @@ fn complete_index_retains_square_beside_open_and_unsupported_geometry() {
         &unsupported.eligibility,
         OffsetOperandIneligibility::UnsupportedCurveFamily
     ));
+    assert!(unsupported.computed_eligibility.is_eligible());
+    assert_eq!(unsupported.endpoints.len(), 2);
 
     assert_eq!(
         first.face_at_point([2.0, 2.0]),
@@ -303,7 +345,7 @@ fn full_circles_coalesce_to_one_semantic_span_and_lookup_respects_holes() {
 }
 
 #[test]
-fn unsupported_closed_family_is_enumerated_as_a_disabled_face() {
+fn general_periodic_family_retains_native_refusal_and_computed_face_eligibility() {
     let mut document = SketchDocument::new(10.0).unwrap();
     let center = document.add_point("center", [0.0, 0.0]).unwrap();
     let major_axis_point = document.add_point("major", [4.0, 0.0]).unwrap();
@@ -335,20 +377,79 @@ fn unsupported_closed_family_is_enumerated_as_a_disabled_face() {
         &index.faces()[0].eligibility,
         OffsetOperandIneligibility::UnsupportedCurveFamily
     ));
+    assert!(index.faces()[0].computed_eligibility.is_eligible());
     let span = index.span(CurveSpan::line(ellipse)).unwrap();
     assert_eq!(span.family, OffsetOperandCurveFamily::Ellipse);
     assert!(disabled_for(
         &span.eligibility,
         OffsetOperandIneligibility::UnsupportedCurveFamily
     ));
+    assert!(span.computed_eligibility.is_eligible());
+    assert!(span.periodic);
+    assert!(span.endpoints.is_empty());
+}
+
+#[test]
+fn computed_ellipse_lookup_certifies_interiors_boundaries_and_nested_holes() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    add_ellipse(&mut document, "outer", [0.0, 0.0], 4.0, 0.5);
+    add_ellipse(&mut document, "inner", [0.0, 0.0], 2.0, 0.5);
+
+    let result = completed(&session(document), OffsetOperandRequest::default());
+    assert_eq!(result.completeness, TopologyCompleteness::Complete);
+    let index = result.operand_index.expect("complete ellipse index");
+    assert_eq!(index.faces().len(), 2);
+    assert!(
+        index
+            .faces()
+            .iter()
+            .all(|face| face.computed_eligibility.is_eligible())
+    );
+
+    let annulus = match index.face_at_point([3.0, 0.0]) {
+        OffsetFaceLookup::Hit(key) => key,
+        other => panic!("expected computed annulus hit, got {other:?}"),
+    };
+    assert_eq!(annulus.holes.len(), 1);
+    let disk = match index.face_at_point([0.0, 0.0]) {
+        OffsetFaceLookup::Hit(key) => key,
+        other => panic!("expected computed disk hit, got {other:?}"),
+    };
+    assert!(disk.holes.is_empty());
+    assert_eq!(index.face_at_point([5.0, 0.0]), OffsetFaceLookup::None);
+    assert!(matches!(
+        index.face_at_point([2.0, 0.0]),
+        OffsetFaceLookup::BoundaryAmbiguous { candidates } if candidates.len() == 2
+    ));
+}
+
+#[test]
+fn computed_face_lookup_fails_closed_when_its_retained_budget_is_exhausted() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    add_ellipse(&mut document, "ellipse", [0.0, 0.0], 4.0, 0.5);
+    let result = completed(
+        &session(document),
+        OffsetOperandRequest {
+            limits: TopologyLimits {
+                max_containment_tests: 1,
+                ..TopologyLimits::default()
+            },
+        },
+    );
+    assert_eq!(result.completeness, TopologyCompleteness::Complete);
+    let index = result
+        .operand_index
+        .expect("profile construction stays complete under the positive limit");
+    assert_eq!(index.faces().len(), 1);
+    assert_eq!(index.face_at_point([0.0, 0.0]), OffsetFaceLookup::None);
 }
 
 #[test]
 #[allow(
     clippy::too_many_lines,
-    reason = "one exhaustive public-family matrix prevents any unsupported curve from acquiring an approximate Offset path"
+    reason = "one exhaustive public-family matrix preserves native routing while admitting every built-in family to computed Offset"
 )]
-fn every_unsupported_native_curve_family_is_typed_and_disabled_without_approximation() {
+fn every_general_curve_family_has_computed_eligibility_and_bounded_endpoint_seeds() {
     let mut document = SketchDocument::new(100.0).unwrap();
     let mut expected = Vec::new();
 
@@ -617,8 +718,268 @@ fn every_unsupported_native_curve_family_is_typed_and_disabled_without_approxima
                     &candidate.eligibility,
                     OffsetOperandIneligibility::UnsupportedCurveFamily,
                 )
+                && candidate.computed_eligibility.is_eligible()
+        }));
+        if family == OffsetOperandCurveFamily::Ellipse {
+            assert!(
+                candidates
+                    .iter()
+                    .all(|candidate| { candidate.periodic && candidate.endpoints.is_empty() })
+            );
+        } else {
+            assert!(candidates.iter().all(|candidate| {
+                candidate.endpoints.len() == 2
+                    && candidate
+                        .endpoints
+                        .iter()
+                        .all(|endpoint| endpoint.position.into_iter().all(f64::is_finite))
+            }));
+        }
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one fixture must prove both ordinary intrinsic boundaries and the exact periodic seam"
+)]
+fn intrinsic_spline_boundaries_and_periodic_seam_have_exact_owned_adjacency() {
+    let mut document = SketchDocument::new(100.0).unwrap();
+    let clamped_controls = [[0.0, 0.0], [1.0, 2.0], [3.0, 2.0], [4.0, 0.0]]
+        .into_iter()
+        .enumerate()
+        .map(|(index, position)| {
+            document
+                .add_point(format!("clamped control {index}"), position)
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let clamped = document
+        .add_curve(
+            "clamped spline",
+            CurveDefinition::BSpline {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: clamped_controls,
+                knots: vec![0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+                span_ids: vec![41, 73],
+                next_span_id: 74,
+            },
+        )
+        .unwrap();
+
+    let periodic_controls = [
+        [20.0, 0.0],
+        [21.5, -0.2],
+        [22.0, 1.4],
+        [20.5, 2.2],
+        [19.2, 1.0],
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, position)| {
+        document
+            .add_point(format!("periodic control {index}"), position)
+            .unwrap()
+    })
+    .collect::<Vec<_>>();
+    let periodic_weights = (0..periodic_controls.len())
+        .map(|index| {
+            document
+                .add_scalar(
+                    format!("periodic weight {index}"),
+                    1.0,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Positive,
+                )
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let periodic = document
+        .add_curve(
+            "periodic NURBS",
+            CurveDefinition::Nurbs {
+                form: DocumentBSplineForm::Periodic,
+                degree: 2,
+                controls: periodic_controls,
+                weights: periodic_weights.clone(),
+                gauge_weight: periodic_weights[0],
+                knots: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+                span_ids: vec![11, 17, 23, 29, 31],
+                next_span_id: 32,
+            },
+        )
+        .unwrap();
+
+    let result = completed(&session(document), OffsetOperandRequest::default());
+    assert_eq!(result.completeness, TopologyCompleteness::Complete);
+    let index = result.operand_index.expect("complete operand index");
+    let endpoint = |curve, segment, endpoint| OffsetEndpointRef {
+        span: CurveSpan { curve, segment },
+        endpoint,
+    };
+    let has_intrinsic_link = |first, second| {
+        index
+            .adjacency_owners(first, second)
+            .is_some_and(|owners| owners == [OffsetJoinOwner::IntrinsicSpanBoundary])
+    };
+
+    assert!(has_intrinsic_link(
+        endpoint(clamped, 41, OffsetEndpointRole::End),
+        endpoint(clamped, 73, OffsetEndpointRole::Start),
+    ));
+    assert_eq!(
+        index
+            .span(CurveSpan {
+                curve: clamped,
+                segment: 41
+            })
+            .unwrap()
+            .endpoints[0]
+            .eligibility,
+        OffsetEndpointEligibility::Terminal
+    );
+    assert_eq!(
+        index
+            .span(CurveSpan {
+                curve: clamped,
+                segment: 41
+            })
+            .unwrap()
+            .endpoints[1]
+            .eligibility,
+        OffsetEndpointEligibility::Joined
+    );
+    assert_eq!(
+        index
+            .span(CurveSpan {
+                curve: clamped,
+                segment: 73
+            })
+            .unwrap()
+            .endpoints[0]
+            .eligibility,
+        OffsetEndpointEligibility::Joined
+    );
+    assert_eq!(
+        index
+            .span(CurveSpan {
+                curve: clamped,
+                segment: 73
+            })
+            .unwrap()
+            .endpoints[1]
+            .eligibility,
+        OffsetEndpointEligibility::Terminal
+    );
+
+    let periodic_spans = [11, 17, 23, 29, 31];
+    for (current, next) in periodic_spans
+        .into_iter()
+        .zip(periodic_spans.into_iter().cycle().skip(1))
+        .take(periodic_spans.len())
+    {
+        assert!(has_intrinsic_link(
+            endpoint(periodic, current, OffsetEndpointRole::End),
+            endpoint(periodic, next, OffsetEndpointRole::Start),
+        ));
+    }
+    let seam_end = endpoint(periodic, 31, OffsetEndpointRole::End);
+    let seam_start = endpoint(periodic, 11, OffsetEndpointRole::Start);
+    assert!(has_intrinsic_link(seam_start, seam_end));
+    assert_eq!(
+        index.adjacency_owners(
+            endpoint(periodic, 11, OffsetEndpointRole::Start),
+            endpoint(periodic, 23, OffsetEndpointRole::End),
+        ),
+        None
+    );
+    for segment in periodic_spans {
+        let candidate = index
+            .span(CurveSpan {
+                curve: periodic,
+                segment,
+            })
+            .unwrap();
+        assert!(candidate.computed_eligibility.is_eligible());
+        assert!(disabled_for(
+            &candidate.eligibility,
+            OffsetOperandIneligibility::UnsupportedCurveFamily,
+        ));
+        assert_eq!(candidate.endpoints.len(), 2);
+        assert!(candidate.endpoints.iter().all(|endpoint| {
+            endpoint.eligibility == OffsetEndpointEligibility::Joined
+                && endpoint.position.into_iter().all(f64::is_finite)
         }));
     }
+    let periodic_face = index
+        .faces()
+        .iter()
+        .find(|face| {
+            face.key
+                .outer
+                .spans
+                .iter()
+                .all(|span| span.span.curve == periodic)
+        })
+        .expect("periodic NURBS face");
+    assert!(periodic_face.computed_eligibility.is_eligible());
+    assert!(disabled_for(
+        &periodic_face.eligibility,
+        OffsetOperandIneligibility::UnsupportedCurveFamily,
+    ));
+}
+
+#[test]
+fn computed_general_face_uses_persistent_endpoint_identity() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let start = document.add_point("start", [0.0, 0.0]).unwrap();
+    let middle = document.add_point("middle", [2.0, 2.0]).unwrap();
+    let end = document.add_point("end", [4.0, 0.0]).unwrap();
+    let curve = document
+        .add_curve(
+            "quadratic boundary",
+            CurveDefinition::QuadraticBezier {
+                controls: [start, middle, end],
+            },
+        )
+        .unwrap();
+    let closing = add_line(&mut document, "closing boundary", end, start);
+
+    let result = completed(&session(document), OffsetOperandRequest::default());
+    let index = result.operand_index.expect("complete operand index");
+    let face = index
+        .faces()
+        .iter()
+        .find(|face| {
+            face.key
+                .outer
+                .spans
+                .iter()
+                .any(|span| span.span == CurveSpan::line(curve))
+        })
+        .expect("persistently owned quadratic face");
+    assert!(face.computed_eligibility.is_eligible());
+    assert!(disabled_for(
+        &face.eligibility,
+        OffsetOperandIneligibility::UnsupportedCurveFamily,
+    ));
+    assert!(
+        face.key
+            .outer
+            .spans
+            .iter()
+            .any(|span| { span.span == CurveSpan::line(closing) })
+    );
+    assert_eq!(
+        index.face_at_point([2.0, 0.5]),
+        OffsetFaceLookup::Hit(face.key.clone())
+    );
+    assert_eq!(index.face_at_point([2.0, -0.5]), OffsetFaceLookup::None);
+    assert!(matches!(
+        index.face_at_point([2.0, 1.0]),
+        OffsetFaceLookup::BoundaryAmbiguous { candidates } if candidates == vec![face.key.clone()]
+    ));
 }
 
 #[test]
@@ -641,6 +1002,10 @@ fn arrangement_intersection_fragments_are_typed_and_never_become_complete_operan
         assert_eq!(candidate.family, OffsetOperandCurveFamily::Line);
         assert!(disabled_for(
             &candidate.eligibility,
+            OffsetOperandIneligibility::ArrangementDerivedFragment,
+        ));
+        assert!(disabled_for(
+            &candidate.computed_eligibility,
             OffsetOperandIneligibility::ArrangementDerivedFragment,
         ));
     }
@@ -1001,9 +1366,23 @@ fn trimmed_and_non_profile_spans_remain_visible_with_typed_disabled_reasons() {
     ));
     assert!(disabled_for(
         &index
+            .span(CurveSpan::line(trimmed))
+            .unwrap()
+            .computed_eligibility,
+        OffsetOperandIneligibility::TrimmedOrPartialSpan
+    ));
+    assert!(disabled_for(
+        &index
             .span(CurveSpan::line(construction))
             .unwrap()
             .eligibility,
+        OffsetOperandIneligibility::NonProfileGeometry
+    ));
+    assert!(disabled_for(
+        &index
+            .span(CurveSpan::line(construction))
+            .unwrap()
+            .computed_eligibility,
         OffsetOperandIneligibility::NonProfileGeometry
     ));
 }

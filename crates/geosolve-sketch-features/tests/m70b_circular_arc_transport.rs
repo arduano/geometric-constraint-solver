@@ -208,7 +208,7 @@ fn current_arc<'a>(
         .iter()
         .find(|evaluation| evaluation.feature == fixture.feature)
         .expect("feature evaluation");
-    let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
+    let ComputedFeatureEvaluationState::Current { corner_edges, .. } = &evaluation.state else {
         panic!(
             "expected Current arc-line Fillet, got {:?}",
             evaluation.state
