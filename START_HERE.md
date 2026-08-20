@@ -237,8 +237,9 @@ for eligible Line/Circle/CircularArc faces and chains, while mixed/general regul
 use associative revision-local computed `CurveOffset` output. General parallels are certified
 adaptive cubic patches; cusp, self-contact, contour touch, topology change or bounded-work
 uncertainty rejects the complete feature. Implementation and development qualification pass;
-M82-F001 through F003 bind cold preview authority, tangent-endpoint locality and bounded fitting
-work. Final clean qualification, frozen nomination and human acceptance remain pending.
+M82-F001 through F004 bind cold preview authority, tangent-endpoint locality, bounded fitting work
+and feature-identity-aware live Offset collection. Final clean qualification, frozen nomination
+and human acceptance remain pending.
 
 ## Read first
 

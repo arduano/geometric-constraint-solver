@@ -4353,12 +4353,14 @@ Reject unknown fields, invalid finite values, malformed adjacency/topology, stal
 and serialized generated patches/certificates atomically. Sketch canonical v1-v4 and private
 draft-v5 bytes remain unchanged.
 
-Qualification found three owning defects. M82-F001 requires a new provisional Offset feature
+Qualification found four owning defects. M82-F001 requires a new provisional Offset feature
 document to cold-evaluate beside an unrelated Current Fillet, preserving durable feature/history/
 transcript authority. M82-F002 distinguishes a persistently owned opposite-inward tangent endpoint
 from an unowned coincident tangency. M82-F003 requires cancellation or
 `profile_subdivisions` exhaustion to stop before fitting/recursive child work and publish no partial
-chain or output identity. Their exact regressions are recorded in `docs/M82_IMPLEMENTATION.md`.
+chain or output identity. M82-F004 requires an active Offset collector to rebuild when computed-
+feature identity changes without a native sketch-input change, preventing stale computed-Fillet
+source exclusions. Their exact regressions are recorded in `docs/M82_IMPLEMENTATION.md`.
 
 The broad golden oracle adds exactly one systemic row,
 `feature.curve-offset.authoring.general-open-chain`, and now contains 272 reviewed `PASS` rows. The

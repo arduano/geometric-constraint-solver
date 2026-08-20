@@ -11840,7 +11840,7 @@ mod tests {
     }
 
     #[test]
-    fn computed_feature_only_change_reactivates_the_live_offset_collector() {
+    fn m82_f004_computed_feature_only_change_reactivates_the_live_offset_collector() {
         let (mut coordinator, spans, points) = grouped_fillet_fixture();
         let mut fillet_authoring = FeatureAuthoringState::default();
         let (candidate, metadata) = prepare_grouped_fillet(

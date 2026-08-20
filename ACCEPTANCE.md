@@ -2944,9 +2944,10 @@ scope, ADR 0038 for architecture, `docs/M82_IMPLEMENTATION.md` for actual eviden
 - [ ] The complete clean committed-tree release gate, no-rebuild frozen Tailscale verification,
   prepared human UAT and exact Pages publication pass before closure.
 
-M82-F001 through M82-F003 bind cold provisional feature authority, owned tangent-endpoint
-locality and cooperative adaptive-fitting work respectively. All three corrections are required by
-the checked contracts above; `docs/M82_IMPLEMENTATION.md` records their exact owning regressions.
+M82-F001 through M82-F004 bind cold provisional feature authority, owned tangent-endpoint
+locality, cooperative adaptive-fitting work and current live Offset collection respectively. All
+four corrections are required by the checked contracts above; `docs/M82_IMPLEMENTATION.md`
+records their exact owning regressions.
 
 M82 explicitly excludes topology-changing repair, trimming/splitting, loop removal, partial
 publication, computed-on-computed chaining, Bake/Explode, stable generated-edge names, canonical

@@ -149,6 +149,20 @@ zero-work exhaustion, child-before-recursion stopping and completed accounting. 
 `m82_curve_offset_work_exhaustion_publishes_nothing_and_never_reuses_output_ids` proves the stop
 survives the owning feature boundary without publication or allocator reuse.
 
+### M82-F004 — feature-only mutation left the active Offset collector stale
+
+Reproduced in the workbench lifecycle with Offset active while a computed Fillet excluded its
+native source spans. Suppressing that Fillet changes computed-feature document identity but not
+the accepted `PreparedSketchInput`; the prior refresh condition therefore retained obsolete
+exclusions and continued rejecting now-eligible source geometry.
+
+The repair authenticates the collector against both accepted sketch input and computed-feature
+identity after successful workspace actions. It preserves the existing `offset-apply` exception,
+whose coordinator publication already reactivates the collector. Exact adapter regression
+`m82_f004_computed_feature_only_change_reactivates_the_live_offset_collector` proves the sketch
+input stays equal, feature identity changes, the refresh is required and the formerly excluded
+span becomes collectible after reactivation.
+
 ## Development qualification record
 
 The following commands actually passed on the implemented tree before clean nomination:
@@ -190,10 +204,13 @@ cargo test --locked -p geosolve-sketch-features --lib \
 cargo test --locked -p geosolve-constraint-editor \
   --test m82_curve_offset_coordinator \
   m82_f001_computed_offset_preview_cold_evaluates_beside_an_unrelated_fillet -- --exact
+cargo test --locked -p geosolve-demo-web --lib \
+  workbench::tests::m82_f004_computed_feature_only_change_reactivates_the_live_offset_collector \
+  -- --exact
 ```
 
-Results are respectively 2/2, 1/1 and 1/1. The complete clean release gate will requalify the
-final committed tree before any UAT nomination.
+Results are respectively 2/2, 1/1, 1/1 and 1/1. The complete clean release gate will requalify
+the final committed tree before any UAT nomination.
 
 ## Compatibility guardrails and remaining boundary
 

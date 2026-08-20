@@ -5607,8 +5607,10 @@ evidence and `docs/M82_UAT.md` is prepared but not executed. M82 is not accepted
 Implementation note (2026-08-20): M82-F001 makes provisional Curve Offset evaluation cold with
 respect to unrelated Fillet continuation state; M82-F002 admits only persistently owned opposite-
 inward tangent endpoints as local joins; and M82-F003 threads the caller's cancellation/work
-controller through every adaptive fitting subdivision. The reviewed golden inventory is exactly
-272 `PASS` rows, adding only `feature.curve-offset.authoring.general-open-chain`. Focused owner,
+controller through every adaptive fitting subdivision. M82-F004 refreshes a live Offset operand
+collector when computed-feature identity changes without a sketch-input change, so suppressing or
+editing a computed Fillet cannot leave stale source exclusions. The reviewed golden inventory is
+exactly 272 `PASS` rows, adding only `feature.curve-offset.authoring.general-open-chain`. Focused owner,
 workspace, Clippy/Rustdoc, WASM and release-assembly development evidence passes; the exact clean
 committed-tree release record and no-rebuild artifact authority remain intentionally pending.
 

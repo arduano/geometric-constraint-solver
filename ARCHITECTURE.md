@@ -743,6 +743,9 @@ inherit a prior Fillet continuation snapshot. M82-F002 keeps tangent endpoint lo
 persistent ownership rather than coordinate coincidence. M82-F003 threads the compound operation
 controller into the public curve-offset kernel and charges every actual adaptive subdivision
 before recursive work, so cancellation/exhaustion withholds the complete generated chain.
+M82-F004 makes the live Offset collector depend on both accepted sketch input and computed-feature
+document identity. Feature-only mutations therefore rebuild computed-Fillet exclusions even when
+the native sketch identity is unchanged.
 
 ### `geosolve-linkage`
 
