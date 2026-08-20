@@ -5031,10 +5031,11 @@ impl RetainedEditorCoordinator {
             .ok_or(ComputedFeatureSnapshotError::CurrentAcceptedStateRequired)?;
         let mut candidate = self.features.clone();
         candidate.replace_fillet_set(feature, radius, corners)?;
+        let mut candidate_allocator = self.computed_evaluation_allocator.clone();
         let outcome = evaluate_computed_features(
             &self.session,
             &candidate,
-            &mut self.computed_evaluation_allocator,
+            &mut candidate_allocator,
             bounded_geometry_control(),
         )?;
         let OperationOutcome::Completed {
@@ -5052,8 +5053,9 @@ impl RetainedEditorCoordinator {
         }
         require_current_feature_authoring_evaluation(&snapshot, feature)?;
         let after = candidate.identity();
-        let next = self.stage_feature_mutation_checkpoint(&candidate)?;
+        let next = checkpoint(&self.session, &candidate, &candidate_allocator)?;
         self.features = candidate;
+        self.computed_evaluation_allocator = candidate_allocator;
         self.computed_input = Some(snapshot.input());
         self.computed_snapshot = Some(snapshot);
         self.computed_preview_snapshot = None;
@@ -10450,10 +10452,11 @@ impl RetainedEditorCoordinator {
             .ok_or(ComputedFeatureSnapshotError::CurrentAcceptedStateRequired)?;
         let mut candidate = self.features.clone();
         let value = mutation(&mut candidate)?;
+        let mut candidate_allocator = self.computed_evaluation_allocator.clone();
         let outcome = evaluate_computed_features(
             &self.session,
             &candidate,
-            &mut self.computed_evaluation_allocator,
+            &mut candidate_allocator,
             bounded_geometry_control(),
         )?;
         let OperationOutcome::Completed {
@@ -10470,8 +10473,9 @@ impl RetainedEditorCoordinator {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
         let after = candidate.identity();
-        let next = self.stage_feature_mutation_checkpoint(&candidate)?;
+        let next = checkpoint(&self.session, &candidate, &candidate_allocator)?;
         self.features = candidate;
+        self.computed_evaluation_allocator = candidate_allocator;
         self.computed_input = Some(snapshot.input());
         self.computed_snapshot = Some(snapshot);
         self.computed_preview_snapshot = None;
@@ -25214,6 +25218,60 @@ mod tests {
                     .is_none()
             );
         }
+    }
+
+    #[test]
+    fn m81_f001_rejected_computed_feature_mutation_is_allocator_neutral() {
+        let fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let session = fixture.coordinator.session().clone();
+        let mut features = ComputedFeatureDocument::new(session.design_document().id());
+        let corners = candidate.persistent_corners();
+        let feature_ids = (0..130)
+            .map(|index| {
+                features
+                    .create_fillet_set(format!("bounded feature {index}"), 0.5, corners.clone())
+                    .expect("valid independent one-corner feature")
+            })
+            .collect::<Vec<_>>();
+        let mut coordinator =
+            RetainedEditorCoordinator::with_features(session, features).expect("coordinator");
+        assert!(
+            coordinator.computed_snapshot.is_none(),
+            "the 260-item feature evaluation must exceed the 256-item bounded envelope"
+        );
+
+        let retained = retained_state_snapshot(&coordinator);
+        let feature_identity = coordinator.feature_document().identity();
+        let allocator = coordinator
+            .persistence_checkpoint()
+            .expect("pre-rejection checkpoint")
+            .computed_evaluation_high_water();
+        let history_cursor = coordinator.history_cursor();
+        let transcript = coordinator.transcript().to_vec();
+        let computed_input = coordinator.computed_input;
+        let computed_problem = coordinator.computed_evaluation_problem.clone();
+
+        assert!(matches!(
+            coordinator.remove_computed_feature(feature_identity, feature_ids[0]),
+            Err(CoordinatorError::ComputedFeatureWorkStopped)
+        ));
+
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(coordinator.history_cursor(), history_cursor);
+        assert_eq!(coordinator.transcript(), transcript);
+        assert_eq!(coordinator.feature_document().identity(), feature_identity);
+        assert_eq!(coordinator.computed_input, computed_input);
+        assert!(coordinator.computed_snapshot.is_none());
+        assert_eq!(coordinator.computed_evaluation_problem, computed_problem);
+        assert_eq!(
+            coordinator
+                .persistence_checkpoint()
+                .expect("post-rejection checkpoint")
+                .computed_evaluation_high_water(),
+            allocator,
+            "a rejected feature mutation must not consume a generated-output revision"
+        );
     }
 
     #[test]
