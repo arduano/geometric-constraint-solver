@@ -5572,9 +5572,10 @@ abstraction.
 
 ### M82: certified computed all-family Curve Offset
 
-Status: **clean-qualified and immutably nominated; human UAT pending**. `docs/M82_GOALS.md` owns the approved product and
-mathematical contract, ADR 0038 owns the architecture, `docs/M82_IMPLEMENTATION.md` records actual
-evidence and `docs/M82_UAT.md` is prepared but not executed. M82 is not accepted or closed.
+Status: **clean-qualified and immutably nominated; human UAT pending**. `docs/M82_GOALS.md` owns
+the approved product and mathematical contract, ADR 0038 owns the architecture,
+`docs/M82_IMPLEMENTATION.md` records actual evidence and `docs/M82_UAT.md` is prepared but not
+executed. M82 is not accepted or closed.
 
 - [x] Add a certified accepted-sketch parallel-curve kernel with exact Line/Circle/CircularArc
   output and deterministic adaptive endpoint-Hermite cubics for Ellipse/EllipticalArc, rational
