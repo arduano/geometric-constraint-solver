@@ -70,7 +70,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   and compilation, operation planning, computed source composition and retained history have
   cohesive private modules. Reproduced M81-F001 stages computed-output allocation until successful
   durable feature publication. Package graph, public APIs, persistence, equations, solver policy
-  and workbench behavior remain frozen; final clean qualification and UAT nomination are pending.
+  and workbench behavior remain frozen. Exact source `e4eca32`, tree `f3ed1bf`, passes the clean
+  release gate and immutable Tailscale byte verification; focused human UAT and Pages closeout are
+  pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1560,5 +1562,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M81: active behavior-preserving architecture consolidation. Private core solver, sketch query/
   Profile Offset validation and compilation, operations planning, computed source composition and
   retained-history responsibilities are separated behind unchanged facades. M81-F001 makes a
-  rejected durable computed-feature mutation allocator-neutral. Focused implementation checks pass;
-  workspace/release qualification, frozen Tailscale nomination and human UAT remain pending.
+  rejected durable computed-feature mutation allocator-neutral. Focused implementation checks,
+  workspace/release qualification and frozen Tailscale nomination pass at exact source `e4eca32`;
+  human UAT remains pending.

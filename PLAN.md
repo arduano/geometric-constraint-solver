@@ -5495,13 +5495,14 @@ dependent/high-valence and existing-feature conversion paths remain deferred.
 
 ### M81: core architecture consolidation
 
-Status: **implementation complete; final qualification and focused human UAT pending**.
+Status: **implementation, final clean qualification and frozen Tailscale nomination complete;
+focused human UAT pending**.
 `docs/M81_GOALS.md` owns the behavior-preserving contract,
 `docs/M81_IMPLEMENTATION.md` owns the implementation/finding/audit ledger and
 `docs/M81_UAT.md` owns the compact candidate scorecard.
 
-- [x] Freeze locked no-dependency Cargo metadata, ordered crate-root public declarations and the
-  reviewed 271-row golden authoring/scene authority before implementation.
+- [x] Freeze locked no-dependency Cargo metadata, ordered leading crate-root public declaration/
+  export lines and the reviewed 271-row golden authoring/scene authority before implementation.
 - [x] Split `geosolve-core` solver internals into private hard-solve, lexicographic-priority and
   independent-validation responsibilities while preserving public `solver` paths, orchestration,
   work charging, fallback order, traces and hard-versus-temporary policy.
@@ -5522,20 +5523,32 @@ Status: **implementation complete; final qualification and focused human UAT pen
 - [x] Use rotating independent subsystem agents for baseline audits, bounded implementation and
   follow-up review; record the release-blocking wildcard-import finding, M81-F001 and every clean
   or deferred seam explicitly.
-- [ ] Re-run final committed-tree subsystem tests, byte-compare metadata/public declarations and
+- [x] Re-run final committed-tree subsystem tests, byte-compare metadata/selected public
+  declaration/export lines and
   canonical persistence, and pass exact 271-row golden survey/check/require-clean.
-- [ ] Pass formatting, diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature
+- [x] Pass formatting, diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature
   workspace tests, native/WASM parity, demo adapter checks and the complete clean release gate.
-- [ ] Freeze the exact no-rebuild release output, byte-verify it over the retained Tailscale
+- [x] Freeze the exact no-rebuild release output, byte-verify it over the retained Tailscale
   endpoint and nominate that source/tree/artifact for focused M81 UAT.
 - [ ] Receive explicit supervising-human acceptance and perform the normal Pages closeout; do not
   publish or start M82 before that decision.
 
-Gate: the package graph, crate-root public declarations, canonical persistence and reviewed golden
-authority remain byte-identical; every accepted state still passes independent validation; rejected
-feature mutations are allocator/history/scene neutral; and the clean release artifact behaves as
-the M80 product. M81 adds no feature, equation, solver policy, persistence version, browser behavior
-or new architectural abstraction.
+Qualification record (2026-08-20): exact source
+`e4eca327fc69c92f95b1722142289302ba4f67bc`, tree
+`f3ed1bf50b793daae328adf04c0924655dc13d74`, passes the complete clean Nix release gate and exact
+271-row golden. Metadata, the original four-root selected declaration/export lines and a
+supplemental all-nine-root selection byte-match activation. The exact no-rebuild seven-file
+snapshot `/tmp/geosolve-m81-uat.QqItRd`, ordered-manifest aggregate
+`df24deb988a31a373b3f973432081078c15e157382134f62c99aaabe96b8e49e`, passes temporary and retained
+Tailscale byte verification and remains served at `http://100.94.63.83:8080/`. Human UAT and Pages
+closeout remain pending.
+
+Gate: the package graph, selected crate-root public declaration/export lines, canonical
+persistence and reviewed golden authority remain byte-identical; every accepted state still passes
+independent validation; M81-F001's directly asserted retained-state and allocator sentinels are
+neutral on rejection; and the clean release artifact behaves as the M80 product. M81 adds no
+feature, equation, solver policy, persistence version, browser behavior or new architectural
+abstraction.
 
 ## Explicit non-goals
 

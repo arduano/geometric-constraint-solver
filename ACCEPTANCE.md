@@ -2820,13 +2820,17 @@ high-valence corners and conversion of existing published computed Fillets.
 
 ## M81 acceptance: core architecture consolidation
 
-Status: **implementation complete; final clean qualification, frozen nomination and human UAT
-pending**. `docs/M81_GOALS.md` is authoritative for scope and
+Status: **implementation, final clean qualification and frozen Tailscale nomination complete;
+focused human UAT pending**. `docs/M81_GOALS.md` is authoritative for scope and
 `docs/M81_IMPLEMENTATION.md` records exact commits, audits and M81-F001.
 
-- The locked no-dependency Cargo metadata and ordered public declaration/export surface of core,
-  sketch, linkage and editor must byte-match the M80 activation freeze. No crate, dependency,
-  feature, public path, type, signature or error text is added, removed or reordered.
+- The locked no-dependency Cargo metadata and originally frozen ordered leading public
+  declaration/export lines of core, sketch, linkage and editor byte-match the M80 activation
+  freeze. A supplemental all-nine-library-root selected-line comparison also byte-matches. These
+  snapshots are declaration/export coverage rather than a claim that multiline bodies encode the
+  complete API; locked compilation and package qualification provide complementary type evidence.
+  No crate, dependency, feature, public path, type, signature or error text is added, removed or
+  reordered.
 - `geosolve-core::solver` remains the public DTO/configuration/orchestration facade. Private hard,
   priority and validation modules preserve exact controller work charging/checkpoints, dense/
   sparse selection and fallback, category priority, cache/trace/source order, diagnostics and
@@ -2846,9 +2850,11 @@ pending**. `docs/M81_GOALS.md` is authoritative for scope and
   host-input truth, high-water merging, replay append, editor invalidation, transient clearing and
   selection reconciliation order.
 - M81-F001's exact public-coordinator regression proves a bounded rejected durable feature
-  mutation preserves the complete prior feature/sketch state, accepted identities/JSON, history,
-  transcript, computed scene/problem and computed-output allocator high-water. Successful feature
-  publication still installs the staged allocator with the authenticated feature/snapshot.
+  mutation preserves feature identity/payload, retained design and accepted identities/JSON,
+  history length/cursor, transcript, computed input/absent-snapshot/problem state and
+  computed-output allocator high-water. It does not directly construct an `EditorScene` or compare
+  the complete retained session/checkpoint state. Successful feature publication still installs
+  the staged allocator with the authenticated feature/snapshot.
 - Canonical sketch v1-v4 fixtures, private unsupported draft-v5 behavior, workspace v6,
   reproduction v1 and persistent/runtime identity order remain unchanged. The reviewed 271-row
   golden inventory remains 271 `PASS`; survey, `--check` and `--require-clean` must pass without
@@ -2868,6 +2874,18 @@ pending**. `docs/M81_GOALS.md` is authoritative for scope and
 M81 adds no primitive, constraint, dimension, inference, computed feature, topology behavior,
 solver equation/policy, persistence version, browser layout or generic architecture framework.
 Discovery requiring any such change is deferred to another approved milestone.
+
+Exact nominated source `e4eca327fc69c92f95b1722142289302ba4f67bc`, tree
+`f3ed1bf50b793daae328adf04c0924655dc13d74`, passes the clean Nix release gate, including the
+unchanged 271-row golden, native/WASM parity, workspace Clippy/tests/Rustdoc, performance, licence
+and release Trunk checks. Its 271,230-byte gate log has SHA-256
+`43abb1e262293d607e6e37d636b90979d9be7c0807020c0d7bbc49800716797e`. The exact no-rebuild
+snapshot `/tmp/geosolve-m81-uat.QqItRd` is read-only with seven regular non-symlink files and
+ordered-manifest aggregate
+`df24deb988a31a373b3f973432081078c15e157382134f62c99aaabe96b8e49e`. Temporary `:18080` and
+retained `http://100.94.63.83:8080/` verification both pass all eight byte/media/length/HTTP checks;
+the retained service remains live for the pending scorecard. Human acceptance and Pages closeout
+remain unchecked.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

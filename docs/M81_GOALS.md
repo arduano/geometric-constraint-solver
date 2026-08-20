@@ -2,11 +2,11 @@
 
 # M81 — Core architecture consolidation
 
-Status: **implementation and rotating review complete; final clean qualification and focused UAT
-pending**. M81 is a behavior-preserving cleanup after the M66–M80 feature sequence. It changes
-private ownership and file boundaries only, except for the exact transactional-authority repair
-recorded as M81-F001. It adds no geometry, relation, solver policy, persistence language, public
-API or workbench UX.
+Status: **implementation, rotating review, final clean qualification and frozen Tailscale
+nomination complete; focused human UAT pending**. M81 is a behavior-preserving cleanup after the
+M66–M80 feature sequence. It changes private ownership and file boundaries only, except for the
+exact transactional-authority repair recorded as M81-F001. It adds no geometry, relation, solver
+policy, persistence language, public API or workbench UX.
 
 ## Goal
 
@@ -22,7 +22,7 @@ Before implementation, M81 froze:
 
 - locked no-dependency Cargo metadata, SHA-256
   `691591282713d87fb2ae63ff12873577c91daadaa2af0c817c0543b9bfd4d66e`;
-- the ordered crate-root public declaration/export surface for `geosolve-core`,
+- the ordered leading crate-root public declaration/export lines selected for `geosolve-core`,
   `geosolve-sketch`, `geosolve-linkage` and `geosolve-constraint-editor`, SHA-256
   `0b46f015459f16f20de98373c452c8cb203aebe4cd4cdc54dbfbc78f4d01e9cd`; and
 - the reviewed milestone-neutral golden authoring/scene authority at 271 rows, with `--check` and
@@ -48,8 +48,9 @@ opportunities.
 
 ### M81-C2 — sketch document and compilation boundaries
 
-- Extract cohesive private wire/query/validation and compiler registration/lowering/validation
-  helpers where a mechanical move can be qualified independently.
+- Extract cohesive private curve-query/Profile Offset validation and compiler registration/
+  lowering/validation helpers where a mechanical move can be qualified independently. Frozen
+  private wire DTO ownership is unchanged; M81 does not perform a wire-layer extraction.
 - Keep `SketchDocument`, session and compiler public paths unchanged and preserve arena insertion,
   source/residual mapping, audit-row and iteration order.
 - Independent candidate validation remains deliberately separate from residual evaluation; no
@@ -69,14 +70,22 @@ opportunities.
 - Extract feature-specific or transaction-specific coordinator helpers only where candidate
   staging, exact-input authentication, publication, transient clearing and history effects remain
   visibly ordered.
-- Audit rejected computed-feature mutations for allocator, history, transcript, accepted-scene and
-  feature-document neutrality through the narrow public coordinator boundary. A reproduced defect
-  receives an M81 finding ID, exact owner regression and smallest transactional repair before any
-  surrounding refactor proceeds.
+- Audit rejected computed-feature mutations for allocator, history, transcript, accepted
+  identity/JSON, scene-input authority and feature-document neutrality through the narrow public
+  coordinator boundary. A reproduced defect receives an M81 finding ID, exact owner regression
+  and smallest transactional repair before any surrounding refactor proceeds.
 - Do not normalize differing preview/durable allocator policies without evidence, merge browser
   behavior into the headless editor or create a generic transaction framework.
 
-### M81-C5 — rotating independent audit and qualification
+### M81-C5 — computed-feature composition boundaries
+
+- Move the existing source-claim, interval-composition, discarded-fragment, combined-role and
+  revision-local output-ID responsibilities behind one private evaluator module.
+- Preserve exact conflict attribution, source ordering, roots, explicit branches, continuation,
+  tolerances, work charging, public DTOs and independent output validation.
+- Do not introduce a generic feature framework, new computed feature or public composition API.
+
+### M81-C6 — rotating independent audit and qualification
 
 - Use multiple independent agents in rotating implementation/review roles across core/linkage,
   sketch/compiler/persistence, features/operations and editor/coordinator/demo seams.
@@ -88,8 +97,11 @@ opportunities.
 
 ## Acceptance
 
-- Locked package metadata and the ordered crate-root public surface are byte-identical to the
-  activation freeze.
+- Locked package metadata and the originally frozen four-root selected public declaration/export
+  lines are byte-identical to the activation freeze. A supplemental selected `pub use`/`pub
+  struct`/`pub enum` leading-line comparison across all nine workspace library roots must also be
+  byte-identical; these text snapshots are declaration/export coverage, not a substitute for Rust
+  type checking or a claim that multiline bodies were hashed.
 - Canonical persistence fixtures, reproduction/workspace round trips and the 271-row golden
   inventory remain byte-identical; no golden output is re-blessed.
 - Focused core, linkage, sketch, operations, features and editor/coordinator suites pass after
@@ -100,6 +112,14 @@ opportunities.
 - The exact no-rebuild release output is frozen and byte-verified over the retained Tailscale UAT
   endpoint before nomination.
 - The worktree is clean and commits remain subsystem-sized and reviewable.
+
+Final qualification satisfies this contract at exact product source
+`e4eca327fc69c92f95b1722142289302ba4f67bc`, tree
+`f3ed1bf50b793daae328adf04c0924655dc13d74`. The original four-root selected-line hash remains
+`0b46f015459f16f20de98373c452c8cb203aebe4cd4cdc54dbfbc78f4d01e9cd`; the supplemental all-nine-
+root selected-line hash is
+`5cd55480a3d0f8a1d7175ef9359c94cc4dcd14cbf6b5d865abf1697667d1af90`. The immutable seven-file
+candidate and HTTP evidence are bound in `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md`.
 
 ## Non-goals
 

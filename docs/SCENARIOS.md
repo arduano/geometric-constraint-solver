@@ -4249,8 +4249,9 @@ diagnostic history, not active ADR 0031 qualification scenarios.
 
 ## M81 architecture-preservation scenarios
 
-M81 adds no product scenario or golden row. It qualifies the existing corpus through the same
-public boundaries while private implementation ownership changes:
+M81 adds no geometry/authoring scenario or golden row. It qualifies the existing corpus through
+the same public boundaries while private implementation ownership changes, and adds one focused
+coordinator transactional regression:
 
 - core dense/sparse, bounds, priority, continuation, cache, rank, conflict/redundancy, diagnostics,
   audit and cancellation scenarios preserve status, source/trace ordering and independent returned-
@@ -4264,12 +4265,16 @@ public boundaries while private implementation ownership changes:
   and
 - focused `m81_f001_rejected_computed_feature_mutation_is_allocator_neutral` supplies the only new
   exact case. It forces bounded durable feature mutation rejection through the public retained
-  coordinator and proves allocator, feature/sketch, accepted-scene, history, transcript and problem
-  neutrality.
+  coordinator and directly preserves feature identity/payload, retained design and accepted
+  identities/JSON, history length/cursor, transcript, computed input/absent-snapshot/problem state
+  and computed-output allocator high-water. It does not construct or compare an `EditorScene` or
+  the complete retained session/checkpoint state.
 
 The stable authoring/scene golden remains exactly 271 rows. M81-F001 is an isolated owner
 regression rather than a new systemic family/lifecycle dimension, so no golden input or authority
-byte changes.
+byte changes. Exact source `e4eca327fc69c92f95b1722142289302ba4f67bc` passes the clean release
+gate and its no-rebuild seven-file snapshot is byte-verified at the retained Tailscale endpoint;
+focused human UAT remains pending.
 
 ## Frozen near-singular fixtures
 
