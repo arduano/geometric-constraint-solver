@@ -10694,6 +10694,20 @@ mod tests {
     }
 
     #[test]
+    fn m82_f005_offset_help_describes_native_and_computed_curve_routes() {
+        let html = include_str!("../../index.html");
+        assert!(html.contains(
+            "Lines, circles and circular arcs stay native; other regular built-in curves use certified computed output."
+        ));
+        assert!(
+            html.contains(
+                "Singular, self-intersecting or topology-changing offsets are unavailable."
+            )
+        );
+        assert!(!html.contains("Exact lines, circles and circular arcs only"));
+    }
+
+    #[test]
     #[allow(
         clippy::too_many_lines,
         reason = "one adapter lifecycle freezes Current, withheld Failed and recovered feature/source presentation"

@@ -175,7 +175,7 @@
               <label>Distance<input id="wb-offset-distance" type="number" step="any" /></label>
               <div class="wb-offset-direction"><span>Direction</span><strong id="wb-offset-direction">—</strong></div>
               <div class="wb-option-actions"><button type="button" data-wb-action="offset-flip">Flip</button><button id="wb-offset-apply" type="button" data-wb-action="offset-apply" disabled>Apply</button><button type="button" data-wb-action="offset-cancel">Cancel</button></div>
-              <p class="wb-option-help">Pick a bounded face, or collect a connected open chain. Exact lines, circles and circular arcs only; topology-changing offsets are intentionally unavailable.</p>
+              <p class="wb-option-help">Pick a bounded face, or collect a connected open chain. Lines, circles and circular arcs stay native; other regular built-in curves use certified computed output. Singular, self-intersecting or topology-changing offsets are unavailable.</p>
             </div>
             <div id="wb-option-panel-conic" class="wb-option-panel" data-wb-option-panel="conic" hidden>
               <label id="wb-conic-ratio-field">Minor-axis ratio<input id="wb-conic-ratio" type="number" min="0" max="1" step="any" value="0.5" /></label>

@@ -2900,7 +2900,7 @@ accepted evidence; Tailscale PID `2850776` is retired. M81 is complete.
 
 ## M82 acceptance: certified computed all-family Curve Offset
 
-Status: **active; clean-qualified and immutably nominated, human UAT pending**.
+Status: **active; M82-F005 corrected, replacement clean qualification and nomination pending**.
 `docs/M82_GOALS.md` is authoritative for
 scope, ADR 0038 for architecture, `docs/M82_IMPLEMENTATION.md` for actual evidence and
 `docs/M82_UAT.md` for the prepared human scorecard. M82 is not accepted or complete.
@@ -2939,22 +2939,23 @@ scope, ADR 0038 for architecture, `docs/M82_IMPLEMENTATION.md` for actual eviden
   spline-intrinsic adjacency, closed faces/holes, both sides, topology barriers, deterministic
   exhaustion, lifecycle and compatibility. Native/WASM/editor/demo parity and any reviewed golden
   addition pass.
-- [x] Formatting, diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature tests,
-  native/WASM/demo parity, the exact reviewed 272-row golden oracle, complete clean release gate
-  and no-rebuild Tailscale byte verification pass.
+- [ ] The corrected source passes formatting, diff hygiene, warnings-denied workspace
+  Clippy/Rustdoc, locked all-feature tests, native/WASM/demo parity, the exact reviewed 272-row
+  golden oracle, complete clean release gate and replacement no-rebuild Tailscale verification.
 - [ ] The prepared human UAT, explicit supervising-human approval and exact Pages publication pass
   before closure.
 
-M82-F001 through M82-F004 bind cold provisional feature authority, owned tangent-endpoint
-locality, cooperative adaptive-fitting work and current live Offset collection respectively. All
-four corrections are required by the checked contracts above; `docs/M82_IMPLEMENTATION.md`
-records their exact owning regressions.
+M82-F001 through M82-F005 bind cold provisional feature authority, owned tangent-endpoint
+locality, cooperative adaptive-fitting work, current live Offset collection and truthful route
+copy respectively. All five corrections are required by the checked contracts above;
+`docs/M82_IMPLEMENTATION.md` records their exact owning regressions.
 
-Mechanical nomination authority is exact source `7fd31c0`, tree `c6b6c89`, no-rebuild snapshot
+Withdrawn pre-F005 mechanical authority is exact source `7fd31c0`, tree `c6b6c89`, snapshot
 `/tmp/geosolve-m82-uat.I58j21`, ordered-manifest aggregate
 `cb07c77de43544be251f97321bba8f978a018078a7b332d3752b39b55dff1a8e` and the byte-verified
-retained endpoint `http://100.94.63.83:8080/`. Every `docs/M82_UAT.md` row, supervising-human
-approval, Pages publication and closure remain pending.
+historical endpoint `http://100.94.63.83:8080/`. Its listener is retired and those bytes never
+entered human UAT. Replacement nomination, every `docs/M82_UAT.md` row, supervising-human approval,
+Pages publication and closure remain pending.
 
 M82 explicitly excludes topology-changing repair, trimming/splitting, loop removal, partial
 publication, computed-on-computed chaining, Bake/Explode, stable generated-edge names, canonical

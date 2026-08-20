@@ -2,17 +2,17 @@
 
 # M82 implementation — certified computed all-family Curve Offset
 
-Status: **clean-qualified and immutably nominated; human UAT pending**. Implementation, focused
-and broad qualification, the exact committed-tree release gate, no-rebuild artifact freeze and
-Tailscale byte verification pass. This is not an acceptance or closure claim. Product scope is
-owned by `docs/M82_GOALS.md`; architecture is owned by ADR 0038.
+Status: **replacement qualification pending after M82-F005; prior frozen candidate withdrawn**.
+Implementation and the focused F005 correction pass, but the corrected source requires a new
+clean gate, no-rebuild freeze and Tailscale nomination before human UAT. This is not an acceptance
+or closure claim. Product scope is owned by `docs/M82_GOALS.md`; architecture is owned by ADR 0038.
 
 Activation baseline: M81 closeout commit
 `e3cbb8f2ae2800181545bb3405704bdcc3ff46a6`.
 
-Nominated product source: `7fd31c0137f6979f945e5ab4d320e7adb552c03d`.
+Withdrawn pre-F005 product source: `7fd31c0137f6979f945e5ab4d320e7adb552c03d`.
 
-Nominated product tree: `c6b6c89cecde30b2b3a7cf057ec61317a38a5634`.
+Withdrawn pre-F005 product tree: `c6b6c89cecde30b2b3a7cf057ec61317a38a5634`.
 
 ## Implementation ledger
 
@@ -76,8 +76,8 @@ if the accepted sketch identity does not.
 
 Development qualification passed the final M82 coordinator slice (16/16), the editor library
 (406/406) and the final demo library (159/159), including exact M82-F001 coverage and live Offset
-collector refresh after computed-feature-only changes. The committed-tree clean gate repeats the
-complete coverage below and passes.
+collector refresh after computed-feature-only changes. M82-F005 adds a focused red/green browser-
+copy regression; its replacement committed-tree gate remains pending below.
 
 ### Phase 4 — strict persistence compatibility
 
@@ -100,8 +100,8 @@ round-trips regenerate output from accepted sketch plus feature intent.
 - [x] Run focused owner suites, golden survey/check/require-clean, native/WASM parity, demo adapter,
   format/diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature workspace tests
   and a pinned Trunk release build during development qualification.
-- [x] Run the complete release gate from the clean nominated commit and retain its exact log/hash.
-- [x] Freeze the gate-produced distribution without rebuilding, byte-verify it over Tailscale and
+- [ ] Run the complete release gate from the corrected clean commit and retain its exact log/hash.
+- [ ] Freeze the replacement gate-produced distribution without rebuilding, byte-verify it over Tailscale and
   bind `docs/M82_UAT.md` to that exact source/tree/artifact.
 
 The reviewed golden inventory increases from 271 to 272 `PASS` rows by exactly
@@ -168,6 +168,19 @@ whose coordinator publication already reactivates the collector. Exact adapter r
 input stays equal, feature identity changes, the refresh is required and the formerly excluded
 span becomes collectible after reactivation.
 
+### M82-F005 — Offset help text still claimed native-only curve support
+
+Found during the final browser-copy audit after the first immutable nomination. The active Offset
+panel still said “Exact lines, circles and circular arcs only,” directly contradicting M82's
+general-family computed route and making the new capability undiscoverable in the demo.
+
+The repair states the routing boundary truthfully: Line/Circle/CircularArc remain native, other
+regular built-in curves use certified computed output, and singular, self-intersecting or
+topology-changing offsets remain unavailable. Exact static-adapter regression
+`m82_f005_offset_help_describes_native_and_computed_curve_routes` failed before the copy change and
+passes afterward. The pre-F005 snapshot is withdrawn and its listener retired; no mathematical,
+topology, persistence or coordinator behavior changed.
+
 ## Development qualification record
 
 The following commands actually passed on the implemented tree before clean nomination:
@@ -212,11 +225,13 @@ cargo test --locked -p geosolve-constraint-editor \
 cargo test --locked -p geosolve-demo-web --lib \
   workbench::tests::m82_f004_computed_feature_only_change_reactivates_the_live_offset_collector \
   -- --exact
+cargo test --locked -p geosolve-demo-web --lib \
+  workbench::tests::m82_f005_offset_help_describes_native_and_computed_curve_routes -- --exact
 ```
 
-Results are respectively 2/2, 1/1, 1/1 and 1/1.
+Results are respectively 2/2, 1/1, 1/1, 1/1 and 1/1.
 
-## Final committed-tree qualification
+## Withdrawn pre-F005 committed-tree qualification
 
 From clean source `7fd31c0137f6979f945e5ab4d320e7adb552c03d`, tree
 `c6b6c89cecde30b2b3a7cf057ec61317a38a5634`, this exact command completed with exit 0:
@@ -234,7 +249,7 @@ native/WASM parity, the demo WASM check, warnings-denied Rustdoc, benchmark comp
 M32 performance budgets, the ignored 256-moving-body sparse crossover in 116.35 seconds,
 licence/package checks and Trunk 0.21.14 release assembly.
 
-## Immutable candidate and served-byte evidence
+## Withdrawn pre-F005 immutable candidate and served-byte evidence
 
 Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
 `/tmp/geosolve-m82-uat.I58j21` and byte-compared before and after freezing. The directory is
@@ -273,7 +288,8 @@ Only after that ledger passed, `geosolve-m82-uat.service`, PID `1188633`, began 
 immutable directory at `http://100.94.63.83:8080/`. The same eight checks passed independently;
 final evidence is `/tmp/geosolve-m82-final-verify.Jlu7xZ/results.tsv`, with the same ledger hash
 because every asserted path/status/type/length/body hash is identical. The temporary listener is
-retired and the retained `:8080` service remains live for focused human UAT.
+retired. M82-F005 subsequently withdrew these bytes before human UAT; the retained listener is
+also retired. The snapshot and verification records remain historical evidence only.
 
 This evidence-only documentation is a descendant of the nominated product source. It does not
 replace that source/tree or rebuild its artifact.
@@ -289,5 +305,7 @@ replace that source/tree or rebuild its artifact.
 - Computed-on-computed chaining, topology repair, trimming/splitting, loop removal, distance
   reduction and stable generated-edge naming remain explicit non-goals.
 
-The only remaining acceptance work is the human scorecard in `docs/M82_UAT.md`, an explicit
-supervising-human decision, exact GitHub Pages publication and closeout. M82 remains active.
+The immediate remaining work is the corrected clean committed-tree release gate, replacement no-
+rebuild freeze and exact Tailscale byte verification. Only then may the human scorecard in
+`docs/M82_UAT.md`, explicit approval, exact GitHub Pages publication and closeout proceed. M82
+remains active.

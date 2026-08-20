@@ -2,12 +2,12 @@
 
 # M82 focused UAT — certified computed all-family Curve Offset
 
-Status: **frozen candidate nominated; human UAT pending**. Implementation, the clean release gate
-and immutable served-byte verification pass. Automated owner tests certify mathematics, topology
-and persistence; this scorecard is for discoverability, interaction truthfulness and visual
-continuity on the exact frozen candidate below.
+Status: **prepared, not executable; pre-F005 candidate withdrawn**. M82-F005 corrected stale
+native-only Offset help after the first nomination, so a replacement clean gate, no-rebuild
+freeze and Tailscale verification are required before human UAT. Automated owner tests certify
+mathematics, topology and persistence; this scorecard remains prepared for the replacement.
 
-## Candidate authority
+## Withdrawn pre-F005 authority
 
 - Product source: `7fd31c0137f6979f945e5ab4d320e7adb552c03d`.
 - Product tree: `c6b6c89cecde30b2b3a7cf057ec61317a38a5634`.
@@ -15,8 +15,8 @@ continuity on the exact frozen candidate below.
   non-symlink files at `0444`).
 - Ordered file-manifest aggregate:
   `cb07c77de43544be251f97321bba8f978a018078a7b332d3752b39b55dff1a8e`.
-- Live Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m82-uat.service`, nominated PID
-  `1188633`).
+- Historical Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m82-uat.service`, retired
+  PID `1188633`).
 - Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 at
   2026-08-20 22:57:08 AEST; log SHA-256
   `7f4ef08a66851c1a117bf091af6bfb49a83abf33face7807e451e9b75ae064cf`.
@@ -27,8 +27,8 @@ continuity on the exact frozen candidate below.
 
 Both verification passes covered `/` plus all seven assets: HTTP 200, zero redirects, no
 `Location` or `Content-Encoding`, exact media type/length/body, the frozen aggregate above and
-root equality with `index.html`. The temporary `:18080` listener is retired; the retained `:8080`
-listener stays live until UAT disposition and any exact public publication are complete.
+root equality with `index.html`. Both listeners are retired. This snapshot was withdrawn before
+human UAT because its Offset help still claimed native-only curve support; it is not a candidate.
 
 ## Prepared scorecard
 

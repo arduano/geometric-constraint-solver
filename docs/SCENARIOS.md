@@ -4281,11 +4281,11 @@ is closed.
 
 ## M82 certified computed Curve Offset scenarios
 
-These scenarios are **implemented, clean-qualified and immutably nominated; human UAT remains
-pending**. They activate the smallest broadening of Offset under ADR 0038 while preserving M80
-native behavior. Focused owner, coordinator, editor, demo/WASM and reviewed 272-row golden evidence
-passes; exact source `7fd31c0`, tree `c6b6c89`, also passes the complete release gate and frozen
-Tailscale verification. M82 remains active until human acceptance and exact public closeout pass.
+These scenarios are **implemented; M82-F005 replacement qualification is pending**. They activate
+the smallest broadening of Offset under ADR 0038 while preserving M80 native behavior. Focused
+owner, coordinator, editor, demo/WASM and reviewed 272-row golden evidence passes. The first frozen
+candidate is withdrawn after stale native-only Offset help was corrected; M82 remains active until
+replacement nomination, human acceptance and exact public closeout pass.
 
 ### M82-O1 — Native analytic route remains exact
 
@@ -4353,22 +4353,24 @@ Reject unknown fields, invalid finite values, malformed adjacency/topology, stal
 and serialized generated patches/certificates atomically. Sketch canonical v1-v4 and private
 draft-v5 bytes remain unchanged.
 
-Qualification found four owning defects. M82-F001 requires a new provisional Offset feature
+Qualification found five owning defects. M82-F001 requires a new provisional Offset feature
 document to cold-evaluate beside an unrelated Current Fillet, preserving durable feature/history/
 transcript authority. M82-F002 distinguishes a persistently owned opposite-inward tangent endpoint
 from an unowned coincident tangency. M82-F003 requires cancellation or
 `profile_subdivisions` exhaustion to stop before fitting/recursive child work and publish no partial
 chain or output identity. M82-F004 requires an active Offset collector to rebuild when computed-
 feature identity changes without a native sketch-input change, preventing stale computed-Fillet
-source exclusions. Their exact regressions are recorded in `docs/M82_IMPLEMENTATION.md`.
+source exclusions. M82-F005 requires browser help to describe both native and computed routes
+rather than claiming exact native curves are the only eligible operands. Their exact regressions
+are recorded in `docs/M82_IMPLEMENTATION.md`.
 
 The broad golden oracle adds exactly one systemic row,
 `feature.curve-offset.authoring.general-open-chain`, and now contains 272 reviewed `PASS` rows. The
 all-family kernel matrix, feature/topology/coordinator lifecycle slices, editor/demo adapters,
 workspace tests, Clippy/Rustdoc, locked WASM check and pinned release assembly pass during
-development qualification. The clean committed-tree gate and immutable served artifact now pass
-at exact source `7fd31c0`, tree `c6b6c89`, snapshot `/tmp/geosolve-m82-uat.I58j21` and
-`http://100.94.63.83:8080/`; human UAT remains pending.
+development qualification. Source `7fd31c0` and snapshot `/tmp/geosolve-m82-uat.I58j21` are
+historical pre-F005 evidence only; their listener is retired and replacement qualification is
+pending before human UAT.
 
 ## Frozen near-singular fixtures
 
