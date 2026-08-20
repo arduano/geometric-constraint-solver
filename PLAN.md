@@ -80,8 +80,12 @@ native line-line Fillet publication amendment and `M80-F016` arc-angle propagati
 clean release qualification and immutable served nomination at exact source `29d8e41`, tree
 `44ecb95`. Supervising-human UAT and exact GitHub Pages publication pass.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
-but those candidates are withdrawn from acceptance and are no longer served. M1–M81 are complete;
-no M82 scope is active. M81 is the closed behavior-preserving core-architecture consolidation.
+but those candidates are withdrawn from acceptance and are no longer served. M1–M81 are complete.
+M82 is active with implementation and development qualification complete: it preserves M80
+native `ProfileOffset` while adding ADR 0038's certified computed Offset route for regular
+built-in general curves, faces and chains. Final clean qualification, frozen nomination and human
+acceptance remain pending.
+M81 remains the closed behavior-preserving core-architecture consolidation.
 M76's
 implementation,
 feature refinements,
@@ -5556,7 +5560,8 @@ aggregate is `c461835ac327655fd16e9355e0b42c1971e74ed9233fcf500908b8051614de72`.
 Root plus all seven hosted paths exact-match with HTTP 200, correct media/length, no redirect or
 content encoding and root equal to `index.html`. Historical snapshot
 `/tmp/geosolve-m81-uat.QqItRd` remains accepted evidence; PID `2850776` and the Tailscale listener
-are retired. M81 is closed and this closeout starts no M82 work.
+are retired. M81 is closed; that closeout did not itself start M82, which is activated separately
+by the active section below.
 
 Gate: the package graph, selected crate-root public declaration/export lines, canonical
 persistence and reviewed golden authority remain byte-identical; every accepted state still passes
@@ -5564,6 +5569,53 @@ independent validation; M81-F001's directly asserted retained-state and allocato
 neutral on rejection; and the clean release artifact behaves as the M80 product. M81 adds no
 feature, equation, solver policy, persistence version, browser behavior or new architectural
 abstraction.
+
+### M82: certified computed all-family Curve Offset
+
+Status: **implementation and development qualification complete; final clean release gate,
+frozen nomination and human UAT pending**. `docs/M82_GOALS.md` owns the approved product and
+mathematical contract, ADR 0038 owns the architecture, `docs/M82_IMPLEMENTATION.md` records actual
+evidence and `docs/M82_UAT.md` is prepared but not executed. M82 is not accepted or closed.
+
+- [x] Add a certified accepted-sketch parallel-curve kernel with exact Line/Circle/CircularArc
+  output and deterministic adaptive endpoint-Hermite cubics for Ellipse/EllipticalArc, rational
+  conic, Parabola, Hyperbola, Bezier, B-spline and NURBS intervals.
+- [x] Certify finite denominator/speed, `1 - delta*kappa > 1e-8`, exact endpoint/tangent data,
+  bounded position/tangent fit error and deterministic cooperative work exhaustion.
+- [x] Add the reviewed acyclic `geosolve-sketch-features -> geosolve-sketch-topology` dependency
+  and persistent `ComputedFeatureDefinition::CurveOffset` intent for one face or ordered open
+  chain with explicit traversal, side, adjacency, junction cells and terminal policy.
+- [x] Validate both the mathematical parallel and fitted output against cusp, self-contact,
+  contour touch, collapse, split/merge, hole loss/inversion and every topology change; reject the
+  complete output without trimming, loop removal, healing or distance reduction.
+- [x] Preserve M80 native `ProfileOffset` unchanged and route only mixed/general eligible operands
+  to computed Curve Offset; exclude active computed-Fillet output while accepting M80 native-
+  published Fillet topology normally.
+- [x] Extend the existing Offset authoring/drag panel, feature tree, Problems, scene, picking,
+  selection, replay and coordinator lifecycle. Generated Offset edges select their stable feature;
+  Fillet arcs retain corner selection and Fillet source-replacement precedence.
+- [x] Add strict private computed-feature v2 while emitting v1 byte-for-byte for empty/Fillet-only
+  state; preserve workspace v6, reproduction v1 and all sketch persistence versions.
+- [x] Add focused analytic/all-family/mixed-chain/face-hole/spline-adjacency/singularity/topology/
+  lifecycle/routing/persistence regressions and independently review any justified golden row.
+- [x] Pass focused native/WASM/editor/demo qualification, formatting, diff hygiene, warnings-
+  denied workspace Clippy/Rustdoc, locked all-feature tests and the reviewed 272-row golden gate.
+- [ ] From a clean committed source, pass the complete release gate; freeze and byte-verify the
+  no-rebuild Tailscale candidate; execute the prepared human UAT; receive explicit approval;
+  publish exact Pages bytes and close M82 before starting another milestone.
+
+Implementation note (2026-08-20): M82-F001 makes provisional Curve Offset evaluation cold with
+respect to unrelated Fillet continuation state; M82-F002 admits only persistently owned opposite-
+inward tangent endpoints as local joins; and M82-F003 threads the caller's cancellation/work
+controller through every adaptive fitting subdivision. The reviewed golden inventory is exactly
+272 `PASS` rows, adding only `feature.curve-offset.authoring.general-open-chain`. Focused owner,
+workspace, Clippy/Rustdoc, WASM and release-assembly development evidence passes; the exact clean
+committed-tree release record and no-rebuild artifact authority remain intentionally pending.
+
+Gate: every Current computed output is finite, certified within the recorded error bounds,
+regular and topology-preserving; any uncertainty or barrier publishes no partial output and no
+durable mutation. The exact M80 route remains behavior-compatible, generated output remains
+revision-local/non-constrainable, and feature v1 compatibility bytes remain unchanged.
 
 ## Explicit non-goals
 

@@ -4279,6 +4279,94 @@ without opening a new finding. Approval descendant `b582b82` passes Pages run `3
 artifact `9392295853` and exact hosted-byte verification; the Tailscale listener is retired and M81
 is closed.
 
+## M82 certified computed Curve Offset scenarios
+
+These scenarios are **implemented with development qualification passing; final clean
+qualification and frozen-candidate human UAT remain pending**. They activate the smallest
+broadening of Offset under ADR 0038 while preserving M80 native behavior. Focused owner,
+coordinator, editor, demo/WASM and reviewed 272-row golden evidence passes; M82 remains active until
+its clean release gate, immutable nomination, human acceptance and exact public closeout pass.
+
+### M82-O1 — Native analytic route remains exact
+
+Offset wholly eligible line, circle, circular-arc, mixed line/arc, open-chain and holed-face
+operands through the ordinary tool. Require the existing native `ProfileOffset` route, exact
+same-family targets, grouped driving dimension, bidirectional editability, persistence and M80
+topology-barrier behavior. No computed feature or generated edge may be created. Repeat with an
+M80 native-published line-arc-line Fillet profile.
+
+### M82-O2 — Every regular general family has certified output
+
+Offset representative Ellipse, EllipticalArc, RationalQuadratic, Parabola, Hyperbola,
+Quadratic/Cubic Bezier, B-spline and NURBS spans on both sides, under reversal and at scales
+`1e-6`, `1` and `1e6`. Require exact accepted source jets, finite regular parallels, deterministic
+adaptive endpoint-Hermite cubics, exact patch endpoints/aligned tangents and independently bounded
+position/tangent error. Line/Circle/CircularArc portions in a computed operand remain exact.
+
+### M82-O3 — Mixed open chains and intrinsic spline adjacency
+
+Build ordered mixed analytic/general open chains using persistent shared points, exact endpoint
+contacts and neighbouring spans of one spline support. Require explicit traversal, side, adjacency
+provenance, tangent/miter junction cells and normal-translated terminals. Coordinate-only
+coincidence, disconnected selection, ambiguous selected branching or non-intrinsic spline overlap
+rejects without feature allocation. Unselected incident branches do not invalidate one deliberate
+continuous selected path.
+
+### M82-O4 — Closed faces, holes and material semantics
+
+Offset closed general-curve faces and mixed faces with several holes Outward and Inward. Preserve
+outer/hole winding, contour and edge order, strict nesting and material semantics. Both the
+mathematical parallel and fitted output must remain simple and non-contacting. Any outer/hole,
+hole/hole or non-adjacent edge touch rejects the complete feature.
+
+### M82-O5 — Regularity, self-contact and topology barriers fail atomically
+
+Approach a tight-curvature cusp where `1 - delta*kappa` reaches `1e-8`, a rational denominator or
+speed loses certification, a parallel or fitted patch self-intersects, contours touch, a loop
+collapses/inverts or fitting/intersection work exhausts. Publish no partial edge/contour, trim,
+split, loop removal, healing or reduced distance. Preserve exact prior feature intent/snapshot,
+accepted native geometry, scene, history, transcript and output allocator; a later valid distance
+recovers normally.
+
+### M82-O6 — Associative current-only lifecycle and provenance
+
+Edit every source family and feature distance/direction through valid, Failed and recovered states.
+Exercise suppression, unsuppression, delete, Undo/Redo, replay, stale exact-CAS and reload. Current
+output has fresh revision-local IDs and stable feature provenance; Failed output is withheld while
+native sketch editing remains available. Selecting any Offset generated edge resolves its feature,
+whereas existing Fillet output retains corner selection. Generated output is not a constraint or
+operation operand.
+
+### M82-O7 — Computed-feature composition and routing boundary
+
+Attempt Offset over active computed-Fillet output and require a typed pre-allocation refusal. Use
+the same shape after explicit M80 native Fillet publication and require normal eligibility. When
+independent Fillet and Curve Offset intents share native sources, preserve Fillet source-
+replacement precedence without Curve Offset claiming source intervals or consuming Fillet output.
+Native-only operands never silently switch to computed output after a solve/topology failure.
+
+### M82-O8 — Strict feature v2 with legacy byte preservation
+
+Round-trip Curve Offset intent through strict private computed-feature v2, unchanged workspace v6
+and `GEOSOLVE_REPRO_V1`. Empty and Fillet-only feature documents emit exact historical v1 bytes.
+Reject unknown fields, invalid finite values, malformed adjacency/topology, stale allocator state
+and serialized generated patches/certificates atomically. Sketch canonical v1-v4 and private
+draft-v5 bytes remain unchanged.
+
+Qualification found three owning defects. M82-F001 requires a new provisional Offset feature
+document to cold-evaluate beside an unrelated Current Fillet, preserving durable feature/history/
+transcript authority. M82-F002 distinguishes a persistently owned opposite-inward tangent endpoint
+from an unowned coincident tangency. M82-F003 requires cancellation or
+`profile_subdivisions` exhaustion to stop before fitting/recursive child work and publish no partial
+chain or output identity. Their exact regressions are recorded in `docs/M82_IMPLEMENTATION.md`.
+
+The broad golden oracle adds exactly one systemic row,
+`feature.curve-offset.authoring.general-open-chain`, and now contains 272 reviewed `PASS` rows. The
+all-family kernel matrix, feature/topology/coordinator lifecycle slices, editor/demo adapters,
+workspace tests, Clippy/Rustdoc, locked WASM check and pinned release assembly pass during
+development qualification. The clean committed-tree gate and immutable served artifact remain the
+final mechanical authority before UAT.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

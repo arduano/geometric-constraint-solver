@@ -2898,6 +2898,60 @@ hosted paths pass HTTP/media/length/encoding/redirect/body checks and `/` equals
 Pages is final public-byte authority. Historical snapshot `/tmp/geosolve-m81-uat.QqItRd` remains
 accepted evidence; Tailscale PID `2850776` is retired. M81 is complete.
 
+## M82 acceptance: certified computed all-family Curve Offset
+
+Status: **active; implementation and development qualification complete, final clean release
+qualification, frozen nomination and human UAT pending**. `docs/M82_GOALS.md` is authoritative for
+scope, ADR 0038 for architecture, `docs/M82_IMPLEMENTATION.md` for actual evidence and
+`docs/M82_UAT.md` for the prepared human scorecard. M82 is not accepted or complete.
+
+- [x] Wholly M80-eligible Line/Circle/CircularArc operands still create the existing native
+  `ProfileOffset` with unchanged equations, persistence, editability and topology-barrier behavior.
+- [x] Mixed/general eligible faces and ordered open chains create one associative computed
+  `CurveOffset` covering every regular built-in planar family without adding solver variables or
+  persistent generated sketch entities.
+- [x] Exact analytic output is retained for Line/Circle/CircularArc. General-family cubic patches
+  have exact endpoints, aligned regular endpoint tangents, position error at most
+  `max(1e-8 * model_scale, 256 * epsilon * coordinate_scale)` and tangent error at most
+  `2e-7` radians.
+- [x] Independent interval evidence proves finite denominator/speed and
+  `1 - delta*kappa > 1e-8`; failure, singularity or work exhaustion returns no partial output and
+  never reports Current.
+- [x] Mathematical parallel and fitted output both remain simple and preserve open/closed state,
+  contour/edge order, winding, holes and strict nesting. Cusp, self-contact, contour touch,
+  collapse, split/merge or any topology change rejects atomically without trimming, healing,
+  loop removal or distance reduction.
+- [x] Face/chain intent retains exact source spans, traversal, direction/side, persistent or
+  intrinsic spline adjacency, tangent/miter cells and normal-translated terminals. Coordinate
+  proximity cannot authenticate connectivity or silently change a branch.
+- [x] Generated IDs are revision-local, never serialized and unavailable as constraint/operation
+  operands. Offset edges select their stable feature; existing Fillet arcs keep corner selection
+  and Fillet source-replacement precedence.
+- [x] Active computed-Fillet output is unavailable as Offset input. Ordinary native line-arc-line
+  geometry published by M80's explicit native Fillet route remains eligible.
+- [x] Source/feature edits, suppression/delete, Undo/Redo, reload, stale-CAS and bounded failure
+  preserve accepted native geometry, feature intent, history/transcript and allocator authority;
+  Failed output is withheld and a later valid state recovers.
+- [x] Computed-feature v2 round-trips Curve Offset strictly while empty/Fillet-only state emits v1
+  byte-for-byte. Workspace v6, reproduction v1, canonical sketch v1-v4 and private draft-v5 remain
+  unchanged; no generated patch or certificate is persistent.
+- [x] Focused owner tests cover every curve family, exact analytic routing, mixed chains,
+  spline-intrinsic adjacency, closed faces/holes, both sides, topology barriers, deterministic
+  exhaustion, lifecycle and compatibility. Native/WASM/editor/demo parity and any reviewed golden
+  addition pass.
+- [x] Development formatting, diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-
+  feature tests, native/WASM/demo parity and the exact reviewed 272-row golden oracle pass.
+- [ ] The complete clean committed-tree release gate, no-rebuild frozen Tailscale verification,
+  prepared human UAT and exact Pages publication pass before closure.
+
+M82-F001 through M82-F003 bind cold provisional feature authority, owned tangent-endpoint
+locality and cooperative adaptive-fitting work respectively. All three corrections are required by
+the checked contracts above; `docs/M82_IMPLEMENTATION.md` records their exact owning regressions.
+
+M82 explicitly excludes topology-changing repair, trimming/splitting, loop removal, partial
+publication, computed-on-computed chaining, Bake/Explode, stable generated-edge names, canonical
+sketch v5, arbitrary third-party curves, surface/B-rep/3D offset and mobile UI.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit
