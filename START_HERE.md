@@ -219,7 +219,7 @@ evidence and are no longer served; this now includes the withdrawn pre-F016 `05b
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
-M81 is the active behavior-preserving core-architecture consolidation. Private hard solve,
+M81 is the completed behavior-preserving core-architecture consolidation. Private hard solve,
 priority and independent-validation responsibilities are separated behind the unchanged core
 solver facade; sketch document queries/Profile Offset validation and compilation, operations
 planning, computed-feature source composition and retained coordinator history have cohesive
@@ -228,8 +228,9 @@ contract. Audit finding M81-F001 makes rejected durable feature mutations alloca
 publishing a staged computed-output allocator only with a successful authenticated transaction.
 Implementation, rotating review, focused subsystem qualification, the complete clean release gate
 and exact frozen Tailscale nomination pass at source `e4eca32`, tree `f3ed1bf`. The supervising
-caller accepts the qualified scorecard and requests closure without a new finding. The immutable
-candidate remains served at `http://100.94.63.83:8080/` until Pages closeout passes.
+caller accepts the qualified scorecard and requests closure without a new finding. Approval
+descendant `b582b82` passes Pages run `32328472125`, artifact `9392295853` and exact public-byte
+verification; the Tailscale listener is retired and M81 is closed.
 
 ## Read first
 
@@ -257,9 +258,9 @@ candidate remains served at `http://100.94.63.83:8080/` until Pages closeout pas
 16. `docs/M80_GOALS.md`, `docs/M80_IMPLEMENTATION.md` and `docs/M80_UAT.md` — implemented native
     topology-preserving Profile Offset plus native line-line Fillet publication contract,
     clean-qualified immutable nomination ledger, and accepted closeout scorecard.
-17. `docs/M81_GOALS.md`, `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md` — active behavior-
-    preserving architecture-consolidation contract, clean-qualified audit/finding ledger and
-    accepted focused scorecard pending Pages closeout.
+17. `docs/M81_GOALS.md`, `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md` — completed behavior-
+    preserving architecture-consolidation contract, clean-qualified audit/finding ledger,
+    accepted focused scorecard and exact public closeout.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -631,10 +632,10 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M80 are complete and M81 is active. Its exact `e4eca32` candidate passes clean qualification,
-immutable Tailscale byte verification and supervising-human acceptance; Pages publication remains
-the final closeout step. Do not route Offset through computed features, admit a topology-changing
-fallback or treat M81's private module moves as new behavior.
+M1-M81 are complete; no M82 scope is active. M81's exact `e4eca32` candidate passes clean
+qualification, immutable Tailscale byte verification and supervising-human acceptance; approval
+descendant `b582b82` passes exact Pages publication. Do not route Offset through computed features,
+admit a topology-changing fallback or treat M81's private module moves as new behavior.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -729,10 +730,10 @@ Durable milestone and cleanup records:
 - `docs/M80_GOALS.md` (implemented native face/open-chain Profile Offset and native Fillet contract)
 - `docs/M80_IMPLEMENTATION.md` (clean-qualified immutable nomination and finding ledger)
 - `docs/M80_UAT.md` (accepted focused scorecard and final public evidence)
-- `docs/M81_GOALS.md` (active behavior-preserving core-architecture consolidation contract)
-- `docs/M81_IMPLEMENTATION.md` (clean-qualified implementation, M81-F001, audit, nomination and
-  acceptance ledger)
-- `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard pending Pages closeout)
+- `docs/M81_GOALS.md` (completed behavior-preserving core-architecture consolidation contract)
+- `docs/M81_IMPLEMENTATION.md` (clean-qualified implementation, M81-F001, audit, nomination,
+  acceptance and publication ledger)
+- `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

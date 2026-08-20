@@ -4275,7 +4275,9 @@ regression rather than a new systemic family/lifecycle dimension, so no golden i
 byte changes. Exact source `e4eca327fc69c92f95b1722142289302ba4f67bc` passes the clean release
 gate and its no-rebuild seven-file snapshot is byte-verified at the retained Tailscale endpoint;
 the supervising caller accepts the qualified behavior-preservation scorecard and requests closure
-without opening a new finding. GitHub Pages publication remains pending.
+without opening a new finding. Approval descendant `b582b82` passes Pages run `32328472125`,
+artifact `9392295853` and exact hosted-byte verification; the Tailscale listener is retired and M81
+is closed.
 
 ## Frozen near-singular fixtures
 

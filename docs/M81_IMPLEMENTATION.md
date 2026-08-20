@@ -2,9 +2,10 @@
 
 # M81 implementation — Core architecture consolidation
 
-Status: **implementation, rotating independent review, final clean qualification, immutable
-Tailscale nomination and supervising-human acceptance complete; GitHub Pages closeout pending**.
-Product behavior remains the M80 baseline except for reproduced transactional defect M81-F001.
+Status: **complete and closed 2026-08-20**. Implementation, rotating independent review, final
+clean qualification, immutable Tailscale nomination, supervising-human acceptance, GitHub Pages
+publication and exact hosted-byte verification pass. Product behavior remains the M80 baseline
+except for reproduced transactional defect M81-F001.
 
 Nominated product source: `e4eca327fc69c92f95b1722142289302ba4f67bc`
 
@@ -282,7 +283,8 @@ Only after that ledger passed, `geosolve-m81-uat.service`, PID `2850776`, began 
 immutable directory at `http://100.94.63.83:8080/`. The same eight checks passed independently;
 final evidence is `/tmp/geosolve-m81-final-verify.Z4aCP5/results.tsv`, with the same result-ledger
 SHA-256 because every asserted path/status/type/length/body hash is identical. The temporary
-listener is retired and the retained `:8080` service remains live for focused human UAT.
+listener was retired and the retained `:8080` service stayed live through focused human UAT and
+until the final Pages proof below passed.
 
 The documentation changes recording this evidence are descendants of `e4eca32`; they do not
 replace the nominated product source/tree or rebuild its artifact.
@@ -292,8 +294,42 @@ replace the nominated product source/tree or rebuild its artifact.
 On 2026-08-20 the supervising caller reviewed the nature of the consolidation, the independent
 findings and M81-F001, explicitly approved the qualified milestone and requested closure. The
 scoped decision accepts M81-U1 through M81-U5 without a new finding; it does not claim a separate
-exhaustive replay of every historical M80 scenario. GitHub Pages publication and exact hosted-byte
-verification are the only remaining closeout work.
+exhaustive replay of every historical M80 scenario.
+
+## Final Pages publication and closeout
+
+Documentation-only approval descendant `b582b82a740d191bd754af2946746c548bf65b40`, tree
+`e06710ef30f34a29a25bf27180d68722ff63fed5`, passes GitHub Pages run `32328472125`. Assembly job
+`96304406437` completed in 5m17s; deploy job `96305307291` completed in 8s for Pages build version
+`b582b82a740d191bd754af2946746c548bf65b40`. Uploaded artifact `9392295853` contains a 7,925,760-
+byte `artifact.tar`, SHA-256
+`8d390be7dc1b24a473ba7d616e02b0b8a1ba02d1fec55eff6ad24f1f5fddd70a`.
+
+The extracted repository-prefixed artifact has exactly seven regular non-symlink files and
+C-locale ordered-manifest aggregate
+`c461835ac327655fd16e9355e0b42c1971e74ed9233fcf500908b8051614de72`:
+
+```text
+7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+93f79eda2bf49cc53495dbafe2b7aabb5f7f9cc3852c9a48af2758694718e953  geosolve-demo-web-54c3dc38dd10d527.js
+f770b6a79fc81e3b09f3a4967c6c52954d68c4f5cc9e0161e878915029bddefc  geosolve-demo-web-54c3dc38dd10d527_bg.wasm
+cbb3da74f14ee492bd73f0ffc8b1ff430b789236ff16c008bd9b51809cad7139  index.html
+957c7809eab90b61a2a72266af8f8660390b8c04fcce7b6c9e06398582097bbf  styles-a41d7984178d1121.css
+```
+
+Proxy-disabled, cache-bypassed identity requests to
+`https://arduano.github.io/geometric-constraint-solver/` for `/` and all seven paths returned HTTP
+200 with zero redirects, no `Location` or `Content-Encoding`, exact expected media type and length,
+and artifact-identical bytes; `/` equals `index.html`. The fetched seven-file aggregate matches
+the artifact. Evidence `/tmp/geosolve-m81-pages-verify.LlrpbW/results.tsv` has SHA-256
+`f54cbd6942b9ca9894089d52bd29ec2ef7290ef2c783e7869ba17bc7e6208306`.
+
+Pages is final public-byte authority. Historical immutable Tailscale snapshot
+`/tmp/geosolve-m81-uat.QqItRd` remains accepted nomination evidence, while
+`geosolve-m81-uat.service` and PID `2850776` are retired. M81 is closed; no M82 scope is activated
+by this closeout.
 
 ## Known limitations and deferred work
 

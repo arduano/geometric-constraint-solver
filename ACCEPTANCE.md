@@ -2820,10 +2820,10 @@ high-valence corners and conversion of existing published computed Fillets.
 
 ## M81 acceptance: core architecture consolidation
 
-Status: **implementation, final clean qualification, frozen Tailscale nomination and
-supervising-human acceptance complete; GitHub Pages closeout pending**. `docs/M81_GOALS.md` is
-authoritative for scope and `docs/M81_IMPLEMENTATION.md` records exact commits, audits and
-M81-F001.
+Status: **complete and closed 2026-08-20**. Implementation, final clean qualification, frozen
+Tailscale nomination, supervising-human acceptance, Pages publication and exact hosted-byte
+verification pass. `docs/M81_GOALS.md` is authoritative for scope and
+`docs/M81_IMPLEMENTATION.md` records exact commits, audits and M81-F001.
 
 - The locked no-dependency Cargo metadata and originally frozen ordered leading public
   declaration/export lines of core, sketch, linkage and editor byte-match the M80 activation
@@ -2886,8 +2886,17 @@ ordered-manifest aggregate
 `df24deb988a31a373b3f973432081078c15e157382134f62c99aaabe96b8e49e`. Temporary `:18080` and
 retained `http://100.94.63.83:8080/` verification both pass all eight byte/media/length/HTTP checks.
 On 2026-08-20 the supervising caller reviewed the consolidation/finding summary, accepted M81-U1
-through M81-U5 as a scoped milestone decision and requested closure. The retained service remains
-live until the pending Pages publication and hosted-byte verification pass.
+through M81-U5 as a scoped milestone decision and requested closure. The retained service stayed
+live until the final Pages publication and hosted-byte verification below passed.
+
+Final public result (2026-08-20): documentation-only approval descendant
+`b582b82a740d191bd754af2946746c548bf65b40`, tree
+`e06710ef30f34a29a25bf27180d68722ff63fed5`, passes Pages run `32328472125`, assembly job
+`96304406437`, deploy job `96305307291` and artifact `9392295853`. The exact seven-file artifact
+aggregate is `c461835ac327655fd16e9355e0b42c1971e74ed9233fcf500908b8051614de72`; `/` plus all seven
+hosted paths pass HTTP/media/length/encoding/redirect/body checks and `/` equals `index.html`.
+Pages is final public-byte authority. Historical snapshot `/tmp/geosolve-m81-uat.QqItRd` remains
+accepted evidence; Tailscale PID `2850776` is retired. M81 is complete.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

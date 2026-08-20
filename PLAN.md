@@ -80,8 +80,8 @@ native line-line Fillet publication amendment and `M80-F016` arc-angle propagati
 clean release qualification and immutable served nomination at exact source `29d8e41`, tree
 `44ecb95`. Supervising-human UAT and exact GitHub Pages publication pass.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
-but those candidates are withdrawn from acceptance and are no longer served. M1–M80 are complete;
-M81 is the active behavior-preserving core-architecture consolidation milestone.
+but those candidates are withdrawn from acceptance and are no longer served. M1–M81 are complete;
+no M82 scope is active. M81 is the closed behavior-preserving core-architecture consolidation.
 M76's
 implementation,
 feature refinements,
@@ -5495,8 +5495,9 @@ dependent/high-valence and existing-feature conversion paths remain deferred.
 
 ### M81: core architecture consolidation
 
-Status: **implementation, final clean qualification, frozen Tailscale nomination and
-supervising-human acceptance complete; GitHub Pages closeout pending**.
+Status: **complete and closed 2026-08-20**. Implementation, final clean qualification, frozen
+Tailscale nomination, supervising-human acceptance, Pages publication and hosted-byte verification
+pass.
 `docs/M81_GOALS.md` owns the behavior-preserving contract,
 `docs/M81_IMPLEMENTATION.md` owns the implementation/finding/audit ledger and
 `docs/M81_UAT.md` owns the compact candidate scorecard.
@@ -5532,7 +5533,7 @@ supervising-human acceptance complete; GitHub Pages closeout pending**.
   endpoint and nominate that source/tree/artifact for focused M81 UAT.
 - [x] Receive explicit supervising-human acceptance of the bound source/tree/artifact without a
   new M81 finding.
-- [ ] Publish the documentation-only approval descendant through GitHub Pages, exact-verify the
+- [x] Publish the documentation-only approval descendant through GitHub Pages, exact-verify the
   hosted bytes, retire the Tailscale listener and close M81 before starting M82.
 
 Qualification record (2026-08-20): exact source
@@ -5542,9 +5543,20 @@ Qualification record (2026-08-20): exact source
 supplemental all-nine-root selection byte-match activation. The exact no-rebuild seven-file
 snapshot `/tmp/geosolve-m81-uat.QqItRd`, ordered-manifest aggregate
 `df24deb988a31a373b3f973432081078c15e157382134f62c99aaabe96b8e49e`, passes temporary and retained
-Tailscale byte verification and remains served at `http://100.94.63.83:8080/`. On 2026-08-20 the
-supervising caller accepted the qualified candidate and requested closure without opening a new
-finding. Pages publication remains pending.
+Tailscale byte verification. On 2026-08-20 the supervising caller accepted the qualified candidate
+and requested closure without opening a new finding. The historical listener was retained until
+the final Pages proof below passed.
+
+Final publication and closeout (2026-08-20): documentation-only approval descendant
+`b582b82a740d191bd754af2946746c548bf65b40`, tree
+`e06710ef30f34a29a25bf27180d68722ff63fed5`, passes Pages run `32328472125`, assembly job
+`96304406437`, deploy job `96305307291` and artifact `9392295853`. The 7,925,760-byte artifact tar
+has SHA-256 `8d390be7dc1b24a473ba7d616e02b0b8a1ba02d1fec55eff6ad24f1f5fddd70a`; its exact seven-file
+aggregate is `c461835ac327655fd16e9355e0b42c1971e74ed9233fcf500908b8051614de72`.
+Root plus all seven hosted paths exact-match with HTTP 200, correct media/length, no redirect or
+content encoding and root equal to `index.html`. Historical snapshot
+`/tmp/geosolve-m81-uat.QqItRd` remains accepted evidence; PID `2850776` and the Tailscale listener
+are retired. M81 is closed and this closeout starts no M82 work.
 
 Gate: the package graph, selected crate-root public declaration/export lines, canonical
 persistence and reviewed golden authority remain byte-identical; every accepted state still passes
