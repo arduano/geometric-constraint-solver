@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Presentation-independent operand collection for native profile offsets.
+//! Presentation-independent operand collection for native and computed offsets.
 //!
 //! The state owns no offset equations or browser event policy. It consumes one complete,
 //! accepted-input-stamped topology index and resolves hover and pointer-down through the same
@@ -90,6 +90,17 @@ pub enum OffsetAuthoringOperand {
     },
 }
 
+/// Deterministic persistence/evaluation route selected from the complete operand.
+///
+/// A route is never selected from a solve or evaluation outcome: wholly M80-eligible
+/// operands remain native, while an otherwise computed-eligible mixed/general operand
+/// uses the one-way computed feature path.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OffsetAuthoringRoute {
+    NativeProfile,
+    ComputedCurve,
+}
+
 impl OffsetAuthoringOperand {
     #[must_use]
     pub const fn kind_label(&self) -> &'static str {
@@ -177,12 +188,14 @@ pub struct OffsetAuthoringCandidate {
     pub input: PreparedSketchInput,
     pub operand: OffsetAuthoringOperand,
     pub distance: f64,
+    pub route: OffsetAuthoringRoute,
 }
 
 /// Separate reusable collector for native topology-preserving Offset.
 #[derive(Clone, Debug, Default)]
 pub struct OffsetAuthoringState {
     index: Option<Arc<OffsetOperandIndex>>,
+    excluded_computed_fillet_sources: BTreeSet<geosolve_sketch::CurveSpan>,
     operand: Option<OffsetAuthoringOperand>,
     distance: Option<f64>,
     remembered_distance: Option<f64>,
@@ -194,6 +207,7 @@ pub struct OffsetAuthoringState {
 impl PartialEq for OffsetAuthoringState {
     fn eq(&self, other: &Self) -> bool {
         self.index.as_deref() == other.index.as_deref()
+            && self.excluded_computed_fillet_sources == other.excluded_computed_fillet_sources
             && self.operand == other.operand
             && self.distance == other.distance
             && self.remembered_distance == other.remembered_distance
@@ -211,7 +225,20 @@ impl OffsetAuthoringState {
         index: Arc<OffsetOperandIndex>,
         model_scale: f64,
     ) -> OffsetAuthoringOutcome {
+        self.activate_with_excluded_computed_fillet_sources(index, model_scale, BTreeSet::new())
+    }
+
+    /// Enters Offset while excluding native sources currently replaced by active computed Fillet
+    /// output. Native-published Fillets remain ordinary topology and require no exclusion.
+    #[must_use]
+    pub fn activate_with_excluded_computed_fillet_sources(
+        &mut self,
+        index: Arc<OffsetOperandIndex>,
+        model_scale: f64,
+        excluded_sources: BTreeSet<geosolve_sketch::CurveSpan>,
+    ) -> OffsetAuthoringOutcome {
         self.index = Some(index);
+        self.excluded_computed_fillet_sources = excluded_sources;
         self.operand = None;
         self.pending_direction_flip = false;
         self.hover = None;
@@ -230,6 +257,7 @@ impl OffsetAuthoringState {
         if self.index.take().is_none() {
             return OffsetAuthoringOutcome::Inactive;
         }
+        self.excluded_computed_fillet_sources.clear();
         self.operand = None;
         self.pending_direction_flip = false;
         self.hover = None;
@@ -489,10 +517,12 @@ impl OffsetAuthoringState {
         let index = self.index.as_ref()?;
         let operand = self.operand.clone()?;
         let distance = self.distance.filter(|value| finite_positive(*value))?;
+        let route = offset_route(index, &operand)?;
         Some(OffsetAuthoringCandidate {
             input: index.input(),
             operand,
             distance,
+            route,
         })
     }
 
@@ -614,10 +644,25 @@ impl OffsetAuthoringState {
                 "The selected face no longer belongs to this Offset snapshot",
             );
         };
-        if !face.eligibility.is_eligible() {
+        if key
+            .outer
+            .spans
+            .iter()
+            .chain(key.holes.iter().flat_map(|hole| &hole.spans))
+            .any(|directed| {
+                self.excluded_computed_fillet_sources
+                    .contains(&directed.span)
+            })
+        {
             return self.warning(
                 OffsetAuthoringWarningKind::UnsupportedOperand,
-                "This face contains geometry that cannot be offset exactly",
+                "A source boundary is currently replaced by computed Fillet output",
+            );
+        }
+        if !face.computed_eligibility.is_eligible() {
+            return self.warning(
+                OffsetAuthoringWarningKind::UnsupportedOperand,
+                "This face contains geometry that cannot participate in Offset",
             );
         }
         let direction = if std::mem::take(&mut self.pending_direction_flip) {
@@ -644,10 +689,16 @@ impl OffsetAuthoringState {
                 "The selected span no longer belongs to this Offset snapshot",
             );
         };
-        if !candidate.eligibility.is_eligible() {
+        if self.excluded_computed_fillet_sources.contains(&span) {
             return self.warning(
                 OffsetAuthoringWarningKind::UnsupportedOperand,
-                "This curve cannot participate in an exact native offset",
+                "This source is currently replaced by computed Fillet output",
+            );
+        }
+        if !candidate.computed_eligibility.is_eligible() {
+            return self.warning(
+                OffsetAuthoringWarningKind::UnsupportedOperand,
+                "This curve cannot participate in Offset",
             );
         }
         if candidate.periodic {
@@ -834,6 +885,39 @@ impl OffsetAuthoringState {
             stage: self.guidance().stage,
             message: message.into(),
         })
+    }
+}
+
+fn offset_route(
+    index: &OffsetOperandIndex,
+    operand: &OffsetAuthoringOperand,
+) -> Option<OffsetAuthoringRoute> {
+    match operand {
+        OffsetAuthoringOperand::Face { key, .. } => {
+            let face = index.face(key)?;
+            if face.eligibility.is_eligible() {
+                Some(OffsetAuthoringRoute::NativeProfile)
+            } else if face.computed_eligibility.is_eligible() {
+                Some(OffsetAuthoringRoute::ComputedCurve)
+            } else {
+                None
+            }
+        }
+        OffsetAuthoringOperand::OpenChain { spans, .. } => {
+            let mut wholly_native = true;
+            for directed in spans {
+                let candidate = index.span(directed.span)?;
+                if !candidate.computed_eligibility.is_eligible() {
+                    return None;
+                }
+                wholly_native &= candidate.eligibility.is_eligible();
+            }
+            Some(if wholly_native {
+                OffsetAuthoringRoute::NativeProfile
+            } else {
+                OffsetAuthoringRoute::ComputedCurve
+            })
+        }
     }
 }
 
@@ -1504,7 +1588,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_native_hover_is_typed_unavailable_and_pick_uses_the_same_target() {
+    fn general_curve_hover_and_pick_share_the_computed_route() {
         let mut document = SketchDocument::new(10.0).expect("document");
         let controls = [
             document.add_point("q0", [-2.0, 0.0]).unwrap(),
@@ -1530,10 +1614,7 @@ mod tests {
             ),
             OffsetAuthoringOutcome::HoverChanged(Some(OffsetAuthoringHover {
                 target: OffsetAuthoringTarget::Span(target),
-                availability: OffsetAuthoringTargetAvailability::Unavailable {
-                    kind: OffsetAuthoringWarningKind::UnsupportedOperand,
-                    ..
-                },
+                availability: OffsetAuthoringTargetAvailability::Available,
             })) if target == span
         ));
         assert!(matches!(
@@ -1543,16 +1624,22 @@ mod tests {
                 PickTolerance::default(),
                 GeometryInteractionPolicy::default(),
             ),
-            OffsetAuthoringOutcome::Warning(OffsetAuthoringWarning {
-                kind: OffsetAuthoringWarningKind::UnsupportedOperand,
+            OffsetAuthoringOutcome::OperandChanged {
+                operand: Some(OffsetAuthoringOperand::OpenChain { .. }),
                 ..
-            })
+            }
         ));
         assert_eq!(
             state.hover_target(),
             Some(&OffsetAuthoringTarget::Span(span))
         );
-        assert!(state.operand().is_none());
+        assert!(matches!(
+            state.candidate(),
+            Some(OffsetAuthoringCandidate {
+                route: OffsetAuthoringRoute::ComputedCurve,
+                ..
+            })
+        ));
     }
 
     #[test]

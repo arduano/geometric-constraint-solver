@@ -386,23 +386,28 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    let related = scene
-        .map(|scene| {
-            scene
-                .annotations
-                .iter()
-                .filter(|annotation| {
-                    selection.contains(&annotation.item)
-                        || matches!(
-                            hover.target,
-                            Some(EditorHoverTarget::Annotation(occurrence))
-                                if occurrence.item == annotation.item
-                        )
-                })
-                .flat_map(|annotation| annotation.operands.iter().copied())
-                .collect::<BTreeSet<_>>()
-        })
-        .unwrap_or_default();
+    let related = scene.map_or_else(BTreeSet::new, |scene| {
+        let mut related = scene
+            .annotations
+            .iter()
+            .filter(|annotation| {
+                selection.contains(&annotation.item)
+                    || matches!(
+                        hover.target,
+                        Some(EditorHoverTarget::Annotation(occurrence))
+                            if occurrence.item == annotation.item
+                    )
+            })
+            .flat_map(|annotation| annotation.operands.iter().copied())
+            .collect::<BTreeSet<_>>();
+        for curve in &scene.computed_offset_curves {
+            let owner = SelectionItem::Feature(curve.owner);
+            if selection.contains(&owner) || geometry_is_hovered(hover, owner) {
+                related.insert(SelectionItem::Curve(curve.source.span));
+            }
+        }
+        related
+    });
     let failed_feature_sources = failed_computed_sources(computed_problems);
     if let Some(accepted) = accepted {
         let identity = accepted.identity();
@@ -538,6 +543,7 @@ pub(crate) fn svg_markup_with_computed_context_action_stamp_display_and_provisio
             &mut output,
             scene,
             selection,
+            provisional,
             hover,
             active_fillet_preview,
             fillet_action_stamp,
@@ -1253,10 +1259,16 @@ fn computed_problem_marker(
     );
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "one equation-free renderer keeps computed Fillet and Curve Offset scene authority explicit"
+)]
 fn render_computed_geometry(
     output: &mut String,
     scene: &EditorScene,
     selection: &[SelectionItem],
+    provisional: &[SelectionItem],
     hover: EditorHoverState,
     active_fillet_preview: Option<&SceneFilletActionTarget>,
     fillet_action_stamp: Option<u64>,
@@ -1266,6 +1278,10 @@ fn render_computed_geometry(
         .computed_curves
         .first()
         .map_or(0, |curve| curve.edge.evaluation.raw());
+    let evaluation = scene
+        .computed_offset_curves
+        .first()
+        .map_or(evaluation, |curve| curve.edge.evaluation.raw());
     let _ = write!(
         output,
         "<g class=\"wb-computed-geometry\" data-computed-evaluation=\"{evaluation}\">"
@@ -1328,6 +1344,80 @@ fn render_computed_geometry(
             },
             geometry_role_key(curve.role),
             interactive,
+            path,
+        );
+        if interactive {
+            let _ = write!(output, "<path class=\"wb-computed-hit\" d=\"{path}\"/>");
+        }
+        output.push_str("</g>");
+    }
+    for curve in scene
+        .computed_offset_curves
+        .iter()
+        .filter(|curve| curve.is_visible(geometry_policy))
+    {
+        let item = SelectionItem::Feature(curve.owner);
+        let selected = selection.contains(&item);
+        let provisional = provisional.contains(&item);
+        let hovered = geometry_is_hovered(hover, item);
+        let interactive = curve.is_interactive(geometry_policy) && !provisional;
+        let path = polyline_path(&curve.screen_polyline);
+        let _ = write!(
+            output,
+            concat!(
+                "<g class=\"wb-computed-item wb-computed-offset-item{}{}{}{}\" {}",
+                "data-feature-id=\"{}\" data-computed-evaluation=\"{}\" ",
+                "data-computed-edge=\"{}\" data-computed-source=\"{}:{}\" data-role=\"{}\" ",
+                "data-interactive=\"{}\"{}>",
+                "<path class=\"wb-curve wb-computed-offset{}{}\" data-role=\"{}\" ",
+                "data-interactive=\"{}\"{} d=\"{}\"/>"
+            ),
+            if selected { " selected" } else { "" },
+            if hovered { " geometry-hovered" } else { "" },
+            if provisional {
+                " offset-provisional"
+            } else {
+                ""
+            },
+            if interactive {
+                ""
+            } else {
+                " interaction-disabled"
+            },
+            if interactive {
+                "data-editor-item=\"feature\" "
+            } else {
+                ""
+            },
+            curve.owner,
+            curve.edge.evaluation.raw(),
+            curve.edge.ordinal,
+            curve.source.span.curve,
+            curve.source.span.segment,
+            geometry_role_key(curve.role),
+            interactive,
+            if provisional {
+                " data-provisional=\"true\" role=\"img\" aria-label=\"Provisional computed Curve Offset edge\""
+            } else {
+                ""
+            },
+            if curve.role == GeometryRole::Construction {
+                " construction"
+            } else {
+                ""
+            },
+            if provisional {
+                " offset-provisional"
+            } else {
+                ""
+            },
+            geometry_role_key(curve.role),
+            interactive,
+            if provisional {
+                " data-provisional=\"true\""
+            } else {
+                ""
+            },
             path,
         );
         if interactive {
@@ -3106,7 +3196,8 @@ mod tests {
         OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal, OffsetDirectedSpan,
         OffsetEndpointRef, OffsetEndpointRole, OffsetTraversal, RetainedEditorCoordinator,
         SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationLabelBounds,
-        SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint, SelectionItem, Viewport,
+        SceneAnnotationOccurrence, SceneComputedOffsetCurve, ScenePointRoleIncidence, ScreenPoint,
+        SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -3122,7 +3213,8 @@ mod tests {
         SketchDesignIdentity, SketchDocument,
     };
     use geosolve_sketch_features::{
-        ComputedFeatureCornerId, ComputedFeatureId, NativeCurveSpanSource,
+        ComputedEdgeId, ComputedEvaluationRevision, ComputedFeatureCornerId, ComputedFeatureId,
+        NativeCurveSpanSource,
     };
 
     use super::{
@@ -3164,6 +3256,20 @@ mod tests {
                 expected[axis]
             );
         }
+    }
+
+    fn native_curve_element(markup: &str, span: CurveSpan) -> &str {
+        let identity = format!("data-persistent-id=\"{}\"", span.curve);
+        let identity_start = markup.find(&identity).expect("native curve identity");
+        let start = markup[..identity_start]
+            .rfind("<path class=\"wb-curve")
+            .expect("native curve element start");
+        let end = identity_start
+            + markup[identity_start..]
+                .find("/>")
+                .expect("native curve element end")
+            + 2;
+        &markup[start..end]
     }
 
     fn assert_offscreen_datum_clipping(session: &RetainedSketchDocumentSession) {
@@ -4429,6 +4535,278 @@ mod tests {
         assert!(hovered_annotation.contains(" hovered"));
         assert!(!hovered_annotation.contains("data-editor-item"));
         assert!(!hovered_annotation.contains("data-persistent-id"));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one SVG contract binds multi-edge ownership, related native sources, preview interactivity and visibility scope"
+    )]
+    fn computed_curve_offset_edges_use_feature_selection_and_preview_stays_noninteractive() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let start = document.add_point("start", [-2.0, 0.0]).expect("start");
+        let end = document.add_point("end", [2.0, 0.0]).expect("end");
+        let source = CurveSpan::line(
+            document
+                .add_curve(
+                    "source",
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("source line"),
+        );
+        let second_start = document
+            .add_point("second start", [-2.0, 3.0])
+            .expect("second start");
+        let second_end = document
+            .add_point("second end", [2.0, 3.0])
+            .expect("second end");
+        let second_source = CurveSpan::line(
+            document
+                .add_curve(
+                    "second source",
+                    CurveDefinition::Line {
+                        start: second_start,
+                        end: second_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("second source line"),
+        );
+        let unrelated_start = document
+            .add_point("unrelated start", [-2.0, -3.0])
+            .expect("unrelated start");
+        let unrelated_end = document
+            .add_point("unrelated end", [2.0, -3.0])
+            .expect("unrelated end");
+        let unrelated_source = CurveSpan::line(
+            document
+                .add_curve(
+                    "unrelated source",
+                    CurveDefinition::Line {
+                        start: unrelated_start,
+                        end: unrelated_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("unrelated source line"),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted source");
+        let viewport = viewport();
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.8,
+        )
+        .expect("scene");
+        let owner = ComputedFeatureId::from_raw(17);
+        let unrelated_owner = ComputedFeatureId::from_raw(18);
+        let item = SelectionItem::Feature(owner);
+        scene.computed_offset_curves.extend([
+            SceneComputedOffsetCurve {
+                edge: ComputedEdgeId {
+                    evaluation: ComputedEvaluationRevision::from_raw(23),
+                    ordinal: 4,
+                },
+                owner,
+                source: NativeCurveSpanSource { span: source },
+                role: GeometryRole::Profile,
+                screen_polyline: [[-2.0, 1.0], [0.0, 1.2], [2.0, 1.0]]
+                    .map(|point| viewport.model_to_screen(point))
+                    .to_vec(),
+            },
+            SceneComputedOffsetCurve {
+                edge: ComputedEdgeId {
+                    evaluation: ComputedEvaluationRevision::from_raw(23),
+                    ordinal: 5,
+                },
+                owner,
+                source: NativeCurveSpanSource { span: source },
+                role: GeometryRole::Profile,
+                screen_polyline: [[-2.0, 1.1], [2.0, 1.1]]
+                    .map(|point| viewport.model_to_screen(point))
+                    .to_vec(),
+            },
+            SceneComputedOffsetCurve {
+                edge: ComputedEdgeId {
+                    evaluation: ComputedEvaluationRevision::from_raw(23),
+                    ordinal: 6,
+                },
+                owner,
+                source: NativeCurveSpanSource {
+                    span: second_source,
+                },
+                role: GeometryRole::Profile,
+                screen_polyline: [[-2.0, 4.0], [2.0, 4.0]]
+                    .map(|point| viewport.model_to_screen(point))
+                    .to_vec(),
+            },
+            SceneComputedOffsetCurve {
+                edge: ComputedEdgeId {
+                    evaluation: ComputedEvaluationRevision::from_raw(23),
+                    ordinal: 7,
+                },
+                owner: unrelated_owner,
+                source: NativeCurveSpanSource {
+                    span: unrelated_source,
+                },
+                role: GeometryRole::Profile,
+                screen_polyline: [[-2.0, -2.0], [2.0, -2.0]]
+                    .map(|point| viewport.model_to_screen(point))
+                    .to_vec(),
+            },
+        ]);
+        assert!(
+            scene
+                .annotations
+                .iter()
+                .all(|annotation| annotation.item != item),
+            "a generated Offset edge must not manufacture an ordinary sketch annotation owner",
+        );
+
+        let current = svg_markup_with_computed_context_action_stamp_display_and_provisional(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[item],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions::default(),
+            None,
+            viewport,
+        );
+        let offset_item = |markup: &str| {
+            let identity = format!("data-feature-id=\"{owner}\"");
+            let identity_start = markup.find(&identity).expect("computed Offset owner");
+            let start = markup[..identity_start]
+                .rfind("<g class=\"wb-computed-item")
+                .expect("computed Offset group");
+            let end = identity_start
+                + markup[identity_start..]
+                    .find("</g>")
+                    .expect("computed Offset group end")
+                + "</g>".len();
+            markup[start..end].to_owned()
+        };
+        let current_item = offset_item(&current);
+        assert!(current_item.contains("wb-computed-offset-item selected"));
+        assert!(!current_item.contains("geometry-hovered"));
+        assert!(current_item.contains("data-editor-item=\"feature\""));
+        assert!(current_item.contains("data-computed-source="));
+        assert!(current_item.contains("class=\"wb-curve wb-computed-offset\""));
+        assert!(current_item.contains("class=\"wb-computed-hit\""));
+        assert!(!current_item.contains("data-feature-corner-id"));
+        assert!(!current_item.contains("data-provisional"));
+        assert!(native_curve_element(&current, source).contains(" related"));
+        assert!(native_curve_element(&current, second_source).contains(" related"));
+        assert!(!native_curve_element(&current, unrelated_source).contains(" related"));
+        assert_eq!(
+            current
+                .matches(&format!("data-feature-id=\"{owner}\""))
+                .count(),
+            3,
+            "every generated edge keeps the same stable multi-source feature owner",
+        );
+
+        let hover_only = svg_markup_with_computed_context_action_stamp_display_and_provisional(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            &[],
+            &[],
+            EditorHoverState {
+                target: Some(EditorHoverTarget::Geometry(item)),
+                context_owner: None,
+            },
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions::default(),
+            None,
+            viewport,
+        );
+        let hover_item = offset_item(&hover_only);
+        assert!(hover_item.contains("geometry-hovered"));
+        assert!(!hover_item.contains(" selected"));
+        assert!(native_curve_element(&hover_only, source).contains(" related"));
+        assert!(native_curve_element(&hover_only, second_source).contains(" related"));
+        assert!(!native_curve_element(&hover_only, unrelated_source).contains(" related"));
+
+        let preview = svg_markup_with_computed_context_action_stamp_display_and_provisional(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            &[],
+            &[item],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            CanvasDisplayOptions::default(),
+            None,
+            viewport,
+        );
+        let preview_item = offset_item(&preview);
+        assert!(preview_item.contains("offset-provisional interaction-disabled"));
+        assert!(preview_item.contains("data-provisional=\"true\""));
+        assert!(preview_item.contains("role=\"img\""));
+        assert!(!preview_item.contains("data-editor-item"));
+        assert!(!preview_item.contains("wb-computed-hit"));
+
+        scene.computed_offset_curves[0].role = GeometryRole::Construction;
+        let scope_excluded = svg_markup_with_computed_context_action_stamp_display_and_provisional(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy {
+                scope: geosolve_constraint_editor::GeometryPickScope::Profile,
+                ..GeometryInteractionPolicy::default()
+            },
+            CanvasDisplayOptions::default(),
+            None,
+            viewport,
+        );
+        let scope_excluded_item = offset_item(&scope_excluded);
+        assert!(scope_excluded_item.contains("wb-computed-offset construction"));
+        assert!(scope_excluded_item.contains("interaction-disabled"));
+        assert!(!scope_excluded_item.contains("data-editor-item"));
+        assert!(!scope_excluded_item.contains("wb-computed-hit"));
     }
 
     #[test]

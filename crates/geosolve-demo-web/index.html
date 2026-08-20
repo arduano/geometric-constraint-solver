@@ -270,11 +270,22 @@
           <button id="wb-apply-angle-orientation" type="button" data-wb-action="angle-orientation" hidden>Apply angle orientation</button>
         </section>
         <section id="wb-feature-editor" class="wb-inspector-section wb-feature-editor" hidden>
-          <span class="wb-field-label">Computed Fillet set</span>
-          <label>Shared radius<input id="wb-feature-radius" type="number" min="0" step="any" /></label>
-          <button type="button" data-wb-action="feature-radius">Update shared radius</button>
+          <span id="wb-feature-kind" class="wb-field-label">Computed feature</span>
+          <div id="wb-feature-radius-controls">
+            <label>Shared radius<input id="wb-feature-radius" type="number" min="0" step="any" /></label>
+            <button type="button" data-wb-action="feature-radius">Update shared radius</button>
+          </div>
+          <div id="wb-feature-offset-controls" class="wb-feature-controls" hidden>
+            <div class="wb-offset-status"><span>Operand</span><strong id="wb-feature-offset-operand">—</strong></div>
+            <label>Offset distance<input id="wb-feature-offset-distance" type="number" min="0" step="any" /></label>
+            <div class="wb-offset-direction"><span>Direction</span><strong id="wb-feature-offset-direction">—</strong></div>
+            <div class="wb-option-actions">
+              <button id="wb-feature-offset-distance-apply" type="button" data-wb-action="feature-offset-distance">Update distance</button>
+              <button id="wb-feature-offset-flip" type="button" data-wb-action="feature-offset-flip">Flip direction</button>
+            </div>
+          </div>
           <button id="wb-feature-suppression" type="button" data-wb-action="feature-suppression">Suppress feature</button>
-          <p>Generated arcs remain outside the sketch constraint graph. Drag an arc to resize the complete set.</p>
+          <p id="wb-feature-detail">Generated geometry remains outside the sketch constraint graph.</p>
         </section>
         <section id="wb-fillet-actions-panel" class="wb-inspector-section wb-fillet-actions-panel" aria-label="Fillet branch actions" hidden>
           <span class="wb-field-label">Fillet branch actions</span>

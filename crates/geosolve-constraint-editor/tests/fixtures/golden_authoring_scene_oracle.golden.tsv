@@ -260,6 +260,7 @@ dimension.segment-length.seed-04	dimension.segment-length	PASS	-	-	input-6eacb4a
 dimension.segment-length.seed-05	dimension.segment-length	PASS	-	-	input-d4296f3ecc8c7d85
 dimension.segment-length.seed-06	dimension.segment-length	PASS	-	-	input-ed6ef2f557c9188c
 dimension.segment-length.seed-07	dimension.segment-length	PASS	-	-	input-8b422760a184f6dd
+feature.curve-offset.authoring.general-open-chain	feature.curve-offset	PASS	-	-	input-86b0e748c84c8899
 feature.fillet.authoring.coincident-closure.curve-pair	feature.fillet	PASS	-	-	input-d04adbf29c08b9bd
 feature.fillet.authoring.coincident-closure.point	feature.fillet	PASS	-	-	input-4ba571059db7afff
 feature.fillet.authoring.native-profile.line-line	feature.fillet	PASS	-	-	input-cca82b1b78cd75c1

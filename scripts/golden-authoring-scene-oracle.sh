@@ -89,6 +89,10 @@ fillet_cases=(
   feature.fillet.evaluation.line-circle.source-rotation.retained-start
 )
 
+curve_offset_cases=(
+  feature.curve-offset.authoring.general-open-chain
+)
+
 scene_cases=(
   scene.current-computed.empty
   scene.current-native.withheld
@@ -151,6 +155,14 @@ if ! timeout -k 5s 300s cargo test --locked -p geosolve-constraint-editor \
   cat "$preflight_log" >&2
   exit 1
 fi
+if ! timeout -k 5s 300s cargo test --locked -p geosolve-constraint-editor \
+  --test golden_curve_offset_oracle \
+  golden_curve_offset_oracle_inventory_and_tsv_schema_are_exhaustive \
+  -- --exact >"$preflight_log" 2>&1; then
+  printf '%s\n' 'Curve Offset oracle inventory/compile preflight failed' >&2
+  cat "$preflight_log" >&2
+  exit 1
+fi
 if ! timeout -k 5s 300s cargo test --locked -p geosolve-demo-web --lib --no-run \
   >"$preflight_log" 2>&1; then
   printf '%s\n' 'scene-oracle compile preflight failed' >&2
@@ -202,6 +214,26 @@ for case_id in "${fillet_cases[@]}"; do
   classify_failed_process "$case_id" feature.fillet "$exit_code" "$log"
 done
 
+for case_id in "${curve_offset_cases[@]}"; do
+  stem="${case_id//./_}"
+  output="$scratch/$stem.tsv"
+  log="$scratch/$stem.log"
+  set +e
+  timeout -k 5s "${timeout_seconds}s" env \
+    GEOSOLVE_GOLDEN_ORACLE_CASE="$case_id" \
+    GEOSOLVE_GOLDEN_ORACLE_OUTPUT="$output" \
+    cargo test --locked -p geosolve-constraint-editor \
+      --test golden_curve_offset_oracle golden_curve_offset_oracle_survey -- --exact --nocapture \
+      >"$log" 2>&1
+  exit_code=$?
+  set -e
+  if [[ "$exit_code" -eq 0 ]] && \
+    append_complete_output "$output" 1 feature.curve-offset "$case_id"; then
+    continue
+  fi
+  classify_failed_process "$case_id" feature.curve-offset "$exit_code" "$log"
+done
+
 for case_id in "${scene_cases[@]}"; do
   stem="${case_id//./_}"
   scene_output="$scratch/$stem.tsv"
@@ -237,7 +269,9 @@ if ! awk -F '\t' '
   seen[$1]++ > 0 { exit 1 }
   $1 ~ /^scene\./ && $2 != "scene-authority" { exit 1 }
   $1 ~ /^feature\.fillet\./ && $2 != "feature.fillet" { exit 1 }
-  $1 !~ /^scene\./ && $1 !~ /^feature\.fillet\./ {
+  $1 ~ /^feature\.curve-offset\./ && $2 != "feature.curve-offset" { exit 1 }
+  $1 !~ /^scene\./ && $1 !~ /^feature\.fillet\./ &&
+    $1 !~ /^feature\.curve-offset\./ {
     expected_family = $1
     sub(/\.(deterministic|seed-[0-9][0-9])$/, "", expected_family)
     if ($2 != expected_family) exit 1
@@ -259,12 +293,15 @@ actual_inventory="$scratch/actual-inventory.tsv"
   for case_id in "${fillet_cases[@]}"; do
     printf '%s\tfeature.fillet\n' "$case_id"
   done
+  for case_id in "${curve_offset_cases[@]}"; do
+    printf '%s\tfeature.curve-offset\n' "$case_id"
+  done
   for case_id in "${scene_cases[@]}"; do
     printf '%s\tscene-authority\n' "$case_id"
   done
 } | LC_ALL=C sort >"$expected_inventory"
 tail -n +2 "$actual" | cut -f 1,2 | LC_ALL=C sort >"$actual_inventory"
-expected_case_count=$((${#families[@]} * ${#authoring_cases[@]} + ${#fillet_cases[@]} + ${#scene_cases[@]}))
+expected_case_count=$((${#families[@]} * ${#authoring_cases[@]} + ${#fillet_cases[@]} + ${#curve_offset_cases[@]} + ${#scene_cases[@]}))
 if [[ "$(wc -l <"$actual_inventory")" -ne "$expected_case_count" ]] || \
   ! cmp -s "$expected_inventory" "$actual_inventory"; then
   printf 'oracle did not classify the exact %s-case inventory\n' "$expected_case_count" >&2

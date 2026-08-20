@@ -4280,7 +4280,10 @@ mod tests {
             .feature(fillet)
             .expect("restored Fillet set");
         let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet_set) =
-            &feature.definition;
+            &feature.definition
+        else {
+            panic!("expected restored FilletSet feature");
+        };
         assert!((fillet_set.radius - 0.96).abs() <= 1.0e-12);
         assert_eq!(
             restored
