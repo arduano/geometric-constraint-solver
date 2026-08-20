@@ -4247,6 +4247,30 @@ including Offset findings `M66-F001`/`M66-F006`, remains at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). They remain compatibility and
 diagnostic history, not active ADR 0031 qualification scenarios.
 
+## M81 architecture-preservation scenarios
+
+M81 adds no product scenario or golden row. It qualifies the existing corpus through the same
+public boundaries while private implementation ownership changes:
+
+- core dense/sparse, bounds, priority, continuation, cache, rank, conflict/redundancy, diagnostics,
+  audit and cancellation scenarios preserve status, source/trace ordering and independent returned-
+  row validation;
+- sketch canonical persistence, curve-control/conic queries and all Profile Offset equation,
+  audit, topology, native-Fillet and source/target-edit scenarios preserve exact behavior;
+- feature Fillet composition scenarios preserve endpoint-claim conflicts, opposite-end source
+  trims, discarded Construction fragments, branch continuation and revision-local output identity;
+- editor history/restore, computed authoring/drag/action, native Fillet, Profile Offset, Undo/Redo,
+  workspace/reproduction and accepted-scene-authority scenarios preserve their existing output;
+  and
+- focused `m81_f001_rejected_computed_feature_mutation_is_allocator_neutral` supplies the only new
+  exact case. It forces bounded durable feature mutation rejection through the public retained
+  coordinator and proves allocator, feature/sketch, accepted-scene, history, transcript and problem
+  neutrality.
+
+The stable authoring/scene golden remains exactly 271 rows. M81-F001 is an isolated owner
+regression rather than a new systemic family/lifecycle dimension, so no golden input or authority
+byte changes.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

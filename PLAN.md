@@ -81,7 +81,7 @@ clean release qualification and immutable served nomination at exact source `29d
 `44ecb95`. Supervising-human UAT and exact GitHub Pages publication pass.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
 but those candidates are withdrawn from acceptance and are no longer served. M1–M80 are complete;
-the next milestone has not been started.
+M81 is the active behavior-preserving core-architecture consolidation milestone.
 M76's
 implementation,
 feature refinements,
@@ -5492,6 +5492,50 @@ v5, mobile UI, B-rep offset or 3D behavior. Explicit Apply native profile must p
 valid ordinary line-arc-line corner atomically, while computed Fillet remains the default and
 Offset itself remains unaware of computed features. Polyline, line-circle/other-curve, batch,
 dependent/high-valence and existing-feature conversion paths remain deferred.
+
+### M81: core architecture consolidation
+
+Status: **implementation complete; final qualification and focused human UAT pending**.
+`docs/M81_GOALS.md` owns the behavior-preserving contract,
+`docs/M81_IMPLEMENTATION.md` owns the implementation/finding/audit ledger and
+`docs/M81_UAT.md` owns the compact candidate scorecard.
+
+- [x] Freeze locked no-dependency Cargo metadata, ordered crate-root public declarations and the
+  reviewed 271-row golden authoring/scene authority before implementation.
+- [x] Split `geosolve-core` solver internals into private hard-solve, lexicographic-priority and
+  independent-validation responsibilities while preserving public `solver` paths, orchestration,
+  work charging, fallback order, traces and hard-versus-temporary policy.
+- [x] Split private sketch curve-control/conic queries and exact Profile Offset document
+  validation from the document facade without changing public/crate-visible paths, error text,
+  wire DTOs or validation order.
+- [x] Split exact Profile Offset compiler registration/path/incidence/audit assembly while keeping
+  candidate and independent validation separate and preserving normalized source bytes.
+- [x] Split deterministic Profile Offset operand/path/junction planning from the equation-free
+  operations facade and make its private dependencies explicit.
+- [x] Split computed-feature source claim/composition/output-ID publication from the evaluator
+  facade without changing roots, branches, tolerances, work charging or public DTOs.
+- [x] Reproduce M81-F001 at the public retained coordinator, freeze the rejected-mutation
+  allocator-neutrality regression, and stage computed evaluation/checkpoint allocation until
+  successful authenticated feature publication.
+- [x] Split retained checkpoint/restore/history publication into one private coordinator module
+  while preserving replay, invalidation, transient-clear and selection-reconciliation order.
+- [x] Use rotating independent subsystem agents for baseline audits, bounded implementation and
+  follow-up review; record the release-blocking wildcard-import finding, M81-F001 and every clean
+  or deferred seam explicitly.
+- [ ] Re-run final committed-tree subsystem tests, byte-compare metadata/public declarations and
+  canonical persistence, and pass exact 271-row golden survey/check/require-clean.
+- [ ] Pass formatting, diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature
+  workspace tests, native/WASM parity, demo adapter checks and the complete clean release gate.
+- [ ] Freeze the exact no-rebuild release output, byte-verify it over the retained Tailscale
+  endpoint and nominate that source/tree/artifact for focused M81 UAT.
+- [ ] Receive explicit supervising-human acceptance and perform the normal Pages closeout; do not
+  publish or start M82 before that decision.
+
+Gate: the package graph, crate-root public declarations, canonical persistence and reviewed golden
+authority remain byte-identical; every accepted state still passes independent validation; rejected
+feature mutations are allocator/history/scene neutral; and the clean release artifact behaves as
+the M80 product. M81 adds no feature, equation, solver policy, persistence version, browser behavior
+or new architectural abstraction.
 
 ## Explicit non-goals
 

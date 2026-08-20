@@ -63,7 +63,14 @@ construction/NURBS UAT and certified all-family visual profiles.
   feature ownership. Implementation, clean release qualification, immutable Tailscale nomination
   and supervising-human UAT pass at exact source `29d8e41`, tree `44ecb95`. Approval descendant
   `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte
-  verification. M80 is complete and part of the accepted baseline; no next target is active.
+  verification. M80 is complete and part of the accepted baseline.
+- **Active cleanup target:** M81 preserves the complete M80 product while making private
+  responsibilities reviewable. Core hard solving, lexicographic priority and independent returned-
+  state validation sit behind the unchanged solver facade; sketch query/Profile Offset validation
+  and compilation, operation planning, computed source composition and retained history have
+  cohesive private modules. Reproduced M81-F001 stages computed-output allocation until successful
+  durable feature publication. Package graph, public APIs, persistence, equations, solver policy
+  and workbench behavior remain frozen; final clean qualification and UAT nomination are pending.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -215,6 +222,13 @@ Owns domain-independent numerical infrastructure:
 
 It does not contain CAD entities, curve-definition variants, rigid bodies, joints, mates, branch labels or persistence schemas from either domain.
 
+M81 changes only private layout. `solver.rs` retains public reports/configuration and `Problem`
+orchestration; `solver/hard.rs` owns component iteration and hard linear algebra;
+`solver/priority.rs` owns lexicographic temporary/preference optimization; and
+`solver/validation.rs` owns independent returned-row, rank/bound and diagnostic validation.
+Residual evaluators are not reused as validation oracles, and solve order, controller charging,
+fallback reasons and trace/source ordering remain contractual behavior.
+
 ### `geosolve-sketch`
 
 Owns the 2D design graph:
@@ -306,6 +320,12 @@ M78-F011 additionally clarifies point-observable drag locality and retains depen
 through both secondary-solve backends; it changes no residual, tolerance, priority, branch rule or
 persistence schema.
 
+M81 gives existing private sketch responsibilities cohesive file boundaries. Curve-control/conic
+queries and exact Profile Offset document validation remain behind `SketchDocument`; Profile
+Offset residual registration/path/incidence/audit assembly remains behind the compiler facade;
+independent candidate validation deliberately stays separate in `compiler.rs`. Public paths,
+canonical wire DTOs, error strings, registration/incidence/audit order and equations do not change.
+
 ### `geosolve-constraint-editor`
 
 Owns presentation-independent sketch interaction policy over public `geosolve-sketch` and
@@ -331,6 +351,12 @@ storage or host expressions. M40.2 implements accepted scene, picking,
 selection, basic relation applicability and the click/drag boundary; M40.3-M40.6
 complete and mechanically qualify the state machine under ADR 0029 through one
 canonical native/release-WASM report and focused browser platform evidence.
+
+M81 moves unchanged checkpoint encoding/decoding, restore and successful history publication into
+private `coordinator/history.rs`. Durable feature candidates evaluate and checkpoint against a
+cloned computed-output allocator; rejection publishes none of it, while success installs feature
+intent, snapshot and allocator in the established order before the unchanged history/transient/
+selection epilogue. This is the M81-F001 transactional correction, not a generic transaction layer.
 
 M77 owns selected-only `SceneCurveControl*` identities, finite cage/guide/rail paint and hit
 geometry, stored-point alias precedence, exact property metadata and the direct gesture lifecycle.
@@ -677,6 +703,12 @@ separately versioned feature document and workspace-v4 envelope; M68 adds no sch
 Version-one references name native constrained spans only. Computed-on-computed chaining,
 Bake/Explode, cross-revision output topological naming and production/profile consumption are
 deferred.
+
+M81 moves existing endpoint-claim conflict attribution, native-source interval composition,
+discarded Construction validation, combined source-role selection and evaluation-local output-ID
+creation into private `evaluation/composition.rs`. Root finding, continuation, explicit branches,
+tolerances, work charging, evaluator input/output DTOs and independent geometry validation remain
+unchanged.
 
 ### `geosolve-linkage`
 
@@ -1525,3 +1557,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   propagation and human UAT pass. Approval descendant `ece6c3c` passes Pages run `32262792440`,
   artifact `9369119336` and exact hosted-byte verification. M80 is part of the accepted baseline;
   `29d8e41` remains exact qualified product authority.
+- M81: active behavior-preserving architecture consolidation. Private core solver, sketch query/
+  Profile Offset validation and compilation, operations planning, computed source composition and
+  retained-history responsibilities are separated behind unchanged facades. M81-F001 makes a
+  rejected durable computed-feature mutation allocator-neutral. Focused implementation checks pass;
+  workspace/release qualification, frozen Tailscale nomination and human UAT remain pending.

@@ -263,6 +263,15 @@ artifact `9317131695`, deployment `5959116526` and exact hosted-byte aggregate
 requalify exact product source `6874aa1`. M79 is complete. Approval, publication and closeout
 change no compatibility boundary.
 
+M80's grouped Profile Offset and explicit native-profile Fillet publication are additive pre-1.0
+domain/editor behavior under ADR 0037; canonical sketch v4 still rejects Profile Offset state and
+the private draft-v5/workspace-v6 bridge remains unsupported as a domain schema. M81 changes none
+of those surfaces. It moves only private implementation bodies behind the same crate roots and
+freezes the ordered public declarations plus locked package metadata before and after the cut.
+M81-F001 changes rejected-mutation side effects only: a failed durable computed-feature mutation
+no longer consumes a revision-local output allocator value. No public type, signature, error text,
+wire format, crate dependency or successful publication result changes.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 

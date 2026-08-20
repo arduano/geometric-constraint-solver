@@ -2818,6 +2818,57 @@ silently implemented as a fallback for an invalid native Profile Offset. Native 
 also excludes polyline-owned corners, line-circle and other curve pairs, batches, dependent or
 high-valence corners and conversion of existing published computed Fillets.
 
+## M81 acceptance: core architecture consolidation
+
+Status: **implementation complete; final clean qualification, frozen nomination and human UAT
+pending**. `docs/M81_GOALS.md` is authoritative for scope and
+`docs/M81_IMPLEMENTATION.md` records exact commits, audits and M81-F001.
+
+- The locked no-dependency Cargo metadata and ordered public declaration/export surface of core,
+  sketch, linkage and editor must byte-match the M80 activation freeze. No crate, dependency,
+  feature, public path, type, signature or error text is added, removed or reordered.
+- `geosolve-core::solver` remains the public DTO/configuration/orchestration facade. Private hard,
+  priority and validation modules preserve exact controller work charging/checkpoints, dense/
+  sparse selection and fallback, category priority, cache/trace/source order, diagnostics and
+  independent returned-row validation. No residual implementation is reused as its own oracle.
+- Sketch document query/control translation and Profile Offset operand/path/junction validation
+  retain their public/crate-visible paths, exact validation order and error text. Profile Offset
+  compilation retains source registration, residual incidence/order/category/scales, audit text/
+  bindings and errors; candidate and independent validators remain separate.
+- `geosolve-sketch-ops` Profile Offset planning retains authenticated topology provenance,
+  selected-set branch policy, traversal/order and exact typed incomplete/unsupported outcomes.
+  It owns no equation and the crate graph is unchanged.
+- Computed-feature source claims, conflict attribution, interval composition, discarded
+  Construction fragments, combined roles and revision-local IDs retain exact ordering and
+  semantics. Root selection, continuation, fold barriers, tolerances and work charging are not
+  moved or changed.
+- Retained checkpoint/restore and successful history publication preserve encoding preference,
+  host-input truth, high-water merging, replay append, editor invalidation, transient clearing and
+  selection reconciliation order.
+- M81-F001's exact public-coordinator regression proves a bounded rejected durable feature
+  mutation preserves the complete prior feature/sketch state, accepted identities/JSON, history,
+  transcript, computed scene/problem and computed-output allocator high-water. Successful feature
+  publication still installs the staged allocator with the authenticated feature/snapshot.
+- Canonical sketch v1-v4 fixtures, private unsupported draft-v5 behavior, workspace v6,
+  reproduction v1 and persistent/runtime identity order remain unchanged. The reviewed 271-row
+  golden inventory remains 271 `PASS`; survey, `--check` and `--require-clean` must pass without
+  re-blessing bytes.
+- Rotating independent reviews cover core/linkage, sketch/compiler/persistence,
+  features/operations and editor/coordinator seams. Each release-blocking or semantic finding is
+  corrected behind owning evidence; unconfirmed improvements are recorded and deferred rather
+  than normalized during refactoring.
+- Focused subsystem tests, native/WASM parity and thin demo tests pass before formatting, diff
+  hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature workspace tests, benchmark/
+  performance/licence/package gates, release Trunk and the complete clean release gate.
+- The exact no-rebuild seven-file release output is frozen read-only and byte-verified first on a
+  temporary listener, then at the retained Tailscale UAT endpoint. Human UAT checks only visible
+  M80 behavior preservation and must explicitly accept the bound source/tree/artifact before
+  Pages closeout.
+
+M81 adds no primitive, constraint, dimension, inference, computed feature, topology behavior,
+solver equation/policy, persistence version, browser layout or generic architecture framework.
+Discovery requiring any such change is deferred to another approved milestone.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit
