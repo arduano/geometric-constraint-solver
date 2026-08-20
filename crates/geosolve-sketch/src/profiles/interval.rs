@@ -178,6 +178,20 @@ impl Interval {
         Some(self.mul(other.reciprocal()?))
     }
 
+    pub fn sqrt(self) -> Option<Self> {
+        if !self.is_finite() || self.lower < 0.0 {
+            return None;
+        }
+        Some(Self {
+            lower: if self.lower == 0.0 {
+                0.0
+            } else {
+                next_down(self.lower.sqrt()).max(0.0)
+            },
+            upper: next_up(self.upper.sqrt()),
+        })
+    }
+
     pub fn scale(self, value: f64) -> Self {
         self.mul(Self::point(value))
     }

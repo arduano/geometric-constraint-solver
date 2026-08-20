@@ -272,6 +272,150 @@ impl CurvePiece {
             .ok_or(PieceEvaluationError::NonFinite)
     }
 
+    pub fn second_derivative(
+        &self,
+        parameter: Interval,
+    ) -> Result<[Interval; 2], PieceEvaluationError> {
+        self.derivative_order(parameter, 2)
+    }
+
+    pub fn third_derivative(
+        &self,
+        parameter: Interval,
+    ) -> Result<[Interval; 2], PieceEvaluationError> {
+        self.derivative_order(parameter, 3)
+    }
+
+    pub fn fourth_derivative(
+        &self,
+        parameter: Interval,
+    ) -> Result<[Interval; 2], PieceEvaluationError> {
+        self.derivative_order(parameter, 4)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the closed family match keeps all higher-jet formulas together for audit"
+    )]
+    fn derivative_order(
+        &self,
+        parameter: Interval,
+        order: u32,
+    ) -> Result<[Interval; 2], PieceEvaluationError> {
+        debug_assert!((2..=4).contains(&order));
+        let derivative = match &self.kind {
+            PieceKind::Linear { .. } => [Interval::ZERO; 2],
+            PieceKind::Circular {
+                radius,
+                angle_offset,
+                angle_rate,
+                ..
+            } => {
+                let angle = angle_offset.add(parameter.mul(Interval::point(*angle_rate)));
+                let sine = angle.sin().map_err(|_| PieceEvaluationError::NonFinite)?;
+                let cosine = angle.cos().map_err(|_| PieceEvaluationError::NonFinite)?;
+                match order {
+                    2 => {
+                        let scale = Interval::scalar_product(-*radius, angle_rate.powi(2));
+                        [cosine.mul(scale), sine.mul(scale)]
+                    }
+                    3 => {
+                        let scale = Interval::scalar_product(*radius, angle_rate.powi(3));
+                        [sine.mul(scale), cosine.mul(scale.neg())]
+                    }
+                    4 => {
+                        let scale = Interval::scalar_product(*radius, angle_rate.powi(4));
+                        [cosine.mul(scale), sine.mul(scale)]
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            PieceKind::Elliptic {
+                major,
+                minor,
+                angle_offset,
+                angle_rate,
+                ..
+            } => {
+                let angle =
+                    Interval::point(*angle_offset).add(parameter.mul(Interval::point(*angle_rate)));
+                let sine = angle.sin().map_err(|_| PieceEvaluationError::NonFinite)?;
+                let cosine = angle.cos().map_err(|_| PieceEvaluationError::NonFinite)?;
+                let rate = angle_rate.powi(i32::try_from(order).expect("small derivative order"));
+                match order {
+                    2 => [
+                        cosine
+                            .mul(Interval::scalar_product(-major[0], rate))
+                            .add(sine.mul(Interval::scalar_product(-minor[0], rate))),
+                        cosine
+                            .mul(Interval::scalar_product(-major[1], rate))
+                            .add(sine.mul(Interval::scalar_product(-minor[1], rate))),
+                    ],
+                    3 => [
+                        sine.mul(Interval::scalar_product(major[0], rate))
+                            .add(cosine.mul(Interval::scalar_product(-minor[0], rate))),
+                        sine.mul(Interval::scalar_product(major[1], rate))
+                            .add(cosine.mul(Interval::scalar_product(-minor[1], rate))),
+                    ],
+                    4 => [
+                        cosine
+                            .mul(Interval::scalar_product(major[0], rate))
+                            .add(sine.mul(Interval::scalar_product(minor[0], rate))),
+                        cosine
+                            .mul(Interval::scalar_product(major[1], rate))
+                            .add(sine.mul(Interval::scalar_product(minor[1], rate))),
+                    ],
+                    _ => unreachable!(),
+                }
+            }
+            PieceKind::Polynomial { x, y } => {
+                let derivative = |polynomial: &Polynomial| {
+                    let mut value = polynomial.clone();
+                    for _ in 0..order {
+                        value = value.derivative();
+                    }
+                    value.bezier_bound(parameter)
+                };
+                [derivative(x), derivative(y)]
+            }
+            PieceKind::Rational { x, y, weight } => [
+                rational_derivative_bound(x, weight, parameter, order)?,
+                rational_derivative_bound(y, weight, parameter, order)?,
+            ],
+            PieceKind::Hyperbolic {
+                transverse,
+                conjugate,
+                native_offset,
+                native_rate,
+                ..
+            } => {
+                let native = Interval::point(*native_offset)
+                    .add(parameter.mul(Interval::point(*native_rate)));
+                let sine = native.sinh().map_err(|_| PieceEvaluationError::NonFinite)?;
+                let cosine = native.cosh().map_err(|_| PieceEvaluationError::NonFinite)?;
+                let rate = native_rate.powi(i32::try_from(order).expect("small derivative order"));
+                let (first, second) = if order.is_multiple_of(2) {
+                    (cosine, sine)
+                } else {
+                    (sine, cosine)
+                };
+                [
+                    first
+                        .mul(Interval::scalar_product(transverse[0], rate))
+                        .add(second.mul(Interval::scalar_product(conjugate[0], rate))),
+                    first
+                        .mul(Interval::scalar_product(transverse[1], rate))
+                        .add(second.mul(Interval::scalar_product(conjugate[1], rate))),
+                ]
+            }
+        };
+        derivative
+            .iter()
+            .all(|value| value.is_finite())
+            .then_some(derivative)
+            .ok_or(PieceEvaluationError::NonFinite)
+    }
+
     pub fn point(&self, parameter: f64) -> Result<[f64; 2], PieceEvaluationError> {
         let value = self.position(Interval::point(parameter))?;
         Ok([value.x.midpoint(), value.y.midpoint()])
@@ -453,6 +597,33 @@ impl CurvePiece {
                 | VisualProfileCurveFamily::PeriodicNurbs
         )
     }
+}
+
+fn rational_derivative_bound(
+    numerator: &Polynomial,
+    denominator: &Polynomial,
+    parameter: Interval,
+    order: u32,
+) -> Result<Interval, PieceEvaluationError> {
+    let denominator_bound = denominator.bezier_bound(parameter);
+    if !denominator_bound.excludes_zero() {
+        return Err(PieceEvaluationError::Pole);
+    }
+    let denominator_derivative = denominator.derivative();
+    let mut derivative_numerator = numerator.clone();
+    let mut denominator_power = 0_u32;
+    for derivative_order in 0..order {
+        derivative_numerator = derivative_numerator.derivative().mul(denominator).sub(
+            &derivative_numerator
+                .mul(&denominator_derivative)
+                .scale(Interval::point(f64::from(derivative_order + 1))),
+        );
+        denominator_power += 1;
+    }
+    derivative_numerator
+        .bezier_bound(parameter)
+        .div(denominator_bound.powi(denominator_power + 1))
+        .ok_or(PieceEvaluationError::Pole)
 }
 
 fn rational_area_numerator(

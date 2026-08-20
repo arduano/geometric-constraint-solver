@@ -204,10 +204,14 @@ pub use profile_offset_construction::{
     DocumentProfileOffsetCreationRequest,
 };
 pub use profiles::{
-    LineCurveFilletBranchCellError, VisualProfileAnalysis, VisualProfileBudgetCounter,
-    VisualProfileBudgetReport, VisualProfileContour, VisualProfileCurveFamily, VisualProfileEdge,
-    VisualProfileFace, VisualProfileGeometryScope, VisualProfileIntersection, VisualProfileIssue,
-    VisualProfileIssueKind, VisualProfileOptions, VisualProfileOrientation, VisualProfileStatus,
+    CurveOffsetCertificate, CurveOffsetCubicPatch, CurveOffsetError, CurveOffsetGeometry,
+    CurveOffsetOptions, CurveOffsetResult, CurveOffsetTraversal, LineCurveFilletBranchCellError,
+    VisualProfileAnalysis, VisualProfileBudgetCounter, VisualProfileBudgetReport,
+    VisualProfileContour, VisualProfileCurveFamily, VisualProfileEdge, VisualProfileFace,
+    VisualProfileGeometryScope, VisualProfileIntersection, VisualProfileIssue,
+    VisualProfileIssueKind, VisualProfileOptions, VisualProfileOrientation,
+    VisualProfilePointContainment, VisualProfilePointContainmentError, VisualProfileStatus,
+    compute_curve_offset, compute_curve_offset_with_controller,
 };
 pub use scenarios::{
     ConflictingRectangleIds, TangentCirclesIds, UnderconstrainedTriangleIds, conflicting_rectangle,
