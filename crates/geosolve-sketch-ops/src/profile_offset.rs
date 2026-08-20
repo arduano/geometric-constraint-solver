@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use super::*;
+use super::{
+    BTreeSet, CurveSpan, DocumentConstraintDefinition, DocumentCurveContinuity,
+    DocumentDirectedProfileOffsetCurve, DocumentOffsetTraversal,
+    DocumentProfileOffsetCreationJunction, DocumentProfileOffsetCreationOperand,
+    DocumentProfileOffsetCreationPath, DocumentProfileOffsetJunctionBranch,
+    DocumentProfileOffsetJunctionOwner, DocumentProfileOffsetTurn, MAX_PROFILE_OFFSET_SPANS,
+    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetJoinOwner, OffsetOperandIndex,
+    OffsetOperandIneligibility, OffsetOperandEligibility, OffsetTraversal,
+    PROFILE_OFFSET_TANGENT_CROSS_TOLERANCE, SketchDocument, SketchOperationIncompleteReason,
+    SketchOperationUnsupportedReason, SketchProfileOffsetOperand, cross,
+};
 
 pub(super) enum ProfileOffsetPlanFailure {
     Unsupported(SketchOperationUnsupportedReason),
