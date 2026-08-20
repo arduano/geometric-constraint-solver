@@ -239,7 +239,11 @@ adaptive cubic patches; cusp, self-contact, contour touch, topology change or bo
 uncertainty rejects the complete feature. Implementation and development qualification pass;
 M82-F001 through F005 bind cold preview authority, tangent-endpoint locality, bounded fitting work,
 feature-identity-aware live Offset collection and truthful route copy. F005 withdraws the first
-frozen candidate; replacement clean qualification and nomination remain pending before human UAT.
+frozen candidate. Replacement source `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
+`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, passes clean qualification and exact no-rebuild
+Tailscale nomination from frozen snapshot `/tmp/geosolve-m82-uat.iOg5Do`, served at
+`http://100.94.63.83:8080/`. The prepared scorecard is now executable; human UAT, explicit approval,
+Pages publication and closure remain pending, and M82 remains outside the accepted baseline.
 
 ## Read first
 
@@ -271,8 +275,8 @@ frozen candidate; replacement clean qualification and nomination remain pending 
     preserving architecture-consolidation contract, clean-qualified audit/finding ledger,
     accepted focused scorecard and exact public closeout.
 18. `docs/M82_GOALS.md`, `docs/M82_IMPLEMENTATION.md` and `docs/M82_UAT.md` — implemented certified
-    all-family Curve Offset contract, replacement-qualification/finding ledger and prepared
-    scorecard; the pre-F005 candidate is withdrawn.
+    all-family Curve Offset contract, replacement-qualification/finding ledger and executable
+    frozen-candidate scorecard; the pre-F005 candidate is withdrawn.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -649,7 +653,11 @@ Tailscale byte verification and supervising-human acceptance; approval descendan
 passes exact Pages publication. M82 is active with implementation and development qualification
 complete under ADR 0038: preserve M80 native Offset routing and add a certified computed route for
 regular general-curve faces/chains. M82-F005 withdraws the first frozen candidate after correcting
-stale native-only help copy; replacement clean qualification and nomination precede human UAT.
+stale native-only help copy. Exact replacement source
+`d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
+`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, passes clean qualification and frozen no-rebuild
+Tailscale nomination; the prepared scorecard is executable. Human UAT, explicit approval, Pages
+publication and closure remain pending, so M82 stays active outside the accepted baseline.
 Do not admit topology repair, partial output or computed-on-computed chaining, and do not treat
 M81's private module moves as new behavior.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
@@ -752,8 +760,8 @@ Durable milestone and cleanup records:
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/adr/0038-certified-computed-curve-offset.md`
 - `docs/M82_GOALS.md` (implemented certified computed all-family Curve Offset contract)
-- `docs/M82_IMPLEMENTATION.md` (implementation, finding and replacement-qualification ledger)
-- `docs/M82_UAT.md` (prepared, unexecuted focused scorecard awaiting the replacement candidate)
+- `docs/M82_IMPLEMENTATION.md` (implementation, finding and replacement-nomination ledger)
+- `docs/M82_UAT.md` (prepared executable focused scorecard bound to the frozen replacement candidate)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

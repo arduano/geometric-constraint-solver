@@ -2,13 +2,13 @@
 
 # M82 — certified computed all-family Curve Offset
 
-Status: **implemented; M82-F005 replacement qualification pending**. The first frozen candidate is
-withdrawn after correcting stale native-only Offset help; the focused red/green regression passes
-and a replacement clean gate and freeze precede human UAT. This milestone broadens the ordinary
-Offset tool from M80's exact native line/circle/circular-arc
-association to deterministic computed offsets for every regular built-in planar curve family. It
-does not change or replace M80 `ProfileOffset`. ADR 0038 owns the architecture and certification
-boundary. M82 is not accepted or closed.
+Status: **implemented and clean-qualified; replacement candidate nominated for human UAT**. The
+first frozen candidate is withdrawn after correcting stale native-only Offset help; the focused
+red/green regression, replacement clean gate, no-rebuild freeze and exact Tailscale verification
+pass. This milestone broadens the ordinary Offset tool from M80's exact native
+line/circle/circular-arc association to deterministic computed offsets for every regular built-in
+planar curve family. It does not change or replace M80 `ProfileOffset`. ADR 0038 owns the
+architecture and certification boundary. M82 is not accepted or closed.
 
 ## Product outcome
 

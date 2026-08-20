@@ -2,13 +2,17 @@
 
 # M82 implementation — certified computed all-family Curve Offset
 
-Status: **replacement qualification pending after M82-F005; prior frozen candidate withdrawn**.
-Implementation and the focused F005 correction pass, but the corrected source requires a new
-clean gate, no-rebuild freeze and Tailscale nomination before human UAT. This is not an acceptance
-or closure claim. Product scope is owned by `docs/M82_GOALS.md`; architecture is owned by ADR 0038.
+Status: **clean-qualified replacement nominated after M82-F005; human UAT pending**. The corrected
+source passes the complete clean gate and its exact no-rebuild artifact is frozen and byte-verified
+over the retained Tailscale endpoint. This is not a human-acceptance or closure claim. Product scope
+is owned by `docs/M82_GOALS.md`; architecture is owned by ADR 0038.
 
 Activation baseline: M81 closeout commit
 `e3cbb8f2ae2800181545bb3405704bdcc3ff46a6`.
+
+Current nominated product source: `d52104595ee11f9e460e98ea5e26200bb34a5d94`.
+
+Current nominated product tree: `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`.
 
 Withdrawn pre-F005 product source: `7fd31c0137f6979f945e5ab4d320e7adb552c03d`.
 
@@ -75,9 +79,9 @@ continuation state. The live browser collector also refreshes when feature ident
 if the accepted sketch identity does not.
 
 Development qualification passed the final M82 coordinator slice (16/16), the editor library
-(406/406) and the final demo library (159/159), including exact M82-F001 coverage and live Offset
-collector refresh after computed-feature-only changes. M82-F005 adds a focused red/green browser-
-copy regression; its replacement committed-tree gate remains pending below.
+(406/406) and the final demo library (160/160), including exact M82-F001 coverage, live Offset
+collector refresh after computed-feature-only changes and the M82-F005 red/green browser-copy
+regression. The replacement committed-tree gate and immutable nomination pass below.
 
 ### Phase 4 — strict persistence compatibility
 
@@ -100,8 +104,8 @@ round-trips regenerate output from accepted sketch plus feature intent.
 - [x] Run focused owner suites, golden survey/check/require-clean, native/WASM parity, demo adapter,
   format/diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature workspace tests
   and a pinned Trunk release build during development qualification.
-- [ ] Run the complete release gate from the corrected clean commit and retain its exact log/hash.
-- [ ] Freeze the replacement gate-produced distribution without rebuilding, byte-verify it over Tailscale and
+- [x] Run the complete release gate from the corrected clean commit and retain its exact log/hash.
+- [x] Freeze the replacement gate-produced distribution without rebuilding, byte-verify it over Tailscale and
   bind `docs/M82_UAT.md` to that exact source/tree/artifact.
 
 The reviewed golden inventory increases from 271 to 272 `PASS` rows by exactly
@@ -231,6 +235,69 @@ cargo test --locked -p geosolve-demo-web --lib \
 
 Results are respectively 2/2, 1/1, 1/1, 1/1 and 1/1.
 
+## Replacement committed-tree qualification
+
+From clean source `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
+`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, this exact command completed with exit 0:
+
+```bash
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The gate ran from 2026-08-20 23:17:08 to 23:28:33 AEST. Its 269,138-byte, 3,530-line log is
+`/tmp/geosolve-m82-clean-gate.d521045.nix.log`, SHA-256
+`b66c277a00861854865440911e769aa5f9e94dbd55114e723b43b3bf46743472`. It passed
+formatting/diff hygiene, warnings-denied locked all-feature workspace Clippy, locked all-feature
+workspace tests, exact 272-row golden `--require-clean`, M70/M71/M74/M75/M76/M77/M79
+native/WASM parity, the demo WASM check, warnings-denied Rustdoc, benchmark compilation, M14 and
+M32 performance budgets, the ignored 256-moving-body sparse crossover in 126.49 seconds,
+licence/package checks and Trunk 0.21.14 release assembly.
+
+## Current replacement immutable candidate and served-byte evidence
+
+Without rebuilding, the replacement gate-produced `crates/geosolve-demo-web/dist` was copied to
+`/tmp/geosolve-m82-uat.iOg5Do` and byte-compared before and after freezing. The directory is `0555`;
+all seven entries are regular non-symlink files at `0444`. Its C-locale ordered `sha256sum *`
+manifest aggregate is
+`3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`:
+
+```text
+7acf06ec28c181468f26a92f6978af0f4b9d4f3205e076e602c517f00923d07f  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+097763e8b1ced1036bed0e5ecd274d5397f0ba22bea5eab5686be4e05172b2f1  geosolve-demo-web-7d599d5013bda062.js
+42785f524cb60d34c251a9ec7ae860b0039717ae25f77d75f9c8f919adc5431f  geosolve-demo-web-7d599d5013bda062_bg.wasm
+3d9e3c0587be4edaf8cd690d91cdb8705a1eb5ba9a506d3a9a12fe59d47a7c0c  index.html
+cd7ea776b4f36425bd0eb23589d9540c5847ba1cad2f3d7aecb6bf49e288685a  styles-4cca540fadc7a849.css
+```
+
+| File | Bytes |
+| --- | ---: |
+| `API_COMPATIBILITY.md` | 28,079 |
+| `LICENSE` | 35,148 |
+| `THIRD_PARTY_LICENSES.md` | 3,120 |
+| `geosolve-demo-web-7d599d5013bda062.js` | 33,750 |
+| `geosolve-demo-web-7d599d5013bda062_bg.wasm` | 7,955,136 |
+| `index.html` | 31,979 |
+| `styles-4cca540fadc7a849.css` | 38,736 |
+
+Temporary service `geosolve-m82-temp-uat.service`, PID `1268826`, first served only that snapshot
+at `100.94.63.83:18080`. Proxy-disabled, cache-bypassed identity requests for `/` and all seven
+files returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected
+media type and length, and snapshot-identical bytes; `/` equals `index.html`. Evidence is
+`/tmp/geosolve-m82-temp-verify.76WBWb/results.tsv`, SHA-256
+`35fa0bb1109d96e97f7107f81ac76292ccd6fbb5cbc10da418d836bb05e6a3dd`.
+
+Only after that ledger passed, the temporary listener was retired and
+`geosolve-m82-uat.service`, PID `1272147`, began serving the same immutable directory at
+`http://100.94.63.83:8080/`. The same eight checks passed independently; final evidence is
+`/tmp/geosolve-m82-final-verify.wU6t8i/results.tsv`, with the same ledger hash because every
+asserted path/status/type/length/body hash is identical. The retained listener stays live through
+focused human UAT.
+
+This evidence-only documentation is a descendant of the nominated product source. It does not
+replace that source/tree or rebuild its artifact.
+
 ## Withdrawn pre-F005 committed-tree qualification
 
 From clean source `7fd31c0137f6979f945e5ab4d320e7adb552c03d`, tree
@@ -287,9 +354,9 @@ media type and length, and snapshot-identical bytes; `/` equals `index.html`. Ev
 Only after that ledger passed, `geosolve-m82-uat.service`, PID `1188633`, began serving the same
 immutable directory at `http://100.94.63.83:8080/`. The same eight checks passed independently;
 final evidence is `/tmp/geosolve-m82-final-verify.Jlu7xZ/results.tsv`, with the same ledger hash
-because every asserted path/status/type/length/body hash is identical. The temporary listener is
-retired. M82-F005 subsequently withdrew these bytes before human UAT; the retained listener is
-also retired. The snapshot and verification records remain historical evidence only.
+because every asserted path/status/type/length/body hash is identical. M82-F005 subsequently
+withdrew these bytes before human UAT; both pre-F005 service runs are retired. The snapshot and
+verification records remain historical evidence only.
 
 This evidence-only documentation is a descendant of the nominated product source. It does not
 replace that source/tree or rebuild its artifact.
@@ -305,7 +372,6 @@ replace that source/tree or rebuild its artifact.
 - Computed-on-computed chaining, topology repair, trimming/splitting, loop removal, distance
   reduction and stable generated-edge naming remain explicit non-goals.
 
-The immediate remaining work is the corrected clean committed-tree release gate, replacement no-
-rebuild freeze and exact Tailscale byte verification. Only then may the human scorecard in
-`docs/M82_UAT.md`, explicit approval, exact GitHub Pages publication and closeout proceed. M82
-remains active.
+The immediate remaining work is the human scorecard in `docs/M82_UAT.md`, explicit supervising-
+human approval, exact GitHub Pages publication and closeout. M82 remains active while the current
+clean-qualified immutable Tailscale candidate is under review.

@@ -2900,10 +2900,11 @@ accepted evidence; Tailscale PID `2850776` is retired. M81 is complete.
 
 ## M82 acceptance: certified computed all-family Curve Offset
 
-Status: **active; M82-F005 corrected, replacement clean qualification and nomination pending**.
+Status: **active; mechanically nominated after M82-F005, human UAT pending**.
 `docs/M82_GOALS.md` is authoritative for
 scope, ADR 0038 for architecture, `docs/M82_IMPLEMENTATION.md` for actual evidence and
-`docs/M82_UAT.md` for the prepared human scorecard. M82 is not accepted or complete.
+`docs/M82_UAT.md` for the prepared, now-executable human scorecard. M82 is not accepted or
+complete.
 
 - [x] Wholly M80-eligible Line/Circle/CircularArc operands still create the existing native
   `ProfileOffset` with unchanged equations, persistence, editability and topology-barrier behavior.
@@ -2939,7 +2940,7 @@ scope, ADR 0038 for architecture, `docs/M82_IMPLEMENTATION.md` for actual eviden
   spline-intrinsic adjacency, closed faces/holes, both sides, topology barriers, deterministic
   exhaustion, lifecycle and compatibility. Native/WASM/editor/demo parity and any reviewed golden
   addition pass.
-- [ ] The corrected source passes formatting, diff hygiene, warnings-denied workspace
+- [x] The corrected source passes formatting, diff hygiene, warnings-denied workspace
   Clippy/Rustdoc, locked all-feature tests, native/WASM/demo parity, the exact reviewed 272-row
   golden oracle, complete clean release gate and replacement no-rebuild Tailscale verification.
 - [ ] The prepared human UAT, explicit supervising-human approval and exact Pages publication pass
@@ -2954,8 +2955,22 @@ Withdrawn pre-F005 mechanical authority is exact source `7fd31c0`, tree `c6b6c89
 `/tmp/geosolve-m82-uat.I58j21`, ordered-manifest aggregate
 `cb07c77de43544be251f97321bba8f978a018078a7b332d3752b39b55dff1a8e` and the byte-verified
 historical endpoint `http://100.94.63.83:8080/`. Its listener is retired and those bytes never
-entered human UAT. Replacement nomination, every `docs/M82_UAT.md` row, supervising-human approval,
-Pages publication and closure remain pending.
+entered human UAT. Every `docs/M82_UAT.md` row, supervising-human approval, Pages publication and
+closure remain pending.
+
+The replacement mechanical authority is exact source
+`d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
+`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`. Its clean release gate ran from 2026-08-20 23:17:08
+through 23:28:33 AEST; `/tmp/geosolve-m82-clean-gate.d521045.nix.log` is 269,138 bytes and 3,530 lines
+with SHA-256 `b66c277a00861854865440911e769aa5f9e94dbd55114e723b43b3bf46743472`. Frozen no-rebuild snapshot
+`/tmp/geosolve-m82-uat.iOg5Do` has ordered-manifest aggregate
+`3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`. It remains available at
+`http://100.94.63.83:8080/` under PID `1272147`; exact verification ledger
+`/tmp/geosolve-m82-final-verify.wU6t8i/results.tsv` has SHA-256
+`35fa0bb1109d96e97f7107f81ac76292ccd6fbb5cbc10da418d836bb05e6a3dd`. This evidence satisfies only
+the mechanical nomination criterion and makes the prepared scorecard executable. Human UAT,
+explicit approval, exact Pages publication and closure remain unchecked; M82 stays active and
+outside the accepted baseline.
 
 M82 explicitly excludes topology-changing repair, trimming/splitting, loop removal, partial
 publication, computed-on-computed chaining, Bake/Explode, stable generated-edge names, canonical

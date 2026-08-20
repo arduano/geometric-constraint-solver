@@ -4281,11 +4281,11 @@ is closed.
 
 ## M82 certified computed Curve Offset scenarios
 
-These scenarios are **implemented; M82-F005 replacement qualification is pending**. They activate
-the smallest broadening of Offset under ADR 0038 while preserving M80 native behavior. Focused
-owner, coordinator, editor, demo/WASM and reviewed 272-row golden evidence passes. The first frozen
-candidate is withdrawn after stale native-only Offset help was corrected; M82 remains active until
-replacement nomination, human acceptance and exact public closeout pass.
+These scenarios are **implemented and clean-qualified; the post-F005 replacement is nominated for
+human UAT**. They activate the smallest broadening of Offset under ADR 0038 while preserving M80
+native behavior. Focused owner, coordinator, editor, demo/WASM and reviewed 272-row golden evidence
+passes. The first frozen candidate is withdrawn after stale native-only Offset help was corrected;
+M82 remains active until human acceptance and exact public closeout pass.
 
 ### M82-O1 — Native analytic route remains exact
 
@@ -4368,9 +4368,11 @@ The broad golden oracle adds exactly one systemic row,
 `feature.curve-offset.authoring.general-open-chain`, and now contains 272 reviewed `PASS` rows. The
 all-family kernel matrix, feature/topology/coordinator lifecycle slices, editor/demo adapters,
 workspace tests, Clippy/Rustdoc, locked WASM check and pinned release assembly pass during
-development qualification. Source `7fd31c0` and snapshot `/tmp/geosolve-m82-uat.I58j21` are
-historical pre-F005 evidence only; their listener is retired and replacement qualification is
-pending before human UAT.
+development qualification. Source `d521045`, tree `0a3bcb0`, snapshot
+`/tmp/geosolve-m82-uat.iOg5Do` and manifest aggregate `3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`
+are the current clean-qualified UAT authority. Source `7fd31c0` and snapshot
+`/tmp/geosolve-m82-uat.I58j21` remain withdrawn historical pre-F005 evidence only; their service
+runs are retired.
 
 ## Frozen near-singular fixtures
 

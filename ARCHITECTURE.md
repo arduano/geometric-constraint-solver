@@ -80,8 +80,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   parallel and fitted output must remain regular, simple and topology-preserving, otherwise the
   complete feature fails closed. Generated geometry is associative, one-way, revision-local and
   non-constrainable. M82-F005 corrects stale native-only Offset help after the first frozen
-  candidate, which is withdrawn. Replacement clean qualification and nomination remain pending,
-  so M82 is not yet part of the accepted baseline.
+  candidate, which remains withdrawn. Replacement source
+  `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
+  `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, passes clean qualification and exact no-rebuild
+  Tailscale nomination. Its prepared scorecard is executable, but human UAT, approval, Pages and
+  closure remain pending, so M82 is not yet part of the accepted baseline.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1604,7 +1607,10 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   workspace/release qualification and frozen Tailscale nomination pass at exact source `e4eca32`.
   Supervising-human acceptance and approval-descendant Pages run `32328472125` pass; M81 is closed.
 - M82: implemented with M82-F005 focused correction passing for certified computed all-family
-  Curve Offset under ADR 0038; replacement clean nomination and human acceptance remain pending.
+  Curve Offset under ADR 0038; replacement source `d52104595ee11f9e460e98ea5e26200bb34a5d94`,
+  tree `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, passes clean no-rebuild mechanical nomination and
+  the human scorecard is executable. Human UAT, explicit approval, Pages publication and closure
+  remain pending; M82 remains active outside the accepted baseline.
   Preserve M80 native
   routing for exact Line/Circle/CircularArc operands; route mixed/general regular faces and ordered
   chains into revision-local computed output with explicit traversal, side, adjacency, junction

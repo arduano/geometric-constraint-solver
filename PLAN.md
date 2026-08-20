@@ -81,11 +81,14 @@ clean release qualification and immutable served nomination at exact source `29d
 `44ecb95`. Supervising-human UAT and exact GitHub Pages publication pass.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
 but those candidates are withdrawn from acceptance and are no longer served. M1–M81 are complete.
-M82 is active with implementation complete and M82-F005 focused correction passing. The first
-clean-qualified Tailscale candidate is withdrawn because its Offset help still claimed native-only
-support; replacement clean qualification and nomination precede human UAT. M82 preserves M80
-native `ProfileOffset` while adding ADR 0038's certified computed Offset route for regular built-in
-general curves, faces and chains.
+M82 is active with implementation complete, M82-F005 focused correction passing and its
+replacement no-rebuild Tailscale candidate mechanically nominated at exact source
+`d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
+`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`. The first clean-qualified Tailscale candidate remains
+withdrawn because its Offset help still claimed native-only support. The prepared human scorecard
+is executable against the replacement candidate; human UAT, explicit approval, Pages publication
+and closure remain pending. M82 preserves M80 native `ProfileOffset` while adding ADR 0038's
+certified computed Offset route for regular built-in general curves, faces and chains.
 M81 remains the closed behavior-preserving core-architecture consolidation.
 M76's
 implementation,
@@ -5573,10 +5576,10 @@ abstraction.
 
 ### M82: certified computed all-family Curve Offset
 
-Status: **M82-F005 corrected; replacement clean qualification and nomination pending**.
+Status: **mechanically nominated after M82-F005; human UAT pending**.
 `docs/M82_GOALS.md` owns the approved product and mathematical contract, ADR 0038 owns the
 architecture, `docs/M82_IMPLEMENTATION.md` records actual evidence and `docs/M82_UAT.md` is
-prepared but not executable yet. M82 is not accepted or closed.
+prepared and executable against the frozen replacement candidate. M82 is not accepted or closed.
 
 - [x] Add a certified accepted-sketch parallel-curve kernel with exact Line/Circle/CircularArc
   output and deterministic adaptive endpoint-Hermite cubics for Ellipse/EllipticalArc, rational
@@ -5601,7 +5604,7 @@ prepared but not executable yet. M82 is not accepted or closed.
   lifecycle/routing/persistence regressions and independently review any justified golden row.
 - [x] Pass focused native/WASM/editor/demo qualification, formatting, diff hygiene, warnings-
   denied workspace Clippy/Rustdoc, locked all-feature tests and the reviewed 272-row golden gate.
-- [ ] From the corrected clean committed source, pass the complete release gate and freeze and
+- [x] From the corrected clean committed source, pass the complete release gate and freeze and
   byte-verify the replacement no-rebuild Tailscale candidate.
 - [ ] Execute the prepared human UAT, receive explicit approval, publish exact Pages bytes and
   close M82 before starting another milestone.
@@ -5615,7 +5618,22 @@ editing a computed Fillet cannot leave stale source exclusions. The reviewed gol
 exactly 272 `PASS` rows, adding only `feature.curve-offset.authoring.general-open-chain`. Focused owner,
 workspace, Clippy/Rustdoc, WASM and release-assembly development evidence passes. M82-F005 makes
 the Offset panel describe native and computed curve routes truthfully. It withdraws source
-`7fd31c0` and snapshot `/tmp/geosolve-m82-uat.I58j21`; replacement qualification is pending.
+`7fd31c0` and snapshot `/tmp/geosolve-m82-uat.I58j21`; that pre-F005 evidence remains historical
+and is not nominated for UAT.
+
+Mechanical nomination record (2026-08-20): exact source
+`d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
+`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, passes the complete clean release gate from
+2026-08-20 23:17:08 through 23:28:33 AEST. Gate log
+`/tmp/geosolve-m82-clean-gate.d521045.nix.log` is 269,138 bytes and 3,530 lines with SHA-256
+`b66c277a00861854865440911e769aa5f9e94dbd55114e723b43b3bf46743472`. The exact no-rebuild
+seven-file snapshot `/tmp/geosolve-m82-uat.iOg5Do`, ordered-manifest aggregate
+`3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`, passes temporary and retained
+Tailscale byte verification. It remains served for human UAT at `http://100.94.63.83:8080/` by PID
+`1272147`; verification ledger `/tmp/geosolve-m82-final-verify.wU6t8i/results.tsv` has SHA-256
+`35fa0bb1109d96e97f7107f81ac76292ccd6fbb5cbc10da418d836bb05e6a3dd`. This completes only
+mechanical nomination. Human UAT, explicit approval, Pages publication and closure remain pending,
+and M82 remains active outside the accepted baseline.
 
 Gate: every Current computed output is finite, certified within the recorded error bounds,
 regular and topology-preserving; any uncertainty or barrier publishes no partial output and no

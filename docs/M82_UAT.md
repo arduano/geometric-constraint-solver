@@ -2,10 +2,35 @@
 
 # M82 focused UAT — certified computed all-family Curve Offset
 
-Status: **prepared, not executable; pre-F005 candidate withdrawn**. M82-F005 corrected stale
-native-only Offset help after the first nomination, so a replacement clean gate, no-rebuild
-freeze and Tailscale verification are required before human UAT. Automated owner tests certify
-mathematics, topology and persistence; this scorecard remains prepared for the replacement.
+Status: **ready and executable against the clean-qualified post-F005 candidate**. M82-F005
+corrected stale native-only Offset help after the first nomination; the replacement clean gate,
+no-rebuild freeze and exact Tailscale verification now pass. Automated owner tests certify
+mathematics, topology and persistence; this scorecard remains pending human review.
+
+## Current replacement authority
+
+- Product source: `d52104595ee11f9e460e98ea5e26200bb34a5d94`.
+- Product tree: `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`.
+- Frozen no-rebuild snapshot: `/tmp/geosolve-m82-uat.iOg5Do` (directory `0555`; seven regular
+  non-symlink files at `0444`).
+- Ordered file-manifest aggregate:
+  `3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`.
+- Current Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m82-uat.service`, live PID
+  `1272147`).
+- Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 from
+  2026-08-20 23:17:08 to 23:28:33 AEST; 269,138-byte, 3,530-line log at
+  `/tmp/geosolve-m82-clean-gate.d521045.nix.log`, SHA-256
+  `b66c277a00861854865440911e769aa5f9e94dbd55114e723b43b3bf46743472`.
+- Exact served-byte verification: temporary
+  `/tmp/geosolve-m82-temp-verify.76WBWb/results.tsv` and retained
+  `/tmp/geosolve-m82-final-verify.wU6t8i/results.tsv`, each SHA-256
+  `35fa0bb1109d96e97f7107f81ac76292ccd6fbb5cbc10da418d836bb05e6a3dd`.
+
+Both verification passes covered `/` plus all seven assets: HTTP 200, zero redirects, no
+`Location` or `Content-Encoding`, exact media type/length/body, the frozen aggregate above and
+root equality with `index.html`. The temporary listener is retired; the retained listener serves
+the same immutable snapshot through focused UAT. The documentation nomination is an evidence-only
+descendant and does not replace the product source/tree or rebuild its bytes.
 
 ## Withdrawn pre-F005 authority
 
@@ -15,8 +40,8 @@ mathematics, topology and persistence; this scorecard remains prepared for the r
   non-symlink files at `0444`).
 - Ordered file-manifest aggregate:
   `cb07c77de43544be251f97321bba8f978a018078a7b332d3752b39b55dff1a8e`.
-- Historical Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m82-uat.service`, retired
-  PID `1188633`).
+- Historical Tailscale service run: `geosolve-m82-uat.service`, retired PID `1188633`, formerly at
+  `http://100.94.63.83:8080/`.
 - Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 at
   2026-08-20 22:57:08 AEST; log SHA-256
   `7f4ef08a66851c1a117bf091af6bfb49a83abf33face7807e451e9b75ae064cf`.

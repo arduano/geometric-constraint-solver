@@ -2,8 +2,8 @@
 
 # ADR 0038: Certified computed all-family Curve Offset
 
-Status: accepted and implemented for active M82; M82-F005 replacement qualification and human
-acceptance pending
+Status: accepted and implemented for active M82; post-F005 clean qualification and immutable
+nomination pass; human acceptance pending
 
 ## Context
 
@@ -158,4 +158,6 @@ exhaustion; Current/Failed publication; suppression/delete; Undo/Redo/reload; na
 computed-Fillet exclusion; native-Fillet eligibility; strict feature v1/v2 compatibility; and
 native/WASM/editor/demo parity. `docs/M82_IMPLEMENTATION.md` records evidence only after commands
 actually pass. The first frozen candidate is withdrawn after M82-F005 corrected stale native-only
-Offset help; `docs/M82_UAT.md` remains pending until a replacement passes the mechanical gate.
+Offset help. Exact source `d521045`, tree `0a3bcb0` passes the replacement clean gate and its
+no-rebuild immutable Tailscale nomination; `docs/M82_UAT.md` is executable and human acceptance
+remains pending.
