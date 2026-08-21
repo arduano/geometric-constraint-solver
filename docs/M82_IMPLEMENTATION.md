@@ -2,17 +2,22 @@
 
 # M82 implementation — certified computed all-family Curve Offset
 
-Status: **clean-qualified replacement nominated after M82-F005; human UAT pending**. The corrected
-source passes the complete clean gate and its exact no-rebuild artifact is frozen and byte-verified
-over the retained Tailscale endpoint. This is not a human-acceptance or closure claim. Product scope
-is owned by `docs/M82_GOALS.md`; architecture is owned by ADR 0038.
+Status: **M82-F006/F007 replacement implementation is under qualification; human UAT pending**.
+The post-F005 source and immutable artifact are withdrawn after exact periodic-NURBS plus fresh
+Bezier reproductions exposed blank-scene composition, and after the computed route gained
+source-owned inverse-edit proxies. Its listener is retired. No replacement source, tree, frozen
+artifact or clean-gate claim exists yet. Product scope is owned by `docs/M82_GOALS.md`;
+architecture is owned by ADR 0038.
 
 Activation baseline: M81 closeout commit
 `e3cbb8f2ae2800181545bb3405704bdcc3ff46a6`.
 
-Current nominated product source: `d52104595ee11f9e460e98ea5e26200bb34a5d94`.
+Withdrawn post-F005 product source: `d52104595ee11f9e460e98ea5e26200bb34a5d94`.
 
-Current nominated product tree: `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`.
+Withdrawn post-F005 product tree: `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`.
+
+Replacement product source/tree: **not yet nominated**. They will be recorded only after the
+expanded golden matrix and complete clean release qualification pass from one unchanged source.
 
 Withdrawn pre-F005 product source: `7fd31c0137f6979f945e5ab4d320e7adb552c03d`.
 
@@ -81,7 +86,7 @@ if the accepted sketch identity does not.
 Development qualification passed the final M82 coordinator slice (16/16), the editor library
 (406/406) and the final demo library (160/160), including exact M82-F001 coverage, live Offset
 collector refresh after computed-feature-only changes and the M82-F005 red/green browser-copy
-regression. The replacement committed-tree gate and immutable nomination pass below.
+regression. Those counts describe the now-withdrawn post-F005 tree, not the F006/F007 replacement.
 
 ### Phase 4 — strict persistence compatibility
 
@@ -94,7 +99,7 @@ Strict v2 records only feature intent and allocator authority. Existing v1 fixtu
 bytes remain unchanged whenever no Curve Offset exists. Workspace and `GEOSOLVE_REPRO_V1`
 round-trips regenerate output from accepted sketch plus feature intent.
 
-### Phase 5 — regression, review and release qualification
+### Phase 5 — withdrawn post-F005 regression, review and release qualification
 
 - [x] Add focused owner regressions for every curve family, analytic exactness, mixed chains,
   faces/holes, spline adjacency, singularity, self-contact, topology barriers, bounded work,
@@ -108,12 +113,36 @@ round-trips regenerate output from accepted sketch plus feature intent.
 - [x] Freeze the replacement gate-produced distribution without rebuilding, byte-verify it over Tailscale and
   bind `docs/M82_UAT.md` to that exact source/tree/artifact.
 
-The reviewed golden inventory increases from 271 to 272 `PASS` rows by exactly
+The withdrawn post-F005 golden inventory increased from 271 to 272 `PASS` rows by exactly
 `feature.curve-offset.authoring.general-open-chain`, input fingerprint
 `input-86b0e748c84c8899`. The fixture SHA-256 is
 `a0d53753e5597dd950024a8108b12f92f325b1896766a5c601220c64970ee123`.
 Golden `--survey`, `--check` and `--require-clean` passed; a later post-cleanup `--check` passed in
-78.54 seconds without changing authority.
+78.54 seconds. M82-F006/F007 prove that one generic row was not sufficient product authority.
+
+### Phase 6 — M82-F006/F007 replacement hardening
+
+- [x] Preserve the supplied periodic-NURBS reproduction payload as an exact fixture and reproduce
+  the same blank-scene root with fresh quadratic and cubic Bezier Offset previews.
+- [x] Authenticate staged Curve Offset feature identity during Fillet-affordance composition and
+  retain the complete native accepted scene if computed presentation composition fails.
+- [x] Add transient feature-selected inverse proxies that retain ordinary source curve-control
+  IDs and feed pointer motion through prepared solving, independent validation, exact CAS,
+  history, replay and computed reevaluation.
+- [x] Keep generated patches revision-local, non-persistent and unavailable as direct constraint
+  or operation operands; scalar/trim controls stay on the native source cage.
+- [x] Expand the broad golden authoring/scene matrix into separately reviewed rows for every
+  built-in geometry family, mixed chains, faces, holed faces and proxy/source regeneration. Every
+  computed row inventories all eligible two-dimensional proxies, projects one proxy edit through
+  an ordinary Coincident follower, requires independent X/Y source motion, regenerates fresh
+  Current output and restores the complete state through Undo/Redo. The reviewed result is exactly
+  289/289 `PASS` with SHA-256
+  `cec9ad971e8e445f6a0e040a534d6790880e1a31903addea0d6d08ae1a5ad5f7`.
+- [ ] Run focused F006/F007 owner and adapter tests, golden survey/check/require-clean, formatting,
+  Clippy/Rustdoc, locked all-feature workspace tests, WASM/Trunk and the complete clean release
+  gate from one unchanged replacement source.
+- [ ] Freeze and byte-verify that replacement without rebuilding, restore a replacement Tailscale
+  listener, bind the UAT scorecard to exact authority, complete human UAT and publish Pages.
 
 ## Finding ledger
 
@@ -185,9 +214,80 @@ topology-changing offsets remain unavailable. Exact static-adapter regression
 passes afterward. The pre-F005 snapshot is withdrawn and its listener retired; no mathematical,
 topology, persistence or coordinator behavior changed.
 
-## Development qualification record
+### M82-F006 — provisional general-curve Offset could blank the complete accepted scene
 
-The following commands actually passed on the implemented tree before clean nomination:
+Reproduced through the ordinary workspace decoder/workbench composition path from the user's exact
+periodic-NURBS reproduction and independently with fresh quadratic and cubic Bezier curves. The
+durable text fixture is
+`crates/geosolve-demo-web/tests/fixtures/m82_f006_periodic_nurbs_repro.txt`; after removing its one
+storage newline, the exact encoded payload is 1,542 bytes with SHA-256
+`33f0caeea427f6048067a6abf51411ee53a428c3d44c12c2e59c22a516360e02`; decoded workspace length
+8,193 bytes, SHA-256
+`929a43c8f51900f1f6bf34fb1696cdcef88e842c26cf80cee3f58f8da88640af`; envelope checksum
+`e0db72996122baa0`. The persisted payload does not retain the transient Offset click identity, so
+the adapter regression deliberately selects a deterministic representative periodic-NURBS span
+rather than claiming to recover the exact click.
+
+The curve-offset evaluator and tessellation were finite and valid. The actual root was scene
+authority: `computed_feature_document_for_input` did not recognize a staged
+`OffsetAuthoringPreviewPublication::ComputedCurve`, so Fillet-affordance composition rejected the
+provisional feature as `StaleComputedFeatureCandidate`; `compose_editor_scene` then discarded the
+entire result through `.ok()?`. The repair authenticates the staged Curve Offset feature document
+and makes computed presentation failure fall back to the complete native accepted scene. A final
+pre-nomination audit found that annotation, retained-session, proxy-control or interaction-origin
+enrichment could still discard a successfully composed Current scene through later `.ok()?`
+operators. That whole Current-composition/enrichment leg is now transactional: any failure retries
+the independent native path, withholds computed controls and cancels an in-flight proxy gesture
+without durable mutation. It does not publish invalid computed output or turn a typed failure into
+Current.
+
+Focused regressions are
+`m82_f006_bezier_offset_preview_is_not_rejected_by_fillet_affordance_composition` and
+`workbench::tests::m82_f006_exact_periodic_nurbs_offset_preview_never_blanks_the_accepted_scene`,
+plus the downstream boundary regression
+`workbench::tests::m82_f006_post_current_proxy_enrichment_failure_returns_complete_native_scene`.
+The latter failed at the crossed adapter before the transactional fallback expansion, then passed
+with exact source/feature/history/transcript neutrality. Full replacement qualification remains
+pending.
+
+### M82-F007 — computed Offset needed constraint-aware inverse direct manipulation
+
+The post-F005 product exposed general computed geometry only as read-only generated output. That
+kept revision-local patches out of solver state, but it did not meet the product expectation that
+dragging an Offset curve control should move the owning constrained source and regenerate the
+parallel.
+
+The replacement keeps the one-way computed architecture and adds transient inverse-edit proxies.
+Feature selection paints eligible two-dimensional source point and rational-middle controls
+relative to computed output while retaining the ordinary `DocumentCurveControlId`. A pointer
+request is inverse-translated to that source control, then uses the existing prepared solve,
+source constraints, independent residual validation, exact CAS, history, replay, Undo/Redo and
+computed reevaluation. Successful publication revokes old generated IDs and publishes fresh
+Current output. Generated geometry remains revision-local, non-persistent and unavailable as a
+direct constraint or operation operand; scalar rails and trim/orientation controls remain on the
+native source cage.
+
+The pre-nomination F007 authority audit also closes two interaction-specific gaps. Constructor-
+owned computed geometry, source parameters, feature identity and evaluation input are sealed, so
+a caller-mutated presentation DTO cannot manufacture a source solve or retain candidate release
+authority. Analytic computed edges carry explicit traversal-correct source-parameter endpoints;
+reverse Line, CircularArc and Circle correspondence therefore descends in native parameter space.
+Connector-only miter edges remain visible and selectable but deliberately carry no inverse-proxy
+correspondence because they do not represent a one-to-one source interval.
+
+Owning coordinator regressions
+`computed_curve_offset_proxy_drag_moves_the_source_and_commits_one_replayable_edit` and
+`computed_curve_offset_proxy_drag_uses_the_normal_constrained_source_solve` bind source-ID
+retention, inverse mapping, hard-residual validation, constraint projection, regenerated Current
+output, history/replay and Undo/Redo. The 14 computed-route golden family/topology rows also require
+the complete eligible two-dimensional proxy inventory, one constrained source/follower edit with
+independent X/Y motion, fresh output, and complete Undo/Redo restoration. Their focused and
+collateral replacement qualification is still in progress.
+
+## Withdrawn post-F005 development qualification record
+
+The following commands actually passed on the now-withdrawn post-F005 tree before its clean
+nomination. They are historical evidence and do not qualify the F006/F007 replacement:
 
 ```bash
 cargo fmt --all -- --check
@@ -235,7 +335,7 @@ cargo test --locked -p geosolve-demo-web --lib \
 
 Results are respectively 2/2, 1/1, 1/1, 1/1 and 1/1.
 
-## Replacement committed-tree qualification
+## Withdrawn post-F005 committed-tree qualification
 
 From clean source `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
 `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, this exact command completed with exit 0:
@@ -253,7 +353,10 @@ native/WASM parity, the demo WASM check, warnings-denied Rustdoc, benchmark comp
 M32 performance budgets, the ignored 256-moving-body sparse crossover in 126.49 seconds,
 licence/package checks and Trunk 0.21.14 release assembly.
 
-## Current replacement immutable candidate and served-byte evidence
+M82-F006/F007 subsequently withdrew this source from product and UAT authority. The record remains
+valid only as historical post-F005 evidence and must not be cited for replacement qualification.
+
+## Withdrawn post-F005 immutable candidate and served-byte evidence
 
 Without rebuilding, the replacement gate-produced `crates/geosolve-demo-web/dist` was copied to
 `/tmp/geosolve-m82-uat.iOg5Do` and byte-compared before and after freezing. The directory is `0555`;
@@ -292,10 +395,11 @@ Only after that ledger passed, the temporary listener was retired and
 `geosolve-m82-uat.service`, PID `1272147`, began serving the same immutable directory at
 `http://100.94.63.83:8080/`. The same eight checks passed independently; final evidence is
 `/tmp/geosolve-m82-final-verify.wU6t8i/results.tsv`, with the same ledger hash because every
-asserted path/status/type/length/body hash is identical. The retained listener stays live through
-focused human UAT.
+asserted path/status/type/length/body hash is identical. M82-F006/F007 subsequently withdrew these
+bytes before human UAT; PID `1272147` and the post-F005 listener are retired. The snapshot and
+verification records remain historical evidence only.
 
-This evidence-only documentation is a descendant of the nominated product source. It does not
+This evidence-only documentation was a descendant of the withdrawn product source. It did not
 replace that source/tree or rebuild its artifact.
 
 ## Withdrawn pre-F005 committed-tree qualification
@@ -365,13 +469,19 @@ replace that source/tree or rebuild its artifact.
 
 - M80 `ProfileOffset` equations, persistence and exact native routing remain unchanged.
 - Computed Curve Offset adds no solver residual, sketch variable or persistent generated topology.
+- Computed Offset proxy gestures reuse ordinary source control IDs and the existing prepared
+  constrained source transaction; they do not make generated geometry a solver variable.
 - Curve evaluation remains owned by public sketch APIs; topology is independently certified and
   the web remains equation-free.
 - Non-finite, singular, uncertified, self-contacting or topology-changing geometry can never
   publish a success-like result or partial output.
+- Failure in computed scene/affordance composition cannot suppress the finite complete native
+  accepted scene.
 - Computed-on-computed chaining, topology repair, trimming/splitting, loop removal, distance
   reduction and stable generated-edge naming remain explicit non-goals.
 
-The immediate remaining work is the human scorecard in `docs/M82_UAT.md`, explicit supervising-
-human approval, exact GitHub Pages publication and closeout. M82 remains active while the current
-clean-qualified immutable Tailscale candidate is under review.
+The immediate remaining work is focused/collateral and complete clean replacement qualification,
+no-rebuild freeze and exact Tailscale verification.
+Only then can `docs/M82_UAT.md` become executable against replacement authority. Human approval,
+exact GitHub Pages publication and closeout follow. M82 remains active with UAT pending; there is
+currently no nominated source, artifact or live M82 listener.

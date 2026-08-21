@@ -2,12 +2,20 @@
 
 # M82 focused UAT — certified computed all-family Curve Offset
 
-Status: **ready and executable against the clean-qualified post-F005 candidate**. M82-F005
-corrected stale native-only Offset help after the first nomination; the replacement clean gate,
-no-rebuild freeze and exact Tailscale verification now pass. Automated owner tests certify
-mathematics, topology and persistence; this scorecard remains pending human review.
+Status: **replacement qualification in progress; human UAT pending and not yet executable**.
+M82-F006 withdrew the post-F005 candidate after the supplied periodic-NURBS payload and fresh
+Bezier previews exposed blank-scene composition. M82-F007 adds computed Offset inverse-edit proxy
+handles that edit the constrained owning source. The prior listener is retired. This scorecard
+must not run until one unchanged replacement source passes the expanded all-family golden matrix,
+the complete clean gate, a no-rebuild freeze and exact Tailscale byte verification.
 
-## Current replacement authority
+## Replacement authority pending
+
+No source, tree, frozen directory, manifest aggregate, clean-gate log, verification ledger or
+listener is currently nominated. Exact values will be recorded only after replacement
+qualification; no prior source or artifact may be reused as authority.
+
+## Withdrawn post-F005 authority
 
 - Product source: `d52104595ee11f9e460e98ea5e26200bb34a5d94`.
 - Product tree: `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`.
@@ -15,8 +23,8 @@ mathematics, topology and persistence; this scorecard remains pending human revi
   non-symlink files at `0444`).
 - Ordered file-manifest aggregate:
   `3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`.
-- Current Tailscale endpoint: `http://100.94.63.83:8080/` (`geosolve-m82-uat.service`, live PID
-  `1272147`).
+- Historical Tailscale service run: `geosolve-m82-uat.service`, retired PID `1272147`, formerly at
+  `http://100.94.63.83:8080/`.
 - Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 from
   2026-08-20 23:17:08 to 23:28:33 AEST; 269,138-byte, 3,530-line log at
   `/tmp/geosolve-m82-clean-gate.d521045.nix.log`, SHA-256
@@ -28,9 +36,8 @@ mathematics, topology and persistence; this scorecard remains pending human revi
 
 Both verification passes covered `/` plus all seven assets: HTTP 200, zero redirects, no
 `Location` or `Content-Encoding`, exact media type/length/body, the frozen aggregate above and
-root equality with `index.html`. The temporary listener is retired; the retained listener serves
-the same immutable snapshot through focused UAT. The documentation nomination is an evidence-only
-descendant and does not replace the product source/tree or rebuild its bytes.
+root equality with `index.html`. Both listener runs are retired. M82-F006/F007 withdrew this
+snapshot before human UAT; it is historical evidence only and cannot qualify the replacement.
 
 ## Withdrawn pre-F005 authority
 
@@ -60,17 +67,19 @@ human UAT because its Offset help still claimed native-only curve support; it is
 | ID | Check | Expected result | Status |
 | --- | --- | --- | --- |
 | M82-U1 | Offset a native-only line/arc face and open chain, then Undo/Redo. | The familiar M80 native association, annotation, drag and editable target behavior remain unchanged. | pending |
-| M82-U2 | Offset one Ellipse/EllipticalArc, one conic, one Bezier and one B-spline/NURBS specimen on both sides. | One consistent Offset tool previews smooth, visually parallel output; every generated edge selects one stable Offset feature and is not directly draggable or constrainable. | pending |
+| M82-U2 | Offset Ellipse, EllipticalArc, RationalQuadratic, Parabola, Hyperbola, Quadratic/Cubic Bezier, open/clamped and periodic B-spline, and open/clamped and periodic NURBS specimens on both sides. | One consistent Offset tool previews finite smooth output; every generated edge selects one stable feature and reveals the eligible source-owned inverse proxies without becoming a direct constraint operand. | pending |
 | M82-U3 | Offset a mixed analytic/general open chain, including intrinsically adjacent spline spans; reverse traversal and Flip. | Collection order, Start/End, side and junction presentation are predictable; Flip changes only the intended side and the complete preview remains continuous. | pending |
 | M82-U4 | Offset a closed general-curve face and a face with at least one hole inward/outward. | Outer/hole material semantics are visually correct, all contours appear or none do, and feature/tree/Problems attribution is clear. | pending |
-| M82-U5 | Increase distance toward a tight-curvature cusp, self-intersection or contour-touch limit, then reduce it. | The last complete valid preview remains visible; Apply is unavailable with a useful local reason; reducing distance recovers without stale errors, partial fragments or a blank scene. | pending |
-| M82-U6 | Edit several source controls and the Offset distance/direction; suppress, unsuppress and delete the feature; Undo/Redo each path. | Output reevaluates associatively, failure never blocks source editing, identities/history stay coherent and native source geometry is never replaced by stale output. | pending |
+| M82-U5 | Increase distance toward a tight-curvature cusp, self-intersection or contour-touch limit, then reduce it. | The last complete valid preview remains visible; Apply is unavailable with a useful local reason; reducing distance recovers without stale errors or partial fragments. Any computed-presentation failure still leaves the complete native accepted scene visible. | pending |
+| M82-U6 | Select computed Offsets from several families and drag their point/rational-middle proxy grips in X/Y; include reverse Line/CircularArc/Circle portions in mixed/general operands, constrained source controls, then Undo/Redo. | The proxy is painted on the traversal-correct parallel; connector-only miter edges invent no proxy. The ordinary source control moves through its constraints, one history/replay edit commits, output regenerates Current with fresh generated IDs, and unrelated/native accepted geometry never blanks or jumps. | pending |
 | M82-U7 | Compare a computed Fillet, a native-published Fillet and an Offset over nearby source geometry. | Active computed Fillet output is unavailable as an Offset operand with clear feedback; native-published line–arc–line topology offsets normally; Fillet corner selection remains distinct from Offset feature selection. | pending |
-| M82-U8 | Save/reload and copy/load a reproduction containing computed Offset; repeat at `1440x900` and about `1024x720`. | Feature intent, side, distance, source provenance and output appearance regenerate correctly; no generated ID/certificate leaks into visible persistence and the panel remains polished at both sizes. | pending |
+| M82-U8 | Save/reload and copy/load a reproduction containing computed Offset; repeat at `1440x900` and about `1024x720`. | Feature intent, side, distance, source provenance and output appearance regenerate correctly; proxy grips rebuild from source authority, no generated ID/certificate/proxy leaks into persistence and the panel remains polished at both sizes. | pending |
+| M82-U9 | Load the exact M82-F006 periodic-NURBS fixture, create its representative Offset, then repeat with fresh quadratic and cubic Beziers. | Preview, Apply, feature selection and a proxy edit retain the complete finite native scene throughout; no family makes all geometry disappear. | pending |
 
 ## Acceptance rule
 
 Any blank/partial scene, stale output, silent distance reduction, topology repair, unexpected route
-away from M80, computed-on-computed consumption, selection ambiguity, history mismatch or failed
-recovery opens a focused M82 finding and withdraws the candidate. Human approval is required
-before M82 closure and public Pages publication.
+away from M80, proxy edit that bypasses source constraints, computed-on-computed consumption,
+selection ambiguity, history mismatch or failed recovery opens a focused M82 finding and withdraws
+the candidate. A replacement candidate does not yet exist. Human approval is required before M82
+closure and public Pages publication.

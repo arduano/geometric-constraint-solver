@@ -2,8 +2,9 @@
 
 # ADR 0038: Certified computed all-family Curve Offset
 
-Status: accepted and implemented for active M82; post-F005 clean qualification and immutable
-nomination pass; human acceptance pending
+Status: accepted architecture for active M82; M82-F006/F007 replacement implementation is under
+qualification and human UAT is pending. The post-F005 nomination is withdrawn and its listener is
+retired.
 
 ## Context
 
@@ -101,6 +102,22 @@ Generated Offset edges resolve selection to their stable feature. Fillet arcs ke
 feature/corner selection. Generated edge IDs, patch boundaries and certificates are revision-local
 and may not become sketch constraints, operation operands or persistent topological names.
 
+Selecting a generated Offset feature may nevertheless expose transient inverse-edit proxies.
+Those grips retain ordinary source `DocumentCurveControlId` values and are painted by translating
+eligible two-dimensional source controls onto the evaluated parallel. Pointer motion is translated
+back to the source control and submitted through the ordinary prepared source solve. Source hard
+constraints, independent residual validation, exact CAS, history and replay therefore remain
+authoritative, and successful source publication regenerates the computed feature with fresh
+revision-local output IDs. Scalar rails and trim/orientation controls remain on the native source
+cage. A proxy is not a generated sketch entity or direct constraint operand.
+
+Proxy placement consumes evaluator-owned source-parameter correspondence, not a presentation
+guess. Analytic Line, Circle and CircularArc edges retain explicit traversal-correct endpoint
+parameters; fitted patches retain their certified native parameter intervals. Connector-only
+miter edges have no one-to-one source interval and therefore expose no proxy correspondence.
+Computed geometry, correspondence, feature identity and evaluation input are constructor-sealed
+before a proxy press or candidate release may authorize a source transaction.
+
 ### Coordinator, scene and persistence
 
 The retained coordinator owns exact accepted-sketch/feature/evaluator input authentication,
@@ -108,6 +125,14 @@ bounded evaluation, complete scene publication, history and replay. A source edi
 when Curve Offset becomes Failed; output is withheld and attributed without replacing accepted
 native geometry. A successful feature edit publishes intent plus its Current snapshot atomically;
 failure preserves feature intent, output allocator, accepted scene, history and transcript.
+
+Accepted native scene publication is fail-safe with respect to computed presentation. Provisional
+Curve Offset feature identity participates in the feature document used by computed Fillet
+affordance composition. Current computed scene construction plus annotation, retained-session,
+proxy-control and interaction-origin enrichment form one transactional presentation leg. If any
+part cannot compose, the complete native accepted scene is returned rather than an empty scene and
+any in-flight computed proxy gesture loses publication authority. This fallback does not turn
+invalid computed output into Current or publish a partial computed feature.
 
 Feature-tree, Problems, scene, picking and related-highlighting paths generalize the existing
 Fillet-shaped computed seam. The Offset authoring panel reuses M80 distance/direction/drag
@@ -124,8 +149,9 @@ Generated geometry and certificates are never serialized.
   becoming new solver state.
 - M80 retains its exact native, constraint-friendly behavior and remains the preferred route for
   wholly eligible operands.
-- General offsets are associative and deterministic but one-way; generated geometry is not
-  directly editable or constrainable.
+- General offsets are associative and deterministic but one-way. Generated geometry is not a
+  direct solver or constraint operand, while feature-selected inverse proxies provide constrained
+  editing of the owning source controls.
 - Singular, self-contacting, topology-changing or uncertified output fails closed instead of
   publishing a visually plausible approximation.
 - The feature crate gains a topology dependency and broader scene/persistence paths, but curve
@@ -148,6 +174,9 @@ Generated geometry and certificates are never serialized.
 - **Consume computed Fillet output:** rejected because version-one computed-on-computed
   dependency/naming semantics remain intentionally unavailable.
 - **Persist generated cubics:** rejected because stale derived geometry must not become authority.
+- **Leave every computed offset grip read-only:** rejected because a polished constraint demo must
+  let direct manipulation flow back to the owning constrained source without mistaking generated
+  patches for solver state.
 
 ## Verification
 
@@ -156,8 +185,13 @@ chains; closed faces/holes; reversal and both sides; source/distance edits; regu
 mathematical and fitted self-contact; contour touch/topology barriers; deterministic work
 exhaustion; Current/Failed publication; suppression/delete; Undo/Redo/reload; native routing;
 computed-Fillet exclusion; native-Fillet eligibility; strict feature v1/v2 compatibility; and
-native/WASM/editor/demo parity. `docs/M82_IMPLEMENTATION.md` records evidence only after commands
-actually pass. The first frozen candidate is withdrawn after M82-F005 corrected stale native-only
-Offset help. Exact source `d521045`, tree `0a3bcb0` passes the replacement clean gate and its
-no-rebuild immutable Tailscale nomination; `docs/M82_UAT.md` is executable and human acceptance
-remains pending.
+native/WASM/editor/demo parity. It must also cover the exact supplied periodic-NURBS payload and
+fresh quadratic/cubic Bezier previews without blank-scene publication, constrained inverse-proxy
+source edits with history/replay, complete eligible two-dimensional proxy inventory, and distinct
+golden rows for every built-in family plus mixed chains, faces and holed faces. Every computed
+golden row requires constraint-projected independent X/Y motion, fresh output and Undo/Redo state
+restoration. `docs/M82_IMPLEMENTATION.md` records evidence only after commands actually pass. The
+previously nominated post-F005 source `d521045`, tree `0a3bcb0`, and immutable
+snapshot are withdrawn after M82-F006/F007; its listener is retired. The replacement golden now
+passes 289/289 reviewed rows. Qualification, immutable nomination and human acceptance remain
+pending.

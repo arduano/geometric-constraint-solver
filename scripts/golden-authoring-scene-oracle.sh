@@ -7,6 +7,10 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 golden="$root/crates/geosolve-constraint-editor/tests/fixtures/golden_authoring_scene_oracle.golden.tsv"
 header=$'case_id\tfamily\tstatus\tfinding_id\tfailure_class\tfingerprint'
 timeout_seconds=30
+# Closed general-curve faces perform certified authoring, constrained proxy/source regeneration,
+# Undo and Redo evaluations in one isolated all-or-nothing row. Keep that complete lifecycle
+# bounded without weakening the ordinary 30-second process-failure classifier.
+curve_offset_timeout_seconds=180
 
 usage() {
   printf '%s\n' \
@@ -90,7 +94,24 @@ fillet_cases=(
 )
 
 curve_offset_cases=(
-  feature.curve-offset.authoring.general-open-chain
+  feature.curve-offset.authoring.line
+  feature.curve-offset.authoring.polyline
+  feature.curve-offset.authoring.circle
+  feature.curve-offset.authoring.circular-arc
+  feature.curve-offset.authoring.ellipse
+  feature.curve-offset.authoring.elliptical-arc
+  feature.curve-offset.authoring.rational-quadratic
+  feature.curve-offset.authoring.parabola
+  feature.curve-offset.authoring.hyperbola
+  feature.curve-offset.authoring.quadratic-bezier
+  feature.curve-offset.authoring.cubic-bezier
+  feature.curve-offset.authoring.bspline-clamped
+  feature.curve-offset.authoring.bspline-periodic
+  feature.curve-offset.authoring.nurbs-clamped
+  feature.curve-offset.authoring.nurbs-periodic
+  feature.curve-offset.authoring.mixed-chain
+  feature.curve-offset.authoring.face
+  feature.curve-offset.authoring.face-with-hole
 )
 
 scene_cases=(
@@ -130,8 +151,9 @@ classify_failed_process() {
   local family="$2"
   local exit_code="$3"
   local log="$4"
+  local effective_timeout="${5:-$timeout_seconds}"
   if [[ "$exit_code" -eq 124 || "$exit_code" -eq 137 ]]; then
-    append_harness_result "$case_id" "$family" TIMEOUT case-timeout "${timeout_seconds}s"
+    append_harness_result "$case_id" "$family" TIMEOUT case-timeout "${effective_timeout}s"
   elif rg -q 'panicked at|test result: FAILED' "$log"; then
     append_harness_result "$case_id" "$family" PANIC test-process "exit-$exit_code"
   else
@@ -219,7 +241,7 @@ for case_id in "${curve_offset_cases[@]}"; do
   output="$scratch/$stem.tsv"
   log="$scratch/$stem.log"
   set +e
-  timeout -k 5s "${timeout_seconds}s" env \
+  timeout -k 5s "${curve_offset_timeout_seconds}s" env \
     GEOSOLVE_GOLDEN_ORACLE_CASE="$case_id" \
     GEOSOLVE_GOLDEN_ORACLE_OUTPUT="$output" \
     cargo test --locked -p geosolve-constraint-editor \
@@ -231,7 +253,8 @@ for case_id in "${curve_offset_cases[@]}"; do
     append_complete_output "$output" 1 feature.curve-offset "$case_id"; then
     continue
   fi
-  classify_failed_process "$case_id" feature.curve-offset "$exit_code" "$log"
+  classify_failed_process \
+    "$case_id" feature.curve-offset "$exit_code" "$log" "$curve_offset_timeout_seconds"
 done
 
 for case_id in "${scene_cases[@]}"; do

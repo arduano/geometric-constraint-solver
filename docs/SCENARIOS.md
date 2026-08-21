@@ -4281,10 +4281,12 @@ is closed.
 
 ## M82 certified computed Curve Offset scenarios
 
-These scenarios are **implemented and clean-qualified; the post-F005 replacement is nominated for
-human UAT**. They activate the smallest broadening of Offset under ADR 0038 while preserving M80
-native behavior. Focused owner, coordinator, editor, demo/WASM and reviewed 272-row golden evidence
-passes. The first frozen candidate is withdrawn after stale native-only Offset help was corrected;
+These scenarios are **implemented with M82-F006/F007 replacement qualification in progress; human
+UAT pending**. They activate the smallest broadening of Offset under ADR 0038 while preserving M80
+native behavior. The post-F005 source/artifact is withdrawn after exact periodic-NURBS and fresh
+Bezier previews exposed blank-scene composition, and after computed output gained source-owned
+inverse editing. Its listener is retired. The distinct all-family golden now passes 289/289
+reviewed rows. Complete clean replacement qualification and immutable nomination remain pending;
 M82 remains active until human acceptance and exact public closeout pass.
 
 ### M82-O1 — Native analytic route remains exact
@@ -4298,10 +4300,12 @@ M80 native-published line-arc-line Fillet profile.
 ### M82-O2 — Every regular general family has certified output
 
 Offset representative Ellipse, EllipticalArc, RationalQuadratic, Parabola, Hyperbola,
-Quadratic/Cubic Bezier, B-spline and NURBS spans on both sides, under reversal and at scales
-`1e-6`, `1` and `1e6`. Require exact accepted source jets, finite regular parallels, deterministic
-adaptive endpoint-Hermite cubics, exact patch endpoints/aligned tangents and independently bounded
-position/tangent error. Line/Circle/CircularArc portions in a computed operand remain exact.
+Quadratic/Cubic Bezier, open/clamped and periodic B-spline, and open/clamped and periodic NURBS
+spans on both sides, under reversal and at scales `1e-6`, `1` and `1e6`. Require exact accepted
+source jets, finite regular parallels, deterministic adaptive endpoint-Hermite cubics, exact patch
+endpoints/aligned tangents and independently bounded position/tangent error.
+Line/Circle/CircularArc portions in a computed operand remain exact. The broad golden matrix must
+name each family separately rather than infer all-family product behavior from one generic row.
 
 ### M82-O3 — Mixed open chains and intrinsic spline adjacency
 
@@ -4335,7 +4339,10 @@ Exercise suppression, unsuppression, delete, Undo/Redo, replay, stale exact-CAS 
 output has fresh revision-local IDs and stable feature provenance; Failed output is withheld while
 native sketch editing remains available. Selecting any Offset generated edge resolves its feature,
 whereas existing Fillet output retains corner selection. Generated output is not a constraint or
-operation operand.
+operation operand. Feature selection exposes transient eligible two-dimensional source-control
+proxies painted on the parallel. Drag them in X/Y and require ordinary prepared source solving,
+hard-constraint projection, independent residual validation, exact CAS, one history/replay edit,
+Undo/Redo and regenerated Current output. Scalar/trim controls remain on the native source cage.
 
 ### M82-O7 — Computed-feature composition and routing boundary
 
@@ -4353,7 +4360,21 @@ Reject unknown fields, invalid finite values, malformed adjacency/topology, stal
 and serialized generated patches/certificates atomically. Sketch canonical v1-v4 and private
 draft-v5 bytes remain unchanged.
 
-Qualification found five owning defects. M82-F001 requires a new provisional Offset feature
+### M82-O9 — Computed presentation can never erase accepted native geometry
+
+Restore exact fixture
+`crates/geosolve-demo-web/tests/fixtures/m82_f006_periodic_nurbs_repro.txt` through the ordinary
+decoder/workbench path, activate Offset on its deterministic representative periodic-NURBS span
+and repeat with fresh quadratic and cubic Beziers. The fixture's encoded payload is 1,542 bytes,
+SHA-256 `33f0caeea427f6048067a6abf51411ee53a428c3d44c12c2e59c22a516360e02`;
+its decoded 8,193-byte workspace has SHA-256
+`929a43c8f51900f1f6bf34fb1696cdcef88e842c26cf80cee3f58f8da88640af` and envelope checksum
+`e0db72996122baa0`. Require provisional Curve Offset identity to authenticate during Fillet-
+affordance composition. If any computed presentation still rejects, publish the complete finite
+native accepted scene and no computed fragments; never return a blank scene or success-like
+invalid feature.
+
+Qualification found seven owning findings. M82-F001 requires a new provisional Offset feature
 document to cold-evaluate beside an unrelated Current Fillet, preserving durable feature/history/
 transcript authority. M82-F002 distinguishes a persistently owned opposite-inward tangent endpoint
 from an unowned coincident tangency. M82-F003 requires cancellation or
@@ -4361,18 +4382,27 @@ from an unowned coincident tangency. M82-F003 requires cancellation or
 chain or output identity. M82-F004 requires an active Offset collector to rebuild when computed-
 feature identity changes without a native sketch-input change, preventing stale computed-Fillet
 source exclusions. M82-F005 requires browser help to describe both native and computed routes
-rather than claiming exact native curves are the only eligible operands. Their exact regressions
+rather than claiming exact native curves are the only eligible operands. M82-F006 authenticates a
+staged Curve Offset feature during Fillet-affordance composition and retains the complete native
+scene on any remaining computed-presentation failure, including later annotation, proxy-control
+and interaction-origin enrichment failure. M82-F007 adds source-owned constrained
+inverse proxies without promoting generated output into solver state or persistence. Its pre-
+nomination audit also seals computed scene semantics, binds reverse analytic traversal
+correspondence and withholds proxy semantics from connector-only edges. Their exact regressions
 are recorded in `docs/M82_IMPLEMENTATION.md`.
 
-The broad golden oracle adds exactly one systemic row,
-`feature.curve-offset.authoring.general-open-chain`, and now contains 272 reviewed `PASS` rows. The
-all-family kernel matrix, feature/topology/coordinator lifecycle slices, editor/demo adapters,
-workspace tests, Clippy/Rustdoc, locked WASM check and pinned release assembly pass during
-development qualification. Source `d521045`, tree `0a3bcb0`, snapshot
-`/tmp/geosolve-m82-uat.iOg5Do` and manifest aggregate `3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`
-are the current clean-qualified UAT authority. Source `7fd31c0` and snapshot
+The withdrawn post-F005 broad oracle added only
+`feature.curve-offset.authoring.general-open-chain` and contained 272 reviewed `PASS` rows. That
+historical evidence does not satisfy the replacement's required distinct family/chain/face/proxy
+matrix. The replacement matrix is 289/289 `PASS`, with 18 Curve Offset rows and SHA-256
+`cec9ad971e8e445f6a0e040a534d6790880e1a31903addea0d6d08ae1a5ad5f7`. Every computed row
+inventories all eligible two-dimensional proxies, moves one constrained source/follower pair in
+both axes, regenerates Current output and checks complete Undo/Redo restoration. Source
+`d521045`, tree `0a3bcb0`, snapshot `/tmp/geosolve-m82-uat.iOg5Do` and manifest aggregate
+`3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e` are withdrawn post-F005
+evidence, and their listener is retired. Source `7fd31c0` and snapshot
 `/tmp/geosolve-m82-uat.I58j21` remain withdrawn historical pre-F005 evidence only; their service
-runs are retired.
+runs are also retired.
 
 ## Frozen near-singular fixtures
 

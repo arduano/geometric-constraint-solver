@@ -2900,11 +2900,11 @@ accepted evidence; Tailscale PID `2850776` is retired. M81 is complete.
 
 ## M82 acceptance: certified computed all-family Curve Offset
 
-Status: **active; mechanically nominated after M82-F005, human UAT pending**.
+Status: **active; M82-F006/F007 replacement qualification in progress, human UAT pending**.
 `docs/M82_GOALS.md` is authoritative for
 scope, ADR 0038 for architecture, `docs/M82_IMPLEMENTATION.md` for actual evidence and
-`docs/M82_UAT.md` for the prepared, now-executable human scorecard. M82 is not accepted or
-complete.
+`docs/M82_UAT.md` for the prepared scorecard, which is not executable until a new immutable
+replacement is nominated. M82 is not accepted or complete.
 
 - [x] Wholly M80-eligible Line/Circle/CircularArc operands still create the existing native
   `ProfileOffset` with unchanged equations, persistence, editability and topology-barrier behavior.
@@ -2925,30 +2925,48 @@ complete.
 - [x] Face/chain intent retains exact source spans, traversal, direction/side, persistent or
   intrinsic spline adjacency, tangent/miter cells and normal-translated terminals. Coordinate
   proximity cannot authenticate connectivity or silently change a branch.
-- [x] Generated IDs are revision-local, never serialized and unavailable as constraint/operation
-  operands. Offset edges select their stable feature; existing Fillet arcs keep corner selection
-  and Fillet source-replacement precedence.
+- [x] Generated IDs are revision-local, never serialized and unavailable as direct
+  constraint/operation operands. Offset edges select their stable feature; existing Fillet arcs
+  keep corner selection and Fillet source-replacement precedence.
+- [x] Feature-selected computed Offset grips retain ordinary source control IDs and inverse-map
+  pointer motion into the prepared constrained source solve; generated patches do not become
+  solver state, and scalar/trim controls remain source-cage owned.
 - [x] Active computed-Fillet output is unavailable as Offset input. Ordinary native line-arc-line
   geometry published by M80's explicit native Fillet route remains eligible.
 - [x] Source/feature edits, suppression/delete, Undo/Redo, reload, stale-CAS and bounded failure
   preserve accepted native geometry, feature intent, history/transcript and allocator authority;
   Failed output is withheld and a later valid state recovers.
+- [x] Provisional Curve Offset identity is authenticated during computed Fillet-affordance
+  composition, and any remaining computed-presentation failure returns the complete native
+  accepted scene rather than an empty scene.
 - [x] Computed-feature v2 round-trips Curve Offset strictly while empty/Fillet-only state emits v1
   byte-for-byte. Workspace v6, reproduction v1, canonical sketch v1-v4 and private draft-v5 remain
   unchanged; no generated patch or certificate is persistent.
 - [x] Focused owner tests cover every curve family, exact analytic routing, mixed chains,
   spline-intrinsic adjacency, closed faces/holes, both sides, topology barriers, deterministic
-  exhaustion, lifecycle and compatibility. Native/WASM/editor/demo parity and any reviewed golden
-  addition pass.
-- [x] The corrected source passes formatting, diff hygiene, warnings-denied workspace
-  Clippy/Rustdoc, locked all-feature tests, native/WASM/demo parity, the exact reviewed 272-row
-  golden oracle, complete clean release gate and replacement no-rebuild Tailscale verification.
+  exhaustion, lifecycle and compatibility on the underlying implementation.
+- [ ] Exact F006 payload/Bezier scene regressions and F007 constrained proxy history/replay
+  regressions pass together with native/WASM/editor/demo parity on the replacement source.
+- [x] A distinct reviewed golden matrix covers Line, Polyline, Circle, CircularArc, Ellipse,
+  EllipticalArc, RationalQuadratic, Parabola, Hyperbola, Quadratic/Cubic Bezier, open/clamped and
+  periodic B-spline/NURBS, mixed chains, faces, holed faces and proxy/source regeneration. Exact
+  replacement matrix is exactly 289/289 `PASS` with SHA-256
+  `cec9ad971e8e445f6a0e040a534d6790880e1a31903addea0d6d08ae1a5ad5f7`; all 18 Curve Offset
+  rows have reviewed stable input fingerprints. Every computed row inventories all eligible
+  two-dimensional proxies, projects one source through an ordinary Coincident constraint with
+  independent X/Y motion, regenerates fresh Current output and verifies complete Undo/Redo state.
+- [ ] One corrected source passes formatting, diff hygiene, warnings-denied workspace
+  Clippy/Rustdoc, locked all-feature tests, native/WASM/demo parity, the expanded golden oracle,
+  complete clean release gate and replacement no-rebuild Tailscale verification.
 - [ ] The prepared human UAT, explicit supervising-human approval and exact Pages publication pass
   before closure.
 
 M82-F001 through M82-F005 bind cold provisional feature authority, owned tangent-endpoint
 locality, cooperative adaptive-fitting work, current live Offset collection and truthful route
-copy respectively. All five corrections are required by the checked contracts above;
+copy respectively. M82-F006 binds provisional Curve Offset identity plus complete native-scene
+fallback from the exact supplied periodic-NURBS payload and fresh quadratic/cubic Beziers.
+M82-F007 binds source-owned constrained inverse proxies without promoting generated patches into
+solver/persistence authority. All seven corrections are required by the contracts above;
 `docs/M82_IMPLEMENTATION.md` records their exact owning regressions.
 
 Withdrawn pre-F005 mechanical authority is exact source `7fd31c0`, tree `c6b6c89`, snapshot
@@ -2958,23 +2976,26 @@ historical endpoint `http://100.94.63.83:8080/`. Its listener is retired and tho
 entered human UAT. Every `docs/M82_UAT.md` row, supervising-human approval, Pages publication and
 closure remain pending.
 
-The replacement mechanical authority is exact source
+Withdrawn post-F005 mechanical authority is exact source
 `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
 `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`. Its clean release gate ran from 2026-08-20 23:17:08
 through 23:28:33 AEST; `/tmp/geosolve-m82-clean-gate.d521045.nix.log` is 269,138 bytes and 3,530 lines
 with SHA-256 `b66c277a00861854865440911e769aa5f9e94dbd55114e723b43b3bf46743472`. Frozen no-rebuild snapshot
 `/tmp/geosolve-m82-uat.iOg5Do` has ordered-manifest aggregate
-`3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`. It remains available at
-`http://100.94.63.83:8080/` under PID `1272147`; exact verification ledger
+`3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`. It was available at
+`http://100.94.63.83:8080/` under now-retired PID `1272147`; exact verification ledger
 `/tmp/geosolve-m82-final-verify.wU6t8i/results.tsv` has SHA-256
-`35fa0bb1109d96e97f7107f81ac76292ccd6fbb5cbc10da418d836bb05e6a3dd`. This evidence satisfies only
-the mechanical nomination criterion and makes the prepared scorecard executable. Human UAT,
-explicit approval, exact Pages publication and closure remain unchecked; M82 stays active and
-outside the accepted baseline.
+`35fa0bb1109d96e97f7107f81ac76292ccd6fbb5cbc10da418d836bb05e6a3dd`. M82-F006/F007 withdraw this
+evidence from current product/UAT authority. It no longer makes the scorecard executable. A new
+clean source, artifact and listener are intentionally absent until replacement qualification.
+Human UAT, explicit approval, exact Pages publication and closure remain unchecked; M82 stays
+active and outside the accepted baseline.
 
 M82 explicitly excludes topology-changing repair, trimming/splitting, loop removal, partial
 publication, computed-on-computed chaining, Bake/Explode, stable generated-edge names, canonical
-sketch v5, arbitrary third-party curves, surface/B-rep/3D offset and mobile UI.
+sketch v5, arbitrary third-party curves, surface/B-rep/3D offset and mobile UI. Inverse proxies
+edit ordinary constrained sources only; this exclusion does not permit direct constraints on
+revision-local output.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -79,12 +79,18 @@ construction/NURBS UAT and certified all-family visual profiles.
   other families use certified deterministic endpoint-Hermite cubic patches. Both the mathematical
   parallel and fitted output must remain regular, simple and topology-preserving, otherwise the
   complete feature fails closed. Generated geometry is associative, one-way, revision-local and
-  non-constrainable. M82-F005 corrects stale native-only Offset help after the first frozen
-  candidate, which remains withdrawn. Replacement source
+  unavailable as a direct constraint operand; feature-selected inverse proxies reuse ordinary
+  source controls and their constrained prepared solve. M82-F006 authenticates provisional Offset
+  identity during computed affordance composition and falls back to the complete native accepted
+  scene on any Current computed composition or downstream enrichment failure. M82-F007 owns the
+  inverse-proxy path, including sealed computed scene semantics, traversal-correct analytic source
+  correspondence and all-eligible-proxy golden inventory. Post-F005 source
   `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
-  `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, passes clean qualification and exact no-rebuild
-  Tailscale nomination. Its prepared scorecard is executable, but human UAT, approval, Pages and
-  closure remain pending, so M82 is not yet part of the accepted baseline.
+  `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, and its immutable artifact are withdrawn; the listener
+  is retired. The reviewed all-family golden now passes 289/289 rows; replacement clean
+  qualification/nomination,
+  human UAT, approval, Pages and closure remain pending, so M82 is not yet part of the accepted
+  baseline.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -736,7 +742,12 @@ topology before publishing Current output.
 M82 permits the acyclic `geosolve-sketch-features -> geosolve-sketch-topology` dependency so
 feature evaluation consumes existing certified face/adjacency evidence. No reverse dependency or
 feature-local curve equation is allowed. Generated Offset edges map to stable feature provenance,
-remain non-constrainable and are never serialized. Active computed-Fillet output remains
+remain unavailable as direct constraint operands and are never serialized. Selecting their owning
+feature may paint transient two-dimensional proxies that retain source
+`DocumentCurveControlId`s. Proxy pointer motion is inverse-translated to the source and enters the
+ordinary prepared solver transaction, source constraints, independent validation, exact CAS,
+history/replay and reevaluation. Scalar rails and trim/orientation controls remain on the native
+source cage. Active computed-Fillet output remains
 ineligible input; M80 native-published Fillet geometry is ordinary input, and existing Fillet
 source-replacement precedence is unchanged. Computed-feature private v2 is used only when Curve
 Offset intent requires it; empty and Fillet-only documents continue to emit exact v1 bytes.
@@ -752,6 +763,12 @@ the native sketch identity is unchanged.
 M82-F005 changes only the browser-owned explanatory copy and binds it with a static adapter
 regression: the tool now distinguishes retained native routing from certified computed routing
 without promising singular, self-intersecting or topology-changing output.
+M82-F006 routes staged Curve Offset identity into the document used by computed Fillet-affordance
+composition. `compose_editor_scene` retains the complete native accepted scene if a computed
+presentation layer still rejects; this fallback never publishes a failed computed feature as
+Current. M82-F007 adds transient inverse-edit proxies over generated presentation while retaining
+ordinary source control IDs and source solver authority. Generated patches remain revision-local,
+non-persistent and outside the constraint graph.
 
 ### `geosolve-linkage`
 
@@ -1606,11 +1623,15 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   rejected durable computed-feature mutation allocator-neutral. Focused implementation checks,
   workspace/release qualification and frozen Tailscale nomination pass at exact source `e4eca32`.
   Supervising-human acceptance and approval-descendant Pages run `32328472125` pass; M81 is closed.
-- M82: implemented with M82-F005 focused correction passing for certified computed all-family
-  Curve Offset under ADR 0038; replacement source `d52104595ee11f9e460e98ea5e26200bb34a5d94`,
-  tree `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, passes clean no-rebuild mechanical nomination and
-  the human scorecard is executable. Human UAT, explicit approval, Pages publication and closure
-  remain pending; M82 remains active outside the accepted baseline.
+- M82: M82-F006/F007 replacement implementation is under qualification for certified computed
+  all-family Curve Offset under ADR 0038. The exact supplied periodic-NURBS payload and fresh
+  Beziers bind complete accepted-scene fallback; computed feature selection exposes source-owned
+  constrained inverse proxies without making generated output persistent or directly
+  constrainable. Post-F005 source `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
+  `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, and its no-rebuild artifact are withdrawn and the
+  listener is retired. The reviewed all-family golden passes 289/289 rows. A new immutable
+  nomination, human UAT, explicit approval, Pages publication and closure remain pending; M82
+  remains active outside the accepted baseline.
   Preserve M80 native
   routing for exact Line/Circle/CircularArc operands; route mixed/general regular faces and ordered
   chains into revision-local computed output with explicit traversal, side, adjacency, junction

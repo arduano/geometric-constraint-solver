@@ -2,10 +2,12 @@
 
 # M82 — certified computed all-family Curve Offset
 
-Status: **implemented and clean-qualified; replacement candidate nominated for human UAT**. The
-first frozen candidate is withdrawn after correcting stale native-only Offset help; the focused
-red/green regression, replacement clean gate, no-rebuild freeze and exact Tailscale verification
-pass. This milestone broadens the ordinary Offset tool from M80's exact native
+Status: **implementation amended after M82-F006/F007; replacement qualification in progress and
+human UAT pending**. The previously nominated post-F005 source and frozen artifact are withdrawn:
+fresh Bezier previews and the supplied periodic-NURBS workspace exposed an accepted-scene
+composition defect, and the user required computed output to provide constraint-aware inverse
+editing rather than remain read-only. No replacement source, artifact or listener is nominated
+yet. This milestone broadens the ordinary Offset tool from M80's exact native
 line/circle/circular-arc association to deterministic computed offsets for every regular built-in
 planar curve family. It does not change or replace M80 `ProfileOffset`. ADR 0038 owns the
 architecture and certification boundary. M82 is not accepted or closed.
@@ -18,7 +20,7 @@ open chain. Operand routing is semantic and invisible to the user:
 - an operand wholly eligible for M80 continues to create the existing native, bidirectionally
   editable `ProfileOffset` with exact same-family target geometry; and
 - a mixed or general-curve operand creates one associative computed `CurveOffset` feature whose
-  generated output is revision-local and read-only.
+  generated output is revision-local and exposes transient source-owned inverse-edit proxies.
 
 The computed path supports all regular built-in planar families: Line, Circle, CircularArc,
 Ellipse, EllipticalArc, RationalQuadratic, Parabola, Hyperbola, Quadratic/Cubic Bezier, B-spline
@@ -82,6 +84,18 @@ geometry is associative, one-way and revision-local:
 
 - it is not solver state, a sketch variable, an ordinary persistent generated entity or a valid
   constraint/operation operand;
+- selecting the owning feature exposes finite proxy grips for its two-dimensional source point
+  and rational-middle controls, painted relative to the computed parallel but retaining the
+  ordinary source `DocumentCurveControlId`;
+- dragging a proxy inverse-translates the pointer request to that source control and uses the
+  ordinary prepared solve, hard constraints, independent residual validation, exact CAS,
+  history, replay and computed-feature reevaluation paths; generated output never becomes the
+  edit or constraint authority;
+- proxy placement uses traversal-correct evaluator-owned source parameters, while connector-only
+  miter edges expose no false source correspondence; constructor-sealed computed scene semantics
+  prevent caller-mutated presentation from authorizing a source solve;
+- scalar rails and trim/orientation controls remain on the native source cage, where their exact
+  domain semantics are available;
 - source edits, feature distance/direction edits, suppression, deletion, Undo/Redo and reload
   reevaluate from the exact current accepted sketch;
 - generated edge IDs are never serialized and are invalid after any input, feature or evaluator
@@ -114,6 +128,12 @@ Apply publishes exactly the displayed authenticated feature intent in one histor
 evaluation, certification, topology, work-budget or exact-CAS failure retains the prior complete
 scene, feature state, history, transcript and allocator authority.
 
+Computed presentation is never accepted-scene authority. If a provisional or durable computed
+feature cannot be composed or its annotation/control/interaction-origin enrichment fails, the
+editor must still publish the complete finite native accepted scene rather than return an empty
+scene. Provisional Curve Offset identities must participate in the same feature-document
+authentication used while composing Fillet affordances.
+
 Problems and the feature tree distinguish source invalidity, offset singularity, fitting budget,
 self-contact and topology-change failures without exposing unstable generated identities. Scene,
 picking, related highlighting and reproduction use generated provenance supplied by the computed
@@ -144,11 +164,18 @@ revision-local output IDs are never serialized.
   partial output or durable mutation.
 - Source edit, distance/direction edit, suppression/delete, Undo/Redo, reload, stale-CAS and
   work-exhaustion paths preserve current-only authority and allocator non-reuse.
+- Exact periodic-NURBS payload restoration plus fresh quadratic- and cubic-Bezier previews prove
+  provisional computed-feature composition cannot blank the accepted native scene.
+- Feature-selected inverse proxies retain source control IDs, go through the normal prepared
+  constrained solve and commit one replayable source edit; regenerated output is Current and old
+  revision-local generated IDs are revoked. Reverse analytic traversal and caller-tampered scene
+  semantics remain fail-closed.
 - Existing native-only Offset continues through M80 byte- and behavior-compatible routing;
   computed Fillet output is excluded while M80 native-published Fillets remain eligible.
 - Feature v1 bytes remain exact for empty/Fillet-only state; strict v2, workspace-v6 and repro-v1
   round trips pass without serializing output geometry.
-- Focused native/WASM/editor/demo tests, reviewed golden coverage, formatting, warnings-denied
+- Focused native/WASM/editor/demo tests, a distinct reviewed golden matrix for every built-in
+  family plus mixed chains/faces/holed faces and proxy regeneration, formatting, warnings-denied
   Clippy/Rustdoc, locked all-feature workspace tests and the complete clean release gate pass
   before a no-rebuild Tailscale UAT nomination.
 
@@ -158,4 +185,6 @@ M82 does not implement trimming, loop removal, self-intersection repair, split/m
 distance reduction, best-effort partial contours, computed-on-computed chaining, Bake/Explode,
 stable generated-edge naming across revisions, canonical sketch v5, arbitrary third-party curves,
 surface/B-rep offset, 3D offset or mobile UI. M80 native `ProfileOffset` remains the only
-constraint-friendly bidirectional offset association.
+bidirectional solver association. Computed inverse proxies deliberately edit constrained source
+controls; they do not promote generated patches into persistent solver geometry or direct
+constraint operands.
