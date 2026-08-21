@@ -232,26 +232,6 @@ caller accepts the qualified scorecard and requests closure without a new findin
 descendant `b582b82` passes Pages run `32328472125`, artifact `9392295853` and exact public-byte
 verification; the Tailscale listener is retired and M81 is closed.
 
-M82 is active under ADR 0038. The same Offset tool keeps M80's exact native `ProfileOffset` route
-for eligible Line/Circle/CircularArc faces and chains, while mixed/general regular built-in curves
-use associative revision-local computed `CurveOffset` output. General parallels are certified
-adaptive cubic patches; cusp, self-contact, contour touch, topology change or bounded-work
-uncertainty rejects the complete feature. M82-F001 through F005 bind cold preview authority,
-tangent-endpoint locality, bounded fitting work, feature-identity-aware live Offset collection and
-truthful route copy. M82-F006 adds exact periodic-NURBS and fresh Bezier blank-scene regressions,
-authenticates provisional Offset identity during computed affordance composition and retains the
-complete native accepted scene on computed composition or downstream enrichment failure. M82-F007
-paints transient Offset proxies that reuse ordinary constrained source controls; generated output
-remains revision-local, non-persistent and unavailable as a direct constraint operand. Post-F005 source
-`d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
-`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, and frozen snapshot
-`/tmp/geosolve-m82-uat.iOg5Do` are withdrawn, and their listener is retired. The reviewed all-family
-golden passes 289/289 rows with complete eligible proxy inventory and constrained X/Y/Undo/Redo
-coverage. Exact replacement source `06e3cce249834959808149441661dd8fdaf47373`, tree
-`9c754edb0bf28d15252c849123d7a7923f26f10c`, passes the complete clean gate and immutable
-Tailscale nomination at `http://100.94.63.83:8080/`. Human UAT is executable but pending; M82
-remains outside the accepted baseline.
-
 ## Read first
 
 1. `AGENTS.md`
@@ -260,7 +240,7 @@ remains outside the accepted baseline.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0038-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
 10. `docs/M74_GOALS.md`, `docs/M74_IMPLEMENTATION.md` and `docs/M74_UAT.md` — completed scoped
@@ -281,9 +261,6 @@ remains outside the accepted baseline.
 17. `docs/M81_GOALS.md`, `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md` — completed behavior-
     preserving architecture-consolidation contract, clean-qualified audit/finding ledger,
     accepted focused scorecard and exact public closeout.
-18. `docs/M82_GOALS.md`, `docs/M82_IMPLEMENTATION.md` and `docs/M82_UAT.md` — active certified
-    all-family Curve Offset contract, M82-F006/F007 replacement-hardening/nomination ledger and
-    executable pending scorecard; both earlier candidates are withdrawn.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -655,22 +632,10 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M81 are complete. M81's exact `e4eca32` candidate passes clean qualification, immutable
-Tailscale byte verification and supervising-human acceptance; approval descendant `b582b82`
-passes exact Pages publication. M82 is active under ADR 0038 with M82-F006/F007 replacement
-implementation mechanically qualified and frozen: preserve M80 native Offset routing, add a
-certified computed route for regular general-curve faces/chains, retain the complete native scene
-if computed presentation fails and inverse-edit constrained owning sources through transient
-generated-curve proxies.
-The reviewed replacement golden covers all 18 Curve Offset family/topology rows and passes
-289/289 classifications. Exact post-F005 source
-`d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
-`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, its frozen no-rebuild Tailscale artifact and listener
-are withdrawn. Exact replacement source `06e3cce249834959808149441661dd8fdaf47373`, tree
-`9c754edb0bf28d15252c849123d7a7923f26f10c`, and its no-rebuild Tailscale artifact are nominated;
-human UAT remains pending, so M82 stays active outside the accepted baseline.
-Do not admit topology repair, partial output or computed-on-computed chaining, and do not treat
-M81's private module moves as new behavior.
+M1-M81 are complete; no M82 scope is active. M81's exact `e4eca32` candidate passes clean
+qualification, immutable Tailscale byte verification and supervising-human acceptance; approval
+descendant `b582b82` passes exact Pages publication. Do not route Offset through computed features,
+admit a topology-changing fallback or treat M81's private module moves as new behavior.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -769,10 +734,6 @@ Durable milestone and cleanup records:
 - `docs/M81_IMPLEMENTATION.md` (clean-qualified implementation, M81-F001, audit, nomination,
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
-- `docs/adr/0038-certified-computed-curve-offset.md`
-- `docs/M82_GOALS.md` (active certified computed all-family Curve Offset contract)
-- `docs/M82_IMPLEMENTATION.md` (implementation, M82-F001–F007 and replacement-nomination ledger)
-- `docs/M82_UAT.md` (executable focused scorecard awaiting human UAT of the frozen replacement)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

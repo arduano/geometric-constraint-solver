@@ -1070,9 +1070,7 @@ fn observe_source_rotation() -> Observation {
     assert_eq!(features.sketch_document(), accepted.document().id());
     assert_eq!(features.features().len(), 1);
     let feature = &features.features()[0];
-    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
-        panic!("expected FilletSet feature");
-    };
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
     assert_eq!(fillet.corners.len(), 1);
     let persisted_corner = fillet.corners[0].without_id();
     let corner = fillet.corners[0].id;
@@ -1147,7 +1145,7 @@ fn validate_source_rotation_snapshot(
         .iter()
         .find(|evaluation| evaluation.feature == feature)
         .expect("source-rotation feature evaluation");
-    let ComputedFeatureEvaluationState::Current { corner_edges, .. } = &evaluation.state else {
+    let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
         let message = match &evaluation.state {
             ComputedFeatureEvaluationState::Failed {
                 failure: ComputedFeatureFailure::NoLocalRoot { .. },

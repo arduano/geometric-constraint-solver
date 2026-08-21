@@ -14,16 +14,11 @@ mod evaluation;
 mod tests;
 
 pub use document::{
-    COMPUTED_FEATURE_DOCUMENT_VERSION, ComputedCurveOffset, ComputedCurveOffsetChain,
-    ComputedCurveOffsetDirectedSpan, ComputedCurveOffsetJunction,
-    ComputedCurveOffsetJunctionBranch, ComputedCurveOffsetJunctionProvenance,
-    ComputedCurveOffsetLoop, ComputedCurveOffsetOperand, ComputedCurveOffsetTerminalPolicy,
-    ComputedCurveOffsetTraversal, ComputedCurveOffsetTurn, ComputedFeature,
-    ComputedFeatureAllocatorHighWater, ComputedFeatureCornerId, ComputedFeatureDefinition,
-    ComputedFeatureDocument, ComputedFeatureDocumentDigest, ComputedFeatureDocumentError,
-    ComputedFeatureDocumentId, ComputedFeatureDocumentIdentity, ComputedFeatureId,
-    ComputedFeatureLifecycleHighWater, ComputedFeatureRevision, ComputedFilletCorner,
-    ComputedFilletParent, ComputedFilletSet, MAX_COMPUTED_CURVE_OFFSET_SPANS,
+    COMPUTED_FEATURE_DOCUMENT_VERSION, ComputedFeature, ComputedFeatureAllocatorHighWater,
+    ComputedFeatureCornerId, ComputedFeatureDefinition, ComputedFeatureDocument,
+    ComputedFeatureDocumentDigest, ComputedFeatureDocumentError, ComputedFeatureDocumentId,
+    ComputedFeatureDocumentIdentity, ComputedFeatureId, ComputedFeatureLifecycleHighWater,
+    ComputedFeatureRevision, ComputedFilletCorner, ComputedFilletParent, ComputedFilletSet,
     MAX_COMPUTED_FEATURE_CORNERS, MAX_COMPUTED_FEATURE_JSON_BYTES,
     MAX_COMPUTED_FEATURE_LABEL_BYTES, MAX_COMPUTED_FEATURES, NativeCurveSpanSource,
     NewComputedFilletCorner,

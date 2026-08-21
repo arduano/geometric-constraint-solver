@@ -2,20 +2,13 @@
 
 mod fillet_branch;
 mod interval;
-mod offset;
 mod pieces;
 
 pub use fillet_branch::LineCurveFilletBranchCellError;
-pub use offset::{
-    CurveOffsetCertificate, CurveOffsetCubicPatch, CurveOffsetError, CurveOffsetGeometry,
-    CurveOffsetOptions, CurveOffsetResult, CurveOffsetTraversal, compute_curve_offset,
-    compute_curve_offset_with_controller,
-};
 
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt;
 use std::rc::Rc;
 
 use interval::{
@@ -242,112 +235,12 @@ pub struct VisualProfileContour {
     pub edges: Vec<VisualProfileEdge>,
 }
 
-/// Certified relation of one finite point to a visual-profile face.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum VisualProfilePointContainment {
-    Inside,
-    Outside,
-    Boundary,
-}
-
-/// Why a visual-profile point query could not return a certified classification.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum VisualProfilePointContainmentError {
-    NonFinitePoint,
-    InvalidFace,
-    Uncertified { kind: VisualProfileIssueKind },
-}
-
-#[derive(Clone, Debug)]
-struct CertifiedContainmentEdge {
-    support: CurveSpan,
-    curve: CurvePiece,
-    source_parameter_enclosures: [Interval; 2],
-}
-
 /// One visual bounded face. The first contour is counterclockwise; later contours are holes.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VisualProfileFace {
     pub contours: Vec<VisualProfileContour>,
     pub visual_area: f64,
     pub area_uncertainty: f64,
-    containment_contours: Vec<Vec<CertifiedContainmentEdge>>,
-}
-
-impl fmt::Debug for VisualProfileFace {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("VisualProfileFace")
-            .field("contours", &self.contours)
-            .field("visual_area", &self.visual_area)
-            .field("area_uncertainty", &self.area_uncertainty)
-            .finish_non_exhaustive()
-    }
-}
-
-impl PartialEq for VisualProfileFace {
-    fn eq(&self, other: &Self) -> bool {
-        self.contours == other.contours
-            && self.visual_area == other.visual_area
-            && self.area_uncertainty == other.area_uncertainty
-    }
-}
-
-impl VisualProfileFace {
-    /// Classifies one exact finite model-space point against this certified face.
-    ///
-    /// The query reuses the interval ray/root certificates retained from profile analysis. It
-    /// never tessellates or trusts the display endpoints as a geometric oracle.
-    ///
-    /// # Errors
-    ///
-    /// Returns a typed error for non-finite input, malformed face evidence, containment
-    /// ambiguity, invalid curve evaluation, or deterministic work-budget exhaustion.
-    pub fn classify_point(
-        &self,
-        point: [f64; 2],
-        options: VisualProfileOptions,
-    ) -> Result<VisualProfilePointContainment, VisualProfilePointContainmentError> {
-        if !point.into_iter().all(f64::is_finite) {
-            return Err(VisualProfilePointContainmentError::NonFinitePoint);
-        }
-        let Some(outer) = self.containment_contours.first() else {
-            return Err(VisualProfilePointContainmentError::InvalidFace);
-        };
-        if outer.is_empty() || self.containment_contours.iter().any(Vec::is_empty) {
-            return Err(VisualProfilePointContainmentError::InvalidFace);
-        }
-        let witness = Box2 {
-            x: Interval::point(point[0]),
-            y: Interval::point(point[1]),
-        };
-        let mut work = Work::new(options);
-        let outer = point_in_certified_contour(witness, outer, &mut work)
-            .map_err(|kind| VisualProfilePointContainmentError::Uncertified { kind })?;
-        match outer {
-            VisualProfilePointContainment::Outside => {
-                return Ok(VisualProfilePointContainment::Outside);
-            }
-            VisualProfilePointContainment::Boundary => {
-                return Ok(VisualProfilePointContainment::Boundary);
-            }
-            VisualProfilePointContainment::Inside => {}
-        }
-        for hole in self.containment_contours.iter().skip(1) {
-            match point_in_certified_contour(witness, hole, &mut work)
-                .map_err(|kind| VisualProfilePointContainmentError::Uncertified { kind })?
-            {
-                VisualProfilePointContainment::Inside => {
-                    return Ok(VisualProfilePointContainment::Outside);
-                }
-                VisualProfilePointContainment::Boundary => {
-                    return Ok(VisualProfilePointContainment::Boundary);
-                }
-                VisualProfilePointContainment::Outside => {}
-            }
-        }
-        Ok(VisualProfilePointContainment::Inside)
-    }
 }
 
 /// Read-only all-family visual profile result.
@@ -730,25 +623,6 @@ fn analyze_visual_profiles_with_work(
             return skipped_analysis(&work, kind, vec![source.span]);
         }
     }
-    // Every pair test starts with the same complete-domain enclosure. Cache those certified
-    // boxes once: adaptive Offset output can contain hundreds of cubic patches, and recomputing
-    // identical interval hulls for every O(n^2) candidate otherwise dominates an interaction
-    // even though nearly all ordered-neighbourhood boxes are immediately disjoint.
-    let source_bounds = match sources
-        .iter()
-        .map(|source| {
-            source.curve.position(source.parameters).map_err(|error| {
-                (
-                    source.span,
-                    evaluation_issue(error, source.span, source.span),
-                )
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()
-    {
-        Ok(bounds) => bounds,
-        Err((span, kind)) => return skipped_analysis(&work, kind, vec![span]),
-    };
 
     let self_candidates = sources
         .iter()
@@ -776,17 +650,6 @@ fn analyze_visual_profiles_with_work(
             Vec::new(),
         );
     }
-    if !work.charge_operation(
-        OperationWorkCounter::ProfileCandidatePairs,
-        candidate_pairs,
-        OperationCheckpoint::ProfileCandidate,
-    ) {
-        return interrupted_profile_analysis(&work);
-    }
-    work.candidate_pairs = candidate_pairs;
-    let Some(overlapping_pairs) = overlapping_source_pairs(&source_bounds, &work) else {
-        return interrupted_profile_analysis(&work);
-    };
 
     let mut source_components = DisjointSet::new(sources.len());
     let mut endpoint_owner = BTreeMap::<VertexKey, usize>::new();
@@ -800,43 +663,53 @@ fn analyze_visual_profiles_with_work(
 
     let mut roots = Vec::new();
     let mut pair_issues = Vec::new();
-    for (first, second) in overlapping_pairs {
-        if same_periodic_partition(&sources[first], &sources[second]) {
-            continue;
-        }
-        match isolate_pair(
-            &sources,
-            first,
-            second,
-            source_bounds[first],
-            source_bounds[second],
-            &explicit_fillet_joins,
-            &mut work,
-        ) {
-            Ok(pair_roots) => {
-                if !pair_roots.is_empty() {
-                    source_components.union(first, second);
-                    roots.extend(pair_roots);
-                }
+    for first in 0..sources.len() {
+        for second in first + 1..sources.len() {
+            if !work.charge_operation(
+                OperationWorkCounter::ProfileCandidatePairs,
+                1,
+                OperationCheckpoint::ProfileCandidate,
+            ) {
+                return skipped_analysis_with_families(
+                    &work,
+                    VisualProfileIssueKind::CandidateBudgetExceeded {
+                        required: work.candidate_pairs.saturating_add(1),
+                        limit: options.max_candidate_pairs,
+                    },
+                    sources.iter().map(|source| source.span).collect(),
+                    families,
+                );
             }
-            Err(kind) => {
-                if matches!(
-                    kind,
-                    VisualProfileIssueKind::IntersectionRootBudgetExceeded { .. }
-                ) {
-                    return skipped_analysis_with_families(
-                        &work,
-                        kind,
-                        sources.iter().map(|source| source.span).collect(),
-                        families,
-                    );
+            work.candidate_pairs += 1;
+            if same_periodic_partition(&sources[first], &sources[second]) {
+                continue;
+            }
+            match isolate_pair(&sources, first, second, &explicit_fillet_joins, &mut work) {
+                Ok(pair_roots) => {
+                    if !pair_roots.is_empty() {
+                        source_components.union(first, second);
+                        roots.extend(pair_roots);
+                    }
                 }
-                source_components.union(first, second);
-                pair_issues.push(PairIssue {
-                    kind,
-                    first_source: first,
-                    second_source: second,
-                });
+                Err(kind) => {
+                    if matches!(
+                        kind,
+                        VisualProfileIssueKind::IntersectionRootBudgetExceeded { .. }
+                    ) {
+                        return skipped_analysis_with_families(
+                            &work,
+                            kind,
+                            sources.iter().map(|source| source.span).collect(),
+                            families,
+                        );
+                    }
+                    source_components.union(first, second);
+                    pair_issues.push(PairIssue {
+                        kind,
+                        first_source: first,
+                        second_source: second,
+                    });
+                }
             }
         }
     }
@@ -844,6 +717,22 @@ fn analyze_visual_profiles_with_work(
         if !piece.curve.may_self_intersect() {
             continue;
         }
+        if !work.charge_operation(
+            OperationWorkCounter::ProfileCandidatePairs,
+            1,
+            OperationCheckpoint::ProfileCandidate,
+        ) {
+            return skipped_analysis_with_families(
+                &work,
+                VisualProfileIssueKind::CandidateBudgetExceeded {
+                    required: work.candidate_pairs.saturating_add(1),
+                    limit: options.max_candidate_pairs,
+                },
+                sources.iter().map(|source| source.span).collect(),
+                families,
+            );
+        }
+        work.candidate_pairs += 1;
         match isolate_self(piece, source, &mut work) {
             Ok(self_roots) => roots.extend(self_roots),
             Err(kind) => {
@@ -2186,74 +2075,24 @@ fn same_periodic_partition(first: &SourcePiece, second: &SourcePiece) -> bool {
         )
 }
 
-/// Returns a conservative, deterministic broad phase for source-pair intersection work.
-///
-/// The narrow phase deliberately treats boxes separated by no more than its round-off margin as
-/// potentially touching. Expand each sweep interval by its own outward-rounded contribution to
-/// that margin so the broad phase can only add candidates, never discard one the narrow phase
-/// would inspect. The final sort restores the historical `(first, second)` iteration order even
-/// when geometric x-order differs from persistent source order.
-fn overlapping_source_pairs(bounds: &[Box2], work: &Work) -> Option<Vec<(usize, usize)>> {
-    let mut sweep = bounds
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(index, bounds)| {
-            debug_assert!(bounds.is_finite());
-            let scale = [
-                bounds.x.lower,
-                bounds.x.upper,
-                bounds.y.lower,
-                bounds.y.upper,
-            ]
-            .into_iter()
-            .map(f64::abs)
-            .fold(1.0, f64::max);
-            let margin = 256.0 * f64::EPSILON * scale;
-            (
-                next_down(bounds.x.lower - margin),
-                next_up(bounds.x.upper + margin),
-                index,
-            )
-        })
-        .collect::<Vec<_>>();
-    sweep.sort_by(|first, second| {
-        first
-            .0
-            .total_cmp(&second.0)
-            .then_with(|| first.2.cmp(&second.2))
-    });
-
-    let mut active = Vec::<(f64, usize)>::new();
-    let mut pairs = Vec::new();
-    for (lower, upper, current) in sweep {
-        if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
-            return None;
-        }
-        active.retain(|(active_upper, _)| *active_upper >= lower);
-        for &(_, other) in &active {
-            if !bounds_clearly_disjoint(bounds[current], bounds[other]) {
-                pairs.push((current.min(other), current.max(other)));
-            }
-        }
-        active.push((upper, current));
-    }
-    pairs.sort_unstable();
-    Some(pairs)
-}
-
 #[allow(clippy::too_many_lines)]
 fn isolate_pair(
     sources: &[SourcePiece],
     first_index: usize,
     second_index: usize,
-    first_bounds: Box2,
-    second_bounds: Box2,
     explicit_fillet_joins: &BTreeSet<ExplicitFilletJoin>,
     work: &mut Work,
 ) -> Result<Vec<CertifiedRoot>, VisualProfileIssueKind> {
     let first = &sources[first_index];
     let second = &sources[second_index];
+    let first_bounds = first
+        .curve
+        .position(first.parameters)
+        .map_err(|error| evaluation_issue(error, first.span, second.span))?;
+    let second_bounds = second
+        .curve
+        .position(second.parameters)
+        .map_err(|error| evaluation_issue(error, first.span, second.span))?;
     if bounds_clearly_disjoint(first_bounds, second_bounds) {
         return Ok(Vec::new());
     }
@@ -2881,7 +2720,7 @@ fn line_curve_intersections(
             }
             continue;
         }
-        if excluded_line_curve_corner_is_local(line, curve, parameter, derivative_value)? {
+        if excluded_line_curve_corner_is_local(line, curve, parameter, derivative_value) {
             continue;
         }
         if depth >= work.options.max_intersection_depth {
@@ -4503,33 +4342,13 @@ fn excluded_line_curve_corner_is_local(
     curve: &SourcePiece,
     parameter: Interval,
     signed_derivative: Interval,
-) -> Result<bool, VisualProfileIssueKind> {
-    let Some((_, line_derivative)) = linear_geometry(line) else {
-        return Ok(false);
-    };
-    for (line_parameter, curve_parameter, _) in shared_corners(line, curve) {
-        let Some(curve_direction) = inward_parameter_direction(parameter, curve_parameter) else {
-            continue;
-        };
-        if signed_derivative.excludes_zero() {
-            return Ok(true);
-        }
-        let line_direction = if parameter_equal(line_parameter, line.parameters.lower) {
-            1.0
-        } else {
-            -1.0
-        };
-        let line_inward = line_derivative.map(|value| value.scale(line_direction));
-        let curve_inward = curve
-            .curve
-            .derivative(parameter)
-            .map_err(|error| evaluation_issue(error, line.span, curve.span))?
-            .map(|value| value.scale(curve_direction));
-        if dot_interval(line_inward, curve_inward).upper < 0.0 {
-            return Ok(true);
-        }
-    }
-    Ok(false)
+) -> bool {
+    signed_derivative.excludes_zero()
+        && shared_corners(line, curve)
+            .iter()
+            .any(|(_, curve_parameter, _)| {
+                inward_parameter_direction(parameter, *curve_parameter).is_some()
+            })
 }
 
 fn excluded_corner_is_local(
@@ -5238,12 +5057,6 @@ fn build_faces(
                 .iter()
                 .map(|child| cycle_contour(&cycles[*child], fragments, true)),
         );
-        let mut containment_contours = vec![cycle_containment_edges(cycle, fragments, sources)];
-        containment_contours.extend(
-            children[index]
-                .iter()
-                .map(|child| cycle_containment_edges(&cycles[*child], fragments, sources)),
-        );
         faces.push(VisualProfileFace {
             contours,
             visual_area: children[index]
@@ -5252,7 +5065,6 @@ fn build_faces(
                     area - cycles[*child].representative_area
                 }),
             area_uncertainty: interval_uncertainty(visual_area),
-            containment_contours,
         });
         work.faces += 1;
     }
@@ -5295,13 +5107,11 @@ fn strictly_contains_cycle(
                 support: fragment.source_span,
             })?;
         return match point_in_cycle(witness, parent, fragments, sources, work)? {
-            VisualProfilePointContainment::Inside => Ok(true),
-            VisualProfilePointContainment::Outside => Ok(false),
-            VisualProfilePointContainment::Boundary => {
-                Err(VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: fragment.source_span,
-                })
-            }
+            PointContainment::Inside => Ok(true),
+            PointContainment::Outside => Ok(false),
+            PointContainment::Boundary => Err(VisualProfileIssueKind::ContainmentAmbiguity {
+                support: fragment.source_span,
+            }),
         };
     }
     Err(VisualProfileIssueKind::ContainmentAmbiguity {
@@ -5309,60 +5119,11 @@ fn strictly_contains_cycle(
     })
 }
 
-#[derive(Clone, Copy)]
-struct ContainmentEdge<'a> {
-    support: CurveSpan,
-    curve: &'a CurvePiece,
-    source_parameter_enclosures: [Interval; 2],
-}
-
-#[derive(Clone, Copy, Debug)]
-enum ContainmentRayAxis {
-    PositiveX,
-    PositiveY,
-    PositiveDiagonal,
-    PositiveSkewX,
-    PositiveSkewY,
-}
-
-impl ContainmentRayAxis {
-    fn along(self, value: Box2) -> Interval {
-        match self {
-            Self::PositiveX => value.x,
-            Self::PositiveY => value.y,
-            Self::PositiveDiagonal => value.x.add(value.y),
-            Self::PositiveSkewX => value.x.mul(Interval::point(2.0)).add(value.y),
-            Self::PositiveSkewY => value.x.add(value.y.mul(Interval::point(2.0))),
-        }
-    }
-
-    fn normal(self, value: Box2) -> Interval {
-        match self {
-            Self::PositiveX => value.y,
-            Self::PositiveY => value.x,
-            Self::PositiveDiagonal => value.y.sub(value.x),
-            Self::PositiveSkewX => value.y.mul(Interval::point(2.0)).sub(value.x),
-            Self::PositiveSkewY => value.y.sub(value.x.mul(Interval::point(2.0))),
-        }
-    }
-
-    fn normal_derivative(self, value: [Interval; 2]) -> Interval {
-        match self {
-            Self::PositiveX => value[1],
-            Self::PositiveY => value[0],
-            Self::PositiveDiagonal => value[1].sub(value[0]),
-            Self::PositiveSkewX => value[1].mul(Interval::point(2.0)).sub(value[0]),
-            Self::PositiveSkewY => value[1].sub(value[0].mul(Interval::point(2.0))),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-enum RayPointContainment {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PointContainment {
     Inside,
     Outside,
     Boundary,
-    Degenerate(CurveSpan),
 }
 
 fn point_in_cycle(
@@ -5371,248 +5132,113 @@ fn point_in_cycle(
     fragments: &[Fragment],
     sources: &[SourcePiece],
     work: &mut Work,
-) -> Result<VisualProfilePointContainment, VisualProfileIssueKind> {
-    let edges = cycle
-        .edges
-        .iter()
-        .map(|edge| {
-            let fragment = &fragments[edge.fragment];
-            let source = &sources[fragment.source];
-            ContainmentEdge {
-                support: source.span,
-                curve: &source.curve,
-                source_parameter_enclosures: fragment.source_parameter_enclosures,
-            }
-        })
-        .collect::<Vec<_>>();
-    point_in_containment_edges(witness, &edges, work)
-}
-
-fn point_in_certified_contour(
-    witness: Box2,
-    contour: &[CertifiedContainmentEdge],
-    work: &mut Work,
-) -> Result<VisualProfilePointContainment, VisualProfileIssueKind> {
-    let edges = contour
-        .iter()
-        .map(|edge| ContainmentEdge {
-            support: edge.support,
-            curve: &edge.curve,
-            source_parameter_enclosures: edge.source_parameter_enclosures,
-        })
-        .collect::<Vec<_>>();
-    point_in_containment_edges(witness, &edges, work)
-}
-
-fn point_in_containment_edges(
-    witness: Box2,
-    edges: &[ContainmentEdge<'_>],
-    work: &mut Work,
-) -> Result<VisualProfilePointContainment, VisualProfileIssueKind> {
-    const RAY_AXES: [ContainmentRayAxis; 5] = [
-        ContainmentRayAxis::PositiveSkewX,
-        ContainmentRayAxis::PositiveSkewY,
-        ContainmentRayAxis::PositiveDiagonal,
-        ContainmentRayAxis::PositiveX,
-        ContainmentRayAxis::PositiveY,
-    ];
-    let mut ambiguous_support = None;
-    for (axis_index, axis) in RAY_AXES.into_iter().enumerate() {
-        let remaining = work
-            .options
-            .max_containment_tests
-            .saturating_sub(work.containment_tests);
-        if remaining == 0 {
-            return Err(VisualProfileIssueKind::ContainmentBudgetExceeded {
-                required: work.options.max_containment_tests.saturating_add(1),
-                limit: work.options.max_containment_tests,
-            });
-        }
-        let remaining_axes = RAY_AXES.len() - axis_index;
-        let axis_limit = work
-            .containment_tests
-            .saturating_add(remaining.div_ceil(remaining_axes));
-        let result = point_in_positive_ray(witness, edges, axis, axis_limit, work);
-        match result {
-            Ok(RayPointContainment::Inside) => {
-                return Ok(VisualProfilePointContainment::Inside);
-            }
-            Ok(RayPointContainment::Outside) => {
-                return Ok(VisualProfilePointContainment::Outside);
-            }
-            Ok(RayPointContainment::Boundary) => {
-                return Ok(VisualProfilePointContainment::Boundary);
-            }
-            Ok(RayPointContainment::Degenerate(support))
-            | Err(VisualProfileIssueKind::ContainmentAmbiguity { support }) => {
-                ambiguous_support = Some(
-                    ambiguous_support.map_or(support, |current: CurveSpan| current.min(support)),
-                );
-            }
-            Err(kind) => return Err(kind),
-        }
-    }
-    Err(VisualProfileIssueKind::ContainmentAmbiguity {
-        support: ambiguous_support.unwrap_or(edges[0].support),
-    })
-}
-
-fn point_in_positive_ray(
-    witness: Box2,
-    edges: &[ContainmentEdge<'_>],
-    axis: ContainmentRayAxis,
-    axis_containment_limit: usize,
-    work: &mut Work,
-) -> Result<RayPointContainment, VisualProfileIssueKind> {
+) -> Result<PointContainment, VisualProfileIssueKind> {
     let mut crossings = 0_usize;
-    let witness_along = axis.along(witness);
-    let witness_normal = axis.normal(witness);
-    for edge in edges {
-        let complete_parameters = Interval::hull(
-            edge.source_parameter_enclosures[0]
-                .lower
-                .min(edge.source_parameter_enclosures[1].lower),
-            edge.source_parameter_enclosures[0]
-                .upper
-                .max(edge.source_parameter_enclosures[1].upper),
-        );
-        let complete_position = edge.curve.position(complete_parameters).map_err(|_| {
-            VisualProfileIssueKind::ContainmentAmbiguity {
-                support: edge.support,
-            }
-        })?;
-        if !axis.normal(complete_position).overlaps(witness_normal)
-            || axis.along(complete_position).upper < witness_along.lower
-        {
-            continue;
-        }
-        for endpoint in edge.source_parameter_enclosures {
-            let position = edge.curve.position(endpoint).map_err(|_| {
+    for edge in &cycle.edges {
+        let fragment = &fragments[edge.fragment];
+        let source = &sources[fragment.source];
+        for endpoint in fragment.source_parameter_enclosures {
+            let position = source.curve.position(endpoint).map_err(|_| {
                 VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: edge.support,
+                    support: source.span,
                 }
             })?;
-            if position.x.overlaps(witness.x) && position.y.overlaps(witness.y) {
-                return Ok(RayPointContainment::Boundary);
-            }
-            if axis.normal(position).overlaps(witness_normal)
-                && axis.along(position).upper >= witness_along.lower
-            {
-                return Ok(RayPointContainment::Degenerate(edge.support));
+            if position.y.overlaps(witness.y) && position.x.upper >= witness.x.lower {
+                return Ok(PointContainment::Boundary);
             }
         }
         let Some(parameters) = Interval::checked(
-            next_up(edge.source_parameter_enclosures[0].upper),
-            next_down(edge.source_parameter_enclosures[1].lower),
+            next_up(fragment.source_parameter_enclosures[0].upper),
+            next_down(fragment.source_parameter_enclosures[1].lower),
         ) else {
             let unresolved = Interval::hull(
-                edge.source_parameter_enclosures[0].upper,
-                edge.source_parameter_enclosures[1].lower,
+                fragment.source_parameter_enclosures[0].upper,
+                fragment.source_parameter_enclosures[1].lower,
             );
-            let position = edge.curve.position(unresolved).map_err(|_| {
+            let position = source.curve.position(unresolved).map_err(|_| {
                 VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: edge.support,
+                    support: source.span,
                 }
             })?;
-            if position.x.overlaps(witness.x) && position.y.overlaps(witness.y) {
-                return Ok(RayPointContainment::Boundary);
-            }
-            if !axis.normal(position).overlaps(witness_normal)
-                || axis.along(position).upper < witness_along.lower
-            {
+            if !position.y.overlaps(witness.y) || position.x.upper < witness.x.lower {
                 continue;
             }
-            return Ok(RayPointContainment::Degenerate(edge.support));
+            return Err(VisualProfileIssueKind::ContainmentAmbiguity {
+                support: source.span,
+            });
         };
-        let roots = isolate_ray_roots(
-            edge,
-            parameters,
-            witness_normal,
-            axis,
-            axis_containment_limit,
-            work,
-        )?;
+        let roots = isolate_ray_roots(source, parameters, witness.y, work)?;
         for root in roots {
-            let position = edge.curve.position(root).map_err(|_| {
+            let derivative = source.curve.derivative(root).map_err(|_| {
                 VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: edge.support,
+                    support: source.span,
                 }
             })?;
-            if position.x.overlaps(witness.x) && position.y.overlaps(witness.y) {
-                return Ok(RayPointContainment::Boundary);
+            if derivative[1].contains_zero() {
+                return Err(VisualProfileIssueKind::ContainmentAmbiguity {
+                    support: source.span,
+                });
             }
-            let derivative = edge.curve.derivative(root).map_err(|_| {
+            let position = source.curve.position(root).map_err(|_| {
                 VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: edge.support,
+                    support: source.span,
                 }
             })?;
-            if axis.normal_derivative(derivative).contains_zero() {
-                return Ok(RayPointContainment::Degenerate(edge.support));
+            if position.x.overlaps(witness.x) {
+                return Ok(PointContainment::Boundary);
             }
-            let position_along = axis.along(position);
-            if position_along.upper < witness_along.lower {
+            if position.x.upper < witness.x.lower {
                 continue;
             }
-            if position_along.lower <= witness_along.upper {
-                return Ok(RayPointContainment::Boundary);
+            if position.x.lower <= witness.x.upper {
+                return Ok(PointContainment::Boundary);
             }
             crossings += 1;
         }
     }
     Ok(if crossings.is_multiple_of(2) {
-        RayPointContainment::Outside
+        PointContainment::Outside
     } else {
-        RayPointContainment::Inside
+        PointContainment::Inside
     })
 }
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "the bounded interval root isolator keeps subdivision, budget and distinct-root certification in one auditable routine"
-)]
 fn isolate_ray_roots(
-    source: &ContainmentEdge<'_>,
+    source: &SourcePiece,
     parameter: Interval,
-    ray_normal: Interval,
-    axis: ContainmentRayAxis,
-    axis_containment_limit: usize,
+    ray_y: Interval,
     work: &mut Work,
 ) -> Result<Vec<Interval>, VisualProfileIssueKind> {
     let mut stack = vec![(parameter, 0_usize)];
     let mut roots = Vec::new();
     while let Some((interval, depth)) = stack.pop() {
-        if work.containment_tests >= axis_containment_limit {
-            return Err(VisualProfileIssueKind::ContainmentAmbiguity {
-                support: source.support,
-            });
-        }
         charge_containment(work)?;
         let position = source.curve.position(interval).map_err(|_| {
             VisualProfileIssueKind::ContainmentAmbiguity {
-                support: source.support,
+                support: source.span,
             }
         })?;
-        if !axis.normal(position).overlaps(ray_normal) {
+        if !position.y.overlaps(ray_y) {
             continue;
         }
         let derivative = source.curve.derivative(interval).map_err(|_| {
             VisualProfileIssueKind::ContainmentAmbiguity {
-                support: source.support,
+                support: source.span,
             }
         })?;
-        let normal_derivative = axis.normal_derivative(derivative);
-        if normal_derivative.excludes_zero() {
+        if derivative[1].excludes_zero() {
             let middle = interval.midpoint();
             let value = source
                 .curve
                 .position(Interval::point(middle))
                 .map_err(|_| VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: source.support,
-                })?;
-            let value = axis.normal(value).sub(ray_normal);
-            let newton = Interval::point(middle).sub(value.div(normal_derivative).ok_or(
+                    support: source.span,
+                })?
+                .y
+                .sub(ray_y);
+            let newton = Interval::point(middle).sub(value.div(derivative[1]).ok_or(
                 VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: source.support,
+                    support: source.span,
                 },
             )?);
             let Some(root) = interval.intersection(newton) else {
@@ -5623,34 +5249,24 @@ fn isolate_ray_roots(
                 continue;
             }
         }
-        let middle = interval.midpoint();
-        if let Some(root) = bracket_ray_midpoint_root(source, interval, middle, ray_normal, axis)? {
-            roots.push(root);
-            if interval.lower < root.lower {
-                stack.push((Interval::hull(interval.lower, root.lower), depth + 1));
-            }
-            if root.upper < interval.upper {
-                stack.push((Interval::hull(root.upper, interval.upper), depth + 1));
-            }
-            continue;
-        }
         if depth >= work.options.max_intersection_depth {
             return Err(VisualProfileIssueKind::ContainmentAmbiguity {
-                support: source.support,
+                support: source.span,
             });
         }
+        let middle = interval.midpoint();
         if middle.to_bits() == interval.lower.to_bits()
             || middle.to_bits() == interval.upper.to_bits()
         {
             return Err(VisualProfileIssueKind::ContainmentAmbiguity {
-                support: source.support,
+                support: source.span,
             });
         }
         if work.intersection_subdivisions >= work.options.max_intersection_subdivisions {
             return Err(
                 VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
-                    first: source.support,
-                    second: source.support,
+                    first: source.span,
+                    second: source.span,
                     limit: work.options.max_intersection_subdivisions,
                 },
             );
@@ -5662,8 +5278,8 @@ fn isolate_ray_roots(
         ) {
             return Err(
                 VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
-                    first: source.support,
-                    second: source.support,
+                    first: source.span,
+                    second: source.span,
                     limit: work.options.max_intersection_subdivisions,
                 },
             );
@@ -5673,70 +5289,14 @@ fn isolate_ray_roots(
         stack.push((Interval::hull(interval.lower, middle), depth + 1));
     }
     roots.sort_by(|first, second| first.lower.total_cmp(&second.lower));
-    let mut distinct_roots = Vec::<Interval>::with_capacity(roots.len());
-    for root in roots {
-        if let Some(previous) = distinct_roots.last_mut()
-            && previous.overlaps(root)
-        {
-            let joined = previous.include(root);
-            let derivative = source.curve.derivative(joined).map_err(|_| {
-                VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: source.support,
-                }
-            })?;
-            if axis.normal_derivative(derivative).contains_zero() {
-                return Err(VisualProfileIssueKind::ContainmentAmbiguity {
-                    support: source.support,
-                });
-            }
-            *previous = joined;
-        } else {
-            distinct_roots.push(root);
+    for pair in roots.windows(2) {
+        if pair[0].overlaps(pair[1]) {
+            return Err(VisualProfileIssueKind::ContainmentAmbiguity {
+                support: source.span,
+            });
         }
     }
-    Ok(distinct_roots)
-}
-
-fn bracket_ray_midpoint_root(
-    source: &ContainmentEdge<'_>,
-    domain: Interval,
-    middle: f64,
-    ray_normal: Interval,
-    axis: ContainmentRayAxis,
-) -> Result<Option<Interval>, VisualProfileIssueKind> {
-    let width = domain.width() * 1.0e-8;
-    if width == 0.0 {
-        return Ok(None);
-    }
-    let interval = Interval::hull(
-        (middle - width).max(domain.lower),
-        (middle + width).min(domain.upper),
-    );
-    if interval.lower.to_bits() == interval.upper.to_bits() {
-        return Ok(None);
-    }
-    let derivative = source.curve.derivative(interval).map_err(|_| {
-        VisualProfileIssueKind::ContainmentAmbiguity {
-            support: source.support,
-        }
-    })?;
-    if !axis.normal_derivative(derivative).excludes_zero() {
-        return Ok(None);
-    }
-    let signed_value = |parameter| -> Result<Interval, VisualProfileIssueKind> {
-        source
-            .curve
-            .position(Interval::point(parameter))
-            .map(|position| axis.normal(position).sub(ray_normal))
-            .map_err(|_| VisualProfileIssueKind::ContainmentAmbiguity {
-                support: source.support,
-            })
-    };
-    let lower = signed_value(interval.lower)?;
-    let upper = signed_value(interval.upper)?;
-    let bracketed =
-        lower.upper < 0.0 && upper.lower > 0.0 || upper.upper < 0.0 && lower.lower > 0.0;
-    Ok(bracketed.then_some(interval))
+    Ok(roots)
 }
 
 fn charge_containment(work: &mut Work) -> Result<(), VisualProfileIssueKind> {
@@ -5830,26 +5390,6 @@ fn cycle_contour(cycle: &Cycle, fragments: &[Fragment], reverse: bool) -> Visual
         area_uncertainty: interval_uncertainty(area),
         edges,
     }
-}
-
-fn cycle_containment_edges(
-    cycle: &Cycle,
-    fragments: &[Fragment],
-    sources: &[SourcePiece],
-) -> Vec<CertifiedContainmentEdge> {
-    cycle
-        .edges
-        .iter()
-        .map(|edge| {
-            let fragment = &fragments[edge.fragment];
-            let source = &sources[fragment.source];
-            CertifiedContainmentEdge {
-                support: source.span,
-                curve: source.curve.clone(),
-                source_parameter_enclosures: fragment.source_parameter_enclosures,
-            }
-        })
-        .collect()
 }
 
 fn skipped_analysis(
@@ -6021,10 +5561,7 @@ fn interval_uncertainty(value: Interval) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Box2, DisjointSet, Interval, VisualProfileOptions, Work, bounds_clearly_disjoint,
-        candidate_pair_count, is_explicit_full_period, next_down, overlapping_source_pairs,
-    };
+    use super::{DisjointSet, candidate_pair_count, is_explicit_full_period, next_down};
     use crate::{
         CurveDefinition, CurveSpan, DocumentTrimBoundary, DocumentTrimParameter, ScalarDomain,
         ScalarUnit, SketchDocument,
@@ -6045,33 +5582,6 @@ mod tests {
         assert_eq!(candidate_pair_count(0), Some(0));
         assert_eq!(candidate_pair_count(70_000), Some(2_449_965_000));
         assert_eq!(candidate_pair_count(usize::MAX), None);
-    }
-
-    #[test]
-    fn source_pair_sweep_is_conservative_and_restores_lexicographic_order() {
-        let box_2d = |x: [f64; 2], y: [f64; 2]| Box2 {
-            x: Interval::hull(x[0], x[1]),
-            y: Interval::hull(y[0], y[1]),
-        };
-        let bounds = vec![
-            box_2d([10.0, 11.0], [0.0, 1.0]),
-            box_2d([0.0, 2.0], [0.0, 2.0]),
-            box_2d([1.0, 3.0], [1.0, 3.0]),
-            box_2d([10.5, 12.0], [0.5, 1.5]),
-            box_2d([5.0, 6.0], [5.0, 6.0]),
-            box_2d([20.0, 21.0], [0.0, 1.0]),
-            box_2d([21.0 + 128.0 * f64::EPSILON, 22.0], [0.0, 1.0]),
-        ];
-        let expected = (0..bounds.len())
-            .flat_map(|first| ((first + 1)..bounds.len()).map(move |second| (first, second)))
-            .filter(|(first, second)| !bounds_clearly_disjoint(bounds[*first], bounds[*second]))
-            .collect::<Vec<_>>();
-
-        let actual =
-            overlapping_source_pairs(&bounds, &Work::new(VisualProfileOptions::default())).unwrap();
-
-        assert_eq!(actual, expected);
-        assert_eq!(actual, vec![(0, 3), (1, 2), (5, 6)]);
     }
 
     #[test]

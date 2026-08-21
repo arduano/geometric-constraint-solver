@@ -224,10 +224,6 @@ fn tree_markup_with_pending_and_implicit(
     output
 }
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "one tree composer keeps native and computed feature rows in their shared semantic order"
-)]
 pub(crate) fn tree_markup_with_features(
     document: &SketchDocument,
     constraint_entries: &[SceneConstraintEntry],
@@ -281,30 +277,9 @@ pub(crate) fn tree_markup_with_features(
         let has_problem = problems
             .iter()
             .any(|problem| problem.feature == Some(feature.id));
-        let summary = match &feature.definition {
-            ComputedFeatureDefinition::FilletSet(fillet) => {
-                format!("{} corners · r {:.3}", fillet.corners.len(), fillet.radius)
-            }
-            ComputedFeatureDefinition::CurveOffset(offset) => {
-                let source_count = match &offset.operand {
-                    geosolve_sketch_features::ComputedCurveOffsetOperand::Face {
-                        outer,
-                        holes,
-                        ..
-                    } => {
-                        outer.spans.len() + holes.iter().map(|hole| hole.spans.len()).sum::<usize>()
-                    }
-                    geosolve_sketch_features::ComputedCurveOffsetOperand::OpenChain {
-                        chain,
-                        ..
-                    } => chain.spans.len(),
-                };
-                format!("{source_count} sources · d {:.3}", offset.distance)
-            }
-        };
         let _ = write!(
             output,
-            "<button class=\"wb-tree-row wb-tree-feature{}{}\" role=\"treeitem\" aria-selected=\"{}\" data-editor-item=\"feature\" data-feature-id=\"{}\" data-feature-state=\"{state}\"{}{}><span class=\"wb-tree-icon\">{}</span><span>{}<small>{}</small></span></button>",
+            "<button class=\"wb-tree-row wb-tree-feature{}{}\" role=\"treeitem\" aria-selected=\"{}\" data-editor-item=\"feature\" data-feature-id=\"{}\" data-feature-state=\"{state}\"{}{}><span class=\"wb-tree-icon\">{}</span>{}</button>",
             if selected { " selected" } else { "" },
             if has_problem { " has-problem" } else { "" },
             selected,
@@ -317,11 +292,8 @@ pub(crate) fn tree_markup_with_features(
             detail,
             super::icons::tree_icon_markup(TreeIconKind::Feature),
             escape(&feature.label),
-            escape(&summary),
         );
-        let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
-            continue;
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
         for (index, corner) in fillet.corners.iter().enumerate() {
             let item = SelectionItem::FeatureCorner(ComputedCornerRef {
                 feature: feature.id,

@@ -34,11 +34,7 @@ use geosolve_sketch::{
     TangentOrientation,
 };
 use geosolve_sketch_features::{
-    ComputedCornerRef, ComputedCurveOffsetChain, ComputedCurveOffsetDirectedSpan,
-    ComputedCurveOffsetJunction, ComputedCurveOffsetJunctionBranch,
-    ComputedCurveOffsetJunctionProvenance, ComputedCurveOffsetLoop, ComputedCurveOffsetOperand,
-    ComputedCurveOffsetTerminalPolicy, ComputedCurveOffsetTraversal, ComputedCurveOffsetTurn,
-    ComputedEdgeId, ComputedEdgeProvenance, ComputedEvaluationAllocator,
+    ComputedCornerRef, ComputedEdgeId, ComputedEdgeProvenance, ComputedEvaluationAllocator,
     ComputedEvaluationAllocatorHighWater, ComputedFeatureAuthoringError,
     ComputedFeatureAuthoringSnapshot, ComputedFeatureCornerId, ComputedFeatureDocument,
     ComputedFeatureDocumentError, ComputedFeatureDocumentIdentity, ComputedFeatureEvaluationError,
@@ -55,8 +51,7 @@ use geosolve_sketch_ops::{
     SketchProfileOffsetOperand,
 };
 use geosolve_sketch_topology::{
-    OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetJoinOwner, OffsetOperandIndex,
-    OffsetOperandRequest, OffsetTraversal, PreparedOffsetOperandQuery, TopologyError,
+    OffsetOperandIndex, OffsetOperandRequest, PreparedOffsetOperandQuery, TopologyError,
     TopologySnapshotError,
 };
 use thiserror::Error;
@@ -77,11 +72,10 @@ use crate::{
     EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
     FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
     GeometryInteractionPolicy, OffsetAuthoringCandidate, OffsetAuthoringOperand,
-    OffsetAuthoringOutcome, OffsetAuthoringPreviewAuthority, OffsetAuthoringRoute,
-    OffsetAuthoringState, OffsetDistanceGestureSeed, PickTolerance, PointGestureSnapshot,
-    PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind, SceneFilletAction,
-    SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
-    ScreenPoint, SelectionItem,
+    OffsetAuthoringOutcome, OffsetAuthoringState, OffsetDistanceGestureSeed, PickTolerance,
+    PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind,
+    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionControlGeometry,
+    SceneFilletActionId, ScreenPoint, SelectionItem,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -103,10 +97,7 @@ const BOUNDED_GEOMETRY_MAX_COMPONENT_LINEARIZATIONS: usize = 1_024;
 const BOUNDED_GEOMETRY_MAX_DENSE_DIMENSION: usize = 256;
 const BOUNDED_GEOMETRY_MAX_DIAGNOSTIC_CANDIDATES: usize = 512;
 const BOUNDED_GEOMETRY_MAX_DIAGNOSTIC_TRIALS: usize = 1_024;
-// One certified all-family Curve Offset may fit up to 16,384 patches, but its exact fitted
-// arrangement is capped independently at two million candidate/self-contact cells. Keep the
-// ordinary compound envelope aligned with that fail-closed kernel ceiling.
-const BOUNDED_GEOMETRY_MAX_PROFILE_WORK: usize = 2_000_000;
+const BOUNDED_GEOMETRY_MAX_PROFILE_WORK: usize = 16_384;
 const BOUNDED_GEOMETRY_MAX_MEASUREMENT_WORK: usize = 16_384;
 const FILLET_RETAINED_ARROW_LENGTH_PIXELS: f64 = 22.0;
 
@@ -253,44 +244,30 @@ fn recorded_transition_is_reanchor_only(
             {
                 return false;
             }
-            match (&before_feature.definition, &after_feature.definition) {
-                (
-                    geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(before_fillet),
-                    geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(after_fillet),
-                ) => {
-                    before_fillet.radius.to_bits() == after_fillet.radius.to_bits()
-                        && before_fillet.corners.len() == after_fillet.corners.len()
-                        && before_fillet.corners.iter().zip(&after_fillet.corners).all(
-                            |(before_corner, after_corner)| {
-                                before_corner.id == after_corner.id
-                                    && before_corner.endpoint_order == after_corner.endpoint_order
-                                    && before_corner.sweep == after_corner.sweep
-                                    && [
-                                        (before_corner.first, after_corner.first),
-                                        (before_corner.second, after_corner.second),
-                                    ]
-                                    .into_iter()
-                                    .all(
-                                        |(before_parent, after_parent)| {
-                                            before_parent.source == after_parent.source
-                                                && before_parent.normal_side
-                                                    == after_parent.normal_side
-                                                && before_parent.retained_endpoint
-                                                    == after_parent.retained_endpoint
-                                        },
-                                    )
-                            },
-                        )
-                }
-                (
-                    geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(before_offset),
-                    geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(after_offset),
-                ) => {
-                    before_offset.distance.to_bits() == after_offset.distance.to_bits()
-                        && before_offset.operand == after_offset.operand
-                }
-                _ => false,
-            }
+            let (
+                geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(before_fillet),
+                geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(after_fillet),
+            ) = (&before_feature.definition, &after_feature.definition);
+            before_fillet.radius.to_bits() == after_fillet.radius.to_bits()
+                && before_fillet.corners.len() == after_fillet.corners.len()
+                && before_fillet.corners.iter().zip(&after_fillet.corners).all(
+                    |(before_corner, after_corner)| {
+                        before_corner.id == after_corner.id
+                            && before_corner.endpoint_order == after_corner.endpoint_order
+                            && before_corner.sweep == after_corner.sweep
+                            && [
+                                (before_corner.first, after_corner.first),
+                                (before_corner.second, after_corner.second),
+                            ]
+                            .into_iter()
+                            .all(|(before_parent, after_parent)| {
+                                before_parent.source == after_parent.source
+                                    && before_parent.normal_side == after_parent.normal_side
+                                    && before_parent.retained_endpoint
+                                        == after_parent.retained_endpoint
+                            })
+                    },
+                )
         })
 }
 
@@ -335,12 +312,8 @@ fn computed_feature_states_match_for_durable_reanchor(
                     (
                         ComputedFeatureEvaluationState::Current {
                             corner_edges: continued,
-                            generated_edges: continued_generated,
                         },
-                        ComputedFeatureEvaluationState::Current {
-                            corner_edges: cold,
-                            generated_edges: cold_generated,
-                        },
+                        ComputedFeatureEvaluationState::Current { corner_edges: cold },
                     ) => {
                         continued.len() == cold.len()
                             && continued.iter().zip(cold).all(
@@ -349,11 +322,6 @@ fn computed_feature_states_match_for_durable_reanchor(
                                         && continued_edge.ordinal == cold_edge.ordinal
                                 },
                             )
-                            && continued_generated.len() == cold_generated.len()
-                            && continued_generated
-                                .iter()
-                                .zip(cold_generated)
-                                .all(|(continued, cold)| continued.ordinal == cold.ordinal)
                     }
                     (
                         ComputedFeatureEvaluationState::Suppressed,
@@ -558,10 +526,7 @@ fn computed_preview_stopped_problems(
         return vec![computed_preview_global_limit(message)];
     };
     let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
-        &feature_value.definition
-    else {
-        return vec![computed_preview_global_limit(message)];
-    };
+        &feature_value.definition;
     let mut corners = fillet
         .corners
         .iter()
@@ -1450,9 +1415,9 @@ pub struct FeatureAuthoringTransaction {
     pub preview: Option<FeatureAuthoringPreviewMetadata>,
 }
 
-/// Stable public identity of one exact independently accepted native Profile Offset preview.
+/// Stable public identity of one exact independently accepted Offset preview.
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeOffsetAuthoringPreviewMetadata {
+pub struct OffsetAuthoringPreviewMetadata {
     pub base_input: PreparedSketchInput,
     pub proposed_commit: PreparedSketchCommit,
     pub dimension: DocumentDimensionId,
@@ -1463,112 +1428,14 @@ pub struct NativeOffsetAuthoringPreviewMetadata {
     pub provisional_constraints: Vec<DocumentConstraintId>,
 }
 
-/// Stable public identity of one exact independently accepted computed Curve Offset preview.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ComputedCurveOffsetAuthoringPreviewMetadata {
-    pub base_input: PreparedSketchInput,
-    pub feature: ComputedFeatureId,
-    pub feature_identity: ComputedFeatureDocumentIdentity,
-    pub input: geosolve_sketch_features::ComputedFeatureEvaluationInput,
-    pub source_spans: Vec<CurveSpan>,
-    pub generated_edges: Vec<ComputedEdgeId>,
-}
-
-/// Route-specific authority of the complete currently rendered Offset preview.
-#[derive(Clone, Debug, PartialEq)]
-pub enum OffsetAuthoringPreviewMetadata {
-    NativeProfile(Box<NativeOffsetAuthoringPreviewMetadata>),
-    ComputedCurve(Box<ComputedCurveOffsetAuthoringPreviewMetadata>),
-}
-
-impl OffsetAuthoringPreviewMetadata {
-    #[must_use]
-    pub const fn route(&self) -> OffsetAuthoringRoute {
-        match self {
-            Self::NativeProfile(_) => OffsetAuthoringRoute::NativeProfile,
-            Self::ComputedCurve(_) => OffsetAuthoringRoute::ComputedCurve,
-        }
-    }
-
-    #[must_use]
-    pub const fn base_input(&self) -> PreparedSketchInput {
-        match self {
-            Self::NativeProfile(metadata) => metadata.base_input,
-            Self::ComputedCurve(metadata) => metadata.base_input,
-        }
-    }
-
-    #[must_use]
-    pub fn source_spans(&self) -> &[CurveSpan] {
-        match self {
-            Self::NativeProfile(metadata) => &metadata.source_spans,
-            Self::ComputedCurve(metadata) => &metadata.source_spans,
-        }
-    }
-
-    #[must_use]
-    pub const fn native_profile(&self) -> Option<&NativeOffsetAuthoringPreviewMetadata> {
-        match self {
-            Self::NativeProfile(metadata) => Some(metadata),
-            Self::ComputedCurve(_) => None,
-        }
-    }
-
-    #[must_use]
-    pub const fn computed_curve(&self) -> Option<&ComputedCurveOffsetAuthoringPreviewMetadata> {
-        match self {
-            Self::ComputedCurve(metadata) => Some(metadata),
-            Self::NativeProfile(_) => None,
-        }
-    }
-
-    #[must_use]
-    pub fn into_native_profile(self) -> Option<NativeOffsetAuthoringPreviewMetadata> {
-        match self {
-            Self::NativeProfile(metadata) => Some(*metadata),
-            Self::ComputedCurve(_) => None,
-        }
-    }
-
-    #[must_use]
-    pub fn into_computed_curve(self) -> Option<ComputedCurveOffsetAuthoringPreviewMetadata> {
-        match self {
-            Self::ComputedCurve(metadata) => Some(*metadata),
-            Self::NativeProfile(_) => None,
-        }
-    }
-}
-
-/// Route-specific value published by one successful Offset Apply transaction.
-#[derive(Clone, Debug, PartialEq)]
-pub enum OffsetAuthoringApplyEffect {
-    NativeProfile(Box<DocumentProfileOffsetIds>),
-    ComputedCurve(ComputedFeatureId),
-}
-
-#[derive(Debug)]
-enum OffsetAuthoringPreviewPublication {
-    NativeProfile {
-        edit: DocumentEdit,
-        patch: Box<PreparedSketchPatch>,
-    },
-    ComputedCurve {
-        expected: ComputedFeatureDocumentIdentity,
-        features: ComputedFeatureDocument,
-        feature: ComputedFeatureId,
-        checkpoint: RestoreCheckpoint,
-    },
-}
-
-/// Exact prepared Offset candidate. Native publication retains the only patch that may commit its
-/// rendered geometry; computed publication retains the only feature document and evaluated
-/// snapshot that may commit its rendered generated edges.
+/// Exact prepared native Offset candidate. The held patch is the only value that may publish the
+/// geometry rendered by this preview; neither the browser nor Apply reconstructs it.
 #[derive(Debug)]
 pub struct OffsetAuthoringPreview {
-    authority: OffsetAuthoringPreviewAuthority,
     candidate: OffsetAuthoringCandidate,
     label: String,
-    publication: OffsetAuthoringPreviewPublication,
+    edit: DocumentEdit,
+    patch: PreparedSketchPatch,
     metadata: OffsetAuthoringPreviewMetadata,
     computed_input: geosolve_sketch_features::ComputedFeatureEvaluationInput,
     computed_snapshot: ComputedFeatureSnapshot,
@@ -1592,60 +1459,6 @@ impl OffsetAuthoringPreview {
     #[must_use]
     pub const fn candidate(&self) -> &OffsetAuthoringCandidate {
         &self.candidate
-    }
-
-    #[must_use]
-    pub const fn route(&self) -> OffsetAuthoringRoute {
-        self.metadata.route()
-    }
-
-    /// Persistent items painted as provisional by presentation adapters.
-    #[must_use]
-    pub fn provisional_items(&self) -> Vec<SelectionItem> {
-        match &self.metadata {
-            OffsetAuthoringPreviewMetadata::NativeProfile(metadata) => metadata
-                .target_spans
-                .iter()
-                .copied()
-                .map(SelectionItem::Curve)
-                .chain(
-                    metadata
-                        .provisional_points
-                        .iter()
-                        .copied()
-                        .map(SelectionItem::Point),
-                )
-                .chain(
-                    metadata
-                        .provisional_constraints
-                        .iter()
-                        .copied()
-                        .map(SelectionItem::Constraint),
-                )
-                .chain(std::iter::once(SelectionItem::Dimension(
-                    metadata.dimension,
-                )))
-                .collect(),
-            OffsetAuthoringPreviewMetadata::ComputedCurve(metadata) => {
-                vec![SelectionItem::Feature(metadata.feature)]
-            }
-        }
-    }
-
-    fn scene_input(&self) -> PreparedSketchInput {
-        match &self.publication {
-            OffsetAuthoringPreviewPublication::NativeProfile { patch, .. } => {
-                patch.preview().candidate_input()
-            }
-            OffsetAuthoringPreviewPublication::ComputedCurve { .. } => self.computed_input.sketch,
-        }
-    }
-
-    fn native_patch(&self) -> Option<&PreparedSketchPatch> {
-        match &self.publication {
-            OffsetAuthoringPreviewPublication::NativeProfile { patch, .. } => Some(patch.as_ref()),
-            OffsetAuthoringPreviewPublication::ComputedCurve { .. } => None,
-        }
     }
 }
 
@@ -1779,10 +1592,7 @@ impl FeatureAuthoringPreview {
             return Vec::new();
         };
         let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
-            &feature.definition
-        else {
-            return Vec::new();
-        };
+            &feature.definition;
         fillet
             .corners
             .iter()
@@ -2045,21 +1855,6 @@ pub enum ReplayAction {
         radius: f64,
         corners: Vec<geosolve_sketch_features::NewComputedFilletCorner>,
     },
-    CreateComputedCurveOffset {
-        expected: ComputedFeatureDocumentIdentity,
-        label: String,
-        distance: f64,
-        operand: ComputedCurveOffsetOperand,
-    },
-    SetComputedCurveOffsetDistance {
-        expected: ComputedFeatureDocumentIdentity,
-        feature: ComputedFeatureId,
-        distance: f64,
-    },
-    FlipComputedCurveOffsetDirection {
-        expected: ComputedFeatureDocumentIdentity,
-        feature: ComputedFeatureId,
-    },
     SetComputedFilletRadius {
         expected: ComputedFeatureDocumentIdentity,
         feature: ComputedFeatureId,
@@ -2264,8 +2059,6 @@ pub enum CoordinatorError {
     FeatureAuthoringTransitionRejected(String),
     #[error("computed Fillet action is unavailable: {0}")]
     ComputedFilletActionUnavailable(String),
-    #[error("Offset preview identity space is exhausted")]
-    OffsetPreviewTokenExhausted,
 }
 
 /// Owner of retained lifecycle, interaction selection, restore history, and transcript.
@@ -2293,7 +2086,6 @@ pub struct RetainedEditorCoordinator {
     feature_authoring_preview: Option<FeatureAuthoringPreview>,
     native_fillet_previews: HashMap<FeatureAuthoringPreviewToken, NativeFilletPreviewCache>,
     next_feature_authoring_preview_token: u64,
-    next_offset_authoring_preview_token: u64,
     offset_authoring_preview: Option<Box<OffsetAuthoringPreview>>,
     offset_authoring_distance_origin: Option<Box<OffsetAuthoringDistanceOrigin>>,
 }
@@ -2526,7 +2318,6 @@ impl RetainedEditorCoordinator {
             feature_authoring_preview: None,
             native_fillet_previews: HashMap::new(),
             next_feature_authoring_preview_token: 1,
-            next_offset_authoring_preview_token: 1,
             offset_authoring_preview: None,
             offset_authoring_distance_origin: None,
         };
@@ -2701,10 +2492,7 @@ impl RetainedEditorCoordinator {
                 return Err(CoordinatorError::StaleComputedFeatureCandidate);
             };
             let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
-                &feature.definition
-            else {
-                return Err(CoordinatorError::StaleComputedFeatureCandidate);
-            };
+                &feature.definition;
             let Some(corner) = fillet
                 .corners
                 .iter()
@@ -2882,14 +2670,6 @@ impl RetainedEditorCoordinator {
             && preview.features.identity() == input.features
         {
             return Some(&preview.features);
-        }
-        if let Some(preview) = self.effective_offset_authoring_preview()
-            && preview.computed_snapshot.input() == *input
-            && let OffsetAuthoringPreviewPublication::ComputedCurve { features, .. } =
-                &preview.publication
-            && features.identity() == input.features
-        {
-            return Some(features);
         }
         (self.features.identity() == input.features).then_some(&self.features)
     }
@@ -3240,14 +3020,8 @@ impl RetainedEditorCoordinator {
             .map(Arc::new)
             .ok_or(CoordinatorError::OffsetOperandIndexIncomplete)?;
         let model_scale = self.session.design_document().model_scale();
-        let excluded_sources =
-            active_computed_fillet_sources(&self.features, self.computed_snapshot.as_ref());
         self.clear_transient();
-        Ok(state.activate_with_excluded_computed_fillet_sources(
-            index,
-            model_scale,
-            excluded_sources,
-        ))
+        Ok(state.activate(index, model_scale))
     }
 
     /// Exact currently held native Offset preview, if any.
@@ -3267,29 +3041,12 @@ impl RetainedEditorCoordinator {
             .zip(state.candidate().as_ref())
             .is_some_and(|(preview, candidate)| {
                 preview.candidate == *candidate
-                    && preview.authority.base_input == self.session.prepared_input()
-                    && preview.metadata.base_input() == self.session.prepared_input()
-                    && match &preview.publication {
-                        OffsetAuthoringPreviewPublication::NativeProfile { patch, .. } => {
-                            patch.base_input() == self.session.prepared_input()
-                                && patch.proposed_commit().accepted_state_identity().is_some()
-                        }
-                        OffsetAuthoringPreviewPublication::ComputedCurve {
-                            expected,
-                            features,
-                            feature,
-                            ..
-                        } => {
-                            *expected == self.features.identity()
-                                && preview.computed_input.features == features.identity()
-                                && preview.computed_input.sketch == self.session.prepared_input()
-                                && require_current_feature_authoring_evaluation(
-                                    &preview.computed_snapshot,
-                                    *feature,
-                                )
-                                .is_ok()
-                        }
-                    }
+                    && preview.patch.base_input() == self.session.prepared_input()
+                    && preview
+                        .metadata
+                        .proposed_commit
+                        .accepted_state_identity()
+                        .is_some()
             })
     }
 
@@ -3314,12 +3071,17 @@ impl RetainedEditorCoordinator {
         let Some(preview) = self.offset_authoring_preview.as_deref() else {
             return Ok(None);
         };
-        if scene.authenticated_prepared_input() != Some(preview.scene_input()) {
+        if scene.authenticated_prepared_input() != Some(preview.patch.preview().candidate_input()) {
             state.clear_hover();
             return Ok(Some(self.editor.pointer_leave()));
         }
-        let Some(hit) = offset_authoring_distance_hit(preview, scene, position, tolerance, policy)
-        else {
+        let Some(hit) = scene.offset_distance_hit(
+            position,
+            tolerance,
+            policy,
+            preview.metadata.dimension,
+            &preview.metadata.target_spans,
+        ) else {
             return Ok(None);
         };
         if !state.index().is_some_and(|index| {
@@ -3355,14 +3117,20 @@ impl RetainedEditorCoordinator {
             let Some(preview) = self.offset_authoring_preview.as_deref() else {
                 return Ok(None);
             };
-            if scene.authenticated_prepared_input() != Some(preview.scene_input()) {
+            if scene.authenticated_prepared_input()
+                != Some(preview.patch.preview().candidate_input())
+            {
                 state.clear_hover();
                 let _ = self.editor.pointer_leave();
                 return Err(CoordinatorError::OffsetPreviewMismatch);
             }
-            let Some(hit) =
-                offset_authoring_distance_hit(preview, scene, input.position, tolerance, policy)
-            else {
+            let Some(hit) = scene.offset_distance_hit(
+                input.position,
+                tolerance,
+                policy,
+                preview.metadata.dimension,
+                &preview.metadata.target_spans,
+            ) else {
                 return Ok(None);
             };
             // The provisional surface owns this press even when a later exact-rail check fails.
@@ -3375,45 +3143,27 @@ impl RetainedEditorCoordinator {
             }) {
                 return Err(CoordinatorError::OffsetPreviewMismatch);
             }
-            let model_derivative = match &preview.metadata {
-                OffsetAuthoringPreviewMetadata::NativeProfile(metadata) => {
-                    let (target, parameter) = match hit.item {
-                        SelectionItem::Curve(target) => (
-                            target,
-                            hit.curve_parameter
-                                .filter(|value| value.is_finite())
-                                .ok_or_else(|| {
-                                    CoordinatorError::OffsetOperationUnavailable(
-                                        "the provisional target has no finite curve parameter"
-                                            .into(),
-                                    )
-                                })?,
-                        ),
-                        SelectionItem::Dimension(dimension) if dimension == metadata.dimension => {
-                            offset_distance_annotation_sample(preview)?
-                        }
-                        _ => return Err(CoordinatorError::OffsetPreviewMismatch),
-                    };
-                    offset_distance_rail(preview, target, parameter)?
+            let (target, parameter) = match hit.item {
+                SelectionItem::Curve(target) => (
+                    target,
+                    hit.curve_parameter
+                        .filter(|value| value.is_finite())
+                        .ok_or_else(|| {
+                            CoordinatorError::OffsetOperationUnavailable(
+                                "the provisional target has no finite curve parameter".into(),
+                            )
+                        })?,
+                ),
+                SelectionItem::Dimension(dimension) if dimension == preview.metadata.dimension => {
+                    offset_distance_annotation_sample(preview)?
                 }
-                OffsetAuthoringPreviewMetadata::ComputedCurve(metadata)
-                    if hit.item == SelectionItem::Feature(metadata.feature) =>
-                {
-                    computed_offset_distance_rail(
-                        self.session
-                            .accepted_state_for_current_input()
-                            .ok_or(CoordinatorError::OffsetPreviewRejected)?
-                            .document(),
-                        &preview.candidate.operand,
-                    )?
-                }
-                OffsetAuthoringPreviewMetadata::ComputedCurve(_) => {
-                    return Err(CoordinatorError::OffsetPreviewMismatch);
-                }
+                _ => return Err(CoordinatorError::OffsetPreviewMismatch),
             };
-            let origin_scene_input = preview.scene_input();
+            let origin_scene_input = preview.patch.preview().candidate_input();
+            let model_derivative = offset_distance_rail(preview, target, parameter)?;
             OffsetDistanceGestureSeed {
-                authority: preview.authority,
+                base_input: preview.metadata.base_input,
+                proposed_commit: preview.metadata.proposed_commit,
                 origin_scene_input,
                 target: hit.item,
                 origin_distance: preview.candidate.distance,
@@ -3455,11 +3205,14 @@ impl RetainedEditorCoordinator {
         let preview = self
             .effective_offset_authoring_preview()
             .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
-        if scene.authenticated_prepared_input() != Some(preview.scene_input()) {
+        if scene.authenticated_prepared_input() != Some(preview.patch.preview().candidate_input()) {
             return Err(CoordinatorError::OffsetPreviewMismatch);
         }
         scene
-            .set_offset_distance_interaction_origin(&origin.preview.authority)
+            .set_offset_distance_interaction_origin(
+                &origin.preview.metadata.base_input,
+                origin.preview.metadata.proposed_commit,
+            )
             .map_err(CoordinatorError::Editor)
     }
 
@@ -3478,7 +3231,8 @@ impl RetainedEditorCoordinator {
         match effect {
             EditorEffect::PreviewOffsetAuthoringDistance {
                 gesture_epoch,
-                authority,
+                base_input,
+                proposed_commit,
                 distance,
             } => {
                 let origin = self
@@ -3486,10 +3240,12 @@ impl RetainedEditorCoordinator {
                     .as_deref()
                     .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
                 if origin.gesture_epoch != *gesture_epoch
-                    || origin.preview.authority != *authority
+                    || origin.preview.metadata.base_input != *base_input
+                    || origin.preview.metadata.proposed_commit != *proposed_commit
                     || !self.editor.offset_distance_preview_request_is_current(
                         *gesture_epoch,
-                        authority,
+                        base_input,
+                        *proposed_commit,
                         *distance,
                     )
                 {
@@ -3503,7 +3259,8 @@ impl RetainedEditorCoordinator {
                 ) {
                     self.editor.reject_offset_distance_preview(
                         *gesture_epoch,
-                        authority,
+                        base_input,
+                        *proposed_commit,
                         *distance,
                     );
                     return Err(CoordinatorError::OffsetCandidateIncomplete);
@@ -3515,15 +3272,18 @@ impl RetainedEditorCoordinator {
                     self.sync_offset_preview_transient();
                     self.editor.reject_offset_distance_preview(
                         *gesture_epoch,
-                        authority,
+                        base_input,
+                        *proposed_commit,
                         *distance,
                     );
                     return Err(error);
                 }
-                if !self
-                    .editor
-                    .accept_offset_distance_preview(*gesture_epoch, authority, *distance)
-                {
+                if !self.editor.accept_offset_distance_preview(
+                    *gesture_epoch,
+                    base_input,
+                    *proposed_commit,
+                    *distance,
+                ) {
                     self.offset_authoring_preview = prior;
                     self.sync_offset_preview_transient();
                     return Err(CoordinatorError::OffsetPreviewMismatch);
@@ -3533,12 +3293,26 @@ impl RetainedEditorCoordinator {
             }
             EditorEffect::FinishOffsetAuthoringDistance {
                 gesture_epoch,
-                authority,
-            } => self.finish_offset_authoring_distance(state, *gesture_epoch, authority, false),
+                base_input,
+                proposed_commit,
+            } => self.finish_offset_authoring_distance(
+                state,
+                *gesture_epoch,
+                base_input,
+                *proposed_commit,
+                false,
+            ),
             EditorEffect::RestoreOffsetAuthoringDistance {
                 gesture_epoch,
-                authority,
-            } => self.finish_offset_authoring_distance(state, *gesture_epoch, authority, true),
+                base_input,
+                proposed_commit,
+            } => self.finish_offset_authoring_distance(
+                state,
+                *gesture_epoch,
+                base_input,
+                *proposed_commit,
+                true,
+            ),
             _ => Err(CoordinatorError::OffsetPreviewMismatch),
         }
     }
@@ -3547,14 +3321,18 @@ impl RetainedEditorCoordinator {
         &mut self,
         state: &mut OffsetAuthoringState,
         gesture_epoch: u64,
-        authority: &OffsetAuthoringPreviewAuthority,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
         restore: bool,
     ) -> Result<(), CoordinatorError> {
         let origin = self
             .offset_authoring_distance_origin
             .take()
             .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
-        if origin.gesture_epoch != gesture_epoch || origin.preview.authority != *authority {
+        if origin.gesture_epoch != gesture_epoch
+            || origin.preview.metadata.base_input != *base_input
+            || origin.preview.metadata.proposed_commit != proposed_commit
+        {
             self.offset_authoring_distance_origin = Some(origin);
             return Err(CoordinatorError::OffsetPreviewMismatch);
         }
@@ -3573,34 +3351,31 @@ impl RetainedEditorCoordinator {
     }
 
     fn sync_offset_preview_transient(&mut self) {
-        self.transient =
-            self.effective_offset_authoring_preview()
-                .and_then(|preview| match &preview.publication {
-                    OffsetAuthoringPreviewPublication::NativeProfile { patch, .. } => patch
-                        .proposed_commit()
-                        .accepted_state_identity()
-                        .map(|accepted| TransientLifecycle::SolvedPreview {
-                            attempt: patch.proposed_commit().attempt_identity(),
-                            accepted,
-                        }),
-                    OffsetAuthoringPreviewPublication::ComputedCurve { .. } => preview
-                        .candidate
-                        .input
-                        .accepted_state_identity()
-                        .map(|accepted| TransientLifecycle::SolvedPreview {
-                            attempt: preview.candidate.input.latest_attempt_identity(),
-                            accepted,
-                        }),
-                });
+        self.transient = self
+            .effective_offset_authoring_preview()
+            .and_then(|preview| {
+                preview
+                    .metadata
+                    .proposed_commit
+                    .accepted_state_identity()
+                    .map(|accepted| TransientLifecycle::SolvedPreview {
+                        attempt: preview.metadata.proposed_commit.attempt_identity(),
+                        accepted,
+                    })
+            });
     }
 
-    /// Prepares, independently validates, and retains one exact route-specific Offset preview.
-    /// Failure is state-neutral and deliberately leaves the previous last-valid ghost installed.
+    /// Prepares, solves, independently validates, and retains one exact Offset patch. Failure is
+    /// state-neutral and deliberately leaves the previous last-valid ghost installed.
     ///
     /// # Errors
     ///
     /// Rejects stale/incomplete operands, unsupported exact geometry, construction/solve failure,
     /// incomplete computed output, or incomplete post-candidate topology authentication.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "operation authentication, exact patch preparation, computed parity and next-index capture form one publication boundary"
+    )]
     pub fn prepare_offset_authoring_preview(
         &mut self,
         state: &OffsetAuthoringState,
@@ -3610,26 +3385,6 @@ impl RetainedEditorCoordinator {
         let candidate = state
             .candidate()
             .ok_or(CoordinatorError::OffsetCandidateIncomplete)?;
-        match candidate.route {
-            OffsetAuthoringRoute::NativeProfile => {
-                self.prepare_native_offset_authoring_preview(state, candidate, label)
-            }
-            OffsetAuthoringRoute::ComputedCurve => {
-                self.prepare_computed_offset_authoring_preview(state, candidate, label)
-            }
-        }
-    }
-
-    #[allow(
-        clippy::too_many_lines,
-        reason = "operation authentication, exact patch preparation, computed parity and next-index capture form one publication boundary"
-    )]
-    fn prepare_native_offset_authoring_preview(
-        &mut self,
-        state: &OffsetAuthoringState,
-        candidate: OffsetAuthoringCandidate,
-        label: String,
-    ) -> Result<OffsetAuthoringPreviewMetadata, CoordinatorError> {
         let index = state
             .index()
             .cloned()
@@ -3699,7 +3454,7 @@ impl RetainedEditorCoordinator {
             .preview()
             .accepted_session()
             .ok_or(CoordinatorError::OffsetPreviewRejected)?;
-        let native_metadata = offset_preview_metadata(&self.session, &patch)?;
+        let metadata = offset_preview_metadata(&self.session, &patch)?;
 
         let mut computed_allocator = self.computed_evaluation_allocator.clone();
         let evaluated = evaluate_computed_features_continuing(
@@ -3746,152 +3501,24 @@ impl RetainedEditorCoordinator {
             .ok_or(CoordinatorError::OffsetOperandIndexIncomplete)?;
         let computed_input = computed_snapshot.input();
         let proposed = patch.proposed_commit();
-        let accepted = proposed
-            .accepted_state_identity()
-            .ok_or(CoordinatorError::OffsetPreviewRejected)?;
-        let authority = OffsetAuthoringPreviewAuthority {
-            base_input: patch.base_input(),
-            token: self.next_offset_authoring_preview_token,
-        };
-        let next_authority_token = authority
-            .token
-            .checked_add(1)
-            .ok_or(CoordinatorError::OffsetPreviewTokenExhausted)?;
 
         self.clear_transient_for_offset_preview();
         self.transient = Some(TransientLifecycle::SolvedPreview {
             attempt: proposed.attempt_identity(),
-            accepted,
+            accepted: proposed
+                .accepted_state_identity()
+                .ok_or(CoordinatorError::OffsetPreviewRejected)?,
         });
-        self.next_offset_authoring_preview_token = next_authority_token;
-        let metadata = OffsetAuthoringPreviewMetadata::NativeProfile(Box::new(native_metadata));
         self.offset_authoring_preview = Some(Box::new(OffsetAuthoringPreview {
-            authority,
             candidate,
             label,
-            publication: OffsetAuthoringPreviewPublication::NativeProfile {
-                edit,
-                patch: Box::new(patch),
-            },
+            edit,
+            patch,
             metadata: metadata.clone(),
             computed_input,
             computed_snapshot,
             computed_allocator,
             next_operand_index,
-        }));
-        Ok(metadata)
-    }
-
-    #[allow(
-        clippy::too_many_lines,
-        reason = "computed Offset preview preparation is one atomic authority-and-evaluation transaction"
-    )]
-    fn prepare_computed_offset_authoring_preview(
-        &mut self,
-        state: &OffsetAuthoringState,
-        candidate: OffsetAuthoringCandidate,
-        label: String,
-    ) -> Result<OffsetAuthoringPreviewMetadata, CoordinatorError> {
-        let index = state
-            .index()
-            .cloned()
-            .ok_or(CoordinatorError::OffsetCandidateIncomplete)?;
-        if candidate.route != OffsetAuthoringRoute::ComputedCurve
-            || candidate.input != self.session.prepared_input()
-            || index.validate_current(&self.session).is_err()
-        {
-            return Err(CoordinatorError::OffsetPreviewMismatch);
-        }
-        let accepted = self
-            .session
-            .accepted_state_for_current_input()
-            .ok_or(CoordinatorError::OffsetPreviewRejected)?;
-        let operand =
-            computed_curve_offset_operand(accepted.document(), index.as_ref(), &candidate.operand)?;
-        let expected = self.features.identity();
-        let mut features = self.features.clone();
-        let feature = features.create_curve_offset(label.clone(), candidate.distance, operand)?;
-        let mut computed_allocator = self.computed_evaluation_allocator.clone();
-        let evaluated = evaluate_computed_features(
-            &self.session,
-            &features,
-            &mut computed_allocator,
-            bounded_geometry_control(),
-        )?;
-        let OperationOutcome::Completed {
-            value: computed_snapshot,
-            ..
-        } = evaluated
-        else {
-            return Err(CoordinatorError::ComputedFeatureWorkStopped);
-        };
-        if self.features.identity() != expected
-            || self.session.prepared_input() != candidate.input
-            || computed_snapshot.input().features != features.identity()
-            || computed_snapshot.input().sketch != candidate.input
-        {
-            return Err(CoordinatorError::OffsetPreviewMismatch);
-        }
-        require_current_feature_authoring_evaluation(&computed_snapshot, feature)?;
-        let generated_edges = computed_snapshot
-            .feature_evaluations()
-            .iter()
-            .find(|evaluation| evaluation.feature == feature)
-            .and_then(|evaluation| match &evaluation.state {
-                ComputedFeatureEvaluationState::Current {
-                    generated_edges, ..
-                } => Some(generated_edges.clone()),
-                ComputedFeatureEvaluationState::Failed { .. }
-                | ComputedFeatureEvaluationState::Suppressed => None,
-            })
-            .filter(|edges| !edges.is_empty())
-            .ok_or(CoordinatorError::OffsetPreviewRejected)?;
-        let computed_input = computed_snapshot.input();
-        let checkpoint = checkpoint(&self.session, &features, &computed_allocator)?;
-        let authority = OffsetAuthoringPreviewAuthority {
-            base_input: candidate.input,
-            token: self.next_offset_authoring_preview_token,
-        };
-        let next_authority_token = authority
-            .token
-            .checked_add(1)
-            .ok_or(CoordinatorError::OffsetPreviewTokenExhausted)?;
-        let source_spans = candidate_source_spans(&candidate.operand);
-        let metadata = OffsetAuthoringPreviewMetadata::ComputedCurve(Box::new(
-            ComputedCurveOffsetAuthoringPreviewMetadata {
-                base_input: candidate.input,
-                feature,
-                feature_identity: features.identity(),
-                input: computed_input,
-                source_spans,
-                generated_edges,
-            },
-        ));
-
-        self.clear_transient_for_offset_preview();
-        self.transient = Some(TransientLifecycle::SolvedPreview {
-            attempt: candidate.input.latest_attempt_identity(),
-            accepted: candidate
-                .input
-                .accepted_state_identity()
-                .ok_or(CoordinatorError::OffsetPreviewRejected)?,
-        });
-        self.next_offset_authoring_preview_token = next_authority_token;
-        self.offset_authoring_preview = Some(Box::new(OffsetAuthoringPreview {
-            authority,
-            candidate,
-            label,
-            publication: OffsetAuthoringPreviewPublication::ComputedCurve {
-                expected,
-                features,
-                feature,
-                checkpoint,
-            },
-            metadata: metadata.clone(),
-            computed_input,
-            computed_snapshot,
-            computed_allocator,
-            next_operand_index: index,
         }));
         Ok(metadata)
     }
@@ -3933,21 +3560,17 @@ impl RetainedEditorCoordinator {
         state.cancel()
     }
 
-    /// Commits the exact route-specific value currently rendered for `state`, records one
+    /// Commits the exact patch currently rendered for `state` through compare-and-swap, records one
     /// checkpoint/replay step, and installs the already-authenticated next operand index so Offset
     /// remains active without reusing stale source identity.
     ///
     /// # Errors
     ///
     /// Rejects missing/mismatched preview authority, stale CAS input, or checkpoint failure.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "native and computed Offset publication share one route-authenticated atomic Apply boundary"
-    )]
     pub fn apply_offset_authoring_preview(
         &mut self,
         state: &mut OffsetAuthoringState,
-    ) -> Result<MutationOutcome<OffsetAuthoringApplyEffect>, CoordinatorError> {
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
         if self.offset_authoring_distance_origin.is_some() {
             return Err(CoordinatorError::OffsetPreviewMismatch);
         }
@@ -3959,157 +3582,70 @@ impl RetainedEditorCoordinator {
             .as_ref()
             .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
         if preview.candidate != candidate
-            || preview.metadata.base_input() != self.session.prepared_input()
-            || preview.authority.base_input != self.session.prepared_input()
-            || preview.computed_input != preview.computed_snapshot.input()
+            || preview.patch.base_input() != self.session.prepared_input()
+            || preview.metadata.base_input != self.session.prepared_input()
         {
             return Err(CoordinatorError::OffsetPreviewMismatch);
         }
-        let native_checkpoint = match &preview.publication {
-            OffsetAuthoringPreviewPublication::NativeProfile { patch, .. } => {
-                let OffsetAuthoringPreviewMetadata::NativeProfile(_) = &preview.metadata else {
-                    return Err(CoordinatorError::OffsetPreviewMismatch);
-                };
-                if patch.base_input() != self.session.prepared_input() {
-                    return Err(CoordinatorError::OffsetPreviewMismatch);
-                }
-                let candidate_session = patch
-                    .preview()
-                    .accepted_session()
-                    .ok_or(CoordinatorError::OffsetPreviewRejected)?;
-                if preview.computed_input.sketch
-                    != candidate_session
-                        .accepted_prepared_input()
-                        .ok_or(CoordinatorError::OffsetPreviewRejected)?
-                {
-                    return Err(CoordinatorError::OffsetPreviewMismatch);
-                }
-                Some(checkpoint(
-                    candidate_session,
-                    &self.features,
-                    &preview.computed_allocator,
-                )?)
-            }
-            OffsetAuthoringPreviewPublication::ComputedCurve {
-                expected,
-                features,
-                feature,
-                ..
-            } => {
-                let OffsetAuthoringPreviewMetadata::ComputedCurve(metadata) = &preview.metadata
-                else {
-                    return Err(CoordinatorError::OffsetPreviewMismatch);
-                };
-                if *expected != self.features.identity()
-                    || metadata.feature != *feature
-                    || metadata.feature_identity != features.identity()
-                    || preview.computed_input.sketch != self.session.prepared_input()
-                    || preview.computed_input.features != features.identity()
-                {
-                    return Err(CoordinatorError::OffsetPreviewMismatch);
-                }
-                require_current_feature_authoring_evaluation(&preview.computed_snapshot, *feature)?;
-                None
-            }
+        let proposed = preview.patch.proposed_commit();
+        let candidate_session = preview
+            .patch
+            .preview()
+            .accepted_session()
+            .ok_or(CoordinatorError::OffsetPreviewRejected)?;
+        if preview.computed_input != preview.computed_snapshot.input()
+            || preview.computed_input.sketch
+                != candidate_session
+                    .accepted_prepared_input()
+                    .ok_or(CoordinatorError::OffsetPreviewRejected)?
+        {
+            return Err(CoordinatorError::OffsetPreviewMismatch);
+        }
+        let next = checkpoint(
+            candidate_session,
+            &self.features,
+            &preview.computed_allocator,
+        )?;
+        let expected = self.session.design_identity();
+        let replay = ReplayAction::Edit {
+            expected,
+            edit: preview.edit.clone(),
+            computed_features: None,
         };
+        let effect =
+            DocumentCommandEffect::CreatedProfileOffset(Box::new(DocumentProfileOffsetIds {
+                target: preview.metadata.distance,
+                dimension: preview.metadata.dimension,
+            }));
+
         let preview = self
             .offset_authoring_preview
             .take()
             .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
-        match preview.publication {
-            OffsetAuthoringPreviewPublication::NativeProfile { edit, patch } => {
-                let OffsetAuthoringPreviewMetadata::NativeProfile(metadata) = &preview.metadata
-                else {
-                    unreachable!("native publication was authenticated above");
-                };
-                let proposed = patch.proposed_commit();
-                let next = native_checkpoint.ok_or(CoordinatorError::OffsetPreviewMismatch)?;
-                let replay = ReplayAction::Edit {
-                    expected: self.session.design_identity(),
-                    edit,
-                    computed_features: None,
-                };
-                let effect =
-                    OffsetAuthoringApplyEffect::NativeProfile(Box::new(DocumentProfileOffsetIds {
-                        target: metadata.distance,
-                        dimension: metadata.dimension,
-                    }));
-                let committed = match self.session.commit_prepared_patch(*patch) {
-                    Ok(committed) => committed,
-                    Err(error) => {
-                        self.clear_transient();
-                        return Err(error.into());
-                    }
-                };
-                if committed != proposed {
-                    self.clear_transient();
-                    return Err(CoordinatorError::OffsetPreviewMismatch);
-                }
-                self.computed_evaluation_allocator = preview.computed_allocator;
-                self.computed_input = Some(preview.computed_input);
-                self.computed_snapshot = Some(preview.computed_snapshot);
-                self.computed_evaluation_problem = None;
-                let model_scale = self.session.design_document().model_scale();
-                let excluded_sources =
-                    active_computed_fillet_sources(&self.features, self.computed_snapshot.as_ref());
-                let _ = state.activate_with_excluded_computed_fillet_sources(
-                    preview.next_operand_index,
-                    model_scale,
-                    excluded_sources,
-                );
-                self.record_feature_mutation(next, replay);
-                Ok(MutationOutcome {
-                    value: effect,
-                    design: committed.design_identity(),
-                    attempt: committed.attempt_identity(),
-                    published_accepted: committed.accepted_state_identity(),
-                })
+        let committed = match self.session.commit_prepared_patch(preview.patch) {
+            Ok(committed) => committed,
+            Err(error) => {
+                self.clear_transient();
+                return Err(error.into());
             }
-            OffsetAuthoringPreviewPublication::ComputedCurve {
-                expected,
-                features,
-                feature,
-                checkpoint,
-            } => {
-                let OffsetAuthoringPreviewMetadata::ComputedCurve(metadata) = &preview.metadata
-                else {
-                    unreachable!("computed publication was authenticated above");
-                };
-                let offset = features
-                    .curve_offset(feature)
-                    .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
-                debug_assert_eq!(metadata.feature, feature);
-                let replay = ReplayAction::CreateComputedCurveOffset {
-                    expected,
-                    label: preview.label.clone(),
-                    distance: offset.distance,
-                    operand: offset.operand.clone(),
-                };
-                let design = self.session.design_identity();
-                let attempt = self.session.prepared_input().latest_attempt_identity();
-                let published_accepted = self.session.prepared_input().accepted_state_identity();
-                self.features = features;
-                self.computed_evaluation_allocator = preview.computed_allocator;
-                self.computed_input = Some(preview.computed_input);
-                self.computed_snapshot = Some(preview.computed_snapshot);
-                self.computed_evaluation_problem = None;
-                let model_scale = self.session.design_document().model_scale();
-                let excluded_sources =
-                    active_computed_fillet_sources(&self.features, self.computed_snapshot.as_ref());
-                let _ = state.activate_with_excluded_computed_fillet_sources(
-                    preview.next_operand_index,
-                    model_scale,
-                    excluded_sources,
-                );
-                self.record_feature_mutation(checkpoint, replay);
-                Ok(MutationOutcome {
-                    value: OffsetAuthoringApplyEffect::ComputedCurve(feature),
-                    design,
-                    attempt,
-                    published_accepted,
-                })
-            }
+        };
+        if committed != proposed {
+            self.clear_transient();
+            return Err(CoordinatorError::OffsetPreviewMismatch);
         }
+        self.computed_evaluation_allocator = preview.computed_allocator;
+        self.computed_input = Some(preview.computed_input);
+        self.computed_snapshot = Some(preview.computed_snapshot);
+        self.computed_evaluation_problem = None;
+        let model_scale = self.session.design_document().model_scale();
+        let _ = state.activate(preview.next_operand_index, model_scale);
+        self.record_feature_mutation(next, replay);
+        Ok(MutationOutcome {
+            value: effect,
+            design: committed.design_identity(),
+            attempt: committed.attempt_identity(),
+            published_accepted: committed.accepted_state_identity(),
+        })
     }
 
     /// Applies native semantic items to a trial authoring state and commits the
@@ -5158,20 +4694,14 @@ impl RetainedEditorCoordinator {
             .native_line_fillet_request(format!("{} native", preview.label))
             .map_err(|reason| CoordinatorError::NativeFilletUnavailable(reason.message().into()))?;
         let source_spans = [request.first.curve, request.second.curve];
-        if self
-            .features
-            .features()
-            .iter()
-            .any(|feature| match &feature.definition {
-                geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) => {
-                    fillet.corners.iter().any(|corner| {
-                        source_spans.contains(&corner.first.source.span)
-                            || source_spans.contains(&corner.second.source.span)
-                    })
-                }
-                geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(_) => false,
+        if self.features.features().iter().any(|feature| {
+            let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+                &feature.definition;
+            fillet.corners.iter().any(|corner| {
+                source_spans.contains(&corner.first.source.span)
+                    || source_spans.contains(&corner.second.source.span)
             })
-        {
+        }) {
             return Err(CoordinatorError::NativeFilletUnavailable(
                 "A source line is already owned by a persistent computed Fillet".into(),
             ));
@@ -5441,51 +4971,6 @@ impl RetainedEditorCoordinator {
         )
     }
 
-    /// Changes one associative Curve Offset distance and reevaluates its complete generated
-    /// output atomically against the current accepted sketch.
-    ///
-    /// # Errors
-    ///
-    /// Rejects stale feature authority, invalid distance or feature intent, stopped work, or an
-    /// evaluation that cannot publish one complete certified current output.
-    pub fn set_computed_curve_offset_distance(
-        &mut self,
-        expected: ComputedFeatureDocumentIdentity,
-        feature: ComputedFeatureId,
-        distance: f64,
-    ) -> Result<ComputedFeatureMutation<()>, CoordinatorError> {
-        self.mutate_features_requiring_current(
-            expected,
-            feature,
-            move |features| features.set_curve_offset_distance(feature, distance),
-            ReplayAction::SetComputedCurveOffsetDistance {
-                expected,
-                feature,
-                distance,
-            },
-        )
-    }
-
-    /// Flips one associative Curve Offset's explicit side/direction while preserving its source
-    /// traversal and reevaluating the complete generated output atomically.
-    ///
-    /// # Errors
-    ///
-    /// Rejects stale feature authority, a non-Offset feature, stopped work, or an evaluation that
-    /// cannot publish one complete certified current output.
-    pub fn flip_computed_curve_offset_direction(
-        &mut self,
-        expected: ComputedFeatureDocumentIdentity,
-        feature: ComputedFeatureId,
-    ) -> Result<ComputedFeatureMutation<()>, CoordinatorError> {
-        self.mutate_features_requiring_current(
-            expected,
-            feature,
-            move |features| features.flip_curve_offset_direction(feature),
-            ReplayAction::FlipComputedCurveOffsetDirection { expected, feature },
-        )
-    }
-
     /// Changes one Fillet set's shared radius by absolute same-branch
     /// continuation of every completed corner.
     ///
@@ -5723,15 +5208,7 @@ impl RetainedEditorCoordinator {
             .feature(owner.feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(owner.feature))?;
         let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
-            &feature.definition
-        else {
-            return Err(ComputedFeatureDocumentError::WrongFeatureKind {
-                feature: owner.feature,
-                expected: "FilletSet",
-                actual: "CurveOffset",
-            }
-            .into());
-        };
+            &feature.definition;
         let prior = fillet
             .corners
             .iter()
@@ -5854,15 +5331,7 @@ impl RetainedEditorCoordinator {
             .feature(feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
         let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
-            &feature_value.definition
-        else {
-            return Err(ComputedFeatureDocumentError::WrongFeatureKind {
-                feature,
-                expected: "FilletSet",
-                actual: "CurveOffset",
-            }
-            .into());
-        };
+            &feature_value.definition;
         let corner_ids = fillet
             .corners
             .iter()
@@ -5980,15 +5449,7 @@ impl RetainedEditorCoordinator {
             .feature(owner.feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(owner.feature))?;
         let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
-            &feature_value.definition
-        else {
-            return Err(ComputedFeatureDocumentError::WrongFeatureKind {
-                feature: owner.feature,
-                expected: "FilletSet",
-                actual: "CurveOffset",
-            }
-            .into());
-        };
+            &feature_value.definition;
         let current = fillet
             .corners
             .iter()
@@ -6224,9 +5685,6 @@ impl RetainedEditorCoordinator {
             ComputedEdgeProvenance::SourceFragment { source, .. } => {
                 Some(SelectionItem::Curve(source.span))
             }
-            ComputedEdgeProvenance::CurveOffset { owner, .. } => {
-                Some(SelectionItem::Feature(*owner))
-            }
             _ => None,
         }
     }
@@ -6274,12 +5732,7 @@ impl RetainedEditorCoordinator {
     #[must_use]
     pub fn visible_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
         if let Some(preview) = self.effective_offset_authoring_preview() {
-            return match &preview.publication {
-                OffsetAuthoringPreviewPublication::NativeProfile { patch, .. } => {
-                    patch.preview().accepted_session()
-                }
-                OffsetAuthoringPreviewPublication::ComputedCurve { .. } => Some(&self.session),
-            };
+            return preview.patch.preview().accepted_session();
         }
         self.solved_preview_session()
     }
@@ -6342,8 +5795,7 @@ impl RetainedEditorCoordinator {
             .base
             .accepted_state_identity()
             .ok_or(crate::EditorError::StalePreparedSketchInput)?;
-        if !scene.constructor_semantics_are_sealed()
-            || scene.authenticated_prepared_input().is_some()
+        if scene.authenticated_prepared_input().is_some()
             || scene.accepted_revision != candidate_accepted.identity().revision().get()
             || scene.design_identity != candidate.design_identity()
             || scene.accepted_document != *candidate_accepted.document()
@@ -10670,31 +10122,6 @@ impl RetainedEditorCoordinator {
                     replay,
                 )?;
             }
-            ReplayAction::CreateComputedCurveOffset {
-                expected,
-                label,
-                distance,
-                operand,
-            } => {
-                let replay = action.clone();
-                let label = label.clone();
-                let operand = operand.clone();
-                self.mutate_features(
-                    *expected,
-                    move |features| features.create_curve_offset(label, *distance, operand),
-                    replay,
-                )?;
-            }
-            ReplayAction::SetComputedCurveOffsetDistance {
-                expected,
-                feature,
-                distance,
-            } => {
-                self.set_computed_curve_offset_distance(*expected, *feature, *distance)?;
-            }
-            ReplayAction::FlipComputedCurveOffsetDirection { expected, feature } => {
-                self.flip_computed_curve_offset_direction(*expected, *feature)?;
-            }
             ReplayAction::SetComputedFilletRadius {
                 expected,
                 feature,
@@ -11021,28 +10448,6 @@ impl RetainedEditorCoordinator {
         mutation: impl FnOnce(&mut ComputedFeatureDocument) -> Result<T, ComputedFeatureDocumentError>,
         replay: ReplayAction,
     ) -> Result<ComputedFeatureMutation<T>, CoordinatorError> {
-        self.mutate_features_with_postcondition(expected, mutation, replay, |_, _| Ok(()))
-    }
-
-    fn mutate_features_requiring_current<T>(
-        &mut self,
-        expected: ComputedFeatureDocumentIdentity,
-        feature: ComputedFeatureId,
-        mutation: impl FnOnce(&mut ComputedFeatureDocument) -> Result<T, ComputedFeatureDocumentError>,
-        replay: ReplayAction,
-    ) -> Result<ComputedFeatureMutation<T>, CoordinatorError> {
-        self.mutate_features_with_postcondition(expected, mutation, replay, move |_, snapshot| {
-            require_current_feature_authoring_evaluation(snapshot, feature)
-        })
-    }
-
-    fn mutate_features_with_postcondition<T>(
-        &mut self,
-        expected: ComputedFeatureDocumentIdentity,
-        mutation: impl FnOnce(&mut ComputedFeatureDocument) -> Result<T, ComputedFeatureDocumentError>,
-        replay: ReplayAction,
-        postcondition: impl FnOnce(&T, &ComputedFeatureSnapshot) -> Result<(), CoordinatorError>,
-    ) -> Result<ComputedFeatureMutation<T>, CoordinatorError> {
         let before = self.features.identity();
         if before != expected {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
@@ -11073,7 +10478,6 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
-        postcondition(&value, &snapshot)?;
         let after = candidate.identity();
         let next = checkpoint(&self.session, &candidate, &candidate_allocator)?;
         self.features = candidate;
@@ -11548,10 +10952,6 @@ fn computed_feature_problem(
         | ComputedFeatureFailure::UncertifiedBranch { corner }
         | ComputedFeatureFailure::OffsetSingularity { corner }
         | ComputedFeatureFailure::InvalidGeometry { corner } => corners.push(*corner),
-        ComputedFeatureFailure::OffsetMissingSource { span_source }
-        | ComputedFeatureFailure::OffsetCurveFailure { span_source, .. } => {
-            sources.push(*span_source);
-        }
         ComputedFeatureFailure::EndpointClaimConflict {
             span_source,
             participants,
@@ -11574,37 +10974,15 @@ fn computed_feature_problem(
     if corners.is_empty()
         && let Some(value) = features.feature(feature)
     {
-        match &value.definition {
-            geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) => {
-                corners.extend(fillet.corners.iter().map(|corner| corner.id));
-            }
-            geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(_) => {}
-        }
+        let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+            &value.definition;
+        corners.extend(fillet.corners.iter().map(|corner| corner.id));
     }
     corners.sort_unstable();
     corners.dedup();
     for corner in &corners {
         if let Some(value) = features.corner(feature, *corner) {
             sources.extend([value.first.source, value.second.source]);
-        }
-    }
-    if sources.is_empty()
-        && let Some(geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(offset)) =
-            features.feature(feature).map(|feature| &feature.definition)
-    {
-        match &offset.operand {
-            geosolve_sketch_features::ComputedCurveOffsetOperand::Face { outer, holes, .. } => {
-                sources.extend(
-                    outer
-                        .spans
-                        .iter()
-                        .chain(holes.iter().flat_map(|hole| &hole.spans))
-                        .map(|span| span.source),
-                );
-            }
-            geosolve_sketch_features::ComputedCurveOffsetOperand::OpenChain { chain, .. } => {
-                sources.extend(chain.spans.iter().map(|span| span.source));
-            }
         }
     }
     sources.sort_unstable();
@@ -11636,9 +11014,6 @@ impl ReplayAction {
             | Self::Reattempt { expected } => Some(*expected),
             Self::ConstructionPlan { expected, .. } => Some(expected.design_identity()),
             Self::CreateComputedFillet { .. }
-            | Self::CreateComputedCurveOffset { .. }
-            | Self::SetComputedCurveOffsetDistance { .. }
-            | Self::FlipComputedCurveOffsetDirection { .. }
             | Self::SetComputedFilletRadius { .. }
             | Self::SetComputedFilletConfiguration { .. }
             | Self::RemoveComputedFeature { .. }
@@ -12313,12 +11688,6 @@ const fn dimension_target_scalar(
 
 fn curve_control_point_aliases_match_scene(scene: &EditorScene) -> bool {
     scene.curve_controls.iter().all(|control| {
-        if !matches!(
-            control.interaction,
-            crate::SceneCurveControlInteraction::PointAlias(_)
-        ) {
-            return true;
-        }
         let DocumentCurveControlTarget::Point(point_id) = control.target else {
             return true;
         };
@@ -12363,377 +11732,6 @@ fn curve_control_projection_edit(
     }
 }
 
-fn candidate_source_spans(operand: &OffsetAuthoringOperand) -> Vec<CurveSpan> {
-    match operand {
-        OffsetAuthoringOperand::Face { key, .. } => key
-            .outer
-            .spans
-            .iter()
-            .chain(key.holes.iter().flat_map(|hole| &hole.spans))
-            .map(|directed| directed.span)
-            .collect(),
-        OffsetAuthoringOperand::OpenChain { spans, .. } => {
-            spans.iter().map(|directed| directed.span).collect()
-        }
-    }
-}
-
-fn active_computed_fillet_sources(
-    features: &ComputedFeatureDocument,
-    snapshot: Option<&ComputedFeatureSnapshot>,
-) -> BTreeSet<CurveSpan> {
-    let Some(snapshot) =
-        snapshot.filter(|snapshot| snapshot.input().features == features.identity())
-    else {
-        return BTreeSet::new();
-    };
-    snapshot
-        .feature_evaluations()
-        .iter()
-        .filter(|evaluation| {
-            matches!(
-                evaluation.state,
-                ComputedFeatureEvaluationState::Current { .. }
-            )
-        })
-        .filter_map(|evaluation| features.feature(evaluation.feature))
-        .filter_map(|feature| match &feature.definition {
-            geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) => Some(fillet),
-            geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(_) => None,
-        })
-        .flat_map(|fillet| {
-            fillet
-                .corners
-                .iter()
-                .flat_map(|corner| [corner.first.source.span, corner.second.source.span])
-        })
-        .collect()
-}
-
-fn computed_curve_offset_operand(
-    document: &SketchDocument,
-    index: &OffsetOperandIndex,
-    operand: &OffsetAuthoringOperand,
-) -> Result<ComputedCurveOffsetOperand, CoordinatorError> {
-    match operand {
-        OffsetAuthoringOperand::Face { key, direction } => {
-            let face = index
-                .face(key)
-                .filter(|face| face.computed_eligibility.is_eligible())
-                .ok_or_else(|| {
-                    CoordinatorError::OffsetOperationUnavailable(
-                        "the selected face is not eligible for computed Offset".into(),
-                    )
-                })?;
-            if &face.key != key {
-                return Err(CoordinatorError::OffsetPreviewMismatch);
-            }
-            let outer = computed_curve_offset_loop(document, index, &key.outer.spans)?;
-            let holes = key
-                .holes
-                .iter()
-                .map(|hole| computed_curve_offset_loop(document, index, &hole.spans))
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(ComputedCurveOffsetOperand::Face {
-                direction: *direction,
-                outer,
-                holes,
-            })
-        }
-        OffsetAuthoringOperand::OpenChain { spans, side } => {
-            if spans.is_empty()
-                || spans.iter().any(|directed| {
-                    index.span(directed.span).is_none_or(|span| {
-                        !span.computed_eligibility.is_eligible() || span.periodic
-                    })
-                })
-            {
-                return Err(CoordinatorError::OffsetOperationUnavailable(
-                    "the selected open chain is not eligible for computed Offset".into(),
-                ));
-            }
-            let directed = spans
-                .iter()
-                .copied()
-                .map(computed_curve_offset_directed_span)
-                .collect();
-            let junctions = spans
-                .windows(2)
-                .map(|pair| computed_curve_offset_junction(document, index, pair[0], pair[1]))
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(ComputedCurveOffsetOperand::OpenChain {
-                side: *side,
-                chain: ComputedCurveOffsetChain {
-                    spans: directed,
-                    junctions,
-                    start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
-                    end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
-                },
-            })
-        }
-    }
-}
-
-fn computed_curve_offset_loop(
-    document: &SketchDocument,
-    index: &OffsetOperandIndex,
-    spans: &[OffsetDirectedSpan],
-) -> Result<ComputedCurveOffsetLoop, CoordinatorError> {
-    if spans.is_empty()
-        || spans.iter().any(|directed| {
-            index
-                .span(directed.span)
-                .is_none_or(|span| !span.computed_eligibility.is_eligible())
-        })
-    {
-        return Err(CoordinatorError::OffsetOperationUnavailable(
-            "the selected contour is not eligible for computed Offset".into(),
-        ));
-    }
-    let periodic_single = spans.len() == 1
-        && index
-            .span(spans[0].span)
-            .is_some_and(|candidate| candidate.periodic);
-    let junctions = if periodic_single {
-        Vec::new()
-    } else {
-        (0..spans.len())
-            .map(|position| {
-                computed_curve_offset_junction(
-                    document,
-                    index,
-                    spans[position],
-                    spans[(position + 1) % spans.len()],
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()?
-    };
-    Ok(ComputedCurveOffsetLoop {
-        spans: spans
-            .iter()
-            .copied()
-            .map(computed_curve_offset_directed_span)
-            .collect(),
-        junctions,
-    })
-}
-
-const fn computed_curve_offset_directed_span(
-    directed: OffsetDirectedSpan,
-) -> ComputedCurveOffsetDirectedSpan {
-    ComputedCurveOffsetDirectedSpan {
-        source: NativeCurveSpanSource {
-            span: directed.span,
-        },
-        traversal: match directed.traversal {
-            OffsetTraversal::Forward => ComputedCurveOffsetTraversal::Forward,
-            OffsetTraversal::Reverse => ComputedCurveOffsetTraversal::Reverse,
-        },
-    }
-}
-
-fn computed_curve_offset_junction(
-    document: &SketchDocument,
-    index: &OffsetOperandIndex,
-    current: OffsetDirectedSpan,
-    next: OffsetDirectedSpan,
-) -> Result<ComputedCurveOffsetJunction, CoordinatorError> {
-    const TANGENCY_TOLERANCE: f64 = 2.0e-7;
-    let current_end = offset_directed_endpoint(current, false);
-    let next_start = offset_directed_endpoint(next, true);
-    let owner = index
-        .adjacency_owners(current_end, next_start)
-        .and_then(|owners| owners.first())
-        .copied()
-        .ok_or_else(|| {
-            CoordinatorError::OffsetOperationUnavailable(
-                "the selected curve junction has no persistent adjacency provenance".into(),
-            )
-        })?;
-    let provenance = match owner {
-        OffsetJoinOwner::SharedPoint(point) => {
-            ComputedCurveOffsetJunctionProvenance::SharedPoint(point)
-        }
-        OffsetJoinOwner::Constraint(constraint) => {
-            ComputedCurveOffsetJunctionProvenance::Constraint(constraint)
-        }
-        OffsetJoinOwner::IntrinsicSpanBoundary => {
-            ComputedCurveOffsetJunctionProvenance::IntrinsicSpanBoundary
-        }
-    };
-    let (current_position, current_tangent) = directed_endpoint_jet(document, current, false)?;
-    let (next_position, next_tangent) = directed_endpoint_jet(document, next, true)?;
-    let coordinate_scale = current_position
-        .into_iter()
-        .chain(next_position)
-        .fold(document.model_scale().abs().max(1.0), |scale, value| {
-            scale.max(value.abs())
-        });
-    let join_tolerance =
-        1.0e-8 * document.model_scale().abs() + 256.0 * f64::EPSILON * coordinate_scale;
-    if (current_position[0] - next_position[0]).hypot(current_position[1] - next_position[1])
-        > join_tolerance
-    {
-        return Err(CoordinatorError::OffsetOperationUnavailable(
-            "the accepted curve junction is not geometrically closed".into(),
-        ));
-    }
-    let dot = current_tangent[0].mul_add(next_tangent[0], current_tangent[1] * next_tangent[1]);
-    let cross = current_tangent[0].mul_add(next_tangent[1], -current_tangent[1] * next_tangent[0]);
-    let branch = if dot >= 1.0 - TANGENCY_TOLERANCE && cross.abs() <= TANGENCY_TOLERANCE {
-        ComputedCurveOffsetJunctionBranch::Tangent
-    } else if cross > TANGENCY_TOLERANCE {
-        ComputedCurveOffsetJunctionBranch::Miter {
-            turn: ComputedCurveOffsetTurn::Left,
-        }
-    } else if cross < -TANGENCY_TOLERANCE {
-        ComputedCurveOffsetJunctionBranch::Miter {
-            turn: ComputedCurveOffsetTurn::Right,
-        }
-    } else {
-        return Err(CoordinatorError::OffsetOperationUnavailable(
-            "the accepted curve junction has an uncertifiable tangent branch".into(),
-        ));
-    };
-    Ok(ComputedCurveOffsetJunction { provenance, branch })
-}
-
-fn directed_endpoint_jet(
-    document: &SketchDocument,
-    directed: OffsetDirectedSpan,
-    start: bool,
-) -> Result<([f64; 2], [f64; 2]), CoordinatorError> {
-    let endpoint = offset_directed_endpoint(directed, start);
-    let parameter = match endpoint.endpoint {
-        OffsetEndpointRole::Start => 0.0,
-        OffsetEndpointRole::End => 1.0,
-    };
-    let jet = document
-        .evaluate_curve_jet(directed.span, parameter)
-        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
-    let differential = jet
-        .differential()
-        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
-    let sign = match directed.traversal {
-        OffsetTraversal::Forward => 1.0,
-        OffsetTraversal::Reverse => -1.0,
-    };
-    Ok((
-        [jet.position.x, jet.position.y],
-        [
-            differential.unit_tangent.x * sign,
-            differential.unit_tangent.y * sign,
-        ],
-    ))
-}
-
-const fn offset_directed_endpoint(directed: OffsetDirectedSpan, start: bool) -> OffsetEndpointRef {
-    let endpoint = match (directed.traversal, start) {
-        (OffsetTraversal::Forward, true) | (OffsetTraversal::Reverse, false) => {
-            OffsetEndpointRole::Start
-        }
-        (OffsetTraversal::Forward, false) | (OffsetTraversal::Reverse, true) => {
-            OffsetEndpointRole::End
-        }
-    };
-    OffsetEndpointRef {
-        span: directed.span,
-        endpoint,
-    }
-}
-
-fn computed_offset_distance_rail(
-    document: &SketchDocument,
-    operand: &OffsetAuthoringOperand,
-) -> Result<[f64; 2], CoordinatorError> {
-    let (directed, direction_sign) = match operand {
-        OffsetAuthoringOperand::Face { key, direction } => (
-            *key.outer.spans.first().ok_or_else(|| {
-                CoordinatorError::OffsetOperationUnavailable(
-                    "the computed Offset face has no source rail".into(),
-                )
-            })?,
-            match direction {
-                DocumentFaceOffsetDirection::Outward => -1.0,
-                DocumentFaceOffsetDirection::Inward => 1.0,
-            },
-        ),
-        OffsetAuthoringOperand::OpenChain { spans, side } => (
-            *spans.first().ok_or_else(|| {
-                CoordinatorError::OffsetOperationUnavailable(
-                    "the computed Offset chain has no source rail".into(),
-                )
-            })?,
-            match side {
-                DocumentLineSide::Left => 1.0,
-                DocumentLineSide::Right => -1.0,
-            },
-        ),
-    };
-    let parameter = document
-        .curve_contact_domains(directed.span)
-        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?
-        .into_iter()
-        .find_map(|domain| match domain {
-            ContactDomain::Bounded { lower, upper } => Some((lower + upper) * 0.5),
-            ContactDomain::Periodic { period } => Some(period * 0.5),
-            ContactDomain::SupportingLine => None,
-        })
-        .filter(|parameter| parameter.is_finite())
-        .ok_or_else(|| {
-            CoordinatorError::OffsetOperationUnavailable(
-                "the computed Offset source has no finite parameter rail".into(),
-            )
-        })?;
-    let differential = document
-        .evaluate_curve_jet(directed.span, parameter)
-        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?
-        .differential()
-        .map_err(|error| CoordinatorError::OffsetOperationUnavailable(error.to_string()))?;
-    let traversal_sign = match directed.traversal {
-        OffsetTraversal::Forward => 1.0,
-        OffsetTraversal::Reverse => -1.0,
-    };
-    let sign = traversal_sign * direction_sign;
-    let rail = [
-        differential.left_normal.x * sign,
-        differential.left_normal.y * sign,
-    ];
-    if rail.into_iter().all(f64::is_finite) {
-        Ok(rail)
-    } else {
-        Err(CoordinatorError::OffsetOperationUnavailable(
-            "the computed Offset source has no finite normal rail".into(),
-        ))
-    }
-}
-
-fn offset_authoring_distance_hit(
-    preview: &OffsetAuthoringPreview,
-    scene: &EditorScene,
-    position: ScreenPoint,
-    tolerance: PickTolerance,
-    policy: GeometryInteractionPolicy,
-) -> Option<crate::Hit> {
-    match &preview.metadata {
-        OffsetAuthoringPreviewMetadata::NativeProfile(metadata) => scene.offset_distance_hit(
-            position,
-            tolerance,
-            policy,
-            metadata.dimension,
-            &metadata.target_spans,
-        ),
-        OffsetAuthoringPreviewMetadata::ComputedCurve(metadata) => scene
-            .computed_offset_distance_hit(
-                position,
-                tolerance,
-                policy,
-                metadata.feature,
-                &metadata.generated_edges,
-            ),
-    }
-}
-
 fn sketch_profile_offset_operand(operand: &OffsetAuthoringOperand) -> SketchProfileOffsetOperand {
     match operand {
         OffsetAuthoringOperand::Face { key, direction } => SketchProfileOffsetOperand::Face {
@@ -12752,25 +11750,18 @@ fn sketch_profile_offset_operand(operand: &OffsetAuthoringOperand) -> SketchProf
 fn preview_profile_offset_edges(
     preview: &OffsetAuthoringPreview,
 ) -> Result<Vec<geosolve_sketch::DocumentProfileOffsetEdgePair>, CoordinatorError> {
-    let metadata = preview
-        .metadata
-        .native_profile()
-        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?;
-    let patch_preview = preview
-        .native_patch()
-        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?
-        .preview();
+    let patch_preview = preview.patch.preview();
     let document = patch_preview
         .accepted_document()
         .ok_or(CoordinatorError::OffsetPreviewRejected)?;
     let dimension = document
-        .dimension(metadata.dimension)
+        .dimension(preview.metadata.dimension)
         .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?;
     let DocumentDimensionDefinition::ProfileOffset { target, operand } = &dimension.definition
     else {
         return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
     };
-    if *target != metadata.distance {
+    if *target != preview.metadata.distance {
         return Err(CoordinatorError::OffsetPreviewIdentityMismatch);
     }
     let edges = match operand {
@@ -12791,10 +11782,7 @@ fn preview_profile_offset_edges(
 fn offset_distance_annotation_sample(
     preview: &OffsetAuthoringPreview,
 ) -> Result<(CurveSpan, f64), CoordinatorError> {
-    let patch_preview = preview
-        .native_patch()
-        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?
-        .preview();
+    let patch_preview = preview.patch.preview();
     let document = patch_preview
         .accepted_document()
         .ok_or(CoordinatorError::OffsetPreviewRejected)?;
@@ -12825,10 +11813,7 @@ fn offset_distance_rail(
             "the provisional Offset rail parameter is not finite".into(),
         ));
     }
-    let patch_preview = preview
-        .native_patch()
-        .ok_or(CoordinatorError::OffsetPreviewIdentityMismatch)?
-        .preview();
+    let patch_preview = preview.patch.preview();
     let document = patch_preview
         .accepted_document()
         .ok_or(CoordinatorError::OffsetPreviewRejected)?;
@@ -12876,7 +11861,7 @@ fn offset_distance_rail(
 fn offset_preview_metadata(
     base: &RetainedSketchDocumentSession,
     patch: &PreparedSketchPatch,
-) -> Result<NativeOffsetAuthoringPreviewMetadata, CoordinatorError> {
+) -> Result<OffsetAuthoringPreviewMetadata, CoordinatorError> {
     let preview = patch.preview();
     let candidate = preview
         .accepted_document()
@@ -12951,7 +11936,7 @@ fn offset_preview_metadata(
             (!base_constraints.contains(&constraint.id)).then_some(constraint.id)
         })
         .collect();
-    Ok(NativeOffsetAuthoringPreviewMetadata {
+    Ok(OffsetAuthoringPreviewMetadata {
         base_input: patch.base_input(),
         proposed_commit: patch.proposed_commit(),
         dimension: dimension.id,
@@ -14603,9 +13588,7 @@ mod tests {
 
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Rectangle offset")
-            .expect("accepted preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("accepted preview");
         assert_eq!(metadata.base_input, input);
         assert_eq!(metadata.source_spans.len(), source_spans.len());
         assert_eq!(metadata.target_spans.len(), source_spans.len());
@@ -14659,9 +13642,7 @@ mod tests {
 
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Line arc offset")
-            .expect("accepted preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("accepted preview");
         let created_constraints = coordinator
             .visible_preview_session()
             .expect("candidate session")
@@ -14688,9 +13669,7 @@ mod tests {
 
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Rectangle offset")
-            .expect("accepted preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("accepted preview");
         let preview_payload = checkpoint_document_to_json(
             coordinator
                 .visible_preview_session()
@@ -14703,7 +13682,7 @@ mod tests {
             .expect("exact patch commit");
         assert!(matches!(
             outcome.value,
-            OffsetAuthoringApplyEffect::NativeProfile(ids)
+            DocumentCommandEffect::CreatedProfileOffset(ids)
                 if *ids == DocumentProfileOffsetIds {
                     target: metadata.distance,
                     dimension: metadata.dimension,
@@ -14822,9 +13801,7 @@ mod tests {
         select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Edited rectangle offset")
-            .expect("edited rectangle preview remains current")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("edited rectangle preview remains current");
         assert_eq!(metadata.base_input, edited_input);
         assert_eq!(metadata.source_spans, source_spans);
         assert!(coordinator.offset_authoring_preview_matches(&state));
@@ -14845,9 +13822,7 @@ mod tests {
         select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Rectangle offset")
-            .expect("accepted preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("accepted preview");
         coordinator
             .apply_offset_authoring_preview(&mut state)
             .expect("accepted association");
@@ -15090,9 +14065,7 @@ mod tests {
 
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "One-line offset")
-            .expect("one-line preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("one-line preview");
         assert_eq!(metadata.source_spans, vec![spans[0]]);
         assert_eq!(metadata.target_spans.len(), 1);
         assert_eq!(metadata.provisional_points.len(), 2);
@@ -15132,9 +14105,7 @@ mod tests {
         let origin_distance = state.distance().expect("remembered positive distance");
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Draggable line offset")
-            .expect("one-line preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("one-line preview");
         assert_eq!(metadata.source_spans, vec![spans[0]]);
         let target = metadata.target_spans[0];
         let preview_scene = profile_offset_preview_scene(&coordinator);
@@ -15367,9 +14338,7 @@ mod tests {
         select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
         let first = coordinator
             .prepare_offset_authoring_preview(&state, "First Offset candidate")
-            .expect("first preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("first preview");
         let target = first.target_spans[0];
         let stale_scene = profile_offset_preview_scene(&coordinator);
         let stale_position = provisional_offset_span_point(&coordinator, &stale_scene, target, 0.5);
@@ -15395,9 +14364,7 @@ mod tests {
         let _ = state.set_distance(replacement_distance);
         let replacement = coordinator
             .prepare_offset_authoring_preview(&state, "Replacement Offset candidate")
-            .expect("replacement preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("replacement preview");
         assert_eq!(
             replacement.target_spans, first.target_spans,
             "provisional target identities remain stable across distance samples"
@@ -15408,8 +14375,7 @@ mod tests {
                 coordinator
                     .offset_authoring_preview()
                     .expect("replacement preview")
-                    .native_patch()
-                    .expect("native patch")
+                    .patch
                     .preview()
                     .candidate_input()
             ),
@@ -15542,9 +14508,7 @@ mod tests {
         ));
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Unavailable rail")
-            .expect("one-line preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("one-line preview");
         let preview_scene = profile_offset_preview_scene(&coordinator);
         let source = metadata.source_spans[0];
         assert_eq!(source, spans[0]);
@@ -15560,15 +14524,12 @@ mod tests {
         // Model a stale/malformed provisional target identity after the coordinate hit has
         // already established ownership. Exact rail derivation must reject, without leaving the
         // lower-priority source collector highlighted or starting a gesture.
-        let OffsetAuthoringPreviewMetadata::NativeProfile(metadata) = &mut coordinator
+        coordinator
             .offset_authoring_preview
             .as_deref_mut()
             .expect("preview")
             .metadata
-        else {
-            panic!("native Profile Offset preview expected");
-        };
-        metadata.target_spans = vec![source];
+            .target_spans = vec![source];
         assert!(matches!(
             coordinator.pointer_down_offset_authoring_distance(
                 &mut state,
@@ -15599,9 +14560,7 @@ mod tests {
         let _ = state.set_distance(0.5);
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Inward drag")
-            .expect("valid inward preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("valid inward preview");
         let target = metadata.target_spans[0];
         let preview_scene = profile_offset_preview_scene(&coordinator);
         let press = provisional_offset_span_point(&coordinator, &preview_scene, target, 0.5);
@@ -15755,9 +14714,7 @@ mod tests {
         select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Stale-safe Offset")
-            .expect("preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("preview");
         let preview_scene = profile_offset_preview_scene(&coordinator);
         let target = metadata.target_spans[0];
         let press = provisional_offset_span_point(&coordinator, &preview_scene, target, 0.5);
@@ -15846,9 +14803,7 @@ mod tests {
         select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Repeated Offset drag")
-            .expect("preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("preview");
         let target = metadata.target_spans[0];
         let first_scene = profile_offset_preview_scene(&coordinator);
         let first_press = provisional_offset_span_point(&coordinator, &first_scene, target, 0.5);
@@ -15893,10 +14848,12 @@ mod tests {
         let delayed_first_restore = match &delayed_first_finish {
             EditorEffect::FinishOffsetAuthoringDistance {
                 gesture_epoch,
-                authority,
+                base_input,
+                proposed_commit,
             } => EditorEffect::RestoreOffsetAuthoringDistance {
                 gesture_epoch: *gesture_epoch,
-                authority: *authority,
+                base_input: *base_input,
+                proposed_commit: *proposed_commit,
             },
             _ => unreachable!("the cloned effect was matched as an Offset finish above"),
         };
@@ -15926,14 +14883,16 @@ mod tests {
         else {
             panic!("second preview effect expected, got {second_effects:?}")
         };
-        let (second_epoch, second_authority, second_distance) = match second_preview {
-            EditorEffect::PreviewOffsetAuthoringDistance {
-                gesture_epoch,
-                authority,
-                distance,
-            } => (*gesture_epoch, *authority, *distance),
-            _ => unreachable!("the current effect was matched as an Offset preview above"),
-        };
+        let (second_epoch, second_base_input, second_proposed_commit, second_distance) =
+            match second_preview {
+                EditorEffect::PreviewOffsetAuthoringDistance {
+                    gesture_epoch,
+                    base_input,
+                    proposed_commit,
+                    distance,
+                } => (*gesture_epoch, *base_input, *proposed_commit, *distance),
+                _ => unreachable!("the current effect was matched as an Offset preview above"),
+            };
         let first_epoch = match &delayed_first_finish {
             EditorEffect::FinishOffsetAuthoringDistance { gesture_epoch, .. } => *gesture_epoch,
             _ => unreachable!("the cloned effect was matched as an Offset finish above"),
@@ -15961,7 +14920,8 @@ mod tests {
                 .editor()
                 .offset_distance_preview_request_is_current(
                     second_epoch,
-                    &second_authority,
+                    &second_base_input,
+                    second_proposed_commit,
                     second_distance,
                 )
         );
@@ -16053,9 +15013,7 @@ mod tests {
         let origin_distance = state.distance().expect("positive circle distance");
         let metadata = coordinator
             .prepare_offset_authoring_preview(&state, "Circle annotation rail")
-            .expect("circle preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("circle preview");
         let preview_scene = profile_offset_preview_scene(&coordinator);
         let annotation = preview_scene
             .annotations
@@ -16134,7 +15092,7 @@ mod tests {
                 .into_iter()
                 .find(|edge| edge.target.curve == target)
                 .expect("target pair");
-            let patch_preview = preview.native_patch().expect("native patch").preview();
+            let patch_preview = preview.patch.preview();
             let document = patch_preview
                 .accepted_document()
                 .expect("accepted candidate");
@@ -16158,14 +15116,9 @@ mod tests {
         select_profile_offset_rectangle(&mut rectangle, &mut rectangle_state, &rectangle_scene);
         let rectangle_metadata = rectangle
             .prepare_offset_authoring_preview(&rectangle_state, "Miter rails")
-            .expect("rectangle preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("rectangle preview");
         let rectangle_preview = rectangle.offset_authoring_preview().expect("preview");
-        let rectangle_patch_preview = rectangle_preview
-            .native_patch()
-            .expect("native patch")
-            .preview();
+        let rectangle_patch_preview = rectangle_preview.patch.preview();
         let document = rectangle_patch_preview
             .accepted_document()
             .expect("candidate document");
@@ -16193,14 +15146,9 @@ mod tests {
         let _ = mixed_state.set_distance(0.25);
         let mixed_metadata = mixed
             .prepare_offset_authoring_preview(&mixed_state, "Line/arc rails")
-            .expect("mixed preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("mixed preview");
         let mixed_preview = mixed.offset_authoring_preview().expect("mixed preview");
-        let mixed_patch_preview = mixed_preview
-            .native_patch()
-            .expect("native patch")
-            .preview();
+        let mixed_patch_preview = mixed_preview.patch.preview();
         let mixed_document = mixed_patch_preview
             .accepted_document()
             .expect("mixed candidate");
@@ -16232,16 +15180,11 @@ mod tests {
         ));
         let circle_metadata = circle
             .prepare_offset_authoring_preview(&circle_state, "Circle rail")
-            .expect("circle preview")
-            .into_native_profile()
-            .expect("native Profile Offset metadata");
+            .expect("circle preview");
         let circle_preview = circle.offset_authoring_preview().expect("circle preview");
         assert_eq!(circle_metadata.target_spans.len(), 1);
         let circle_target = circle_metadata.target_spans[0];
-        let circle_patch_preview = circle_preview
-            .native_patch()
-            .expect("native patch")
-            .preview();
+        let circle_patch_preview = circle_preview.patch.preview();
         let circle_document = circle_patch_preview
             .accepted_document()
             .expect("circle candidate");
@@ -24022,10 +22965,7 @@ mod tests {
         let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
         let before = fixture.coordinator.feature_document().clone();
         let ComputedFeatureDefinition::FilletSet(fillet) =
-            &before.feature(feature).expect("Fillet feature").definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            &before.feature(feature).expect("Fillet feature").definition;
         let corner = fillet.corners[0];
 
         let mut refreshed_corner = corner.without_id();
@@ -24231,10 +23171,7 @@ mod tests {
                 .feature_document()
                 .feature(first)
                 .expect("first Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             let corner = set.corners[0];
             (corner.id, vec![corner.first.source, corner.second.source])
         };
@@ -24507,10 +23444,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("Fillet feature")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         fillet.radius
     }
 
@@ -24671,7 +23605,7 @@ mod tests {
             assert_eq!(preview.snapshot().edges().len(), 5);
             assert!(matches!(
                 &preview.snapshot().feature_evaluations()[0].state,
-                ComputedFeatureEvaluationState::Current { corner_edges, .. }
+                ComputedFeatureEvaluationState::Current { corner_edges }
                     if corner_edges.len() == 2
             ));
             let middle = preview
@@ -25044,7 +23978,6 @@ mod tests {
             .expect("fold feature");
         let corner = match &features.feature(feature).unwrap().definition {
             ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0].id,
-            ComputedFeatureDefinition::CurveOffset(_) => panic!("expected FilletSet feature"),
         };
         let owner = ComputedCornerRef { feature, corner };
         let mut coordinator =
@@ -25100,7 +24033,6 @@ mod tests {
                 assert_eq!(fillet.corners[0].id, corner);
                 fillet.corners[0].without_id()
             }
-            ComputedFeatureDefinition::CurveOffset(_) => panic!("expected FilletSet feature"),
         };
         assert_eq!(regular_corner.first.source, fold.corner.first.source);
         assert_eq!(regular_corner.second.source, fold.corner.second.source);
@@ -25167,7 +24099,6 @@ mod tests {
                 assert_eq!(fillet.corners[0].id, corner);
                 fillet.corners[0].without_id()
             }
-            ComputedFeatureDefinition::CurveOffset(_) => panic!("expected FilletSet feature"),
         };
         assert_eq!(restored_corner, fold.corner);
         let restored_scene = current_computed_scene(&coordinator);
@@ -25194,9 +24125,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("redone regular feature");
-        let ComputedFeatureDefinition::FilletSet(redo_fillet) = &redo_feature.definition else {
-            panic!("expected FilletSet feature");
-        };
+        let ComputedFeatureDefinition::FilletSet(redo_fillet) = &redo_feature.definition;
         assert_eq!(redo_fillet.corners[0].id, corner);
         assert_eq!(redo_fillet.corners[0].without_id(), regular_corner);
         assert_eq!(coordinator.session().design_identity(), design_identity);
@@ -25904,10 +24833,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("feature")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             fillet
                 .corners
                 .iter()
@@ -25961,20 +24887,14 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("remaining set")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         assert_eq!(remaining.corners.len(), 1);
         coordinator.undo().expect("restore deleted corner");
         let ComputedFeatureDefinition::FilletSet(restored) = &coordinator
             .feature_document()
             .feature(feature)
             .expect("restored set")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         assert_eq!(restored.corners.len(), 2);
         let source_delete_edges = coordinator
             .computed_snapshot()
@@ -26021,10 +24941,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("same restored feature")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         assert_eq!(
             recovered_set
                 .corners
@@ -26063,10 +24980,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("single-corner set")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         let [corner] = set.corners.as_slice() else {
             panic!("expected one Fillet corner")
         };
@@ -26102,10 +25016,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("same set restored")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             assert_eq!(restored.corners.len(), 1);
             assert_eq!(restored.corners[0].id, corner);
             assert!(matches!(
@@ -26378,10 +25289,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("published Fillet set")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             let persistent_corners = set
                 .corners
                 .iter()
@@ -26571,10 +25479,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("same feature after source Undo")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             assert_eq!(
                 recovered_set
                     .corners
@@ -26865,10 +25770,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("edited Fillet set")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         let corner_ids_before_radius = set_before_radius
             .corners
             .iter()
@@ -26944,10 +25846,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("re-anchored Fillet set")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         assert_eq!(
             set_after_radius
                 .corners
@@ -27253,10 +26152,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("published Fillet")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         let owner = ComputedCornerRef {
             feature,
             corner: fillet.corners[0].id,
@@ -27815,10 +26711,7 @@ mod tests {
                     .feature_document()
                     .feature(feature)
                     .expect("published model Fillet")
-                    .definition
-                else {
-                    panic!("expected FilletSet feature");
-                };
+                    .definition;
                 (
                     ComputedCornerRef {
                         feature,
@@ -28106,10 +26999,7 @@ mod tests {
                 .feature_document()
                 .feature(self.feature)
                 .expect("stable model feature")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             assert_eq!(
                 fillet
                     .corners
@@ -28276,7 +27166,7 @@ mod tests {
                     .snapshot(),
                 metadata.feature,
             ),
-            ComputedFeatureEvaluationState::Current { corner_edges, .. }
+            ComputedFeatureEvaluationState::Current { corner_edges }
                 if corner_edges.len() == 2
         ));
 
@@ -28320,10 +27210,7 @@ mod tests {
                 .feature_document()
                 .feature(created)
                 .expect("published grouped Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             (
                 fillet
                     .corners
@@ -28344,7 +27231,7 @@ mod tests {
             .expect("published grouped output");
         assert!(matches!(
             computed_feature_state(created_snapshot, created),
-            ComputedFeatureEvaluationState::Current { corner_edges, .. }
+            ComputedFeatureEvaluationState::Current { corner_edges }
                 if corner_edges.len() == 2
         ));
         let created_arc_radii = created_snapshot
@@ -28387,10 +27274,7 @@ mod tests {
                 .feature_document()
                 .feature(published)
                 .expect("initial published grouped Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             fillet
                 .corners
                 .iter()
@@ -28416,10 +27300,7 @@ mod tests {
                 .feature_document()
                 .feature(published)
                 .expect("resized published grouped Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             (
                 fillet
                     .corners
@@ -28453,10 +27334,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("published Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             (
                 ComputedCornerRef {
                     feature,
@@ -28669,10 +27547,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("contact-edited Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             fillet
                 .corners
                 .iter()
@@ -28748,10 +27623,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("published Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             ComputedCornerRef {
                 feature,
                 corner: fillet.corners[0].id,
@@ -29203,10 +28075,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("line-circle Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             ComputedCornerRef {
                 feature,
                 corner: fillet.corners[0].id,
@@ -29355,10 +28224,7 @@ mod tests {
                 .feature_document()
                 .feature(feature)
                 .expect("published Fillet")
-                .definition
-            else {
-                panic!("expected FilletSet feature");
-            };
+                .definition;
             ComputedCornerRef {
                 feature,
                 corner: fillet.corners[0].id,
@@ -29478,10 +28344,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("published grouped Fillet")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         let mut owners = fillet
             .corners
             .iter()
@@ -29576,10 +28439,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("published grouped Fillet")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         let owners = fillet
             .corners
             .iter()
@@ -29645,10 +28505,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("published Fillet")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         let owner = ComputedCornerRef {
             feature,
             corner: fillet.corners[0].id,
@@ -29812,10 +28669,7 @@ mod tests {
             .feature_document()
             .feature(feature)
             .expect("published Fillet")
-            .definition
-        else {
-            panic!("expected FilletSet feature");
-        };
+            .definition;
         let owner = ComputedCornerRef {
             feature,
             corner: fillet.corners[0].id,

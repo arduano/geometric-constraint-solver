@@ -15,7 +15,6 @@ categories = ["algorithms", "mathematics", "science"]
 [dependencies]
 geosolve-geometry = { version = "0.2.0", path = "../geosolve-geometry" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
-geosolve-sketch-topology = { version = "0.2.0", path = "../geosolve-sketch-topology" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

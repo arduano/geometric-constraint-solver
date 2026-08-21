@@ -367,13 +367,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-tree-external { border-left: 2px solid #638b91 !important; color: #9cc6c9; }
 .wb-tree-feature { color: #dfc88f; }
-.wb-tree-feature small {
-  display: block;
-  margin-top: 0.08rem;
-  color: #879290;
-  font-size: 0.6rem;
-  font-weight: 400;
-}
 .wb-tree-feature[data-feature-state="failed"] { color: #f1a99b; }
 .wb-tree-feature[data-feature-state="suppressed"] { opacity: 0.58; }
 .wb-tree-feature-corner { padding-left: 1.3rem; color: #a8b4b1; }
@@ -597,11 +590,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   font-size: 0.64rem;
   line-height: 1.4;
 }
-#wb-feature-radius-controls,
-.wb-feature-controls {
-  display: grid;
-  gap: 0.55rem;
-}
 .wb-fillet-actions-panel p {
   margin: 0;
   color: #899492;
@@ -688,14 +676,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke: #8ed5ca;
   stroke-width: 2.6;
 }
-.wb-computed-offset {
-  stroke: #7fc6ef;
-  stroke-width: 2.6;
-}
 .wb-computed-item.geometry-hovered .wb-computed-fillet,
-.wb-computed-item.selected .wb-computed-fillet,
-.wb-computed-item.geometry-hovered .wb-computed-offset,
-.wb-computed-item.selected .wb-computed-offset {
+.wb-computed-item.selected .wb-computed-fillet {
   stroke: #efb856;
   filter: drop-shadow(0 0 3px rgb(239 184 86 / 45%));
 }
@@ -712,7 +694,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   pointer-events: stroke;
   cursor: ew-resize;
 }
-.wb-computed-offset-item .wb-computed-hit { cursor: pointer; }
 .wb-computed-item.has-problem .wb-computed-fillet { stroke: #ff7666; }
 .wb-fillet-radius-rail,
 .wb-fillet-radius-spoke,
@@ -909,11 +890,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-curve-control[data-control-role="trim-start"] .wb-curve-control-mark,
 .wb-curve-control[data-control-role="trim-end"] .wb-curve-control-mark { stroke: #e6c785; }
 .wb-curve-control[data-control-role="rational-middle"] .wb-curve-control-mark { stroke: #b7a0df; }
-.wb-curve-control.offset-proxy .wb-curve-control-mark {
-  fill: #102d31;
-  stroke: #65d6cf;
-  stroke-dasharray: 2.5 1.5;
-}
 .wb-curve-control.hovered .wb-curve-control-mark,
 .wb-curve-control.active .wb-curve-control-mark {
   stroke: #ffd27d;

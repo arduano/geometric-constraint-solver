@@ -5,23 +5,20 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_sketch::{
-    ContactNeighborhood, CurveSpan, DesignPointId, DocumentArcSweep, DocumentConstraintId,
-    DocumentCurveNormalSide, DocumentFaceOffsetDirection, DocumentFilletEndpointOrder,
-    DocumentFilletTrimEndpoint, DocumentId, DocumentLineSide, DocumentTrimParameter,
+    ContactNeighborhood, CurveSpan, DocumentArcSweep, DocumentCurveNormalSide,
+    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentId, DocumentTrimParameter,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 /// Current independent computed-feature intent schema.
-pub const COMPUTED_FEATURE_DOCUMENT_VERSION: u32 = 2;
+pub const COMPUTED_FEATURE_DOCUMENT_VERSION: u32 = 1;
 /// Defensive byte limit applied before feature-document JSON deserialization.
 pub const MAX_COMPUTED_FEATURE_JSON_BYTES: usize = 16 * 1024 * 1024;
 /// Defensive bound for persistent computed features.
 pub const MAX_COMPUTED_FEATURES: usize = 100_000;
 /// Defensive bound for corners across all Fillet sets.
 pub const MAX_COMPUTED_FEATURE_CORNERS: usize = 200_000;
-/// Defensive bound for native source spans across all computed Curve Offsets.
-pub const MAX_COMPUTED_CURVE_OFFSET_SPANS: usize = 200_000;
 /// Defensive bound for one persistent feature label.
 pub const MAX_COMPUTED_FEATURE_LABEL_BYTES: usize = 1_024;
 
@@ -306,118 +303,11 @@ pub struct ComputedFilletSet {
     pub corners: Vec<ComputedFilletCorner>,
 }
 
-/// Explicit traversal of one native span in a computed Curve Offset operand.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ComputedCurveOffsetTraversal {
-    Forward,
-    Reverse,
-}
-
-/// One ordered source-only span in a computed Curve Offset operand.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ComputedCurveOffsetDirectedSpan {
-    pub source: NativeCurveSpanSource,
-    pub traversal: ComputedCurveOffsetTraversal,
-}
-
-/// Stable native ownership of one ordered source junction.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(
-    tag = "kind",
-    content = "id",
-    rename_all = "snake_case",
-    deny_unknown_fields
-)]
-pub enum ComputedCurveOffsetJunctionProvenance {
-    SharedPoint(DesignPointId),
-    Constraint(DocumentConstraintId),
-    /// Adjacency between two intrinsic spans of one native spline curve.
-    IntrinsicSpanBoundary,
-}
-
-/// Retained non-tangent turn at one ordered source junction.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ComputedCurveOffsetTurn {
-    Left,
-    Right,
-}
-
-/// Explicit local branch retained at one ordered source junction.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum ComputedCurveOffsetJunctionBranch {
-    Miter { turn: ComputedCurveOffsetTurn },
-    Tangent,
-}
-
-/// One ordered source junction and its authenticated native provenance.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ComputedCurveOffsetJunction {
-    pub provenance: ComputedCurveOffsetJunctionProvenance,
-    pub branch: ComputedCurveOffsetJunctionBranch,
-}
-
-/// One closed directed source path. Junction `i` joins span `i` to the next
-/// span, wrapping from the final span to the first.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ComputedCurveOffsetLoop {
-    pub spans: Vec<ComputedCurveOffsetDirectedSpan>,
-    pub junctions: Vec<ComputedCurveOffsetJunction>,
-}
-
-/// Explicit terminal behavior for a computed open-chain offset.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ComputedCurveOffsetTerminalPolicy {
-    NormalTranslation,
-}
-
-/// One open directed source chain. Junction `i` joins span `i` to span
-/// `i + 1`; both terminals retain their explicit normal-translation policy.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ComputedCurveOffsetChain {
-    pub spans: Vec<ComputedCurveOffsetDirectedSpan>,
-    pub junctions: Vec<ComputedCurveOffsetJunction>,
-    pub start_terminal: ComputedCurveOffsetTerminalPolicy,
-    pub end_terminal: ComputedCurveOffsetTerminalPolicy,
-}
-
-/// Source-only topology and explicit displacement direction of one computed
-/// Curve Offset operation.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum ComputedCurveOffsetOperand {
-    Face {
-        direction: DocumentFaceOffsetDirection,
-        outer: ComputedCurveOffsetLoop,
-        holes: Vec<ComputedCurveOffsetLoop>,
-    },
-    OpenChain {
-        side: DocumentLineSide,
-        chain: ComputedCurveOffsetChain,
-    },
-}
-
-/// One associative source-only computed Curve Offset operation.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ComputedCurveOffset {
-    pub distance: f64,
-    pub operand: ComputedCurveOffsetOperand,
-}
-
 /// Closed persistent computed-feature definition surface.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ComputedFeatureDefinition {
     FilletSet(ComputedFilletSet),
-    CurveOffset(ComputedCurveOffset),
 }
 
 /// One persistent feature-tree item.
@@ -461,174 +351,8 @@ struct ComputedFeatureWireV1 {
     revision: ComputedFeatureRevision,
     next_feature_id: ComputedFeatureId,
     next_corner_id: ComputedFeatureCornerId,
-    features: Vec<ComputedFeatureV1>,
-    digest: ComputedFeatureDocumentDigest,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ComputedFeatureV1 {
-    id: ComputedFeatureId,
-    label: String,
-    suppressed: bool,
-    definition: ComputedFeatureDefinitionV1,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-enum ComputedFeatureDefinitionV1 {
-    FilletSet(ComputedFilletSetV1),
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ComputedFilletSetV1 {
-    radius: f64,
-    corners: Vec<ComputedFilletCornerV1>,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ComputedFilletCornerV1 {
-    id: ComputedFeatureCornerId,
-    first: ComputedFilletParentV1,
-    second: ComputedFilletParentV1,
-    endpoint_order: DocumentFilletEndpointOrder,
-    sweep: DocumentArcSweep,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ComputedFilletParentV1 {
-    source: NativeCurveSpanSourceV1,
-    picked_parameter: f64,
-    winding: i32,
-    neighborhood: ContactNeighborhood,
-    normal_side: DocumentCurveNormalSide,
-    retained_endpoint: DocumentFilletTrimEndpoint,
-    periodic_anchor: Option<DocumentTrimParameter>,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct NativeCurveSpanSourceV1 {
-    span: CurveSpan,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ComputedFeatureWireV2 {
-    version: u32,
-    document_id: ComputedFeatureDocumentId,
-    sketch_document: DocumentId,
-    revision: ComputedFeatureRevision,
-    next_feature_id: ComputedFeatureId,
-    next_corner_id: ComputedFeatureCornerId,
     features: Vec<ComputedFeature>,
     digest: ComputedFeatureDocumentDigest,
-}
-
-#[derive(Deserialize)]
-struct ComputedFeatureWireVersion {
-    version: u32,
-}
-
-impl From<ComputedFeatureV1> for ComputedFeature {
-    fn from(value: ComputedFeatureV1) -> Self {
-        let definition = match value.definition {
-            ComputedFeatureDefinitionV1::FilletSet(fillet) => {
-                ComputedFeatureDefinition::FilletSet(fillet.into())
-            }
-        };
-        Self {
-            id: value.id,
-            label: value.label,
-            suppressed: value.suppressed,
-            definition,
-        }
-    }
-}
-
-impl From<ComputedFilletSetV1> for ComputedFilletSet {
-    fn from(value: ComputedFilletSetV1) -> Self {
-        Self {
-            radius: value.radius,
-            corners: value
-                .corners
-                .into_iter()
-                .map(ComputedFilletCorner::from)
-                .collect(),
-        }
-    }
-}
-
-impl From<ComputedFilletCornerV1> for ComputedFilletCorner {
-    fn from(value: ComputedFilletCornerV1) -> Self {
-        Self {
-            id: value.id,
-            first: value.first.into(),
-            second: value.second.into(),
-            endpoint_order: value.endpoint_order,
-            sweep: value.sweep,
-        }
-    }
-}
-
-impl From<ComputedFilletParentV1> for ComputedFilletParent {
-    fn from(value: ComputedFilletParentV1) -> Self {
-        Self {
-            source: NativeCurveSpanSource {
-                span: value.source.span,
-            },
-            picked_parameter: value.picked_parameter,
-            winding: value.winding,
-            neighborhood: value.neighborhood,
-            normal_side: value.normal_side,
-            retained_endpoint: value.retained_endpoint,
-            periodic_anchor: value.periodic_anchor,
-        }
-    }
-}
-
-impl From<&ComputedFilletSet> for ComputedFilletSetV1 {
-    fn from(value: &ComputedFilletSet) -> Self {
-        Self {
-            radius: value.radius,
-            corners: value
-                .corners
-                .iter()
-                .map(ComputedFilletCornerV1::from)
-                .collect(),
-        }
-    }
-}
-
-impl From<&ComputedFilletCorner> for ComputedFilletCornerV1 {
-    fn from(value: &ComputedFilletCorner) -> Self {
-        Self {
-            id: value.id,
-            first: ComputedFilletParentV1::from(value.first),
-            second: ComputedFilletParentV1::from(value.second),
-            endpoint_order: value.endpoint_order,
-            sweep: value.sweep,
-        }
-    }
-}
-
-impl From<ComputedFilletParent> for ComputedFilletParentV1 {
-    fn from(value: ComputedFilletParent) -> Self {
-        Self {
-            source: NativeCurveSpanSourceV1 {
-                span: value.source.span,
-            },
-            picked_parameter: value.picked_parameter,
-            winding: value.winding,
-            neighborhood: value.neighborhood,
-            normal_side: value.normal_side,
-            retained_endpoint: value.retained_endpoint,
-            periodic_anchor: value.periodic_anchor,
-        }
-    }
 }
 
 /// Strict persistence or mutation failure for computed-feature intent.
@@ -639,9 +363,7 @@ pub enum ComputedFeatureDocumentError {
     InvalidId(String),
     #[error("invalid computed-feature digest encoding")]
     InvalidDigestEncoding,
-    #[error(
-        "unsupported computed-feature document version {actual}; supported versions are 1 and {expected}"
-    )]
+    #[error("unsupported computed-feature document version {actual}; expected {expected}")]
     UnsupportedVersion { actual: u32, expected: u32 },
     #[error("computed-feature JSON exceeds {limit} bytes")]
     JsonResourceLimit { limit: usize },
@@ -664,12 +386,6 @@ pub enum ComputedFeatureDocumentError {
     UnknownFeature(ComputedFeatureId),
     #[error("unknown computed feature corner {0}")]
     UnknownCorner(ComputedFeatureCornerId),
-    #[error("computed feature {feature} is {actual}, not {expected}")]
-    WrongFeatureKind {
-        feature: ComputedFeatureId,
-        expected: &'static str,
-        actual: &'static str,
-    },
     #[error("computed-feature allocator is exhausted")]
     IdExhausted,
     #[error("computed-feature revision is exhausted")]
@@ -740,21 +456,8 @@ impl ComputedFeatureDocument {
         feature: ComputedFeatureId,
         corner: ComputedFeatureCornerId,
     ) -> Option<&ComputedFilletCorner> {
-        let ComputedFeatureDefinition::FilletSet(fillet) = &self.feature(feature)?.definition
-        else {
-            return None;
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &self.feature(feature)?.definition;
         fillet.corners.iter().find(|value| value.id == corner)
-    }
-
-    /// Returns one computed Curve Offset definition when `feature` has that kind.
-    #[must_use]
-    pub fn curve_offset(&self, feature: ComputedFeatureId) -> Option<&ComputedCurveOffset> {
-        let ComputedFeatureDefinition::CurveOffset(offset) = &self.feature(feature)?.definition
-        else {
-            return None;
-        };
-        Some(offset)
     }
 
     #[must_use]
@@ -866,54 +569,6 @@ impl ComputedFeatureDocument {
         Ok(id)
     }
 
-    /// Creates one persistent source-only Curve Offset and allocates a stable
-    /// feature ID atomically.
-    ///
-    /// # Errors
-    ///
-    /// Rejects an invalid label, non-positive distance, malformed operand,
-    /// allocator exhaustion or resource exhaustion without changing the document.
-    pub fn create_curve_offset(
-        &mut self,
-        label: impl Into<String>,
-        distance: f64,
-        operand: ComputedCurveOffsetOperand,
-    ) -> Result<ComputedFeatureId, ComputedFeatureDocumentError> {
-        let label = label.into();
-        validate_label(&label)?;
-        validate_curve_offset(distance, &operand)?;
-        let span_count = curve_offset_operand_span_count(&operand)?;
-        validate_resource(
-            "Curve Offset spans",
-            self.curve_offset_span_count()
-                .checked_add(span_count)
-                .ok_or(ComputedFeatureDocumentError::IdExhausted)?,
-            MAX_COMPUTED_CURVE_OFFSET_SPANS,
-        )?;
-        validate_resource("features", self.features.len() + 1, MAX_COMPUTED_FEATURES)?;
-        let next_feature = self
-            .next_feature_id
-            .0
-            .checked_add(1)
-            .ok_or(ComputedFeatureDocumentError::IdExhausted)?;
-        let next_revision = next_revision(self.revision)?;
-
-        let id = self.next_feature_id;
-        self.next_feature_id = ComputedFeatureId(next_feature);
-        self.revision = next_revision;
-        self.features.push(ComputedFeature {
-            id,
-            label,
-            suppressed: false,
-            definition: ComputedFeatureDefinition::CurveOffset(ComputedCurveOffset {
-                distance,
-                operand,
-            }),
-        });
-        self.normalize();
-        Ok(id)
-    }
-
     /// Appends corners to an existing Fillet set while retaining its shared radius.
     ///
     /// # Errors
@@ -924,18 +579,11 @@ impl ComputedFeatureDocument {
         feature: ComputedFeatureId,
         corners: Vec<NewComputedFilletCorner>,
     ) -> Result<Vec<ComputedFeatureCornerId>, ComputedFeatureDocumentError> {
-        let current = self
-            .feature(feature)
-            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(current_fillet) = &current.definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "FilletSet",
-                &current.definition,
-            ));
-        };
         if corners.is_empty() {
             return Ok(Vec::new());
+        }
+        if self.feature(feature).is_none() {
+            return Err(ComputedFeatureDocumentError::UnknownFeature(feature));
         }
         let corners = corners
             .into_iter()
@@ -944,10 +592,16 @@ impl ComputedFeatureDocument {
         for corner in &corners {
             validate_new_corner(*corner)?;
         }
-        let existing_pairs = current_fillet
-            .corners
-            .iter()
-            .map(|corner| corner_source_pair(corner.without_id()))
+        let existing_pairs = self
+            .feature(feature)
+            .into_iter()
+            .flat_map(|value| {
+                let ComputedFeatureDefinition::FilletSet(fillet) = &value.definition;
+                fillet
+                    .corners
+                    .iter()
+                    .map(|corner| corner_source_pair(corner.without_id()))
+            })
             .collect::<std::collections::BTreeSet<_>>();
         validate_unique_new_corner_pairs(corners.iter().copied())?;
         if corners
@@ -999,9 +653,7 @@ impl ComputedFeatureDocument {
             .iter_mut()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition else {
-            return Err(wrong_feature_kind(feature, "FilletSet", &value.definition));
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
         fillet.corners.extend(created);
         fillet.corners.sort_by_key(|corner| corner.id);
         self.next_corner_id = ComputedFeatureCornerId(end);
@@ -1021,13 +673,7 @@ impl ComputedFeatureDocument {
             .iter()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(fillet) = &current.definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "FilletSet",
-                &current.definition,
-            ));
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &current.definition;
         if fillet.radius.to_bits() == radius.to_bits() {
             return Ok(());
         }
@@ -1037,143 +683,8 @@ impl ComputedFeatureDocument {
             .iter_mut()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition else {
-            return Err(wrong_feature_kind(feature, "FilletSet", &value.definition));
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
         fillet.radius = radius;
-        self.revision = next_revision;
-        Ok(())
-    }
-
-    /// Changes one computed Curve Offset distance without replacing its sources
-    /// or explicit branch state.
-    pub fn set_curve_offset_distance(
-        &mut self,
-        feature: ComputedFeatureId,
-        distance: f64,
-    ) -> Result<(), ComputedFeatureDocumentError> {
-        validate_distance(distance)?;
-        let current = self
-            .features
-            .iter()
-            .find(|value| value.id == feature)
-            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::CurveOffset(offset) = &current.definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "CurveOffset",
-                &current.definition,
-            ));
-        };
-        if offset.distance.to_bits() == distance.to_bits() {
-            return Ok(());
-        }
-        let next_revision = next_revision(self.revision)?;
-        let value = self
-            .features
-            .iter_mut()
-            .find(|value| value.id == feature)
-            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::CurveOffset(offset) = &mut value.definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "CurveOffset",
-                &value.definition,
-            ));
-        };
-        offset.distance = distance;
-        self.revision = next_revision;
-        Ok(())
-    }
-
-    /// Replaces the complete source topology, direction and branch state of one
-    /// computed Curve Offset while preserving its feature identity and distance.
-    pub fn set_curve_offset_operand(
-        &mut self,
-        feature: ComputedFeatureId,
-        operand: ComputedCurveOffsetOperand,
-    ) -> Result<(), ComputedFeatureDocumentError> {
-        validate_curve_offset_operand(&operand)?;
-        let replacement_span_count = curve_offset_operand_span_count(&operand)?;
-        let current = self
-            .features
-            .iter()
-            .find(|value| value.id == feature)
-            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::CurveOffset(offset) = &current.definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "CurveOffset",
-                &current.definition,
-            ));
-        };
-        if offset.operand == operand {
-            return Ok(());
-        }
-        let current_span_count = curve_offset_operand_span_count(&offset.operand)?;
-        let future_span_count = self
-            .curve_offset_span_count()
-            .checked_sub(current_span_count)
-            .and_then(|count| count.checked_add(replacement_span_count))
-            .ok_or(ComputedFeatureDocumentError::IdExhausted)?;
-        validate_resource(
-            "Curve Offset spans",
-            future_span_count,
-            MAX_COMPUTED_CURVE_OFFSET_SPANS,
-        )?;
-        let next_revision = next_revision(self.revision)?;
-        let value = self
-            .features
-            .iter_mut()
-            .find(|value| value.id == feature)
-            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::CurveOffset(offset) = &mut value.definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "CurveOffset",
-                &value.definition,
-            ));
-        };
-        offset.operand = operand;
-        self.revision = next_revision;
-        Ok(())
-    }
-
-    /// Flips the explicit Left/Right or Outward/Inward direction of one
-    /// computed Curve Offset without reversing its source traversal.
-    pub fn flip_curve_offset_direction(
-        &mut self,
-        feature: ComputedFeatureId,
-    ) -> Result<(), ComputedFeatureDocumentError> {
-        let current = self
-            .features
-            .iter()
-            .find(|value| value.id == feature)
-            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        if !matches!(
-            current.definition,
-            ComputedFeatureDefinition::CurveOffset(_)
-        ) {
-            return Err(wrong_feature_kind(
-                feature,
-                "CurveOffset",
-                &current.definition,
-            ));
-        }
-        let next_revision = next_revision(self.revision)?;
-        let value = self
-            .features
-            .iter_mut()
-            .find(|value| value.id == feature)
-            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::CurveOffset(offset) = &mut value.definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "CurveOffset",
-                &value.definition,
-            ));
-        };
-        flip_curve_offset_operand_direction(&mut offset.operand);
         self.revision = next_revision;
         Ok(())
     }
@@ -1192,14 +703,7 @@ impl ComputedFeatureDocument {
             .iter()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(current_fillet) = &current_feature.definition
-        else {
-            return Err(wrong_feature_kind(
-                feature,
-                "FilletSet",
-                &current_feature.definition,
-            ));
-        };
+        let ComputedFeatureDefinition::FilletSet(current_fillet) = &current_feature.definition;
         if current_fillet.corners.iter().any(|value| {
             value.id != corner
                 && corner_source_pair(value.without_id()) == corner_source_pair(replacement)
@@ -1223,9 +727,7 @@ impl ComputedFeatureDocument {
             .iter_mut()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition else {
-            return Err(wrong_feature_kind(feature, "FilletSet", &value.definition));
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
         let value = fillet
             .corners
             .iter_mut()
@@ -1261,13 +763,7 @@ impl ComputedFeatureDocument {
             .iter()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(current_fillet) = &current.definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "FilletSet",
-                &current.definition,
-            ));
-        };
+        let ComputedFeatureDefinition::FilletSet(current_fillet) = &current.definition;
         if corners.len() != current_fillet.corners.len() {
             return Err(invalid_field(
                 "corners",
@@ -1335,9 +831,7 @@ impl ComputedFeatureDocument {
             .iter_mut()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition else {
-            return Err(wrong_feature_kind(feature, "FilletSet", &value.definition));
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
         fillet.radius = radius;
         fillet.corners = replacement_corners;
         self.revision = next_revision;
@@ -1407,13 +901,7 @@ impl ComputedFeatureDocument {
             .iter()
             .position(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(fillet) = &self.features[index].definition else {
-            return Err(wrong_feature_kind(
-                feature,
-                "FilletSet",
-                &self.features[index].definition,
-            ));
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &self.features[index].definition;
         if !fillet.corners.iter().any(|value| value.id == corner) {
             return Err(ComputedFeatureDocumentError::UnknownCorner(corner));
         }
@@ -1422,14 +910,7 @@ impl ComputedFeatureDocument {
         if removed_feature {
             self.features.remove(index);
         } else {
-            let ComputedFeatureDefinition::FilletSet(fillet) = &mut self.features[index].definition
-            else {
-                return Err(wrong_feature_kind(
-                    feature,
-                    "FilletSet",
-                    &self.features[index].definition,
-                ));
-            };
+            let ComputedFeatureDefinition::FilletSet(fillet) = &mut self.features[index].definition;
             fillet.corners.retain(|value| value.id != corner);
         }
         self.revision = next_revision;
@@ -1506,25 +987,10 @@ impl ComputedFeatureDocument {
         Ok(())
     }
 
-    /// Serializes canonical strict computed-feature JSON.
-    ///
-    /// Empty and Fillet-only documents retain their byte-identical V1 wire
-    /// representation. V2 is emitted only when Curve Offset intent requires it.
+    /// Serializes canonical strict V1 computed-feature JSON.
     pub fn to_json(&self) -> Result<String, ComputedFeatureDocumentError> {
         self.validate()?;
-        if let Some(features) = self.v1_features() {
-            return Ok(serde_json::to_string(&ComputedFeatureWireV1 {
-                version: 1,
-                document_id: self.id,
-                sketch_document: self.sketch_document,
-                revision: self.revision,
-                next_feature_id: self.next_feature_id,
-                next_corner_id: self.next_corner_id,
-                features,
-                digest: self.digest(),
-            })?);
-        }
-        Ok(serde_json::to_string(&ComputedFeatureWireV2 {
+        let wire = ComputedFeatureWireV1 {
             version: COMPUTED_FEATURE_DOCUMENT_VERSION,
             document_id: self.id,
             sketch_document: self.sketch_document,
@@ -1533,60 +999,35 @@ impl ComputedFeatureDocument {
             next_corner_id: self.next_corner_id,
             features: self.features.clone(),
             digest: self.digest(),
-        })?)
+        };
+        Ok(serde_json::to_string(&wire)?)
     }
 
-    /// Imports strict V1 or V2 computed-feature JSON and verifies its canonical digest.
+    /// Imports strict V1 computed-feature JSON and verifies its canonical digest.
     pub fn from_json(json: &str) -> Result<Self, ComputedFeatureDocumentError> {
         if json.len() > MAX_COMPUTED_FEATURE_JSON_BYTES {
             return Err(ComputedFeatureDocumentError::JsonResourceLimit {
                 limit: MAX_COMPUTED_FEATURE_JSON_BYTES,
             });
         }
-        let version: ComputedFeatureWireVersion = serde_json::from_str(json)?;
-        let (mut document, digest) = match version.version {
-            1 => {
-                let wire: ComputedFeatureWireV1 = serde_json::from_str(json)?;
-                (
-                    Self {
-                        id: wire.document_id,
-                        sketch_document: wire.sketch_document,
-                        revision: wire.revision,
-                        next_feature_id: wire.next_feature_id,
-                        next_corner_id: wire.next_corner_id,
-                        features: wire
-                            .features
-                            .into_iter()
-                            .map(ComputedFeature::from)
-                            .collect(),
-                    },
-                    wire.digest,
-                )
-            }
-            COMPUTED_FEATURE_DOCUMENT_VERSION => {
-                let wire: ComputedFeatureWireV2 = serde_json::from_str(json)?;
-                (
-                    Self {
-                        id: wire.document_id,
-                        sketch_document: wire.sketch_document,
-                        revision: wire.revision,
-                        next_feature_id: wire.next_feature_id,
-                        next_corner_id: wire.next_corner_id,
-                        features: wire.features,
-                    },
-                    wire.digest,
-                )
-            }
-            actual => {
-                return Err(ComputedFeatureDocumentError::UnsupportedVersion {
-                    actual,
-                    expected: COMPUTED_FEATURE_DOCUMENT_VERSION,
-                });
-            }
+        let wire: ComputedFeatureWireV1 = serde_json::from_str(json)?;
+        if wire.version != COMPUTED_FEATURE_DOCUMENT_VERSION {
+            return Err(ComputedFeatureDocumentError::UnsupportedVersion {
+                actual: wire.version,
+                expected: COMPUTED_FEATURE_DOCUMENT_VERSION,
+            });
+        }
+        let mut document = Self {
+            id: wire.document_id,
+            sketch_document: wire.sketch_document,
+            revision: wire.revision,
+            next_feature_id: wire.next_feature_id,
+            next_corner_id: wire.next_corner_id,
+            features: wire.features,
         };
         document.normalize();
         document.validate()?;
-        if document.digest() != digest {
+        if document.digest() != wire.digest {
             return Err(ComputedFeatureDocumentError::DigestMismatch);
         }
         Ok(document)
@@ -1618,95 +1059,53 @@ impl ComputedFeatureDocument {
                 return Err(ComputedFeatureDocumentError::DuplicateFeature(feature.id));
             }
             validate_label(&feature.label)?;
-            match &feature.definition {
-                ComputedFeatureDefinition::FilletSet(fillet) => {
-                    validate_radius(fillet.radius)?;
-                    if fillet.corners.is_empty() {
-                        return Err(invalid_field(
-                            "corners",
-                            "a Fillet set must contain at least one corner",
-                        ));
-                    }
-                    let mut pairs = std::collections::BTreeSet::new();
-                    for corner in &fillet.corners {
-                        if corner.id.0 == 0 || corner.id >= self.next_corner_id {
-                            return Err(invalid_field(
-                                "corner id",
-                                "must be nonzero and below the allocator cursor",
-                            ));
-                        }
-                        if !corner_ids.insert(corner.id) {
-                            return Err(ComputedFeatureDocumentError::DuplicateCorner(corner.id));
-                        }
-                        validate_new_corner(corner.without_id())?;
-                        if !pairs.insert(corner_source_pair(corner.without_id())) {
-                            return Err(invalid_field(
-                                "corner parents",
-                                "a Fillet set cannot contain duplicate canonical source pairs",
-                            ));
-                        }
-                    }
+            let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+            validate_radius(fillet.radius)?;
+            if fillet.corners.is_empty() {
+                return Err(invalid_field(
+                    "corners",
+                    "a Fillet set must contain at least one corner",
+                ));
+            }
+            let mut pairs = std::collections::BTreeSet::new();
+            for corner in &fillet.corners {
+                if corner.id.0 == 0 || corner.id >= self.next_corner_id {
+                    return Err(invalid_field(
+                        "corner id",
+                        "must be nonzero and below the allocator cursor",
+                    ));
                 }
-                ComputedFeatureDefinition::CurveOffset(offset) => {
-                    validate_curve_offset(offset.distance, &offset.operand)?;
+                if !corner_ids.insert(corner.id) {
+                    return Err(ComputedFeatureDocumentError::DuplicateCorner(corner.id));
+                }
+                validate_new_corner(corner.without_id())?;
+                if !pairs.insert(corner_source_pair(corner.without_id())) {
+                    return Err(invalid_field(
+                        "corner parents",
+                        "a Fillet set cannot contain duplicate canonical source pairs",
+                    ));
                 }
             }
         }
-        validate_resource(
-            "Curve Offset spans",
-            self.curve_offset_span_count(),
-            MAX_COMPUTED_CURVE_OFFSET_SPANS,
-        )?;
         Ok(())
     }
 
     fn corner_count(&self) -> usize {
         self.features
             .iter()
-            .map(|feature| match &feature.definition {
-                ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners.len(),
-                ComputedFeatureDefinition::CurveOffset(_) => 0,
+            .map(|feature| {
+                let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+                fillet.corners.len()
             })
             .sum()
-    }
-
-    fn curve_offset_span_count(&self) -> usize {
-        self.features
-            .iter()
-            .fold(0_usize, |count, feature| match &feature.definition {
-                ComputedFeatureDefinition::FilletSet(_) => count,
-                ComputedFeatureDefinition::CurveOffset(offset) => count.saturating_add(
-                    curve_offset_operand_span_count(&offset.operand).unwrap_or(usize::MAX),
-                ),
-            })
     }
 
     fn normalize(&mut self) {
         self.features.sort_by_key(|feature| feature.id);
         for feature in &mut self.features {
-            if let ComputedFeatureDefinition::FilletSet(fillet) = &mut feature.definition {
-                fillet.corners.sort_by_key(|corner| corner.id);
-            }
+            let ComputedFeatureDefinition::FilletSet(fillet) = &mut feature.definition;
+            fillet.corners.sort_by_key(|corner| corner.id);
         }
-    }
-
-    fn v1_features(&self) -> Option<Vec<ComputedFeatureV1>> {
-        self.features
-            .iter()
-            .map(|feature| {
-                let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
-                    return None;
-                };
-                Some(ComputedFeatureV1 {
-                    id: feature.id,
-                    label: feature.label.clone(),
-                    suppressed: feature.suppressed,
-                    definition: ComputedFeatureDefinitionV1::FilletSet(ComputedFilletSetV1::from(
-                        fillet,
-                    )),
-                })
-            })
-            .collect()
     }
 
     fn canonical_payload_bytes(&self) -> Vec<u8> {
@@ -1737,149 +1136,8 @@ impl ComputedFeatureDocument {
             .iter_mut()
             .find(|value| value.id == feature)
             .expect("test feature exists");
-        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition else {
-            panic!("test feature is not a FilletSet");
-        };
+        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
         fillet.radius = radius;
-    }
-}
-
-fn validate_curve_offset(
-    distance: f64,
-    operand: &ComputedCurveOffsetOperand,
-) -> Result<(), ComputedFeatureDocumentError> {
-    validate_distance(distance)?;
-    validate_curve_offset_operand(operand)
-}
-
-fn validate_distance(distance: f64) -> Result<(), ComputedFeatureDocumentError> {
-    if !distance.is_finite() || distance <= 0.0 {
-        return Err(invalid_field("distance", "must be finite and positive"));
-    }
-    Ok(())
-}
-
-fn validate_curve_offset_operand(
-    operand: &ComputedCurveOffsetOperand,
-) -> Result<(), ComputedFeatureDocumentError> {
-    let mut used_sources = std::collections::BTreeSet::new();
-    match operand {
-        ComputedCurveOffsetOperand::Face { outer, holes, .. } => {
-            validate_curve_offset_path(outer.spans.as_slice(), &outer.junctions, true)?;
-            insert_unique_curve_offset_sources(&outer.spans, &mut used_sources)?;
-            for hole in holes {
-                validate_curve_offset_path(hole.spans.as_slice(), &hole.junctions, true)?;
-                insert_unique_curve_offset_sources(&hole.spans, &mut used_sources)?;
-            }
-        }
-        ComputedCurveOffsetOperand::OpenChain { chain, .. } => {
-            validate_curve_offset_path(chain.spans.as_slice(), &chain.junctions, false)?;
-            insert_unique_curve_offset_sources(&chain.spans, &mut used_sources)?;
-        }
-    }
-    Ok(())
-}
-
-fn validate_curve_offset_path(
-    spans: &[ComputedCurveOffsetDirectedSpan],
-    junctions: &[ComputedCurveOffsetJunction],
-    closed: bool,
-) -> Result<(), ComputedFeatureDocumentError> {
-    if spans.is_empty() {
-        return Err(invalid_field(
-            "Curve Offset spans",
-            "an operand path must contain at least one native span",
-        ));
-    }
-    let valid_junction_count = if closed && spans.len() == 1 {
-        // A one-span path can be intrinsically periodic (no junction) or can
-        // close through one explicit native seam (one junction). Exact source
-        // evaluation distinguishes those cases against the referenced sketch.
-        junctions.len() <= 1
-    } else {
-        let expected = if closed { spans.len() } else { spans.len() - 1 };
-        junctions.len() == expected
-    };
-    if !valid_junction_count {
-        return Err(invalid_field(
-            "Curve Offset junctions",
-            "junction count does not match the ordered path",
-        ));
-    }
-    for (index, junction) in junctions.iter().enumerate() {
-        let outgoing_index = (index + 1) % spans.len();
-        if junction.provenance == ComputedCurveOffsetJunctionProvenance::IntrinsicSpanBoundary
-            && spans[index].source.span.curve != spans[outgoing_index].source.span.curve
-        {
-            return Err(invalid_field(
-                "Curve Offset junction provenance",
-                "an intrinsic span boundary must join spans of one native curve",
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn insert_unique_curve_offset_sources(
-    spans: &[ComputedCurveOffsetDirectedSpan],
-    used_sources: &mut std::collections::BTreeSet<NativeCurveSpanSource>,
-) -> Result<(), ComputedFeatureDocumentError> {
-    if spans.iter().any(|span| !used_sources.insert(span.source)) {
-        return Err(invalid_field(
-            "Curve Offset spans",
-            "every native source span must occur exactly once in an operand",
-        ));
-    }
-    Ok(())
-}
-
-fn curve_offset_operand_span_count(
-    operand: &ComputedCurveOffsetOperand,
-) -> Result<usize, ComputedFeatureDocumentError> {
-    match operand {
-        ComputedCurveOffsetOperand::Face { outer, holes, .. } => holes
-            .iter()
-            .try_fold(outer.spans.len(), |count, hole| {
-                count.checked_add(hole.spans.len())
-            })
-            .ok_or(ComputedFeatureDocumentError::IdExhausted),
-        ComputedCurveOffsetOperand::OpenChain { chain, .. } => Ok(chain.spans.len()),
-    }
-}
-
-fn flip_curve_offset_operand_direction(operand: &mut ComputedCurveOffsetOperand) {
-    match operand {
-        ComputedCurveOffsetOperand::Face { direction, .. } => {
-            *direction = match direction {
-                DocumentFaceOffsetDirection::Outward => DocumentFaceOffsetDirection::Inward,
-                DocumentFaceOffsetDirection::Inward => DocumentFaceOffsetDirection::Outward,
-            };
-        }
-        ComputedCurveOffsetOperand::OpenChain { side, .. } => {
-            *side = match side {
-                DocumentLineSide::Left => DocumentLineSide::Right,
-                DocumentLineSide::Right => DocumentLineSide::Left,
-            };
-        }
-    }
-}
-
-const fn computed_feature_kind(definition: &ComputedFeatureDefinition) -> &'static str {
-    match definition {
-        ComputedFeatureDefinition::FilletSet(_) => "FilletSet",
-        ComputedFeatureDefinition::CurveOffset(_) => "CurveOffset",
-    }
-}
-
-const fn wrong_feature_kind(
-    feature: ComputedFeatureId,
-    expected: &'static str,
-    definition: &ComputedFeatureDefinition,
-) -> ComputedFeatureDocumentError {
-    ComputedFeatureDocumentError::WrongFeatureKind {
-        feature,
-        expected,
-        actual: computed_feature_kind(definition),
     }
 }
 

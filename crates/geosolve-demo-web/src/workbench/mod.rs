@@ -960,159 +960,6 @@ fn annotation_inspector_presentation(
     })
 }
 
-#[cfg(any(target_arch = "wasm32", test))]
-#[derive(Clone, Debug, PartialEq)]
-struct ComputedFeatureEditorPresentation {
-    kind: &'static str,
-    detail: String,
-    fillet_radius: Option<f64>,
-    curve_offset: Option<CurveOffsetEditorPresentation>,
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-#[derive(Clone, Debug, PartialEq)]
-struct CurveOffsetEditorPresentation {
-    distance: f64,
-    operand_kind: String,
-    direction: &'static str,
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ComputedFeatureEditorIntent {
-    SetCurveOffsetDistance(f64),
-    FlipCurveOffsetDirection,
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ComputedFeatureEditorAction {
-    SetCurveOffsetDistance {
-        expected: geosolve_sketch_features::ComputedFeatureDocumentIdentity,
-        feature: geosolve_sketch_features::ComputedFeatureId,
-        distance: f64,
-    },
-    FlipCurveOffsetDirection {
-        expected: geosolve_sketch_features::ComputedFeatureDocumentIdentity,
-        feature: geosolve_sketch_features::ComputedFeatureId,
-    },
-}
-
-/// Maps one published property intent to the exact current computed-feature identity.
-///
-/// The browser does not rebuild a target from a generated edge or cache a feature revision in
-/// markup. The action is stamped from the authoritative sidecar immediately before dispatch, and
-/// the retained coordinator remains responsible for exact compare-and-swap publication.
-#[cfg(any(target_arch = "wasm32", test))]
-fn computed_feature_editor_action(
-    features: &geosolve_sketch_features::ComputedFeatureDocument,
-    feature: geosolve_sketch_features::ComputedFeatureId,
-    intent: ComputedFeatureEditorIntent,
-) -> Result<ComputedFeatureEditorAction, &'static str> {
-    let selected = features
-        .feature(feature)
-        .ok_or("selected computed feature no longer exists")?;
-    if !matches!(
-        selected.definition,
-        geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(_)
-    ) {
-        return Err("the selected computed feature is not a Curve Offset");
-    }
-    let expected = features.identity();
-    match intent {
-        ComputedFeatureEditorIntent::SetCurveOffsetDistance(distance) => {
-            if !distance.is_finite() || distance <= 0.0 {
-                return Err("Curve Offset distance must be finite and positive");
-            }
-            Ok(ComputedFeatureEditorAction::SetCurveOffsetDistance {
-                expected,
-                feature,
-                distance,
-            })
-        }
-        ComputedFeatureEditorIntent::FlipCurveOffsetDirection => {
-            Ok(ComputedFeatureEditorAction::FlipCurveOffsetDirection { expected, feature })
-        }
-    }
-}
-
-/// Browser-neutral selected-feature copy and property visibility.
-///
-/// This keeps Curve Offset selection owned by its feature instead of letting the Fillet-only
-/// radius editor or the ordinary constraint-annotation inspector claim generated edges.
-#[cfg(any(target_arch = "wasm32", test))]
-fn computed_feature_editor_presentation(
-    feature: &geosolve_sketch_features::ComputedFeature,
-) -> ComputedFeatureEditorPresentation {
-    match &feature.definition {
-        geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) => {
-            ComputedFeatureEditorPresentation {
-                kind: "Computed Fillet set",
-                detail: "Generated arcs remain outside the sketch constraint graph. Drag an arc to resize the complete set."
-                    .into(),
-                fillet_radius: Some(fillet.radius),
-                curve_offset: None,
-            }
-        }
-        geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(offset) => {
-            let (operand_kind, direction) = match &offset.operand {
-                geosolve_sketch_features::ComputedCurveOffsetOperand::Face {
-                    direction,
-                    outer,
-                    holes,
-                } => {
-                    let contour_count = holes.len() + 1;
-                    let source_count = outer.spans.len()
-                        + holes
-                            .iter()
-                            .map(|hole| hole.spans.len())
-                            .sum::<usize>();
-                    let operand_kind = format!(
-                        "Face · {contour_count} contour{} · {source_count} source span{}",
-                        if contour_count == 1 { "" } else { "s" },
-                        if source_count == 1 { "" } else { "s" },
-                    );
-                    let direction = match direction {
-                        geosolve_sketch::DocumentFaceOffsetDirection::Outward => {
-                            "Outward from material"
-                        }
-                        geosolve_sketch::DocumentFaceOffsetDirection::Inward => {
-                            "Inward into material"
-                        }
-                    };
-                    (operand_kind, direction)
-                }
-                geosolve_sketch_features::ComputedCurveOffsetOperand::OpenChain {
-                    side,
-                    chain,
-                } => {
-                    let source_count = chain.spans.len();
-                    let operand_kind = format!(
-                        "Open chain · {source_count} source span{}",
-                        if source_count == 1 { "" } else { "s" },
-                    );
-                    let direction = match side {
-                        geosolve_sketch::DocumentLineSide::Left => "Left of traversal",
-                        geosolve_sketch::DocumentLineSide::Right => "Right of traversal",
-                    };
-                    (operand_kind, direction)
-                }
-            };
-            ComputedFeatureEditorPresentation {
-                kind: "Computed Curve Offset",
-                detail: "Generated edges select this feature and remain outside the sketch constraint graph."
-                    .into(),
-                fillet_radius: None,
-                curve_offset: Some(CurveOffsetEditorPresentation {
-                    distance: offset.distance,
-                    operand_kind,
-                    direction,
-                }),
-            }
-        }
-    }
-}
-
 /// Browser-neutral markup for the exact selected-curve property fallback.
 ///
 /// The metadata already identifies persistent scalar ownership and explicit
@@ -1803,34 +1650,6 @@ fn offset_canvas_presentation(
     presentation
 }
 
-/// Returns generated Curve Offset owners that exist only in the exact held preview.
-///
-/// A preview feature is intentionally absent from the durable feature document. Keeping that
-/// distinction in the presentation adapter makes every generated preview edge non-selectable
-/// without inferring geometry or exposing the coordinator's private publication patch.
-#[cfg(any(target_arch = "wasm32", test))]
-fn provisional_computed_offset_items(
-    scene: &geosolve_constraint_editor::EditorScene,
-    durable_features: &geosolve_sketch_features::ComputedFeatureDocument,
-) -> Vec<geosolve_constraint_editor::SelectionItem> {
-    let mut items = scene
-        .computed_offset_curves
-        .iter()
-        .filter(|curve| {
-            durable_features.feature(curve.owner).is_none_or(|feature| {
-                !matches!(
-                    &feature.definition,
-                    geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(_)
-                )
-            })
-        })
-        .map(|curve| geosolve_constraint_editor::SelectionItem::Feature(curve.owner))
-        .collect::<Vec<_>>();
-    items.sort_unstable();
-    items.dedup();
-    items
-}
-
 #[cfg(any(target_arch = "wasm32", test))]
 fn offset_target_for_selection(
     item: geosolve_constraint_editor::SelectionItem,
@@ -2123,22 +1942,6 @@ fn feature_apply_returns_focus_to_select(action: &str, feature_authoring_active:
     matches!(action, "feature-apply" | "feature-apply-native") && !feature_authoring_active
 }
 
-/// Whether an active Offset collector must rebuild its exact operand/exclusion snapshot after a
-/// successful workspace action.
-#[cfg(any(target_arch = "wasm32", test))]
-fn offset_authoring_requires_reactivation(
-    collector_input: Option<&geosolve_sketch::PreparedSketchInput>,
-    current_sketch_input: &geosolve_sketch::PreparedSketchInput,
-    prior_features: geosolve_sketch_features::ComputedFeatureDocumentIdentity,
-    current_features: geosolve_sketch_features::ComputedFeatureDocumentIdentity,
-    action: &str,
-) -> bool {
-    action != "offset-apply"
-        && collector_input.is_some_and(|input| {
-            input != current_sketch_input || prior_features != current_features
-        })
-}
-
 /// Publishes the exact held preview as native Profile geometry and performs the complete shared
 /// workbench success transition. Any error preserves the authoring candidate, overlay and
 /// selection so a stale or unsupported click is presentation-neutral.
@@ -2259,81 +2062,14 @@ fn reproduction_payload_size_label(bytes: usize) -> String {
 /// presentation geometry, but it deliberately lacks authority to publish inferred
 /// construction. Keep that scene detached instead of confusing the missing authority
 /// with missing geometry. Current computed output remains fail-closed on any provenance
-/// or affordance-composition error. A malformed computed presentation must not
-/// erase the independently accepted sketch: withhold that computed layer and
-/// retain the complete native scene instead. Only the historical presentation
-/// row is detached from current authoring authority.
+/// or affordance-composition error; only the historical presentation row is detached.
 #[cfg(any(target_arch = "wasm32", test))]
 fn compose_editor_scene(
     coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
     viewport: geosolve_constraint_editor::Viewport,
     chord_tolerance_pixels: f64,
 ) -> Option<geosolve_constraint_editor::EditorScene> {
-    compose_editor_scene_with_current_composer(
-        coordinator,
-        viewport,
-        chord_tolerance_pixels,
-        |coordinator, source, expected, snapshot| {
-            use geosolve_constraint_editor::{EditorScene, SelectionItem};
-
-            let accepted = source.accepted_state()?;
-            let accepted_input = source.accepted_prepared_input()?;
-            let mut scene = EditorScene::from_accepted_with_computed(
-                accepted.identity().revision().get(),
-                source.design_identity(),
-                accepted.document(),
-                source.design_document(),
-                &accepted_input,
-                expected,
-                snapshot,
-                viewport,
-                chord_tolerance_pixels,
-            )
-            .ok()?;
-            let mut action_items = coordinator.editor().selection().to_vec();
-            if let Some(preview) = coordinator.feature_authoring_preview() {
-                action_items.push(SelectionItem::Feature(preview.metadata().feature));
-                action_items.sort_unstable();
-                action_items.dedup();
-            }
-            coordinator
-                .populate_computed_fillet_affordances(
-                    &mut scene,
-                    &action_items,
-                    chord_tolerance_pixels,
-                )
-                .ok()?;
-            Some(scene)
-        },
-    )
-}
-
-/// Shared native-fallback composition path. The injected Current-scene composer
-/// keeps the failure branch directly testable without manufacturing malformed
-/// retained coordinator state.
-#[cfg(any(target_arch = "wasm32", test))]
-fn compose_editor_scene_with_current_composer<F>(
-    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
-    viewport: geosolve_constraint_editor::Viewport,
-    chord_tolerance_pixels: f64,
-    compose_current: F,
-) -> Option<geosolve_constraint_editor::EditorScene>
-where
-    F: FnOnce(
-        &geosolve_constraint_editor::RetainedEditorCoordinator,
-        &geosolve_sketch::RetainedSketchDocumentSession,
-        &geosolve_sketch_features::ComputedFeatureEvaluationInput,
-        &geosolve_sketch_features::ComputedFeatureSnapshot,
-    ) -> Option<geosolve_constraint_editor::EditorScene>,
-{
-    use geosolve_constraint_editor::{ComputedSceneState, EditorScene};
-
-    #[derive(Clone, Copy, Eq, PartialEq)]
-    enum CandidateKind {
-        Native,
-        Computed,
-        NativeFallback,
-    }
+    use geosolve_constraint_editor::{ComputedSceneState, EditorScene, SelectionItem};
 
     let source = coordinator
         .visible_preview_session()
@@ -2357,54 +2093,72 @@ where
     if !current_accepted {
         return native_scene();
     }
-    let enrich = |mut scene: EditorScene, kind: CandidateKind| {
-        if !scene.update_annotation_values(accepted) {
-            return None;
-        }
-        scene.apply_annotation_layout(&coordinator.editor().annotation_layout_for_scene());
-        // A prepared curve-control candidate keeps truthful candidate geometry/computed provenance
-        // and remains detached from drafting authority. The coordinator separately authenticates the
-        // durable pointer-down origin after the exact selected-control layer has been rebuilt.
-        let mut scene = if prepared_curve_preview {
-            scene
-        } else {
-            scene.with_retained_session(source).ok()?
-        };
-        coordinator
-            .editor()
-            .populate_curve_controls(&mut scene)
-            .ok()?;
-        if matches!(
-            coordinator.editor().active_pointer_gesture(),
-            Some(geosolve_constraint_editor::ActivePointerGesture {
-                kind: geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance,
-                ..
-            })
-        ) && kind != CandidateKind::NativeFallback
-        {
-            coordinator
-                .retain_offset_distance_interaction_origin(&mut scene)
-                .ok()?;
-        }
-        if prepared_curve_preview && kind == CandidateKind::Computed {
-            coordinator
-                .retain_curve_control_preview_interaction_origin(&mut scene)
-                .ok()?;
-        }
-        Some(scene)
-    };
-    match coordinator.computed_scene_state() {
+    let scene = match coordinator.computed_scene_state() {
         ComputedSceneState::Current { expected, snapshot } => {
-            compose_current(coordinator, source, expected, snapshot)
-                .and_then(|scene| enrich(scene, CandidateKind::Computed))
-                .or_else(|| {
-                    native_scene().and_then(|scene| enrich(scene, CandidateKind::NativeFallback))
-                })
+            let accepted_input = source.accepted_prepared_input()?;
+            let mut scene = EditorScene::from_accepted_with_computed(
+                scene_revision,
+                scene_design_identity,
+                accepted.document(),
+                source.design_document(),
+                &accepted_input,
+                expected,
+                snapshot,
+                viewport,
+                chord_tolerance_pixels,
+            )
+            .ok()?;
+            let mut action_items = coordinator.editor().selection().to_vec();
+            if let Some(preview) = coordinator.feature_authoring_preview() {
+                action_items.push(SelectionItem::Feature(preview.metadata().feature));
+                action_items.sort_unstable();
+                action_items.dedup();
+            }
+            coordinator
+                .populate_computed_fillet_affordances(
+                    &mut scene,
+                    &action_items,
+                    chord_tolerance_pixels,
+                )
+                .ok()?;
+            scene
         }
-        ComputedSceneState::Withheld | ComputedSceneState::Absent => {
-            native_scene().and_then(|scene| enrich(scene, CandidateKind::Native))
-        }
+        ComputedSceneState::Withheld | ComputedSceneState::Absent => native_scene()?,
+    };
+    let mut scene = scene;
+    if !scene.update_annotation_values(accepted) {
+        return None;
     }
+    scene.apply_annotation_layout(&coordinator.editor().annotation_layout_for_scene());
+    // A prepared curve-control candidate keeps truthful candidate geometry/computed provenance
+    // and remains detached from drafting authority. The coordinator separately authenticates the
+    // durable pointer-down origin after the exact selected-control layer has been rebuilt.
+    let mut scene = if prepared_curve_preview {
+        scene
+    } else {
+        scene.with_retained_session(source).ok()?
+    };
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .ok()?;
+    if matches!(
+        coordinator.editor().active_pointer_gesture(),
+        Some(geosolve_constraint_editor::ActivePointerGesture {
+            kind: geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance,
+            ..
+        })
+    ) {
+        coordinator
+            .retain_offset_distance_interaction_origin(&mut scene)
+            .ok()?;
+    }
+    if prepared_curve_preview {
+        coordinator
+            .retain_curve_control_preview_interaction_origin(&mut scene)
+            .ok()?;
+    }
+    Some(scene)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -5272,7 +5026,6 @@ pub(crate) mod wasm {
     fn perform_action(document: &Document, wb: &mut Workbench, action: &str) {
         clear_canvas_pointer_ownership(wb);
         let offset_input_before = wb.offset_authoring.index().map(|index| index.input());
-        let offset_features_before = wb.coordinator.feature_document().identity();
         let mut stepped_geometry_draft = false;
         let result = match action {
             "new" => cancel_before_camera_change(document, wb).and_then(|()| {
@@ -5411,8 +5164,6 @@ pub(crate) mod wasm {
             "delete" => delete_selection(wb),
             "geometry-role" => toggle_geometry_role(wb),
             "feature-radius" => apply_selected_feature_radius(document, wb),
-            "feature-offset-distance" => apply_selected_curve_offset_distance(document, wb),
-            "feature-offset-flip" => flip_selected_curve_offset_direction(wb),
             "feature-suppression" => toggle_selected_feature_suppression(wb),
             "dimension-target" => apply_dimension_target(document, wb),
             "profile-offset-flip" => flip_selected_profile_offset_direction(wb),
@@ -5494,29 +5245,16 @@ pub(crate) mod wasm {
         }
         if result.is_ok()
             && wb.feature_authoring.active_tool().is_some()
-            && matches!(
-                action,
-                "undo"
-                    | "redo"
-                    | "delete"
-                    | "feature-radius"
-                    | "feature-offset-distance"
-                    | "feature-offset-flip"
-                    | "feature-suppression"
-            )
+            && matches!(action, "undo" | "redo" | "delete" | "feature-radius")
         {
             clear_feature_authoring(wb);
             wb.notice = "Workspace changed; start a new Fillet batch".into();
         }
         if result.is_ok()
             && wb.offset_authoring.is_active()
-            && super::offset_authoring_requires_reactivation(
-                offset_input_before.as_ref(),
-                &wb.coordinator.session().prepared_input(),
-                offset_features_before,
-                wb.coordinator.feature_document().identity(),
-                action,
-            )
+            && offset_input_before
+                .is_some_and(|input| input != wb.coordinator.session().prepared_input())
+            && action != "offset-apply"
         {
             let refreshed = {
                 let Workbench {
@@ -5547,8 +5285,6 @@ pub(crate) mod wasm {
                 | "offset-cancel"
                 | "options-close"
                 | "geometry-role"
-                | "feature-offset-distance"
-                | "feature-offset-flip"
                 | "annotation-reset-selected"
                 | "annotation-reset-all"
                 | "curve-rational-middle"
@@ -6049,15 +5785,6 @@ pub(crate) mod wasm {
     ) -> Result<(), String> {
         let feature =
             selected_feature(wb).ok_or_else(|| "select one Fillet set or arc".to_owned())?;
-        if !matches!(
-            wb.coordinator
-                .feature_document()
-                .feature(feature)
-                .map(|feature| &feature.definition),
-            Some(geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(_))
-        ) {
-            return Err("the selected computed feature has no shared Fillet radius".into());
-        }
         let radius = finite_positive_input(document, "wb-feature-radius", "Fillet radius")?;
         let expected = wb.coordinator.feature_document().identity();
         wb.coordinator
@@ -6066,75 +5793,14 @@ pub(crate) mod wasm {
             .map_err(|error| error.to_string())
     }
 
-    fn dispatch_selected_curve_offset_intent(
-        wb: &mut Workbench,
-        intent: super::ComputedFeatureEditorIntent,
-    ) -> Result<(), String> {
-        let feature = selected_feature(wb)
-            .ok_or_else(|| "select one computed Curve Offset feature".to_owned())?;
-        let action = super::computed_feature_editor_action(
-            wb.coordinator.feature_document(),
-            feature,
-            intent,
-        )
-        .map_err(str::to_owned)?;
-        match action {
-            super::ComputedFeatureEditorAction::SetCurveOffsetDistance {
-                expected,
-                feature,
-                distance,
-            } => wb
-                .coordinator
-                .set_computed_curve_offset_distance(expected, feature, distance)
-                .map(|_| ())
-                .map_err(|error| error.to_string()),
-            super::ComputedFeatureEditorAction::FlipCurveOffsetDirection { expected, feature } => {
-                wb.coordinator
-                    .flip_computed_curve_offset_direction(expected, feature)
-                    .map(|_| ())
-                    .map_err(|error| error.to_string())
-            }
-        }
-    }
-
-    fn apply_selected_curve_offset_distance(
-        document: &Document,
-        wb: &mut Workbench,
-    ) -> Result<(), String> {
-        let distance = finite_positive_input(
-            document,
-            "wb-feature-offset-distance",
-            "Curve Offset distance",
-        )?;
-        dispatch_selected_curve_offset_intent(
-            wb,
-            super::ComputedFeatureEditorIntent::SetCurveOffsetDistance(distance),
-        )?;
-        wb.notice = format!("Curve Offset distance set to {distance}");
-        Ok(())
-    }
-
-    fn flip_selected_curve_offset_direction(wb: &mut Workbench) -> Result<(), String> {
-        dispatch_selected_curve_offset_intent(
-            wb,
-            super::ComputedFeatureEditorIntent::FlipCurveOffsetDirection,
-        )?;
-        let direction = selected_feature(wb)
-            .and_then(|feature| wb.coordinator.feature_document().feature(feature))
-            .and_then(|feature| super::computed_feature_editor_presentation(feature).curve_offset)
-            .map_or("updated", |offset| offset.direction);
-        wb.notice = format!("Curve Offset direction flipped: {direction}");
-        Ok(())
-    }
-
     fn toggle_selected_feature_suppression(wb: &mut Workbench) -> Result<(), String> {
         let feature =
-            selected_feature(wb).ok_or_else(|| "select one computed feature".to_owned())?;
+            selected_feature(wb).ok_or_else(|| "select one Fillet set or arc".to_owned())?;
         let suppressed = wb
             .coordinator
             .feature_document()
             .feature(feature)
-            .ok_or_else(|| "selected computed feature no longer exists".to_owned())?
+            .ok_or_else(|| "selected Fillet set no longer exists".to_owned())?
             .suppressed;
         let expected = wb.coordinator.feature_document().identity();
         wb.coordinator
@@ -6454,21 +6120,18 @@ pub(crate) mod wasm {
                 .apply_offset_authoring_preview(offset_authoring)
                 .map_err(|error| format!("Offset was not applied: {error}"))?
         };
-        match mutation.value {
-            geosolve_constraint_editor::OffsetAuthoringApplyEffect::NativeProfile(ids) => wb
-                .coordinator
-                .set_selection([SelectionItem::Dimension(ids.dimension)]),
-            geosolve_constraint_editor::OffsetAuthoringApplyEffect::ComputedCurve(feature) => {
-                wb.coordinator
-                    .set_selection([SelectionItem::Feature(feature)]);
-            }
-        }
+        let geosolve_sketch::DocumentCommandEffect::CreatedProfileOffset(ids) = mutation.value
+        else {
+            return Err("Offset publication returned an unexpected document effect".into());
+        };
+        wb.coordinator
+            .set_selection([SelectionItem::Dimension(ids.dimension)]);
         wb.notice = "Offset accepted; select another face or open chain".into();
         Ok(())
     }
 
     fn next_offset_authoring_label(wb: &Workbench) -> String {
-        let native_count = wb
+        let ordinal = wb
             .coordinator
             .session()
             .design_document()
@@ -6480,20 +6143,8 @@ pub(crate) mod wasm {
                     geosolve_sketch::DocumentDimensionDefinition::ProfileOffset { .. }
                 )
             })
-            .count();
-        let computed_count = wb
-            .coordinator
-            .feature_document()
-            .features()
-            .iter()
-            .filter(|feature| {
-                matches!(
-                    feature.definition,
-                    geosolve_sketch_features::ComputedFeatureDefinition::CurveOffset(_)
-                )
-            })
-            .count();
-        let ordinal = native_count + computed_count + 1;
+            .count()
+            + 1;
         format!("Offset {ordinal}")
     }
 
@@ -7097,13 +6748,31 @@ pub(crate) mod wasm {
         pending.extend(offset_presentation.pending.iter().copied());
         let mut provisional = Vec::new();
         if let Some(preview) = coordinator.offset_authoring_preview() {
-            provisional.extend(preview.provisional_items());
-        }
-        if let Some(scene) = scene.as_ref() {
-            provisional.extend(super::provisional_computed_offset_items(
-                scene,
-                coordinator.feature_document(),
-            ));
+            provisional.extend(
+                preview
+                    .metadata()
+                    .target_spans
+                    .iter()
+                    .copied()
+                    .map(SelectionItem::Curve),
+            );
+            provisional.extend(
+                preview
+                    .metadata()
+                    .provisional_points
+                    .iter()
+                    .copied()
+                    .map(SelectionItem::Point),
+            );
+            provisional.extend(
+                preview
+                    .metadata()
+                    .provisional_constraints
+                    .iter()
+                    .copied()
+                    .map(SelectionItem::Constraint),
+            );
+            provisional.push(SelectionItem::Dimension(preview.metadata().dimension));
         }
         pending.sort_unstable();
         pending.dedup();
@@ -8079,55 +7748,17 @@ pub(crate) mod wasm {
             return Ok(());
         };
         section.remove_attribute("hidden")?;
-        let presentation = super::computed_feature_editor_presentation(feature);
-        required(document, "wb-feature-kind")?.set_text_content(Some(presentation.kind));
-        required(document, "wb-feature-detail")?.set_text_content(Some(&presentation.detail));
-        let radius_controls = required(document, "wb-feature-radius-controls")?;
-        set_hidden(&radius_controls, presentation.fillet_radius.is_none())?;
+        let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+            &feature.definition;
         if let Ok(input) = required(document, "wb-feature-radius")?.dyn_into::<HtmlInputElement>() {
             let editing = document
                 .active_element()
                 .is_some_and(|element| element.id() == "wb-feature-radius");
-            if let Some(radius) = presentation.fillet_radius
-                && !editing
-                && input.value_as_number().to_bits() != radius.to_bits()
-            {
-                input.set_value_as_number(radius);
+            if !editing && input.value_as_number().to_bits() != fillet.radius.to_bits() {
+                input.set_value_as_number(fillet.radius);
             }
-            input.set_disabled(presentation.fillet_radius.is_none());
+            input.set_disabled(false);
         }
-        let offset_controls = required(document, "wb-feature-offset-controls")?;
-        set_hidden(&offset_controls, presentation.curve_offset.is_none())?;
-        if let Ok(input) =
-            required(document, "wb-feature-offset-distance")?.dyn_into::<HtmlInputElement>()
-        {
-            let editing = document
-                .active_element()
-                .is_some_and(|element| element.id() == "wb-feature-offset-distance");
-            if let Some(offset) = &presentation.curve_offset
-                && !editing
-                && input.value_as_number().to_bits() != offset.distance.to_bits()
-            {
-                input.set_value_as_number(offset.distance);
-            }
-            input.set_disabled(presentation.curve_offset.is_none());
-        }
-        let (operand_kind, direction) = presentation
-            .curve_offset
-            .as_ref()
-            .map_or(("—", "—"), |offset| {
-                (offset.operand_kind.as_str(), offset.direction)
-            });
-        required(document, "wb-feature-offset-operand")?.set_text_content(Some(operand_kind));
-        required(document, "wb-feature-offset-direction")?.set_text_content(Some(direction));
-        set_disabled(
-            &required(document, "wb-feature-offset-distance-apply")?,
-            presentation.curve_offset.is_none(),
-        )?;
-        set_disabled(
-            &required(document, "wb-feature-offset-flip")?,
-            presentation.curve_offset.is_none(),
-        )?;
         let suppression = required(document, "wb-feature-suppression")?;
         suppression.set_text_content(Some(if feature.suppressed {
             "Unsuppress feature"
@@ -8881,16 +8512,17 @@ mod tests {
         FeatureAuthoringPreviewMetadata, FeatureAuthoringStage, FeatureAuthoringState,
         FeatureAuthoringTool, GeometryDraftBranch, GeometryDraftStage, GeometryDraftStatus,
         GeometryInteractionPolicy, GeometryPickScope, GeometryToolVariant, GeometryVisibility,
-        Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState, PickTolerance, PointerInput,
-        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
-        SceneAnnotationOccurrence, SceneAnnotationVisibility, SceneComputedOffsetCurve,
-        SceneConstraintGlyph, SceneCurveOrigin, ScreenPoint, SelectionItem, Viewport,
+        Modifiers, OffsetAuthoringOutcome, OffsetAuthoringState, OffsetAuthoringWarning,
+        OffsetAuthoringWarningKind, PickTolerance, PointerInput, RetainedEditorCoordinator,
+        SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationOccurrence,
+        SceneAnnotationVisibility, SceneConstraintGlyph, SceneCurveOrigin, ScreenPoint,
+        SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DesignPointId, DocumentArcSweep, DocumentBSplineForm,
         DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionDefinition,
-        DocumentDimensionMode, DocumentEdit, DocumentObjectId, DocumentSolveRequest, GeometryRole,
+        DocumentDimensionMode, DocumentEdit, DocumentSolveRequest, GeometryRole,
         MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, RetainedSketchDocumentSession, ScalarDomain,
         ScalarUnit, SketchAcceptedStateIdentity, SketchDocument,
     };
@@ -8900,107 +8532,27 @@ mod tests {
         CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
         CanvasPointerCaptures, CanvasPointerContextRoute, CanvasPointerMoveOwner,
         CanvasPointerOwnership, CanvasPointerTerminal, CanvasPointerTerminalDisposition,
-        CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, ComputedFeatureEditorAction,
-        ComputedFeatureEditorIntent, DismissibleDisclosure, DraftingPointerSample,
-        FilletActionRenderAuthority, FinishDoubleClickTracker, ForegroundOverlayEscapeOwner,
-        HistoryShortcut, OptionOverlayKind, OptionOverlayState, PointerMoveQueue,
-        ReproductionFocusReturn, annotation_family_name, annotation_inspector_presentation,
-        apply_native_fillet_profile, apply_validated_reproduction, canvas_cursor_key,
-        canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
-        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
-        compose_editor_scene_with_current_composer, computed_feature_editor_action,
-        computed_feature_editor_presentation, coordinate_hud, current_problem_items,
+        CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, DismissibleDisclosure,
+        DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
+        ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
+        PointerMoveQueue, ReproductionFocusReturn, annotation_family_name,
+        annotation_inspector_presentation, apply_native_fillet_profile,
+        apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
+        canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
+        compose_editor_scene, coordinate_hud, current_problem_items,
         curve_control_inspector_detail, curve_control_inspector_markup,
         draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
         foreground_overlay_escape_owner, geometry_sweep_flip_available,
         geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
-        observe_feature_authoring_preview_lifecycle, offset_authoring_requires_reactivation,
-        offset_canvas_presentation, offset_click_owns_semantic_pick, offset_operand_status,
-        offset_target_for_selection, owns_authoring_pick, provisional_computed_offset_items,
-        rational_conic_construction_copy, reconcile_feature_authoring_painted_items,
-        reproduction_focus_target_after_action, reproduction_overlay_presentation,
-        reproduction_payload_size_label, resolve_canvas_fillet_action_candidates,
-        revoke_canvas_pointer_context, revoke_held_feature_authoring_preview,
-        route_canvas_pan_pointer_down, route_canvas_primary_pointer_down,
-        should_route_stationary_draft_inference,
+        observe_feature_authoring_preview_lifecycle, offset_canvas_presentation,
+        offset_click_owns_semantic_pick, offset_operand_status, offset_target_for_selection,
+        owns_authoring_pick, rational_conic_construction_copy,
+        reconcile_feature_authoring_painted_items, reproduction_focus_target_after_action,
+        reproduction_overlay_presentation, reproduction_payload_size_label,
+        resolve_canvas_fillet_action_candidates, revoke_canvas_pointer_context,
+        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
+        route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
     };
-
-    fn one_span_curve_offset_operand(
-        span: CurveSpan,
-    ) -> geosolve_sketch_features::ComputedCurveOffsetOperand {
-        geosolve_sketch_features::ComputedCurveOffsetOperand::OpenChain {
-            side: geosolve_sketch::DocumentLineSide::Left,
-            chain: geosolve_sketch_features::ComputedCurveOffsetChain {
-                spans: vec![geosolve_sketch_features::ComputedCurveOffsetDirectedSpan {
-                    source: geosolve_sketch_features::NativeCurveSpanSource { span },
-                    traversal: geosolve_sketch_features::ComputedCurveOffsetTraversal::Forward,
-                }],
-                junctions: Vec::new(),
-                start_terminal:
-                    geosolve_sketch_features::ComputedCurveOffsetTerminalPolicy::NormalTranslation,
-                end_terminal:
-                    geosolve_sketch_features::ComputedCurveOffsetTerminalPolicy::NormalTranslation,
-            },
-        }
-    }
-
-    fn published_quadratic_curve_offset_for_web() -> (
-        RetainedEditorCoordinator,
-        geosolve_sketch_features::ComputedFeatureId,
-        CurveSpan,
-    ) {
-        let mut document = SketchDocument::new(10.0).expect("document");
-        let controls = [
-            document.add_point("start", [0.0, 0.0]).unwrap(),
-            document.add_point("control", [2.0, 1.0]).unwrap(),
-            document.add_point("end", [4.0, 0.0]).unwrap(),
-        ];
-        let source = CurveSpan::line(
-            document
-                .add_curve(
-                    "web lifecycle source",
-                    CurveDefinition::QuadraticBezier { controls },
-                )
-                .expect("quadratic source"),
-        );
-        let session = RetainedSketchDocumentSession::new(
-            document,
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .expect("accepted source");
-        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
-        let mut authoring = OffsetAuthoringState::default();
-        assert!(matches!(
-            coordinator.activate_offset_authoring(&mut authoring),
-            Ok(OffsetAuthoringOutcome::ModeEntered(_))
-        ));
-        assert!(matches!(
-            authoring.pick_target(geosolve_constraint_editor::OffsetAuthoringTarget::Span(
-                source
-            )),
-            OffsetAuthoringOutcome::OperandChanged { .. }
-        ));
-        assert!(matches!(
-            authoring.set_distance(0.2),
-            OffsetAuthoringOutcome::DistanceChanged { .. }
-        ));
-        let preview = coordinator
-            .prepare_offset_authoring_preview(&authoring, "Lifecycle Curve Offset")
-            .expect("computed preview");
-        let feature = preview
-            .computed_curve()
-            .expect("general curve uses computed route")
-            .feature;
-        let applied = coordinator
-            .apply_offset_authoring_preview(&mut authoring)
-            .expect("computed publication");
-        assert_eq!(
-            applied.value,
-            geosolve_constraint_editor::OffsetAuthoringApplyEffect::ComputedCurve(feature)
-        );
-        (coordinator, feature, source)
-    }
 
     fn rejected_constraint_fixture() -> (
         RetainedEditorCoordinator,
@@ -9332,7 +8884,6 @@ mod tests {
             .expect("current composite Fillet scene");
         assert_eq!(scene.computed_input.as_ref(), Some(&metadata.input));
         assert_eq!(scene.computed_curves.len(), 2);
-        assert!(scene.computed_offset_curves.is_empty());
         assert_eq!(scene.fillet_affordances.len(), 2);
         assert!(
             scene
@@ -9460,7 +9011,6 @@ mod tests {
         scene_oracle_require(
             scene.computed_input.as_ref() == Some(&expected_input)
                 && scene.computed_curves.is_empty()
-                && scene.computed_offset_curves.is_empty()
                 && scene.fillet_affordances.is_empty()
                 && scene
                     .curves
@@ -9545,7 +9095,6 @@ mod tests {
         scene_oracle_require(
             scene.computed_input.is_none()
                 && scene.computed_curves.is_empty()
-                && scene.computed_offset_curves.is_empty()
                 && scene.fillet_affordances.is_empty(),
             "withheld-scene-leaked-computed-geometry",
         )?;
@@ -9629,7 +9178,6 @@ mod tests {
         scene_oracle_require(
             scene.computed_input.as_ref() == Some(&metadata.input)
                 && scene.computed_curves.len() == 2
-                && scene.computed_offset_curves.is_empty()
                 && scene.fillet_affordances.len() == 2
                 && scene
                     .curves
@@ -10295,7 +9843,6 @@ mod tests {
         for headless_selector in [
             ".wb-datum.geometry-hovered .wb-datum-line",
             ".wb-computed-item.geometry-hovered .wb-computed-fillet",
-            ".wb-computed-item.geometry-hovered .wb-computed-offset",
             ".wb-dimension.hovered",
         ] {
             assert!(
@@ -10511,16 +10058,6 @@ mod tests {
                 .is_none(),
             "multi-selection has no single semantic annotation owner",
         );
-        assert!(
-            annotation_inspector_presentation(
-                Some(&scene),
-                &[SelectionItem::Feature(
-                    geosolve_sketch_features::ComputedFeatureId::from_raw(91),
-                )],
-            )
-            .is_none(),
-            "a computed feature remains feature-inspector state, not an ordinary annotation",
-        );
 
         let html = include_str!("../../index.html");
         for id in [
@@ -10531,696 +10068,6 @@ mod tests {
         ] {
             assert!(html.contains(&format!("id=\"{id}\"")));
         }
-    }
-
-    #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one adapter contract binds preview ownership, variant controls, exact actions and static DOM identity"
-    )]
-    fn computed_curve_offset_preview_ownership_and_feature_editor_are_variant_specific() {
-        let mut document = SketchDocument::new(8.0).expect("document");
-        let start = document.add_point("start", [-2.0, 0.0]).expect("start");
-        let end = document.add_point("end", [2.0, 0.0]).expect("end");
-        let span = CurveSpan::line(
-            document
-                .add_curve(
-                    "general Offset source",
-                    CurveDefinition::Line {
-                        start,
-                        end,
-                        branch_direction: [1.0, 0.0],
-                    },
-                )
-                .expect("source line"),
-        );
-        let upper = document.add_point("upper", [2.0, 2.0]).expect("upper");
-        let second_span = CurveSpan::line(
-            document
-                .add_curve(
-                    "Fillet comparison source",
-                    CurveDefinition::Line {
-                        start: end,
-                        end: upper,
-                        branch_direction: [0.0, 1.0],
-                    },
-                )
-                .expect("second source line"),
-        );
-        let operand = one_span_curve_offset_operand(span);
-        let mut durable = geosolve_sketch_features::ComputedFeatureDocument::new(document.id());
-        let prospective = geosolve_sketch_features::ComputedFeatureId::from_raw(1);
-        let session = RetainedSketchDocumentSession::new(
-            document,
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .expect("session");
-        let accepted = session.accepted_state().expect("accepted source");
-        let viewport = Viewport::new([800.0, 600.0], [0.0, 0.0], 60.0).expect("viewport");
-        let mut scene = EditorScene::from_accepted_for_design(
-            accepted.identity().revision().get(),
-            session.design_identity(),
-            accepted.document(),
-            session.design_document(),
-            viewport,
-            0.25,
-        )
-        .expect("scene");
-        scene.computed_offset_curves.push(SceneComputedOffsetCurve {
-            edge: geosolve_sketch_features::ComputedEdgeId {
-                evaluation: geosolve_sketch_features::ComputedEvaluationRevision::from_raw(7),
-                ordinal: 0,
-            },
-            owner: prospective,
-            source: geosolve_sketch_features::NativeCurveSpanSource { span },
-            role: GeometryRole::Profile,
-            screen_polyline: [[-2.0, 1.0], [2.0, 1.0]]
-                .map(|point| viewport.model_to_screen(point))
-                .to_vec(),
-            screen_source_parameters: vec![0.0, 1.0],
-        });
-        assert_eq!(
-            provisional_computed_offset_items(&scene, &durable),
-            vec![SelectionItem::Feature(prospective)],
-            "a generated owner absent from durable intent is exact preview-only presentation",
-        );
-
-        let retained = durable
-            .create_curve_offset("General Curve Offset", 1.25, operand)
-            .expect("durable Curve Offset");
-        assert_eq!(retained, prospective);
-        assert!(
-            provisional_computed_offset_items(&scene, &durable).is_empty(),
-            "the same stable owner becomes selectable only after durable publication",
-        );
-        let presentation = computed_feature_editor_presentation(
-            durable.feature(retained).expect("retained feature"),
-        );
-        assert_eq!(presentation.kind, "Computed Curve Offset");
-        assert!(presentation.detail.contains("select this feature"));
-        assert_eq!(presentation.fillet_radius, None);
-        let offset = presentation
-            .curve_offset
-            .expect("Curve Offset properties are visible");
-        assert_eq!(offset.distance.to_bits(), 1.25_f64.to_bits());
-        assert_eq!(offset.operand_kind, "Open chain · 1 source span");
-        assert_eq!(offset.direction, "Left of traversal");
-
-        let expected = durable.identity();
-        assert_eq!(
-            computed_feature_editor_action(
-                &durable,
-                retained,
-                ComputedFeatureEditorIntent::SetCurveOffsetDistance(2.5),
-            ),
-            Ok(ComputedFeatureEditorAction::SetCurveOffsetDistance {
-                expected,
-                feature: retained,
-                distance: 2.5,
-            }),
-            "the numeric intent carries the exact current sidecar and feature identity",
-        );
-        assert_eq!(
-            computed_feature_editor_action(
-                &durable,
-                retained,
-                ComputedFeatureEditorIntent::FlipCurveOffsetDirection,
-            ),
-            Ok(ComputedFeatureEditorAction::FlipCurveOffsetDirection {
-                expected,
-                feature: retained,
-            }),
-            "Flip maps to the same exact current feature without rebuilding its operand",
-        );
-        assert!(
-            computed_feature_editor_action(
-                &durable,
-                retained,
-                ComputedFeatureEditorIntent::SetCurveOffsetDistance(f64::NAN),
-            )
-            .is_err(),
-            "the presentation seam never turns a non-finite value into a mutation action",
-        );
-
-        let problem = geosolve_constraint_editor::ComputedFeatureProblemMetadata {
-            feature: Some(retained),
-            corners: Vec::new(),
-            sources: vec![geosolve_sketch_features::NativeCurveSpanSource { span }],
-            scope: EditorProblemScope::Targeted,
-            message: "Curve Offset self-contact is unavailable".into(),
-        };
-        let tree = super::panels::tree_markup_with_features(
-            session.design_document(),
-            &[],
-            &durable,
-            None,
-            &[problem],
-            &[SelectionItem::Feature(retained)],
-            &[],
-        );
-        assert!(tree.contains("wb-tree-feature selected has-problem"));
-        assert!(tree.contains("data-feature-problem=\"true\""));
-        assert!(tree.contains("General Curve Offset"));
-        assert!(tree.contains("1 sources · d 1.250"));
-        assert!(!tree.contains("data-editor-item=\"feature-corner\""));
-
-        let parent = |source, picked_parameter, retained_endpoint| {
-            geosolve_sketch_features::ComputedFilletParent {
-                source: geosolve_sketch_features::NativeCurveSpanSource { span: source },
-                picked_parameter,
-                winding: 0,
-                neighborhood: geosolve_sketch::ContactNeighborhood::Interior,
-                normal_side: DocumentCurveNormalSide::Left,
-                retained_endpoint,
-                periodic_anchor: None,
-            }
-        };
-        let fillet = durable
-            .create_fillet_set(
-                "Comparison Fillet",
-                0.5,
-                vec![geosolve_sketch_features::NewComputedFilletCorner {
-                    first: parent(span, 0.8, geosolve_sketch::DocumentFilletTrimEndpoint::End),
-                    second: parent(
-                        second_span,
-                        0.2,
-                        geosolve_sketch::DocumentFilletTrimEndpoint::Start,
-                    ),
-                    endpoint_order: geosolve_sketch::DocumentFilletEndpointOrder::FirstThenSecond,
-                    sweep: DocumentArcSweep::CounterClockwise,
-                }],
-            )
-            .expect("valid comparison Fillet");
-        let fillet_presentation =
-            computed_feature_editor_presentation(durable.feature(fillet).expect("retained Fillet"));
-        assert_eq!(fillet_presentation.fillet_radius, Some(0.5));
-        assert_eq!(fillet_presentation.curve_offset, None);
-        assert!(
-            computed_feature_editor_action(
-                &durable,
-                fillet,
-                ComputedFeatureEditorIntent::FlipCurveOffsetDirection,
-            )
-            .is_err(),
-            "Fillet selection cannot expose or dispatch Curve Offset controls",
-        );
-
-        let html = include_str!("../../index.html");
-        for id in [
-            "wb-feature-editor",
-            "wb-feature-kind",
-            "wb-feature-radius-controls",
-            "wb-feature-offset-controls",
-            "wb-feature-offset-operand",
-            "wb-feature-offset-distance",
-            "wb-feature-offset-direction",
-            "wb-feature-offset-distance-apply",
-            "wb-feature-offset-flip",
-            "wb-feature-detail",
-            "wb-feature-suppression",
-        ] {
-            assert!(html.contains(&format!("id=\"{id}\"")));
-        }
-    }
-
-    #[test]
-    fn m82_f005_offset_help_describes_native_and_computed_curve_routes() {
-        let html = include_str!("../../index.html");
-        assert!(html.contains(
-            "Lines, circles and circular arcs stay native; other regular built-in curves use certified computed output."
-        ));
-        assert!(
-            html.contains(
-                "Singular, self-intersecting or topology-changing offsets are unavailable."
-            )
-        );
-        assert!(!html.contains("Exact lines, circles and circular arcs only"));
-    }
-
-    #[test]
-    fn m82_f006_exact_periodic_nurbs_offset_preview_never_blanks_the_accepted_scene() {
-        // Exact user-supplied transport identity:
-        // payload SHA-256 33f0caeea427f6048067a6abf51411ee53a428c3d44c12c2e59c22a516360e02
-        // workspace SHA-256 929a43c8f51900f1f6bf34fb1696cdcef88e842c26cf80cee3f58f8da88640af
-        let payload = include_str!("../../tests/fixtures/m82_f006_periodic_nurbs_repro.txt")
-            .trim_end_matches(['\r', '\n']);
-        assert_eq!(payload.len(), 1_542, "exact supplied payload bytes");
-        assert!(payload.starts_with("GEOSOLVE_REPRO_V1:zlib-base64url:8193:e0db72996122baa0:"));
-        let workspace = crate::reproduction::decode_workspace(payload)
-            .expect("exact supplied reproduction transport");
-        assert_eq!(workspace.len(), 8_193, "declared workspace byte identity");
-
-        let restored = super::persistence::coordinator_from_reproduction_payload(payload)
-            .expect("ordinary validated coordinator restoration");
-        let viewport = Viewport::new([1_200.0, 800.0], [0.7, 1.0], 120.0)
-            .expect("finite reproduction viewport");
-        let native_scene = compose_editor_scene(&restored, viewport, 0.25)
-            .expect("the restored accepted scene is initially visible");
-        assert_eq!(native_scene.curves.len(), 5, "five periodic NURBS spans");
-        assert!(native_scene.computed_offset_curves.is_empty());
-        let spans = restored
-            .session()
-            .design_document()
-            .curve_spans(restored.session().design_document().curves()[0].id)
-            .expect("periodic NURBS spans");
-        assert_eq!(spans.len(), 5);
-        let span = spans
-            .iter()
-            .copied()
-            .find(|span| span.segment == 23)
-            .expect("deterministic representative periodic NURBS span");
-        let mut coordinator = restored;
-        let mut authoring = OffsetAuthoringState::default();
-        assert!(matches!(
-            coordinator.activate_offset_authoring(&mut authoring),
-            Ok(OffsetAuthoringOutcome::ModeEntered(_))
-        ));
-        assert!(matches!(
-            authoring.pick_target(geosolve_constraint_editor::OffsetAuthoringTarget::Span(
-                span
-            )),
-            OffsetAuthoringOutcome::OperandChanged { .. }
-        ));
-        let metadata = coordinator
-            .prepare_offset_authoring_preview(&authoring, "Exact periodic NURBS Curve Offset")
-            .expect("the supplied click path reaches Preview ready");
-        assert!(metadata.computed_curve().is_some());
-        let source = coordinator
-            .visible_preview_session()
-            .unwrap_or(coordinator.session());
-        let accepted = source
-            .accepted_state_for_current_input()
-            .expect("current accepted source");
-        let accepted_input = source
-            .accepted_prepared_input()
-            .expect("accepted prepared input");
-        let geosolve_constraint_editor::ComputedSceneState::Current { expected, snapshot } =
-            coordinator.computed_scene_state()
-        else {
-            panic!("Preview ready must carry Current computed authority")
-        };
-        assert_eq!(expected, &snapshot.input());
-        assert_eq!(expected.sketch, accepted_input);
-        assert!(snapshot.edges().iter().any(|edge| {
-            matches!(
-                edge.geometry,
-                geosolve_sketch_features::ComputedEdgeGeometry::CurveOffset(_)
-            )
-        }));
-        let report = accepted.solve_result().unstable_core_report();
-        assert!(report.hard_residuals_validated, "{report:#?}");
-        assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
-
-        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
-            .expect("a Current periodic NURBS preview must retain the complete accepted scene");
-        assert_eq!(
-            scene.curves.len(),
-            5,
-            "native accepted scene remains complete"
-        );
-        assert!(
-            !scene.computed_offset_curves.is_empty(),
-            "ready preview publishes visible certified output"
-        );
-    }
-
-    #[test]
-    fn m82_f006_active_proxy_composition_failure_returns_complete_native_scene() {
-        let (mut coordinator, feature, source) = published_quadratic_curve_offset_for_web();
-        coordinator.set_selection([SelectionItem::Feature(feature)]);
-        let viewport = Viewport::new([900.0, 650.0], [2.0, 0.0], 70.0).expect("viewport");
-        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
-            .expect("initial certified computed scene");
-        let proxy = scene
-            .curve_controls
-            .iter()
-            .find(|control| control.offset_proxy.is_some())
-            .expect("selected Offset source-owned proxy")
-            .clone();
-        let pointer_id = 82_706;
-        let pointer = |position| PointerInput {
-            pointer_id,
-            position,
-            modifiers: Modifiers::default(),
-        };
-        assert!(
-            coordinator
-                .pointer_down(&scene, pointer(proxy.screen_position))
-                .is_empty(),
-            "proxy pointer-down"
-        );
-        let target = ScreenPoint {
-            x: proxy.screen_position.x + 24.0,
-            y: proxy.screen_position.y - 18.0,
-        };
-        let request = coordinator
-            .editor_mut()
-            .pointer_move(&scene, pointer(target));
-        let [
-            geosolve_constraint_editor::EditorEffect::RequestCurveControlPreview {
-                request_id,
-                expected,
-                control,
-                model_position,
-                ..
-            },
-        ] = request.as_slice()
-        else {
-            panic!("proxy preview request: {request:#?}")
-        };
-        let acknowledgement = coordinator.resolve_curve_control_preview(
-            pointer_id,
-            *request_id,
-            *expected,
-            *control,
-            *model_position,
-        );
-        assert!(matches!(
-            acknowledgement.as_slice(),
-            [geosolve_constraint_editor::EditorEffect::PreviewCurveControl { .. }]
-        ));
-        assert!(coordinator.curve_control_preview_active());
-
-        let durable_design = coordinator.session().design_identity();
-        let durable_feature = coordinator.feature_document().identity();
-        let durable_history = (coordinator.history_len(), coordinator.history_cursor());
-        let durable_transcript = coordinator.transcript().to_vec();
-        let fallback = compose_editor_scene_with_current_composer(
-            &coordinator,
-            viewport,
-            0.25,
-            |_, _, _, _| None,
-        )
-        .expect("failed computed composition must retain the accepted native scene");
-        assert!(fallback.computed_offset_curves.is_empty());
-        assert!(fallback.curve_controls.is_empty());
-        assert!(fallback.curves.iter().any(|curve| curve.span == source));
-        assert!(fallback.curves.iter().all(|curve| {
-            curve
-                .screen_polyline
-                .iter()
-                .copied()
-                .all(|point| point.x.is_finite() && point.y.is_finite())
-        }));
-
-        let release =
-            coordinator
-                .editor_mut()
-                .pointer_up(&fallback, durable_design, pointer(target));
-        assert!(matches!(
-            release.as_slice(),
-            [geosolve_constraint_editor::EditorEffect::ClearCurveControlPreview]
-        ));
-        coordinator
-            .apply_editor_effect(&release[0])
-            .expect("stale proxy preview clears without durable publication");
-        assert_eq!(coordinator.session().design_identity(), durable_design);
-        assert_eq!(coordinator.feature_document().identity(), durable_feature);
-        assert_eq!(
-            (coordinator.history_len(), coordinator.history_cursor()),
-            durable_history
-        );
-        assert_eq!(coordinator.transcript(), durable_transcript.as_slice());
-        assert!(!coordinator.curve_control_preview_active());
-    }
-
-    #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one crossed-adapter regression keeps the prepared proxy gesture, injected enrichment failure, native fallback and exact durable-state neutrality together"
-    )]
-    fn m82_f006_post_current_proxy_enrichment_failure_returns_complete_native_scene() {
-        let (mut coordinator, feature, source) = published_quadratic_curve_offset_for_web();
-        coordinator.set_selection([SelectionItem::Feature(feature)]);
-        let viewport = Viewport::new([900.0, 650.0], [2.0, 0.0], 70.0).expect("viewport");
-        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
-            .expect("initial certified computed scene");
-        let proxy = scene
-            .curve_controls
-            .iter()
-            .find(|control| control.offset_proxy.is_some())
-            .expect("selected Offset source-owned proxy")
-            .clone();
-        let pointer_id = 82_707;
-        let pointer = |position| PointerInput {
-            pointer_id,
-            position,
-            modifiers: Modifiers::default(),
-        };
-        assert!(
-            coordinator
-                .pointer_down(&scene, pointer(proxy.screen_position))
-                .is_empty(),
-            "proxy pointer-down"
-        );
-        let target = ScreenPoint {
-            x: proxy.screen_position.x + 24.0,
-            y: proxy.screen_position.y - 18.0,
-        };
-        let request = coordinator
-            .editor_mut()
-            .pointer_move(&scene, pointer(target));
-        let [
-            geosolve_constraint_editor::EditorEffect::RequestCurveControlPreview {
-                request_id,
-                expected,
-                control,
-                model_position,
-                ..
-            },
-        ] = request.as_slice()
-        else {
-            panic!("proxy preview request: {request:#?}")
-        };
-        let acknowledgement = coordinator.resolve_curve_control_preview(
-            pointer_id,
-            *request_id,
-            *expected,
-            *control,
-            *model_position,
-        );
-        assert!(matches!(
-            acknowledgement.as_slice(),
-            [geosolve_constraint_editor::EditorEffect::PreviewCurveControl { .. }]
-        ));
-        assert!(coordinator.curve_control_preview_active());
-
-        let durable_design = coordinator.session().design_identity();
-        let durable_feature = coordinator.feature_document().identity();
-        let durable_history = (coordinator.history_len(), coordinator.history_cursor());
-        let durable_transcript = coordinator.transcript().to_vec();
-        let fallback = compose_editor_scene_with_current_composer(
-            &coordinator,
-            viewport,
-            0.25,
-            |_, visible, expected, snapshot| {
-                let accepted = visible.accepted_state_for_current_input()?;
-                let accepted_input = visible.accepted_prepared_input()?;
-                let mut scene = EditorScene::from_accepted_with_computed(
-                    accepted.identity().revision().get(),
-                    visible.design_identity(),
-                    accepted.document(),
-                    visible.design_document(),
-                    &accepted_input,
-                    expected,
-                    snapshot,
-                    viewport,
-                    0.25,
-                )
-                .ok()?;
-                let native_source = scene.curves.iter_mut().find(|curve| curve.span == source)?;
-                // Preserve finite painted geometry but poison only the presentation-owned
-                // source-parameter samples. Proxy enrichment must reject this Current layer
-                // instead of erasing the independently accepted native scene.
-                native_source.screen_parameters.fill(1.0e9);
-                Some(scene)
-            },
-        )
-        .expect("failed post-Current enrichment must retain the accepted native scene");
-        assert!(fallback.computed_offset_curves.is_empty());
-        assert!(fallback.computed_curves.is_empty());
-        assert!(fallback.curve_controls.is_empty());
-        assert!(fallback.curves.iter().any(|curve| curve.span == source));
-        assert!(fallback.curves.iter().all(|curve| {
-            curve
-                .screen_polyline
-                .iter()
-                .copied()
-                .all(|point| point.x.is_finite() && point.y.is_finite())
-        }));
-
-        let release =
-            coordinator
-                .editor_mut()
-                .pointer_up(&fallback, durable_design, pointer(target));
-        assert!(matches!(
-            release.as_slice(),
-            [geosolve_constraint_editor::EditorEffect::ClearCurveControlPreview]
-        ));
-        coordinator
-            .apply_editor_effect(&release[0])
-            .expect("stale proxy preview clears without durable publication");
-        assert_eq!(coordinator.session().design_identity(), durable_design);
-        assert_eq!(coordinator.feature_document().identity(), durable_feature);
-        assert_eq!(
-            (coordinator.history_len(), coordinator.history_cursor()),
-            durable_history
-        );
-        assert_eq!(coordinator.transcript(), durable_transcript.as_slice());
-        assert!(!coordinator.curve_control_preview_active());
-    }
-
-    #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one adapter lifecycle freezes Current, withheld Failed and recovered feature/source presentation"
-    )]
-    fn computed_curve_offset_source_failure_withholds_and_recovers_web_presentation() {
-        let (mut coordinator, feature, source) = published_quadratic_curve_offset_for_web();
-        let feature_identity = coordinator.feature_document().identity();
-        let feature_label = coordinator
-            .feature_document()
-            .feature(feature)
-            .expect("published Curve Offset")
-            .label
-            .clone();
-        let feature_intent = coordinator
-            .feature_document()
-            .feature(feature)
-            .expect("published Curve Offset")
-            .clone();
-        let initial_edges = coordinator
-            .computed_snapshot()
-            .expect("Current snapshot")
-            .edges()
-            .iter()
-            .map(|edge| edge.id)
-            .collect::<Vec<_>>();
-        assert!(!initial_edges.is_empty());
-        coordinator.set_selection([SelectionItem::Feature(feature)]);
-        let viewport = Viewport::new([900.0, 650.0], [2.0, 0.0], 70.0).expect("viewport");
-        let current_scene =
-            compose_editor_scene(&coordinator, viewport, 0.25).expect("Current computed web scene");
-        assert!(!current_scene.computed_offset_curves.is_empty());
-        assert!(
-            current_scene
-                .computed_offset_curves
-                .iter()
-                .all(|curve| { curve.owner == feature && curve.source.span == source })
-        );
-        assert!(coordinator.computed_feature_problems().is_empty());
-
-        coordinator
-            .apply_edit(
-                coordinator.session().design_identity(),
-                DocumentEdit::Delete {
-                    object: DocumentObjectId::Curve(source.curve),
-                },
-            )
-            .expect("accepted source deletion");
-        assert_eq!(coordinator.feature_document().identity(), feature_identity);
-        assert_eq!(
-            coordinator
-                .feature_document()
-                .feature(feature)
-                .map(|feature| feature.label.as_str()),
-            Some(feature_label.as_str()),
-        );
-        let failed_scene =
-            compose_editor_scene(&coordinator, viewport, 0.25).expect("withheld failure scene");
-        assert!(failed_scene.computed_offset_curves.is_empty());
-        assert!(failed_scene.curves.iter().all(|curve| curve.span != source));
-        assert!(
-            initial_edges
-                .iter()
-                .all(|edge| { coordinator.selection_for_computed_edge(*edge).is_none() })
-        );
-        let problems = coordinator.computed_feature_problems();
-        assert_eq!(problems.len(), 1);
-        assert_eq!(problems[0].feature, Some(feature));
-        assert_eq!(
-            problems[0].sources,
-            vec![geosolve_sketch_features::NativeCurveSpanSource { span: source }],
-            "the withheld problem retains the exact missing source identity",
-        );
-        let failed_tree = super::panels::tree_markup_with_features(
-            coordinator.session().design_document(),
-            &[],
-            coordinator.feature_document(),
-            coordinator.computed_snapshot(),
-            &problems,
-            &[SelectionItem::Feature(feature)],
-            &[],
-        );
-        assert!(failed_tree.contains(&feature_label));
-        assert!(failed_tree.contains("data-feature-state=\"failed\""));
-        assert!(failed_tree.contains("data-feature-problem=\"true\""));
-        let failed_markup = super::scene::svg_markup_with_computed_context(
-            Some(&failed_scene),
-            coordinator.session().accepted_state(),
-            &problems,
-            &[SelectionItem::Feature(feature)],
-            &[],
-            EditorHoverState::default(),
-            None,
-            None,
-            None,
-            viewport,
-        );
-        assert!(failed_markup.contains(&format!("data-feature-id=\"{feature}\"")));
-        assert!(failed_markup.contains("data-computed-source=\"global\""));
-
-        coordinator.undo().expect("restore deleted native source");
-        let recovered_feature_identity = coordinator.feature_document().identity();
-        assert_eq!(
-            recovered_feature_identity.document,
-            feature_identity.document
-        );
-        assert_eq!(
-            recovered_feature_identity.sketch_document,
-            feature_identity.sketch_document
-        );
-        assert!(recovered_feature_identity.revision > feature_identity.revision);
-        assert_ne!(recovered_feature_identity.digest, feature_identity.digest);
-        assert_eq!(
-            coordinator.feature_document().feature(feature),
-            Some(&feature_intent),
-            "Undo rebases the sidecar lifecycle but retains the exact feature identity and intent",
-        );
-        assert!(coordinator.computed_feature_problems().is_empty());
-        let recovered_scene = compose_editor_scene(&coordinator, viewport, 0.25)
-            .expect("recovered computed web scene");
-        assert!(!recovered_scene.computed_offset_curves.is_empty());
-        assert!(
-            recovered_scene
-                .computed_offset_curves
-                .iter()
-                .all(|curve| { curve.owner == feature && curve.source.span == source })
-        );
-        assert!(
-            recovered_scene
-                .curves
-                .iter()
-                .any(|curve| curve.span == source)
-        );
-        assert!(
-            initial_edges
-                .iter()
-                .all(|edge| { coordinator.selection_for_computed_edge(*edge).is_none() })
-        );
-        let recovered_tree = super::panels::tree_markup_with_features(
-            coordinator.session().design_document(),
-            &[],
-            coordinator.feature_document(),
-            coordinator.computed_snapshot(),
-            &[],
-            &[SelectionItem::Feature(feature)],
-            &[],
-        );
-        assert!(recovered_tree.contains(&feature_label));
-        assert!(recovered_tree.contains("data-feature-state=\"current\""));
-        assert!(!recovered_tree.contains("data-feature-problem=\"true\""));
     }
 
     #[test]
@@ -12215,60 +11062,6 @@ mod tests {
             )
             .expect("prepare grouped computed preview");
         (candidate, metadata)
-    }
-
-    #[test]
-    fn m82_f004_computed_feature_only_change_reactivates_the_live_offset_collector() {
-        let (mut coordinator, spans, points) = grouped_fillet_fixture();
-        let mut fillet_authoring = FeatureAuthoringState::default();
-        let (candidate, metadata) = prepare_grouped_fillet(
-            &mut coordinator,
-            &mut fillet_authoring,
-            [points[1], points[2]],
-        );
-        let feature = coordinator
-            .apply_feature_authoring_preview(metadata.token, &candidate)
-            .expect("computed Fillet publication")
-            .value;
-
-        let mut offset_authoring = OffsetAuthoringState::default();
-        coordinator
-            .activate_offset_authoring(&mut offset_authoring)
-            .expect("Offset activation with active computed Fillet exclusions");
-        assert!(matches!(
-            offset_authoring.pick_target(geosolve_constraint_editor::OffsetAuthoringTarget::Span(
-                spans[0]
-            )),
-            OffsetAuthoringOutcome::Warning(_)
-        ));
-        let collector_input = offset_authoring.index().map(|index| index.input());
-        let prior_features = coordinator.feature_document().identity();
-        let prior_sketch = coordinator.session().prepared_input();
-
-        coordinator
-            .set_computed_feature_suppressed(prior_features, feature, true)
-            .expect("suppress computed Fillet without changing the native sketch");
-        let current_features = coordinator.feature_document().identity();
-        let current_sketch = coordinator.session().prepared_input();
-        assert_eq!(current_sketch, prior_sketch);
-        assert_ne!(current_features, prior_features);
-        assert!(offset_authoring_requires_reactivation(
-            collector_input.as_ref(),
-            &current_sketch,
-            prior_features,
-            current_features,
-            "feature-suppression",
-        ));
-
-        coordinator
-            .activate_offset_authoring(&mut offset_authoring)
-            .expect("reactivate against the current computed-feature snapshot");
-        assert!(matches!(
-            offset_authoring.pick_target(geosolve_constraint_editor::OffsetAuthoringTarget::Span(
-                spans[0]
-            )),
-            OffsetAuthoringOutcome::OperandChanged { .. }
-        ));
     }
 
     fn native_line_fillet_fixture() -> (
@@ -13629,7 +12422,7 @@ mod tests {
             document.add_point("q1", [0.0, 5.0]).unwrap(),
             document.add_point("q2", [2.0, 3.0]).unwrap(),
         ];
-        let general = CurveSpan::line(
+        let unsupported = CurveSpan::line(
             document
                 .add_curve("quadratic", CurveDefinition::QuadraticBezier { controls })
                 .unwrap(),
@@ -13665,16 +12458,22 @@ mod tests {
         assert!(offset_operand_status(&authoring).contains("ordered edge"));
 
         let _ = authoring.reset();
-        let general_target = offset_target_for_selection(SelectionItem::Curve(general))
-            .expect("general native curve remains a typed target");
+        let unsupported_target = offset_target_for_selection(SelectionItem::Curve(unsupported))
+            .expect("unsupported native curve remains a typed target");
         assert!(matches!(
-            authoring.pick_target(general_target),
-            OffsetAuthoringOutcome::OperandChanged { .. }
+            authoring.pick_target(unsupported_target),
+            OffsetAuthoringOutcome::Warning(OffsetAuthoringWarning {
+                kind: OffsetAuthoringWarningKind::UnsupportedOperand,
+                ..
+            })
         ));
         let presentation = offset_canvas_presentation(&authoring);
-        assert_eq!(presentation.pending, vec![SelectionItem::Curve(general)]);
-        assert!(presentation.unavailable.is_empty());
-        assert!(offset_operand_status(&authoring).contains("ordered edge"));
+        assert!(presentation.pending.is_empty());
+        assert_eq!(
+            presentation.unavailable,
+            vec![SelectionItem::Curve(unsupported)]
+        );
+        assert!(offset_operand_status(&authoring).starts_with("Unavailable ·"));
         assert!(offset_target_for_selection(SelectionItem::Point(start)).is_none());
     }
 
@@ -13857,10 +12656,7 @@ mod tests {
             .feature(created.value)
             .expect("created Fillet set");
         let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
-            &feature.definition
-        else {
-            panic!("expected grouped Fillet feature");
-        };
+            &feature.definition;
         let problem = geosolve_constraint_editor::ComputedFeatureProblemMetadata {
             feature: Some(feature.id),
             corners: vec![fillet.corners[0].id],

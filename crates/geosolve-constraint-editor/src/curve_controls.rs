@@ -122,18 +122,6 @@ pub enum SceneCurveControlInteraction {
     Direct,
 }
 
-/// Transient inverse-edit ownership for a control painted on computed Offset output.
-///
-/// `source_model_offset` maps a dragged proxy position back onto the ordinary
-/// accepted source control. The resulting edit still goes through the source
-/// document's normal prepared solve, constraints, independent validation and
-/// computed-feature reevaluation; the generated curve never becomes solver state.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SceneCurveControlOffsetProxy {
-    pub feature: geosolve_sketch_features::ComputedFeatureId,
-    pub source_model_offset: [f64; 2],
-}
-
 /// One finite selected-curve grip.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SceneCurveControl {
@@ -144,9 +132,6 @@ pub struct SceneCurveControl {
     pub availability: DocumentCurveControlAvailability,
     pub role: SceneCurveControlRole,
     pub interaction: SceneCurveControlInteraction,
-    /// Present only when this is a revision-local control proxy painted for a
-    /// selected computed Curve Offset feature.
-    pub offset_proxy: Option<SceneCurveControlOffsetProxy>,
     pub model_position: [f64; 2],
     /// Painted grip center. This normally projects `model_position`; a crowded
     /// derived grip may move along its tangent or one-dimensional rail so
@@ -283,96 +268,6 @@ pub(crate) fn build_selected_curve_controls(
     attach_size_rails(&mut controls, viewport);
     let guides = build_guides(&curve.definition, &controls, viewport);
     Ok((controls, guides))
-}
-
-pub(crate) fn make_offset_proxy_control(
-    mut control: SceneCurveControl,
-    feature: geosolve_sketch_features::ComputedFeatureId,
-    proxy_model_position: [f64; 2],
-    viewport: Viewport,
-) -> Option<SceneCurveControl> {
-    if !proxy_model_position.iter().all(|value| value.is_finite()) {
-        return None;
-    }
-    // Only genuinely two-dimensional controls are exposed on the generated
-    // parallel. Scalar rails and trim parameters remain available on the
-    // ordinary source cage, where their domain/orientation semantics are exact.
-    if !matches!(
-        control.target,
-        DocumentCurveControlTarget::Point(_) | DocumentCurveControlTarget::RationalMiddle { .. }
-    ) {
-        return None;
-    }
-    let source_model_offset = [
-        control.model_position[0] - proxy_model_position[0],
-        control.model_position[1] - proxy_model_position[1],
-    ];
-    if !source_model_offset.iter().all(|value| value.is_finite()) {
-        return None;
-    }
-    let screen_position = viewport.model_to_screen(proxy_model_position);
-    if !screen_position.is_finite() {
-        return None;
-    }
-    control.model_position = proxy_model_position;
-    control.screen_position = screen_position;
-    control.grip = match control.grip {
-        SceneCurveControlGripGeometry::Circle { radius_pixels, .. } => {
-            SceneCurveControlGripGeometry::Circle {
-                center: screen_position,
-                radius_pixels,
-            }
-        }
-        SceneCurveControlGripGeometry::Square {
-            half_extent_pixels, ..
-        } => SceneCurveControlGripGeometry::Square {
-            center: screen_position,
-            half_extent_pixels,
-        },
-        SceneCurveControlGripGeometry::Diamond { radius_pixels, .. } => {
-            SceneCurveControlGripGeometry::Diamond {
-                center: screen_position,
-                radius_pixels,
-            }
-        }
-    };
-    // A source design-point alias must become a direct proxy: pointer motion
-    // is inverse-mapped before the ordinary source edit is prepared.
-    control.interaction = SceneCurveControlInteraction::Direct;
-    control.offset_proxy = Some(SceneCurveControlOffsetProxy {
-        feature,
-        source_model_offset,
-    });
-    control.rail = None;
-    control.accessible_name = format!("Offset proxy — {}", control.accessible_name);
-    Some(control)
-}
-
-pub(crate) fn build_offset_proxy_guides(
-    document: &SketchDocument,
-    controls: &[SceneCurveControl],
-    viewport: Viewport,
-) -> Vec<SceneCurveControlGuide> {
-    let mut owners = controls
-        .iter()
-        .map(|control| control.id.curve)
-        .collect::<Vec<_>>();
-    owners.sort_unstable();
-    owners.dedup();
-
-    let mut guides = Vec::new();
-    for owner in owners {
-        let Some(curve) = document.curve(owner) else {
-            continue;
-        };
-        let family_controls = controls
-            .iter()
-            .filter(|control| control.id.curve == owner)
-            .cloned()
-            .collect::<Vec<_>>();
-        guides.extend(build_guides(&curve.definition, &family_controls, viewport));
-    }
-    guides
 }
 
 fn separate_overlapping_elliptical_arc_trim_grips(
@@ -530,7 +425,6 @@ fn scene_control(
         availability: control.availability,
         role,
         interaction,
-        offset_proxy: None,
         model_position: control.position,
         screen_position,
         grip,

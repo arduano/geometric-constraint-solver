@@ -12,11 +12,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DesignPointId,
-    DocumentBSplineForm, DocumentConstraintDefinition, DocumentConstraintId, EffectiveActivity,
+    DocumentArcSweep, DocumentConstraintDefinition, DocumentConstraintId, EffectiveActivity,
     FeatureEndpoint, GeometryRole, OperationControl, OperationOutcome, PreparedSketchInput,
     RetainedSketchDocumentSession, SketchAcceptedStateIdentity, SketchDocument,
-    VisualProfileAnalysis, VisualProfileContour, VisualProfileFace, VisualProfileIssue,
-    VisualProfileOptions, VisualProfilePointContainment, VisualProfileStatus,
+    VisualProfileAnalysis, VisualProfileContour, VisualProfileEdge, VisualProfileFace,
+    VisualProfileIssue, VisualProfileStatus,
 };
 use thiserror::Error;
 
@@ -32,7 +32,7 @@ pub struct OffsetOperandRequest {
 }
 
 /// Worker-movable immutable offset-operand query.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PreparedOffsetOperandQuery {
     snapshot: TopologySnapshot,
     request: OffsetOperandRequest,
@@ -82,7 +82,7 @@ impl PreparedOffsetOperandQuery {
         let analysis =
             document.analyze_visual_profiles_controlled(request.limits.visual_options(), control);
         Ok(analysis.map(move |analysis| {
-            build_operand_result(&input, accepted, request, &document, &analysis)
+            build_operand_result(&input, accepted, request, document, &analysis)
         }))
     }
 }
@@ -125,10 +125,7 @@ impl OffsetOperandCurveFamily {
     }
 }
 
-/// Why a face or curve span cannot be used by one offset route.
-///
-/// `UnsupportedCurveFamily` is specific to M80's exact native route. The other reasons apply to
-/// both native and computed routing.
+/// Why a face or curve span cannot be used by the exact associative offset operation.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum OffsetOperandIneligibility {
     NonProfileGeometry,
@@ -138,7 +135,7 @@ pub enum OffsetOperandIneligibility {
     UnownedEndpointJoin,
 }
 
-/// Complete typed eligibility for one operand under one route.
+/// Complete typed eligibility for one operand.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OffsetOperandEligibility {
     Eligible,
@@ -217,8 +214,6 @@ pub struct OffsetEndpointRef {
 pub enum OffsetJoinOwner {
     SharedPoint(DesignPointId),
     Constraint(DocumentConstraintId),
-    /// Exact boundary between adjacent semantic spans of one native B-spline or NURBS curve.
-    IntrinsicSpanBoundary,
 }
 
 /// One undirected exact endpoint adjacency. Endpoints are stored in canonical order.
@@ -244,29 +239,23 @@ pub struct OffsetEndpointCandidate {
     pub eligibility: OffsetEndpointEligibility,
 }
 
-/// One native curve-span candidate for manual chain collection under either offset route.
+/// One native curve-span candidate for manual chain collection.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OffsetSpanCandidate {
     pub span: CurveSpan,
     pub family: OffsetOperandCurveFamily,
-    /// Eligibility for M80's exact native `ProfileOffset` route.
     pub eligibility: OffsetOperandEligibility,
-    /// Eligibility for M82's source-only computed `CurveOffset` route.
-    pub computed_eligibility: OffsetOperandEligibility,
     pub periodic: bool,
     pub endpoints: Vec<OffsetEndpointCandidate>,
 }
 
-/// One visual face projected to a stable semantic key and typed native/computed eligibility.
+/// One visual face projected to a stable semantic key and typed exact-offset eligibility.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OffsetFaceCandidate {
     pub key: OffsetFaceKey,
     pub visual_area: f64,
-    /// Eligibility for M80's exact native `ProfileOffset` route.
     pub eligibility: OffsetOperandEligibility,
-    /// Eligibility for M82's source-only computed `CurveOffset` route.
-    pub computed_eligibility: OffsetOperandEligibility,
-    hit_face: VisualProfileFace,
+    hit_contours: Vec<VisualProfileContour>,
 }
 
 /// Deterministic result of model-space face lookup.
@@ -282,7 +271,7 @@ pub enum OffsetFaceLookup {
 pub struct OffsetOperandIndex {
     input: PreparedSketchInput,
     accepted: SketchAcceptedStateIdentity,
-    containment_options: VisualProfileOptions,
+    document: SketchDocument,
     spans: Vec<OffsetSpanCandidate>,
     faces: Vec<OffsetFaceCandidate>,
     adjacencies: Vec<OffsetEndpointAdjacency>,
@@ -340,25 +329,11 @@ impl OffsetOperandIndex {
         })
     }
 
-    /// Returns the persistent owners proving exact adjacency between two endpoints.
-    #[must_use]
-    pub fn adjacency_owners(
-        &self,
-        first: OffsetEndpointRef,
-        second: OffsetEndpointRef,
-    ) -> Option<&[OffsetJoinOwner]> {
-        let endpoints = canonical_endpoint_pair(first, second);
-        self.adjacencies
-            .binary_search_by_key(&endpoints, |adjacency| adjacency.endpoints)
-            .ok()
-            .map(|index| self.adjacencies[index].owners.as_slice())
-    }
-
     /// Finds the smallest face containing a finite model-space point.
     ///
-    /// Boundary input is never guessed to one side. Every built-in family uses the sketch-owned
-    /// interval certificate retained by visual-profile analysis; an ambiguous, invalid or
-    /// work-exhausted predicate fails closed for that candidate.
+    /// Boundary-near input is never guessed to one side. Faces containing unsupported curve
+    /// families remain enumerable and disabled, but are skipped by this exact supported-family
+    /// lookup; hovering their boundary spans still exposes the typed family reason.
     #[must_use]
     pub fn face_at_point(&self, point: [f64; 2]) -> OffsetFaceLookup {
         if !point.into_iter().all(f64::is_finite) {
@@ -367,7 +342,7 @@ impl OffsetOperandIndex {
         let mut inside = Vec::new();
         let mut boundary = Vec::new();
         for candidate in &self.faces {
-            match face_containment(candidate, point, self.containment_options) {
+            match face_containment(&self.document, candidate, point) {
                 FaceContainment::Inside => {
                     inside.push((candidate.visual_area, candidate.key.clone()));
                 }
@@ -442,7 +417,7 @@ fn build_operand_result(
     input: &PreparedSketchInput,
     accepted: SketchAcceptedStateIdentity,
     request: OffsetOperandRequest,
-    document: &SketchDocument,
+    document: SketchDocument,
     analysis: &VisualProfileAnalysis,
 ) -> OffsetOperandResult {
     let completeness = match analysis.status {
@@ -452,15 +427,8 @@ fn build_operand_result(
     };
     let budgets = topology_budgets(analysis);
     let issues = analysis.issues.clone();
-    let operand_index = (analysis.status == VisualProfileStatus::Complete).then(|| {
-        build_operand_index(
-            input,
-            accepted,
-            document,
-            analysis,
-            request.limits.visual_options(),
-        )
-    });
+    let operand_index = (analysis.status == VisualProfileStatus::Complete)
+        .then(|| build_operand_index(input, accepted, document, analysis));
     OffsetOperandResult {
         input: *input,
         accepted,
@@ -483,9 +451,8 @@ struct EndpointSeed {
 fn build_operand_index(
     input: &PreparedSketchInput,
     accepted: SketchAcceptedStateIdentity,
-    document: &SketchDocument,
+    document: SketchDocument,
     analysis: &VisualProfileAnalysis,
-    containment_options: VisualProfileOptions,
 ) -> OffsetOperandIndex {
     let activity = document.effective_activity();
     let arrangement_spans = analysis
@@ -507,31 +474,26 @@ fn build_operand_index(
             continue;
         };
         for span in curve_spans {
-            let mut common_reasons = Vec::new();
+            let mut reasons = Vec::new();
             if role != GeometryRole::Profile {
-                common_reasons.push(OffsetOperandIneligibility::NonProfileGeometry);
+                reasons.push(OffsetOperandIneligibility::NonProfileGeometry);
+            }
+            if !family.is_exact_offset_supported() {
+                reasons.push(OffsetOperandIneligibility::UnsupportedCurveFamily);
             }
             if document.trim_views_for_span(span).next().is_some() {
-                common_reasons.push(OffsetOperandIneligibility::TrimmedOrPartialSpan);
+                reasons.push(OffsetOperandIneligibility::TrimmedOrPartialSpan);
             }
             if arrangement_spans.contains(&span) {
-                common_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
+                reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
             }
-            let mut native_reasons = common_reasons.clone();
-            if !family.is_exact_offset_supported() {
-                native_reasons.push(OffsetOperandIneligibility::UnsupportedCurveFamily);
-            }
-            let periodic = matches!(
-                family,
-                OffsetOperandCurveFamily::Circle | OffsetOperandCurveFamily::Ellipse
-            );
-            let seeds = supported_endpoint_seeds(document, span, &curve.definition);
+            let periodic = family == OffsetOperandCurveFamily::Circle;
+            let seeds = supported_endpoint_seeds(&document, span, &curve.definition);
             endpoint_seeds.extend(seeds.iter().copied());
             spans.push(OffsetSpanCandidate {
                 span,
                 family,
-                eligibility: OffsetOperandEligibility::from_reasons(native_reasons),
-                computed_eligibility: OffsetOperandEligibility::from_reasons(common_reasons),
+                eligibility: OffsetOperandEligibility::from_reasons(reasons),
                 periodic,
                 endpoints: seeds
                     .iter()
@@ -547,7 +509,7 @@ fn build_operand_index(
     spans.sort_by_key(|candidate| candidate.span);
     endpoint_seeds.sort_by_key(|candidate| candidate.endpoint);
 
-    let adjacencies = build_endpoint_adjacencies(document, &activity, &endpoint_seeds);
+    let adjacencies = build_endpoint_adjacencies(&document, &activity, &endpoint_seeds);
     let mut endpoint_degree = BTreeMap::<OffsetEndpointRef, usize>::new();
     for adjacency in &adjacencies {
         for endpoint in adjacency.endpoints {
@@ -591,7 +553,7 @@ fn build_operand_index(
     OffsetOperandIndex {
         input: *input,
         accepted,
-        containment_options,
+        document,
         spans,
         faces,
         adjacencies,
@@ -624,11 +586,21 @@ fn supported_endpoint_seeds(
     span: CurveSpan,
     definition: &CurveDefinition,
 ) -> Vec<EndpointSeed> {
+    let point_for = |point: DesignPointId, endpoint| {
+        document.point(point).map(|value| EndpointSeed {
+            endpoint: OffsetEndpointRef { span, endpoint },
+            position: value.position,
+            point: Some(point),
+        })
+    };
     match definition {
-        CurveDefinition::Line { start, end, .. }
-        | CurveDefinition::RationalQuadraticConic { start, end, .. } => {
-            point_endpoint_seeds(document, span, *start, *end)
-        }
+        CurveDefinition::Line { start, end, .. } => [
+            point_for(*start, OffsetEndpointRole::Start),
+            point_for(*end, OffsetEndpointRole::End),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
         CurveDefinition::Polyline { points, closed, .. } => {
             let index = span.segment as usize;
             let Some(start) = points.get(index).copied() else {
@@ -641,98 +613,32 @@ fn supported_endpoint_seeds(
             } else {
                 return Vec::new();
             };
-            point_endpoint_seeds(document, span, start, end)
+            [
+                point_for(start, OffsetEndpointRole::Start),
+                point_for(end, OffsetEndpointRole::End),
+            ]
+            .into_iter()
+            .flatten()
+            .collect()
         }
-        CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. } => Vec::new(),
-        CurveDefinition::CircularArc { .. }
-        | CurveDefinition::EllipticalArc { .. }
-        | CurveDefinition::ParabolaSegment { .. }
-        | CurveDefinition::HyperbolaSegment { .. } => {
-            evaluated_endpoint_seeds(document, span, None, None)
-        }
-        CurveDefinition::QuadraticBezier { controls } => {
-            point_endpoint_seeds(document, span, controls[0], controls[2])
-        }
-        CurveDefinition::CubicBezier { controls } => {
-            point_endpoint_seeds(document, span, controls[0], controls[3])
-        }
-        CurveDefinition::BSpline {
-            form,
-            controls,
-            span_ids,
-            ..
-        }
-        | CurveDefinition::Nurbs {
-            form,
-            controls,
-            span_ids,
-            ..
-        } => spline_endpoint_seeds(document, span, *form, controls, span_ids),
-    }
-}
-
-fn point_endpoint_seeds(
-    document: &SketchDocument,
-    span: CurveSpan,
-    start: DesignPointId,
-    end: DesignPointId,
-) -> Vec<EndpointSeed> {
-    [
-        (OffsetEndpointRole::Start, start),
-        (OffsetEndpointRole::End, end),
-    ]
-    .into_iter()
-    .filter_map(|(endpoint, point)| {
-        document.point(point).map(|value| EndpointSeed {
-            endpoint: OffsetEndpointRef { span, endpoint },
-            position: value.position,
-            point: Some(point),
+        CurveDefinition::CircularArc { .. } => [
+            (OffsetEndpointRole::Start, 0.0),
+            (OffsetEndpointRole::End, 1.0),
+        ]
+        .into_iter()
+        .filter_map(|(endpoint, parameter)| {
+            document
+                .evaluate_curve_jet(span, parameter)
+                .ok()
+                .map(|jet| EndpointSeed {
+                    endpoint: OffsetEndpointRef { span, endpoint },
+                    position: [jet.position.x, jet.position.y],
+                    point: None,
+                })
         })
-    })
-    .collect()
-}
-
-fn evaluated_endpoint_seeds(
-    document: &SketchDocument,
-    span: CurveSpan,
-    start_point: Option<DesignPointId>,
-    end_point: Option<DesignPointId>,
-) -> Vec<EndpointSeed> {
-    [
-        (OffsetEndpointRole::Start, 0.0, start_point),
-        (OffsetEndpointRole::End, 1.0, end_point),
-    ]
-    .into_iter()
-    .filter_map(|(endpoint, parameter, point)| {
-        document
-            .evaluate_curve_jet(span, parameter)
-            .ok()
-            .map(|jet| EndpointSeed {
-                endpoint: OffsetEndpointRef { span, endpoint },
-                position: [jet.position.x, jet.position.y],
-                point,
-            })
-    })
-    .collect()
-}
-
-fn spline_endpoint_seeds(
-    document: &SketchDocument,
-    span: CurveSpan,
-    form: DocumentBSplineForm,
-    controls: &[DesignPointId],
-    span_ids: &[u32],
-) -> Vec<EndpointSeed> {
-    let Some(ordinal) = span_ids
-        .iter()
-        .position(|candidate| *candidate == span.segment)
-    else {
-        return Vec::new();
-    };
-    let start_point = (form == DocumentBSplineForm::Clamped && ordinal == 0).then(|| controls[0]);
-    let end_point = (form == DocumentBSplineForm::Clamped && ordinal + 1 == span_ids.len())
-        .then(|| *controls.last().expect("validated spline controls"));
-    evaluated_endpoint_seeds(document, span, start_point, end_point)
+        .collect(),
+        _ => Vec::new(),
+    }
 }
 
 #[allow(
@@ -745,50 +651,6 @@ fn build_endpoint_adjacencies(
     seeds: &[EndpointSeed],
 ) -> Vec<OffsetEndpointAdjacency> {
     let mut links = BTreeMap::<[OffsetEndpointRef; 2], BTreeSet<OffsetJoinOwner>>::new();
-    let seeded_endpoints = seeds
-        .iter()
-        .map(|seed| seed.endpoint)
-        .collect::<BTreeSet<_>>();
-    for curve in document.curves() {
-        if !activity.is_active(curve.id) {
-            continue;
-        }
-        let (form, span_ids) = match &curve.definition {
-            CurveDefinition::BSpline { form, span_ids, .. }
-            | CurveDefinition::Nurbs { form, span_ids, .. } => (*form, span_ids.as_slice()),
-            _ => continue,
-        };
-        for pair in span_ids.windows(2) {
-            add_intrinsic_span_link(
-                &mut links,
-                &seeded_endpoints,
-                CurveSpan {
-                    curve: curve.id,
-                    segment: pair[0],
-                },
-                CurveSpan {
-                    curve: curve.id,
-                    segment: pair[1],
-                },
-            );
-        }
-        if form == DocumentBSplineForm::Periodic
-            && let (Some(first), Some(last)) = (span_ids.first(), span_ids.last())
-        {
-            add_intrinsic_span_link(
-                &mut links,
-                &seeded_endpoints,
-                CurveSpan {
-                    curve: curve.id,
-                    segment: *last,
-                },
-                CurveSpan {
-                    curve: curve.id,
-                    segment: *first,
-                },
-            );
-        }
-    }
     let mut by_point = BTreeMap::<DesignPointId, Vec<OffsetEndpointRef>>::new();
     for seed in seeds {
         if let Some(point) = seed.point {
@@ -892,30 +754,6 @@ fn build_endpoint_adjacencies(
         .collect()
 }
 
-fn add_intrinsic_span_link(
-    links: &mut BTreeMap<[OffsetEndpointRef; 2], BTreeSet<OffsetJoinOwner>>,
-    seeded_endpoints: &BTreeSet<OffsetEndpointRef>,
-    incoming: CurveSpan,
-    outgoing: CurveSpan,
-) {
-    let incoming = OffsetEndpointRef {
-        span: incoming,
-        endpoint: OffsetEndpointRole::End,
-    };
-    let outgoing = OffsetEndpointRef {
-        span: outgoing,
-        endpoint: OffsetEndpointRole::Start,
-    };
-    if seeded_endpoints.contains(&incoming) && seeded_endpoints.contains(&outgoing) {
-        add_endpoint_link(
-            links,
-            incoming,
-            outgoing,
-            OffsetJoinOwner::IntrinsicSpanBoundary,
-        );
-    }
-}
-
 fn add_endpoint_link(
     links: &mut BTreeMap<[OffsetEndpointRef; 2], BTreeSet<OffsetJoinOwner>>,
     first: OffsetEndpointRef,
@@ -972,14 +810,11 @@ fn build_face_candidate(
     adjacencies: &BTreeSet<[OffsetEndpointRef; 2]>,
 ) -> Option<OffsetFaceCandidate> {
     let mut contours = Vec::new();
-    let mut native_reasons = Vec::new();
-    let mut computed_reasons = Vec::new();
+    let mut reasons = Vec::new();
     for contour in &face.contours {
-        let (key, mut contour_native_reasons, mut contour_computed_reasons) =
-            build_contour_key(contour, spans, adjacencies)?;
+        let (key, mut contour_reasons) = build_contour_key(contour, spans, adjacencies)?;
         contours.push(key);
-        native_reasons.append(&mut contour_native_reasons);
-        computed_reasons.append(&mut contour_computed_reasons);
+        reasons.append(&mut contour_reasons);
     }
     let outer = contours.first()?.clone();
     let mut holes = contours.into_iter().skip(1).collect::<Vec<_>>();
@@ -988,9 +823,8 @@ fn build_face_candidate(
     Some(OffsetFaceCandidate {
         key,
         visual_area: face.visual_area,
-        eligibility: OffsetOperandEligibility::from_reasons(native_reasons),
-        computed_eligibility: OffsetOperandEligibility::from_reasons(computed_reasons),
-        hit_face: face.clone(),
+        eligibility: OffsetOperandEligibility::from_reasons(reasons),
+        hit_contours: face.contours.clone(),
     })
 }
 
@@ -999,14 +833,9 @@ fn build_contour_key(
     contour: &VisualProfileContour,
     spans: &BTreeMap<CurveSpan, &OffsetSpanCandidate>,
     adjacencies: &BTreeSet<[OffsetEndpointRef; 2]>,
-) -> Option<(
-    OffsetContourKey,
-    Vec<OffsetOperandIneligibility>,
-    Vec<OffsetOperandIneligibility>,
-)> {
+) -> Option<(OffsetContourKey, Vec<OffsetOperandIneligibility>)> {
     let first = contour.edges.first()?;
-    let mut native_reasons = Vec::new();
-    let mut computed_reasons = Vec::new();
+    let mut reasons = Vec::new();
 
     if contour
         .edges
@@ -1014,11 +843,10 @@ fn build_contour_key(
         .all(|edge| edge.source_span == first.source_span)
         && spans
             .get(&first.source_span)
-            .is_some_and(|candidate| candidate.periodic && candidate.endpoints.is_empty())
+            .is_some_and(|candidate| candidate.family == OffsetOperandCurveFamily::Circle)
     {
         let candidate = spans[&first.source_span];
-        native_reasons.extend(candidate.eligibility.reasons());
-        computed_reasons.extend(candidate.computed_eligibility.reasons());
+        reasons.extend(candidate.eligibility.reasons());
         let directions = contour
             .edges
             .iter()
@@ -1035,8 +863,7 @@ fn build_contour_key(
             && contour.edges.len() == 2
             && (covered_parameter_length - std::f64::consts::TAU).abs() <= period_tolerance;
         if !complete {
-            native_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
-            computed_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
+            reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
         }
         let traversal = directions
             .first()
@@ -1049,8 +876,7 @@ fn build_contour_key(
                     traversal,
                 }],
             },
-            native_reasons,
-            computed_reasons,
+            reasons,
         ));
     }
 
@@ -1058,26 +884,21 @@ fn build_contour_key(
     let mut seen = BTreeSet::new();
     for edge in &contour.edges {
         let Some(candidate) = spans.get(&edge.source_span).copied() else {
-            native_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
-            computed_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
+            reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
             continue;
         };
-        native_reasons.extend(candidate.eligibility.reasons());
-        computed_reasons.extend(candidate.computed_eligibility.reasons());
+        reasons.extend(candidate.eligibility.reasons());
         if !seen.insert(edge.source_span) {
-            native_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
-            computed_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
+            reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
         }
         let Some(edge_traversal) = traversal(edge.source_parameters) else {
-            native_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
-            computed_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
+            reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
             continue;
         };
         if candidate.family == OffsetOperandCurveFamily::Circle
             || !is_complete_bounded_interval(edge.source_parameters)
         {
-            native_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
-            computed_reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
+            reasons.push(OffsetOperandIneligibility::ArrangementDerivedFragment);
         }
         directed.push(OffsetDirectedSpan {
             span: edge.source_span,
@@ -1098,13 +919,15 @@ fn build_contour_key(
         let Some(next_candidate) = spans.get(&next.span).copied() else {
             continue;
         };
-        let native_join_requires_owner = matches!(
+        if !matches!(
             current_candidate.family,
             OffsetOperandCurveFamily::Line | OffsetOperandCurveFamily::CircularArc
-        ) && matches!(
+        ) || !matches!(
             next_candidate.family,
             OffsetOperandCurveFamily::Line | OffsetOperandCurveFamily::CircularArc
-        );
+        ) {
+            continue;
+        }
         let current_end = OffsetEndpointRef {
             span: current.span,
             endpoint: match current.traversal {
@@ -1120,18 +943,11 @@ fn build_contour_key(
             },
         };
         if !adjacencies.contains(&canonical_endpoint_pair(current_end, next_start)) {
-            if native_join_requires_owner {
-                native_reasons.push(OffsetOperandIneligibility::UnownedEndpointJoin);
-            }
-            computed_reasons.push(OffsetOperandIneligibility::UnownedEndpointJoin);
+            reasons.push(OffsetOperandIneligibility::UnownedEndpointJoin);
         }
     }
     canonicalize_contour_rotation(&mut directed);
-    Some((
-        OffsetContourKey { spans: directed },
-        native_reasons,
-        computed_reasons,
-    ))
+    Some((OffsetContourKey { spans: directed }, reasons))
 }
 
 fn traversal(parameters: [f64; 2]) -> Option<OffsetTraversal> {
@@ -1187,15 +1003,301 @@ enum FaceContainment {
 }
 
 fn face_containment(
+    document: &SketchDocument,
     candidate: &OffsetFaceCandidate,
     point: [f64; 2],
-    options: VisualProfileOptions,
 ) -> FaceContainment {
-    let result = candidate.hit_face.classify_point(point, options);
-    match result {
-        Ok(VisualProfilePointContainment::Inside) => FaceContainment::Inside,
-        Ok(VisualProfilePointContainment::Outside) => FaceContainment::Outside,
-        Ok(VisualProfilePointContainment::Boundary) => FaceContainment::Boundary,
-        Err(_) => FaceContainment::Unavailable,
+    let tolerance = model_tolerance(document, point);
+    for contour in &candidate.hit_contours {
+        for edge in &contour.edges {
+            let Some(on_boundary) = point_on_edge(document, edge, point, tolerance) else {
+                return FaceContainment::Unavailable;
+            };
+            if on_boundary {
+                return FaceContainment::Boundary;
+            }
+        }
     }
+    let Some(outer) = candidate.hit_contours.first() else {
+        return FaceContainment::Unavailable;
+    };
+    let Some(inside_outer) = point_in_contour(document, outer, point, tolerance) else {
+        return FaceContainment::Unavailable;
+    };
+    if !inside_outer {
+        return FaceContainment::Outside;
+    }
+    for hole in candidate.hit_contours.iter().skip(1) {
+        let Some(inside_hole) = point_in_contour(document, hole, point, tolerance) else {
+            return FaceContainment::Unavailable;
+        };
+        if inside_hole {
+            return FaceContainment::Outside;
+        }
+    }
+    FaceContainment::Inside
+}
+
+fn model_tolerance(document: &SketchDocument, point: [f64; 2]) -> f64 {
+    let scale = document
+        .model_scale()
+        .abs()
+        .max(point[0].abs())
+        .max(point[1].abs())
+        .max(1.0);
+    document.model_scale().abs() * 1.0e-9 + scale * 256.0 * f64::EPSILON
+}
+
+fn point_on_edge(
+    document: &SketchDocument,
+    edge: &VisualProfileEdge,
+    point: [f64; 2],
+    tolerance: f64,
+) -> Option<bool> {
+    let curve = document.curve(edge.source_span.curve)?;
+    match &curve.definition {
+        CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. } => {
+            Some(point_segment_distance(point, edge.start, edge.end) <= tolerance)
+        }
+        CurveDefinition::Circle { center, radius } => {
+            let center = document.point(*center)?.position;
+            let radius = document.scalar(*radius)?.value;
+            radial_boundary(
+                point,
+                center,
+                radius,
+                edge.source_parameters,
+                RadialParameterization::Circle,
+                tolerance,
+            )
+        }
+        CurveDefinition::CircularArc {
+            center,
+            radius,
+            start_angle,
+            end_angle,
+            sweep,
+        } => {
+            let center = document.point(*center)?.position;
+            let radius = document.scalar(*radius)?.value;
+            let start = document.scalar(*start_angle)?.value;
+            let end = document.scalar(*end_angle)?.value;
+            let signed_sweep = signed_arc_sweep(start, end, *sweep)?;
+            radial_boundary(
+                point,
+                center,
+                radius,
+                edge.source_parameters,
+                RadialParameterization::Arc {
+                    start,
+                    sweep: signed_sweep,
+                },
+                tolerance,
+            )
+        }
+        _ => None,
+    }
+}
+
+fn point_segment_distance(point: [f64; 2], start: [f64; 2], end: [f64; 2]) -> f64 {
+    let direction = [end[0] - start[0], end[1] - start[1]];
+    let length_squared = direction[0].mul_add(direction[0], direction[1] * direction[1]);
+    if !length_squared.is_finite() || length_squared <= 0.0 {
+        return (point[0] - start[0]).hypot(point[1] - start[1]);
+    }
+    let displacement = [point[0] - start[0], point[1] - start[1]];
+    let parameter = ((displacement[0] * direction[0] + displacement[1] * direction[1])
+        / length_squared)
+        .clamp(0.0, 1.0);
+    let projection = [
+        direction[0].mul_add(parameter, start[0]),
+        direction[1].mul_add(parameter, start[1]),
+    ];
+    (point[0] - projection[0]).hypot(point[1] - projection[1])
+}
+
+#[derive(Clone, Copy, Debug)]
+enum RadialParameterization {
+    Circle,
+    Arc { start: f64, sweep: f64 },
+}
+
+fn radial_boundary(
+    point: [f64; 2],
+    center: [f64; 2],
+    radius: f64,
+    interval: [f64; 2],
+    parameterization: RadialParameterization,
+    tolerance: f64,
+) -> Option<bool> {
+    if !radius.is_finite() || radius <= 0.0 {
+        return None;
+    }
+    let displacement = [point[0] - center[0], point[1] - center[1]];
+    let distance = displacement[0].hypot(displacement[1]);
+    if (distance - radius).abs() > tolerance {
+        return Some(false);
+    }
+    let angle = displacement[1]
+        .atan2(displacement[0])
+        .rem_euclid(std::f64::consts::TAU);
+    Some(
+        parameter_for_angle(parameterization, angle)
+            .into_iter()
+            .any(|parameter| parameter_in_closed_interval(parameter, interval)),
+    )
+}
+
+fn point_in_contour(
+    document: &SketchDocument,
+    contour: &VisualProfileContour,
+    point: [f64; 2],
+    tolerance: f64,
+) -> Option<bool> {
+    let mut ray_y = point[1];
+    for _ in 0..8 {
+        if contour.edges.iter().any(|edge| {
+            (edge.start[1] - ray_y).abs() <= tolerance || (edge.end[1] - ray_y).abs() <= tolerance
+        }) {
+            ray_y += 4.0 * tolerance;
+        } else {
+            break;
+        }
+    }
+    let mut crossings = 0_usize;
+    for edge in &contour.edges {
+        crossings = crossings.checked_add(edge_ray_crossings(
+            document, edge, point[0], ray_y, tolerance,
+        )?)?;
+    }
+    Some(!crossings.is_multiple_of(2))
+}
+
+fn edge_ray_crossings(
+    document: &SketchDocument,
+    edge: &VisualProfileEdge,
+    point_x: f64,
+    ray_y: f64,
+    tolerance: f64,
+) -> Option<usize> {
+    let curve = document.curve(edge.source_span.curve)?;
+    match &curve.definition {
+        CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. } => {
+            let crosses = (edge.start[1] > ray_y) != (edge.end[1] > ray_y);
+            if !crosses {
+                return Some(0);
+            }
+            let parameter = (ray_y - edge.start[1]) / (edge.end[1] - edge.start[1]);
+            let intersection_x = (edge.end[0] - edge.start[0]).mul_add(parameter, edge.start[0]);
+            Some(usize::from(intersection_x > point_x + tolerance))
+        }
+        CurveDefinition::Circle { center, radius } => radial_ray_crossings(
+            document.point(*center)?.position,
+            document.scalar(*radius)?.value,
+            edge.source_parameters,
+            RadialParameterization::Circle,
+            point_x,
+            ray_y,
+            tolerance,
+        ),
+        CurveDefinition::CircularArc {
+            center,
+            radius,
+            start_angle,
+            end_angle,
+            sweep,
+        } => {
+            let start = document.scalar(*start_angle)?.value;
+            let end = document.scalar(*end_angle)?.value;
+            radial_ray_crossings(
+                document.point(*center)?.position,
+                document.scalar(*radius)?.value,
+                edge.source_parameters,
+                RadialParameterization::Arc {
+                    start,
+                    sweep: signed_arc_sweep(start, end, *sweep)?,
+                },
+                point_x,
+                ray_y,
+                tolerance,
+            )
+        }
+        _ => None,
+    }
+}
+
+fn radial_ray_crossings(
+    center: [f64; 2],
+    radius: f64,
+    interval: [f64; 2],
+    parameterization: RadialParameterization,
+    point_x: f64,
+    ray_y: f64,
+    tolerance: f64,
+) -> Option<usize> {
+    if !radius.is_finite() || radius <= 0.0 {
+        return None;
+    }
+    let sine = (ray_y - center[1]) / radius;
+    if !sine.is_finite() || sine.abs() >= 1.0 {
+        return Some(0);
+    }
+    let cosine = (1.0 - sine * sine).sqrt();
+    let mut crossings = 0;
+    for signed_cosine in [-cosine, cosine] {
+        let intersection_x = signed_cosine.mul_add(radius, center[0]);
+        if intersection_x <= point_x + tolerance {
+            continue;
+        }
+        let angle = sine.atan2(signed_cosine).rem_euclid(std::f64::consts::TAU);
+        if parameter_for_angle(parameterization, angle)
+            .into_iter()
+            .any(|parameter| parameter_in_open_interval(parameter, interval))
+        {
+            crossings += 1;
+        }
+    }
+    Some(crossings)
+}
+
+fn parameter_for_angle(parameterization: RadialParameterization, angle: f64) -> Vec<f64> {
+    match parameterization {
+        RadialParameterization::Circle => (-2..=2)
+            .map(|winding| angle + f64::from(winding) * std::f64::consts::TAU)
+            .collect(),
+        RadialParameterization::Arc { start, sweep } => (-2..=2)
+            .map(|winding| {
+                let unwrapped = angle + f64::from(winding) * std::f64::consts::TAU;
+                (unwrapped - start) / sweep
+            })
+            .collect(),
+    }
+}
+
+fn parameter_in_closed_interval(parameter: f64, interval: [f64; 2]) -> bool {
+    let lower = interval[0].min(interval[1]);
+    let upper = interval[0].max(interval[1]);
+    let tolerance = (upper - lower).abs().max(1.0) * 256.0 * f64::EPSILON;
+    parameter >= lower - tolerance && parameter <= upper + tolerance
+}
+
+fn parameter_in_open_interval(parameter: f64, interval: [f64; 2]) -> bool {
+    let lower = interval[0].min(interval[1]);
+    let upper = interval[0].max(interval[1]);
+    let tolerance = (upper - lower).abs().max(1.0) * 256.0 * f64::EPSILON;
+    parameter > lower + tolerance && parameter < upper - tolerance
+}
+
+fn signed_arc_sweep(start: f64, end: f64, sweep: DocumentArcSweep) -> Option<f64> {
+    let magnitude = match sweep {
+        DocumentArcSweep::CounterClockwise => (end - start).rem_euclid(std::f64::consts::TAU),
+        DocumentArcSweep::Clockwise => (start - end).rem_euclid(std::f64::consts::TAU),
+    };
+    if !magnitude.is_finite() || magnitude == 0.0 {
+        return None;
+    }
+    Some(match sweep {
+        DocumentArcSweep::CounterClockwise => magnitude,
+        DocumentArcSweep::Clockwise => -magnitude,
+    })
 }

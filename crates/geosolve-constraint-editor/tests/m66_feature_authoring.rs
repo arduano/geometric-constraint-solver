@@ -731,12 +731,8 @@ fn adjacent_fillet_sets_publish_sequentially_through_screen_pick_transactions() 
             .feature_document()
             .feature(second_feature)
             .expect("second feature");
-        let ComputedFeatureDefinition::FilletSet(first) = &first.definition else {
-            panic!("expected first FilletSet feature");
-        };
-        let ComputedFeatureDefinition::FilletSet(second) = &second.definition else {
-            panic!("expected second FilletSet feature");
-        };
+        let ComputedFeatureDefinition::FilletSet(first) = &first.definition;
+        let ComputedFeatureDefinition::FilletSet(second) = &second.definition;
         assert_eq!(first.corners.len(), 1);
         assert_eq!(second.corners.len(), 1);
         (first.corners[0], second.corners[0])
@@ -814,10 +810,7 @@ fn adjacent_fillet_sets_publish_sequentially_through_screen_pick_transactions() 
         .feature_document()
         .feature(second_feature)
         .expect("redone second feature")
-        .definition
-    else {
-        panic!("expected redone FilletSet feature");
-    };
+        .definition;
     assert_eq!(redone.corners[0].id, second_corner.id);
     let redone_snapshot = coordinator
         .computed_snapshot()

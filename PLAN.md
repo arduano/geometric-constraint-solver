@@ -80,19 +80,8 @@ native line-line Fillet publication amendment and `M80-F016` arc-angle propagati
 clean release qualification and immutable served nomination at exact source `29d8e41`, tree
 `44ecb95`. Supervising-human UAT and exact GitHub Pages publication pass.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
-but those candidates are withdrawn from acceptance and are no longer served. M1–M81 are complete.
-M82 is active with the M82-F006/F007 replacement mechanically qualified and frozen. Exact supplied
-periodic-NURBS and fresh Bezier reproductions withdrew post-F005 source
-`d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
-`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, and its no-rebuild Tailscale artifact; its listener is
-retired. The replacement preserves the complete native scene on computed-presentation failure and
-adds source-owned constrained inverse-edit proxies while keeping generated output revision-local
-and non-persistent. Exact replacement source `06e3cce249834959808149441661dd8fdaf47373`, tree
-`9c754edb0bf28d15252c849123d7a7923f26f10c`, passes the distinct all-family golden expansion,
-complete clean qualification and immutable Tailscale nomination. Human UAT remains pending. M82
-preserves M80 native `ProfileOffset` while adding ADR 0038's certified computed Offset route for
-regular built-in general curves, faces and chains.
-M81 remains the closed behavior-preserving core-architecture consolidation.
+but those candidates are withdrawn from acceptance and are no longer served. M1–M81 are complete;
+no M82 scope is active. M81 is the closed behavior-preserving core-architecture consolidation.
 M76's
 implementation,
 feature refinements,
@@ -5567,8 +5556,7 @@ aggregate is `c461835ac327655fd16e9355e0b42c1971e74ed9233fcf500908b8051614de72`.
 Root plus all seven hosted paths exact-match with HTTP 200, correct media/length, no redirect or
 content encoding and root equal to `index.html`. Historical snapshot
 `/tmp/geosolve-m81-uat.QqItRd` remains accepted evidence; PID `2850776` and the Tailscale listener
-are retired. M81 is closed; that closeout did not itself start M82, which is activated separately
-by the active section below.
+are retired. M81 is closed and this closeout starts no M82 work.
 
 Gate: the package graph, selected crate-root public declaration/export lines, canonical
 persistence and reviewed golden authority remain byte-identical; every accepted state still passes
@@ -5576,120 +5564,6 @@ independent validation; M81-F001's directly asserted retained-state and allocato
 neutral on rejection; and the clean release artifact behaves as the M80 product. M81 adds no
 feature, equation, solver policy, persistence version, browser behavior or new architectural
 abstraction.
-
-### M82: certified computed all-family Curve Offset
-
-Status: **M82-F006/F007 replacement clean-qualified and nominated; human UAT pending**.
-`docs/M82_GOALS.md` owns the approved product and mathematical contract, ADR 0038 owns the
-architecture, `docs/M82_IMPLEMENTATION.md` records actual evidence and `docs/M82_UAT.md` is
-executable against the exact frozen replacement. M82 is not accepted or closed.
-
-- [x] Add a certified accepted-sketch parallel-curve kernel with exact Line/Circle/CircularArc
-  output and deterministic adaptive endpoint-Hermite cubics for Ellipse/EllipticalArc, rational
-  conic, Parabola, Hyperbola, Bezier, B-spline and NURBS intervals.
-- [x] Certify finite denominator/speed, `1 - delta*kappa > 1e-8`, exact endpoint/tangent data,
-  bounded position/tangent fit error and deterministic cooperative work exhaustion.
-- [x] Add the reviewed acyclic `geosolve-sketch-features -> geosolve-sketch-topology` dependency
-  and persistent `ComputedFeatureDefinition::CurveOffset` intent for one face or ordered open
-  chain with explicit traversal, side, adjacency, junction cells and terminal policy.
-- [x] Validate both the mathematical parallel and fitted output against cusp, self-contact,
-  contour touch, collapse, split/merge, hole loss/inversion and every topology change; reject the
-  complete output without trimming, loop removal, healing or distance reduction.
-- [x] Preserve M80 native `ProfileOffset` unchanged and route only mixed/general eligible operands
-  to computed Curve Offset; exclude active computed-Fillet output while accepting M80 native-
-  published Fillet topology normally.
-- [x] Extend the existing Offset authoring/drag panel, feature tree, Problems, scene, picking,
-  selection, replay and coordinator lifecycle. Generated Offset edges select their stable feature;
-  Fillet arcs retain corner selection and Fillet source-replacement precedence.
-- [x] Close M82-F006 at the scene owner and crossed workbench adapter: authenticate provisional
-  Curve Offset identity during Fillet-affordance composition and fall back to the complete native
-  accepted scene if computed presentation fails. Preserve the exact supplied periodic-NURBS
-  payload plus fresh quadratic/cubic Bezier regressions.
-- [x] Implement M82-F007 transient inverse-edit proxies for eligible two-dimensional source
-  controls. Retain ordinary source control IDs and use prepared constrained solving, independent
-  validation, exact CAS, history/replay and computed regeneration; generated patches remain
-  revision-local, non-persistent and not direct constraint operands.
-- [x] Add strict private computed-feature v2 while emitting v1 byte-for-byte for empty/Fillet-only
-  state; preserve workspace v6, reproduction v1 and all sketch persistence versions.
-- [x] Add focused analytic/all-family/mixed-chain/face-hole/spline-adjacency/singularity/topology/
-  lifecycle/routing/persistence regressions. The withdrawn post-F005 tree's one generic golden row
-  is historical evidence, not sufficient replacement qualification.
-- [x] Expand and review distinct golden rows for Line, Polyline, Circle, CircularArc, Ellipse,
-  EllipticalArc, RationalQuadratic, Parabola, Hyperbola, Quadratic/Cubic Bezier, open/clamped and
-  periodic B-spline/NURBS, mixed chains, faces and holed faces, including proxy/source regeneration.
-- [x] Pass focused F006/F007 native/WASM/editor/demo qualification, formatting, diff hygiene,
-  warnings-denied workspace Clippy/Rustdoc, locked all-feature tests and the expanded golden gate.
-- [x] From one corrected clean committed source, pass the complete release gate and freeze and
-  byte-verify a new no-rebuild Tailscale candidate.
-- [ ] Execute the prepared human UAT, receive explicit approval, publish exact Pages bytes and
-  close M82 before starting another milestone.
-
-Implementation note (2026-08-20): M82-F001 makes provisional Curve Offset evaluation cold with
-respect to unrelated Fillet continuation state; M82-F002 admits only persistently owned opposite-
-inward tangent endpoints as local joins; and M82-F003 threads the caller's cancellation/work
-controller through every adaptive fitting subdivision. M82-F004 refreshes a live Offset operand
-collector when computed-feature identity changes without a sketch-input change, so suppressing or
-editing a computed Fillet cannot leave stale source exclusions. The withdrawn post-F005 golden
-inventory was exactly 272 `PASS` rows, adding only
-`feature.curve-offset.authoring.general-open-chain`. Focused owner, workspace, Clippy/Rustdoc,
-WASM and release-assembly development evidence passed on that historical tree. M82-F005 makes
-the Offset panel describe native and computed curve routes truthfully. It withdraws source
-`7fd31c0` and snapshot `/tmp/geosolve-m82-uat.I58j21`; that pre-F005 evidence remains historical
-and is not nominated for UAT.
-
-Mechanical nomination record (2026-08-20): exact source
-`d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
-`0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, passes the complete clean release gate from
-2026-08-20 23:17:08 through 23:28:33 AEST. Gate log
-`/tmp/geosolve-m82-clean-gate.d521045.nix.log` is 269,138 bytes and 3,530 lines with SHA-256
-`b66c277a00861854865440911e769aa5f9e94dbd55114e723b43b3bf46743472`. The exact no-rebuild
-seven-file snapshot `/tmp/geosolve-m82-uat.iOg5Do`, ordered-manifest aggregate
-`3e6d15dc04fd190c904559dc540936c4f31921d0e8bb257266dff40a2ed8327e`, passed temporary and retained
-Tailscale byte verification. Its retired service ran at `http://100.94.63.83:8080/` as PID
-`1272147`; verification ledger `/tmp/geosolve-m82-final-verify.wU6t8i/results.tsv` has SHA-256
-`35fa0bb1109d96e97f7107f81ac76292ccd6fbb5cbc10da418d836bb05e6a3dd`. This completes only
-historical mechanical nomination. M82-F006/F007 withdraw this source, snapshot and listener
-from product/UAT authority. Human UAT, explicit approval, Pages publication and closure remain
-pending, and M82 remains active outside the accepted baseline.
-
-Replacement hardening note (2026-08-21): the exact M82-F006 fixture has encoded length 1,542 bytes
-and SHA-256 `33f0caeea427f6048067a6abf51411ee53a428c3d44c12c2e59c22a516360e02`;
-its decoded 8,193-byte workspace has SHA-256
-`929a43c8f51900f1f6bf34fb1696cdcef88e842c26cf80cee3f58f8da88640af` and envelope checksum
-`e0db72996122baa0`. The root is provisional Curve Offset identity missing from Fillet-affordance
-composition, followed by scene composition discarding all accepted geometry. F007 maps transient
-computed grips back to ordinary source controls rather than adding generated solver state. The
-reviewed replacement oracle now has exactly 289/289 `PASS` rows and SHA-256
-`cec9ad971e8e445f6a0e040a534d6790880e1a31903addea0d6d08ae1a5ad5f7`: its 18 distinct Curve
-Offset rows cover every built-in family, mixed chains, computed faces and computed holed faces,
-and every computed row inventories all eligible two-dimensional proxies, commits one ordinary-
-constraint-projected source edit with independent X/Y motion, verifies fresh Current output and
-restores complete source/constraint/output state through Undo/Redo. F006 qualification also makes
-the whole Current computed composition/enrichment leg transactional, so a downstream proxy or
-interaction-origin presentation failure returns the independent native scene. F007 qualification
-additionally seals computed presentation semantics against caller tampering and carries traversal-
-correct source-parameter correspondence for analytic segments; connector-only miter edges
-intentionally expose no proxy correspondence.
-
-Replacement nomination record (2026-08-21): exact source
-`06e3cce249834959808149441661dd8fdaf47373`, tree
-`9c754edb0bf28d15252c849123d7a7923f26f10c`, passes focused/collateral qualification and the
-complete clean release gate from 11:30:53 through 11:54:30 AEST. The 275,822-byte, 3,586-line gate
-log `/tmp/geosolve-m82-clean-gate.06e3cce.attempt3.nix.log` has SHA-256
-`ca390a3a137b10b07a6534a72b182bb35a67a314bc05441084376e5cb93f861d`. No-rebuild seven-file
-snapshot `/tmp/geosolve-m82-uat.G4pmMH`, ordered-manifest aggregate
-`70885cec204ffc586fe84f1faf94b89e3998c23fca0035bb8909f1e57957b535`, passes temporary and
-retained exact Tailscale byte verification; both ledgers have SHA-256
-`65018fd399cb3e2f13f7d8b6694b349a96c1e1c278861449edf5552095fa71bf`. PID `3024723` serves the
-immutable candidate at `http://100.94.63.83:8080/`. Human UAT, explicit approval, Pages publication
-and closure remain pending; M82 stays active outside the accepted baseline.
-
-Gate: every Current computed output is finite, certified within the recorded error bounds,
-regular and topology-preserving; any uncertainty or barrier publishes no partial output and no
-durable mutation. The exact M80 route remains behavior-compatible, generated output remains
-revision-local/non-persistent and unavailable as a direct constraint operand, inverse proxies obey
-source constraints, accepted native geometry never blanks on computed-presentation failure, and
-feature v1 compatibility bytes remain unchanged.
 
 ## Explicit non-goals
 

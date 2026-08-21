@@ -170,9 +170,7 @@ fn publish_three_corner_feature(
         .feature_document()
         .feature(mutation.value)
         .expect("published closure feature");
-    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
-        panic!("expected FilletSet feature");
-    };
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
     assert_eq!(fillet.corners.len(), 3);
     let current = fixture
         .coordinator

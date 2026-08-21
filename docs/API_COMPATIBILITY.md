@@ -272,18 +272,6 @@ M81-F001 changes rejected-mutation side effects only: a failed durable computed-
 no longer consumes a revision-local output allocator value. No public type, signature, error text,
 wire format, crate dependency or successful publication result changes.
 
-M82 is an additive pre-1.0 computed Curve Offset extension under ADR 0038. Public accepted-sketch
-evaluation returns `CurveOffsetResult` with explicit traversal endpoint source parameters and
-exact/certified `CurveOffsetGeometry`; computed-feature provenance carries the same revision-local
-correspondence or explicitly records its absence for a connector-only edge. Public
-`SceneComputedOffsetCurve` samples and `SceneCurveControlOffsetProxy` are presentation and inverse-
-editing DTOs, not persistent sketch identities, solver variables or direct constraint operands.
-Caller mutation of public scene fields revokes the private constructor seal before a proxy can
-authorize a prepared source transaction. The computed-feature private format advances to v2 only
-when Curve Offset intent exists; empty and Fillet-only state retains exact v1 bytes. Canonical
-sketch v1-v4, unsupported draft-v5, workspace v6 and `GEOSOLVE_REPRO_V1` retain their existing
-compatibility dispositions.
-
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 

@@ -844,13 +844,12 @@ fn shared_endpoint_angle_uses_the_finite_interior_wedge() {
 fn all_twenty_constraint_glyph_families_publish_native_wasm_geometry() {
     use std::collections::BTreeSet;
 
-    let scenes = vec![
+    let scenes = [
         alpha_scene(AlphaScenarioKind::Corpus),
         alpha_scene(AlphaScenarioKind::NurbsDifferential),
         alpha_scene(AlphaScenarioKind::M28TrimmedFillet),
         supplemental_constraint_scene(),
-    ]
-    .into_boxed_slice();
+    ];
     let annotations = scenes
         .iter()
         .flat_map(|scene| &scene.annotations)

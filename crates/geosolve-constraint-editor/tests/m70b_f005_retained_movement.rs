@@ -168,9 +168,7 @@ fn exact_documents() -> (SketchDocument, ComputedFeatureDocument) {
 
 fn fixture_from_documents(document: SketchDocument, features: ComputedFeatureDocument) -> Fixture {
     let feature = &features.features()[0];
-    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
-        panic!("expected FilletSet feature");
-    };
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
     let corner = fillet.corners[0];
     let owner = ComputedCornerRef {
         feature: feature.id,
@@ -239,9 +237,7 @@ fn exact_fixture() -> Fixture {
 
 fn exact_fixture_with_unrelated_failed_feature() -> (Fixture, ComputedFeatureId) {
     let (document, mut features) = exact_documents();
-    let ComputedFeatureDefinition::FilletSet(current) = &features.features()[0].definition else {
-        panic!("expected current FilletSet feature");
-    };
+    let ComputedFeatureDefinition::FilletSet(current) = &features.features()[0].definition;
     let mut missing = current.corners[0].without_id();
     missing.first.source.span.curve = CurveId(PersistentId::from_u128(0xf005_0001));
     missing.second.source.span.curve = CurveId(PersistentId::from_u128(0xf005_0002));
@@ -259,9 +255,7 @@ fn persistent_feature_semantics(
         .feature_document()
         .feature(owner.feature)
         .expect("persistent feature identity");
-    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition else {
-        panic!("expected persistent FilletSet feature");
-    };
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
     let corner = *fillet
         .corners
         .iter()
@@ -348,7 +342,7 @@ fn assert_current(
         .iter()
         .find(|evaluation| evaluation.feature == owner.feature)
         .expect("stable feature evaluation identity");
-    let ComputedFeatureEvaluationState::Current { corner_edges, .. } = &evaluation.state else {
+    let ComputedFeatureEvaluationState::Current { corner_edges } = &evaluation.state else {
         panic!(
             "{PAYLOAD_FINGERPRINT}: persistent Fillet evaluation failed: {:?}",
             evaluation.state
@@ -474,9 +468,7 @@ fn assert_current_with_unrelated_failure(
         &evaluation.state,
         ComputedFeatureEvaluationState::Failed { failure } if failure == expected_failure
     ));
-    let ComputedFeatureDefinition::FilletSet(fillet) = &expected_feature.definition else {
-        panic!("expected failed FilletSet feature");
-    };
+    let ComputedFeatureDefinition::FilletSet(fillet) = &expected_feature.definition;
     for corner in &fillet.corners {
         assert!(
             snapshot

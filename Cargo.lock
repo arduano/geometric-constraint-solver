@@ -671,7 +671,6 @@ version = "0.2.0"
 dependencies = [
  "geosolve-geometry",
  "geosolve-sketch",
- "geosolve-sketch-topology",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

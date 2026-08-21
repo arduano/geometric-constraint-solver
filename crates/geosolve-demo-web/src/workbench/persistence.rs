@@ -859,8 +859,7 @@ mod tests {
         AuthoringMutation, AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool,
         ComputedEdgeGeometry, ComputedFeatureEvaluationState, ComputedSceneState, ConstraintIntent,
         EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOutcome, FeatureAuthoringState,
-        FeatureAuthoringTool, Modifiers, OffsetAuthoringApplyEffect, OffsetAuthoringOutcome,
-        OffsetAuthoringState, OffsetAuthoringTarget, PointerInput, RetainedEditorCoordinator,
+        FeatureAuthoringTool, Modifiers, PointerInput, RetainedEditorCoordinator,
         SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph, ScreenPoint,
         SelectionItem, Viewport,
     };
@@ -1124,90 +1123,6 @@ mod tests {
             .value
     }
 
-    fn published_curve_offset_coordinator() -> (
-        RetainedEditorCoordinator,
-        geosolve_sketch_features::ComputedFeatureId,
-        CurveSpan,
-    ) {
-        let mut document = SketchDocument::new(10.0).expect("document");
-        let controls = [
-            document.add_point("offset start", [0.0, 0.0]).unwrap(),
-            document.add_point("offset control", [2.0, 1.0]).unwrap(),
-            document.add_point("offset end", [4.0, 0.0]).unwrap(),
-        ];
-        let source = CurveSpan::line(
-            document
-                .add_curve(
-                    "workspace Curve Offset source",
-                    CurveDefinition::QuadraticBezier { controls },
-                )
-                .expect("quadratic source"),
-        );
-        let session = RetainedSketchDocumentSession::new(
-            document,
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .expect("accepted source");
-        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
-        let mut authoring = OffsetAuthoringState::default();
-        assert!(matches!(
-            coordinator.activate_offset_authoring(&mut authoring),
-            Ok(OffsetAuthoringOutcome::ModeEntered(_))
-        ));
-        assert!(matches!(
-            authoring.pick_target(OffsetAuthoringTarget::Span(source)),
-            OffsetAuthoringOutcome::OperandChanged { .. }
-        ));
-        assert!(matches!(
-            authoring.set_distance(0.35),
-            OffsetAuthoringOutcome::DistanceChanged { .. }
-        ));
-        let preview = coordinator
-            .prepare_offset_authoring_preview(&authoring, "Workspace Curve Offset")
-            .expect("computed Offset preview");
-        let feature = preview
-            .computed_curve()
-            .expect("general curve uses computed route")
-            .feature;
-        let applied = coordinator
-            .apply_offset_authoring_preview(&mut authoring)
-            .expect("computed Offset publication");
-        assert_eq!(
-            applied.value,
-            OffsetAuthoringApplyEffect::ComputedCurve(feature)
-        );
-        (coordinator, feature, source)
-    }
-
-    fn assert_current_curve_offset(
-        coordinator: &RetainedEditorCoordinator,
-        feature: geosolve_sketch_features::ComputedFeatureId,
-    ) -> usize {
-        let snapshot = coordinator
-            .computed_snapshot()
-            .expect("computed Offset snapshot");
-        let evaluation = snapshot
-            .feature_evaluations()
-            .iter()
-            .find(|evaluation| evaluation.feature == feature)
-            .expect("Curve Offset evaluation");
-        let ComputedFeatureEvaluationState::Current {
-            corner_edges,
-            generated_edges,
-        } = &evaluation.state
-        else {
-            panic!("expected Current Curve Offset, got {evaluation:#?}")
-        };
-        assert!(corner_edges.is_empty());
-        assert!(!generated_edges.is_empty());
-        assert!(generated_edges.iter().all(|edge| matches!(
-            snapshot.edge(*edge).map(|edge| &edge.geometry),
-            Some(ComputedEdgeGeometry::CurveOffset(_))
-        )));
-        generated_edges.len()
-    }
-
     fn clamped_bspline_document() -> (SketchDocument, CurveId) {
         let mut document = SketchDocument::new(1.0).expect("document");
         let controls = [[0.0, 0.0], [1.0, 2.0], [2.0, -1.0], [3.0, 1.5], [4.0, 0.0]]
@@ -1286,87 +1201,6 @@ mod tests {
             decoded.revisions().accepted(),
             snapshot.revisions().accepted()
         );
-    }
-
-    #[test]
-    fn m82_curve_offset_round_trips_workspace_v6_and_reproduction_v1_as_intent() {
-        let (coordinator, feature, source) = published_curve_offset_coordinator();
-        let feature_json = coordinator
-            .feature_document()
-            .to_json()
-            .expect("strict computed-feature v2");
-        let feature_identity = coordinator.feature_document().identity();
-        let initial_edges = assert_current_curve_offset(&coordinator, feature);
-        let feature_value: serde_json::Value =
-            serde_json::from_str(&feature_json).expect("feature v2 JSON");
-        assert_eq!(feature_value["version"], 2);
-        assert!(feature_json.contains("curve_offset"));
-        assert!(!feature_json.contains("generated_edges"));
-        assert!(!feature_json.contains("cubic_patches"));
-
-        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("workspace v6");
-        assert_eq!(snapshot.version, 6);
-        assert_eq!(snapshot.features_json, feature_json);
-        let encoded_workspace = snapshot.encode().expect("workspace v6 JSON");
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&encoded_workspace).unwrap()["version"],
-            6,
-        );
-        let decoded = WorkspaceSnapshot::decode(&encoded_workspace).expect("decode workspace v6");
-        let restored = coordinator_from_snapshot(&decoded).expect("restore workspace v6");
-        let restored_identity = restored.feature_document().identity();
-        assert_eq!(restored_identity.document, feature_identity.document);
-        assert_eq!(
-            restored_identity.sketch_document,
-            feature_identity.sketch_document
-        );
-        assert!(restored_identity.revision > feature_identity.revision);
-        assert_ne!(restored_identity.digest, feature_identity.digest);
-        assert_eq!(
-            restored.feature_document().features(),
-            coordinator.feature_document().features()
-        );
-        let restored_feature_json = restored.feature_document().to_json().unwrap();
-        assert!(restored_feature_json.contains("curve_offset"));
-        assert!(!restored_feature_json.contains("generated_edges"));
-        assert!(!restored_feature_json.contains("cubic_patches"));
-        assert_eq!(
-            assert_current_curve_offset(&restored, feature),
-            initial_edges
-        );
-
-        let payload =
-            reproduction_payload_from_coordinator(&coordinator).expect("GEOSOLVE_REPRO_V1 payload");
-        assert!(payload.starts_with("GEOSOLVE_REPRO_V1:zlib-base64url:"));
-        let reproduced_workspace =
-            crate::reproduction::decode_workspace(&payload).expect("decode reproduction v1");
-        let reproduced_snapshot =
-            WorkspaceSnapshot::decode(&reproduced_workspace).expect("workspace v6 in repro v1");
-        assert_eq!(reproduced_snapshot.version, 6);
-        assert_eq!(reproduced_snapshot.features_json, feature_json);
-        let reproduced =
-            coordinator_from_reproduction_payload(&payload).expect("restore reproduction v1");
-        assert_eq!(reproduced.feature_document().identity(), restored_identity);
-        assert_eq!(
-            reproduced.feature_document().features(),
-            coordinator.feature_document().features()
-        );
-        assert_eq!(
-            assert_current_curve_offset(&reproduced, feature),
-            initial_edges
-        );
-        let offset = reproduced
-            .feature_document()
-            .curve_offset(feature)
-            .expect("restored Curve Offset intent");
-        assert_eq!(offset.distance.to_bits(), 0.35_f64.to_bits());
-        let geosolve_sketch_features::ComputedCurveOffsetOperand::OpenChain { chain, .. } =
-            &offset.operand
-        else {
-            panic!("expected restored open-chain intent")
-        };
-        assert_eq!(chain.spans.len(), 1);
-        assert_eq!(chain.spans[0].source.span, source);
     }
 
     #[test]

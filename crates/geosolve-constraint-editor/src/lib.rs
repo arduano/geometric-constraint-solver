@@ -36,25 +36,23 @@ pub use commit_plan::{
 };
 pub use coordinator::{
     ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
-    ComputedCurveOffsetAuthoringPreviewMetadata, ComputedFeatureMutation,
-    ComputedFeatureProblemMetadata, ComputedProfileBoundary, ComputedSceneState,
-    ContactBranchAction, CoordinatorActionKind, CoordinatorError, CurveNumericPropertyKind,
-    CurveNumericPropertyMetadata, CurvePropertyFamily, DimensionTargetDisplayUnit,
-    DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget, EditorMutation,
-    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
-    FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome, FeatureAuthoringPreview,
-    FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken, FeatureAuthoringTransaction,
-    GeometryRoleSelectionState, LifecycleDto, LifecycleStatus, MeasurementPublication,
-    MutationOutcome, NativeOffsetAuthoringPreviewMetadata, OffsetAuthoringApplyEffect,
-    OffsetAuthoringPreview, OffsetAuthoringPreviewMetadata, ProblemsDto,
-    ProfileOffsetDirectionMetadata, ProfileOffsetDirectionState, ProjectedDragRejectionStage,
-    ProjectedDragWorkEvidence, RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator, SelectedCurvePropertyMetadata, display_dimension_target,
+    ComputedFeatureMutation, ComputedFeatureProblemMetadata, ComputedProfileBoundary,
+    ComputedSceneState, ContactBranchAction, CoordinatorActionKind, CoordinatorError,
+    CurveNumericPropertyKind, CurveNumericPropertyMetadata, CurvePropertyFamily,
+    DimensionTargetDisplayUnit, DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget,
+    EditorMutation, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
+    EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome,
+    FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
+    FeatureAuthoringTransaction, GeometryRoleSelectionState, LifecycleDto, LifecycleStatus,
+    MeasurementPublication, MutationOutcome, ProblemsDto, ProfileOffsetDirectionMetadata,
+    ProfileOffsetDirectionState, ProjectedDragRejectionStage, ProjectedDragWorkEvidence,
+    RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    SelectedCurvePropertyMetadata, display_dimension_target,
 };
 pub use curve_controls::{
     SceneCurveControl, SceneCurveControlGripGeometry, SceneCurveControlGuide,
     SceneCurveControlGuideKind, SceneCurveControlHit, SceneCurveControlInteraction,
-    SceneCurveControlOffsetProxy, SceneCurveControlRail, SceneCurveControlRole,
+    SceneCurveControlRail, SceneCurveControlRole,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -85,7 +83,7 @@ pub use inference::*;
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,
     OffsetAuthoringGuidance, OffsetAuthoringHover, OffsetAuthoringOperand, OffsetAuthoringOutcome,
-    OffsetAuthoringRoute, OffsetAuthoringStage, OffsetAuthoringState, OffsetAuthoringTarget,
+    OffsetAuthoringStage, OffsetAuthoringState, OffsetAuthoringTarget,
     OffsetAuthoringTargetAvailability, OffsetAuthoringWarning, OffsetAuthoringWarningKind,
 };
 use std::cmp::Ordering;
@@ -97,9 +95,9 @@ use geosolve_sketch::{
     DocumentCurveControlId, DocumentCurveCurvatureRelation, DocumentCurveNormalSide,
     DocumentCurveSpanRef, DocumentDimensionId, DocumentDimensionMode, DocumentDirectionSense,
     DocumentEndpointRef, DocumentHyperbolaBranch, DocumentObjectId, FeatureEndpoint, GeometryRole,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDatum, SketchDesignIdentity, SketchDocument,
-    TangentOrientation,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchCommit, PreparedSketchInput,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDatum, SketchDesignIdentity,
+    SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -531,47 +529,6 @@ impl SceneComputedCurve {
     }
 }
 
-/// One evaluation-local computed Curve Offset edge.
-///
-/// Every generated edge resolves to the stable owning feature while retaining
-/// native-source provenance. The parameter samples are presentation-only
-/// correspondence used to place inverse-edit proxy controls; they never become
-/// generated sketch identities or solver variables.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SceneComputedOffsetCurve {
-    pub edge: geosolve_sketch_features::ComputedEdgeId,
-    pub owner: geosolve_sketch_features::ComputedFeatureId,
-    pub source: NativeCurveSpanSource,
-    /// Effective role inherited from the native source.
-    pub role: GeometryRole,
-    pub screen_polyline: Vec<ScreenPoint>,
-    /// Source-curve parameter paired one-to-one with `screen_polyline`.
-    ///
-    /// Junction-only connector edges carry an empty vector because they have no honest inverse-
-    /// edit correspondence to either adjacent native source.
-    pub screen_source_parameters: Vec<f64>,
-}
-
-impl SceneComputedOffsetCurve {
-    /// Whether this generated edge is displayed under session-local construction
-    /// visibility. Pick scope deliberately does not hide displayed geometry.
-    #[must_use]
-    pub fn is_visible(&self, policy: GeometryInteractionPolicy) -> bool {
-        self.role == GeometryRole::Profile || policy.visibility.explicit_construction
-    }
-
-    /// Whether this computed result may own feature selection under the current
-    /// geometry policy.
-    #[must_use]
-    pub fn is_interactive(&self, policy: GeometryInteractionPolicy) -> bool {
-        self.is_visible(policy) && role_participates(self.role, policy.scope)
-    }
-
-    fn is_pickable(&self, policy: GeometryInteractionPolicy) -> bool {
-        self.is_interactive(policy)
-    }
-}
-
 const fn role_participates(role: GeometryRole, scope: GeometryPickScope) -> bool {
     match scope {
         GeometryPickScope::All => true,
@@ -914,7 +871,7 @@ impl SceneFilletHit {
 }
 
 /// Exact constructor-owned scene semantics that may participate in drafting
-/// inference or direct-manipulation publication.
+/// inference publication.
 ///
 /// `EditorScene` remains an ergonomic presentation DTO with public fields, so
 /// a host may alter a detached scene for rendering or compatibility behavior.
@@ -928,9 +885,6 @@ struct DraftInferenceSceneSeal {
     design_identity: SketchDesignIdentity,
     viewport: Viewport,
     curves: Vec<SceneCurve>,
-    feature_identity: Option<ComputedFeatureDocumentIdentity>,
-    computed_input: Option<ComputedFeatureEvaluationInput>,
-    computed_offset_curves: Vec<SceneComputedOffsetCurve>,
     datums: Vec<SceneDatum>,
     constraint_entries: Vec<SceneConstraintEntry>,
     construction_snap_points: Vec<ScenePoint>,
@@ -953,9 +907,6 @@ struct CurveControlInteractionOrigin {
     candidate_revision: u64,
     candidate_design_identity: SketchDesignIdentity,
     viewport: Viewport,
-    feature_identity: Option<ComputedFeatureDocumentIdentity>,
-    computed_input: Option<ComputedFeatureEvaluationInput>,
-    computed_offset_curves: Vec<SceneComputedOffsetCurve>,
     curve_controls: Vec<SceneCurveControl>,
     curve_control_guides: Vec<SceneCurveControlGuide>,
 }
@@ -976,9 +927,6 @@ impl CurveControlInteractionOrigin {
             candidate_revision: scene.accepted_revision,
             candidate_design_identity: scene.design_identity,
             viewport: scene.viewport,
-            feature_identity: scene.feature_identity,
-            computed_input: scene.computed_input,
-            computed_offset_curves: scene.computed_offset_curves.clone(),
             curve_controls: scene.curve_controls.clone(),
             curve_control_guides: scene.curve_control_guides.clone(),
         }
@@ -999,9 +947,6 @@ impl CurveControlInteractionOrigin {
             && self.candidate_design_identity == scene.design_identity
             && self.viewport == viewport
             && scene.viewport == viewport
-            && self.feature_identity == scene.feature_identity
-            && self.computed_input == scene.computed_input
-            && self.computed_offset_curves == scene.computed_offset_curves
             && self.curve_controls == scene.curve_controls
             && self.curve_control_guides == scene.curve_control_guides
             && scene.curve_controls.iter().any(|candidate| {
@@ -1024,9 +969,6 @@ impl DraftInferenceSceneSeal {
             design_identity: scene.design_identity,
             viewport: scene.viewport,
             curves: scene.curves.clone(),
-            feature_identity: scene.feature_identity,
-            computed_input: scene.computed_input,
-            computed_offset_curves: scene.computed_offset_curves.clone(),
             datums: scene.datums.clone(),
             constraint_entries: scene.constraint_entries.clone(),
             construction_snap_points: scene.construction_snap_points.clone(),
@@ -1038,9 +980,6 @@ impl DraftInferenceSceneSeal {
             && self.design_identity == scene.design_identity
             && self.viewport == scene.viewport
             && self.curves == scene.curves
-            && self.feature_identity == scene.feature_identity
-            && self.computed_input == scene.computed_input
-            && self.computed_offset_curves == scene.computed_offset_curves
             && self.datums == scene.datums
             && self.constraint_entries == scene.constraint_entries
             && self.construction_snap_points == scene.construction_snap_points
@@ -1059,9 +998,8 @@ pub struct EditorScene {
     /// an inferred construction plan.
     prepared_input: Option<PreparedSketchInput>,
     /// Private constructor-owned copy of every scene value consumed by drafting
-    /// inference or computed Offset inverse-control derivation. Public
-    /// presentation-field mutation invalidates publication authority instead of
-    /// silently changing authenticated semantics.
+    /// inference. Public presentation-field mutation invalidates publication
+    /// authority instead of silently changing authenticated semantics.
     draft_inference_seal: Option<DraftInferenceSceneSeal>,
     pub viewport: Viewport,
     pub points: Vec<ScenePoint>,
@@ -1071,12 +1009,7 @@ pub struct EditorScene {
     /// Generated Fillet arcs. Source replacement fragments remain native
     /// [`SceneCurve`] values so native span selection and dragging stay intact.
     pub computed_curves: Vec<SceneComputedCurve>,
-    /// Revision-local generated Curve Offset edges. These never become sketch
-    /// primitives or constraint operands; selecting their feature may derive
-    /// transient source-owned inverse-edit proxies from this exact geometry.
-    pub computed_offset_curves: Vec<SceneComputedOffsetCurve>,
-    /// Selected-only transient grips owned by one native curve or exposed as
-    /// source-owned proxies for one computed Offset feature.
+    /// Selected-only transient grips owned by one native curve.
     ///
     /// These are recomputed from accepted geometry and editor selection. They
     /// are never persistent points, constraint operands, or snapping anchors.
@@ -1087,7 +1020,7 @@ pub struct EditorScene {
     pub feature_identity: Option<geosolve_sketch_features::ComputedFeatureDocumentIdentity>,
     pub computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
     fillet_interaction_origin: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
-    offset_distance_interaction_origin: Option<OffsetAuthoringPreviewAuthority>,
+    offset_distance_interaction_origin: Option<(PreparedSketchInput, PreparedSketchCommit)>,
     curve_control_interaction_origin: Option<CurveControlInteractionOrigin>,
     /// Explicit direct-manipulation affordances supplied for current Fillet corners.
     pub fillet_affordances: Vec<SceneFilletCornerAffordances>,
@@ -1201,93 +1134,6 @@ impl EditorScene {
         )?;
         self.curve_controls = controls;
         self.curve_control_guides = guides;
-        Ok(())
-    }
-
-    fn set_selected_curve_offset_controls(
-        &mut self,
-        feature: Option<geosolve_sketch_features::ComputedFeatureId>,
-    ) -> Result<(), EditorError> {
-        self.curve_control_interaction_origin = None;
-        self.curve_controls.clear();
-        self.curve_control_guides.clear();
-        let Some(feature) = feature else {
-            return Ok(());
-        };
-        let mut proxies: Vec<(
-            f64,
-            geosolve_sketch_features::ComputedEdgeId,
-            SceneCurveControl,
-        )> = Vec::new();
-        for offset in self
-            .computed_offset_curves
-            .iter()
-            .filter(|curve| curve.owner == feature)
-        {
-            let Some(source_curve) = self.curves.iter().find(|curve| {
-                curve.span == offset.source.span
-                    && curve.authoring_eligible
-                    && matches!(
-                        curve.origin,
-                        SceneCurveOrigin::Native | SceneCurveOrigin::FilletDiscarded { .. }
-                    )
-            }) else {
-                continue;
-            };
-            let (controls, _) = curve_controls::build_selected_curve_controls(
-                &self.accepted_document,
-                offset.source.span,
-                self.viewport,
-            )?;
-            for control in controls {
-                let Some((source_distance, parameter)) =
-                    closest_scene_curve_parameter(source_curve, control.screen_position)
-                else {
-                    continue;
-                };
-                let Some(offset_screen) =
-                    computed_offset_screen_point_at_parameter(offset, parameter)
-                else {
-                    continue;
-                };
-                let source_jet = self
-                    .accepted_document
-                    .evaluate_curve_jet(offset.source.span, parameter)?;
-                let offset_model = self.viewport.screen_to_model(offset_screen);
-                let proxy_position = [
-                    control.model_position[0] + offset_model[0] - source_jet.position.x,
-                    control.model_position[1] + offset_model[1] - source_jet.position.y,
-                ];
-                let Some(proxy) = curve_controls::make_offset_proxy_control(
-                    control,
-                    feature,
-                    proxy_position,
-                    self.viewport,
-                ) else {
-                    continue;
-                };
-                if let Some(existing) = proxies
-                    .iter_mut()
-                    .find(|(_, _, candidate)| candidate.id == proxy.id)
-                {
-                    if source_distance < existing.0
-                        || (source_distance.to_bits() == existing.0.to_bits()
-                            && offset.edge < existing.1)
-                    {
-                        *existing = (source_distance, offset.edge, proxy);
-                    }
-                } else {
-                    proxies.push((source_distance, offset.edge, proxy));
-                }
-            }
-        }
-        proxies.sort_by_key(|(_, edge, control)| (control.id, *edge));
-        self.curve_controls = proxies.into_iter().map(|(_, _, control)| control).collect();
-        self.curve_control_guides = curve_controls::build_offset_proxy_guides(
-            &self.accepted_document,
-            &self.curve_controls,
-            self.viewport,
-        );
         Ok(())
     }
 
@@ -1431,7 +1277,6 @@ impl EditorScene {
             curves,
             datums: scene_datums(viewport),
             computed_curves: Vec::new(),
-            computed_offset_curves: Vec::new(),
             curve_controls: Vec::new(),
             curve_control_guides: Vec::new(),
             feature_identity: None,
@@ -1505,10 +1350,6 @@ impl EditorScene {
         self.draft_inference_seal
             .as_ref()
             .is_some_and(|seal| seal.matches(self))
-    }
-
-    pub(crate) fn constructor_semantics_are_sealed(&self) -> bool {
-        self.draft_inference_semantics_are_sealed()
     }
 
     pub(crate) fn authenticated_prepared_input(&self) -> Option<PreparedSketchInput> {
@@ -1926,29 +1767,6 @@ impl EditorScene {
                     )?,
                     radius_rail: None,
                 }),
-                (
-                    geosolve_sketch_features::ComputedEdgeGeometry::CurveOffset(geometry),
-                    geosolve_sketch_features::ComputedEdgeProvenance::CurveOffset {
-                        owner,
-                        source,
-                        source_parameters,
-                    },
-                ) => {
-                    let tessellation = tessellate_computed_curve_offset(
-                        geometry,
-                        *source_parameters,
-                        viewport,
-                        chord_tolerance_pixels,
-                    )?;
-                    scene.computed_offset_curves.push(SceneComputedOffsetCurve {
-                        edge: edge.id,
-                        owner: *owner,
-                        source: *source,
-                        role: edge.role,
-                        screen_polyline: tessellation.screen_polyline,
-                        screen_source_parameters: tessellation.source_parameters,
-                    });
-                }
                 _ => {}
             }
         }
@@ -1976,7 +1794,6 @@ impl EditorScene {
         }
         scene.curves.sort_by_key(|curve| curve.span);
         scene.computed_curves.sort_by_key(|curve| curve.edge);
-        scene.computed_offset_curves.sort_by_key(|curve| curve.edge);
         scene.feature_identity = Some(computed.input().features);
         scene.computed_input = Some(computed.input());
         // A detached input stamp cannot authenticate caller-supplied scene
@@ -2037,22 +1854,25 @@ impl EditorScene {
     /// provisional candidate from the same live distance gesture.
     pub(crate) fn set_offset_distance_interaction_origin(
         &mut self,
-        authority: &OffsetAuthoringPreviewAuthority,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
     ) -> Result<(), EditorError> {
         if self.authenticated_prepared_input().is_none()
-            || authority.token == 0
-            || authority.base_input.design_identity().document() != self.design_identity.document()
+            || proposed_commit.design_identity().document()
+                != base_input.design_identity().document()
+            || proposed_commit.accepted_state_identity().is_none()
         {
             return Err(EditorError::StalePreparedSketchInput);
         }
-        self.offset_distance_interaction_origin = Some(*authority);
+        self.offset_distance_interaction_origin = Some((*base_input, proposed_commit));
         Ok(())
     }
 
     fn accepts_offset_distance_gesture(&self, gesture: &OffsetDistanceGesture) -> bool {
         self.viewport == gesture.viewport
             && (self.authenticated_prepared_input() == Some(gesture.origin_scene_input)
-                || self.offset_distance_interaction_origin == Some(gesture.authority))
+                || self.offset_distance_interaction_origin
+                    == Some((gesture.base_input, gesture.proposed_commit)))
     }
 
     /// Attaches one independently derived Fillet-radius continuation rail.
@@ -2632,14 +2452,6 @@ impl EditorScene {
                         computed_curve_hit(curve, position, tolerance.curve_pixels)
                     }),
             )
-            .chain(
-                self.computed_offset_curves
-                    .iter()
-                    .filter(move |curve| curve.is_pickable(policy))
-                    .filter_map(move |curve| {
-                        computed_offset_curve_hit(curve, position, tolerance.curve_pixels)
-                    }),
-            )
     }
 
     fn datum_hit_test(
@@ -2873,46 +2685,6 @@ impl EditorScene {
             .min_by(|first, second| first.distance_pixels.total_cmp(&second.distance_pixels))
     }
 
-    /// Resolves only revision-local generated edges of one held computed Curve Offset preview.
-    /// The owning feature remains the hit identity; this dedicated surface exists solely for the
-    /// provisional distance gesture and never promotes generated geometry to a sketch operand.
-    pub(crate) fn computed_offset_distance_hit(
-        &self,
-        position: ScreenPoint,
-        tolerance: PickTolerance,
-        policy: GeometryInteractionPolicy,
-        owner: ComputedFeatureId,
-        generated_edges: &[ComputedEdgeId],
-    ) -> Option<Hit> {
-        if !position.is_finite()
-            || !tolerance.is_valid()
-            || generated_edges.is_empty()
-            || generated_edges.windows(2).any(|pair| pair[0] >= pair[1])
-        {
-            return None;
-        }
-        self.computed_offset_curves
-            .iter()
-            .filter(|curve| {
-                curve.owner == owner
-                    && generated_edges.binary_search(&curve.edge).is_ok()
-                    && curve.is_pickable(policy)
-            })
-            .filter_map(|curve| computed_offset_curve_hit(curve, position, tolerance.curve_pixels))
-            .min_by(|first, second| {
-                first
-                    .distance_pixels
-                    .total_cmp(&second.distance_pixels)
-                    .then_with(|| match (first.geometry, second.geometry) {
-                        (
-                            Some(SceneGeometryHit::ComputedCurveOffset { edge: first, .. }),
-                            Some(SceneGeometryHit::ComputedCurveOffset { edge: second, .. }),
-                        ) => first.cmp(&second),
-                        _ => Ordering::Equal,
-                    })
-            })
-    }
-
     /// Returns the ordinary best visible geometry hit only when that exact
     /// persistent item still exists in `source`.
     ///
@@ -3025,12 +2797,6 @@ impl EditorScene {
                     .map(|point| self.viewport.screen_to_model(*point))
             }))
             .chain(self.computed_curves.iter().flat_map(|curve| {
-                curve
-                    .screen_polyline
-                    .iter()
-                    .map(|point| self.viewport.screen_to_model(*point))
-            }))
-            .chain(self.computed_offset_curves.iter().flat_map(|curve| {
                 curve
                     .screen_polyline
                     .iter()
@@ -3198,21 +2964,13 @@ pub enum SceneGeometryHit {
         owner: ComputedCornerRef,
         role: GeometryRole,
     },
-    ComputedCurveOffset {
-        edge: ComputedEdgeId,
-        owner: ComputedFeatureId,
-        source: NativeCurveSpanSource,
-        role: GeometryRole,
-    },
 }
 
 impl SceneGeometryHit {
     fn preferred_role(self, scope: GeometryPickScope) -> GeometryRole {
         match self {
             Self::Point { incidence } => incidence.preferred_role(scope),
-            Self::NativeCurve { role, .. }
-            | Self::ComputedFilletArc { role, .. }
-            | Self::ComputedCurveOffset { role, .. } => role,
+            Self::NativeCurve { role, .. } | Self::ComputedFilletArc { role, .. } => role,
         }
     }
 }
@@ -3328,17 +3086,6 @@ pub struct ActivePointerGesture {
     pub kind: ActivePointerGestureKind,
 }
 
-/// Exact coordinator-issued identity of one provisional Offset preview.
-///
-/// The token is process-local and never persisted. Pairing it with the accepted
-/// sketch input prevents a rerendered or stale gesture from authorizing a
-/// different native or computed Offset candidate.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct OffsetAuthoringPreviewAuthority {
-    pub base_input: PreparedSketchInput,
-    pub token: u64,
-}
-
 /// Host work requested by one state transition.
 #[derive(Clone, Debug, PartialEq)]
 pub enum EditorEffect {
@@ -3440,19 +3187,22 @@ pub enum EditorEffect {
     /// Requests a fully prepared replacement for the provisional native Offset candidate.
     PreviewOffsetAuthoringDistance {
         gesture_epoch: u64,
-        authority: OffsetAuthoringPreviewAuthority,
+        base_input: PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
         distance: f64,
     },
     /// Ends direct Offset authoring while retaining only the last independently accepted ghost.
     /// Apply remains the sole retained publication and history step.
     FinishOffsetAuthoringDistance {
         gesture_epoch: u64,
-        authority: OffsetAuthoringPreviewAuthority,
+        base_input: PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
     },
     /// Restores the exact non-cloneable pointer-down Offset patch and collector state.
     RestoreOffsetAuthoringDistance {
         gesture_epoch: u64,
-        authority: OffsetAuthoringPreviewAuthority,
+        base_input: PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
     },
     /// The exact applicable branch alternative currently previewed by canvas
     /// hover or accessible focus. This is presentation state only; it carries
@@ -4600,7 +4350,6 @@ struct CurveControlGesture {
     origin_model: [f64; 2],
     model_position: [f64; 2],
     model_offset: [f64; 2],
-    offset_proxy: Option<SceneCurveControlOffsetProxy>,
     rail: Option<SceneCurveControlRail>,
     moved: bool,
     last_sampled_position: Option<[f64; 2]>,
@@ -4643,7 +4392,8 @@ struct FeatureRadiusGesture {
 struct OffsetDistanceGesture {
     epoch: u64,
     pointer_id: u64,
-    authority: OffsetAuthoringPreviewAuthority,
+    base_input: PreparedSketchInput,
+    proposed_commit: PreparedSketchCommit,
     origin_scene_input: PreparedSketchInput,
     viewport: Viewport,
     origin: ScreenPoint,
@@ -4657,7 +4407,8 @@ struct OffsetDistanceGesture {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct OffsetDistanceGestureSeed {
-    pub(crate) authority: OffsetAuthoringPreviewAuthority,
+    pub(crate) base_input: PreparedSketchInput,
+    pub(crate) proposed_commit: PreparedSketchCommit,
     pub(crate) origin_scene_input: PreparedSketchInput,
     pub(crate) target: SelectionItem,
     pub(crate) origin_distance: f64,
@@ -5469,11 +5220,10 @@ impl ConstraintEditor {
         &self.selection
     }
 
-    /// Recomputes the selected-only native curve cage or computed Offset proxy
-    /// cage on one accepted scene.
+    /// Recomputes the selected-only native curve cage on one accepted scene.
     ///
     /// The scene remains empty outside Select mode, for zero/multiple selections,
-    /// for unsupported owners, and for stale or wholly non-editable sources.
+    /// for non-curve owners, and for stale or wholly non-editable native curves.
     /// Presentation adapters call this after composing the accepted scene and do
     /// not reconstruct family controls from SVG geometry.
     ///
@@ -5482,20 +5232,13 @@ impl ConstraintEditor {
     /// Returns a typed accepted-domain control-enumeration failure without
     /// publishing a partial cage.
     pub fn populate_curve_controls(&self, scene: &mut EditorScene) -> Result<(), EditorError> {
-        if self.tool != EditorTool::Select || self.selection.len() != 1 {
-            return scene.set_selected_curve_controls(None);
-        }
-        match self.selection[0] {
-            SelectionItem::Curve(span) => scene.set_selected_curve_controls(Some(span)),
-            SelectionItem::Feature(feature) => {
-                scene.set_selected_curve_offset_controls(Some(feature))
-            }
-            SelectionItem::Point(_)
-            | SelectionItem::Constraint(_)
-            | SelectionItem::Dimension(_)
-            | SelectionItem::Datum(_)
-            | SelectionItem::FeatureCorner(_) => scene.set_selected_curve_controls(None),
-        }
+        let owner = (self.tool == EditorTool::Select && self.selection.len() == 1)
+            .then(|| match self.selection[0] {
+                SelectionItem::Curve(span) => Some(span),
+                _ => None,
+            })
+            .flatten();
+        scene.set_selected_curve_controls(owner)
     }
 
     /// Returns presentation-only manual annotation placement.
@@ -5867,33 +5610,15 @@ impl ConstraintEditor {
                 geometry: None,
             }));
         }
-        if let Some(hit) = scene.curve_control_hit_test_with_policy(
-            position,
-            self.pick_tolerance,
-            self.geometry_policy,
-        ) {
-            let selected_owner_matches = match self.selection.as_slice() {
-                [SelectionItem::Curve(selected)] => hit.owner() == *selected,
-                [SelectionItem::Feature(selected)] => scene.curve_controls.iter().any(|control| {
-                    control.id == hit.control()
-                        && control.owner == hit.owner()
-                        && control
-                            .offset_proxy
-                            .is_some_and(|proxy| proxy.feature == *selected)
-                }),
-                [
-                    SelectionItem::Point(_)
-                    | SelectionItem::Constraint(_)
-                    | SelectionItem::Dimension(_)
-                    | SelectionItem::Datum(_)
-                    | SelectionItem::FeatureCorner(_),
-                ]
-                | []
-                | [_, _, ..] => false,
-            };
-            if selected_owner_matches {
-                return Some(ResolvedSelectPointerTarget::CurveControl(hit));
-            }
+        if let [SelectionItem::Curve(selected)] = self.selection.as_slice()
+            && let Some(hit) = scene.curve_control_hit_test_with_policy(
+                position,
+                self.pick_tolerance,
+                self.geometry_policy,
+            )
+            && hit.owner() == *selected
+        {
+            return Some(ResolvedSelectPointerTarget::CurveControl(hit));
         }
         if let Some(hit) = scene.draggable_geometry_hit_test_with_policy(
             position,
@@ -6129,7 +5854,10 @@ impl ConstraintEditor {
         input: PointerInput,
         hit: SceneCurveControlHit,
     ) -> Vec<EditorEffect> {
-        if self.tool != EditorTool::Select || !input.position.is_finite() {
+        if self.tool != EditorTool::Select
+            || !input.position.is_finite()
+            || self.selection.as_slice() != [SelectionItem::Curve(hit.owner())]
+        {
             return Vec::new();
         }
         let Some(control) = scene.curve_controls.iter().find(|candidate| {
@@ -6139,14 +5867,6 @@ impl ConstraintEditor {
         }) else {
             return Vec::new();
         };
-        let selected_owner = control
-            .offset_proxy
-            .map_or(SelectionItem::Curve(hit.owner()), |proxy| {
-                SelectionItem::Feature(proxy.feature)
-            });
-        if self.selection.as_slice() != [selected_owner] {
-            return Vec::new();
-        }
         match hit {
             SceneCurveControlHit::PointAlias { point, .. } => {
                 let effects = self.cancel_point_gesture();
@@ -6203,18 +5923,9 @@ impl ConstraintEditor {
                         control.model_position[0] - pointer_position[0],
                         control.model_position[1] - pointer_position[1],
                     ],
-                    offset_proxy: control.offset_proxy,
                     rail: control.rail,
                     moved: false,
-                    last_sampled_position: Some(control.offset_proxy.map_or(
-                        control.model_position,
-                        |proxy| {
-                            [
-                                control.model_position[0] + proxy.source_model_offset[0],
-                                control.model_position[1] + proxy.source_model_offset[1],
-                            ]
-                        },
-                    )),
+                    last_sampled_position: Some(control.model_position),
                     latest_request: None,
                     last_valid_request: None,
                 });
@@ -6306,9 +6017,6 @@ impl ConstraintEditor {
             || !seed.model_derivative.into_iter().all(f64::is_finite)
             || !derivative_norm_squared.is_finite()
             || derivative_norm_squared <= 0.0
-            || seed.authority.token == 0
-            || seed.authority.base_input.design_identity().document()
-                != seed.origin_scene_input.design_identity().document()
             || scene.authenticated_prepared_input() != Some(seed.origin_scene_input)
         {
             return None;
@@ -6318,7 +6026,8 @@ impl ConstraintEditor {
         self.offset_distance_gesture = Some(OffsetDistanceGesture {
             epoch,
             pointer_id: input.pointer_id,
-            authority: seed.authority,
+            base_input: seed.base_input,
+            proposed_commit: seed.proposed_commit,
             origin_scene_input: seed.origin_scene_input,
             viewport: scene.viewport,
             origin: input.position,
@@ -6795,7 +6504,7 @@ impl ConstraintEditor {
             return None;
         }
         let pointer = scene.viewport.screen_to_model(position);
-        let proxy_position = if let Some(rail) = gesture.rail {
+        let model_position = if let Some(rail) = gesture.rail {
             let delta = [
                 pointer[0] - gesture.origin_model[0],
                 pointer[1] - gesture.origin_model[1],
@@ -6817,12 +6526,6 @@ impl ConstraintEditor {
                 pointer[1] + gesture.model_offset[1],
             ]
         };
-        let model_position = gesture.offset_proxy.map_or(proxy_position, |proxy| {
-            [
-                proxy_position[0] + proxy.source_model_offset[0],
-                proxy_position[1] + proxy.source_model_offset[1],
-            ]
-        });
         model_position
             .into_iter()
             .all(f64::is_finite)
@@ -6936,7 +6639,8 @@ impl ConstraintEditor {
             self.offset_distance_gesture = None;
             return vec![EditorEffect::RestoreOffsetAuthoringDistance {
                 gesture_epoch: gesture.epoch,
-                authority: gesture.authority,
+                base_input: gesture.base_input,
+                proposed_commit: gesture.proposed_commit,
             }];
         }
         gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
@@ -6962,7 +6666,8 @@ impl ConstraintEditor {
         self.offset_distance_gesture = Some(gesture);
         vec![EditorEffect::PreviewOffsetAuthoringDistance {
             gesture_epoch: gesture.epoch,
-            authority: gesture.authority,
+            base_input: gesture.base_input,
+            proposed_commit: gesture.proposed_commit,
             distance,
         }]
     }
@@ -7203,12 +6908,14 @@ impl ConstraintEditor {
     pub(crate) fn offset_distance_preview_request_is_current(
         &self,
         gesture_epoch: u64,
-        authority: &OffsetAuthoringPreviewAuthority,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
         distance: f64,
     ) -> bool {
         self.offset_distance_gesture.is_some_and(|gesture| {
             gesture.epoch == gesture_epoch
-                && gesture.authority == *authority
+                && gesture.base_input == *base_input
+                && gesture.proposed_commit == proposed_commit
                 && gesture
                     .last_requested_distance
                     .is_some_and(|requested| requested.to_bits() == distance.to_bits())
@@ -7218,14 +6925,16 @@ impl ConstraintEditor {
     pub(crate) fn accept_offset_distance_preview(
         &mut self,
         gesture_epoch: u64,
-        authority: &OffsetAuthoringPreviewAuthority,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
         distance: f64,
     ) -> bool {
         let Some(mut gesture) = self.offset_distance_gesture else {
             return false;
         };
         if gesture.epoch != gesture_epoch
-            || gesture.authority != *authority
+            || gesture.base_input != *base_input
+            || gesture.proposed_commit != proposed_commit
             || gesture
                 .last_requested_distance
                 .is_none_or(|requested| requested.to_bits() != distance.to_bits())
@@ -7240,14 +6949,16 @@ impl ConstraintEditor {
     pub(crate) fn reject_offset_distance_preview(
         &mut self,
         gesture_epoch: u64,
-        authority: &OffsetAuthoringPreviewAuthority,
+        base_input: &PreparedSketchInput,
+        proposed_commit: PreparedSketchCommit,
         distance: f64,
     ) -> bool {
         let Some(mut gesture) = self.offset_distance_gesture else {
             return false;
         };
         if gesture.epoch != gesture_epoch
-            || gesture.authority != *authority
+            || gesture.base_input != *base_input
+            || gesture.proposed_commit != proposed_commit
             || gesture
                 .last_requested_distance
                 .is_none_or(|requested| requested.to_bits() != distance.to_bits())
@@ -7397,12 +7108,14 @@ impl ConstraintEditor {
             return if scene.accepts_offset_distance_gesture(&gesture) {
                 vec![EditorEffect::FinishOffsetAuthoringDistance {
                     gesture_epoch: gesture.epoch,
-                    authority: gesture.authority,
+                    base_input: gesture.base_input,
+                    proposed_commit: gesture.proposed_commit,
                 }]
             } else {
                 vec![EditorEffect::RestoreOffsetAuthoringDistance {
                     gesture_epoch: gesture.epoch,
-                    authority: gesture.authority,
+                    base_input: gesture.base_input,
+                    proposed_commit: gesture.proposed_commit,
                 }]
             };
         }
@@ -7609,7 +7322,8 @@ impl ConstraintEditor {
             .map_or_else(Vec::new, |gesture| {
                 vec![EditorEffect::RestoreOffsetAuthoringDistance {
                     gesture_epoch: gesture.epoch,
-                    authority: gesture.authority,
+                    base_input: gesture.base_input,
+                    proposed_commit: gesture.proposed_commit,
                 }]
             })
     }
@@ -10593,232 +10307,6 @@ fn tessellate_computed_arc_geometry(
     Ok(geometry)
 }
 
-const MAX_COMPUTED_OFFSET_POLYLINE_POINTS: usize = 131_072;
-const MAX_COMPUTED_OFFSET_CUBIC_DEPTH: u8 = 16;
-
-#[derive(Clone, Debug, PartialEq)]
-struct ComputedOffsetTessellation {
-    screen_polyline: Vec<ScreenPoint>,
-    source_parameters: Vec<f64>,
-}
-
-/// Converts evaluator-owned exact/certified Curve Offset geometry into one
-/// bounded screen polyline. This is presentation tessellation only: the scene
-/// neither reevaluates the source parallel nor changes its certified patches.
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
-)]
-fn tessellate_computed_curve_offset(
-    geometry: &geosolve_sketch::CurveOffsetGeometry,
-    source_parameter_range: Option<[f64; 2]>,
-    viewport: Viewport,
-    chord_tolerance_pixels: f64,
-) -> Result<ComputedOffsetTessellation, EditorError> {
-    if !chord_tolerance_pixels.is_finite() || chord_tolerance_pixels <= 0.0 {
-        return Err(EditorError::InvalidTolerance);
-    }
-    let (mut output, mut source_parameters) = match geometry {
-        geosolve_sketch::CurveOffsetGeometry::Line { start, end } => {
-            if !start.iter().chain(end).all(|value| value.is_finite()) {
-                return Err(EditorError::StaleComputedFeatureSnapshot);
-            }
-            (
-                vec![
-                    viewport.model_to_screen(*start),
-                    viewport.model_to_screen(*end),
-                ],
-                source_parameter_range.map_or_else(Vec::new, |range| range.to_vec()),
-            )
-        }
-        geosolve_sketch::CurveOffsetGeometry::CircularArc {
-            center,
-            radius,
-            start_angle,
-            sweep,
-            ..
-        } => tessellate_computed_offset_arc(
-            *center,
-            *radius,
-            *start_angle,
-            *sweep,
-            source_parameter_range,
-            viewport,
-            chord_tolerance_pixels,
-        )?,
-        geosolve_sketch::CurveOffsetGeometry::CubicPatches(patches) => {
-            let [source_start, source_end] =
-                source_parameter_range.ok_or(EditorError::StaleComputedFeatureSnapshot)?;
-            let first = patches
-                .first()
-                .ok_or(EditorError::StaleComputedFeatureSnapshot)?;
-            let last = patches
-                .last()
-                .ok_or(EditorError::StaleComputedFeatureSnapshot)?;
-            if first.source_parameters[0].to_bits() != source_start.to_bits()
-                || last.source_parameters[1].to_bits() != source_end.to_bits()
-            {
-                return Err(EditorError::StaleComputedFeatureSnapshot);
-            }
-            if patches.len() >= MAX_COMPUTED_OFFSET_POLYLINE_POINTS {
-                return Err(EditorError::StaleComputedFeatureSnapshot);
-            }
-            let first_screen = first.controls.map(|point| viewport.model_to_screen(point));
-            let mut points = vec![first_screen[0]];
-            let mut parameters = vec![first.source_parameters[0]];
-            let mut previous_end = first.controls[0];
-            for patch in patches {
-                if !patch
-                    .controls
-                    .iter()
-                    .flatten()
-                    .all(|value| value.is_finite())
-                    || !patch
-                        .source_parameters
-                        .iter()
-                        .all(|value| value.is_finite())
-                {
-                    return Err(EditorError::StaleComputedFeatureSnapshot);
-                }
-                let scale = previous_end
-                    .into_iter()
-                    .chain(patch.controls[0])
-                    .fold(1.0_f64, |value, coordinate| value.max(coordinate.abs()));
-                if distance_model(previous_end, patch.controls[0]) > 256.0 * f64::EPSILON * scale {
-                    return Err(EditorError::StaleComputedFeatureSnapshot);
-                }
-                let controls = patch.controls.map(|point| viewport.model_to_screen(point));
-                tessellate_computed_offset_cubic(
-                    controls,
-                    patch.source_parameters,
-                    chord_tolerance_pixels,
-                    0,
-                    &mut points,
-                    &mut parameters,
-                )?;
-                previous_end = patch.controls[3];
-            }
-            (points, parameters)
-        }
-    };
-    if output.len() < 2
-        || output.len() > MAX_COMPUTED_OFFSET_POLYLINE_POINTS
-        || (!source_parameters.is_empty() && output.len() != source_parameters.len())
-        || !output.iter().copied().all(ScreenPoint::is_finite)
-        || !source_parameters.iter().all(|value| value.is_finite())
-    {
-        return Err(EditorError::StaleComputedFeatureSnapshot);
-    }
-    output.shrink_to_fit();
-    source_parameters.shrink_to_fit();
-    Ok(ComputedOffsetTessellation {
-        screen_polyline: output,
-        source_parameters,
-    })
-}
-
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
-)]
-fn tessellate_computed_offset_arc(
-    center: [f64; 2],
-    radius: f64,
-    start_angle: f64,
-    sweep: f64,
-    source_parameter_range: Option<[f64; 2]>,
-    viewport: Viewport,
-    chord_tolerance_pixels: f64,
-) -> Result<(Vec<ScreenPoint>, Vec<f64>), EditorError> {
-    if !center.iter().all(|value| value.is_finite())
-        || !radius.is_finite()
-        || radius <= 0.0
-        || !start_angle.is_finite()
-        || !sweep.is_finite()
-        || sweep.abs() <= f64::EPSILON
-    {
-        return Err(EditorError::StaleComputedFeatureSnapshot);
-    }
-    let screen_radius = radius * viewport.pixels_per_model_unit;
-    let cosine = (1.0 - chord_tolerance_pixels / screen_radius).clamp(-1.0, 1.0);
-    let max_step = (2.0 * cosine.acos()).clamp(1.0e-3, std::f64::consts::FRAC_PI_4);
-    let segments = ((sweep.abs() / max_step).ceil() as usize)
-        .clamp(usize::from(MIN_COMPUTED_ARC_SEGMENTS), 4096);
-    let mut parameters = source_parameter_range
-        .map(|_| Vec::with_capacity(segments + 1))
-        .unwrap_or_default();
-    let points = (0..=segments)
-        .map(|index| {
-            let fraction = index as f64 / segments as f64;
-            let angle = sweep.mul_add(fraction, start_angle);
-            if let Some([source_start, source_end]) = source_parameter_range {
-                parameters.push((source_end - source_start).mul_add(fraction, source_start));
-            }
-            viewport.model_to_screen([
-                radius.mul_add(angle.cos(), center[0]),
-                radius.mul_add(angle.sin(), center[1]),
-            ])
-        })
-        .collect();
-    Ok((points, parameters))
-}
-
-fn tessellate_computed_offset_cubic(
-    controls: [ScreenPoint; 4],
-    source_parameters: [f64; 2],
-    tolerance: f64,
-    depth: u8,
-    output: &mut Vec<ScreenPoint>,
-    output_parameters: &mut Vec<f64>,
-) -> Result<(), EditorError> {
-    if output.len() >= MAX_COMPUTED_OFFSET_POLYLINE_POINTS
-        || output.len() != output_parameters.len()
-    {
-        return Err(EditorError::StaleComputedFeatureSnapshot);
-    }
-    let flatness = point_segment_projection(controls[1], controls[0], controls[3])
-        .0
-        .max(point_segment_projection(controls[2], controls[0], controls[3]).0);
-    if depth >= MAX_COMPUTED_OFFSET_CUBIC_DEPTH || flatness <= tolerance {
-        output.push(controls[3]);
-        output_parameters.push(source_parameters[1]);
-        return Ok(());
-    }
-    let midpoint = |first: ScreenPoint, second: ScreenPoint| ScreenPoint {
-        x: 0.5 * (first.x + second.x),
-        y: 0.5 * (first.y + second.y),
-    };
-    let first = midpoint(controls[0], controls[1]);
-    let second = midpoint(controls[1], controls[2]);
-    let third = midpoint(controls[2], controls[3]);
-    let fourth = midpoint(first, second);
-    let fifth = midpoint(second, third);
-    let middle = midpoint(fourth, fifth);
-    let middle_parameter = 0.5 * (source_parameters[0] + source_parameters[1]);
-    tessellate_computed_offset_cubic(
-        [controls[0], first, fourth, middle],
-        [source_parameters[0], middle_parameter],
-        tolerance,
-        depth + 1,
-        output,
-        output_parameters,
-    )?;
-    tessellate_computed_offset_cubic(
-        [middle, fifth, third, controls[3]],
-        [middle_parameter, source_parameters[1]],
-        tolerance,
-        depth + 1,
-        output,
-        output_parameters,
-    )
-}
-
-fn distance_model(first: [f64; 2], second: [f64; 2]) -> f64 {
-    (first[0] - second[0]).hypot(first[1] - second[1])
-}
-
 #[allow(clippy::too_many_arguments)]
 fn tessellate(
     document: &SketchDocument,
@@ -11296,82 +10784,6 @@ fn computed_curve_hit(
     })
 }
 
-fn computed_offset_curve_hit(
-    curve: &SceneComputedOffsetCurve,
-    position: ScreenPoint,
-    tolerance_pixels: f64,
-) -> Option<Hit> {
-    let distance = curve
-        .screen_polyline
-        .windows(2)
-        .map(|segment| point_segment_projection(position, segment[0], segment[1]).0)
-        .min_by(f64::total_cmp)?;
-    (distance <= tolerance_pixels).then_some(Hit {
-        item: SelectionItem::Feature(curve.owner),
-        distance_pixels: distance,
-        curve_parameter: None,
-        geometry: Some(SceneGeometryHit::ComputedCurveOffset {
-            edge: curve.edge,
-            owner: curve.owner,
-            source: curve.source,
-            role: curve.role,
-        }),
-    })
-}
-
-fn closest_scene_curve_parameter(curve: &SceneCurve, position: ScreenPoint) -> Option<(f64, f64)> {
-    curve
-        .screen_polyline
-        .windows(2)
-        .zip(curve.screen_parameters.windows(2))
-        .filter_map(|(segment, parameters)| {
-            let (distance, fraction) = point_segment_projection(position, segment[0], segment[1]);
-            let parameter = (parameters[1] - parameters[0]).mul_add(fraction, parameters[0]);
-            (distance.is_finite() && parameter.is_finite()).then_some((distance, parameter))
-        })
-        .min_by(|first, second| first.0.total_cmp(&second.0))
-}
-
-fn computed_offset_screen_point_at_parameter(
-    curve: &SceneComputedOffsetCurve,
-    parameter: f64,
-) -> Option<ScreenPoint> {
-    if !parameter.is_finite()
-        || curve.screen_polyline.len() < 2
-        || curve.screen_polyline.len() != curve.screen_source_parameters.len()
-    {
-        return None;
-    }
-    curve
-        .screen_polyline
-        .windows(2)
-        .zip(curve.screen_source_parameters.windows(2))
-        .filter_map(|(segment, parameters)| {
-            let delta = parameters[1] - parameters[0];
-            let lower = parameters[0].min(parameters[1]);
-            let upper = parameters[0].max(parameters[1]);
-            let outside = if parameter < lower {
-                lower - parameter
-            } else if parameter > upper {
-                parameter - upper
-            } else {
-                0.0
-            };
-            let fraction = if delta.abs() <= f64::EPSILON {
-                0.0
-            } else {
-                ((parameter - parameters[0]) / delta).clamp(0.0, 1.0)
-            };
-            let point = ScreenPoint {
-                x: (segment[1].x - segment[0].x).mul_add(fraction, segment[0].x),
-                y: (segment[1].y - segment[0].y).mul_add(fraction, segment[0].y),
-            };
-            (outside.is_finite() && point.is_finite()).then_some((outside, point))
-        })
-        .min_by(|first, second| first.0.total_cmp(&second.0))
-        .map(|(_, point)| point)
-}
-
 fn document_contains_item(document: &SketchDocument, item: SelectionItem) -> bool {
     match item {
         SelectionItem::Point(point) => document.point(point).is_some(),
@@ -11455,8 +10867,8 @@ fn best_policy_hit(hits: impl IntoIterator<Item = Hit>, scope: GeometryPickScope
 }
 
 fn compare_same_role_hits(first: &Hit, second: &Hit) -> Ordering {
-    geometry_hit_priority(first)
-        .cmp(&geometry_hit_priority(second))
+    native_hit_priority(first.item)
+        .cmp(&native_hit_priority(second.item))
         .then_with(|| first.distance_pixels.total_cmp(&second.distance_pixels))
         .then_with(|| first.item.cmp(&second.item))
         .then_with(|| match (first.curve_parameter, second.curve_parameter) {
@@ -11467,18 +10879,15 @@ fn compare_same_role_hits(first: &Hit, second: &Hit) -> Ordering {
         })
 }
 
-const fn geometry_hit_priority(hit: &Hit) -> u8 {
-    match (hit.item, hit.geometry) {
-        (SelectionItem::Point(_), _) => 0,
-        (SelectionItem::Curve(_), _)
-        | (
-            SelectionItem::Feature(_) | SelectionItem::FeatureCorner(_),
-            Some(
-                SceneGeometryHit::ComputedFilletArc { .. }
-                | SceneGeometryHit::ComputedCurveOffset { .. },
-            ),
-        ) => 1,
-        _ => 2,
+const fn native_hit_priority(item: SelectionItem) -> u8 {
+    match item {
+        SelectionItem::Point(_) => 0,
+        SelectionItem::Curve(_) => 1,
+        SelectionItem::Constraint(_)
+        | SelectionItem::Dimension(_)
+        | SelectionItem::Datum(_)
+        | SelectionItem::Feature(_)
+        | SelectionItem::FeatureCorner(_) => 2,
     }
 }
 
@@ -20224,115 +19633,6 @@ mod tests {
             .expect("equidistant parallel lines are in range");
         assert_eq!(tie.item, SelectionItem::Curve(first.min(second)));
         assert!((tie.distance_pixels - 8.0).abs() < 1.0e-12);
-    }
-
-    fn install_nearby_computed_offset(
-        scene: &mut EditorScene,
-        source: CurveSpan,
-        role: GeometryRole,
-    ) -> (ComputedFeatureId, ComputedEdgeId) {
-        let owner = ComputedFeatureId::from_raw(42);
-        let edge = ComputedEdgeId {
-            evaluation: ComputedEvaluationRevision::from_raw(7),
-            ordinal: 3,
-        };
-        scene.computed_offset_curves.push(SceneComputedOffsetCurve {
-            edge,
-            owner,
-            source: NativeCurveSpanSource { span: source },
-            role,
-            screen_polyline: vec![
-                scene.viewport.model_to_screen([-4.0, 1.1]),
-                scene.viewport.model_to_screen([4.0, 1.1]),
-            ],
-            screen_source_parameters: vec![0.0, 1.0],
-        });
-        (owner, edge)
-    }
-
-    #[test]
-    fn computed_offset_stroke_and_nearby_native_source_use_curve_distance_then_exact_ties() {
-        let (document, spans, _) = line_document();
-        let mut scene = scene(&document);
-        let (owner, _) =
-            install_nearby_computed_offset(&mut scene, spans[0], GeometryRole::Profile);
-
-        let generated_stroke = scene.viewport.model_to_screen([0.0, 1.1]);
-        let generated = scene
-            .hit_test(generated_stroke, PickTolerance::default())
-            .expect("generated and native strokes are both within curve tolerance");
-        assert_eq!(generated.item, SelectionItem::Feature(owner));
-        assert_eq!(generated.distance_pixels.to_bits(), 0.0_f64.to_bits());
-        assert!(matches!(
-            generated.geometry,
-            Some(SceneGeometryHit::ComputedCurveOffset {
-                owner: actual,
-                source: NativeCurveSpanSource { span },
-                ..
-            }) if actual == owner && span == spans[0]
-        ));
-
-        let native_stroke = scene.viewport.model_to_screen([0.0, 1.0]);
-        assert_eq!(
-            scene
-                .hit_test(native_stroke, PickTolerance::default())
-                .map(|hit| hit.item),
-            Some(SelectionItem::Curve(spans[0]))
-        );
-
-        let exact_tie = ScreenPoint {
-            x: 0.5 * (generated_stroke.x + native_stroke.x),
-            y: 0.5 * (generated_stroke.y + native_stroke.y),
-        };
-        assert_eq!(
-            scene
-                .hit_test(exact_tie, PickTolerance::default())
-                .map(|hit| hit.item),
-            Some(SelectionItem::Curve(spans[0])),
-            "persistent native identity remains the deterministic exact-distance tie break"
-        );
-    }
-
-    #[test]
-    fn computed_offset_distance_surface_obeys_pick_scope_not_visibility_alone() {
-        let (document, spans, _) = line_document();
-        let mut scene = scene(&document);
-        let (owner, edge) =
-            install_nearby_computed_offset(&mut scene, spans[0], GeometryRole::Construction);
-        let position = scene.viewport.model_to_screen([0.0, 1.1]);
-        let profile_policy = GeometryInteractionPolicy {
-            scope: GeometryPickScope::Profile,
-            visibility: GeometryVisibility::default(),
-        };
-        let construction_policy = GeometryInteractionPolicy {
-            scope: GeometryPickScope::Construction,
-            visibility: GeometryVisibility::default(),
-        };
-
-        assert!(scene.computed_offset_curves[0].is_visible(profile_policy));
-        assert!(!scene.computed_offset_curves[0].is_interactive(profile_policy));
-        assert_eq!(
-            scene.computed_offset_distance_hit(
-                position,
-                PickTolerance::default(),
-                profile_policy,
-                owner,
-                &[edge],
-            ),
-            None
-        );
-        assert_eq!(
-            scene
-                .computed_offset_distance_hit(
-                    position,
-                    PickTolerance::default(),
-                    construction_policy,
-                    owner,
-                    &[edge],
-                )
-                .map(|hit| hit.item),
-            Some(SelectionItem::Feature(owner))
-        );
     }
 
     #[test]
