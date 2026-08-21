@@ -9,9 +9,16 @@ use geosolve_core::{OperationCheckpoint, OperationController, OperationWorkCount
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
+mod materialization;
 mod profile_offset;
 mod query;
 
+pub use materialization::{
+    SketchMaterializationBatch, SketchMaterializationConstraintReservation,
+    SketchMaterializationDimensionReservation, SketchMaterializationIdentityReservation,
+    SketchMaterializationReservationAllocator, SketchMaterializationReservationConsumption,
+    SketchMaterializationReservationSet, SketchMaterializationSemanticCatalog,
+};
 use profile_offset::{document_profile_offset_edges, document_profile_offset_junctions};
 pub(crate) use query::{DocumentConicGeometryError, document_hyperbola_branch};
 use query::{

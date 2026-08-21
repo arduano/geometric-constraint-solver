@@ -134,6 +134,10 @@ pub use document::{
     MAX_DOCUMENT_OBJECTS, MAX_DOCUMENT_PARAMETERS, MAX_EXTERNAL_BINDINGS, MAX_LABEL_BYTES,
     MAX_PERSISTENT_SPLINE_SPAN_CURSORS, MAX_POLYLINE_POINTS, MirroredCurveIds, PersistentId,
     RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDatum, SketchDocument,
+    SketchMaterializationBatch, SketchMaterializationConstraintReservation,
+    SketchMaterializationDimensionReservation, SketchMaterializationIdentityReservation,
+    SketchMaterializationReservationAllocator, SketchMaterializationReservationConsumption,
+    SketchMaterializationReservationSet, SketchMaterializationSemanticCatalog,
     SketchPersistentIdentityHighWater, TangentOrientation,
 };
 pub use document_lowering::{
