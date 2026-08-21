@@ -232,6 +232,13 @@ caller accepts the qualified scorecard and requests closure without a new findin
 descendant `b582b82` passes Pages run `32328472125`, artifact `9392295853` and exact public-byte
 verification; the Tailscale listener is retired and M81 is closed.
 
+M82 is closed as a deferred design exploration, not as an accepted feature. Hands-on review found
+the computed all-family Offset prototype unfit for the intended CAD workflow. Rollback commit
+`fa54f30` restores the exact M81 product tree; no M82 API, schema, golden row or UI remains on
+`main`. The complete prototype and ADR are preserved at
+`archive/m82-certified-computed-offset-2026-08-21` (`d1e2613`). The rejected Tailscale listener is
+retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
+
 ## Read first
 
 1. `AGENTS.md`
@@ -261,6 +268,8 @@ verification; the Tailscale listener is retired and M81 is closed.
 17. `docs/M81_GOALS.md`, `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md` — completed behavior-
     preserving architecture-consolidation contract, clean-qualified audit/finding ledger,
     accepted focused scorecard and exact public closeout.
+18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
+    and the archive branch holding the full unaccepted prototype/ADR.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -632,7 +641,9 @@ completed amended ADR 0037's grouped native Profile Offset, explicit native line
 publication and F016 arc-angle propagation repair. Exact product source `29d8e41` passes clean
 qualification, immutable Tailscale nomination and supervising-human UAT; approval descendant
 `ece6c3c` passes Pages run `32262792440`, artifact `9369119336` and exact hosted-byte verification.
-M1-M81 are complete; no M82 scope is active. M81's exact `e4eca32` candidate passes clean
+M1-M82 are complete. M82 closes by explicit deferral rather than feature acceptance: `fa54f30`
+restores the exact M81 product tree and the complete discarded prototype is archived at
+`archive/m82-certified-computed-offset-2026-08-21`. M81's exact `e4eca32` candidate passes clean
 qualification, immutable Tailscale byte verification and supervising-human acceptance; approval
 descendant `b582b82` passes exact Pages publication. Do not route Offset through computed features,
 admit a topology-changing fallback or treat M81's private module moves as new behavior.
@@ -734,6 +745,7 @@ Durable milestone and cleanup records:
 - `docs/M81_IMPLEMENTATION.md` (clean-qualified implementation, M81-F001, audit, nomination,
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
+- `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

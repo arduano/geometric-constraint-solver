@@ -4279,6 +4279,26 @@ without opening a new finding. Approval descendant `b582b82` passes Pages run `3
 artifact `9392295853` and exact hosted-byte verification; the Tailscale listener is retired and M81
 is closed.
 
+## M82 withdrawal and preservation scenarios
+
+M82 is closed by explicit deferral and adds no accepted geometry scenario. Its closeout requires:
+
+- rollback commit `fa54f30` has exactly the M81 closeout tree
+  `17b2eeab0eda39e19df81d3cf3e505ceac274825`;
+- M80 native Line/Circle/CircularArc Profile Offset, native-published Fillet topology and every M81
+  architecture-preservation scenario still pass the complete release gate;
+- the authoring/scene golden is exactly the restored 271-row fixture, with no computed Curve Offset
+  family, proxy or lifecycle rows on `main`;
+- no computed Offset feature definition, v2 persistence, inverse proxy, UI route or M82 fixture is
+  reachable from the supported product; and
+- local and remote branch `archive/m82-certified-computed-offset-2026-08-21` points to `d1e2613`
+  and retains the complete unaccepted design for future study.
+
+The rejected frozen candidate and its seven M82 findings are historical archive evidence only.
+Former UAT PID `3024723` is retired and port `8080` is free. No M82 feature UAT or Pages publication
+is claimed; existing accepted M81 Pages bytes remain public authority. See
+`docs/M82_DEFERRED.md`.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

@@ -80,8 +80,11 @@ native line-line Fillet publication amendment and `M80-F016` arc-angle propagati
 clean release qualification and immutable served nomination at exact source `29d8e41`, tree
 `44ecb95`. Supervising-human UAT and exact GitHub Pages publication pass.
 Pre-amendment qualification and immutable Tailscale nomination remain valid historical evidence,
-but those candidates are withdrawn from acceptance and are no longer served. M1–M81 are complete;
-no M82 scope is active. M81 is the closed behavior-preserving core-architecture consolidation.
+but those candidates are withdrawn from acceptance and are no longer served. M1–M82 are complete.
+M82 closes as an explicitly deferred design exploration: its unaccepted computed all-family Offset
+prototype is preserved at `archive/m82-certified-computed-offset-2026-08-21`, while `main` restores
+the exact accepted M81 product tree and retains no M82 feature code. M81 remains the latest product-
+changing architecture consolidation.
 M76's
 implementation,
 feature refinements,
@@ -5564,6 +5567,32 @@ independent validation; M81-F001's directly asserted retained-state and allocato
 neutral on rejection; and the clean release artifact behaves as the M80 product. M81 adds no
 feature, equation, solver policy, persistence version, browser behavior or new architectural
 abstraction.
+
+### M82: computed all-family Offset design exploration
+
+Status: **closed and deferred 2026-08-21; implementation withdrawn, no feature accepted**.
+`docs/M82_DEFERRED.md` owns the closeout and archive record.
+
+- [x] Explore a certified computed Offset route for regular built-in curve families without
+  changing M80's exact native `ProfileOffset` route.
+- [x] Mechanically qualify the prototype and expose it through an immutable Tailscale candidate.
+- [x] Record the supervising caller's hands-on conclusion that the resulting interaction and
+  ownership design is not fit for purpose and should be redesigned in a future milestone.
+- [x] Preserve the complete source, tests, ADR, golden expansion, failure fixtures and evidence at
+  local and remote branch `archive/m82-certified-computed-offset-2026-08-21`, exact tip `d1e2613`.
+- [x] Audit every M82 change and retain no production/test code on `main`; reusable-looking pieces
+  remain coupled to the unaccepted contract and are archive-only research.
+- [x] Reverse the exact 12-commit M82 range in commit `fa54f30` and prove its tree
+  `17b2eeab0eda39e19df81d3cf3e505ceac274825` exactly matches M81 closeout `e3cbb8f`.
+- [x] Pass the complete clean release gate on that rollback, including the restored 271-row golden,
+  native/WASM parity, workspace Clippy/tests/Rustdoc, performance, licence and Trunk checks.
+- [x] Retire the rejected Tailscale candidate without publishing it to Pages and close M82 as a
+  non-product milestone. Existing accepted M81 Pages bytes remain public authority.
+
+Gate: `main` exposes exactly the accepted M81 product behavior and no M82 API, schema, golden row or
+UI. The archive branch preserves the exploration without making ADR 0038 active architecture. Any
+future arbitrary-curve Offset milestone must approve a new design and qualify it independently;
+M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ## Explicit non-goals
 

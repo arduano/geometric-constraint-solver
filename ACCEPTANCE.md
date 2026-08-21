@@ -2898,6 +2898,34 @@ hosted paths pass HTTP/media/length/encoding/redirect/body checks and `/` equals
 Pages is final public-byte authority. Historical snapshot `/tmp/geosolve-m81-uat.QqItRd` remains
 accepted evidence; Tailscale PID `2850776` is retired. M81 is complete.
 
+## M82 acceptance: deferred computed all-family Offset exploration
+
+Status: **closed by explicit withdrawal on 2026-08-21; no computed Offset feature accepted**.
+`docs/M82_DEFERRED.md` is the authoritative closeout record.
+
+- [x] The complete explored architecture, implementation, tests, ADR, failure fixtures, golden
+  expansion and qualification evidence are preserved on local and remote branch
+  `archive/m82-certified-computed-offset-2026-08-21` at exact commit `d1e2613`, tree `849e107`.
+- [x] The 12 M82 commits are reversed without history rewriting by `fa54f30`; its exact tree
+  `17b2eeab0eda39e19df81d3cf3e505ceac274825` equals M81 closeout `e3cbb8f`.
+- [x] No M82 production code, public API, computed-feature v2 syntax, persistence path, demo UI,
+  regression fixture or 18-row Offset golden expansion remains on `main`.
+- [x] M80 native Line/Circle/CircularArc Profile Offset and native-published Fillet behavior remain
+  the supported product contract; the reviewed golden is restored to 271/271 `PASS` with SHA-256
+  `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797`.
+- [x] Clean committed rollback source `fa54f30` passes
+  `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` with exit `0`, including
+  formatting/diff hygiene, workspace Clippy/tests/Rustdoc, native/WASM parity, golden,
+  performance, licence/package and Trunk release checks.
+- [x] The rejected M82 UAT service is retired: former PID `3024723` is inactive, port `8080` is
+  free, and the immutable snapshot remains read-only historical evidence.
+- [x] No M82 feature UAT or feature acceptance is claimed. The candidate never reached Pages;
+  existing accepted M81 Pages bytes remain public product authority.
+
+M82 acceptance means only that the exploration is safely archived, removed and closed. A future
+milestone may mine the archive, but must begin from a newly approved design and cannot inherit
+M82's mechanical qualification as product evidence.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit
