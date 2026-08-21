@@ -31,6 +31,13 @@ construction/NURBS UAT and certified all-family visual profiles.
   model, inverse controls, tests, ADR and evidence for a future redesign. No prototype API,
   persistence v2, golden expansion or UI remains on `main`. `docs/M82_DEFERRED.md` owns the
   disposition.
+- **Proposed target:** M83 adds an optional host-side `geosolve-sketch-lineage` companion and a
+  separate DOM-free WASM adapter under proposed ADR 0039. Lineage is an editable ordered action
+  program with stable typed outputs and explicitly reserved materialized IDs; the existing flat
+  `SketchDocument` remains the independently validated solver model. Accepted direct manipulation
+  rewrites the owning placement step, and deleting a native Profile Offset step rematerializes
+  without its complete ownership set. `docs/M83_GOALS.md` owns the planned architecture/proof
+  slice. No M83 behavior is implemented or part of the baseline yet.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
