@@ -12,16 +12,19 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{
     ContactNeighborhood, CurveDefinition, CurveOffsetGeometry, CurveSpan, DocumentArcSweep,
-    DocumentBSplineForm, DocumentConstraintDefinition, DocumentEdit, DocumentFaceOffsetDirection,
-    DocumentLineSide, DocumentObjectId, DocumentSolveRequest, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
+    DocumentBSplineForm, DocumentConstraintDefinition, DocumentCurveControlKind,
+    DocumentCurveControlTarget, DocumentEdit, DocumentFaceOffsetDirection, DocumentLineSide,
+    DocumentObjectId, DocumentRationalConicControl, DocumentSolveRequest,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+    SketchDocument, SolverConfig,
 };
 use geosolve_sketch_features::{
-    ComputedCurveOffsetChain, ComputedCurveOffsetDirectedSpan, ComputedCurveOffsetJunctionBranch,
-    ComputedCurveOffsetJunctionProvenance, ComputedCurveOffsetOperand,
-    ComputedCurveOffsetTerminalPolicy, ComputedCurveOffsetTraversal, ComputedEdgeGeometry,
-    ComputedEdgeId, ComputedEdgeProvenance, ComputedFeatureEvaluationState, ComputedFeatureFailure,
-    ComputedFeatureId, NativeCurveSpanSource,
+    ComputedCurveOffsetChain, ComputedCurveOffsetDirectedSpan, ComputedCurveOffsetJunction,
+    ComputedCurveOffsetJunctionBranch, ComputedCurveOffsetJunctionProvenance,
+    ComputedCurveOffsetOperand, ComputedCurveOffsetTerminalPolicy, ComputedCurveOffsetTraversal,
+    ComputedCurveOffsetTurn, ComputedEdgeGeometry, ComputedEdgeId, ComputedEdgeProvenance,
+    ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFeatureId,
+    NativeCurveSpanSource,
 };
 
 fn coordinator(document: SketchDocument) -> RetainedEditorCoordinator {
@@ -80,6 +83,61 @@ fn quadratic_bezier_document() -> (SketchDocument, CurveSpan) {
     (document, CurveSpan::line(curve))
 }
 
+fn cubic_bezier_document() -> (SketchDocument, CurveSpan) {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let controls = [
+        document.add_point("start", [0.0, 0.0]).unwrap(),
+        document.add_point("first control", [1.0, 1.5]).unwrap(),
+        document.add_point("second control", [3.0, 1.5]).unwrap(),
+        document.add_point("end", [4.0, 0.0]).unwrap(),
+    ];
+    let curve = document
+        .add_curve("cubic source", CurveDefinition::CubicBezier { controls })
+        .unwrap();
+    (document, CurveSpan::line(curve))
+}
+
+fn horizontally_constrained_quadratic_document() -> (
+    SketchDocument,
+    CurveSpan,
+    geosolve_sketch::DesignPointId,
+    geosolve_sketch::DesignPointId,
+) {
+    let mut document = SketchDocument::new(10.0).expect("document");
+    let start = document.add_point("fixed start", [0.0, 0.0]).unwrap();
+    let control = document
+        .add_point("horizontally constrained control", [2.0, 0.0])
+        .unwrap();
+    let end = document.add_point("free end", [4.0, 1.0]).unwrap();
+    let curve = document
+        .add_curve(
+            "constrained quadratic source",
+            CurveDefinition::QuadraticBezier {
+                controls: [start, control, end],
+            },
+        )
+        .unwrap();
+    document
+        .add_constraint(
+            "anchor source start",
+            DocumentConstraintDefinition::FixedPoint {
+                point: start,
+                target: [0.0, 0.0],
+            },
+        )
+        .unwrap();
+    document
+        .add_constraint(
+            "control stays horizontal to start",
+            DocumentConstraintDefinition::HorizontalPoints {
+                first: start,
+                second: control,
+            },
+        )
+        .unwrap();
+    (document, CurveSpan::line(curve), start, control)
+}
+
 fn assert_finite_offset_geometry(geometry: &CurveOffsetGeometry) {
     match geometry {
         CurveOffsetGeometry::Line { start, end } => {
@@ -119,7 +177,10 @@ fn assert_current_curve_offset(
         .expect("complete current computed snapshot");
     assert_eq!(
         snapshot.input().sketch,
-        coordinator.session().prepared_input()
+        coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("current accepted computed source input")
     );
     if coordinator.feature_document().feature(feature).is_some() {
         assert_eq!(
@@ -197,6 +258,32 @@ fn single_computed_operand(span: CurveSpan) -> ComputedCurveOffsetOperand {
     }
 }
 
+fn publish_explicit_computed_offset(
+    document: SketchDocument,
+    operand: ComputedCurveOffsetOperand,
+    distance: f64,
+    label: &str,
+) -> (RetainedEditorCoordinator, ComputedFeatureId) {
+    let mut coordinator = coordinator(document);
+    let expected = coordinator.feature_document().identity();
+    coordinator
+        .replay(&ReplayAction::CreateComputedCurveOffset {
+            expected,
+            label: label.into(),
+            distance,
+            operand,
+        })
+        .expect("explicit computed Curve Offset publication");
+    let feature = coordinator
+        .feature_document()
+        .features()
+        .last()
+        .expect("published computed Curve Offset")
+        .id;
+    assert_current_curve_offset(&coordinator, feature);
+    (coordinator, feature)
+}
+
 fn published_quadratic_curve_offset(
     distance: f64,
 ) -> (RetainedEditorCoordinator, ComputedFeatureId, CurveSpan) {
@@ -256,6 +343,1389 @@ fn computed_offset_preview_scene(
             .expect("live Offset distance origin");
     }
     scene
+}
+
+fn prepared_curve_offset_proxy_scene(
+    coordinator: &RetainedEditorCoordinator,
+    viewport: Viewport,
+) -> EditorScene {
+    let source = coordinator
+        .visible_preview_session()
+        .expect("independently accepted source-control preview");
+    let accepted = source
+        .accepted_state_for_current_input()
+        .expect("accepted source-control preview");
+    let accepted_input = source
+        .accepted_prepared_input()
+        .expect("accepted prepared proxy input");
+    let ComputedSceneState::Current { expected, snapshot } = coordinator.computed_scene_state()
+    else {
+        panic!("source-control preview must retain complete current computed output")
+    };
+    assert_eq!(snapshot.input().sketch, accepted_input);
+    let mut scene = EditorScene::from_accepted_with_computed(
+        accepted.identity().revision().get(),
+        source.design_identity(),
+        accepted.document(),
+        source.design_document(),
+        &accepted_input,
+        expected,
+        snapshot,
+        viewport,
+        0.25,
+    )
+    .expect("complete computed proxy preview scene");
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .expect("selected Offset proxy controls on candidate scene");
+    coordinator
+        .retain_curve_control_preview_interaction_origin(&mut scene)
+        .expect("authenticated proxy interaction origin");
+    scene
+}
+
+fn assert_complete_curve_offset_scene(
+    scene: &EditorScene,
+    source: CurveSpan,
+    feature: ComputedFeatureId,
+) {
+    assert!(
+        scene.curves.iter().any(|curve| curve.span == source),
+        "the accepted native source must remain visible"
+    );
+    assert!(
+        scene.points.len() >= 3,
+        "source control points must not disappear from the accepted scene"
+    );
+    let generated = scene
+        .computed_offset_curves
+        .iter()
+        .filter(|curve| curve.owner == feature)
+        .collect::<Vec<_>>();
+    assert!(!generated.is_empty(), "one complete computed Offset output");
+    assert!(generated.iter().all(|curve| {
+        curve.screen_polyline.len() >= 2
+            && curve.screen_polyline.len() == curve.screen_source_parameters.len()
+            && curve
+                .screen_polyline
+                .iter()
+                .all(|point| point.x.is_finite() && point.y.is_finite())
+            && curve
+                .screen_source_parameters
+                .iter()
+                .all(|parameter| parameter.is_finite())
+    }));
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ComputedOffsetProxySceneTamper {
+    Geometry,
+    SourceParameters,
+    Owner,
+    ComputedInput,
+    FeatureIdentity,
+}
+
+const COMPUTED_OFFSET_PROXY_SCENE_TAMPERS: [ComputedOffsetProxySceneTamper; 5] = [
+    ComputedOffsetProxySceneTamper::Geometry,
+    ComputedOffsetProxySceneTamper::SourceParameters,
+    ComputedOffsetProxySceneTamper::Owner,
+    ComputedOffsetProxySceneTamper::ComputedInput,
+    ComputedOffsetProxySceneTamper::FeatureIdentity,
+];
+
+fn tamper_computed_offset_proxy_scene(
+    scene: &mut EditorScene,
+    tamper: ComputedOffsetProxySceneTamper,
+    foreign_owner: ComputedFeatureId,
+) {
+    match tamper {
+        ComputedOffsetProxySceneTamper::Geometry => {
+            for point in &mut scene.computed_offset_curves[0].screen_polyline {
+                point.x += 12.0;
+            }
+        }
+        ComputedOffsetProxySceneTamper::SourceParameters => {
+            for parameter in &mut scene.computed_offset_curves[0].screen_source_parameters {
+                *parameter += 0.125;
+            }
+        }
+        ComputedOffsetProxySceneTamper::Owner => {
+            for curve in &mut scene.computed_offset_curves {
+                curve.owner = foreign_owner;
+            }
+        }
+        ComputedOffsetProxySceneTamper::ComputedInput => scene.computed_input = None,
+        ComputedOffsetProxySceneTamper::FeatureIdentity => scene.feature_identity = None,
+    }
+}
+
+#[test]
+fn computed_curve_offset_proxy_pointer_down_rejects_tampered_constructor_semantics() {
+    let viewport =
+        Viewport::new([1_000.0, 700.0], [2.0, 0.5], 80.0).expect("finite proxy viewport");
+    let foreign_owner = ComputedFeatureId::from_raw(82_999);
+
+    for tamper in COMPUTED_OFFSET_PROXY_SCENE_TAMPERS {
+        let (mut coordinator, feature, _) = published_quadratic_curve_offset(0.2);
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Feature(feature)]);
+        let mut scene = computed_offset_preview_scene(&coordinator, viewport, false);
+        coordinator
+            .editor()
+            .populate_curve_controls(&mut scene)
+            .expect("untampered computed Offset proxy cage");
+        assert!(!scene.curve_controls.is_empty());
+        let history = (coordinator.history_len(), coordinator.history_cursor());
+        let transcript = coordinator.transcript().to_vec();
+        let design = coordinator.session().export_design_json().unwrap();
+
+        tamper_computed_offset_proxy_scene(&mut scene, tamper, foreign_owner);
+        if matches!(tamper, ComputedOffsetProxySceneTamper::Owner) {
+            coordinator
+                .editor_mut()
+                .set_selection([SelectionItem::Feature(foreign_owner)]);
+        }
+        coordinator
+            .editor()
+            .populate_curve_controls(&mut scene)
+            .expect("tampered scene remains a finite detached presentation DTO");
+        let proxy = scene
+            .curve_controls
+            .first()
+            .unwrap_or_else(|| panic!("{tamper:?}: self-consistent forged proxy cage"))
+            .clone();
+        let pointer_id = 82_800 + tamper as u64;
+        let down = coordinator.pointer_down(&scene, pointer(pointer_id, proxy.screen_position));
+        assert!(
+            down.is_empty(),
+            "{tamper:?}: rejected press effects {down:?}"
+        );
+        assert!(
+            coordinator.editor().active_pointer_gesture().is_none(),
+            "{tamper:?}: detached computed semantics must not start a gesture"
+        );
+        let moved = geosolve_constraint_editor::ScreenPoint {
+            x: proxy.screen_position.x + 12.0,
+            y: proxy.screen_position.y - 7.0,
+        };
+        let move_effects = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(pointer_id, moved));
+        assert!(
+            move_effects
+                .iter()
+                .all(|effect| !matches!(effect, EditorEffect::RequestCurveControlPreview { .. })),
+            "{tamper:?}: detached scene requested a source solve: {move_effects:?}"
+        );
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            history,
+            "{tamper:?}: rejected scene changed history"
+        );
+        assert_eq!(coordinator.transcript(), transcript, "{tamper:?}");
+        assert_eq!(
+            coordinator.session().export_design_json().unwrap(),
+            design,
+            "{tamper:?}: rejected scene changed source geometry"
+        );
+    }
+}
+
+#[test]
+fn computed_curve_offset_proxy_candidate_rejects_tampered_constructor_semantics() {
+    let (mut coordinator, feature, _) = published_quadratic_curve_offset(0.2);
+    let viewport =
+        Viewport::new([1_000.0, 700.0], [2.0, 0.5], 80.0).expect("finite proxy viewport");
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Feature(feature)]);
+    let mut origin_scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut origin_scene)
+        .expect("selected computed Offset proxy cage");
+    let proxy = origin_scene.curve_controls[1].clone();
+    let pointer_id = 82_806;
+    assert!(
+        coordinator
+            .pointer_down(&origin_scene, pointer(pointer_id, proxy.screen_position))
+            .is_empty()
+    );
+    let moved = geosolve_constraint_editor::ScreenPoint {
+        x: proxy.screen_position.x + 12.0,
+        y: proxy.screen_position.y - 7.0,
+    };
+    let request = coordinator
+        .editor_mut()
+        .pointer_move(&origin_scene, pointer(pointer_id, moved));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control,
+            model_position,
+            ..
+        },
+    ] = request.as_slice()
+    else {
+        panic!("one legitimate source-control request expected: {request:?}")
+    };
+    assert!(matches!(
+        coordinator
+            .resolve_curve_control_preview(
+                pointer_id,
+                *request_id,
+                *expected,
+                *control,
+                *model_position,
+            )
+            .as_slice(),
+        [EditorEffect::PreviewCurveControl { .. }]
+    ));
+
+    let source = coordinator
+        .visible_preview_session()
+        .expect("independently accepted source-control preview");
+    let accepted = source
+        .accepted_state_for_current_input()
+        .expect("accepted source-control preview");
+    let accepted_input = source
+        .accepted_prepared_input()
+        .expect("accepted prepared proxy input");
+    let ComputedSceneState::Current { expected, snapshot } = coordinator.computed_scene_state()
+    else {
+        panic!("source-control preview must retain complete current computed output")
+    };
+    let mut candidate = EditorScene::from_accepted_with_computed(
+        accepted.identity().revision().get(),
+        source.design_identity(),
+        accepted.document(),
+        source.design_document(),
+        &accepted_input,
+        expected,
+        snapshot,
+        viewport,
+        0.25,
+    )
+    .expect("complete detached candidate scene");
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut candidate)
+        .expect("candidate proxy cage");
+    let mut valid = candidate.clone();
+    coordinator
+        .retain_curve_control_preview_interaction_origin(&mut valid)
+        .expect("untampered candidate keeps pointer-down authority");
+
+    let foreign_owner = ComputedFeatureId::from_raw(82_999);
+    for tamper in COMPUTED_OFFSET_PROXY_SCENE_TAMPERS {
+        let mut forged = candidate.clone();
+        tamper_computed_offset_proxy_scene(&mut forged, tamper, foreign_owner);
+        coordinator
+            .editor()
+            .populate_curve_controls(&mut forged)
+            .expect("tampered candidate remains finite presentation");
+        assert!(
+            coordinator
+                .retain_curve_control_preview_interaction_origin(&mut forged)
+                .is_err(),
+            "{tamper:?}: a detached candidate must not retain release authority"
+        );
+    }
+}
+
+#[test]
+fn computed_curve_offset_proxy_release_rejects_post_retain_scene_tampering() {
+    let viewport =
+        Viewport::new([1_000.0, 700.0], [2.0, 0.5], 80.0).expect("finite proxy viewport");
+    let foreign_owner = ComputedFeatureId::from_raw(82_999);
+
+    for tamper in COMPUTED_OFFSET_PROXY_SCENE_TAMPERS {
+        let (mut coordinator, feature, _) = published_quadratic_curve_offset(0.2);
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Feature(feature)]);
+        let mut origin_scene = computed_offset_preview_scene(&coordinator, viewport, false);
+        coordinator
+            .editor()
+            .populate_curve_controls(&mut origin_scene)
+            .expect("selected computed Offset proxy cage");
+        let proxy = origin_scene.curve_controls[1].clone();
+        let pointer_id = 82_810 + tamper as u64;
+        assert!(
+            coordinator
+                .pointer_down(&origin_scene, pointer(pointer_id, proxy.screen_position))
+                .is_empty()
+        );
+        let release_position = geosolve_constraint_editor::ScreenPoint {
+            x: proxy.screen_position.x + 12.0,
+            y: proxy.screen_position.y - 7.0,
+        };
+        let request = coordinator
+            .editor_mut()
+            .pointer_move(&origin_scene, pointer(pointer_id, release_position));
+        let [
+            EditorEffect::RequestCurveControlPreview {
+                request_id,
+                expected,
+                control,
+                model_position,
+                ..
+            },
+        ] = request.as_slice()
+        else {
+            panic!("{tamper:?}: one legitimate source-control request expected: {request:?}")
+        };
+        assert!(matches!(
+            coordinator
+                .resolve_curve_control_preview(
+                    pointer_id,
+                    *request_id,
+                    *expected,
+                    *control,
+                    *model_position,
+                )
+                .as_slice(),
+            [EditorEffect::PreviewCurveControl { .. }]
+        ));
+
+        let mut candidate = prepared_curve_offset_proxy_scene(&coordinator, viewport);
+        let durable_design = coordinator.session().export_design_json().unwrap();
+        let durable_features = coordinator.feature_document().to_json().unwrap();
+        let durable_allocator = coordinator.checkpoint().computed_evaluation_high_water();
+        let durable_history = (coordinator.history_len(), coordinator.history_cursor());
+        let durable_transcript = coordinator.transcript().to_vec();
+        let expected = coordinator.session().design_identity();
+
+        tamper_computed_offset_proxy_scene(&mut candidate, tamper, foreign_owner);
+        let release = coordinator.editor_mut().pointer_up(
+            &candidate,
+            expected,
+            pointer(pointer_id, release_position),
+        );
+        assert!(
+            matches!(release.as_slice(), [EditorEffect::ClearCurveControlPreview]),
+            "{tamper:?}: post-retain tampering must clear, not commit: {release:?}"
+        );
+        coordinator
+            .apply_editor_effect(&release[0])
+            .expect("rejected release clears only transient preview state");
+        assert_eq!(
+            coordinator.session().export_design_json().unwrap(),
+            durable_design,
+            "{tamper:?}: rejected release changed the source design"
+        );
+        assert_eq!(
+            coordinator.feature_document().to_json().unwrap(),
+            durable_features,
+            "{tamper:?}: rejected release changed feature intent"
+        );
+        assert_eq!(
+            coordinator.checkpoint().computed_evaluation_high_water(),
+            durable_allocator,
+            "{tamper:?}: rejected release changed computed-output allocator authority"
+        );
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            durable_history,
+            "{tamper:?}: rejected release changed history"
+        );
+        assert_eq!(coordinator.transcript(), durable_transcript, "{tamper:?}");
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one reverse-analytic regression keeps evaluator provenance, proxy placement and inverse prepared-drag evidence together"
+)]
+fn reverse_line_in_general_chain_retains_native_parameter_proxy_correspondence() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let bezier_start = document.add_point("Bezier start", [-4.0, -1.0]).unwrap();
+    let bezier_control = document.add_point("Bezier control", [-2.0, 0.0]).unwrap();
+    let join = document
+        .add_point("shared reverse join", [0.0, 0.0])
+        .unwrap();
+    let native_line_start = document.add_point("native line start", [4.0, 0.0]).unwrap();
+    let bezier = document
+        .add_curve(
+            "leading general curve",
+            CurveDefinition::QuadraticBezier {
+                controls: [bezier_start, bezier_control, join],
+            },
+        )
+        .unwrap();
+    let line = add_line(
+        &mut document,
+        "reverse analytic line",
+        native_line_start,
+        join,
+    );
+    let bezier_span = CurveSpan::line(bezier);
+    let line_span = CurveSpan::line(line);
+    let operand = ComputedCurveOffsetOperand::OpenChain {
+        side: DocumentLineSide::Left,
+        chain: ComputedCurveOffsetChain {
+            spans: vec![
+                ComputedCurveOffsetDirectedSpan {
+                    source: NativeCurveSpanSource { span: bezier_span },
+                    traversal: ComputedCurveOffsetTraversal::Forward,
+                },
+                ComputedCurveOffsetDirectedSpan {
+                    source: NativeCurveSpanSource { span: line_span },
+                    traversal: ComputedCurveOffsetTraversal::Reverse,
+                },
+            ],
+            junctions: vec![ComputedCurveOffsetJunction {
+                provenance: ComputedCurveOffsetJunctionProvenance::SharedPoint(join),
+                branch: ComputedCurveOffsetJunctionBranch::Tangent,
+            }],
+            start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+        },
+    };
+    let (mut coordinator, feature) =
+        publish_explicit_computed_offset(document, operand, 0.2, "Reverse line Offset");
+    let snapshot = coordinator.computed_snapshot().unwrap();
+    let line_edge = snapshot
+        .edges()
+        .iter()
+        .find(|edge| {
+            matches!(
+                edge.provenance,
+                ComputedEdgeProvenance::CurveOffset { source, .. }
+                    if source.span == line_span
+            )
+        })
+        .expect("reverse exact line edge");
+    let ComputedEdgeProvenance::CurveOffset {
+        source_parameters, ..
+    } = &line_edge.provenance
+    else {
+        unreachable!("matched Curve Offset provenance")
+    };
+    assert_eq!(*source_parameters, Some([1.0, 0.0]));
+
+    let viewport = Viewport::new([1_000.0, 700.0], [0.0, 0.0], 80.0).unwrap();
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Feature(feature)]);
+    let mut scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .expect("reverse-line source proxies");
+    let painted_line = scene
+        .computed_offset_curves
+        .iter()
+        .find(|curve| curve.source.span == line_span)
+        .expect("painted reverse exact line");
+    assert_eq!(painted_line.screen_source_parameters, [1.0, 0.0]);
+    let proxy = scene
+        .curve_controls
+        .iter()
+        .find(|control| {
+            control.target == DocumentCurveControlTarget::Point(native_line_start)
+                && control.offset_proxy.is_some()
+        })
+        .expect("proxy for native parameter-zero line endpoint")
+        .clone();
+    assert!((proxy.model_position[0] - 4.0).abs() <= 1.0e-12);
+    assert!((proxy.model_position[1] - 0.2).abs() <= 1.0e-12);
+
+    let source_origin = [4.0, 0.0];
+    let delta = [0.3, -0.15];
+    let moved = viewport.model_to_screen([
+        proxy.model_position[0] + delta[0],
+        proxy.model_position[1] + delta[1],
+    ]);
+    let pointer_id = 82_810;
+    assert!(
+        coordinator
+            .pointer_down(&scene, pointer(pointer_id, proxy.screen_position))
+            .is_empty()
+    );
+    let effects = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, moved));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            control,
+            model_position,
+            ..
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("reverse line proxy must request one native source edit: {effects:#?}")
+    };
+    assert_eq!(*control, proxy.id);
+    for axis in 0..2 {
+        assert!((model_position[axis] - (source_origin[axis] + delta[axis])).abs() <= 1.0e-12);
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one negative-angle reverse-arc regression keeps exact native correspondence, centre-proxy placement and inverse-drag evidence together"
+)]
+fn negative_angle_reverse_arc_in_general_chain_keeps_center_proxy_local() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let center = document
+        .add_point("reverse arc centre", [0.0, 0.0])
+        .unwrap();
+    let radius = document
+        .add_scalar(
+            "reverse arc radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let start_angle_value = -2.4_f64;
+    let end_angle_value = -0.6_f64;
+    let start_angle = document
+        .add_scalar(
+            "negative start angle",
+            start_angle_value,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .unwrap();
+    let end_angle = document
+        .add_scalar(
+            "negative end angle",
+            end_angle_value,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )
+        .unwrap();
+    let arc = document
+        .add_curve(
+            "negative-angle source arc",
+            CurveDefinition::CircularArc {
+                center,
+                radius,
+                start_angle,
+                end_angle,
+                sweep: DocumentArcSweep::CounterClockwise,
+            },
+        )
+        .unwrap();
+    let arc_span = CurveSpan::line(arc);
+    let join_position = [2.0 * end_angle_value.cos(), 2.0 * end_angle_value.sin()];
+    let reverse_tangent = [end_angle_value.sin(), -end_angle_value.cos()];
+    let join = document.add_point("owned arc end", join_position).unwrap();
+    let bezier_control = document
+        .add_point(
+            "reverse tangent control",
+            [
+                join_position[0] - reverse_tangent[0],
+                join_position[1] - reverse_tangent[1],
+            ],
+        )
+        .unwrap();
+    let bezier_start = document
+        .add_point(
+            "reverse tangent start",
+            [
+                join_position[0] - 2.0 * reverse_tangent[0],
+                join_position[1] - 2.0 * reverse_tangent[1],
+            ],
+        )
+        .unwrap();
+    let bezier = document
+        .add_curve(
+            "leading tangent Bezier",
+            CurveDefinition::QuadraticBezier {
+                controls: [bezier_start, bezier_control, join],
+            },
+        )
+        .unwrap();
+    let arc_end = document
+        .add_curve_contact(
+            "reverse arc endpoint contact",
+            arc_span,
+            1.0,
+            0,
+            ContactNeighborhood::End,
+            None,
+        )
+        .unwrap();
+    let join_constraint = document
+        .add_constraint(
+            "owned reverse arc endpoint",
+            DocumentConstraintDefinition::PointOnCurve {
+                point: join,
+                contact: arc_end,
+            },
+        )
+        .unwrap();
+    let bezier_span = CurveSpan::line(bezier);
+    let operand = ComputedCurveOffsetOperand::OpenChain {
+        side: DocumentLineSide::Left,
+        chain: ComputedCurveOffsetChain {
+            spans: vec![
+                ComputedCurveOffsetDirectedSpan {
+                    source: NativeCurveSpanSource { span: bezier_span },
+                    traversal: ComputedCurveOffsetTraversal::Forward,
+                },
+                ComputedCurveOffsetDirectedSpan {
+                    source: NativeCurveSpanSource { span: arc_span },
+                    traversal: ComputedCurveOffsetTraversal::Reverse,
+                },
+            ],
+            junctions: vec![ComputedCurveOffsetJunction {
+                provenance: ComputedCurveOffsetJunctionProvenance::Constraint(join_constraint),
+                branch: ComputedCurveOffsetJunctionBranch::Tangent,
+            }],
+            start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+        },
+    };
+    let (mut coordinator, feature) =
+        publish_explicit_computed_offset(document, operand, 0.2, "Reverse arc Offset");
+    let snapshot = coordinator.computed_snapshot().unwrap();
+    let arc_edge = snapshot
+        .edges()
+        .iter()
+        .find(|edge| {
+            matches!(
+                edge.provenance,
+                ComputedEdgeProvenance::CurveOffset { source, .. }
+                    if source.span == arc_span
+            )
+        })
+        .expect("reverse exact circular-arc edge");
+    let ComputedEdgeProvenance::CurveOffset {
+        source_parameters, ..
+    } = &arc_edge.provenance
+    else {
+        unreachable!("matched Curve Offset provenance")
+    };
+    assert_eq!(*source_parameters, Some([1.0, 0.0]));
+
+    let viewport = Viewport::new([1_000.0, 700.0], [0.0, 0.0], 80.0).unwrap();
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Feature(feature)]);
+    let mut scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .expect("reverse-arc source proxies");
+    let painted_arc = scene
+        .computed_offset_curves
+        .iter()
+        .find(|curve| curve.source.span == arc_span)
+        .expect("painted reverse exact circular arc");
+    assert_eq!(
+        painted_arc.screen_source_parameters.first().copied(),
+        Some(1.0)
+    );
+    assert_eq!(
+        painted_arc.screen_source_parameters.last().copied(),
+        Some(0.0)
+    );
+    let proxy = scene
+        .curve_controls
+        .iter()
+        .find(|control| {
+            control.target == DocumentCurveControlTarget::Point(center)
+                && control.offset_proxy.is_some()
+        })
+        .expect("reverse-arc centre proxy")
+        .clone();
+    let generated_offset = proxy.model_position;
+    let offset_length = generated_offset[0].hypot(generated_offset[1]);
+    assert!(
+        (offset_length - 0.2).abs() <= 4.0e-3,
+        "the centre proxy must differ by the local parallel distance, not an arc chord: {proxy:#?}"
+    );
+    let native_start_radial = [start_angle_value.cos(), start_angle_value.sin()];
+    assert!(
+        generated_offset[0].mul_add(
+            native_start_radial[0],
+            generated_offset[1] * native_start_radial[1]
+        ) > 0.19,
+        "native parameter zero must map to the negative-angle arc start: {proxy:#?}"
+    );
+
+    let delta = [0.25, -0.1];
+    let moved = viewport.model_to_screen([
+        proxy.model_position[0] + delta[0],
+        proxy.model_position[1] + delta[1],
+    ]);
+    let pointer_id = 82_811;
+    assert!(
+        coordinator
+            .pointer_down(&scene, pointer(pointer_id, proxy.screen_position))
+            .is_empty()
+    );
+    let effects = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, moved));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            control,
+            model_position,
+            ..
+        },
+    ] = effects.as_slice()
+    else {
+        panic!("reverse arc proxy must request one native centre edit: {effects:#?}")
+    };
+    assert_eq!(*control, proxy.id);
+    assert!((model_position[0] - delta[0]).abs() <= 1.0e-12);
+    assert!((model_position[1] - delta[1]).abs() <= 1.0e-12);
+}
+
+#[test]
+fn m82_f006_bezier_offset_preview_is_not_rejected_by_fillet_affordance_composition() {
+    for (family, fixture) in [
+        (
+            "quadratic Bezier",
+            quadratic_bezier_document as fn() -> (SketchDocument, CurveSpan),
+        ),
+        ("cubic Bezier", cubic_bezier_document),
+    ] {
+        let (document, span) = fixture();
+        let mut coordinator = coordinator(document);
+        let state = activate_open_chain(&mut coordinator, span, 0.2);
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, format!("{family} Offset"))
+            .unwrap_or_else(|error| panic!("{family}: certified preview: {error:?}"));
+        assert!(
+            metadata.computed_curve().is_some(),
+            "{family}: computed route"
+        );
+        let viewport =
+            Viewport::new([900.0, 650.0], [2.0, 0.5], 80.0).expect("finite test viewport");
+        let mut scene = computed_offset_preview_scene(&coordinator, viewport, false);
+        assert!(scene.fillet_affordances.is_empty());
+        coordinator
+            .populate_computed_fillet_affordances(&mut scene, &[], 0.25)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "{family}: a Current Curve Offset preview with no Fillet output must not be rejected as a stale Fillet candidate: {error:?}"
+                )
+            });
+        assert!(scene.fillet_affordances.is_empty());
+        assert!(!scene.computed_offset_curves.is_empty());
+    }
+}
+
+#[test]
+#[allow(
+    clippy::float_cmp,
+    clippy::too_many_lines,
+    reason = "one owning-boundary regression keeps exact source history plus proxy geometry, prepared solving, computed regeneration and replay together"
+)]
+fn computed_curve_offset_proxy_drag_moves_the_source_and_commits_one_replayable_edit() {
+    let (mut coordinator, feature, source_span) = published_quadratic_curve_offset(0.2);
+    let original_edges = assert_current_curve_offset(&coordinator, feature);
+    let replay_session = coordinator.session().clone();
+    let replay_features = coordinator.feature_document().clone();
+    let history_before = (coordinator.history_len(), coordinator.history_cursor());
+    let transcript_before = coordinator.transcript().len();
+    let viewport =
+        Viewport::new([1_000.0, 700.0], [2.0, 0.5], 80.0).expect("finite proxy viewport");
+
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Feature(feature)]);
+    let mut scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .expect("selected computed Offset proxy cage");
+    assert_complete_curve_offset_scene(&scene, source_span, feature);
+
+    let source_controls = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .curve_controls(source_span.curve)
+        .expect("ordinary quadratic source controls");
+    assert_eq!(source_controls.len(), 3);
+    assert_eq!(scene.curve_controls.len(), 3);
+    assert_eq!(
+        scene.curve_control_guides.len(),
+        2,
+        "the generated quadratic proxy retains its control polygon"
+    );
+    for proxy in &scene.curve_controls {
+        let metadata = proxy.offset_proxy.expect("computed Offset proxy metadata");
+        assert_eq!(metadata.feature, feature);
+        assert!(
+            metadata.source_model_offset[0].hypot(metadata.source_model_offset[1]) > 1.0e-6,
+            "the generated grip must be displaced from its source control: {proxy:#?}"
+        );
+        assert!(proxy.model_position.iter().all(|value| value.is_finite()));
+        assert!(proxy.screen_position.x.is_finite() && proxy.screen_position.y.is_finite());
+        assert!(source_controls.iter().any(|source| source.id == proxy.id));
+    }
+
+    let proxy = scene
+        .curve_controls
+        .iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::ControlPoint { ordinal: 1 })
+        .expect("quadratic middle-control Offset proxy")
+        .clone();
+    let DocumentCurveControlTarget::Point(source_point) = proxy.target else {
+        panic!("quadratic middle proxy must retain its ordinary source point target")
+    };
+    let source_origin = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .point(source_point)
+        .unwrap()
+        .position;
+    let delta = [0.35, 0.4];
+    let moved_proxy_model = [
+        proxy.model_position[0] + delta[0],
+        proxy.model_position[1] + delta[1],
+    ];
+    let moved_proxy_screen = viewport.model_to_screen(moved_proxy_model);
+    let pointer_id = 82_701;
+    let down = coordinator.pointer_down(&scene, pointer(pointer_id, proxy.screen_position));
+    assert!(down.is_empty(), "proxy pointer-down effects: {down:#?}");
+    let request = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, moved_proxy_screen));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control,
+            model_position,
+            ..
+        },
+    ] = request.as_slice()
+    else {
+        panic!("Offset proxy must request one ordinary source-control preview: {request:#?}")
+    };
+    assert_eq!(
+        *control, proxy.id,
+        "the generated grip retains the source ID"
+    );
+    for axis in 0..2 {
+        assert!(
+            (model_position[axis] - (source_origin[axis] + delta[axis])).abs() <= 1.0e-12,
+            "axis {axis}: proxy motion must inverse-map to the source control"
+        );
+    }
+
+    let acknowledgement = coordinator.resolve_curve_control_preview(
+        pointer_id,
+        *request_id,
+        *expected,
+        *control,
+        *model_position,
+    );
+    assert!(matches!(
+        acknowledgement.as_slice(),
+        [EditorEffect::PreviewCurveControl {
+            control: accepted_control,
+            ..
+        }] if *accepted_control == proxy.id
+    ));
+    let preview_session = coordinator
+        .visible_preview_session()
+        .expect("independently accepted proxy preview");
+    let preview_accepted = preview_session
+        .accepted_state_for_current_input()
+        .expect("current accepted proxy source");
+    let preview_point = preview_accepted
+        .document()
+        .point(source_point)
+        .unwrap()
+        .position;
+    for axis in 0..2 {
+        assert!((preview_point[axis] - model_position[axis]).abs() <= 1.0e-10);
+    }
+    let preview_report = preview_accepted.solve_result().unstable_core_report();
+    assert!(
+        preview_report.hard_residuals_validated,
+        "{preview_report:#?}"
+    );
+    assert!(
+        preview_report.hard_residual_max <= 1.0e-9,
+        "{preview_report:#?}"
+    );
+
+    let candidate_scene = prepared_curve_offset_proxy_scene(&coordinator, viewport);
+    assert_complete_curve_offset_scene(&candidate_scene, source_span, feature);
+    assert_eq!(candidate_scene.curve_controls.len(), 3);
+    assert_eq!(candidate_scene.curve_control_guides.len(), 2);
+    let release = coordinator.editor_mut().pointer_up(
+        &candidate_scene,
+        scene.design_identity,
+        pointer(pointer_id, moved_proxy_screen),
+    );
+    let [
+        commit @ EditorEffect::CommitCurveControl {
+            control: committed_control,
+            ..
+        },
+    ] = release.as_slice()
+    else {
+        panic!("the exact prepared proxy preview must release atomically: {release:#?}")
+    };
+    assert_eq!(*committed_control, proxy.id);
+    coordinator
+        .apply_editor_effect(commit)
+        .expect("publish exact source-control patch")
+        .expect("one source geometry mutation");
+
+    assert_eq!(
+        (coordinator.history_len(), coordinator.history_cursor()),
+        (history_before.0 + 1, history_before.1 + 1)
+    );
+    assert_eq!(coordinator.transcript().len(), transcript_before + 1);
+    let replay_action = coordinator
+        .transcript()
+        .last()
+        .expect("durable proxy source edit")
+        .clone();
+    assert!(matches!(
+        &replay_action,
+        ReplayAction::Edit {
+            edit: DocumentEdit::SetPointPosition { point, .. },
+            ..
+        } if *point == source_point
+    ));
+    let committed_point = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .point(source_point)
+        .unwrap()
+        .position;
+    for axis in 0..2 {
+        assert!((committed_point[axis] - preview_point[axis]).abs() <= 1.0e-10);
+    }
+    let regenerated_edges = assert_current_curve_offset(&coordinator, feature);
+    assert_ne!(regenerated_edges, original_edges);
+    assert!(
+        original_edges
+            .iter()
+            .all(|edge| coordinator.selection_for_computed_edge(*edge).is_none()),
+        "revision-local pre-edit generated IDs must be revoked"
+    );
+    let mut committed_scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut committed_scene)
+        .unwrap();
+    assert_complete_curve_offset_scene(&committed_scene, source_span, feature);
+
+    let committed_design_json = coordinator.session().export_design_json().unwrap();
+    let committed_accepted_json = coordinator.session().export_accepted_json().unwrap();
+    let committed_feature_json = coordinator.feature_document().to_json().unwrap();
+    let mut replayed =
+        RetainedEditorCoordinator::with_features(replay_session, replay_features).unwrap();
+    replayed
+        .replay(&replay_action)
+        .expect("deterministic proxy source-edit replay");
+    assert_eq!(
+        replayed.session().export_design_json().unwrap(),
+        committed_design_json
+    );
+    assert_eq!(
+        replayed.session().export_accepted_json().unwrap(),
+        committed_accepted_json
+    );
+    assert_eq!(
+        replayed.feature_document().to_json().unwrap(),
+        committed_feature_json
+    );
+    assert_current_curve_offset(&replayed, feature);
+
+    coordinator.undo().expect("Undo proxy-owned source edit");
+    assert_eq!(
+        coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document()
+            .point(source_point)
+            .unwrap()
+            .position,
+        source_origin
+    );
+    assert_current_curve_offset(&coordinator, feature);
+    coordinator.redo().expect("Redo proxy-owned source edit");
+    assert_eq!(
+        coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document()
+            .point(source_point)
+            .unwrap()
+            .position,
+        committed_point
+    );
+    assert_current_curve_offset(&coordinator, feature);
+}
+
+#[test]
+#[allow(
+    clippy::float_cmp,
+    clippy::too_many_lines,
+    reason = "one constrained owning-boundary regression keeps exact fixed geometry and the full proxy solve/publication lifecycle together"
+)]
+fn computed_curve_offset_proxy_drag_uses_the_normal_constrained_source_solve() {
+    let (document, source_span, fixed_start, constrained_control) =
+        horizontally_constrained_quadratic_document();
+    let mut coordinator = coordinator(document);
+    let mut offset_state = activate_open_chain(&mut coordinator, source_span, 0.2);
+    let feature = coordinator
+        .prepare_offset_authoring_preview(&offset_state, "Constrained quadratic Offset")
+        .expect("regular constrained quadratic preview")
+        .into_computed_curve()
+        .expect("quadratic uses computed Offset route")
+        .feature;
+    assert_eq!(
+        coordinator
+            .apply_offset_authoring_preview(&mut offset_state)
+            .expect("publish constrained quadratic Offset")
+            .value,
+        OffsetAuthoringApplyEffect::ComputedCurve(feature)
+    );
+    let original_edges = assert_current_curve_offset(&coordinator, feature);
+    let history_before = (coordinator.history_len(), coordinator.history_cursor());
+    let viewport =
+        Viewport::new([1_000.0, 700.0], [2.0, 0.5], 80.0).expect("finite proxy viewport");
+
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Feature(feature)]);
+    let mut scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .expect("computed Offset proxies for constrained source");
+    assert_complete_curve_offset_scene(&scene, source_span, feature);
+    let proxy = scene
+        .curve_controls
+        .iter()
+        .find(|control| control.target == DocumentCurveControlTarget::Point(constrained_control))
+        .expect("proxy for horizontally constrained source control")
+        .clone();
+    assert_eq!(
+        proxy.id.kind,
+        DocumentCurveControlKind::ControlPoint { ordinal: 1 }
+    );
+
+    let source_origin = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .point(constrained_control)
+        .unwrap()
+        .position;
+    assert_eq!(source_origin, [2.0, 0.0]);
+    let raw_delta = [0.5, 0.75];
+    let raw_source_target = [
+        source_origin[0] + raw_delta[0],
+        source_origin[1] + raw_delta[1],
+    ];
+    let moved_proxy = viewport.model_to_screen([
+        proxy.model_position[0] + raw_delta[0],
+        proxy.model_position[1] + raw_delta[1],
+    ]);
+    let pointer_id = 82_702;
+    let down = coordinator.pointer_down(&scene, pointer(pointer_id, proxy.screen_position));
+    assert!(down.is_empty(), "proxy pointer-down effects: {down:#?}");
+    let request = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, moved_proxy));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control,
+            model_position,
+            ..
+        },
+    ] = request.as_slice()
+    else {
+        panic!("one constrained source-control preview request expected: {request:#?}")
+    };
+    assert_eq!(*control, proxy.id);
+    for axis in 0..2 {
+        assert!((model_position[axis] - raw_source_target[axis]).abs() <= 1.0e-12);
+    }
+
+    let acknowledgement = coordinator.resolve_curve_control_preview(
+        pointer_id,
+        *request_id,
+        *expected,
+        *control,
+        *model_position,
+    );
+    let [
+        EditorEffect::PreviewCurveControl {
+            model_position: solved_control,
+            ..
+        },
+    ] = acknowledgement.as_slice()
+    else {
+        panic!("constrained source solve must retain one valid preview: {acknowledgement:#?}")
+    };
+    assert!((solved_control[0] - raw_source_target[0]).abs() <= 1.0e-9);
+    assert!(
+        solved_control[1].abs() <= 1.0e-9,
+        "the source HorizontalPoints relation must project the raw proxy Y request"
+    );
+    assert!(
+        (solved_control[1] - raw_source_target[1]).abs() > 0.5,
+        "the generated proxy must not bypass normal source constraints"
+    );
+
+    let preview_session = coordinator.visible_preview_session().unwrap();
+    let preview_accepted = preview_session.accepted_state_for_current_input().unwrap();
+    assert_eq!(
+        preview_accepted
+            .document()
+            .point(fixed_start)
+            .unwrap()
+            .position,
+        [0.0, 0.0]
+    );
+    let constrained_position = preview_accepted
+        .document()
+        .point(constrained_control)
+        .unwrap()
+        .position;
+    assert!((constrained_position[0] - 2.5).abs() <= 1.0e-9);
+    assert!(constrained_position[1].abs() <= 1.0e-9);
+    let report = preview_accepted.solve_result().unstable_core_report();
+    assert!(report.hard_residuals_validated, "{report:#?}");
+    assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+
+    let candidate_scene = prepared_curve_offset_proxy_scene(&coordinator, viewport);
+    assert_complete_curve_offset_scene(&candidate_scene, source_span, feature);
+    let release = coordinator.editor_mut().pointer_up(
+        &candidate_scene,
+        scene.design_identity,
+        pointer(pointer_id, moved_proxy),
+    );
+    let [commit @ EditorEffect::CommitCurveControl { .. }] = release.as_slice() else {
+        panic!("constrained proxy preview must release its exact prepared patch: {release:#?}")
+    };
+    coordinator
+        .apply_editor_effect(commit)
+        .expect("publish constrained source-control patch")
+        .expect("one constrained source mutation");
+
+    assert_eq!(
+        (coordinator.history_len(), coordinator.history_cursor()),
+        (history_before.0 + 1, history_before.1 + 1)
+    );
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap();
+    assert_eq!(
+        accepted.document().point(fixed_start).unwrap().position,
+        [0.0, 0.0]
+    );
+    let committed_control = accepted
+        .document()
+        .point(constrained_control)
+        .unwrap()
+        .position;
+    assert!((committed_control[0] - 2.5).abs() <= 1.0e-9);
+    assert!(committed_control[1].abs() <= 1.0e-9);
+    let report = accepted.solve_result().unstable_core_report();
+    assert!(report.hard_residuals_validated, "{report:#?}");
+    assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+    let regenerated_edges = assert_current_curve_offset(&coordinator, feature);
+    assert_ne!(regenerated_edges, original_edges);
+    let committed_scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    assert_complete_curve_offset_scene(&committed_scene, source_span, feature);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one projective-owner regression keeps proxy solve, commit and regenerated output together"
+)]
+fn computed_curve_offset_rational_middle_proxy_preserves_projective_ownership() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let start = document.add_point("rational start", [0.0, 0.0]).unwrap();
+    let end = document.add_point("rational end", [4.0, 0.0]).unwrap();
+    let weight = document
+        .add_scalar(
+            "rational weight",
+            0.75,
+            ScalarUnit::Parameter,
+            ScalarDomain::Bounded {
+                lower: MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+                upper: f64::MAX,
+            },
+        )
+        .unwrap();
+    let curve = document
+        .add_curve(
+            "rational source",
+            CurveDefinition::RationalQuadraticConic {
+                start,
+                weighted_middle: [1.5, 1.125],
+                middle_weight: weight,
+                end,
+            },
+        )
+        .unwrap();
+    let span = CurveSpan::line(curve);
+    let mut coordinator = coordinator(document);
+    let mut state = activate_open_chain(&mut coordinator, span, 0.2);
+    let feature = coordinator
+        .prepare_offset_authoring_preview(&state, "Rational middle Offset")
+        .unwrap()
+        .into_computed_curve()
+        .expect("rational source uses the computed route")
+        .feature;
+    coordinator
+        .apply_offset_authoring_preview(&mut state)
+        .expect("publish rational Offset");
+    let original_edges = assert_current_curve_offset(&coordinator, feature);
+
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Feature(feature)]);
+    let viewport = Viewport::new([1_000.0, 700.0], [2.0, 0.5], 80.0).unwrap();
+    let mut scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut scene)
+        .unwrap();
+    let proxy = scene
+        .curve_controls
+        .iter()
+        .find(|control| control.id.kind == DocumentCurveControlKind::RationalMiddle)
+        .expect("rational middle computed proxy")
+        .clone();
+    assert!(matches!(
+        proxy.target,
+        DocumentCurveControlTarget::RationalMiddle { weight: target, .. } if target == weight
+    ));
+    assert!(
+        proxy
+            .offset_proxy
+            .is_some_and(|proxy| proxy.feature == feature)
+    );
+    assert_eq!(
+        coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document()
+            .rational_conic_control(curve)
+            .unwrap(),
+        DocumentRationalConicControl::Euclidean {
+            middle: [2.0, 1.5],
+            weight: 0.75,
+        }
+    );
+
+    let pointer_id = 82_703;
+    assert!(
+        coordinator
+            .pointer_down(&scene, pointer(pointer_id, proxy.screen_position))
+            .is_empty()
+    );
+    let moved = geosolve_constraint_editor::ScreenPoint {
+        x: proxy.screen_position.x + 16.0,
+        y: proxy.screen_position.y - 8.0,
+    };
+    let request = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, moved));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control,
+            model_position,
+            ..
+        },
+    ] = request.as_slice()
+    else {
+        panic!("rational middle proxy must request one source projection: {request:#?}")
+    };
+    assert_eq!(*control, proxy.id);
+    let acknowledgement = coordinator.resolve_curve_control_preview(
+        pointer_id,
+        *request_id,
+        *expected,
+        *control,
+        *model_position,
+    );
+    assert!(matches!(
+        acknowledgement.as_slice(),
+        [EditorEffect::PreviewCurveControl { control: accepted, .. }] if accepted == control
+    ));
+    let preview = coordinator
+        .visible_preview_session()
+        .unwrap()
+        .accepted_state_for_current_input()
+        .unwrap();
+    let DocumentRationalConicControl::Euclidean {
+        middle: preview_middle,
+        weight: preview_weight,
+    } = preview.document().rational_conic_control(curve).unwrap()
+    else {
+        panic!("finite-weight rational proxy must retain Euclidean ownership")
+    };
+    assert!((preview_middle[0] - 2.2).abs() <= 1.0e-12);
+    assert!((preview_middle[1] - 1.6).abs() <= 1.0e-12);
+    assert_eq!(preview_weight.to_bits(), 0.75_f64.to_bits());
+
+    let candidate_scene = prepared_curve_offset_proxy_scene(&coordinator, viewport);
+    let release = coordinator.editor_mut().pointer_up(
+        &candidate_scene,
+        scene.design_identity,
+        pointer(pointer_id, moved),
+    );
+    let [commit @ EditorEffect::CommitCurveControl { .. }] = release.as_slice() else {
+        panic!("rational proxy release must commit its prepared patch: {release:#?}")
+    };
+    coordinator
+        .apply_editor_effect(commit)
+        .unwrap()
+        .expect("one rational middle source edit");
+    let DocumentRationalConicControl::Euclidean {
+        middle: committed_middle,
+        weight: committed_weight,
+    } = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .rational_conic_control(curve)
+        .unwrap()
+    else {
+        panic!("committed rational proxy must retain Euclidean ownership")
+    };
+    assert!((committed_middle[0] - 2.2).abs() <= 1.0e-12);
+    assert!((committed_middle[1] - 1.6).abs() <= 1.0e-12);
+    assert_eq!(committed_weight.to_bits(), 0.75_f64.to_bits());
+    assert_ne!(
+        assert_current_curve_offset(&coordinator, feature),
+        original_edges
+    );
 }
 
 fn pointer(pointer_id: u64, position: geosolve_constraint_editor::ScreenPoint) -> PointerInput {
@@ -1242,6 +2712,486 @@ fn stale_computed_preview_cannot_overwrite_a_newer_feature_transaction() {
 #[test]
 #[allow(
     clippy::too_many_lines,
+    reason = "forward and reverse analytic/fitted trims plus connector provenance form one exact correspondence contract"
+)]
+fn forward_and_reverse_line_fitted_miters_keep_exact_source_correspondence() {
+    for reverse in [false, true] {
+        let mut document = SketchDocument::new(10.0).unwrap();
+        let path_start = document.add_point("path start", [-2.0, 0.0]).unwrap();
+        let join = document.add_point("shared join", [0.0, 0.0]).unwrap();
+        let control = document.add_point("Bezier control", [2.0, 1.0]).unwrap();
+        let path_end = document.add_point("path end", [4.0, 2.0]).unwrap();
+        let (line_start, line_end, bezier_controls, traversal, full_parameters) = if reverse {
+            (
+                join,
+                path_start,
+                [path_end, control, join],
+                ComputedCurveOffsetTraversal::Reverse,
+                [1.0_f64, 0.0_f64],
+            )
+        } else {
+            (
+                path_start,
+                join,
+                [join, control, path_end],
+                ComputedCurveOffsetTraversal::Forward,
+                [0.0_f64, 1.0_f64],
+            )
+        };
+        let line = add_line(&mut document, "line", line_start, line_end);
+        let bezier = document
+            .add_curve(
+                "quadratic",
+                CurveDefinition::QuadraticBezier {
+                    controls: bezier_controls,
+                },
+            )
+            .unwrap();
+        let line_span = CurveSpan::line(line);
+        let bezier_span = CurveSpan::line(bezier);
+        let spans = [line_span, bezier_span];
+        let operand = ComputedCurveOffsetOperand::OpenChain {
+            side: DocumentLineSide::Left,
+            chain: ComputedCurveOffsetChain {
+                spans: spans
+                    .map(|span| ComputedCurveOffsetDirectedSpan {
+                        source: NativeCurveSpanSource { span },
+                        traversal,
+                    })
+                    .to_vec(),
+                junctions: vec![ComputedCurveOffsetJunction {
+                    provenance: ComputedCurveOffsetJunctionProvenance::SharedPoint(join),
+                    branch: ComputedCurveOffsetJunctionBranch::Miter {
+                        turn: ComputedCurveOffsetTurn::Left,
+                    },
+                }],
+                start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+                end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            },
+        };
+        let (mut coordinator, feature) = publish_explicit_computed_offset(
+            document,
+            operand,
+            0.2,
+            if reverse {
+                "Reverse line/fitted miter"
+            } else {
+                "Forward line/fitted miter"
+            },
+        );
+        let inner_edges = assert_current_curve_offset(&coordinator, feature);
+        assert_eq!(inner_edges.len(), 2);
+        {
+            let snapshot = coordinator.computed_snapshot().unwrap();
+            let line_edge = inner_edges
+                .iter()
+                .map(|edge| snapshot.edge(*edge).unwrap())
+                .find(|edge| {
+                    matches!(
+                        edge.provenance,
+                        ComputedEdgeProvenance::CurveOffset { source, .. }
+                            if source.span == line_span
+                    )
+                })
+                .expect("trimmed exact line edge");
+            let line_parameters = match line_edge.provenance {
+                ComputedEdgeProvenance::CurveOffset {
+                    source_parameters: Some(parameters),
+                    ..
+                } => parameters,
+                ref provenance => panic!("missing line correspondence: {provenance:?}"),
+            };
+            let ComputedEdgeGeometry::CurveOffset(CurveOffsetGeometry::Line { start, end }) =
+                &line_edge.geometry
+            else {
+                panic!("line source must remain analytic: {:?}", line_edge.geometry)
+            };
+            let native_start = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .unwrap()
+                .document()
+                .point(line_start)
+                .unwrap()
+                .position;
+            let native_end = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .unwrap()
+                .document()
+                .point(line_end)
+                .unwrap()
+                .position;
+            let direction = [
+                native_end[0] - native_start[0],
+                native_end[1] - native_start[1],
+            ];
+            let denominator = direction[0].mul_add(direction[0], direction[1] * direction[1]);
+            let native_parameter = |point: [f64; 2]| {
+                ((point[0] - native_start[0]) * direction[0]
+                    + (point[1] - native_start[1]) * direction[1])
+                    / denominator
+            };
+            for (actual, expected) in line_parameters
+                .into_iter()
+                .zip([native_parameter(*start), native_parameter(*end)])
+            {
+                assert!(
+                    (actual - expected).abs() <= 1.0e-12,
+                    "line provenance {actual} must equal independently projected native parameter {expected}"
+                );
+            }
+            assert_eq!(line_parameters[0].to_bits(), full_parameters[0].to_bits());
+            assert!((0.0..1.0).contains(&line_parameters[1]));
+            if reverse {
+                assert!(line_parameters[1] < line_parameters[0]);
+            } else {
+                assert!(line_parameters[1] > line_parameters[0]);
+            }
+
+            let fitted_edge = inner_edges
+                .iter()
+                .map(|edge| snapshot.edge(*edge).unwrap())
+                .find(|edge| {
+                    matches!(
+                        edge.provenance,
+                        ComputedEdgeProvenance::CurveOffset { source, .. }
+                            if source.span == bezier_span
+                    )
+                })
+                .expect("trimmed fitted edge");
+            let fitted_parameters = match fitted_edge.provenance {
+                ComputedEdgeProvenance::CurveOffset {
+                    source_parameters: Some(parameters),
+                    ..
+                } => parameters,
+                ref provenance => panic!("missing fitted correspondence: {provenance:?}"),
+            };
+            let ComputedEdgeGeometry::CurveOffset(CurveOffsetGeometry::CubicPatches(patches)) =
+                &fitted_edge.geometry
+            else {
+                panic!(
+                    "Bezier source must retain fitted output: {:?}",
+                    fitted_edge.geometry
+                )
+            };
+            assert_eq!(
+                fitted_parameters[0].to_bits(),
+                patches.first().unwrap().source_parameters[0].to_bits()
+            );
+            assert_eq!(
+                fitted_parameters[1].to_bits(),
+                patches.last().unwrap().source_parameters[1].to_bits()
+            );
+            assert!((0.0..1.0).contains(&fitted_parameters[0]));
+            assert_eq!(fitted_parameters[1].to_bits(), full_parameters[1].to_bits());
+            if reverse {
+                assert!(fitted_parameters[0] > fitted_parameters[1]);
+            } else {
+                assert!(fitted_parameters[0] < fitted_parameters[1]);
+            }
+        }
+
+        coordinator
+            .flip_computed_curve_offset_direction(
+                coordinator.feature_document().identity(),
+                feature,
+            )
+            .expect("flip to outer connector side");
+        let outer_edges = assert_current_curve_offset(&coordinator, feature);
+        assert_eq!(outer_edges.len(), 4);
+        let snapshot = coordinator.computed_snapshot().unwrap();
+        for source_span in spans {
+            let source_edges = outer_edges
+                .iter()
+                .map(|edge| snapshot.edge(*edge).unwrap())
+                .filter(|edge| {
+                    matches!(
+                        edge.provenance,
+                        ComputedEdgeProvenance::CurveOffset { source, .. }
+                            if source.span == source_span
+                    )
+                })
+                .collect::<Vec<_>>();
+            let mapped = source_edges
+                .iter()
+                .filter_map(|edge| match edge.provenance {
+                    ComputedEdgeProvenance::CurveOffset {
+                        source_parameters: Some(parameters),
+                        ..
+                    } => Some(parameters),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                mapped.len(),
+                1,
+                "one mapped source edge for {source_span:?}"
+            );
+            assert_eq!(
+                mapped[0].map(f64::to_bits),
+                full_parameters.map(f64::to_bits),
+                "untrimmed outer source mapping"
+            );
+            let connectors = source_edges
+                .iter()
+                .filter(|edge| {
+                    matches!(
+                        edge.provenance,
+                        ComputedEdgeProvenance::CurveOffset {
+                            source_parameters: None,
+                            ..
+                        }
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                connectors.len(),
+                1,
+                "each source owns exactly one connector-only fragment"
+            );
+            assert!(matches!(
+                connectors[0].geometry,
+                ComputedEdgeGeometry::CurveOffset(CurveOffsetGeometry::Line { .. })
+            ));
+        }
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "forward and reverse exact-arc trimming plus fitted-neighbor provenance form one correspondence contract"
+)]
+fn forward_and_reverse_arc_fitted_miters_keep_exact_source_correspondence() {
+    for reverse in [false, true] {
+        let mut document = SketchDocument::new(10.0).unwrap();
+        let center = document.add_point("arc centre", [0.0, 2.0]).unwrap();
+        let radius = document
+            .add_scalar(
+                "arc radius",
+                2.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let (
+            native_start_angle,
+            native_end_angle,
+            sweep,
+            traversal,
+            contact_parameter,
+            contact_side,
+            full_parameters,
+        ) = if reverse {
+            (
+                -std::f64::consts::FRAC_PI_2,
+                -std::f64::consts::PI,
+                DocumentArcSweep::Clockwise,
+                ComputedCurveOffsetTraversal::Reverse,
+                0.0,
+                ContactNeighborhood::Start,
+                [1.0_f64, 0.0_f64],
+            )
+        } else {
+            (
+                -std::f64::consts::PI,
+                -std::f64::consts::FRAC_PI_2,
+                DocumentArcSweep::CounterClockwise,
+                ComputedCurveOffsetTraversal::Forward,
+                1.0,
+                ContactNeighborhood::End,
+                [0.0_f64, 1.0_f64],
+            )
+        };
+        let start_angle = document
+            .add_scalar(
+                "arc start",
+                native_start_angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let end_angle = document
+            .add_scalar(
+                "arc end",
+                native_end_angle,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let arc = document
+            .add_curve(
+                "source arc",
+                CurveDefinition::CircularArc {
+                    center,
+                    radius,
+                    start_angle,
+                    end_angle,
+                    sweep,
+                },
+            )
+            .unwrap();
+        let join = document.add_point("Bezier join", [0.0, 0.0]).unwrap();
+        let control = document.add_point("Bezier control", [2.0, 1.0]).unwrap();
+        let path_end = document.add_point("Bezier end", [4.0, 2.0]).unwrap();
+        let bezier_controls = if reverse {
+            [path_end, control, join]
+        } else {
+            [join, control, path_end]
+        };
+        let bezier = document
+            .add_curve(
+                "quadratic",
+                CurveDefinition::QuadraticBezier {
+                    controls: bezier_controls,
+                },
+            )
+            .unwrap();
+        let arc_span = CurveSpan::line(arc);
+        let bezier_span = CurveSpan::line(bezier);
+        let arc_contact = document
+            .add_curve_contact(
+                "owned arc join",
+                arc_span,
+                contact_parameter,
+                0,
+                contact_side,
+                None,
+            )
+            .unwrap();
+        let junction_constraint = document
+            .add_constraint(
+                "arc-to-Bezier join",
+                DocumentConstraintDefinition::PointOnCurve {
+                    point: join,
+                    contact: arc_contact,
+                },
+            )
+            .unwrap();
+        let operand = ComputedCurveOffsetOperand::OpenChain {
+            side: DocumentLineSide::Left,
+            chain: ComputedCurveOffsetChain {
+                spans: [arc_span, bezier_span]
+                    .map(|span| ComputedCurveOffsetDirectedSpan {
+                        source: NativeCurveSpanSource { span },
+                        traversal,
+                    })
+                    .to_vec(),
+                junctions: vec![ComputedCurveOffsetJunction {
+                    provenance: ComputedCurveOffsetJunctionProvenance::Constraint(
+                        junction_constraint,
+                    ),
+                    branch: ComputedCurveOffsetJunctionBranch::Miter {
+                        turn: ComputedCurveOffsetTurn::Left,
+                    },
+                }],
+                start_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+                end_terminal: ComputedCurveOffsetTerminalPolicy::NormalTranslation,
+            },
+        };
+        let (coordinator, feature) = publish_explicit_computed_offset(
+            document,
+            operand,
+            0.2,
+            if reverse {
+                "Reverse arc/fitted miter"
+            } else {
+                "Forward arc/fitted miter"
+            },
+        );
+        let generated = assert_current_curve_offset(&coordinator, feature);
+        assert_eq!(generated.len(), 2);
+        let snapshot = coordinator.computed_snapshot().unwrap();
+        let arc_edge = generated
+            .iter()
+            .map(|edge| snapshot.edge(*edge).unwrap())
+            .find(|edge| {
+                matches!(
+                    edge.provenance,
+                    ComputedEdgeProvenance::CurveOffset { source, .. }
+                        if source.span == arc_span
+                )
+            })
+            .expect("trimmed exact circular arc");
+        let arc_parameters = match arc_edge.provenance {
+            ComputedEdgeProvenance::CurveOffset {
+                source_parameters: Some(parameters),
+                ..
+            } => parameters,
+            ref provenance => panic!("missing arc correspondence: {provenance:?}"),
+        };
+        let ComputedEdgeGeometry::CurveOffset(CurveOffsetGeometry::CircularArc {
+            sweep: generated_sweep,
+            ..
+        }) = &arc_edge.geometry
+        else {
+            panic!("arc source must remain analytic: {:?}", arc_edge.geometry)
+        };
+        assert!(*generated_sweep > 0.0);
+        assert!(*generated_sweep < std::f64::consts::FRAC_PI_2);
+        assert_eq!(arc_parameters[0].to_bits(), full_parameters[0].to_bits());
+        let retained_fraction = *generated_sweep / std::f64::consts::FRAC_PI_2;
+        let expected_trimmed_parameter = (full_parameters[1] - full_parameters[0])
+            .mul_add(retained_fraction, full_parameters[0]);
+        assert!(
+            (arc_parameters[1] - expected_trimmed_parameter).abs() <= 1.0e-12,
+            "analytic sweep must retain exact source-parameter fraction: {arc_parameters:?} versus {expected_trimmed_parameter}"
+        );
+        assert!((0.0..1.0).contains(&arc_parameters[1]));
+        if reverse {
+            assert!(arc_parameters[1] < arc_parameters[0]);
+        } else {
+            assert!(arc_parameters[1] > arc_parameters[0]);
+        }
+
+        let fitted_edge = generated
+            .iter()
+            .map(|edge| snapshot.edge(*edge).unwrap())
+            .find(|edge| {
+                matches!(
+                    edge.provenance,
+                    ComputedEdgeProvenance::CurveOffset { source, .. }
+                        if source.span == bezier_span
+                )
+            })
+            .expect("trimmed fitted neighbor");
+        let fitted_parameters = match fitted_edge.provenance {
+            ComputedEdgeProvenance::CurveOffset {
+                source_parameters: Some(parameters),
+                ..
+            } => parameters,
+            ref provenance => panic!("missing fitted correspondence: {provenance:?}"),
+        };
+        let ComputedEdgeGeometry::CurveOffset(CurveOffsetGeometry::CubicPatches(patches)) =
+            &fitted_edge.geometry
+        else {
+            panic!(
+                "Bezier neighbor must retain fitted output: {:?}",
+                fitted_edge.geometry
+            )
+        };
+        assert_eq!(
+            fitted_parameters[0].to_bits(),
+            patches.first().unwrap().source_parameters[0].to_bits()
+        );
+        assert_eq!(
+            fitted_parameters[1].to_bits(),
+            patches.last().unwrap().source_parameters[1].to_bits()
+        );
+        assert!((0.0..1.0).contains(&fitted_parameters[0]));
+        assert_eq!(fitted_parameters[1].to_bits(), full_parameters[1].to_bits());
+        if reverse {
+            assert!(fitted_parameters[0] > fitted_parameters[1]);
+        } else {
+            assert!(fitted_parameters[0] < fitted_parameters[1]);
+        }
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
     reason = "one mixed-chain regression keeps both offset sides and exact miter provenance together"
 )]
 fn non_tangent_line_and_bezier_chain_trims_the_inner_miter_and_supports_both_sides() {
@@ -1362,10 +3312,51 @@ fn non_tangent_line_and_bezier_chain_trims_the_inner_miter_and_supports_both_sid
         .flip_computed_curve_offset_direction(coordinator.feature_document().identity(), feature)
         .expect("durable side flip");
     assert_operand(&coordinator, DocumentLineSide::Right);
+    let outer_edges = assert_current_curve_offset(&coordinator, feature);
     assert_eq!(
-        assert_current_curve_offset(&coordinator, feature).len(),
+        outer_edges.len(),
         4,
         "the outer side retains both source parallels plus its two authenticated miter connectors"
+    );
+    let outer_snapshot = coordinator.computed_snapshot().unwrap();
+    assert_eq!(
+        outer_edges
+            .iter()
+            .filter(|edge| matches!(
+                outer_snapshot.edge(**edge).unwrap().provenance,
+                ComputedEdgeProvenance::CurveOffset {
+                    source_parameters: None,
+                    ..
+                }
+            ))
+            .count(),
+        2,
+        "miter-only connector fragments must not manufacture source parameter correspondence"
+    );
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Feature(feature)]);
+    let viewport = Viewport::new([900.0, 650.0], [0.0, 0.0], 80.0).unwrap();
+    let mut outer_scene = computed_offset_preview_scene(&coordinator, viewport, false);
+    coordinator
+        .editor()
+        .populate_curve_controls(&mut outer_scene)
+        .expect("source-owned outer-side proxies");
+    assert_eq!(
+        outer_scene
+            .computed_offset_curves
+            .iter()
+            .filter(|curve| curve.screen_source_parameters.is_empty())
+            .count(),
+        2,
+        "connector geometry remains rendered but publishes no inverse-edit proxy samples"
+    );
+    assert!(
+        outer_scene
+            .curve_controls
+            .iter()
+            .all(|control| control.offset_proxy.is_some()),
+        "every published generated grip must still resolve an ordinary source control"
     );
 }
 

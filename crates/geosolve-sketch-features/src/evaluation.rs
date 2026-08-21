@@ -1225,6 +1225,10 @@ pub enum ComputedEdgeProvenance {
     CurveOffset {
         owner: ComputedFeatureId,
         source: NativeCurveSpanSource,
+        /// Native source parameters paired with this generated edge's traversal endpoints.
+        /// `None` identifies a junction connector that has no honest inverse-edit
+        /// correspondence to the attributed source span.
+        source_parameters: Option<[f64; 2]>,
     },
 }
 
@@ -1654,6 +1658,9 @@ struct EvaluatedFeatureCandidate {
 struct EvaluatedCurveOffsetEdge {
     role: GeometryRole,
     source: NativeCurveSpanSource,
+    /// Native source parameters paired with the generated edge's traversal endpoints.
+    /// Junction-only connector geometry deliberately carries no correspondence.
+    source_parameters: Option<[f64; 2]>,
     geometry: CurveOffsetGeometry,
     certificate: CurveOffsetCertificate,
     /// Position-error bounds at each fitted patch endpoint. Fresh Hermite patches are exact at
@@ -1926,6 +1933,7 @@ fn evaluate_snapshot(
                 provenance: ComputedEdgeProvenance::CurveOffset {
                     owner: candidate.feature,
                     source: edge.source,
+                    source_parameters: edge.source_parameters,
                 },
             });
         }
@@ -2299,6 +2307,7 @@ fn evaluate_curve_offset_path(
         source_edges.push(EvaluatedCurveOffsetEdge {
             role,
             source: source.source,
+            source_parameters: Some(result.source_parameters),
             patch_endpoint_position_errors: curve_offset_patch_endpoint_errors(&result.geometry),
             geometry: result.geometry,
             certificate: result.certificate,
@@ -2442,16 +2451,36 @@ fn curve_offset_junction_edges(
             if matches!(current.geometry, CurveOffsetGeometry::Line { .. })
                 && matches!(next.geometry, CurveOffsetGeometry::Line { .. })
             {
-                let CurveOffsetGeometry::Line { start, .. } = current.geometry else {
+                let CurveOffsetGeometry::Line {
+                    start,
+                    end: current_end,
+                } = current.geometry
+                else {
                     unreachable!("line-line branch was checked")
                 };
-                let CurveOffsetGeometry::Line { end, .. } = next.geometry else {
+                let CurveOffsetGeometry::Line {
+                    start: next_start,
+                    end,
+                } = next.geometry
+                else {
                     unreachable!("line-line branch was checked")
                 };
+                let current_fraction = line_parameter_at_point(start, current_end, miter)?;
+                let next_fraction = line_parameter_at_point(next_start, end, miter)?;
                 let mut current_edge = current.clone();
                 current_edge.geometry = CurveOffsetGeometry::Line { start, end: miter };
+                current_edge.source_parameters = trimmed_source_parameters(
+                    current.source_parameters,
+                    CurveOffsetTrimSide::Prefix,
+                    current_fraction,
+                )?;
                 let mut next_edge = next.clone();
                 next_edge.geometry = CurveOffsetGeometry::Line { start: miter, end };
+                next_edge.source_parameters = trimmed_source_parameters(
+                    next.source_parameters,
+                    CurveOffsetTrimSide::Suffix,
+                    next_fraction,
+                )?;
                 return Ok(CurveOffsetJunctionResolution {
                     current_edge: Some(current_edge),
                     next_edge: Some(next_edge),
@@ -2525,6 +2554,49 @@ struct CertifiedCurvedMiterIntersection {
 enum CurveOffsetTrimSide {
     Prefix,
     Suffix,
+}
+
+fn line_parameter_at_point(
+    start: [f64; 2],
+    end: [f64; 2],
+    point: [f64; 2],
+) -> Result<f64, EvaluateFeatureError> {
+    let direction = subtract(end, start);
+    let denominator = dot(direction, direction);
+    let parameter = dot(subtract(point, start), direction) / denominator;
+    let tolerance = 4_096.0 * f64::EPSILON;
+    if !parameter.is_finite()
+        || denominator <= 0.0
+        || parameter < -tolerance
+        || parameter > 1.0 + tolerance
+    {
+        return Err(curved_miter_failure(
+            "invalid analytic miter correspondence",
+        ));
+    }
+    Ok(parameter.clamp(0.0, 1.0))
+}
+
+fn trimmed_source_parameters(
+    source_parameters: Option<[f64; 2]>,
+    side: CurveOffsetTrimSide,
+    parameter: f64,
+) -> Result<Option<[f64; 2]>, EvaluateFeatureError> {
+    let [start, end] =
+        source_parameters.ok_or_else(|| curved_miter_failure("missing source correspondence"))?;
+    let middle = (end - start).mul_add(parameter, start);
+    if !start.is_finite()
+        || !end.is_finite()
+        || !parameter.is_finite()
+        || !(0.0..=1.0).contains(&parameter)
+        || !middle.is_finite()
+    {
+        return Err(curved_miter_failure("invalid source correspondence"));
+    }
+    Ok(Some(match side {
+        CurveOffsetTrimSide::Prefix => [start, middle],
+        CurveOffsetTrimSide::Suffix => [middle, end],
+    }))
 }
 
 fn certify_curved_miter_intersection(
@@ -2828,6 +2900,8 @@ fn trim_curve_offset_edge(
                 }
                 _ => return Err(curved_miter_failure("degenerate curved miter trim")),
             };
+            trimmed.source_parameters =
+                trimmed_source_parameters(edge.source_parameters, side, location.parameter)?;
         }
         CurveOffsetGeometry::CircularArc {
             center,
@@ -2853,6 +2927,8 @@ fn trim_curve_offset_edge(
                 sweep: trimmed_sweep,
                 closed: false,
             };
+            trimmed.source_parameters =
+                trimmed_source_parameters(edge.source_parameters, side, location.parameter)?;
         }
         CurveOffsetGeometry::CubicPatches(patches) => {
             let endpoint_errors = &edge.patch_endpoint_position_errors;
@@ -2954,6 +3030,18 @@ fn trim_curve_offset_edge(
                         .map(|patch| patch.maximum_tangent_error_radians)
                         .fold(0.0, f64::max),
                 );
+            let source_start = retained_patches
+                .first()
+                .ok_or_else(|| curved_miter_failure("empty curved miter trim"))?
+                .source_parameters[0];
+            let source_end = retained_patches
+                .last()
+                .ok_or_else(|| curved_miter_failure("empty curved miter trim"))?
+                .source_parameters[1];
+            if !source_start.is_finite() || !source_end.is_finite() {
+                return Err(curved_miter_failure("invalid source correspondence"));
+            }
+            trimmed.source_parameters = Some([source_start, source_end]);
             trimmed.geometry = CurveOffsetGeometry::CubicPatches(retained_patches);
             trimmed.patch_endpoint_position_errors = retained_errors;
         }
@@ -3114,6 +3202,7 @@ fn exact_offset_connector(
     EvaluatedCurveOffsetEdge {
         role: GeometryRole::Profile,
         source,
+        source_parameters: None,
         geometry: CurveOffsetGeometry::Line { start, end },
         certificate: CurveOffsetCertificate {
             maximum_position_error: 0.0,
@@ -3645,8 +3734,40 @@ fn validate_curve_offset_topology(
     {
         return Err(offset_topology_change());
     }
+    validate_curve_offset_source_correspondence(paths)?;
     certify_fitted_curve_offset_topology(paths, model_scale, face, controller)?;
     certify_mathematical_curve_offset_topology(paths, model_scale, controller)
+}
+
+fn validate_curve_offset_source_correspondence(
+    paths: &[EvaluatedCurveOffsetPath],
+) -> Result<(), EvaluateFeatureError> {
+    for edge in paths.iter().flat_map(|path| &path.edges) {
+        match (&edge.geometry, edge.source_parameters) {
+            (
+                CurveOffsetGeometry::Line { .. } | CurveOffsetGeometry::CircularArc { .. },
+                Some([start, end]),
+            ) if start.is_finite() && end.is_finite() && start.to_bits() != end.to_bits() => {}
+            (CurveOffsetGeometry::Line { .. }, None) => {
+                // Junction connectors are rendered and feature-selectable, but have no honest
+                // inverse-edit parameterization on either adjacent native source.
+            }
+            (CurveOffsetGeometry::CubicPatches(patches), Some([start, end]))
+                if !patches.is_empty()
+                    && start.is_finite()
+                    && end.is_finite()
+                    && patches[0].source_parameters[0].to_bits() == start.to_bits()
+                    && patches.last().is_some_and(|patch| {
+                        patch.source_parameters[1].to_bits() == end.to_bits()
+                    })
+                    && patches.windows(2).all(|pair| {
+                        pair[0].source_parameters[1].to_bits()
+                            == pair[1].source_parameters[0].to_bits()
+                    }) => {}
+            _ => return Err(offset_topology_change()),
+        }
+    }
+    Ok(())
 }
 
 const OFFSET_TUBE_MAX_DEPTH: usize = 40;

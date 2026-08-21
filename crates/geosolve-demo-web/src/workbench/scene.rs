@@ -971,17 +971,28 @@ fn render_curve_control(output: &mut String, control: &SceneCurveControl, hover:
     let _ = write!(
         output,
         concat!(
-            "<g class=\"wb-curve-control{}{}\" role=\"img\" aria-label=\"{}\" ",
+            "<g class=\"wb-curve-control{}{}{}\" role=\"img\" aria-label=\"{}\" ",
             "aria-disabled=\"{}\" data-control-role=\"{}\" data-curve-id=\"{}\" ",
-            "data-editor-segment=\"{}\" pointer-events=\"none\">"
+            "data-editor-segment=\"{}\"{} pointer-events=\"none\">"
         ),
         if hovered { " hovered" } else { "" },
         if read_only { " read-only" } else { "" },
+        if control.offset_proxy.is_some() {
+            " offset-proxy"
+        } else {
+            ""
+        },
         escape(&label),
         read_only,
         role,
         control.id.curve,
         control.owner.segment,
+        control.offset_proxy.map_or_else(String::new, |proxy| {
+            format!(
+                " data-offset-proxy=\"true\" data-feature-id=\"{}\"",
+                proxy.feature
+            )
+        }),
     );
     let _ = write!(output, "<title>{}</title>", escape(&label));
     match control.grip {
@@ -3789,7 +3800,7 @@ mod tests {
             half_extent_pixels * 2.0,
         )));
 
-        let mut read_only = middle;
+        let mut read_only = middle.clone();
         read_only.availability = DocumentCurveControlAvailability::ReadOnly(
             DocumentCurveControlWithholdingReason::HostParameterOwned,
         );
@@ -3799,6 +3810,22 @@ mod tests {
         assert!(read_only_markup.contains("class=\"wb-curve-control read-only\""));
         assert!(read_only_markup.contains("aria-disabled=\"true\""));
         assert!(read_only_markup.contains("read-only: value is owned by a host parameter"));
+
+        let feature = ComputedFeatureId::from_raw(82);
+        let mut offset_proxy = middle;
+        offset_proxy.offset_proxy =
+            Some(geosolve_constraint_editor::SceneCurveControlOffsetProxy {
+                feature,
+                source_model_offset: [-0.25, 0.1],
+            });
+        offset_proxy.accessible_name = format!("Offset proxy — {}", offset_proxy.accessible_name);
+        scene.curve_controls = vec![offset_proxy];
+        let mut proxy_markup = String::new();
+        render_curve_controls(&mut proxy_markup, &scene, EditorHoverState::default());
+        assert!(proxy_markup.contains("class=\"wb-curve-control offset-proxy\""));
+        assert!(proxy_markup.contains("data-offset-proxy=\"true\""));
+        assert!(proxy_markup.contains(&format!("data-feature-id=\"{feature}\"")));
+        assert!(proxy_markup.contains("aria-label=\"Offset proxy — Middle control P1"));
     }
 
     #[test]
@@ -4626,6 +4653,7 @@ mod tests {
                 screen_polyline: [[-2.0, 1.0], [0.0, 1.2], [2.0, 1.0]]
                     .map(|point| viewport.model_to_screen(point))
                     .to_vec(),
+                screen_source_parameters: vec![0.0, 0.5, 1.0],
             },
             SceneComputedOffsetCurve {
                 edge: ComputedEdgeId {
@@ -4638,6 +4666,7 @@ mod tests {
                 screen_polyline: [[-2.0, 1.1], [2.0, 1.1]]
                     .map(|point| viewport.model_to_screen(point))
                     .to_vec(),
+                screen_source_parameters: vec![0.0, 1.0],
             },
             SceneComputedOffsetCurve {
                 edge: ComputedEdgeId {
@@ -4652,6 +4681,7 @@ mod tests {
                 screen_polyline: [[-2.0, 4.0], [2.0, 4.0]]
                     .map(|point| viewport.model_to_screen(point))
                     .to_vec(),
+                screen_source_parameters: vec![0.0, 1.0],
             },
             SceneComputedOffsetCurve {
                 edge: ComputedEdgeId {
@@ -4666,6 +4696,7 @@ mod tests {
                 screen_polyline: [[-2.0, -2.0], [2.0, -2.0]]
                     .map(|point| viewport.model_to_screen(point))
                     .to_vec(),
+                screen_source_parameters: vec![0.0, 1.0],
             },
         ]);
         assert!(

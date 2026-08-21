@@ -94,6 +94,13 @@ pub struct CurveOffsetCertificate {
 pub struct CurveOffsetResult {
     pub source: CurveSpan,
     pub traversal: CurveOffsetTraversal,
+    /// Native source-curve parameters at the generated curve's traversal start and end.
+    ///
+    /// Exact analytic output does not otherwise retain source parameters in its geometry DTO.
+    /// Keeping the correspondence here prevents downstream consumers from mistaking geometric
+    /// arc angles or path-local fractions for native source parameters, especially under reverse
+    /// traversal. Fitted patches retain the same correspondence at finer granularity.
+    pub source_parameters: [f64; 2],
     pub signed_distance: f64,
     pub geometry: CurveOffsetGeometry,
     pub certificate: CurveOffsetCertificate,
@@ -183,6 +190,15 @@ pub fn compute_curve_offset_with_controller(
         .map_err(|_| CurveOffsetError::InvalidSource)?;
     let piece = piece_for_span(document, source).map_err(map_piece_error)?;
     let parameterization = PathParameterization::new(&curve.definition, traversal)?;
+    let source_parameters = [parameterization.native(0.0), parameterization.native(1.0)];
+    let result = |geometry, certificate| CurveOffsetResult {
+        source,
+        traversal,
+        source_parameters,
+        signed_distance,
+        geometry,
+        certificate,
+    };
     if !charge_curve_offset_work(controller) {
         return Ok(None);
     }
@@ -198,13 +214,10 @@ pub fn compute_curve_offset_with_controller(
             traversal,
             signed_distance,
         )?;
-        return Ok(Some(CurveOffsetResult {
-            source,
-            traversal,
-            signed_distance,
-            geometry: CurveOffsetGeometry::Line { start, end },
-            certificate: exact_certificate(1.0),
-        }));
+        return Ok(Some(result(
+            CurveOffsetGeometry::Line { start, end },
+            exact_certificate(1.0),
+        )));
     }
 
     if let Some((center_id, source_sweep, closed)) =
@@ -223,19 +236,16 @@ pub fn compute_curve_offset_with_controller(
             CurveOffsetTraversal::Forward => source_sweep,
             CurveOffsetTraversal::Reverse => -source_sweep,
         };
-        return Ok(Some(CurveOffsetResult {
-            source,
-            traversal,
-            signed_distance,
-            geometry: CurveOffsetGeometry::CircularArc {
+        return Ok(Some(result(
+            CurveOffsetGeometry::CircularArc {
                 center,
                 radius,
                 start_angle: (start.position[1] - center[1]).atan2(start.position[0] - center[0]),
                 sweep,
                 closed,
             },
-            certificate: exact_certificate(start.regularity),
-        }));
+            exact_certificate(start.regularity),
+        )));
     }
 
     let mut state = ApproximationState {
@@ -265,18 +275,15 @@ pub fn compute_curve_offset_with_controller(
     if state.patches.is_empty() || !state.minimum_regularity.is_finite() {
         return Err(CurveOffsetError::InvalidGeometry);
     }
-    Ok(Some(CurveOffsetResult {
-        source,
-        traversal,
-        signed_distance,
-        geometry: CurveOffsetGeometry::CubicPatches(state.patches),
-        certificate: CurveOffsetCertificate {
+    Ok(Some(result(
+        CurveOffsetGeometry::CubicPatches(state.patches),
+        CurveOffsetCertificate {
             maximum_position_error: state.maximum_position_error,
             maximum_tangent_error_radians: state.maximum_tangent_error,
             minimum_regularity_factor: state.minimum_regularity,
             subdivision_count: state.subdivisions,
         },
-    }))
+    )))
 }
 
 fn charge_curve_offset_work(controller: &mut OperationController) -> bool {
@@ -1290,6 +1297,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact native-route regression keeps Line and Polyline reversal geometry and source correspondence together"
+    )]
     fn reverse_traversal_flips_the_left_offset_side() {
         let mut document = SketchDocument::new(1.0).unwrap();
         let start = document.add_point("start", [0.0, 0.0]).unwrap();
@@ -1321,6 +1332,14 @@ mod tests {
             options,
         )
         .unwrap();
+        assert_eq!(
+            forward.source_parameters.map(f64::to_bits),
+            [0.0, 1.0].map(f64::to_bits)
+        );
+        assert_eq!(
+            reverse.source_parameters.map(f64::to_bits),
+            [1.0, 0.0].map(f64::to_bits)
+        );
         let CurveOffsetGeometry::Line {
             start: forward_start,
             end: forward_end,
@@ -1343,9 +1362,75 @@ mod tests {
         ] {
             assert!(distance(actual, expected) <= 1.0e-14);
         }
+
+        let polyline_end = document.add_point("polyline end", [2.0, 2.0]).unwrap();
+        let polyline = document
+            .add_curve(
+                "polyline",
+                CurveDefinition::Polyline {
+                    points: vec![start, end, polyline_end],
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+                },
+            )
+            .unwrap();
+        let polyline_span = CurveSpan {
+            curve: polyline,
+            segment: 1,
+        };
+        let polyline_forward = compute_curve_offset(
+            &document,
+            polyline_span,
+            CurveOffsetTraversal::Forward,
+            0.5,
+            options,
+        )
+        .unwrap();
+        let polyline_reverse = compute_curve_offset(
+            &document,
+            polyline_span,
+            CurveOffsetTraversal::Reverse,
+            0.5,
+            options,
+        )
+        .unwrap();
+        assert_eq!(
+            polyline_forward.source_parameters.map(f64::to_bits),
+            [0.0, 1.0].map(f64::to_bits)
+        );
+        assert_eq!(
+            polyline_reverse.source_parameters.map(f64::to_bits),
+            [1.0, 0.0].map(f64::to_bits)
+        );
+        let CurveOffsetGeometry::Line {
+            start: polyline_forward_start,
+            end: polyline_forward_end,
+        } = polyline_forward.geometry
+        else {
+            panic!("polyline span remains exact");
+        };
+        let CurveOffsetGeometry::Line {
+            start: polyline_reverse_start,
+            end: polyline_reverse_end,
+        } = polyline_reverse.geometry
+        else {
+            panic!("reverse polyline span remains exact");
+        };
+        for (actual, expected) in [
+            (polyline_forward_start, [1.5, 0.0]),
+            (polyline_forward_end, [1.5, 2.0]),
+            (polyline_reverse_start, [2.5, 2.0]),
+            (polyline_reverse_end, [2.5, 0.0]),
+        ] {
+            assert!(distance(actual, expected) <= 1.0e-14);
+        }
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact analytic-family regression keeps forward/reverse geometry, source correspondence and certificates together"
+    )]
     fn line_circle_and_circular_arc_offsets_remain_exact_analytic_geometry() {
         let mut document = SketchDocument::new(1.0).unwrap();
         let center = document.add_point("center", [1.0, 2.0]).unwrap();
@@ -1362,14 +1447,14 @@ mod tests {
         let start_angle = scalar(
             &mut document,
             "start",
-            0.0,
+            -2.4,
             ScalarUnit::Angle,
             ScalarDomain::Finite,
         );
         let end_angle = scalar(
             &mut document,
             "end",
-            std::f64::consts::FRAC_PI_2,
+            -0.6,
             ScalarUnit::Angle,
             ScalarDomain::Finite,
         );
@@ -1410,7 +1495,7 @@ mod tests {
             options,
         )
         .unwrap();
-        let arc = compute_curve_offset(
+        let arc_forward = compute_curve_offset(
             &document,
             CurveSpan::line(arc),
             CurveOffsetTraversal::Forward,
@@ -1418,12 +1503,25 @@ mod tests {
             options,
         )
         .unwrap();
+        let arc_reverse = compute_curve_offset(
+            &document,
+            CurveSpan::line(arc),
+            CurveOffsetTraversal::Reverse,
+            0.5,
+            options,
+        )
+        .unwrap();
 
-        for (result, expected_radius, expected_sweep, expected_closed) in [
-            (forward, 2.5, TAU, true),
-            (reverse, 3.5, -TAU, true),
-            (arc, 2.5, std::f64::consts::FRAC_PI_2, false),
+        for (result, expected_radius, expected_sweep, expected_closed, expected_parameters) in [
+            (forward, 2.5, TAU, true, [0.0, TAU]),
+            (reverse, 3.5, -TAU, true, [TAU, 0.0]),
+            (arc_forward, 2.5, 1.8, false, [0.0, 1.0]),
+            (arc_reverse, 3.5, -1.8, false, [1.0, 0.0]),
         ] {
+            assert_eq!(
+                result.source_parameters.map(f64::to_bits),
+                expected_parameters.map(f64::to_bits)
+            );
             let CurveOffsetGeometry::CircularArc {
                 center: actual_center,
                 radius,
@@ -1698,50 +1796,255 @@ mod tests {
             .into_iter()
             .enumerate()
             {
-                let traversal = if (family_index + scale_index) % 3 == 0 {
-                    CurveOffsetTraversal::Reverse
-                } else {
-                    CurveOffsetTraversal::Forward
-                };
                 let signed_distance = if (family_index + scale_index) % 2 == 0 {
                     0.05 * scale
                 } else {
                     -0.05 * scale
                 };
-                let result = compute_curve_offset(
+                let mut forward_parameters = None;
+                for traversal in [CurveOffsetTraversal::Forward, CurveOffsetTraversal::Reverse] {
+                    let result = compute_curve_offset(
+                        &document,
+                        CurveSpan::line(curve),
+                        traversal,
+                        signed_distance,
+                        options,
+                    )
+                    .unwrap_or_else(|error| {
+                        panic!("{label} {traversal:?} offset failed at scale {scale}: {error:?}")
+                    });
+                    match traversal {
+                        CurveOffsetTraversal::Forward => {
+                            forward_parameters = Some(result.source_parameters);
+                        }
+                        CurveOffsetTraversal::Reverse => {
+                            let forward = forward_parameters
+                                .expect("forward traversal precedes reverse traversal");
+                            assert_eq!(
+                                result.source_parameters.map(f64::to_bits),
+                                [forward[1], forward[0]].map(f64::to_bits),
+                                "{label} reverse traversal must reverse native source correspondence"
+                            );
+                        }
+                    }
+                    let CurveOffsetGeometry::CubicPatches(patches) = result.geometry else {
+                        panic!("{label} {traversal:?} must use certified cubic output");
+                    };
+                    assert!(!patches.is_empty(), "{label} {traversal:?}");
+                    assert_eq!(
+                        patches.first().unwrap().source_parameters[0].to_bits(),
+                        result.source_parameters[0].to_bits(),
+                        "{label} {traversal:?} fitted start correspondence"
+                    );
+                    assert_eq!(
+                        patches.last().unwrap().source_parameters[1].to_bits(),
+                        result.source_parameters[1].to_bits(),
+                        "{label} {traversal:?} fitted end correspondence"
+                    );
+                    assert!(
+                        patches
+                            .iter()
+                            .flat_map(|patch| patch.controls.iter().flatten())
+                            .all(|value| value.is_finite()),
+                        "{label} {traversal:?}"
+                    );
+                    assert_independent_patch_samples(
+                        &document,
+                        CurveSpan::line(curve),
+                        signed_distance,
+                        &patches,
+                        label,
+                    );
+                    assert!(
+                        result.certificate.maximum_position_error <= options.position_tolerance
+                    );
+                    assert!(
+                        result.certificate.maximum_tangent_error_radians
+                            <= options.tangent_tolerance_radians
+                    );
+                    assert!(
+                        result.certificate.minimum_regularity_factor > options.regularity_margin
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one spline-form matrix keeps every semantic span, traversal and rational ownership permutation together"
+    )]
+    fn every_clamped_and_periodic_spline_span_has_bidirectional_source_correspondence() {
+        fn add_controls(
+            document: &mut SketchDocument,
+            prefix: &str,
+            positions: &[[f64; 2]],
+        ) -> Vec<crate::DesignPointId> {
+            positions
+                .iter()
+                .enumerate()
+                .map(|(index, position)| {
+                    document
+                        .add_point(format!("{prefix} control {index}"), *position)
+                        .unwrap()
+                })
+                .collect::<Vec<_>>()
+        }
+        let mut document = SketchDocument::new(10.0).unwrap();
+        let clamped_bspline_controls = add_controls(
+            &mut document,
+            "clamped B-spline",
+            &[[0.0, 0.0], [1.0, 1.0], [3.0, 1.0], [4.0, 0.0]],
+        );
+        let periodic_bspline_controls = add_controls(
+            &mut document,
+            "periodic B-spline",
+            &[[8.0, 0.0], [9.5, -0.2], [10.0, 1.4], [8.5, 2.2], [7.2, 1.0]],
+        );
+        let clamped_nurbs_controls = add_controls(
+            &mut document,
+            "clamped NURBS",
+            &[[0.0, 5.0], [1.0, 6.0], [3.0, 6.0], [4.0, 5.0]],
+        );
+        let periodic_nurbs_controls = add_controls(
+            &mut document,
+            "periodic NURBS",
+            &[[8.0, 5.0], [9.5, 4.8], [10.0, 6.4], [8.5, 7.2], [7.2, 6.0]],
+        );
+        let add_weights = |document: &mut SketchDocument, prefix: &str, values: &[f64]| {
+            values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    scalar(
+                        document,
+                        &format!("{prefix} weight {index}"),
+                        *value,
+                        ScalarUnit::Parameter,
+                        ScalarDomain::Positive,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let clamped_weights = add_weights(&mut document, "clamped NURBS", &[1.0, 0.8, 1.1, 0.95]);
+        let periodic_weights = add_weights(
+            &mut document,
+            "periodic NURBS",
+            &[1.0, 0.9, 1.05, 0.85, 1.1],
+        );
+        let clamped_bspline = document
+            .add_curve(
+                "clamped B-spline",
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 2,
+                    controls: clamped_bspline_controls,
+                    knots: vec![0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+                    span_ids: vec![41, 73],
+                    next_span_id: 74,
+                },
+            )
+            .unwrap();
+        let periodic_bspline = document
+            .add_curve(
+                "periodic B-spline",
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Periodic,
+                    degree: 2,
+                    controls: periodic_bspline_controls,
+                    knots: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+                    span_ids: vec![11, 17, 23, 29, 31],
+                    next_span_id: 32,
+                },
+            )
+            .unwrap();
+        let clamped_nurbs = document
+            .add_curve(
+                "clamped NURBS",
+                CurveDefinition::Nurbs {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 2,
+                    controls: clamped_nurbs_controls,
+                    weights: clamped_weights.clone(),
+                    gauge_weight: clamped_weights[0],
+                    knots: vec![0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+                    span_ids: vec![41, 73],
+                    next_span_id: 74,
+                },
+            )
+            .unwrap();
+        let periodic_nurbs = document
+            .add_curve(
+                "periodic NURBS",
+                CurveDefinition::Nurbs {
+                    form: DocumentBSplineForm::Periodic,
+                    degree: 2,
+                    controls: periodic_nurbs_controls,
+                    weights: periodic_weights.clone(),
+                    gauge_weight: periodic_weights[0],
+                    knots: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+                    span_ids: vec![11, 17, 23, 29, 31],
+                    next_span_id: 32,
+                },
+            )
+            .unwrap();
+
+        let options = CurveOffsetOptions::for_model_scale(document.model_scale());
+        for (label, curve, spans) in [
+            ("clamped B-spline", clamped_bspline, &[41_u32, 73][..]),
+            (
+                "periodic B-spline",
+                periodic_bspline,
+                &[11_u32, 17, 23, 29, 31][..],
+            ),
+            ("clamped NURBS", clamped_nurbs, &[41_u32, 73][..]),
+            (
+                "periodic NURBS",
+                periodic_nurbs,
+                &[11_u32, 17, 23, 29, 31][..],
+            ),
+        ] {
+            for segment in spans {
+                let span = CurveSpan {
+                    curve,
+                    segment: *segment,
+                };
+                let forward = compute_curve_offset(
                     &document,
-                    CurveSpan::line(curve),
-                    traversal,
-                    signed_distance,
+                    span,
+                    CurveOffsetTraversal::Forward,
+                    0.05,
                     options,
                 )
-                .unwrap_or_else(|error| {
-                    panic!("{label} offset failed at scale {scale}: {error:?}")
-                });
-                let CurveOffsetGeometry::CubicPatches(patches) = result.geometry else {
-                    panic!("{label} must use certified cubic output");
-                };
-                assert!(!patches.is_empty(), "{label}");
-                assert!(
-                    patches
-                        .iter()
-                        .flat_map(|patch| patch.controls.iter().flatten())
-                        .all(|value| value.is_finite()),
-                    "{label}"
-                );
-                assert_independent_patch_samples(
+                .unwrap_or_else(|error| panic!("{label} span {segment} forward: {error:?}"));
+                let reverse = compute_curve_offset(
                     &document,
-                    CurveSpan::line(curve),
-                    signed_distance,
-                    &patches,
-                    label,
+                    span,
+                    CurveOffsetTraversal::Reverse,
+                    0.05,
+                    options,
+                )
+                .unwrap_or_else(|error| panic!("{label} span {segment} reverse: {error:?}"));
+                assert_eq!(
+                    reverse.source_parameters.map(f64::to_bits),
+                    [forward.source_parameters[1], forward.source_parameters[0]].map(f64::to_bits),
+                    "{label} span {segment} reverse correspondence"
                 );
-                assert!(result.certificate.maximum_position_error <= options.position_tolerance);
-                assert!(
-                    result.certificate.maximum_tangent_error_radians
-                        <= options.tangent_tolerance_radians
-                );
-                assert!(result.certificate.minimum_regularity_factor > options.regularity_margin);
+                for result in [forward, reverse] {
+                    let CurveOffsetGeometry::CubicPatches(patches) = result.geometry else {
+                        panic!("{label} span {segment} must remain certified fitted output")
+                    };
+                    assert_eq!(
+                        patches.first().unwrap().source_parameters[0].to_bits(),
+                        result.source_parameters[0].to_bits()
+                    );
+                    assert_eq!(
+                        patches.last().unwrap().source_parameters[1].to_bits(),
+                        result.source_parameters[1].to_bits()
+                    );
+                    assert_independent_patch_samples(&document, span, 0.05, &patches, label);
+                }
             }
         }
     }

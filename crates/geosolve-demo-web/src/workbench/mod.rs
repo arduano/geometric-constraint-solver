@@ -2259,14 +2259,81 @@ fn reproduction_payload_size_label(bytes: usize) -> String {
 /// presentation geometry, but it deliberately lacks authority to publish inferred
 /// construction. Keep that scene detached instead of confusing the missing authority
 /// with missing geometry. Current computed output remains fail-closed on any provenance
-/// or affordance-composition error; only the historical presentation row is detached.
+/// or affordance-composition error. A malformed computed presentation must not
+/// erase the independently accepted sketch: withhold that computed layer and
+/// retain the complete native scene instead. Only the historical presentation
+/// row is detached from current authoring authority.
 #[cfg(any(target_arch = "wasm32", test))]
 fn compose_editor_scene(
     coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
     viewport: geosolve_constraint_editor::Viewport,
     chord_tolerance_pixels: f64,
 ) -> Option<geosolve_constraint_editor::EditorScene> {
-    use geosolve_constraint_editor::{ComputedSceneState, EditorScene, SelectionItem};
+    compose_editor_scene_with_current_composer(
+        coordinator,
+        viewport,
+        chord_tolerance_pixels,
+        |coordinator, source, expected, snapshot| {
+            use geosolve_constraint_editor::{EditorScene, SelectionItem};
+
+            let accepted = source.accepted_state()?;
+            let accepted_input = source.accepted_prepared_input()?;
+            let mut scene = EditorScene::from_accepted_with_computed(
+                accepted.identity().revision().get(),
+                source.design_identity(),
+                accepted.document(),
+                source.design_document(),
+                &accepted_input,
+                expected,
+                snapshot,
+                viewport,
+                chord_tolerance_pixels,
+            )
+            .ok()?;
+            let mut action_items = coordinator.editor().selection().to_vec();
+            if let Some(preview) = coordinator.feature_authoring_preview() {
+                action_items.push(SelectionItem::Feature(preview.metadata().feature));
+                action_items.sort_unstable();
+                action_items.dedup();
+            }
+            coordinator
+                .populate_computed_fillet_affordances(
+                    &mut scene,
+                    &action_items,
+                    chord_tolerance_pixels,
+                )
+                .ok()?;
+            Some(scene)
+        },
+    )
+}
+
+/// Shared native-fallback composition path. The injected Current-scene composer
+/// keeps the failure branch directly testable without manufacturing malformed
+/// retained coordinator state.
+#[cfg(any(target_arch = "wasm32", test))]
+fn compose_editor_scene_with_current_composer<F>(
+    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
+    viewport: geosolve_constraint_editor::Viewport,
+    chord_tolerance_pixels: f64,
+    compose_current: F,
+) -> Option<geosolve_constraint_editor::EditorScene>
+where
+    F: FnOnce(
+        &geosolve_constraint_editor::RetainedEditorCoordinator,
+        &geosolve_sketch::RetainedSketchDocumentSession,
+        &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        &geosolve_sketch_features::ComputedFeatureSnapshot,
+    ) -> Option<geosolve_constraint_editor::EditorScene>,
+{
+    use geosolve_constraint_editor::{ComputedSceneState, EditorScene};
+
+    #[derive(Clone, Copy, Eq, PartialEq)]
+    enum CandidateKind {
+        Native,
+        Computed,
+        NativeFallback,
+    }
 
     let source = coordinator
         .visible_preview_session()
@@ -2290,72 +2357,54 @@ fn compose_editor_scene(
     if !current_accepted {
         return native_scene();
     }
-    let scene = match coordinator.computed_scene_state() {
-        ComputedSceneState::Current { expected, snapshot } => {
-            let accepted_input = source.accepted_prepared_input()?;
-            let mut scene = EditorScene::from_accepted_with_computed(
-                scene_revision,
-                scene_design_identity,
-                accepted.document(),
-                source.design_document(),
-                &accepted_input,
-                expected,
-                snapshot,
-                viewport,
-                chord_tolerance_pixels,
-            )
-            .ok()?;
-            let mut action_items = coordinator.editor().selection().to_vec();
-            if let Some(preview) = coordinator.feature_authoring_preview() {
-                action_items.push(SelectionItem::Feature(preview.metadata().feature));
-                action_items.sort_unstable();
-                action_items.dedup();
-            }
-            coordinator
-                .populate_computed_fillet_affordances(
-                    &mut scene,
-                    &action_items,
-                    chord_tolerance_pixels,
-                )
-                .ok()?;
-            scene
+    let enrich = |mut scene: EditorScene, kind: CandidateKind| {
+        if !scene.update_annotation_values(accepted) {
+            return None;
         }
-        ComputedSceneState::Withheld | ComputedSceneState::Absent => native_scene()?,
-    };
-    let mut scene = scene;
-    if !scene.update_annotation_values(accepted) {
-        return None;
-    }
-    scene.apply_annotation_layout(&coordinator.editor().annotation_layout_for_scene());
-    // A prepared curve-control candidate keeps truthful candidate geometry/computed provenance
-    // and remains detached from drafting authority. The coordinator separately authenticates the
-    // durable pointer-down origin after the exact selected-control layer has been rebuilt.
-    let mut scene = if prepared_curve_preview {
-        scene
-    } else {
-        scene.with_retained_session(source).ok()?
-    };
-    coordinator
-        .editor()
-        .populate_curve_controls(&mut scene)
-        .ok()?;
-    if matches!(
-        coordinator.editor().active_pointer_gesture(),
-        Some(geosolve_constraint_editor::ActivePointerGesture {
-            kind: geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance,
-            ..
-        })
-    ) {
+        scene.apply_annotation_layout(&coordinator.editor().annotation_layout_for_scene());
+        // A prepared curve-control candidate keeps truthful candidate geometry/computed provenance
+        // and remains detached from drafting authority. The coordinator separately authenticates the
+        // durable pointer-down origin after the exact selected-control layer has been rebuilt.
+        let mut scene = if prepared_curve_preview {
+            scene
+        } else {
+            scene.with_retained_session(source).ok()?
+        };
         coordinator
-            .retain_offset_distance_interaction_origin(&mut scene)
+            .editor()
+            .populate_curve_controls(&mut scene)
             .ok()?;
+        if matches!(
+            coordinator.editor().active_pointer_gesture(),
+            Some(geosolve_constraint_editor::ActivePointerGesture {
+                kind: geosolve_constraint_editor::ActivePointerGestureKind::OffsetDistance,
+                ..
+            })
+        ) && kind != CandidateKind::NativeFallback
+        {
+            coordinator
+                .retain_offset_distance_interaction_origin(&mut scene)
+                .ok()?;
+        }
+        if prepared_curve_preview && kind == CandidateKind::Computed {
+            coordinator
+                .retain_curve_control_preview_interaction_origin(&mut scene)
+                .ok()?;
+        }
+        Some(scene)
+    };
+    match coordinator.computed_scene_state() {
+        ComputedSceneState::Current { expected, snapshot } => {
+            compose_current(coordinator, source, expected, snapshot)
+                .and_then(|scene| enrich(scene, CandidateKind::Computed))
+                .or_else(|| {
+                    native_scene().and_then(|scene| enrich(scene, CandidateKind::NativeFallback))
+                })
+        }
+        ComputedSceneState::Withheld | ComputedSceneState::Absent => {
+            native_scene().and_then(|scene| enrich(scene, CandidateKind::Native))
+        }
     }
-    if prepared_curve_preview {
-        coordinator
-            .retain_curve_control_preview_interaction_origin(&mut scene)
-            .ok()?;
-    }
-    Some(scene)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -8859,8 +8908,9 @@ mod tests {
         apply_native_fillet_profile, apply_validated_reproduction, canvas_cursor_key,
         canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
         canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
-        computed_feature_editor_action, computed_feature_editor_presentation, coordinate_hud,
-        current_problem_items, curve_control_inspector_detail, curve_control_inspector_markup,
+        compose_editor_scene_with_current_composer, computed_feature_editor_action,
+        computed_feature_editor_presentation, coordinate_hud, current_problem_items,
+        curve_control_inspector_detail, curve_control_inspector_markup,
         draft_inference_preference_is_stale, feature_apply_returns_focus_to_select,
         foreground_overlay_escape_owner, geometry_sweep_flip_available,
         geometry_variant_keyboard_target, history_shortcut, native_fillet_apply_presentation,
@@ -10548,6 +10598,7 @@ mod tests {
             screen_polyline: [[-2.0, 1.0], [2.0, 1.0]]
                 .map(|point| viewport.model_to_screen(point))
                 .to_vec(),
+            screen_source_parameters: vec![0.0, 1.0],
         });
         assert_eq!(
             provisional_computed_offset_items(&scene, &durable),
@@ -10705,6 +10756,319 @@ mod tests {
             )
         );
         assert!(!html.contains("Exact lines, circles and circular arcs only"));
+    }
+
+    #[test]
+    fn m82_f006_exact_periodic_nurbs_offset_preview_never_blanks_the_accepted_scene() {
+        // Exact user-supplied transport identity:
+        // payload SHA-256 33f0caeea427f6048067a6abf51411ee53a428c3d44c12c2e59c22a516360e02
+        // workspace SHA-256 929a43c8f51900f1f6bf34fb1696cdcef88e842c26cf80cee3f58f8da88640af
+        let payload = include_str!("../../tests/fixtures/m82_f006_periodic_nurbs_repro.txt")
+            .trim_end_matches(['\r', '\n']);
+        assert_eq!(payload.len(), 1_542, "exact supplied payload bytes");
+        assert!(payload.starts_with("GEOSOLVE_REPRO_V1:zlib-base64url:8193:e0db72996122baa0:"));
+        let workspace = crate::reproduction::decode_workspace(payload)
+            .expect("exact supplied reproduction transport");
+        assert_eq!(workspace.len(), 8_193, "declared workspace byte identity");
+
+        let restored = super::persistence::coordinator_from_reproduction_payload(payload)
+            .expect("ordinary validated coordinator restoration");
+        let viewport = Viewport::new([1_200.0, 800.0], [0.7, 1.0], 120.0)
+            .expect("finite reproduction viewport");
+        let native_scene = compose_editor_scene(&restored, viewport, 0.25)
+            .expect("the restored accepted scene is initially visible");
+        assert_eq!(native_scene.curves.len(), 5, "five periodic NURBS spans");
+        assert!(native_scene.computed_offset_curves.is_empty());
+        let spans = restored
+            .session()
+            .design_document()
+            .curve_spans(restored.session().design_document().curves()[0].id)
+            .expect("periodic NURBS spans");
+        assert_eq!(spans.len(), 5);
+        let span = spans
+            .iter()
+            .copied()
+            .find(|span| span.segment == 23)
+            .expect("deterministic representative periodic NURBS span");
+        let mut coordinator = restored;
+        let mut authoring = OffsetAuthoringState::default();
+        assert!(matches!(
+            coordinator.activate_offset_authoring(&mut authoring),
+            Ok(OffsetAuthoringOutcome::ModeEntered(_))
+        ));
+        assert!(matches!(
+            authoring.pick_target(geosolve_constraint_editor::OffsetAuthoringTarget::Span(
+                span
+            )),
+            OffsetAuthoringOutcome::OperandChanged { .. }
+        ));
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&authoring, "Exact periodic NURBS Curve Offset")
+            .expect("the supplied click path reaches Preview ready");
+        assert!(metadata.computed_curve().is_some());
+        let source = coordinator
+            .visible_preview_session()
+            .unwrap_or(coordinator.session());
+        let accepted = source
+            .accepted_state_for_current_input()
+            .expect("current accepted source");
+        let accepted_input = source
+            .accepted_prepared_input()
+            .expect("accepted prepared input");
+        let geosolve_constraint_editor::ComputedSceneState::Current { expected, snapshot } =
+            coordinator.computed_scene_state()
+        else {
+            panic!("Preview ready must carry Current computed authority")
+        };
+        assert_eq!(expected, &snapshot.input());
+        assert_eq!(expected.sketch, accepted_input);
+        assert!(snapshot.edges().iter().any(|edge| {
+            matches!(
+                edge.geometry,
+                geosolve_sketch_features::ComputedEdgeGeometry::CurveOffset(_)
+            )
+        }));
+        let report = accepted.solve_result().unstable_core_report();
+        assert!(report.hard_residuals_validated, "{report:#?}");
+        assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+            .expect("a Current periodic NURBS preview must retain the complete accepted scene");
+        assert_eq!(
+            scene.curves.len(),
+            5,
+            "native accepted scene remains complete"
+        );
+        assert!(
+            !scene.computed_offset_curves.is_empty(),
+            "ready preview publishes visible certified output"
+        );
+    }
+
+    #[test]
+    fn m82_f006_active_proxy_composition_failure_returns_complete_native_scene() {
+        let (mut coordinator, feature, source) = published_quadratic_curve_offset_for_web();
+        coordinator.set_selection([SelectionItem::Feature(feature)]);
+        let viewport = Viewport::new([900.0, 650.0], [2.0, 0.0], 70.0).expect("viewport");
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+            .expect("initial certified computed scene");
+        let proxy = scene
+            .curve_controls
+            .iter()
+            .find(|control| control.offset_proxy.is_some())
+            .expect("selected Offset source-owned proxy")
+            .clone();
+        let pointer_id = 82_706;
+        let pointer = |position| PointerInput {
+            pointer_id,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        assert!(
+            coordinator
+                .pointer_down(&scene, pointer(proxy.screen_position))
+                .is_empty(),
+            "proxy pointer-down"
+        );
+        let target = ScreenPoint {
+            x: proxy.screen_position.x + 24.0,
+            y: proxy.screen_position.y - 18.0,
+        };
+        let request = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(target));
+        let [
+            geosolve_constraint_editor::EditorEffect::RequestCurveControlPreview {
+                request_id,
+                expected,
+                control,
+                model_position,
+                ..
+            },
+        ] = request.as_slice()
+        else {
+            panic!("proxy preview request: {request:#?}")
+        };
+        let acknowledgement = coordinator.resolve_curve_control_preview(
+            pointer_id,
+            *request_id,
+            *expected,
+            *control,
+            *model_position,
+        );
+        assert!(matches!(
+            acknowledgement.as_slice(),
+            [geosolve_constraint_editor::EditorEffect::PreviewCurveControl { .. }]
+        ));
+        assert!(coordinator.curve_control_preview_active());
+
+        let durable_design = coordinator.session().design_identity();
+        let durable_feature = coordinator.feature_document().identity();
+        let durable_history = (coordinator.history_len(), coordinator.history_cursor());
+        let durable_transcript = coordinator.transcript().to_vec();
+        let fallback = compose_editor_scene_with_current_composer(
+            &coordinator,
+            viewport,
+            0.25,
+            |_, _, _, _| None,
+        )
+        .expect("failed computed composition must retain the accepted native scene");
+        assert!(fallback.computed_offset_curves.is_empty());
+        assert!(fallback.curve_controls.is_empty());
+        assert!(fallback.curves.iter().any(|curve| curve.span == source));
+        assert!(fallback.curves.iter().all(|curve| {
+            curve
+                .screen_polyline
+                .iter()
+                .copied()
+                .all(|point| point.x.is_finite() && point.y.is_finite())
+        }));
+
+        let release =
+            coordinator
+                .editor_mut()
+                .pointer_up(&fallback, durable_design, pointer(target));
+        assert!(matches!(
+            release.as_slice(),
+            [geosolve_constraint_editor::EditorEffect::ClearCurveControlPreview]
+        ));
+        coordinator
+            .apply_editor_effect(&release[0])
+            .expect("stale proxy preview clears without durable publication");
+        assert_eq!(coordinator.session().design_identity(), durable_design);
+        assert_eq!(coordinator.feature_document().identity(), durable_feature);
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            durable_history
+        );
+        assert_eq!(coordinator.transcript(), durable_transcript.as_slice());
+        assert!(!coordinator.curve_control_preview_active());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one crossed-adapter regression keeps the prepared proxy gesture, injected enrichment failure, native fallback and exact durable-state neutrality together"
+    )]
+    fn m82_f006_post_current_proxy_enrichment_failure_returns_complete_native_scene() {
+        let (mut coordinator, feature, source) = published_quadratic_curve_offset_for_web();
+        coordinator.set_selection([SelectionItem::Feature(feature)]);
+        let viewport = Viewport::new([900.0, 650.0], [2.0, 0.0], 70.0).expect("viewport");
+        let scene = compose_editor_scene(&coordinator, viewport, 0.25)
+            .expect("initial certified computed scene");
+        let proxy = scene
+            .curve_controls
+            .iter()
+            .find(|control| control.offset_proxy.is_some())
+            .expect("selected Offset source-owned proxy")
+            .clone();
+        let pointer_id = 82_707;
+        let pointer = |position| PointerInput {
+            pointer_id,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        assert!(
+            coordinator
+                .pointer_down(&scene, pointer(proxy.screen_position))
+                .is_empty(),
+            "proxy pointer-down"
+        );
+        let target = ScreenPoint {
+            x: proxy.screen_position.x + 24.0,
+            y: proxy.screen_position.y - 18.0,
+        };
+        let request = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(target));
+        let [
+            geosolve_constraint_editor::EditorEffect::RequestCurveControlPreview {
+                request_id,
+                expected,
+                control,
+                model_position,
+                ..
+            },
+        ] = request.as_slice()
+        else {
+            panic!("proxy preview request: {request:#?}")
+        };
+        let acknowledgement = coordinator.resolve_curve_control_preview(
+            pointer_id,
+            *request_id,
+            *expected,
+            *control,
+            *model_position,
+        );
+        assert!(matches!(
+            acknowledgement.as_slice(),
+            [geosolve_constraint_editor::EditorEffect::PreviewCurveControl { .. }]
+        ));
+        assert!(coordinator.curve_control_preview_active());
+
+        let durable_design = coordinator.session().design_identity();
+        let durable_feature = coordinator.feature_document().identity();
+        let durable_history = (coordinator.history_len(), coordinator.history_cursor());
+        let durable_transcript = coordinator.transcript().to_vec();
+        let fallback = compose_editor_scene_with_current_composer(
+            &coordinator,
+            viewport,
+            0.25,
+            |_, visible, expected, snapshot| {
+                let accepted = visible.accepted_state_for_current_input()?;
+                let accepted_input = visible.accepted_prepared_input()?;
+                let mut scene = EditorScene::from_accepted_with_computed(
+                    accepted.identity().revision().get(),
+                    visible.design_identity(),
+                    accepted.document(),
+                    visible.design_document(),
+                    &accepted_input,
+                    expected,
+                    snapshot,
+                    viewport,
+                    0.25,
+                )
+                .ok()?;
+                let native_source = scene.curves.iter_mut().find(|curve| curve.span == source)?;
+                // Preserve finite painted geometry but poison only the presentation-owned
+                // source-parameter samples. Proxy enrichment must reject this Current layer
+                // instead of erasing the independently accepted native scene.
+                native_source.screen_parameters.fill(1.0e9);
+                Some(scene)
+            },
+        )
+        .expect("failed post-Current enrichment must retain the accepted native scene");
+        assert!(fallback.computed_offset_curves.is_empty());
+        assert!(fallback.computed_curves.is_empty());
+        assert!(fallback.curve_controls.is_empty());
+        assert!(fallback.curves.iter().any(|curve| curve.span == source));
+        assert!(fallback.curves.iter().all(|curve| {
+            curve
+                .screen_polyline
+                .iter()
+                .copied()
+                .all(|point| point.x.is_finite() && point.y.is_finite())
+        }));
+
+        let release =
+            coordinator
+                .editor_mut()
+                .pointer_up(&fallback, durable_design, pointer(target));
+        assert!(matches!(
+            release.as_slice(),
+            [geosolve_constraint_editor::EditorEffect::ClearCurveControlPreview]
+        ));
+        coordinator
+            .apply_editor_effect(&release[0])
+            .expect("stale proxy preview clears without durable publication");
+        assert_eq!(coordinator.session().design_identity(), durable_design);
+        assert_eq!(coordinator.feature_document().identity(), durable_feature);
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            durable_history
+        );
+        assert_eq!(coordinator.transcript(), durable_transcript.as_slice());
+        assert!(!coordinator.curve_control_preview_active());
     }
 
     #[test]

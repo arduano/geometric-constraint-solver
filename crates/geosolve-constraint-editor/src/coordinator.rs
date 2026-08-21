@@ -2883,6 +2883,14 @@ impl RetainedEditorCoordinator {
         {
             return Some(&preview.features);
         }
+        if let Some(preview) = self.effective_offset_authoring_preview()
+            && preview.computed_snapshot.input() == *input
+            && let OffsetAuthoringPreviewPublication::ComputedCurve { features, .. } =
+                &preview.publication
+            && features.identity() == input.features
+        {
+            return Some(features);
+        }
         (self.features.identity() == input.features).then_some(&self.features)
     }
 
@@ -6334,7 +6342,8 @@ impl RetainedEditorCoordinator {
             .base
             .accepted_state_identity()
             .ok_or(crate::EditorError::StalePreparedSketchInput)?;
-        if scene.authenticated_prepared_input().is_some()
+        if !scene.constructor_semantics_are_sealed()
+            || scene.authenticated_prepared_input().is_some()
             || scene.accepted_revision != candidate_accepted.identity().revision().get()
             || scene.design_identity != candidate.design_identity()
             || scene.accepted_document != *candidate_accepted.document()
@@ -12304,6 +12313,12 @@ const fn dimension_target_scalar(
 
 fn curve_control_point_aliases_match_scene(scene: &EditorScene) -> bool {
     scene.curve_controls.iter().all(|control| {
+        if !matches!(
+            control.interaction,
+            crate::SceneCurveControlInteraction::PointAlias(_)
+        ) {
+            return true;
+        }
         let DocumentCurveControlTarget::Point(point_id) = control.target else {
             return true;
         };

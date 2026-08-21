@@ -909,6 +909,11 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-curve-control[data-control-role="trim-start"] .wb-curve-control-mark,
 .wb-curve-control[data-control-role="trim-end"] .wb-curve-control-mark { stroke: #e6c785; }
 .wb-curve-control[data-control-role="rational-middle"] .wb-curve-control-mark { stroke: #b7a0df; }
+.wb-curve-control.offset-proxy .wb-curve-control-mark {
+  fill: #102d31;
+  stroke: #65d6cf;
+  stroke-dasharray: 2.5 1.5;
+}
 .wb-curve-control.hovered .wb-curve-control-mark,
 .wb-curve-control.active .wb-curve-control-mark {
   stroke: #ffd27d;
