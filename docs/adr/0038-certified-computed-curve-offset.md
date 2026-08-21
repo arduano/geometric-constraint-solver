@@ -2,9 +2,9 @@
 
 # ADR 0038: Certified computed all-family Curve Offset
 
-Status: accepted architecture for active M82; M82-F006/F007 replacement implementation is under
-qualification and human UAT is pending. The post-F005 nomination is withdrawn and its listener is
-retired.
+Status: accepted architecture for active M82; M82-F006/F007 replacement implementation is
+mechanically qualified and immutably nominated, with human UAT pending. The post-F005 nomination
+is withdrawn and its listener is retired.
 
 ## Context
 
@@ -193,5 +193,6 @@ golden row requires constraint-projected independent X/Y motion, fresh output an
 restoration. `docs/M82_IMPLEMENTATION.md` records evidence only after commands actually pass. The
 previously nominated post-F005 source `d521045`, tree `0a3bcb0`, and immutable
 snapshot are withdrawn after M82-F006/F007; its listener is retired. The replacement golden now
-passes 289/289 reviewed rows. Qualification, immutable nomination and human acceptance remain
-pending.
+passes 289/289 reviewed rows. Exact replacement source `06e3cce`, tree `9c754ed`, passes complete
+clean qualification and immutable Tailscale nomination. Human acceptance and public closeout
+remain pending.

@@ -2,15 +2,19 @@
 
 # M82 — certified computed all-family Curve Offset
 
-Status: **implementation amended after M82-F006/F007; replacement qualification in progress and
+Status: **implementation amended after M82-F006/F007; replacement mechanically qualified and
 human UAT pending**. The previously nominated post-F005 source and frozen artifact are withdrawn:
 fresh Bezier previews and the supplied periodic-NURBS workspace exposed an accepted-scene
 composition defect, and the user required computed output to provide constraint-aware inverse
-editing rather than remain read-only. No replacement source, artifact or listener is nominated
-yet. This milestone broadens the ordinary Offset tool from M80's exact native
+editing rather than remain read-only. Exact replacement source
+`06e3cce249834959808149441661dd8fdaf47373`, tree
+`9c754edb0bf28d15252c849123d7a7923f26f10c`, now passes the complete clean gate and immutable
+Tailscale verification at `http://100.94.63.83:8080/`. This milestone broadens the ordinary Offset
+tool from M80's exact native
 line/circle/circular-arc association to deterministic computed offsets for every regular built-in
 planar curve family. It does not change or replace M80 `ProfileOffset`. ADR 0038 owns the
-architecture and certification boundary. M82 is not accepted or closed.
+architecture and certification boundary. M82 is not accepted or closed; human UAT, approval and
+Pages publication remain pending.
 
 ## Product outcome
 

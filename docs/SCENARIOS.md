@@ -4281,13 +4281,14 @@ is closed.
 
 ## M82 certified computed Curve Offset scenarios
 
-These scenarios are **implemented with M82-F006/F007 replacement qualification in progress; human
-UAT pending**. They activate the smallest broadening of Offset under ADR 0038 while preserving M80
-native behavior. The post-F005 source/artifact is withdrawn after exact periodic-NURBS and fresh
-Bezier previews exposed blank-scene composition, and after computed output gained source-owned
-inverse editing. Its listener is retired. The distinct all-family golden now passes 289/289
-reviewed rows. Complete clean replacement qualification and immutable nomination remain pending;
-M82 remains active until human acceptance and exact public closeout pass.
+These scenarios are **implemented with M82-F006/F007 replacement clean-qualified and nominated;
+human UAT pending**. They activate the smallest broadening of Offset under ADR 0038 while preserving
+M80 native behavior. The post-F005 source/artifact is withdrawn after exact periodic-NURBS and
+fresh Bezier previews exposed blank-scene composition, and after computed output gained
+source-owned inverse editing. Its listener is retired. The distinct all-family golden now passes
+289/289 reviewed rows. Exact replacement source `06e3cce249834959808149441661dd8fdaf47373`, tree
+`9c754edb0bf28d15252c849123d7a7923f26f10c`, passes complete clean qualification and immutable
+Tailscale nomination. M82 remains active until human acceptance and exact public closeout pass.
 
 ### M82-O1 — Native analytic route remains exact
 
@@ -4403,6 +4404,13 @@ both axes, regenerates Current output and checks complete Undo/Redo restoration.
 evidence, and their listener is retired. Source `7fd31c0` and snapshot
 `/tmp/geosolve-m82-uat.I58j21` remain withdrawn historical pre-F005 evidence only; their service
 runs are also retired.
+
+The current replacement source is `06e3cce249834959808149441661dd8fdaf47373`, tree
+`9c754edb0bf28d15252c849123d7a7923f26f10c`. Its complete clean gate exits 0; immutable snapshot
+`/tmp/geosolve-m82-uat.G4pmMH` has ordered-manifest aggregate
+`70885cec204ffc586fe84f1faf94b89e3998c23fca0035bb8909f1e57957b535`. Temporary and retained
+served-byte ledgers pass, and PID `3024723` serves the exact candidate at
+`http://100.94.63.83:8080/` for the pending human UAT. This nomination does not accept or close M82.
 
 ## Frozen near-singular fixtures
 

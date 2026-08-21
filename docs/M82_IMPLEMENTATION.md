@@ -2,12 +2,14 @@
 
 # M82 implementation — certified computed all-family Curve Offset
 
-Status: **M82-F006/F007 replacement implementation is under qualification; human UAT pending**.
-The post-F005 source and immutable artifact are withdrawn after exact periodic-NURBS plus fresh
+Status: **M82-F006/F007 replacement is mechanically qualified and frozen; human UAT pending**.
+The post-F005 source and immutable artifact remain withdrawn after exact periodic-NURBS plus fresh
 Bezier reproductions exposed blank-scene composition, and after the computed route gained
-source-owned inverse-edit proxies. Its listener is retired. No replacement source, tree, frozen
-artifact or clean-gate claim exists yet. Product scope is owned by `docs/M82_GOALS.md`;
-architecture is owned by ADR 0038.
+source-owned inverse-edit proxies. Exact replacement source
+`06e3cce249834959808149441661dd8fdaf47373`, tree
+`9c754edb0bf28d15252c849123d7a7923f26f10c`, now passes the complete clean gate and no-rebuild
+Tailscale byte verification. Product scope is owned by `docs/M82_GOALS.md`; architecture is owned
+by ADR 0038. M82 remains active until human UAT, approval, Pages and closure.
 
 Activation baseline: M81 closeout commit
 `e3cbb8f2ae2800181545bb3405704bdcc3ff46a6`.
@@ -16,8 +18,9 @@ Withdrawn post-F005 product source: `d52104595ee11f9e460e98ea5e26200bb34a5d94`.
 
 Withdrawn post-F005 product tree: `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`.
 
-Replacement product source/tree: **not yet nominated**. They will be recorded only after the
-expanded golden matrix and complete clean release qualification pass from one unchanged source.
+Replacement product source: `06e3cce249834959808149441661dd8fdaf47373`.
+
+Replacement product tree: `9c754edb0bf28d15252c849123d7a7923f26f10c`.
 
 Withdrawn pre-F005 product source: `7fd31c0137f6979f945e5ab4d320e7adb552c03d`.
 
@@ -138,11 +141,12 @@ Golden `--survey`, `--check` and `--require-clean` passed; a later post-cleanup 
   Current output and restores the complete state through Undo/Redo. The reviewed result is exactly
   289/289 `PASS` with SHA-256
   `cec9ad971e8e445f6a0e040a534d6790880e1a31903addea0d6d08ae1a5ad5f7`.
-- [ ] Run focused F006/F007 owner and adapter tests, golden survey/check/require-clean, formatting,
+- [x] Run focused F006/F007 owner and adapter tests, golden survey/check/require-clean, formatting,
   Clippy/Rustdoc, locked all-feature workspace tests, WASM/Trunk and the complete clean release
   gate from one unchanged replacement source.
-- [ ] Freeze and byte-verify that replacement without rebuilding, restore a replacement Tailscale
-  listener, bind the UAT scorecard to exact authority, complete human UAT and publish Pages.
+- [x] Freeze and byte-verify that replacement without rebuilding, restore a replacement Tailscale
+  listener and bind the UAT scorecard to exact authority.
+- [ ] Complete human UAT, receive explicit approval, publish exact Pages bytes and close M82.
 
 ## Finding ledger
 
@@ -247,8 +251,8 @@ Focused regressions are
 plus the downstream boundary regression
 `workbench::tests::m82_f006_post_current_proxy_enrichment_failure_returns_complete_native_scene`.
 The latter failed at the crossed adapter before the transactional fallback expansion, then passed
-with exact source/feature/history/transcript neutrality. Full replacement qualification remains
-pending.
+with exact source/feature/history/transcript neutrality. Complete replacement qualification now
+passes on the nominated source below.
 
 ### M82-F007 — computed Offset needed constraint-aware inverse direct manipulation
 
@@ -282,7 +286,101 @@ retention, inverse mapping, hard-residual validation, constraint projection, reg
 output, history/replay and Undo/Redo. The 14 computed-route golden family/topology rows also require
 the complete eligible two-dimensional proxy inventory, one constrained source/follower edit with
 independent X/Y motion, fresh output, and complete Undo/Redo restoration. Their focused and
-collateral replacement qualification is still in progress.
+collateral replacement qualification passes on the nominated source below.
+
+## Replacement development qualification
+
+The F006/F007 replacement was qualified through the ordinary owner and collateral boundaries on
+exact source `06e3cce249834959808149441661dd8fdaf47373`, tree
+`9c754edb0bf28d15252c849123d7a7923f26f10c`. The commands actually run include:
+
+```bash
+cargo fmt --all -- --check
+git diff --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --workspace --all-features
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
+cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
+./scripts/golden-authoring-scene-oracle.sh --check
+./scripts/golden-authoring-scene-oracle.sh --require-clean
+```
+
+Formatting, diff hygiene, warnings-denied Clippy/Rustdoc, locked workspace tests and WASM all
+pass. Relevant locked suite results are `geosolve-demo-web --lib` 163/163,
+`m82_curve_offset_coordinator` 27/27, `geosolve-sketch --lib` 49/49,
+`geosolve-sketch-features --lib` 55/55 and `geosolve-constraint-editor --lib` 406/406. The isolated
+golden check and require-clean commands pass exactly 289/289 rows; all 18 Curve Offset rows are
+`PASS` with reviewed stable input fingerprints and fixture SHA-256
+`cec9ad971e8e445f6a0e040a534d6790880e1a31903addea0d6d08ae1a5ad5f7`.
+
+## Replacement committed-tree qualification
+
+From that unchanged clean source, this effective command completed with exact process exit `0`:
+
+```bash
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+Authoritative direct unit `geosolve-m82-release-gate-v3.service`, invocation
+`3bbe18739d8441ef870ae14c503c6363`, ran from 2026-08-21 11:30:53 to 11:54:30 AEST and reported
+`Result=success`, `SubState=exited`, `ExecMainCode=1` (`CLD_EXITED`) and `ExecMainStatus=0`. Its
+275,822-byte, 3,586-line log is `/tmp/geosolve-m82-clean-gate.06e3cce.attempt3.nix.log`, SHA-256
+`ca390a3a137b10b07a6534a72b182bb35a67a314bc05441084376e5cb93f861d`. The independently captured
+unit-status and exit evidence are `/tmp/geosolve-m82-clean-gate.06e3cce.attempt3.unit-status` and
+`/tmp/geosolve-m82-clean-gate.06e3cce.attempt3.exit`.
+
+The gate passed formatting/diff hygiene, warnings-denied locked all-feature workspace Clippy,
+locked all-feature workspace tests, exact 289-row golden `--require-clean`, M70/M71/M74/M75/M76/
+M77/M79 native/WASM parity, demo WASM checking, warnings-denied Rustdoc, benchmark compilation,
+M14 and M32 performance budgets, the ignored 256-moving-body sparse crossover in 93.62 seconds,
+licence/package checks and Trunk 0.21.14 release assembly. Earlier interrupted or status-ambiguous
+attempts are not qualification evidence and did not supply the frozen distribution below.
+
+## Replacement immutable candidate and served-byte evidence
+
+Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
+`/tmp/geosolve-m82-uat.G4pmMH`, compared file-by-file before and after freezing and made immutable.
+The directory is `0555`; all seven entries are regular non-symlink files at `0444`. Freeze evidence
+is `/tmp/geosolve-m82-freeze-evidence.2XdQNw`. The C-locale ordered `sha256sum *` manifest aggregate
+is `70885cec204ffc586fe84f1faf94b89e3998c23fca0035bb8909f1e57957b535`:
+
+```text
+1c5b785624b689b35af58c49b4684a73a31f6e9a0ba3e77b9f426997965a2d03  API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  LICENSE
+61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803  THIRD_PARTY_LICENSES.md
+69df3d033af8b28ed7e03400412b60a353521851f093f8f59e97fab370538f77  geosolve-demo-web-91818dfa170b8037.js
+7151a191487f25ef2ab9dc69a579767c297cde010929c5b02518903346f6d516  geosolve-demo-web-91818dfa170b8037_bg.wasm
+3ccc39cd1b5555535b57afa5293f1fed3e62e6806f74b62b66a61452dc696bc4  index.html
+adad0be4657a4759f2e06fbb275bf89e21b68bfb6771c0d215906ecfd3affdda  styles-ade3b43f7158f090.css
+```
+
+| File | Bytes |
+| --- | ---: |
+| `API_COMPATIBILITY.md` | 29,060 |
+| `LICENSE` | 35,148 |
+| `THIRD_PARTY_LICENSES.md` | 3,120 |
+| `geosolve-demo-web-91818dfa170b8037.js` | 33,750 |
+| `geosolve-demo-web-91818dfa170b8037_bg.wasm` | 7,986,035 |
+| `index.html` | 31,979 |
+| `styles-ade3b43f7158f090.css` | 38,859 |
+
+Temporary service `geosolve-m82-temp-uat.service`, PID `3022963`, first served only that snapshot
+at `100.94.63.83:18080`. Proxy-disabled, cache-bypassed identity requests for `/` and all seven
+files returned HTTP 200 with zero redirects, no `Location` or `Content-Encoding`, exact expected
+media type and length, and snapshot-identical bytes; `/` equals `index.html`. Evidence is
+`/tmp/geosolve-m82-temp-verify.pLz16X/results.tsv`, SHA-256
+`65018fd399cb3e2f13f7d8b6694b349a96c1e1c278861449edf5552095fa71bf`.
+
+Only after that ledger passed, `geosolve-m82-uat.service`, PID `3024723`, began serving the same
+immutable directory at `http://100.94.63.83:8080/`. The same eight checks passed independently;
+final evidence is `/tmp/geosolve-m82-final-verify.HK7BJ3/results.tsv`, with the same ledger hash
+because every asserted path/status/type/length/body hash is identical. The fetched seven-file
+aggregate also equals the frozen manifest aggregate. The temporary listener is retired; the
+retained `:8080` service stays live for human UAT.
+
+This evidence-only documentation is a descendant of the nominated product source. It does not
+replace source/tree authority or rebuild the artifact. Human UAT, approval, Pages publication and
+M82 closure remain pending.
 
 ## Withdrawn post-F005 development qualification record
 
@@ -480,8 +578,7 @@ replace that source/tree or rebuild its artifact.
 - Computed-on-computed chaining, topology repair, trimming/splitting, loop removal, distance
   reduction and stable generated-edge naming remain explicit non-goals.
 
-The immediate remaining work is focused/collateral and complete clean replacement qualification,
-no-rebuild freeze and exact Tailscale verification.
-Only then can `docs/M82_UAT.md` become executable against replacement authority. Human approval,
-exact GitHub Pages publication and closeout follow. M82 remains active with UAT pending; there is
-currently no nominated source, artifact or live M82 listener.
+Focused/collateral qualification, the complete clean replacement gate, no-rebuild freeze and exact
+Tailscale verification pass. `docs/M82_UAT.md` is executable against the nominated replacement.
+Human UAT, explicit approval, exact GitHub Pages publication and closeout remain. M82 stays active
+outside the accepted baseline while the retained UAT listener serves the exact frozen bytes.

@@ -2900,11 +2900,11 @@ accepted evidence; Tailscale PID `2850776` is retired. M81 is complete.
 
 ## M82 acceptance: certified computed all-family Curve Offset
 
-Status: **active; M82-F006/F007 replacement qualification in progress, human UAT pending**.
+Status: **active; M82-F006/F007 replacement clean-qualified and nominated, human UAT pending**.
 `docs/M82_GOALS.md` is authoritative for
 scope, ADR 0038 for architecture, `docs/M82_IMPLEMENTATION.md` for actual evidence and
-`docs/M82_UAT.md` for the prepared scorecard, which is not executable until a new immutable
-replacement is nominated. M82 is not accepted or complete.
+`docs/M82_UAT.md` for the scorecard, which is now executable against the exact immutable
+replacement. M82 is not accepted or complete.
 
 - [x] Wholly M80-eligible Line/Circle/CircularArc operands still create the existing native
   `ProfileOffset` with unchanged equations, persistence, editability and topology-barrier behavior.
@@ -2945,7 +2945,7 @@ replacement is nominated. M82 is not accepted or complete.
 - [x] Focused owner tests cover every curve family, exact analytic routing, mixed chains,
   spline-intrinsic adjacency, closed faces/holes, both sides, topology barriers, deterministic
   exhaustion, lifecycle and compatibility on the underlying implementation.
-- [ ] Exact F006 payload/Bezier scene regressions and F007 constrained proxy history/replay
+- [x] Exact F006 payload/Bezier scene regressions and F007 constrained proxy history/replay
   regressions pass together with native/WASM/editor/demo parity on the replacement source.
 - [x] A distinct reviewed golden matrix covers Line, Polyline, Circle, CircularArc, Ellipse,
   EllipticalArc, RationalQuadratic, Parabola, Hyperbola, Quadratic/Cubic Bezier, open/clamped and
@@ -2955,7 +2955,7 @@ replacement is nominated. M82 is not accepted or complete.
   rows have reviewed stable input fingerprints. Every computed row inventories all eligible
   two-dimensional proxies, projects one source through an ordinary Coincident constraint with
   independent X/Y motion, regenerates fresh Current output and verifies complete Undo/Redo state.
-- [ ] One corrected source passes formatting, diff hygiene, warnings-denied workspace
+- [x] One corrected source passes formatting, diff hygiene, warnings-denied workspace
   Clippy/Rustdoc, locked all-feature tests, native/WASM/demo parity, the expanded golden oracle,
   complete clean release gate and replacement no-rebuild Tailscale verification.
 - [ ] The prepared human UAT, explicit supervising-human approval and exact Pages publication pass
@@ -2986,10 +2986,22 @@ with SHA-256 `b66c277a00861854865440911e769aa5f9e94dbd55114e723b43b3bf46743472`.
 `http://100.94.63.83:8080/` under now-retired PID `1272147`; exact verification ledger
 `/tmp/geosolve-m82-final-verify.wU6t8i/results.tsv` has SHA-256
 `35fa0bb1109d96e97f7107f81ac76292ccd6fbb5cbc10da418d836bb05e6a3dd`. M82-F006/F007 withdraw this
-evidence from current product/UAT authority. It no longer makes the scorecard executable. A new
-clean source, artifact and listener are intentionally absent until replacement qualification.
-Human UAT, explicit approval, exact Pages publication and closure remain unchecked; M82 stays
-active and outside the accepted baseline.
+evidence from current product/UAT authority. It no longer qualifies the scorecard.
+
+Current replacement authority is exact source
+`06e3cce249834959808149441661dd8fdaf47373`, tree
+`9c754edb0bf28d15252c849123d7a7923f26f10c`. Its clean gate ran from 2026-08-21 11:30:53 through
+11:54:30 AEST; `/tmp/geosolve-m82-clean-gate.06e3cce.attempt3.nix.log` is 275,822 bytes and 3,586
+lines with SHA-256 `ca390a3a137b10b07a6534a72b182bb35a67a314bc05441084376e5cb93f861d`.
+Frozen no-rebuild snapshot `/tmp/geosolve-m82-uat.G4pmMH` is read-only with seven regular
+non-symlink files and ordered-manifest aggregate
+`70885cec204ffc586fe84f1faf94b89e3998c23fca0035bb8909f1e57957b535`. Temporary `:18080` and
+retained `http://100.94.63.83:8080/` verification both pass all eight byte/media/length/HTTP checks;
+both result ledgers have SHA-256
+`65018fd399cb3e2f13f7d8b6694b349a96c1e1c278861449edf5552095fa71bf`. PID `3024723` keeps the
+retained candidate live, so `docs/M82_UAT.md` is executable. Human UAT, explicit approval, exact
+Pages publication and closure remain unchecked; M82 stays active and outside the accepted
+baseline.
 
 M82 explicitly excludes topology-changing repair, trimming/splitting, loop removal, partial
 publication, computed-on-computed chaining, Bake/Explode, stable generated-edge names, canonical

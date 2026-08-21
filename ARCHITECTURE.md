@@ -87,10 +87,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   correspondence and all-eligible-proxy golden inventory. Post-F005 source
   `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
   `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, and its immutable artifact are withdrawn; the listener
-  is retired. The reviewed all-family golden now passes 289/289 rows; replacement clean
-  qualification/nomination,
-  human UAT, approval, Pages and closure remain pending, so M82 is not yet part of the accepted
-  baseline.
+  is retired. The reviewed all-family golden now passes 289/289 rows. Exact replacement source
+  `06e3cce249834959808149441661dd8fdaf47373`, tree
+  `9c754edb0bf28d15252c849123d7a7923f26f10c`, passes clean qualification and immutable Tailscale
+  nomination. Human UAT, approval, Pages and closure remain pending, so M82 is not yet part of the
+  accepted baseline.
 - **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
@@ -1623,18 +1624,20 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   rejected durable computed-feature mutation allocator-neutral. Focused implementation checks,
   workspace/release qualification and frozen Tailscale nomination pass at exact source `e4eca32`.
   Supervising-human acceptance and approval-descendant Pages run `32328472125` pass; M81 is closed.
-- M82: M82-F006/F007 replacement implementation is under qualification for certified computed
-  all-family Curve Offset under ADR 0038. The exact supplied periodic-NURBS payload and fresh
+- M82: M82-F006/F007 replacement implementation is mechanically qualified and nominated for
+  certified computed all-family Curve Offset under ADR 0038. The exact supplied periodic-NURBS
+  payload and fresh
   Beziers bind complete accepted-scene fallback; computed feature selection exposes source-owned
   constrained inverse proxies without making generated output persistent or directly
   constrainable. Post-F005 source `d52104595ee11f9e460e98ea5e26200bb34a5d94`, tree
   `0a3bcb066a6a2d5d5d2d99591441035be23d20fe`, and its no-rebuild artifact are withdrawn and the
-  listener is retired. The reviewed all-family golden passes 289/289 rows. A new immutable
-  nomination, human UAT, explicit approval, Pages publication and closure remain pending; M82
-  remains active outside the accepted baseline.
-  Preserve M80 native
-  routing for exact Line/Circle/CircularArc operands; route mixed/general regular faces and ordered
-  chains into revision-local computed output with explicit traversal, side, adjacency, junction
-  cells and terminals. Certify regularity, approximation error, self-contact and unchanged topology
-  over every built-in planar family. Reject atomically rather than trim, split, heal or reduce
-  distance. Add private feature v2 while preserving v1 bytes for empty/Fillet-only state.
+  listener is retired. The reviewed all-family golden passes 289/289 rows. Exact source
+  `06e3cce249834959808149441661dd8fdaf47373`, tree
+  `9c754edb0bf28d15252c849123d7a7923f26f10c`, supplies the clean-qualified immutable nomination.
+  Human UAT, explicit approval, Pages publication and closure remain pending; M82 remains active
+  outside the accepted baseline. Preserve M80 native routing for exact Line/Circle/CircularArc
+  operands; route mixed/general regular faces and ordered chains into revision-local computed output
+  with explicit traversal, side, adjacency, junction cells and terminals. Certify regularity,
+  approximation error, self-contact and unchanged topology over every built-in planar family.
+  Reject atomically rather than trim, split, heal or reduce distance. Add private feature v2 while
+  preserving v1 bytes for empty/Fillet-only state.

@@ -2,18 +2,37 @@
 
 # M82 focused UAT — certified computed all-family Curve Offset
 
-Status: **replacement qualification in progress; human UAT pending and not yet executable**.
+Status: **replacement mechanically qualified and frozen; human UAT pending and executable**.
 M82-F006 withdrew the post-F005 candidate after the supplied periodic-NURBS payload and fresh
 Bezier previews exposed blank-scene composition. M82-F007 adds computed Offset inverse-edit proxy
-handles that edit the constrained owning source. The prior listener is retired. This scorecard
-must not run until one unchanged replacement source passes the expanded all-family golden matrix,
-the complete clean gate, a no-rebuild freeze and exact Tailscale byte verification.
+handles that edit the constrained owning source. One unchanged replacement now passes the expanded
+all-family golden matrix, complete clean gate, no-rebuild freeze and exact Tailscale verification.
+M82 remains active until this scorecard, explicit approval, Pages publication and closure pass.
 
-## Replacement authority pending
+## Nominated replacement authority
 
-No source, tree, frozen directory, manifest aggregate, clean-gate log, verification ledger or
-listener is currently nominated. Exact values will be recorded only after replacement
-qualification; no prior source or artifact may be reused as authority.
+- Product source: `06e3cce249834959808149441661dd8fdaf47373`.
+- Product tree: `9c754edb0bf28d15252c849123d7a7923f26f10c`.
+- Frozen no-rebuild snapshot: `/tmp/geosolve-m82-uat.G4pmMH` (directory `0555`; seven regular
+  non-symlink files at `0444`).
+- Ordered file-manifest aggregate:
+  `70885cec204ffc586fe84f1faf94b89e3998c23fca0035bb8909f1e57957b535`.
+- Current Tailscale endpoint: `http://100.94.63.83:8080/` under
+  `geosolve-m82-uat.service`, PID `3024723`.
+- Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, direct
+  systemd process exit 0 from 2026-08-21 11:30:53 to 11:54:30 AEST; 275,822-byte, 3,586-line log
+  `/tmp/geosolve-m82-clean-gate.06e3cce.attempt3.nix.log`, SHA-256
+  `ca390a3a137b10b07a6534a72b182bb35a67a314bc05441084376e5cb93f861d`.
+- Exact served-byte verification: temporary
+  `/tmp/geosolve-m82-temp-verify.pLz16X/results.tsv` and retained
+  `/tmp/geosolve-m82-final-verify.HK7BJ3/results.tsv`, each SHA-256
+  `65018fd399cb3e2f13f7d8b6694b349a96c1e1c278861449edf5552095fa71bf`.
+
+Both verification passes covered `/` plus all seven assets: HTTP 200, zero redirects, no
+`Location` or `Content-Encoding`, exact media type/length/body, the frozen aggregate above and
+root equality with `index.html`. The temporary listener is retired; the retained listener serves
+only the immutable replacement and remains live through UAT. This evidence-only documentation is
+a descendant of the nominated source and does not replace or rebuild it.
 
 ## Withdrawn post-F005 authority
 
@@ -81,5 +100,5 @@ human UAT because its Offset help still claimed native-only curve support; it is
 Any blank/partial scene, stale output, silent distance reduction, topology repair, unexpected route
 away from M80, proxy edit that bypasses source constraints, computed-on-computed consumption,
 selection ambiguity, history mismatch or failed recovery opens a focused M82 finding and withdraws
-the candidate. A replacement candidate does not yet exist. Human approval is required before M82
-closure and public Pages publication.
+the nominated replacement. Human approval is required before M82 closure and public Pages
+publication.
