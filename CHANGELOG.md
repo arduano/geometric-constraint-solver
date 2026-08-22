@@ -36,7 +36,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   atomic owner across shape changes; projected computed-feature transcript replay performs the
   same drag-free promotion as the original release. A private bounded workspace-v7 ledger retains
   exact stamp-authenticated host-only inputs needed solely by accepted authority in Undo/Redo,
-  without adding host concepts to the generic lineage or RPC schema.
+  without adding host concepts to the generic lineage or RPC schema. Projected direct
+  manipulation now reifies accepted geometry without converting effective host-supplied driving
+  dimensions or dimensionless properties into authored local fallback values.
 - Typed retained-design, solve-attempt and accepted-state identities/views for
   repairable unsolved sketch intent, optional finite candidate geometry and separate
   v1-v4 design/accepted persistence with host-owned revision high-water metadata.

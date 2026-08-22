@@ -5,9 +5,10 @@
 use super::lineage::CoordinatorLineage;
 use super::{
     ComputedEvaluationAllocator, ComputedFeatureDocument, ComputedFeatureEvaluationState,
-    CoordinatorError, MutationOutcome, OperationOutcome, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator, RetainedSketchDocumentSession, SketchDocument,
-    SketchLifecycleRevisionHighWater, bounded_geometry_control, evaluate_computed_features,
+    CoordinatorError, DocumentParameterTarget, MutationOutcome, OperationOutcome, ReplayAction,
+    RestoreCheckpoint, RetainedEditorCoordinator, RetainedSketchDocumentSession, SketchDocument,
+    SketchLifecycleRevisionHighWater, bounded_geometry_control, dimension_target_scalar,
+    evaluate_computed_features,
 };
 
 impl RetainedEditorCoordinator {
@@ -24,11 +25,13 @@ impl RetainedEditorCoordinator {
             .accepted_state_for_current_input()
             .ok_or(CoordinatorError::DirectManipulationColdReproductionRejected)?;
         let accepted_document = accepted.document().clone();
+        let mut promoted_design = accepted_document.clone();
+        preserve_host_parameter_fallbacks(candidate.design_document(), &mut promoted_design)?;
         let input = candidate.last_attempt().input();
         let request = input.publication_request().without_temporary_targets();
         let promoted =
             RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
-                accepted_document.clone(),
+                promoted_design,
                 accepted_document,
                 self.session.revision_high_water(),
                 candidate.parameter_batch().clone(),
@@ -118,6 +121,7 @@ impl RetainedEditorCoordinator {
             materialized.design_json(),
             materialized.design_uses_draft_v5(),
         )?;
+        let accepted = current_accepted_document(next)?;
         let attempt_input = candidate_session.last_attempt().input();
         let request = attempt_input
             .candidate_request()
@@ -125,8 +129,8 @@ impl RetainedEditorCoordinator {
             .without_previous_state_preferences();
         let cold_session =
             RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
-                design.clone(),
                 design,
+                accepted,
                 materialized.revisions(),
                 candidate_session.parameter_batch().clone(),
                 candidate_session
@@ -140,8 +144,7 @@ impl RetainedEditorCoordinator {
             .ok_or(CoordinatorError::DirectManipulationColdReproductionRejected)?;
         let (cold_accepted_json, cold_accepted_is_draft_v5) =
             checkpoint_document_to_json(cold_accepted.document())?;
-        if !next.accepted_belongs_to_current_design()
-            || next.accepted_json() != Some(cold_accepted_json.as_str())
+        if next.accepted_json() != Some(cold_accepted_json.as_str())
             || next.accepted_uses_draft_v5() != cold_accepted_is_draft_v5
         {
             return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
@@ -211,6 +214,39 @@ impl RetainedEditorCoordinator {
     }
 }
 
+/// Accepted documents contain effective host-parameter values, while the
+/// retained design deliberately keeps the caller's local fallback values.
+/// Direct-manipulation promotion may reify solver-projected geometry, but it
+/// must not silently turn immutable host inputs into authored scalar edits.
+fn preserve_host_parameter_fallbacks(
+    retained: &SketchDocument,
+    promoted: &mut SketchDocument,
+) -> Result<(), CoordinatorError> {
+    for binding in retained.parameter_bindings() {
+        let scalar = match binding.target {
+            DocumentParameterTarget::DrivingDimension(dimension) => {
+                let definition = &retained
+                    .dimension(dimension)
+                    .ok_or(CoordinatorError::InvalidActionInput(
+                        "host parameter targets a missing driving dimension",
+                    ))?
+                    .definition;
+                dimension_target_scalar(definition)
+            }
+            DocumentParameterTarget::DimensionlessFixedScalar(property) => property.scalar,
+            DocumentParameterTarget::Activation(_) => continue,
+        };
+        let fallback = retained
+            .scalar(scalar)
+            .ok_or(CoordinatorError::InvalidActionInput(
+                "host parameter targets a missing fallback scalar",
+            ))?
+            .value;
+        promoted.set_scalar_value(scalar, fallback)?;
+    }
+    Ok(())
+}
+
 pub(super) fn mutation_from<T: Clone>(
     outcome: &geosolve_sketch::RetainedDocumentTransactionOutcome<T>,
 ) -> MutationOutcome<T> {
@@ -269,6 +305,21 @@ fn checkpoint_document_from_json(
     } else {
         SketchDocument::from_json(json)
     }
+}
+
+fn current_accepted_document(
+    checkpoint: &RestoreCheckpoint,
+) -> Result<SketchDocument, CoordinatorError> {
+    if !checkpoint.accepted_belongs_to_current_design() {
+        return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+    }
+    checkpoint_document_from_json(
+        checkpoint
+            .accepted_json()
+            .ok_or(CoordinatorError::DirectManipulationColdReproductionRejected)?,
+        checkpoint.accepted_uses_draft_v5(),
+    )
+    .map_err(CoordinatorError::from)
 }
 
 pub(super) fn restore_sketch_checkpoint(
@@ -462,4 +513,52 @@ fn lifecycle_high_water_covers(
             (Some(current), Some(required)) => current.get() >= required.get(),
             (None, Some(_)) => false,
         }
+}
+
+#[cfg(test)]
+mod tests {
+    use geosolve_sketch::{DocumentParameterKind, DocumentParameterTarget, SketchDocument};
+
+    use super::{dimension_target_scalar, preserve_host_parameter_fallbacks};
+
+    #[test]
+    fn direct_promotion_preserves_driving_dimension_fallback() {
+        let mut retained = SketchDocument::new(8.0).expect("document");
+        let rectangle = retained
+            .add_rectangle("host-sized rectangle", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let parameter = retained
+            .add_parameter("host width", DocumentParameterKind::Length)
+            .expect("parameter");
+        retained
+            .add_parameter_binding(
+                parameter,
+                DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]),
+            )
+            .expect("binding");
+        let target = dimension_target_scalar(
+            &retained
+                .dimension(rectangle.dimensions[0])
+                .expect("dimension")
+                .definition,
+        );
+        let fallback = retained.scalar(target).expect("fallback scalar").value;
+        let mut promoted = retained.clone();
+        promoted
+            .set_scalar_value(target, fallback + 2.0)
+            .expect("effective host value");
+
+        preserve_host_parameter_fallbacks(&retained, &mut promoted)
+            .expect("preserve local fallback");
+
+        assert_eq!(
+            promoted
+                .scalar(target)
+                .expect("promoted scalar")
+                .value
+                .to_bits(),
+            fallback.to_bits(),
+            "accepted host input must not become retained authored intent"
+        );
+    }
 }

@@ -379,6 +379,24 @@ duplicate, stamp-mismatched and wrong-session companions while preserving the co
 coordinator byte-for-byte; its Rustdoc and API-compatibility record state that lineage session,
 ledger and exact current/accepted host payloads form one workspace bundle.
 
+### M83-F026 — direct promotion authored an effective host value as a local fallback
+
+The first committed candidate attempt, source `9bbbedd`, independently reproduced the existing
+M77-F009 rational-control regression. A projected direct edit correctly used the host-supplied
+effective weight `0.8`, but promotion copied the complete accepted document into retained intent
+and changed the authored fallback from `0.5` to `0.8`. The candidate was withdrawn immediately;
+its clean-gate log is `/tmp/geosolve-m83-clean-gate.9bbbedd.nix.log`, 71,999 bytes and 839 lines,
+with SHA-256
+`0108b29d32fcc761a77c9da388fb3075570db4a1609d166717f1264732cf622b`.
+
+Direct-manipulation promotion now reifies accepted projected geometry while copying every
+host-bound driving-dimension or dimensionless-property scalar fallback from retained design
+intent. Activation bindings have no scalar fallback. Cold owner-rewrite qualification separately
+certifies the staged accepted checkpoint under the exact host inputs, so the retained fallback is
+not misrepresented as effective accepted state. The exact pre-existing M77-F009 regression, all
+16 curve-control coordinator cases, and a focused driving-dimension fallback unit regression pass;
+the replacement must complete a fresh clean gate before nomination.
+
 ## Qualification record
 
 Current focused and collateral evidence (development worktree, not yet a nominated clean
@@ -412,10 +430,17 @@ Result: 21 passed, zero failed. The frozen action catalog has 194 catalog entrie
 (195 physical lines), with SHA-256
 `8a45fde5691f82adb1afb9e30b1d71fff24884667453ab46fd275fe0caad922a`.
 
-The complete editor and demo library suites subsequently passed 458/458 and 164/164. Focused
+The complete editor and demo library suites subsequently passed 459/459 and 164/164. Focused
 workspace-v7 authority passed 6/6, the complete persistence module passed 27/27, lineage restore
 passed 3/3 and Undo/Redo collateral passed 23/23. The M70B retained-movement suite passed 9/9,
 including the projected-release transcript-replay regression that opened M83-F024.
+
+The first attempted clean gate from committed source `9bbbedd` ran on 2026-08-22 from 11:40:02
+through 11:42:52 AEST and exited nonzero at M77-F009, after 15/16 curve-control cases passed. That
+gate is withdrawn defect-reproduction evidence only and does not nominate its source or `dist`.
+After the M83-F026 repair, the complete editor library plus M70B retained movement, M77 curve
+properties and focused M83 behavior/history collateral passed 459/459, 9/9, 6/6 and 7/7
+respectively on the development worktree.
 
 ```bash
 cargo test --locked -p geosolve-sketch-lineage-wasm --all-features --no-fail-fast

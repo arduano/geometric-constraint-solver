@@ -4400,6 +4400,18 @@ cache-free reload. The source-route evidence is a closed inventory sentinel rath
 instrumentation of every route. Release-WASM parity, complete release qualification and immutable-
 candidate human UAT remain pending.
 
+### M83-F026 — projected editing preserves host-owned scalar fallbacks
+
+Bind a rational-conic weight or a driving dimension to a host parameter whose effective value
+differs from the document-local fallback, then perform a projected spatial edit that rewrites one
+or more lineage owners. The accepted projection must use the effective host value, while retained
+intent preserves the fallback bit-for-bit. Undo/Redo, replay and cold reconstruction must reproduce
+the same accepted projection from the retained fallback plus exact host input; activation bindings
+remain unaffected because they have no scalar fallback. The focused M77-F009 rational-control
+regression, all 16 curve-control coordinator cases and a driving-dimension unit regression cover
+both scalar target families. The pre-repair `9bbbedd` candidate is withdrawn and no artifact from
+its failed clean gate may be nominated.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:
