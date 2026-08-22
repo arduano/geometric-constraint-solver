@@ -31,8 +31,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   accepted digests and rebuilds Undo/Redo authority without trusting disposable flat caches.
   Final authority review additionally rejects consumed numeric identity reuse after divergent
   Redo abandonment, cold-authenticates every historical accepted stamp during workspace load,
-  reconstructs serialized attempt metadata from exact lineage-owned host inputs, and aligns RPC
-  wrong-document versus stale-revision errors.
+  reconstructs serialized attempt metadata from exact workspace host inputs, and aligns RPC
+  wrong-document versus stale-revision errors. Tagged contact branch values retain one stable
+  atomic owner across shape changes; projected computed-feature transcript replay performs the
+  same drag-free promotion as the original release. A private bounded workspace-v7 ledger retains
+  exact stamp-authenticated host-only inputs needed solely by accepted authority in Undo/Redo,
+  without adding host concepts to the generic lineage or RPC schema.
 - Typed retained-design, solve-attempt and accepted-state identities/views for
   repairable unsolved sketch intent, optional finite candidate geometry and separate
   v1-v4 design/accepted persistence with host-owned revision high-water metadata.

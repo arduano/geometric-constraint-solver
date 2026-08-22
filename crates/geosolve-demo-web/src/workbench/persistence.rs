@@ -46,6 +46,8 @@ pub(crate) struct WorkspaceSnapshot {
     version: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     lineage_session_json: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lineage_host_input_ledger_json: Option<String>,
     #[serde(
         default,
         deserialize_with = "deserialize_disposable_json_cache",
@@ -412,6 +414,9 @@ impl WorkspaceSnapshot {
         let lineage_session_json = coordinator
             .lineage_session_json()
             .map_err(|error| error.to_string())?;
+        let lineage_host_input_ledger_json = coordinator
+            .lineage_host_input_ledger_json()
+            .map_err(|error| error.to_string())?;
         let lineage_materialization_map_json = coordinator
             .lineage_materialization_map_json()
             .map_err(|error| error.to_string())?;
@@ -423,6 +428,7 @@ impl WorkspaceSnapshot {
             coordinator.session().accepted_parameter_batch(),
             coordinator.session().accepted_external_snapshot_set(),
             lineage_session_json,
+            Some(lineage_host_input_ledger_json),
             lineage_materialization_map_json,
         ))
     }
@@ -436,12 +442,14 @@ impl WorkspaceSnapshot {
         accepted_parameter_batch: Option<&ParameterBatch>,
         accepted_external_snapshot_set: Option<&ExternalSnapshotSet>,
         lineage_session_json: String,
+        lineage_host_input_ledger_json: Option<String>,
         lineage_materialization_map_json: String,
     ) -> Self {
         let revisions = checkpoint.revisions();
         Self {
             version: 7,
             lineage_session_json: Some(lineage_session_json),
+            lineage_host_input_ledger_json,
             lineage_materialization_map_json: Some(lineage_materialization_map_json),
             design: WorkspaceDocumentPayload {
                 encoding: if checkpoint.design_uses_draft_v5() {
@@ -508,6 +516,11 @@ impl WorkspaceSnapshot {
             let lineage_session_json = coordinator
                 .lineage_session_json()
                 .map_err(|error| error.to_string())?;
+            snapshot.lineage_host_input_ledger_json = Some(
+                coordinator
+                    .lineage_host_input_ledger_json()
+                    .map_err(|error| error.to_string())?,
+            );
             snapshot.lineage_materialization_map_json = Some(
                 RetainedEditorCoordinator::lineage_materialization_map_json_for_session(
                     &lineage_session_json,
@@ -559,6 +572,7 @@ impl WorkspaceSnapshot {
                 Self {
                     version: 7,
                     lineage_session_json: None,
+                    lineage_host_input_ledger_json: None,
                     lineage_materialization_map_json: None,
                     design,
                     accepted,
@@ -591,6 +605,7 @@ impl WorkspaceSnapshot {
                 Self {
                     version: 7,
                     lineage_session_json: None,
+                    lineage_host_input_ledger_json: None,
                     lineage_materialization_map_json: None,
                     design: legacy.design,
                     accepted: legacy.accepted,
@@ -628,6 +643,7 @@ impl WorkspaceSnapshot {
                 Self {
                     version: 7,
                     lineage_session_json: None,
+                    lineage_host_input_ledger_json: None,
                     lineage_materialization_map_json: None,
                     design: legacy.design,
                     accepted: legacy.accepted,
@@ -658,6 +674,7 @@ impl WorkspaceSnapshot {
                 Self {
                     version: 7,
                     lineage_session_json: None,
+                    lineage_host_input_ledger_json: None,
                     lineage_materialization_map_json: None,
                     design: legacy.design,
                     accepted: legacy.accepted,
@@ -681,6 +698,7 @@ impl WorkspaceSnapshot {
                     serde_json::from_str(input).map_err(|error| error.to_string())?;
                 snapshot.version = 7;
                 snapshot.lineage_session_json = None;
+                snapshot.lineage_host_input_ledger_json = None;
                 snapshot.lineage_materialization_map_json = None;
                 snapshot.annotation_layout_json = None;
                 if snapshot.accepted.is_some() {
@@ -696,6 +714,7 @@ impl WorkspaceSnapshot {
                     serde_json::from_str(input).map_err(|error| error.to_string())?;
                 snapshot.version = 7;
                 snapshot.lineage_session_json = None;
+                snapshot.lineage_host_input_ledger_json = None;
                 snapshot.lineage_materialization_map_json = None;
                 if snapshot.accepted.is_some() {
                     snapshot.accepted_parameter_batch_json =
@@ -715,6 +734,7 @@ impl WorkspaceSnapshot {
         const V7_FIELDS: &[&str] = &[
             "version",
             "lineage_session_json",
+            "lineage_host_input_ledger_json",
             "lineage_materialization_map_json",
             "design",
             "accepted",
@@ -746,6 +766,10 @@ impl WorkspaceSnapshot {
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| "workspace v7 is missing authoritative lineage".to_owned())?
             .to_owned();
+        let lineage_host_input_ledger_json = object
+            .get("lineage_host_input_ledger_json")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
         let materialized_intent =
             RetainedEditorCoordinator::lineage_materialization_checkpoint(&lineage_session_json)
                 .map_err(|error| error.to_string())?;
@@ -830,6 +854,7 @@ impl WorkspaceSnapshot {
             accepted_parameter_batch.as_ref(),
             accepted_external_snapshot_set.as_ref(),
             lineage_session_json.clone(),
+            lineage_host_input_ledger_json.clone(),
             lineage_materialization_map_json.clone(),
         );
         let expected_accepted_parameter_batch = if current_is_accepted {
@@ -850,6 +875,7 @@ impl WorkspaceSnapshot {
             expected_accepted_parameter_batch,
             expected_accepted_external_snapshot_set,
             lineage_session_json.clone(),
+            lineage_host_input_ledger_json.clone(),
             lineage_materialization_map_json,
         );
 
@@ -890,6 +916,7 @@ impl WorkspaceSnapshot {
                 })
             && self.lineage_materialization_map_json
                 == intent_expected.lineage_materialization_map_json
+            && self.lineage_host_input_ledger_json == intent_expected.lineage_host_input_ledger_json
             && self.parameter_batch_json == intent_expected.parameter_batch_json
             && self.external_snapshot_set_json == intent_expected.external_snapshot_set_json
             && self.accepted_parameter_batch_json == intent_expected.accepted_parameter_batch_json
@@ -1375,9 +1402,18 @@ pub(crate) fn coordinator_from_snapshot(
     )
     .map_err(|error| error.to_string())?;
     if let Some(lineage_session_json) = &snapshot.lineage_session_json {
-        coordinator
-            .restore_lineage_session_json(lineage_session_json)
-            .map_err(|error| error.to_string())?;
+        if let Some(host_input_ledger_json) = &snapshot.lineage_host_input_ledger_json {
+            coordinator
+                .restore_lineage_session_and_host_input_ledger_json(
+                    lineage_session_json,
+                    host_input_ledger_json,
+                )
+                .map_err(|error| error.to_string())?;
+        } else {
+            coordinator
+                .restore_lineage_session_json(lineage_session_json)
+                .map_err(|error| error.to_string())?;
+        }
     }
     let layout = compatible_annotation_layout(&coordinator, &cached_layout);
     coordinator.editor_mut().restore_annotation_layout(layout);
@@ -1705,8 +1741,8 @@ mod tests {
                 },
             )
             .expect("history edit");
-        let history_len = coordinator.history_len();
-        let history_cursor = coordinator.history_cursor();
+        let history_len_before_host_inputs = coordinator.history_len();
+        let history_cursor_before_host_inputs = coordinator.history_cursor();
         let current_parameters = ParameterBatch::new(
             2,
             vec![ParameterBatchEntry {
@@ -1732,8 +1768,31 @@ mod tests {
                 DocumentSolveRequest::default(),
             )
             .expect("snapshot attempt");
-        assert_eq!(coordinator.history_len(), history_len);
-        assert_eq!(coordinator.history_cursor(), history_cursor);
+        assert_eq!(
+            coordinator.history_len(),
+            history_len_before_host_inputs,
+            "host-only evaluation must not create user-visible history"
+        );
+        assert_eq!(
+            coordinator.history_cursor(),
+            history_cursor_before_host_inputs
+        );
+        // Capture the current host-input pair in a later action while the
+        // preceding accepted program remains only in Undo. Workspace restore
+        // must resolve that historical stamp from retained action provenance,
+        // rather than reverting to the baseline input pair or trusting flat
+        // accepted bytes.
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreatePoint {
+                    label: "current-input history point".into(),
+                    position: [11.0, 8.0],
+                },
+            )
+            .expect("current-input history edit");
+        let history_len = coordinator.history_len();
+        let history_cursor = coordinator.history_cursor();
 
         let encoded = WorkspaceSnapshot::from_coordinator(&coordinator)
             .expect("workspace")
@@ -1788,6 +1847,274 @@ mod tests {
             &current_snapshots
         );
         assert_current_geometry(&restored);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn workspace_v7_retains_host_only_inputs_for_accepted_authority_held_only_in_redo() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let rectangle = document
+            .add_rectangle("parameterized rectangle", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let parameter = document
+            .add_parameter("width input", DocumentParameterKind::Length)
+            .expect("parameter");
+        document
+            .add_parameter_binding(
+                parameter,
+                DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]),
+            )
+            .expect("parameter binding");
+        let external_point = document
+            .add_point("external point", [1.0, 2.0])
+            .expect("point");
+        let binding = document
+            .add_external_binding("external datum", ExternalFeatureKindV1::Point, None)
+            .expect("external binding");
+        document
+            .add_constraint(
+                "external coincidence",
+                DocumentConstraintDefinition::ExternalPointCoincident {
+                    point: external_point,
+                    external: DocumentExternalPointRef { binding },
+                },
+            )
+            .expect("external constraint");
+        let initial_parameters = ParameterBatch::new(
+            1,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(4.0),
+            }],
+        )
+        .expect("initial parameters");
+        let initial_snapshots =
+            ExternalSnapshotSet::new(1, vec![external_point_entry(binding, 1, [1.0, 2.0])])
+                .expect("initial snapshots");
+        let session = RetainedSketchDocumentSession::new_with_inputs(
+            document,
+            initial_parameters,
+            initial_snapshots,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("initial session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreatePoint {
+                    label: "redo-only point".into(),
+                    position: [9.0, 7.0],
+                },
+            )
+            .expect("history edit before host-only inputs");
+
+        let redo_parameters = ParameterBatch::new(
+            2,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(6.0),
+            }],
+        )
+        .expect("redo-only parameters");
+        coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                redo_parameters,
+                DocumentSolveRequest::default(),
+            )
+            .expect("redo-only parameter acceptance");
+        let redo_snapshots =
+            ExternalSnapshotSet::new(2, vec![external_point_entry(binding, 2, [3.0, 4.0])])
+                .expect("redo-only snapshots");
+        coordinator
+            .replace_external_snapshot_set(
+                coordinator.session().design_identity(),
+                redo_snapshots,
+                DocumentSolveRequest::default(),
+            )
+            .expect("redo-only snapshot acceptance");
+        coordinator
+            .undo()
+            .expect("move host-only accepted authority into Redo");
+
+        let current_parameters = ParameterBatch::new(
+            3,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(7.0),
+            }],
+        )
+        .expect("current parameters");
+        coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                current_parameters.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("current parameter acceptance");
+        let current_snapshots =
+            ExternalSnapshotSet::new(3, vec![external_point_entry(binding, 3, [5.0, 6.0])])
+                .expect("current snapshots");
+        coordinator
+            .replace_external_snapshot_set(
+                coordinator.session().design_identity(),
+                current_snapshots.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("current snapshot acceptance");
+        assert_eq!(coordinator.history_cursor(), 0);
+        assert_eq!(coordinator.history_len(), 2);
+
+        let encoded = WorkspaceSnapshot::from_coordinator(&coordinator)
+            .expect("workspace")
+            .encode()
+            .expect("workspace JSON");
+        let mut missing_ledger: serde_json::Value =
+            serde_json::from_str(&encoded).expect("workspace value");
+        missing_ledger
+            .as_object_mut()
+            .expect("workspace object")
+            .remove("lineage_host_input_ledger_json");
+        let missing_ledger = WorkspaceSnapshot::decode(
+            &serde_json::to_string(&missing_ledger).expect("workspace without ledger"),
+        )
+        .expect("legacy v7 shape remains strictly decodable");
+        assert!(
+            coordinator_from_snapshot(&missing_ledger)
+                .expect_err("missing historical payload must fail eager authority restoration")
+                .contains("accepted lineage external-input provenance"),
+            "a workspace cannot defer an unreproducible Redo authority until traversal"
+        );
+
+        let recovered = WorkspaceSnapshot::decode(&encoded).expect("decode workspace");
+        let mut restored = coordinator_from_snapshot(&recovered)
+            .expect("cold-authenticate accepted authority held only in Redo");
+        assert_eq!(restored.session().parameter_batch(), &current_parameters);
+        assert_eq!(
+            restored.session().external_snapshot_set(),
+            &current_snapshots
+        );
+
+        restored.redo().expect("Redo with current live host inputs");
+        assert_eq!(restored.session().parameter_batch(), &current_parameters);
+        assert_eq!(
+            restored.session().external_snapshot_set(),
+            &current_snapshots
+        );
+        let accepted = restored
+            .session()
+            .accepted_state_for_current_input()
+            .expect("Redo re-evaluates under current host inputs");
+        let left = accepted
+            .document()
+            .point(rectangle.points[0])
+            .expect("rectangle left")
+            .position;
+        let right = accepted
+            .document()
+            .point(rectangle.points[1])
+            .expect("rectangle right")
+            .position;
+        assert!(((right[0] - left[0]) - 7.0).abs() < 1.0e-9);
+        let external_position = accepted
+            .document()
+            .point(external_point)
+            .expect("external point")
+            .position;
+        assert!((external_position[0] - 5.0).abs() < 1.0e-9);
+        assert!((external_position[1] - 6.0).abs() < 1.0e-9);
+    }
+
+    #[test]
+    fn workspace_v7_restores_host_only_accepted_inputs_beneath_a_failed_current_attempt() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let rectangle = document
+            .add_rectangle("parameterized rectangle", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let parameter = document
+            .add_parameter("width input", DocumentParameterKind::Length)
+            .expect("parameter");
+        document
+            .add_parameter_binding(
+                parameter,
+                DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]),
+            )
+            .expect("parameter binding");
+        let initial = ParameterBatch::new(
+            1,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(4.0),
+            }],
+        )
+        .expect("initial parameters");
+        let session = RetainedSketchDocumentSession::new_with_parameter_batch(
+            document,
+            initial,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("initial session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        let accepted_parameters = ParameterBatch::new(
+            2,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(6.0),
+            }],
+        )
+        .expect("host-only accepted parameters");
+        let accepted = coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                accepted_parameters.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("host-only accepted evaluation");
+        assert!(accepted.published_accepted.is_some());
+
+        let missing = ParameterBatch::new(3, Vec::new()).expect("missing parameter batch");
+        let rejected = coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                missing.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("typed rejected evaluation");
+        assert!(rejected.published_accepted.is_none());
+        assert_eq!(coordinator.history_len(), 1);
+
+        let encoded = WorkspaceSnapshot::from_coordinator(&coordinator)
+            .expect("workspace")
+            .encode()
+            .expect("workspace JSON");
+        let snapshot = WorkspaceSnapshot::decode(&encoded).expect("decode workspace");
+        let restored = coordinator_from_snapshot(&snapshot)
+            .expect("restore accepted authority from its stamped ledger entry");
+        assert_eq!(restored.session().parameter_batch(), &missing);
+        assert_eq!(
+            restored.session().accepted_parameter_batch(),
+            Some(&accepted_parameters)
+        );
+        assert!(restored.session().last_attempt().failure().is_some());
+        let accepted = restored
+            .session()
+            .accepted_state()
+            .expect("historical accepted state");
+        let left = accepted
+            .document()
+            .point(rectangle.points[0])
+            .expect("rectangle left")
+            .position;
+        let right = accepted
+            .document()
+            .point(rectangle.points[1])
+            .expect("rectangle right")
+            .position;
+        assert!(((right[0] - left[0]) - 6.0).abs() < 1.0e-9);
     }
 
     #[test]

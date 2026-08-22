@@ -2457,14 +2457,40 @@ impl RetainedEditorCoordinator {
         Ok(self.lineage.to_canonical_json()?)
     }
 
-    /// Canonical workspace authority including retained/accepted lineage,
-    /// bounded Undo/Redo history, and lifecycle allocator high-waters.
+    /// Canonical generic lineage-session authority including retained/accepted
+    /// lineage, bounded Undo/Redo history, and lifecycle allocator high-waters.
+    ///
+    /// A workbench workspace is a bundle rather than this string alone. It
+    /// must also persist [`Self::lineage_host_input_ledger_json`] from the
+    /// same coordinator state and the session's exact current and accepted
+    /// parameter/snapshot payloads. The generic lineage session intentionally
+    /// retains only opaque input stamps.
     ///
     /// # Errors
     ///
     /// Returns a bounded canonical lineage-session serialization error.
     pub fn lineage_session_json(&self) -> Result<String, CoordinatorError> {
         Ok(self.lineage.to_canonical_session_json()?)
+    }
+
+    /// Canonical bounded exact host-input ledger needed to authenticate
+    /// accepted authority retained only in lineage Undo/Redo history.
+    ///
+    /// The generic lineage session intentionally carries only opaque input
+    /// stamps. Workspace persistence stores this coordinator-owned companion
+    /// beside that session; standalone RPC sessions do not need it because
+    /// untrusted accepted authority is discarded on load.
+    ///
+    /// Capture this string and [`Self::lineage_session_json`] from the same
+    /// coordinator state, together with the exact current and accepted host
+    /// inputs exposed by [`Self::session`]. None is a self-contained
+    /// coordinator-workspace envelope by itself.
+    ///
+    /// # Errors
+    ///
+    /// Returns a bounded canonical-ledger serialization error.
+    pub fn lineage_host_input_ledger_json(&self) -> Result<String, CoordinatorError> {
+        Ok(self.lineage.to_canonical_host_input_ledger_json()?)
     }
 
     /// Canonical revision-stamped logical/native ownership cache for the
@@ -2620,7 +2646,16 @@ impl RetainedEditorCoordinator {
         Ok(lineage.to_canonical_session_json()?)
     }
 
-    /// Replaces this workbench from authoritative workspace-v7 lineage.
+    /// Replaces this workbench from authoritative workspace-v7 lineage when
+    /// every required historical host-input pair is recoverable without the
+    /// optional coordinator ledger.
+    ///
+    /// Before calling, the receiver must already contain the exact current
+    /// and accepted parameter/snapshot payloads decoded from the same
+    /// workspace. This compatibility path is intended for earlier v7 payloads
+    /// whose accepted inputs are recoverable from those payloads or from
+    /// authenticated action provenance.
+    ///
     /// Flat sketch/feature state is rebuilt cold and independently validated;
     /// any previously loaded flat cache is disposable.
     ///
@@ -2632,10 +2667,52 @@ impl RetainedEditorCoordinator {
         &mut self,
         lineage_session_json: &str,
     ) -> Result<(), CoordinatorError> {
-        let mut candidate = CoordinatorLineage::from_session_json(lineage_session_json)?;
-        candidate.validate_complete_accepted_authority()?;
-        let current_inputs = candidate.current_host_inputs()?;
-        candidate.reconstruct_current_evaluation_authority(&current_inputs)?;
+        self.restore_lineage_session_json_inner(lineage_session_json, None)
+    }
+
+    /// Replaces this workbench from authoritative workspace-v7 lineage and
+    /// its bounded exact historical host-input companion.
+    ///
+    /// `lineage_session_json` and `host_input_ledger_json` must have been
+    /// captured from the same coordinator state. Before calling, the receiver
+    /// must already contain the exact current and accepted parameter/snapshot
+    /// payloads decoded from that same workspace snapshot. Restoration uses
+    /// those live inputs to reconstruct the current attempt and the accepted
+    /// pair plus the ledger to authenticate all visible/Undo/Redo authority.
+    ///
+    /// # Errors
+    ///
+    /// Returns strict lineage, host-input, sketch restore, feature, or
+    /// validation errors without publishing the candidate authority.
+    pub fn restore_lineage_session_and_host_input_ledger_json(
+        &mut self,
+        lineage_session_json: &str,
+        host_input_ledger_json: &str,
+    ) -> Result<(), CoordinatorError> {
+        self.restore_lineage_session_json_inner(lineage_session_json, Some(host_input_ledger_json))
+    }
+
+    fn restore_lineage_session_json_inner(
+        &mut self,
+        lineage_session_json: &str,
+        host_input_ledger_json: Option<&str>,
+    ) -> Result<(), CoordinatorError> {
+        let mut candidate = if let Some(host_input_ledger_json) = host_input_ledger_json {
+            CoordinatorLineage::from_session_and_host_input_ledger_json(
+                lineage_session_json,
+                host_input_ledger_json,
+            )?
+        } else {
+            CoordinatorLineage::from_session_json(lineage_session_json)?
+        };
+        candidate.validate_complete_accepted_authority(
+            self.session.accepted_parameter_batch(),
+            self.session.accepted_external_snapshot_set(),
+        )?;
+        let current_parameters = self.session.parameter_batch().clone();
+        let current_snapshots = self.session.latest_attempt_external_snapshot_set().clone();
+        candidate
+            .reconstruct_current_evaluation_authority(&current_parameters, &current_snapshots)?;
         let undo_len = candidate.undo_len();
         let redo_len = candidate.redo_len();
         let materialized = candidate
@@ -2664,8 +2741,8 @@ impl RetainedEditorCoordinator {
             &candidate,
             &materialized,
             revisions,
-            current_inputs.parameters(),
-            current_inputs.snapshots(),
+            &current_parameters,
+            &current_snapshots,
         )?;
         let retained_features = merge_feature_lifecycle_high_water(
             self.features.lifecycle_high_water(),
@@ -7677,6 +7754,22 @@ impl RetainedEditorCoordinator {
         if retained.published_accepted_identity().is_none() {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
+        let candidate_session =
+            if candidate_session
+                .accepted_prepared_input()
+                .is_some_and(|input| {
+                    prepared_sketch_inputs_match_for_replay(&transition.after_sketch, &input)
+                })
+            {
+                candidate_session
+            } else {
+                // Canvas releases promote their projected solve into drag-free
+                // retained intent before recording the transition. Reproduce that
+                // normalization only when the ordinary edit result does not
+                // already match (programmatic edits deliberately preserve their
+                // exact candidate request).
+                self.promote_direct_manipulation_projection(&candidate_session)?
+            };
         let after_sketch = candidate_session
             .accepted_prepared_input()
             .ok_or(CoordinatorError::StaleComputedFeatureCandidate)?;
@@ -19130,6 +19223,79 @@ mod tests {
             seeded_from_live,
             "disposable history slots must start from the actual restored live checkpoint"
         );
+    }
+
+    #[test]
+    fn restore_lineage_session_and_host_input_ledger_rejects_hostile_companions_atomically() {
+        let retained = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted retained session");
+        let mut source =
+            RetainedEditorCoordinator::new(retained.clone()).expect("source coordinator");
+        source
+            .replace_parameter_batch(
+                source.session().design_identity(),
+                ParameterBatch::new(83, Vec::new()).expect("host-only parameter batch"),
+                DocumentSolveRequest::default(),
+            )
+            .expect("host-only accepted evaluation");
+        let source_session = source
+            .lineage_session_json()
+            .expect("source lineage session");
+        let source_ledger = source
+            .lineage_host_input_ledger_json()
+            .expect("source host-input ledger");
+
+        let mut duplicate: serde_json::Value =
+            serde_json::from_str(&source_ledger).expect("ledger value");
+        let entries = duplicate
+            .get_mut("entries")
+            .and_then(serde_json::Value::as_array_mut)
+            .expect("ledger entries");
+        entries.push(entries.first().expect("accepted ledger entry").clone());
+
+        let mut stamp_mismatch: serde_json::Value =
+            serde_json::from_str(&source_ledger).expect("ledger value");
+        stamp_mismatch
+            .get_mut("entries")
+            .and_then(serde_json::Value::as_array_mut)
+            .and_then(|entries| entries.first_mut())
+            .and_then(serde_json::Value::as_object_mut)
+            .expect("ledger entry")
+            .insert(
+                "external_inputs".to_owned(),
+                serde_json::Value::String("external-inputs:caller-forged".to_owned()),
+            );
+
+        let unrelated =
+            RetainedEditorCoordinator::new(retained.clone()).expect("unrelated coordinator");
+        let hostile_ledgers = [
+            format!(" {source_ledger}"),
+            serde_json::to_string(&duplicate).expect("duplicate ledger JSON"),
+            serde_json::to_string(&stamp_mismatch).expect("stamp-mismatch ledger JSON"),
+            unrelated
+                .lineage_host_input_ledger_json()
+                .expect("wrong-session ledger"),
+        ];
+
+        let mut target = RetainedEditorCoordinator::new(retained).expect("restore target");
+        for hostile_ledger in hostile_ledgers {
+            let before = format!("{target:#?}");
+            target
+                .restore_lineage_session_and_host_input_ledger_json(
+                    &source_session,
+                    &hostile_ledger,
+                )
+                .expect_err("hostile companion must fail before publication");
+            assert_eq!(
+                format!("{target:#?}"),
+                before,
+                "rejected companion must preserve the complete coordinator"
+            );
+        }
     }
 
     #[test]

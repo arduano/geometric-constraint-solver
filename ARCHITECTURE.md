@@ -371,11 +371,12 @@ generic caller-authored actions remain structural and fail with
 
 Standalone RPC load strips caller-certified current and historical accepted authority until a
 fresh cold evaluation succeeds. The workbench workspace-v7 loader is deliberately different: it
-uses exact persisted host inputs to cold-reproduce every distinct accepted authority reachable in
-current, Undo and Redo positions, reconstructs the current attempt from fresh owning-domain work,
-and only then admits a disposable flat cache. The private TypeScript package is a data
-binding/request builder, not a geometry engine or an executable OpenSCAD-like authoring language
-in M83.
+uses exact persisted current/accepted inputs, authenticated action provenance and a private bounded
+coordinator ledger for host-only historical pairs to cold-reproduce every distinct accepted
+authority reachable in current, Undo and Redo positions. It reconstructs the current attempt from
+fresh owning-domain work and only then admits a disposable flat cache. The ledger does not enter
+the generic lineage-session or RPC schema. The private TypeScript package is a data binding/request
+builder, not a geometry engine or an executable OpenSCAD-like authoring language in M83.
 
 ### `geosolve-constraint-editor`
 

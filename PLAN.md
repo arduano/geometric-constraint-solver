@@ -5614,50 +5614,50 @@ property, geometry role, explicit branch, native operation and computed `FilletS
 workbench honestly to workspace v7 and expose the same stateful engine through
 `geosolve.lineage.rpc.v0`.
 
-- [ ] Freeze the accepted M81 package/API/persistence and 271-row golden baseline, keep M82
+- [x] Freeze the accepted M81 package/API/persistence and 271-row golden baseline, keep M82
   archived, and implement ADR 0039 without changing solver equations or weakening independent
   success validation.
-- [ ] Complete pure safe-Rust `geosolve-sketch-lineage` with canonical versioned documents,
+- [x] Complete pure safe-Rust `geosolve-sketch-lineage` with canonical versioned documents,
   retained/latest-attempt/last-accepted authority, exact-revision transactions and one lineage
   history. Route editor/workbench dependencies downward without making lineage depend on UI state.
-- [ ] Add stable typed step/input/output ports and a complete ownership/lifecycle vocabulary for
+- [x] Add stable typed step/input/output ports and a complete ownership/lifecycle vocabulary for
   owned, aliased, created, continued and retired identities. Reserve persistent typed IDs through
   an atomic validated materialization seam; never infer identity from coordinates, proximity,
   ordering or hashes.
-- [ ] Cover all 25 `GeometryToolVariant`s, including intrinsic relations, modifiers,
+- [x] Cover all 25 `GeometryToolVariant`s, including intrinsic relations, modifiers,
   variable-cardinality child ports, snapped aliases, geometry roles and recipe branch intent.
-- [ ] Cover every current persistent constraint and dimension definition, Driving/Reference mode,
+- [x] Cover every current persistent constraint and dimension definition, Driving/Reference mode,
   curve control/property, parameter/activation surface, Profile/Construction role and explicit
   branch. Catalog exhaustiveness must reject an unmapped new variant.
-- [ ] Cover `Split`, `Break`, `Trim`, `Extend`, `Mirror`, `Chamfer`, `AssociativeFillet`,
+- [x] Cover `Split`, `Break`, `Trim`, `Extend`, `Mirror`, `Chamfer`, `AssociativeFillet`,
   `Rectangle`, `RegularPolygon`, `Slot`, `LinearPattern` and `ProfileOffset` with exact typed
   created/continued/retired mappings, whole-step ownership and dependency-safe delete/rebind.
-- [ ] Integrate native Fillet/Profile Offset and computed `FilletSet`. Retain stable feature/corner
+- [x] Integrate native Fillet/Profile Offset and computed `FilletSet`. Retain stable feature/corner
   lineage ports while keeping computed evaluated fragments authenticated revision-local derived
   geometry rather than assigning false persistent native identity.
-- [ ] Implement cold `StrictChronological` evaluation as the oracle, then optimized
+- [x] Implement cold `StrictChronological` evaluation as the oracle, then optimized
   `DependencyLocal` dirty-closure evaluation. Differentially prove identical accepted/failure
   authority, canonical sketch/feature digests, identities, ownership, branches and hard validity
   after every supported edit class.
-- [ ] Reconcile every accepted direct manipulation by atomically rewriting all affected owner
+- [x] Reconcile every accepted direct manipulation by atomically rewriting all affected owner
   steps. Reject missing inverses, partial owner updates and failed cold reproduction; never append
   a generic Move step or persist sampled derived coordinates.
-- [ ] Preserve exact retained-versus-accepted failure authority, reservations and one history
+- [x] Preserve exact retained-versus-accepted failure authority, reservations and one history
   position for structurally valid failing edits. Stale, cancelled, exhausted, malformed and
   non-finite requests publish and record nothing; Undo/Redo restores exact programs and identities.
-- [ ] Introduce workspace v7 with authoritative retained/accepted lineage, history cursor and
+- [x] Introduce workspace v7 with authoritative retained/accepted lineage, history cursor and
   high-waters plus an authenticated disposable flat cache. Strictly migrate workspaces v1-v6
   through honest `ImportedBaseline` roots, preserving available flat/feature/high-water/annotation
   state without synthesizing authoring history.
-- [ ] Add the DOM-free stateful `geosolve.lineage.rpc.v0` session protocol with versioned envelopes,
+- [x] Add the DOM-free stateful `geosolve.lineage.rpc.v0` session protocol with versioned envelopes,
   opaque string IDs/revisions, deterministic errors and native/WASM transcript parity. It owns no
   DOM, storage, renderer, start hook or TypeScript geometry logic.
-- [ ] Prove the sole workbench has no writable flat side path or nested user history. Pass focused
-  M83-W1–W11 catalog/identity/policy/migration/RPC/workbench tests, unchanged domain baselines and
-  the complete clean release gate from committed source.
-- [ ] Receive focused architecture/API review, nominate an immutable Tailscale candidate, pass and
-  record M83-W12 human UAT, freeze the accepted artifact, publish it to GitHub Pages and verify the
-  exact public bytes before closing M83.
+- [x] Prove the sole workbench has no writable flat side path or nested user history. Pass focused
+  M83-W1–W11 catalog/identity/policy/migration/RPC/workbench tests and unchanged domain baselines.
+- [ ] Pass the complete clean release gate from committed source, receive focused architecture/API
+  review and nominate an immutable byte-verified Tailscale candidate.
+- [ ] Pass and record M83-W12 human UAT, freeze the accepted artifact, publish it to GitHub Pages
+  and verify the exact public bytes before closing M83.
 
 Gate: every current workbench action survives cold lineage rematerialization with exact typed
 identity flow; direct editing rewrites every owner atomically; all current native operations and

@@ -2928,89 +2928,90 @@ M82's mechanical qualification as product evidence.
 
 ## M83 acceptance: authoritative sketch lineage and deterministic rematerialization
 
-Status: **in progress; no criterion has passed**. `docs/M83_GOALS.md` is the authoritative scope
-and ADR 0039 is accepted for implementation. This section supersedes commit `56d1eda`'s narrow
-proof criteria without claiming that the expanded implementation or product has been accepted.
+Status: **mechanical implementation criteria pass; clean nomination and human UAT remain
+pending**. `docs/M83_GOALS.md` is the authoritative scope and ADR 0039 is accepted for
+implementation. This section supersedes commit `56d1eda`'s narrow proof criteria without claiming
+that the expanded product has received supervising-human acceptance.
 
-- [ ] `LineageDocument` is the sole writable persistent design authority for the demo workbench.
+- [x] `LineageDocument` is the sole writable persistent design authority for the demo workbench.
   Flat `SketchDocument`, `ComputedFeatureDocument` and evaluated feature geometry are derived,
   independently validated materializations; no workbench command or history path mutates them as
   a peer authority.
-- [ ] `geosolve-sketch-lineage` is a separate pure safe-Rust orchestration crate. Solver/domain
+- [x] `geosolve-sketch-lineage` is a separate pure safe-Rust orchestration crate. Solver/domain
   crates do not depend on it, and it owns no residual, Jacobian, rank/priority policy, curve
   equation, branch search, browser behavior or unchecked success path. Editor/workbench
   dependencies point downward through a reusable semantic recipe seam.
-- [ ] Canonical lineage has bounded versioned decoding, deterministic ordering/digest, stable step
+- [x] Canonical lineage has bounded versioned decoding, deterministic ordering/digest, stable step
   IDs and host keys, typed dependency/cycle validation, exact-revision transactions, retained/
   latest-attempt/last-accepted authority and one user-visible Undo/Redo history.
-- [ ] Stable typed ports cover every current persistent identity kind and semantic output role.
+- [x] Stable typed ports cover every current persistent identity kind and semantic output role.
   Owned and aliased relationships plus created, continued and retired lifecycle states are
   explicit. Variable-cardinality outputs use stable child ports; no coordinate, proximity,
   tessellation/order or hash fallback establishes or repairs identity.
-- [ ] The materialized-ID seam preserves unrelated persistent sketch/source/feature identities
+- [x] The materialized-ID seam preserves unrelated persistent sketch/source/feature identities
   across strict/local rebuild, earlier insertion/deletion, suppression and Undo/Redo. Namespace,
   kind/count/order, reference closure, source ownership, spline span cursors and allocator
   high-waters validate atomically before mutation; rejected batches preserve input state.
-- [ ] A revision-stamped bidirectional materialization map binds logical ports to current native
+- [x] A revision-stamped bidirectional materialization map binds logical ports to current native
   identities, writable flat leaves to exact owner-step fields and each step to its complete owned
   set. Computed feature/corner lineage is distinct from authenticated revision-local generated
   fragments.
-- [ ] M83-W1 passes for all 25 `GeometryToolVariant`s, including exact recipe identity, modifiers,
+- [x] M83-W1 passes for all 25 `GeometryToolVariant`s, including exact recipe identity, modifiers,
   intrinsic relations, snapped aliases, repeated Polyline/NURBS children and explicit recipe
   branches. A catalog/lineage exhaustiveness sentinel rejects any unmapped current or future
   variant.
-- [ ] M83-W2 passes for every current `DocumentConstraintDefinition` and
+- [x] M83-W2 passes for every current `DocumentConstraintDefinition` and
   `DocumentDimensionDefinition`, including Driving/Reference modes, source/scalar ownership,
   suppression, annotation keys and all explicit orientations/sides. Create/edit/delete,
   Undo/Redo and cold reload preserve exact identities.
-- [ ] M83-W3 passes for every current curve-control/property family, rational ordinary/projective
+- [x] M83-W3 passes for every current curve-control/property family, rational ordinary/projective
   mode, arc/ellipse sweep, hyperbola branch, NURBS gauge, contact/tangency/Fillet/Offset branch,
   Profile/Construction role and activation state. Each writable value rewrites its declared owner;
   existing read-only ownership reasons remain enforced.
-- [ ] M83-W4 passes for `Split`, `Break`, `Trim`, `Extend`, `Mirror`, `Chamfer`,
+- [x] M83-W4 passes for `Split`, `Break`, `Trim`, `Extend`, `Mirror`, `Chamfer`,
   `AssociativeFillet`, `Rectangle`, `RegularPolygon`, `Slot`, `LinearPattern` and `ProfileOffset`.
   Each stores typed inputs/parameters and complete created/continued/retired identity evidence;
   whole-step deletion is exact and live dependents require an explicit typed cascade/rebind.
-- [ ] M83-W5 passes for native Fillet/Profile Offset and computed `FilletSet`. Stable native
+- [x] M83-W5 passes for native Fillet/Profile Offset and computed `FilletSet`. Stable native
   outputs and stable computed feature/corner ports survive source/parameter rematerialization;
   generated computed fragments remain revision-local. Deleting each action removes exactly its
   complete owned intent/materialization without affecting unrelated identities.
-- [ ] M83-W6 proves accepted direct manipulation emits one exact-revision atomic `RewriteSteps`
+- [x] M83-W6 proves accepted direct manipulation emits one exact-revision atomic `RewriteSteps`
   transaction containing every affected recipe/relation/dimension/operation/feature/import owner.
   No Move step, partial owner update, inferred discrete branch or sampled derived-coordinate write
   may publish. Cold independent reproduction must match the accepted projection.
-- [ ] A structurally valid explicit edit whose downstream evaluation fails advances retained
+- [x] A structurally valid explicit edit whose downstream evaluation fails advances retained
   lineage/history once while preserving the previous complete accepted lineage/materialization,
   accepted revision and live allocator authority. Projected editing cannot use the stale reverse
   map. Undo/Redo restores exact programs/reservations; stale, cancelled, exhausted, malformed,
   non-finite and ID-exhausted requests record and publish nothing.
-- [ ] `StrictChronological` cold evaluation is the correctness oracle. M83-W7 differential tests
+- [x] `StrictChronological` cold evaluation is the correctness oracle. M83-W7 differential tests
   prove `DependencyLocal` produces identical accepted/failure authority, canonical sketch and
   feature digests, logical/materialized identities, ownership, branch state and hard-validity
   evidence after every supported edit class; only policy telemetry/work counts may differ.
-- [ ] Every topology-sensitive step consumes authenticated current upstream materialization, every
+- [x] Every topology-sensitive step consumes authenticated current upstream materialization, every
   attempt carries exact lineage/external-input stamps and work/cancellation state, and exact CAS
   prevents stale or partial publication under both evaluation policies.
-- [ ] Workspace v7 persists retained and last-accepted lineage, revisions/digests, reservations and
+- [x] Workspace v7 persists retained and last-accepted lineage, revisions/digests, reservations and
   allocator/lifecycle high-waters, one history/cursor, required external provenance and valid
   annotation layout. Canonical v7 round trips deterministically with bounded resource validation.
-- [ ] M83-W9 migrates every workspace version v1-v6 through its existing strict decoder and an
+- [x] M83-W9 migrates every workspace version v1-v6 through its existing strict decoder and an
   honest `ImportedBaseline`. Exact state available in each version—including retained-versus-
   accepted authority, sketch IDs/high-waters, computed `FilletSet` intent/high-waters, external
   state and annotations—is preserved without fictional recipes, events or pre-import history.
-- [ ] Workspace-v7 flat sketch/feature/map cache data is accepted only after lineage/input/
+- [x] Workspace-v7 flat sketch/feature/map cache data is accepted only after lineage/input/
   namespace/high-water/identity/provenance/independent-validity verification. Missing, corrupt,
   stale or swapped cache data is discarded; a cold rebuild reproduces the same accepted authority.
-- [ ] `geosolve.lineage.rpc.v0` is a stateful DOM-free protocol with versioned correlated envelopes,
+- [x] `geosolve.lineage.rpc.v0` is a stateful DOM-free protocol with versioned correlated envelopes,
   opaque string IDs/revisions, retained session state and deterministic structured errors. It has
   no DOM, `web-sys`, storage, renderer, JavaScript solve callback or start hook, and TypeScript owns
   no geometry/acceptance logic.
-- [ ] M83-W10 native/WASM multi-request transcripts agree for create/import, edit, evaluation,
+- [x] M83-W10 native/WASM multi-request transcripts agree for create/import, edit, evaluation,
   retained failure, atomic structural owner rewrite, Undo/Redo, inspect and export, including
   canonical replies and final retained/accepted session authority. The coordinator's distinct
   projected multi-owner reconciliation remains owned by M83-W6. Worker/Node-like initialization
   passes.
-- [ ] M83-W11 instrumentation proves every current persistent workbench mutation routes through
+- [x] M83-W11 instrumentation proves every current persistent workbench mutation routes through
   lineage, no writable flat side path or nested user history remains, and a cache-free reload
   reconstructs the same accepted scene and feature state.
 - [ ] Focused M83-W1–W11 tests pass with unchanged sketch/operation/topology/feature/editor/

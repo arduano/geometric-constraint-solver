@@ -325,10 +325,10 @@ only in an Undo checkpoint rejects eagerly and preserves the target coordinator 
 
 A structurally valid workspace could supply a forged latest `Failed`, `Pending`, `Cancelled`,
 `Exhausted` or `Stale` attempt even though the flat scene was rebuilt cold. Restore now derives the
-current host inputs from lineage, executes the ordinary owning-domain evaluator and replaces that
-metadata with fresh accepted-or-failed evidence. All five serialized dispositions are covered; a
-valid retained program reconstructs `Accepted` authority with the real input/materialization stamp
-and no caller diagnostic.
+current host inputs from the independently decoded workspace payloads, executes the ordinary
+owning-domain evaluator and replaces that metadata with fresh accepted-or-failed evidence. All
+five serialized dispositions are covered; a valid retained program reconstructs `Accepted`
+authority with the real input/materialization stamp and no caller diagnostic.
 
 ### M83-F022 — wrong-document exact requests were reported as stale revisions
 
@@ -337,9 +337,52 @@ The RPC's direct expected-identity guard collapsed a foreign document and a stal
 classifies document identity first and revision/digest second. Its focused regression also proves
 the failed request leaves the exported session byte-identical.
 
+### M83-F023 — tagged branch values lost stable writable ownership
+
+The M55 contact-branch matrix exposed a bridge-only failure when a contact changed from a bounded
+domain to its supporting line. The first structural owner map split tagged values into
+shape-dependent leaves such as `domain.lower`; changing the variant removed those leaves before
+the owner rewrite could authenticate them and returned `MissingOwner`. `domain` and
+`neighborhood` are now stable atomic writable leaves, and action-shape authentication uses the
+same boundary. The complete 17-case M55 branch suite and the focused
+`branch_variant_shape_changes_keep_stable_atomic_owner_leaves` regression pass without changing a
+contact equation or branch rule.
+
+### M83-F024 — projected feature replay retained a temporary drag target
+
+The first complete release gate reproduced an existing M70B retained-movement regression:
+`m70b_f005_projected_gesture_crosses_cardinal_mark_and_commits_exact_branch` rejected transcript
+replay with `StaleComputedFeatureCandidate`. M83's direct-manipulation path correctly promotes the
+accepted projected document into drag-free durable intent, but the recorded-edit replay path
+reapplied the native edit without performing that same normalization. Replay now preserves an
+ordinary programmatic edit when its prepared input already matches, and otherwise performs the
+same projection promotion before authenticating the exact recorded after-input. All nine M70B
+retained-movement cases pass, covering projected and programmatic edits, unrelated failed
+features, branch continuity, atomic rejection, Undo/Redo, transcript replay and cold restore.
+
+### M83-F025 — historical host-only input bytes could disappear behind an opaque stamp
+
+An accepted parameter/snapshot pair can change without creating a lineage action. If that
+authority later existed only in Undo or Redo, and the current position accepted another host-only
+pair, workspace v7 retained the historical stamp but could lose the exact bytes needed to
+authenticate it. Restoration therefore failed closed even for a legitimate workspace. A private,
+bounded, canonical coordinator ledger now retains exactly the stamp-authenticated input pairs
+referenced by current/Undo/Redo accepted authority; it lives beside the generic lineage session in
+workspace v7 and does not enter the public lineage or RPC schema. Load resolves every accepted
+stamp from this ledger, current/accepted workspace inputs or authenticated action provenance,
+cold-validates every distinct authority, and rejects a missing, noncanonical, oversized,
+duplicate or stamp-mismatched payload before publication. Focused regressions cover a host-only
+pair held only in Redo, a missing ledger, current live-input preservation on Redo, and a failed
+current attempt whose visible accepted state must be rebuilt from a ledger pair rather than the
+last action's older inputs. The public paired-restore boundary additionally rejects noncanonical,
+duplicate, stamp-mismatched and wrong-session companions while preserving the complete live
+coordinator byte-for-byte; its Rustdoc and API-compatibility record state that lineage session,
+ledger and exact current/accepted host payloads form one workspace bundle.
+
 ## Qualification record
 
-Current focused evidence (development worktree, not a nominated clean candidate):
+Current focused and collateral evidence (development worktree, not yet a nominated clean
+candidate):
 
 ```bash
 cargo test --locked -p geosolve-sketch-lineage --all-features --no-fail-fast
@@ -352,8 +395,9 @@ cargo test --locked -p geosolve-constraint-editor \
   coordinator::lineage::tests --lib
 ```
 
-Result: 21 passed, zero failed, including complete-manifest, imported-root and historical-authority
-forgery regressions.
+Result: 22 passed, zero failed, including complete-manifest, imported-root, stable tagged-branch
+owners and historical-authority forgery regressions. The ledger codec and public paired-restore
+atomicity cases pass separately within the editor library suite.
 
 ```bash
 cargo test --locked -p geosolve-constraint-editor \
@@ -368,6 +412,11 @@ Result: 21 passed, zero failed. The frozen action catalog has 194 catalog entrie
 (195 physical lines), with SHA-256
 `8a45fde5691f82adb1afb9e30b1d71fff24884667453ab46fd275fe0caad922a`.
 
+The complete editor and demo library suites subsequently passed 458/458 and 164/164. Focused
+workspace-v7 authority passed 6/6, the complete persistence module passed 27/27, lineage restore
+passed 3/3 and Undo/Redo collateral passed 23/23. The M70B retained-movement suite passed 9/9,
+including the projected-release transcript-replay regression that opened M83-F024.
+
 ```bash
 cargo test --locked -p geosolve-sketch-lineage-wasm --all-features --no-fail-fast
 nix-shell --run 'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
@@ -380,16 +429,19 @@ Result: twelve RPC/schema unit tests, one native transcript-parity test, one act
 parity test and both TypeScript compile/runtime checks passed. The frozen RPC transcript has 22
 responses, 97,333 bytes and FNV-1a `d8a40f0902aeee3c`.
 
-Workspace-v7 cold/cache tests pass 4/4; cache-free workbench routing/reload tests pass 2/2; the
-strict v1-v5 migration matrix and v6 compatibility test pass. The imported-deletion M78 collateral
-regression and the revision-local computed-allocator regression pass.
+Workspace-v7 cold/cache and historical-host-input tests pass 6/6; cache-free workbench
+routing/reload tests pass 2/2; the strict v1-v5 migration matrix and v6 compatibility test pass.
+The imported-deletion M78 collateral regression and the revision-local computed-allocator
+regression pass. Targeted warnings-denied Clippy, `cargo fmt --all -- --check` and
+warnings-denied editor Rustdoc plus `git diff --check` pass on the implementation worktree.
 
-The existing authoring/scene golden remains 271 catalog entries plus its header, with SHA-256
+The generic golden survey and `--check` both pass all 271 rows unchanged. The fixture remains 271
+catalog entries plus its header, with SHA-256
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` at this checkpoint.
 
-Full workspace Clippy/tests, native/WASM RPC parity, Rustdoc, package/licence checks, performance,
-Trunk, the clean release gate, immutable snapshot and served-byte evidence remain pending. No
-clean-candidate claim is made by the focused development runs above.
+The clean committed-source release gate, its workspace-wide Clippy/tests/Rustdoc and performance/
+licence/package/Trunk stages, immutable snapshot and served-byte evidence remain pending. No clean-
+candidate claim is made by the development runs above.
 
 ## Known limitations and next gate
 

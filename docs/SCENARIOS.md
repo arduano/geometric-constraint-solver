@@ -4328,8 +4328,9 @@ complete edit without a Move step, partial owner update or history entry.
 
 Status: focused multi-owner, exact-leaf and tampered-map regressions pass. Complete action-manifest
 authentication now also rejects forged continuation leaves, same-kind inputs, outputs, identity
-flows and reservations in current/accepted/Undo/Redo authority. Architecture review and the clean
-candidate gate remain pending.
+flows and reservations in current/accepted/Undo/Redo authority. Tagged `domain` and
+`neighborhood` branch values remain stable atomic owner leaves when their serialized variant shape
+changes. Architecture review and the clean candidate gate remain pending.
 
 ### M83-L3 — strict/local equivalence with historical host inputs
 
@@ -4363,15 +4364,18 @@ independently valid underconstrained solution; the loader must discard it and re
 cold accepted lineage materialization. A forged accepted digest, even with a recomputed enclosing
 session checksum, cannot become accepted authority whether it is current or reachable only through
 Undo/Redo. Serialized Pending/Failed/Cancelled/Exhausted/Stale attempt metadata is never trusted;
-the loader replaces it with fresh evidence from the exact lineage-owned host inputs.
+the loader replaces it with fresh evidence from the exact persisted current host inputs.
 
 Status: migration, exact accepted-cache substitution, forged current/history authority and atomic
 hostile RPC-load regressions pass. Deleting imported persistent geometry now appends an explicit
 `Retired` action without rewriting the baseline manifest. Coordinator restore and Undo/Redo also
 cold-reproduce accepted authority, repair corrupt disposable history caches and retain never-reuse
 high-waters from current, accepted and both history directions. Load-time regressions cover a
-forged historical accepted digest and every non-accepted serialized attempt disposition. Complete
-release qualification remains pending.
+forged historical accepted digest and every non-accepted serialized attempt disposition. A
+bounded private workspace ledger additionally retains an accepted host-only input pair that exists
+only in Redo, while Undo/Redo continue to evaluate the selected program under current live host
+inputs. A failed current attempt rebuilds its visible accepted program from that stamped ledger
+entry rather than an older action-time payload. Complete release qualification remains pending.
 
 ### M83-L6 — stateful native/WASM RPC and sole-workbench routing
 

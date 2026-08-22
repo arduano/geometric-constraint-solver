@@ -300,6 +300,14 @@ protocol version. The private `@geosolve/lineage-bindings` TypeScript package is
 not published to npm. Workspace v7 is demo-application persistence, not canonical sketch schema:
 it strictly migrates v1-v6 through `ImportedBaseline`, and its flat sketch/feature/map fields are
 disposable caches. Canonical sketch input/output remains v1-v4/v4 and draft v5 remains unsupported.
+The additive public coordinator string codecs are deliberately lower-level parts of that
+application bundle: `lineage_session_json()` carries generic declarative session/history authority,
+while `lineage_host_input_ledger_json()` carries the bounded exact host-only pairs needed by
+historical accepted positions. Both strings must be captured together with the same coordinator's
+current and accepted parameter/snapshot payloads. Paired restore requires those exact current and
+accepted payloads to be installed in the receiver before it cold-authenticates the session and
+ledger; neither string is a self-contained workspace envelope. The ledger remains outside the
+generic lineage-session and `geosolve.lineage.rpc.v0` schemas.
 The additive host-parameter JSON codec, exact accepted/current host-input accessors and Serde
 implementations used by the action compiler do not change any existing equation or wire language.
 M83 remains provisional until clean qualification and supervising-human UAT approval.
