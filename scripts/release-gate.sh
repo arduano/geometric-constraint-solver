@@ -38,7 +38,12 @@ env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
 env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
   cargo test --locked -p geosolve-constraint-editor --test m79_inference_lifecycle \
   --target wasm32-unknown-unknown
+env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+  cargo test --locked -p geosolve-sketch-lineage-wasm --test m83_rpc_parity \
+  --target wasm32-unknown-unknown
 cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
+npm --prefix packages/geosolve-lineage ci --ignore-scripts
+npm --prefix packages/geosolve-lineage test
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
 cargo bench --locked --workspace --all-features --no-run
 
@@ -62,6 +67,8 @@ for package in \
   geosolve-sketch-features \
   geosolve-sketch-ops \
   geosolve-sketch-topology \
+  geosolve-sketch-lineage \
+  geosolve-sketch-lineage-wasm \
   geosolve-constraint-editor
 do
   contents="$(cargo package --locked --allow-dirty --list -p "$package")"

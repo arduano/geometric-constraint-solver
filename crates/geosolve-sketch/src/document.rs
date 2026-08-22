@@ -371,8 +371,33 @@ pub enum DocumentCurveControlKind {
     ConjugateAxis,
 }
 
+impl DocumentCurveControlKind {
+    /// Stable semantic family key used by host-side owner/write-back catalogs.
+    /// Ordinal controls retain their ordinal separately from this family key.
+    #[must_use]
+    pub const fn semantic_key(self) -> &'static str {
+        match self {
+            Self::Center => "center",
+            Self::StartPoint => "start-point",
+            Self::EndPoint => "end-point",
+            Self::ControlPoint { .. } => "control-point",
+            Self::Radius => "radius",
+            Self::TrimStart => "trim-start",
+            Self::TrimEnd => "trim-end",
+            Self::MajorAxisPoint => "major-axis-point",
+            Self::MinorAxis => "minor-axis",
+            Self::RationalMiddle => "rational-middle",
+            Self::Vertex => "vertex",
+            Self::Focus => "focus",
+            Self::TransverseAxisPoint => "transverse-axis-point",
+            Self::ConjugateAxis => "conjugate-axis",
+        }
+    }
+}
+
 /// Coordinate interpretation of the middle control of a rational quadratic conic.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DocumentRationalConicControlMode {
     /// Conventional Euclidean control `P1 = Qh / w`, valid only when `w != 0`.
     Euclidean,
@@ -384,7 +409,8 @@ pub enum DocumentRationalConicControlMode {
 ///
 /// The persistent definition continues to store `(Qh, w)`. Euclidean input is converted to
 /// `Qh = w * P1`; projective input is deliberately restricted to the zero-weight mode.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(tag = "mode", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum DocumentRationalConicControl {
     Euclidean {
@@ -612,7 +638,8 @@ pub enum DocumentBSplineForm {
 }
 
 /// Explicit adjacent B-spline span transition direction.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DocumentBSplineSpanDirection {
     Previous,
     Next,
@@ -1080,7 +1107,8 @@ pub struct ContactSlot {
 }
 
 /// Validated fields used to create one persistent contact slot.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ContactDefinition {
     pub curve: CurveSpan,
     pub parameter: DesignScalarId,
@@ -1091,7 +1119,8 @@ pub struct ContactDefinition {
 }
 
 /// One atomic accepted-state update for a persistent contact slot.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ContactStateEdit {
     pub contact: ContactId,
     pub value: f64,
@@ -1104,7 +1133,8 @@ pub struct ContactStateEdit {
 ///
 /// Unlike [`ContactStateEdit`], this form may change the selected semantic span
 /// and parameter-domain topology while retaining the contact and parameter IDs.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ContactBranchEdit {
     pub contact: ContactId,
     pub curve: CurveSpan,
@@ -1373,6 +1403,50 @@ pub enum DocumentConstraintDefinition {
     },
 }
 
+impl DocumentConstraintDefinition {
+    /// Stable closed semantic key for lineage and host audit catalogs.
+    #[must_use]
+    pub const fn semantic_key(&self) -> &'static str {
+        match self {
+            Self::FixedPoint { .. } => "fixed-point",
+            Self::FixedCoordinate { .. } => "fixed-coordinate",
+            Self::CoincidentWithOrigin { .. } => "coincident-with-origin",
+            Self::PointOnDatumAxis { .. } => "point-on-datum-axis",
+            Self::Coincident { .. } => "coincident",
+            Self::ExternalPointCoincident { .. } => "external-point-coincident",
+            Self::Horizontal { .. } => "horizontal",
+            Self::Vertical { .. } => "vertical",
+            Self::HorizontalPoints { .. } => "horizontal-points",
+            Self::VerticalPoints { .. } => "vertical-points",
+            Self::HorizontalPointToMidpoint { .. } => "horizontal-point-to-midpoint",
+            Self::VerticalPointToMidpoint { .. } => "vertical-point-to-midpoint",
+            Self::PointOnCurve { .. } => "point-on-curve",
+            Self::Parallel { .. } => "parallel",
+            Self::Perpendicular { .. } => "perpendicular",
+            Self::ExternalLineCollinear { .. } => "external-line-collinear",
+            Self::CollinearWithDatumAxis { .. } => "collinear-with-datum-axis",
+            Self::Concentric { .. } => "concentric",
+            Self::Collinear { .. } => "collinear",
+            Self::EqualLength { .. } => "equal-length",
+            Self::EqualRadius { .. } => "equal-radius",
+            Self::Midpoint { .. } => "midpoint",
+            Self::SymmetricAboutLine { .. } => "symmetric-about-line",
+            Self::SymmetricAboutDatumAxis { .. } => "symmetric-about-datum-axis",
+            Self::LineCircleTangency { .. } => "line-circle-tangency",
+            Self::CircleCircleTangency { .. } => "circle-circle-tangency",
+            Self::CircleArcTangency { .. } => "circle-arc-tangency",
+            Self::LineCurveTangency { .. } => "line-curve-tangency",
+            Self::CurveCurveContact { .. } => "curve-curve-contact",
+            Self::CurveCurveTangency { .. } => "curve-curve-tangency",
+            Self::CurveDirection { .. } => "curve-direction",
+            Self::EqualCurvature { .. } => "equal-curvature",
+            Self::EndpointContinuity { .. } => "endpoint-continuity",
+            Self::LineLineFillet { .. } => "line-line-fillet",
+            Self::CurveCurveFillet { .. } => "curve-curve-fillet",
+        }
+    }
+}
+
 /// One persistent geometric source and its independent audit identity.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1552,6 +1626,23 @@ pub enum DocumentDimensionDefinition {
     },
 }
 
+impl DocumentDimensionDefinition {
+    /// Stable closed semantic key for lineage and host audit catalogs.
+    #[must_use]
+    pub const fn semantic_key(&self) -> &'static str {
+        match self {
+            Self::PointDistance { .. } => "point-distance",
+            Self::CurveLength { .. } => "curve-length",
+            Self::Radius { .. } => "radius",
+            Self::Diameter { .. } => "diameter",
+            Self::OrientedAngle { .. } => "oriented-angle",
+            Self::SupportingLineOffset { .. } => "supporting-line-offset",
+            Self::ExactTranslatedSegmentOffset { .. } => "exact-translated-segment-offset",
+            Self::ProfileOffset { .. } => "profile-offset",
+        }
+    }
+}
+
 /// Persistent identities created by one atomic profile-offset declaration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DocumentProfileOffsetIds {
@@ -1617,7 +1708,8 @@ pub struct DocumentParameterOutput {
 }
 
 /// Any deletable persistent object identity.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
 pub enum DocumentObjectId {
     Point(DesignPointId),
     Scalar(DesignScalarId),
@@ -1661,7 +1753,8 @@ pub enum GeometryRole {
 }
 
 /// One curve-scoped profile/construction role change in an atomic batch.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct GeometryRoleEdit {
     pub curve: CurveId,
     pub role: GeometryRole,
@@ -1944,7 +2037,8 @@ pub struct DocumentMirroredBSplineInsertion {
 }
 
 /// Validated input for one atomic associative line-line fillet construction.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LineLineFilletRequest {
     pub first: CurveSpan,
     pub first_side: DocumentCurveNormalSide,
@@ -1972,7 +2066,8 @@ pub struct LineLineFilletIds {
 }
 
 /// One generic fillet parent request with explicit root and visible-endpoint state.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct CurveFilletParentRequest {
     pub curve: CurveSpan,
     pub parameter: f64,
@@ -1984,7 +2079,8 @@ pub struct CurveFilletParentRequest {
 }
 
 /// Validated input for one atomic associative generic curve fillet construction.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct CurveCurveFilletRequest {
     pub first: CurveFilletParentRequest,
     pub second: CurveFilletParentRequest,

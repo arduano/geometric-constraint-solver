@@ -1093,7 +1093,9 @@ pub struct ComputedSourceInterval {
 }
 
 /// Stable source/corner attribution for one endpoint claim.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, serde::Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Serialize,
+)]
 pub struct ComputedCornerRef {
     pub feature: ComputedFeatureId,
     pub corner: ComputedFeatureCornerId,

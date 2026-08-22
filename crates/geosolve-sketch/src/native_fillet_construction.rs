@@ -15,7 +15,8 @@ use geosolve_core::{OperationCheckpoint, OperationControl, OperationController, 
 const NATIVE_FILLET_GEOMETRY_EPSILON: f64 = 1.0e-9;
 
 /// One retained line and the exact endpoint replaced by a native Fillet contact.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentNativeLineFilletParent {
     pub curve: CurveSpan,
     pub endpoint: FeatureEndpoint,
@@ -25,7 +26,8 @@ pub struct DocumentNativeLineFilletParent {
 }
 
 /// Complete accepted-geometry request for one ordinary native line-line Fillet.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentNativeLineFilletCreationRequest {
     pub label: String,
     pub first: DocumentNativeLineFilletParent,
@@ -39,7 +41,8 @@ pub struct DocumentNativeLineFilletCreationRequest {
 }
 
 /// Opaque accepted-geometry-derived plan for one native line-line Fillet.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentPreparedNativeLineFilletGeometry {
     request: DocumentNativeLineFilletCreationRequest,
     source_definitions: [CurveDefinition; 2],
@@ -66,7 +69,8 @@ impl DocumentPreparedNativeLineFilletGeometry {
 }
 
 /// Persistent identities created or replaced by one native line-line Fillet transaction.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentNativeLineFilletIds {
     pub source_lines: [CurveId; 2],
     pub removed_corner: DesignPointId,

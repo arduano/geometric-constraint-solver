@@ -3,6 +3,8 @@
 //! Retained-design lifecycle coordination for presentation adapters.
 
 mod history;
+mod lineage;
+mod lineage_evaluation;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
@@ -58,7 +60,15 @@ use thiserror::Error;
 
 #[cfg(test)]
 use history::checkpoint_document_to_json;
-use history::{AcceptedCheckpointRestore, checkpoint, mutation_from, restore_sketch_checkpoint};
+use history::{
+    checkpoint, mutation_from, restore_sketch_checkpoint, restore_sketch_checkpoint_from_lineage,
+};
+use lineage::CoordinatorLineage;
+pub use lineage_evaluation::{
+    LINEAGE_DOMAIN_EVALUATOR, LineageDomainEvaluationEvidence, LineageDomainEvaluationFailure,
+    LineageEvaluationWorkEvidence, evaluate_lineage_session_cold,
+    evaluate_lineage_session_cold_with_inputs, lineage_external_input_stamp,
+};
 
 use crate::feature_authoring::resolve_feature_item_picks;
 use crate::{
@@ -436,6 +446,32 @@ fn evaluate_durable_computed_reanchor(
         return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
     }
     Ok((reanchored, cold))
+}
+
+/// Re-evaluates already re-anchored feature intent after the workbench has
+/// promoted a projected accepted document into complete retained lineage
+/// intent. Promotion deliberately removes the temporary drag request from the
+/// prepared sketch stamp, so the former cold snapshot is semantic comparison
+/// evidence only and cannot be published for the new durable input.
+fn evaluate_computed_features_after_projection_promotion(
+    session: &RetainedSketchDocumentSession,
+    features: &ComputedFeatureDocument,
+    allocator: &mut ComputedEvaluationAllocator,
+    projected: &ComputedFeatureSnapshot,
+) -> Result<ComputedFeatureSnapshot, CoordinatorError> {
+    let evaluated =
+        evaluate_computed_features(session, features, allocator, bounded_geometry_control())?;
+    let OperationOutcome::Completed { value: cold, .. } = evaluated else {
+        return Err(CoordinatorError::ComputedFeatureWorkStopped);
+    };
+    if !computed_feature_states_match_for_durable_reanchor(projected, &cold) {
+        return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+    }
+    let independently_reanchored = cold.reanchored_feature_document(features)?;
+    if !computed_feature_document_semantics_match(features, &independently_reanchored) {
+        return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+    }
+    Ok(cold)
 }
 
 fn computed_feature_preview_invalidations(
@@ -1719,6 +1755,21 @@ pub enum CurveNumericPropertyKind {
 }
 
 impl CurveNumericPropertyKind {
+    /// Stable semantic family key used by lineage owner/write-back catalogs.
+    /// Ordinal NURBS weights retain their ordinal separately from this key.
+    #[must_use]
+    pub const fn semantic_key(self) -> &'static str {
+        match self {
+            Self::Radius => "radius",
+            Self::MinorAxisRatio => "minor-axis-ratio",
+            Self::TrimStart => "trim-start",
+            Self::TrimEnd => "trim-end",
+            Self::SemiConjugate => "semi-conjugate",
+            Self::RationalWeight => "rational-weight",
+            Self::NurbsWeight { .. } => "nurbs-weight",
+        }
+    }
+
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
@@ -2059,12 +2110,32 @@ pub enum CoordinatorError {
     FeatureAuthoringTransitionRejected(String),
     #[error("computed Fillet action is unavailable: {0}")]
     ComputedFilletActionUnavailable(String),
+    #[error(
+        "direct-manipulation lineage cold reproduction did not produce complete accepted authority"
+    )]
+    DirectManipulationColdReproductionRejected,
+    #[error(
+        "direct-manipulation lineage cold reproduction does not match the staged accepted projection"
+    )]
+    DirectManipulationColdReproductionMismatch,
+    #[error("lineage transaction rejected: {0}")]
+    Lineage(String),
+    #[cfg(test)]
+    #[error("injected previous-checkpoint failure")]
+    InjectedPreviousCheckpointFailure,
+}
+
+impl From<lineage::LineageBridgeError> for CoordinatorError {
+    fn from(error: lineage::LineageBridgeError) -> Self {
+        Self::Lineage(error.to_string())
+    }
 }
 
 /// Owner of retained lifecycle, interaction selection, restore history, and transcript.
 #[derive(Debug)]
 pub struct RetainedEditorCoordinator {
     session: RetainedSketchDocumentSession,
+    lineage: CoordinatorLineage,
     features: ComputedFeatureDocument,
     computed_snapshot: Option<ComputedFeatureSnapshot>,
     computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
@@ -2088,6 +2159,8 @@ pub struct RetainedEditorCoordinator {
     next_feature_authoring_preview_token: u64,
     offset_authoring_preview: Option<Box<OffsetAuthoringPreview>>,
     offset_authoring_distance_origin: Option<Box<OffsetAuthoringDistanceOrigin>>,
+    #[cfg(test)]
+    reject_next_previous_checkpoint: bool,
 }
 
 /// Fully prepared, infallibly publishable state for one accepted inferred
@@ -2101,6 +2174,21 @@ struct StagedConstructionPublication {
     computed_snapshot: Option<ComputedFeatureSnapshot>,
     computed_evaluation_problem: Option<String>,
     checkpoint: RestoreCheckpoint,
+}
+
+/// Complete fallible Undo/Redo result. Publication only moves these prepared
+/// values into the live coordinator, so a traversal, restore, evaluation, or
+/// evidence failure cannot expose a partially restored workbench.
+struct StagedHistoryPublication {
+    lineage: CoordinatorLineage,
+    session: RetainedSketchDocumentSession,
+    features: ComputedFeatureDocument,
+    computed_evaluation_allocator: ComputedEvaluationAllocator,
+    computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    computed_snapshot: Option<ComputedFeatureSnapshot>,
+    computed_evaluation_problem: Option<String>,
+    history_checkpoint: RestoreCheckpoint,
+    target: usize,
 }
 
 /// Exact non-persistent whole-feature candidate accepted during one published
@@ -2295,8 +2383,19 @@ impl RetainedEditorCoordinator {
         if features.sketch_document() != session.design_document().id() {
             return Err(ComputedFeatureSnapshotError::FeatureDocumentForDifferentSketch.into());
         }
+        let initial_checkpoint = checkpoint(&session, &features, &computed_evaluation_allocator)?;
+        let lineage = CoordinatorLineage::import(
+            geosolve_sketch_lineage::LineageDocumentId::from_raw(
+                session.design_document().id().0.as_u128(),
+            ),
+            &initial_checkpoint,
+            session.parameter_batch(),
+            session.external_snapshot_set(),
+            session.accepted_state_for_current_input().is_some(),
+        )?;
         let mut coordinator = Self {
             session,
+            lineage,
             features,
             computed_snapshot: None,
             computed_input: None,
@@ -2320,6 +2419,8 @@ impl RetainedEditorCoordinator {
             next_feature_authoring_preview_token: 1,
             offset_authoring_preview: None,
             offset_authoring_distance_origin: None,
+            #[cfg(test)]
+            reject_next_previous_checkpoint: false,
         };
         coordinator.refresh_computed_features();
         coordinator.history.push(checkpoint(
@@ -2333,6 +2434,289 @@ impl RetainedEditorCoordinator {
     #[must_use]
     pub const fn session(&self) -> &RetainedSketchDocumentSession {
         &self.session
+    }
+
+    /// Authoritative editable action program for the retained workbench.
+    #[must_use]
+    pub fn lineage_document(&self) -> &geosolve_sketch_lineage::LineageDocument {
+        self.lineage.session().document()
+    }
+
+    /// Exact revision/digest identity of current retained lineage intent.
+    #[must_use]
+    pub fn lineage_identity(&self) -> geosolve_sketch_lineage::LineageDocumentIdentity {
+        self.lineage.identity()
+    }
+
+    /// Canonical persisted lineage v1.
+    ///
+    /// # Errors
+    ///
+    /// Returns a bounded canonical-lineage serialization error.
+    pub fn lineage_json(&self) -> Result<String, CoordinatorError> {
+        Ok(self.lineage.to_canonical_json()?)
+    }
+
+    /// Canonical workspace authority including retained/accepted lineage,
+    /// bounded Undo/Redo history, and lifecycle allocator high-waters.
+    ///
+    /// # Errors
+    ///
+    /// Returns a bounded canonical lineage-session serialization error.
+    pub fn lineage_session_json(&self) -> Result<String, CoordinatorError> {
+        Ok(self.lineage.to_canonical_session_json()?)
+    }
+
+    /// Canonical revision-stamped logical/native ownership cache for the
+    /// current retained lineage. The map is always derivable and never a
+    /// second authority.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed lineage/cache validation failure.
+    pub fn lineage_materialization_map_json(&self) -> Result<String, CoordinatorError> {
+        lineage::validate_lineage_document_semantics(self.lineage_document())?;
+        geosolve_sketch_lineage::LineageMaterializationMap::derive(self.lineage_document())
+            .and_then(|map| map.to_canonical_json())
+            .map_err(|error| CoordinatorError::Lineage(error.to_string()))
+    }
+
+    /// Authenticates the editor-generated semantic ownership declarations in
+    /// one lineage document without evaluating or mutating it. Structurally
+    /// valid low-level RPC actions with no private workbench parameters remain
+    /// outside this additional contract.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed bridge error for a malformed baseline, compiled action,
+    /// semantic output override, or writable-leaf manifest.
+    pub fn validate_lineage_document_semantics(
+        document: &geosolve_sketch_lineage::LineageDocument,
+    ) -> Result<(), CoordinatorError> {
+        lineage::validate_lineage_document_semantics(document).map_err(Into::into)
+    }
+
+    /// Authenticates current, accepted, Undo, and Redo lineage programs in a
+    /// complete loaded session without changing their revisions or history.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first structural or editor-semantic authority failure.
+    pub fn validate_lineage_session_semantics(
+        session: &geosolve_sketch_lineage::LineageSession,
+    ) -> Result<(), CoordinatorError> {
+        lineage::validate_lineage_session_semantics(session).map_err(Into::into)
+    }
+
+    /// Re-derives and canonically encodes the ownership cache for one complete
+    /// persisted lineage session without trusting any caller-supplied map.
+    ///
+    /// # Errors
+    ///
+    /// Returns strict session, identity-flow, or encoding validation errors.
+    pub fn lineage_materialization_map_json_for_session(
+        lineage_session_json: &str,
+    ) -> Result<String, CoordinatorError> {
+        let session =
+            geosolve_sketch_lineage::LineageSession::from_session_json(lineage_session_json)
+                .map_err(|error| CoordinatorError::Lineage(error.to_string()))?;
+        Self::validate_lineage_session_semantics(&session)?;
+        geosolve_sketch_lineage::LineageMaterializationMap::derive(session.document())
+            .and_then(|map| map.to_canonical_json())
+            .map_err(|error| CoordinatorError::Lineage(error.to_string()))
+    }
+
+    /// Authenticates a disposable ownership cache against one persisted
+    /// lineage session. Cache corruption or staleness never changes lineage.
+    ///
+    /// # Errors
+    ///
+    /// Returns strict session or cache mismatch errors.
+    pub fn validate_lineage_materialization_map_json(
+        lineage_session_json: &str,
+        map_json: &str,
+    ) -> Result<(), CoordinatorError> {
+        let session =
+            geosolve_sketch_lineage::LineageSession::from_session_json(lineage_session_json)
+                .map_err(|error| CoordinatorError::Lineage(error.to_string()))?;
+        Self::validate_lineage_session_semantics(&session)?;
+        geosolve_sketch_lineage::LineageMaterializationMap::from_json_for_document(
+            map_json,
+            session.document(),
+        )
+        .map(|_| ())
+        .map_err(|error| CoordinatorError::Lineage(error.to_string()))
+    }
+
+    /// Authenticates exact last-accepted host-input payloads against the
+    /// accepted external-input stamp retained by a lineage session.
+    ///
+    /// # Errors
+    ///
+    /// Rejects missing/extra payloads, malformed lineage authority, or any
+    /// canonical payload whose recomputed stamp differs from last accepted.
+    pub fn validate_lineage_accepted_external_inputs(
+        lineage_session_json: &str,
+        parameters: Option<&ParameterBatch>,
+        snapshots: Option<&ExternalSnapshotSet>,
+    ) -> Result<(), CoordinatorError> {
+        let lineage = CoordinatorLineage::from_session_json(lineage_session_json)?;
+        lineage
+            .validate_accepted_external_inputs(parameters, snapshots)
+            .map_err(CoordinatorError::from)
+    }
+
+    /// Cold equation-free lineage lowering used by workspace-v7 cache recovery.
+    /// The returned checkpoint contains retained sketch/feature intent and
+    /// allocator metadata; any accepted flat payload is deliberately absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns a strict lineage-session or materialization error.
+    pub fn lineage_materialization_checkpoint(
+        lineage_session_json: &str,
+    ) -> Result<RestoreCheckpoint, CoordinatorError> {
+        let lineage = CoordinatorLineage::from_session_json(lineage_session_json)?;
+        Ok(lineage.materialize()?.into_restore_checkpoint())
+    }
+
+    /// Cold equation-free lowering of the exact last-accepted lineage program.
+    /// This differs from the current retained program after an accepted
+    /// structural edit has failed downstream.
+    ///
+    /// # Errors
+    ///
+    /// Returns a strict lineage-session or materialization error.
+    pub fn lineage_last_accepted_materialization_checkpoint(
+        lineage_session_json: &str,
+    ) -> Result<Option<RestoreCheckpoint>, CoordinatorError> {
+        let lineage = CoordinatorLineage::from_session_json(lineage_session_json)?;
+        Ok(lineage
+            .materialize_last_accepted()?
+            .map(lineage::LineageCheckpoint::into_restore_checkpoint))
+    }
+
+    /// Wraps one strictly decoded legacy flat checkpoint in an honest
+    /// single-step `ImportedBaseline` lineage session.
+    ///
+    /// # Errors
+    ///
+    /// Returns a document-ID, baseline encoding, or canonical-session error.
+    pub fn imported_lineage_session_json(
+        checkpoint: &RestoreCheckpoint,
+    ) -> Result<String, CoordinatorError> {
+        let document = if checkpoint.design_uses_draft_v5() {
+            SketchDocument::from_draft_v5_json(checkpoint.design_json())?
+        } else {
+            SketchDocument::from_json(checkpoint.design_json())?
+        };
+        let lineage = CoordinatorLineage::import(
+            geosolve_sketch_lineage::LineageDocumentId::from_raw(document.id().0.as_u128()),
+            checkpoint,
+            &ParameterBatch::default(),
+            &ExternalSnapshotSet::default(),
+            checkpoint.accepted_belongs_to_current_design() && checkpoint.accepted_json().is_some(),
+        )?;
+        Ok(lineage.to_canonical_session_json()?)
+    }
+
+    /// Replaces this workbench from authoritative workspace-v7 lineage.
+    /// Flat sketch/feature state is rebuilt cold and independently validated;
+    /// any previously loaded flat cache is disposable.
+    ///
+    /// # Errors
+    ///
+    /// Returns strict lineage, sketch restore, feature, or validation errors
+    /// without publishing the candidate lineage as authority.
+    pub fn restore_lineage_session_json(
+        &mut self,
+        lineage_session_json: &str,
+    ) -> Result<(), CoordinatorError> {
+        let mut candidate = CoordinatorLineage::from_session_json(lineage_session_json)?;
+        candidate.validate_complete_accepted_authority()?;
+        let current_inputs = candidate.current_host_inputs()?;
+        candidate.reconstruct_current_evaluation_authority(&current_inputs)?;
+        let undo_len = candidate.undo_len();
+        let redo_len = candidate.redo_len();
+        let materialized = candidate
+            .retained_history_lifecycle_checkpoint()?
+            .into_restore_checkpoint();
+        let current_revisions = self.session.revision_high_water();
+        let restored_revisions = materialized.revisions();
+        let accepted = match (current_revisions.accepted(), restored_revisions.accepted()) {
+            (Some(first), Some(second)) => Some(first.get().max(second.get())),
+            (Some(value), None) | (None, Some(value)) => Some(value.get()),
+            (None, None) => None,
+        };
+        let revisions = SketchLifecycleRevisionHighWater::from_raw(
+            current_revisions
+                .design()
+                .get()
+                .max(restored_revisions.design().get()),
+            current_revisions
+                .attempt()
+                .get()
+                .max(restored_revisions.attempt().get()),
+            accepted,
+        );
+        let session = restore_sketch_checkpoint_from_lineage(
+            &self.session,
+            &candidate,
+            &materialized,
+            revisions,
+            current_inputs.parameters(),
+            current_inputs.snapshots(),
+        )?;
+        let retained_features = merge_feature_lifecycle_high_water(
+            self.features.lifecycle_high_water(),
+            materialized.feature_lifecycle_high_water(),
+        );
+        let mut features = ComputedFeatureDocument::from_json(materialized.feature_json())?;
+        if features.sketch_document() != session.design_document().id() {
+            return Err(ComputedFeatureSnapshotError::FeatureDocumentForDifferentSketch.into());
+        }
+        features.rebase_after_restore(retained_features)?;
+        let mut computed_evaluation_allocator = self.computed_evaluation_allocator.clone();
+        computed_evaluation_allocator
+            .retain_high_water(materialized.computed_evaluation_high_water());
+        let (computed_input, computed_snapshot, computed_evaluation_problem) =
+            match evaluate_computed_features(
+                &session,
+                &features,
+                &mut computed_evaluation_allocator,
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => {
+                    (Some(value.input()), Some(value), None)
+                }
+                Ok(stopped) => (
+                    None,
+                    None,
+                    Some(format!(
+                        "computed-feature evaluation stopped: {:?}",
+                        stopped.report().stopping_reason
+                    )),
+                ),
+                Err(error) => (None, None, Some(error.to_string())),
+            };
+        candidate
+            .retain_computed_evaluation_high_water(computed_evaluation_allocator.high_water())?;
+        let live = checkpoint(&session, &features, &computed_evaluation_allocator)?;
+
+        self.session = session;
+        self.features = features;
+        self.computed_evaluation_allocator = computed_evaluation_allocator;
+        self.computed_input = computed_input;
+        self.computed_snapshot = computed_snapshot;
+        self.computed_evaluation_problem = computed_evaluation_problem;
+        self.lineage = candidate;
+        self.history = vec![live; undo_len + 1 + redo_len];
+        self.history_cursor = undo_len;
+        self.transcript.clear();
+        self.editor.invalidate_for_retained_state_change(true);
+        self.clear_transient();
+        self.reconcile_selection();
+        Ok(())
     }
 
     /// Persistent computed-feature intent owned beside the sketch session.
@@ -2740,22 +3124,22 @@ impl RetainedEditorCoordinator {
 
     #[must_use]
     pub fn history_len(&self) -> usize {
-        self.history.len()
+        self.lineage.undo_len() + 1 + self.lineage.redo_len()
     }
 
     #[must_use]
-    pub const fn history_cursor(&self) -> usize {
-        self.history_cursor
+    pub fn history_cursor(&self) -> usize {
+        self.lineage.undo_len()
     }
 
     #[must_use]
     pub fn can_undo(&self) -> bool {
-        self.history_cursor > 0
+        self.lineage.can_undo()
     }
 
     #[must_use]
     pub fn can_redo(&self) -> bool {
-        self.history_cursor + 1 < self.history.len()
+        self.lineage.can_redo()
     }
 
     /// Returns the checkpoint frozen when the current history entry was
@@ -3612,6 +3996,7 @@ impl RetainedEditorCoordinator {
             edit: preview.edit.clone(),
             computed_features: None,
         };
+        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
         let effect =
             DocumentCommandEffect::CreatedProfileOffset(Box::new(DocumentProfileOffsetIds {
                 target: preview.metadata.distance,
@@ -3639,7 +4024,7 @@ impl RetainedEditorCoordinator {
         self.computed_evaluation_problem = None;
         let model_scale = self.session.design_document().model_scale();
         let _ = state.activate(preview.next_operand_index, model_scale);
-        self.record_feature_mutation(next, replay);
+        self.publish_staged_feature_mutation(staged_lineage, next, replay);
         Ok(MutationOutcome {
             value: effect,
             design: committed.design_identity(),
@@ -3913,6 +4298,7 @@ impl RetainedEditorCoordinator {
             .checked_add(1)
             .ok_or(CoordinatorError::FeatureAuthoringPreviewTokenExhausted)?;
         self.computed_evaluation_allocator = candidate_allocator;
+        self.retain_current_computed_evaluation_high_water();
         let metadata = FeatureAuthoringPreviewMetadata {
             token: FeatureAuthoringPreviewToken(token_value),
             feature,
@@ -4023,6 +4409,7 @@ impl RetainedEditorCoordinator {
             .checked_add(1)
             .ok_or(CoordinatorError::FeatureAuthoringPreviewTokenExhausted)?;
         self.computed_evaluation_allocator = candidate_allocator;
+        self.retain_current_computed_evaluation_high_water();
         let metadata = FeatureAuthoringPreviewMetadata {
             token: FeatureAuthoringPreviewToken(token_value),
             feature,
@@ -4486,6 +4873,7 @@ impl RetainedEditorCoordinator {
             radius: preview.candidate.radius(),
             corners: preview.candidate.persistent_corners(),
         };
+        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
         let preview = self
             .feature_authoring_preview
             .take()
@@ -4497,7 +4885,7 @@ impl RetainedEditorCoordinator {
         self.computed_input = Some(preview.snapshot.input());
         self.computed_snapshot = Some(preview.snapshot);
         self.computed_evaluation_problem = None;
-        self.record_feature_mutation(next, replay);
+        self.publish_staged_feature_mutation(staged_lineage, next, replay);
         Ok(ComputedFeatureMutation {
             value: feature,
             before,
@@ -4559,27 +4947,37 @@ impl RetainedEditorCoordinator {
                 return Err(failure.coordinator_error());
             }
         }
+        let (replay, staged_lineage) = {
+            let Some(NativeFilletPreviewCache::Prepared(publication)) =
+                self.native_fillet_previews.get(&token)
+            else {
+                return Err(CoordinatorError::NativeFilletPreviewMismatch);
+            };
+            let replay = ReplayAction::Edit {
+                expected: publication.base_input.design_identity(),
+                edit: publication.edit.clone(),
+                computed_features: None,
+            };
+            let staged_lineage =
+                self.stage_feature_mutation_lineage(&publication.checkpoint, &replay)?;
+            (replay, staged_lineage)
+        };
         let Some(NativeFilletPreviewCache::Prepared(publication)) =
             self.native_fillet_previews.remove(&token)
         else {
             return Err(CoordinatorError::NativeFilletPreviewMismatch);
         };
         let PreparedNativeFilletPublication {
-            base_input,
+            base_input: _,
             base_computed_allocator: _,
             proposed,
             ids,
-            edit,
+            edit: _,
             patch,
             computed_snapshot,
             computed_allocator,
             checkpoint,
         } = *publication;
-        let replay = ReplayAction::Edit {
-            expected: base_input.design_identity(),
-            edit,
-            computed_features: None,
-        };
         let committed = match self.session.commit_prepared_patch(patch) {
             Ok(committed) => committed,
             Err(error) => {
@@ -4596,7 +4994,7 @@ impl RetainedEditorCoordinator {
         self.computed_snapshot = Some(computed_snapshot);
         self.computed_evaluation_problem = None;
         self.clear_feature_authoring_preview();
-        self.record_feature_mutation(checkpoint, replay);
+        self.publish_staged_feature_mutation(staged_lineage, checkpoint, replay);
         Ok(MutationOutcome {
             value: ids,
             design: committed.design_identity(),
@@ -5060,6 +5458,7 @@ impl RetainedEditorCoordinator {
         require_current_feature_authoring_evaluation(&snapshot, feature)?;
         let after = candidate.identity();
         let next = checkpoint(&self.session, &candidate, &candidate_allocator)?;
+        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
         self.features = candidate;
         self.computed_evaluation_allocator = candidate_allocator;
         self.computed_input = Some(snapshot.input());
@@ -5069,7 +5468,7 @@ impl RetainedEditorCoordinator {
         self.computed_fillet_preview = None;
         self.computed_evaluation_problem = None;
         self.computed_preview_evaluation_problem = None;
-        self.record_feature_mutation(next, replay);
+        self.publish_staged_feature_mutation(staged_lineage, next, replay);
         Ok(ComputedFeatureMutation {
             value: (),
             before,
@@ -5404,7 +5803,9 @@ impl RetainedEditorCoordinator {
             &candidate,
             &mut self.computed_evaluation_allocator,
             bounded_geometry_control(),
-        )?;
+        );
+        self.retain_current_computed_evaluation_high_water();
+        let outcome = outcome?;
         let OperationOutcome::Completed {
             value: snapshot, ..
         } = outcome
@@ -5570,14 +5971,21 @@ impl RetainedEditorCoordinator {
         }
         require_current_feature_authoring_evaluation(&preview.snapshot, feature)?;
         let next = self.stage_feature_mutation_checkpoint(&preview.features)?;
+        let radius = preview.radius;
+        let corners = preview.corners.clone();
+        let replay = ReplayAction::SetComputedFilletConfiguration {
+            expected: origin.features,
+            feature,
+            radius,
+            corners,
+        };
+        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
         let preview = self
             .computed_fillet_preview
             .take()
             .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
         let before = self.features.identity();
         let after = preview.features.identity();
-        let radius = preview.radius;
-        let corners = preview.corners.clone();
         self.features = preview.features;
         self.computed_input = Some(preview.snapshot.input());
         self.computed_snapshot = Some(preview.snapshot);
@@ -5585,15 +5993,7 @@ impl RetainedEditorCoordinator {
         self.computed_preview_input = None;
         self.computed_evaluation_problem = None;
         self.computed_preview_evaluation_problem = None;
-        self.record_feature_mutation(
-            next,
-            ReplayAction::SetComputedFilletConfiguration {
-                expected: origin.features,
-                feature,
-                radius,
-                corners,
-            },
-        );
+        self.publish_staged_feature_mutation(staged_lineage, next, replay);
         Ok(ComputedFeatureMutation {
             value: (),
             before,
@@ -6601,6 +7001,7 @@ impl RetainedEditorCoordinator {
             control,
             previous.filter(|snapshot| snapshot.input().features == self.features.identity()),
         );
+        self.retain_current_computed_evaluation_high_water();
         match evaluated {
             Ok(OperationOutcome::Completed { value, .. }) => {
                 if publication == SolvedPreviewPublicationPolicy::RequireCompleteComputedScene
@@ -6914,7 +7315,6 @@ impl RetainedEditorCoordinator {
                 &self.session,
                 saved_checkpoint,
                 revisions,
-                AcceptedCheckpointRestore::RequireExact,
             )?)
         };
         let retained_features = merge_feature_lifecycle_high_water(
@@ -6948,11 +7348,21 @@ impl RetainedEditorCoordinator {
         self.clear_transient();
         self.refresh_computed_features();
         self.history.clear();
-        self.history.push(checkpoint(
+        let reloaded_checkpoint = checkpoint(
             &self.session,
             &self.features,
             &self.computed_evaluation_allocator,
-        )?);
+        )?;
+        self.lineage = CoordinatorLineage::import(
+            geosolve_sketch_lineage::LineageDocumentId::from_raw(
+                self.session.design_document().id().0.as_u128(),
+            ),
+            &reloaded_checkpoint,
+            self.session.parameter_batch(),
+            self.session.external_snapshot_set(),
+            self.session.accepted_state_for_current_input().is_some(),
+        )?;
+        self.history.push(reloaded_checkpoint);
         self.history_cursor = 0;
         self.transcript.clear();
         self.reconcile_selection();
@@ -7264,9 +7674,11 @@ impl RetainedEditorCoordinator {
             .ok_or(CoordinatorError::StaleComputedFeatureCandidate)?;
         let mut candidate_session = self.session.clone();
         let retained = candidate_session.apply(expected, edit)?;
+        if retained.published_accepted_identity().is_none() {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
         let after_sketch = candidate_session
             .accepted_prepared_input()
-            .filter(|_| retained.published_accepted_identity().is_some())
             .ok_or(CoordinatorError::StaleComputedFeatureCandidate)?;
         if !prepared_sketch_inputs_match_for_replay(&transition.after_sketch, &after_sketch) {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
@@ -7293,6 +7705,7 @@ impl RetainedEditorCoordinator {
             return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
         }
         let next = checkpoint(&candidate_session, &transition.after, &candidate_allocator)?;
+        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
 
         self.session = candidate_session;
         self.features = transition.after.clone();
@@ -7303,7 +7716,7 @@ impl RetainedEditorCoordinator {
         self.computed_preview_input = None;
         self.computed_fillet_preview = None;
         self.computed_evaluation_problem = None;
-        self.record_feature_mutation(next, replay);
+        self.publish_staged_feature_mutation(staged_lineage, next, replay);
         Ok(())
     }
 
@@ -7933,15 +8346,28 @@ impl RetainedEditorCoordinator {
         request: DocumentSolveRequest,
     ) -> Result<MutationOutcome<()>, CoordinatorError> {
         self.ensure_expected(expected)?;
-        let attempt = self
-            .session
-            .update_parameter_batch(expected, batch, request)?;
+        let mut session = self.session.clone();
+        let attempt = session.update_parameter_batch(expected, batch, request)?;
         let result = MutationOutcome {
             value: (),
             design: attempt.design_identity(),
             attempt: attempt.identity(),
             published_accepted: attempt.accepted_state_identity(),
         };
+        let evaluated = checkpoint(
+            &session,
+            &self.features,
+            &self.computed_evaluation_allocator,
+        )?;
+        let mut lineage = self.lineage.clone();
+        lineage.publish_current_evaluation(
+            &evaluated,
+            session.parameter_batch(),
+            session.external_snapshot_set(),
+            session.accepted_state_for_current_input().is_some(),
+        )?;
+        self.session = session;
+        self.lineage = lineage;
         self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.refresh_computed_features();
@@ -7956,6 +8382,10 @@ impl RetainedEditorCoordinator {
     /// # Errors
     ///
     /// Returns stale-design, stale-snapshot-revision, or solve-setup errors.
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "the candidate payload is an owned transactional host input even when the sketch session rejects and retains its prior accepted set"
+    )]
     pub fn replace_external_snapshot_set(
         &mut self,
         expected: SketchDesignIdentity,
@@ -7963,15 +8393,28 @@ impl RetainedEditorCoordinator {
         request: DocumentSolveRequest,
     ) -> Result<MutationOutcome<()>, CoordinatorError> {
         self.ensure_expected(expected)?;
-        let attempt = self
-            .session
-            .update_external_snapshot_set(expected, snapshots, request)?;
+        let mut session = self.session.clone();
+        let attempt = session.update_external_snapshot_set(expected, snapshots.clone(), request)?;
         let result = MutationOutcome {
             value: (),
             design: attempt.design_identity(),
             attempt: attempt.identity(),
             published_accepted: attempt.accepted_state_identity(),
         };
+        let evaluated = checkpoint(
+            &session,
+            &self.features,
+            &self.computed_evaluation_allocator,
+        )?;
+        let mut lineage = self.lineage.clone();
+        lineage.publish_current_evaluation(
+            &evaluated,
+            session.parameter_batch(),
+            &snapshots,
+            session.accepted_state_for_current_input().is_some(),
+        )?;
+        self.session = session;
+        self.lineage = lineage;
         self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.refresh_computed_features();
@@ -8131,7 +8574,7 @@ impl RetainedEditorCoordinator {
                 plan: plan.clone(),
             },
             &mut controller,
-        ) {
+        )? {
             return Ok(controller.outcome_unchecked());
         }
         Ok(controller.outcome(value))
@@ -8160,7 +8603,7 @@ impl RetainedEditorCoordinator {
                 expected: Box::new(*expected),
                 plan: effective_plan.clone(),
             },
-        );
+        )?;
         Ok(result)
     }
 
@@ -8344,11 +8787,24 @@ impl RetainedEditorCoordinator {
         &mut self,
         staged: StagedConstructionPublication,
         replay: ReplayAction,
-    ) {
+    ) -> Result<(), CoordinatorError> {
         let published_plan = match &replay {
             ReplayAction::ConstructionPlan { expected, plan } => Some((expected.as_ref(), plan)),
             _ => None,
         };
+        let previous = checkpoint(
+            &self.session,
+            &self.features,
+            &self.computed_evaluation_allocator,
+        )?;
+        self.lineage.record(
+            &replay,
+            self.editor.geometry_tool_variant(),
+            &previous,
+            &staged.checkpoint,
+            staged.session.parameter_batch(),
+            staged.session.external_snapshot_set(),
+        )?;
         self.session = staged.session;
         self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
         self.computed_input = staged.computed_input;
@@ -8366,6 +8822,7 @@ impl RetainedEditorCoordinator {
         self.editor.invalidate_for_retained_state_change(false);
         self.clear_transient();
         self.reconcile_selection();
+        Ok(())
     }
 
     fn publish_staged_construction_in_controller(
@@ -8373,15 +8830,15 @@ impl RetainedEditorCoordinator {
         staged: StagedConstructionPublication,
         replay: ReplayAction,
         controller: &mut OperationController,
-    ) -> bool {
+    ) -> Result<bool, CoordinatorError> {
         if controller
             .checkpoint(OperationCheckpoint::BeforeCommit)
             .is_err()
         {
-            return false;
+            return Ok(false);
         }
-        self.publish_staged_construction(staged, replay);
-        true
+        self.publish_staged_construction(staged, replay)?;
+        Ok(true)
     }
 
     /// Applies one complete alpha relation action over the current selection.
@@ -9511,7 +9968,22 @@ impl RetainedEditorCoordinator {
     ) -> Result<SketchAttemptIdentity, CoordinatorError> {
         self.ensure_expected(expected)?;
         let request = self.session.last_attempt().input().candidate_request();
-        let attempt = self.session.reattempt(expected, request)?.identity();
+        let mut session = self.session.clone();
+        let attempt = session.reattempt(expected, request)?.identity();
+        let evaluated = checkpoint(
+            &session,
+            &self.features,
+            &self.computed_evaluation_allocator,
+        )?;
+        let mut lineage = self.lineage.clone();
+        lineage.publish_current_evaluation(
+            &evaluated,
+            session.parameter_batch(),
+            session.external_snapshot_set(),
+            session.accepted_state_for_current_input().is_some(),
+        )?;
+        self.session = session;
+        self.lineage = lineage;
         self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.refresh_computed_features();
@@ -9542,7 +10014,7 @@ impl RetainedEditorCoordinator {
         point: DesignPointId,
         model_position: [f64; 2],
         release_control: OperationControl,
-    ) -> Result<MutationOutcome<EditorMutation>, CoordinatorError> {
+    ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
         self.ensure_expected(expected)?;
         let preview = self
             .solved_preview_session()
@@ -9617,7 +10089,7 @@ impl RetainedEditorCoordinator {
                 &preview,
             )?
         };
-        let after_sketch = candidate_session
+        let projected_after_sketch = candidate_session
             .accepted_prepared_input()
             .filter(|_| retained.published_accepted_identity().is_some())
             .ok_or(CoordinatorError::SolvedPreviewMismatch)?;
@@ -9650,11 +10122,24 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::ComputedFeaturePreviewInvalidated);
         }
-        let (candidate_features, cold) = evaluate_durable_computed_reanchor(
+        let (candidate_features, projected_cold) = evaluate_durable_computed_reanchor(
             &candidate_session,
             &self.features,
             &mut candidate_allocator,
             &continued,
+        )?;
+        if projected_cold.input().sketch != projected_after_sketch {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let candidate_session = self.promote_direct_manipulation_projection(&candidate_session)?;
+        let after_sketch = candidate_session
+            .accepted_prepared_input()
+            .ok_or(CoordinatorError::DirectManipulationColdReproductionRejected)?;
+        let cold = evaluate_computed_features_after_projection_promotion(
+            &candidate_session,
+            &candidate_features,
+            &mut candidate_allocator,
+            &projected_cold,
         )?;
         if cold.input().sketch != after_sketch
             || cold.input().features != candidate_features.identity()
@@ -9686,6 +10171,12 @@ impl RetainedEditorCoordinator {
             &candidate_features,
             &candidate_allocator,
         )?;
+        let Some(staged_lineage) =
+            self.stage_direct_manipulation_lineage(&next, &replay, &candidate_session)?
+        else {
+            self.clear_transient();
+            return Ok(None);
+        };
         let outcome = MutationOutcome {
             value: retained.value().clone(),
             design: retained.design_identity(),
@@ -9699,13 +10190,13 @@ impl RetainedEditorCoordinator {
         self.computed_input = Some(cold.input());
         self.computed_snapshot = Some(cold);
         self.computed_evaluation_problem = None;
-        self.record_feature_mutation(next, replay);
-        Ok(MutationOutcome {
+        self.publish_staged_feature_mutation(staged_lineage, next, replay);
+        Ok(Some(MutationOutcome {
             value: EditorMutation::PointMove(outcome.value),
             design: outcome.design,
             attempt: outcome.attempt,
             published_accepted: outcome.published_accepted,
-        })
+        }))
     }
 
     fn commit_curve_control_preview(
@@ -9763,10 +10254,10 @@ impl RetainedEditorCoordinator {
         let before_features = self.features.identity();
         let proposed = preview.patch.proposed_commit();
         let patch_preview = preview.patch.preview();
-        let candidate_session = patch_preview
+        let projected_session = patch_preview
             .accepted_session()
             .ok_or(CoordinatorError::PreviewNotAccepted)?;
-        let after_sketch = candidate_session
+        let projected_after_sketch = projected_session
             .accepted_prepared_input()
             .filter(|input| {
                 input.design_identity() == proposed.design_identity()
@@ -9774,18 +10265,31 @@ impl RetainedEditorCoordinator {
                     && input.accepted_state_identity() == proposed.accepted_state_identity()
             })
             .ok_or(CoordinatorError::SolvedPreviewMismatch)?;
-        if preview.computed_snapshot.input().sketch != after_sketch
+        if preview.computed_snapshot.input().sketch != projected_after_sketch
             || preview.computed_snapshot.input().features != before_features
         {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
 
         let mut candidate_allocator = preview.computed_allocator.clone();
-        let (candidate_features, cold) = evaluate_durable_computed_reanchor(
-            candidate_session,
+        let (candidate_features, projected_cold) = evaluate_durable_computed_reanchor(
+            projected_session,
             &self.features,
             &mut candidate_allocator,
             &preview.computed_snapshot,
+        )?;
+        if projected_cold.input().sketch != projected_after_sketch {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let candidate_session = self.promote_direct_manipulation_projection(projected_session)?;
+        let after_sketch = candidate_session
+            .accepted_prepared_input()
+            .ok_or(CoordinatorError::DirectManipulationColdReproductionRejected)?;
+        let cold = evaluate_computed_features_after_projection_promotion(
+            &candidate_session,
+            &candidate_features,
+            &mut candidate_allocator,
+            &projected_cold,
         )?;
         if cold.input().sketch != after_sketch
             || cold.input().features != candidate_features.identity()
@@ -9812,7 +10316,17 @@ impl RetainedEditorCoordinator {
             edit: preview.edit.clone(),
             computed_features,
         };
-        let next = checkpoint(candidate_session, &candidate_features, &candidate_allocator)?;
+        let next = checkpoint(
+            &candidate_session,
+            &candidate_features,
+            &candidate_allocator,
+        )?;
+        let Some(staged_lineage) =
+            self.stage_direct_manipulation_lineage(&next, &replay, &candidate_session)?
+        else {
+            self.clear_curve_control_preview();
+            return Ok(None);
+        };
         let effect = curve_control_command_effect(&preview.edit)?;
 
         let mut gesture = self
@@ -9839,12 +10353,13 @@ impl RetainedEditorCoordinator {
         if committed != proposed {
             return Err(CoordinatorError::SolvedPreviewMismatch);
         }
+        self.session = candidate_session;
         self.features = candidate_features;
         self.computed_evaluation_allocator = candidate_allocator;
         self.computed_input = Some(cold.input());
         self.computed_snapshot = Some(cold);
         self.computed_evaluation_problem = None;
-        self.record_feature_mutation(next, replay);
+        self.publish_staged_feature_mutation(staged_lineage, next, replay);
         Ok(Some(MutationOutcome {
             value: EditorMutation::CurveControl(effect),
             design: committed.design_identity(),
@@ -9877,9 +10392,7 @@ impl RetainedEditorCoordinator {
                 expected,
                 point,
                 model_position,
-            } => self
-                .commit_solved_point_move(*expected, *point, *model_position, release_control)
-                .map(Some),
+            } => self.commit_solved_point_move(*expected, *point, *model_position, release_control),
             EditorEffect::CommitCurveControl {
                 expected,
                 pointer_id,
@@ -10299,11 +10812,11 @@ impl RetainedEditorCoordinator {
     ///
     /// Returns [`CoordinatorError::NothingToUndo`] or a restore error.
     pub fn undo(&mut self) -> Result<(), CoordinatorError> {
-        let target = self
-            .history_cursor
-            .checked_sub(1)
-            .ok_or(CoordinatorError::NothingToUndo)?;
-        self.restore_history(target)?;
+        if !self.lineage.can_undo() {
+            return Err(CoordinatorError::NothingToUndo);
+        }
+        let staged = self.stage_history_publication(false)?;
+        self.publish_staged_history(staged);
         self.transcript.push(ReplayAction::Undo);
         Ok(())
     }
@@ -10314,59 +10827,141 @@ impl RetainedEditorCoordinator {
     ///
     /// Returns [`CoordinatorError::NothingToRedo`] or a restore error.
     pub fn redo(&mut self) -> Result<(), CoordinatorError> {
-        let target = self.history_cursor + 1;
-        if target >= self.history.len() {
+        if !self.lineage.can_redo() {
             return Err(CoordinatorError::NothingToRedo);
         }
-        self.restore_history(target)?;
+        let staged = self.stage_history_publication(true)?;
+        self.publish_staged_history(staged);
         self.transcript.push(ReplayAction::Redo);
         Ok(())
     }
 
-    fn restore_history(&mut self, target: usize) -> Result<(), CoordinatorError> {
-        let checkpoint = self.history[target].clone();
-        let current_checkpoint = &self.history[self.history_cursor];
-        let sketch_unchanged = self.session.accepted_state_for_current_input().is_some()
-            && checkpoint.design_json == current_checkpoint.design_json
-            && checkpoint.design_is_draft_v5 == current_checkpoint.design_is_draft_v5
-            && checkpoint.accepted_json == current_checkpoint.accepted_json
-            && checkpoint.accepted_is_draft_v5 == current_checkpoint.accepted_is_draft_v5
-            && checkpoint.accepted_belongs_to_current_design
-                == current_checkpoint.accepted_belongs_to_current_design;
-        if sketch_unchanged {
-            let high_water = self
-                .session
-                .persistent_identity_high_water()
-                .merged(&checkpoint.sketch_identity_high_water)?;
-            self.session
-                .retain_persistent_identity_high_water(&high_water)?;
+    fn stage_history_publication(
+        &self,
+        redo: bool,
+    ) -> Result<StagedHistoryPublication, CoordinatorError> {
+        let mut lineage = self.lineage.clone();
+        let target_materialization = if redo {
+            lineage.redo()?
         } else {
-            let revisions = self.session.revision_high_water();
-            self.session = restore_sketch_checkpoint(
-                &self.session,
-                &checkpoint,
-                revisions,
-                AcceptedCheckpointRestore::PreferCurrentInputTruth,
-            )?;
-        }
+            lineage.undo()?
+        };
+        let target = lineage.undo_len();
+        let mut history_checkpoint = target_materialization.into_restore_checkpoint();
+        let target_checkpoint = lineage
+            .retained_history_lifecycle_checkpoint()?
+            .into_restore_checkpoint();
+        let current_revisions = self.session.revision_high_water();
+        let target_revisions = target_checkpoint.revisions();
+        let accepted = match (current_revisions.accepted(), target_revisions.accepted()) {
+            (Some(first), Some(second)) => Some(first.get().max(second.get())),
+            (Some(value), None) | (None, Some(value)) => Some(value.get()),
+            (None, None) => None,
+        };
+        let revisions = SketchLifecycleRevisionHighWater::from_raw(
+            current_revisions
+                .design()
+                .get()
+                .max(target_revisions.design().get()),
+            current_revisions
+                .attempt()
+                .get()
+                .max(target_revisions.attempt().get()),
+            accepted,
+        );
+        let session = restore_sketch_checkpoint_from_lineage(
+            &self.session,
+            &lineage,
+            &target_checkpoint,
+            revisions,
+            self.session.parameter_batch(),
+            self.session.latest_attempt_external_snapshot_set(),
+        )?;
         let retained_features = merge_feature_lifecycle_high_water(
             self.features.lifecycle_high_water(),
-            checkpoint.feature_lifecycle,
+            target_checkpoint.feature_lifecycle,
         );
-        let mut restored_features = ComputedFeatureDocument::from_json(&checkpoint.feature_json)?;
-        if restored_features.sketch_document() != self.session.design_document().id() {
+        let mut features = ComputedFeatureDocument::from_json(&target_checkpoint.feature_json)?;
+        if features.sketch_document() != session.design_document().id() {
             return Err(ComputedFeatureSnapshotError::FeatureDocumentForDifferentSketch.into());
         }
-        restored_features.rebase_after_restore(retained_features)?;
-        self.computed_evaluation_allocator
-            .retain_high_water(checkpoint.evaluation_allocator);
-        self.features = restored_features;
-        self.history_cursor = target;
+        features.rebase_after_restore(retained_features)?;
+        let mut computed_evaluation_allocator = self.computed_evaluation_allocator.clone();
+        computed_evaluation_allocator.retain_high_water(target_checkpoint.evaluation_allocator);
+        let (computed_input, computed_snapshot, computed_evaluation_problem) =
+            match evaluate_computed_features(
+                &session,
+                &features,
+                &mut computed_evaluation_allocator,
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => {
+                    (Some(value.input()), Some(value), None)
+                }
+                Ok(stopped) => (
+                    None,
+                    None,
+                    Some(format!(
+                        "computed-feature evaluation stopped: {:?}",
+                        stopped.report().stopping_reason
+                    )),
+                ),
+                Err(error) => (None, None, Some(error.to_string())),
+            };
+        let checkpoint = checkpoint(&session, &features, &computed_evaluation_allocator)?;
+        lineage.publish_current_evaluation(
+            &checkpoint,
+            session.parameter_batch(),
+            session.latest_attempt_external_snapshot_set(),
+            session.accepted_state_for_current_input().is_some(),
+        )?;
+        // The disposable history slot retains the lifecycle frozen at that
+        // user-visible position, while its accepted bytes are refreshed only
+        // from the independently rebuilt live domains. Session-global
+        // never-reuse cursors remain in the owning domains and lineage history
+        // aggregate used above, not retroactively flattened into every slot.
+        history_checkpoint
+            .accepted_json
+            .clone_from(&checkpoint.accepted_json);
+        history_checkpoint.accepted_is_draft_v5 = checkpoint.accepted_is_draft_v5;
+        history_checkpoint.accepted_belongs_to_current_design =
+            checkpoint.accepted_belongs_to_current_design;
+        Ok(StagedHistoryPublication {
+            lineage,
+            session,
+            features,
+            computed_evaluation_allocator,
+            computed_input,
+            computed_snapshot,
+            computed_evaluation_problem,
+            history_checkpoint,
+            target,
+        })
+    }
+
+    fn publish_staged_history(&mut self, staged: StagedHistoryPublication) {
+        self.lineage = staged.lineage;
+        self.session = staged.session;
+        self.features = staged.features;
+        self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
+        self.computed_input = staged.computed_input;
+        self.computed_snapshot = staged.computed_snapshot;
+        self.computed_evaluation_problem = staged.computed_evaluation_problem;
+        self.refresh_history_cache(staged.target, staged.history_checkpoint);
         self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
-        self.refresh_computed_features();
         self.reconcile_selection();
-        Ok(())
+    }
+
+    fn refresh_history_cache(&mut self, target: usize, checkpoint: RestoreCheckpoint) {
+        let expected_len = self.lineage.undo_len() + 1 + self.lineage.redo_len();
+        if self.history.len() < expected_len {
+            self.history.resize(expected_len, checkpoint.clone());
+        } else {
+            self.history.truncate(expected_len);
+        }
+        self.history[target] = checkpoint;
+        self.history_cursor = target;
     }
 
     fn record_mutation(
@@ -10391,6 +10986,25 @@ impl RetainedEditorCoordinator {
         };
         let previous_features = self.features.clone();
         let previous_allocator = self.computed_evaluation_allocator.clone();
+        #[cfg(test)]
+        let previous_checkpoint = if std::mem::take(&mut self.reject_next_previous_checkpoint) {
+            Err(CoordinatorError::InjectedPreviousCheckpointFailure)
+        } else {
+            checkpoint(&previous_session, &previous_features, &previous_allocator)
+        };
+        #[cfg(not(test))]
+        let previous_checkpoint =
+            checkpoint(&previous_session, &previous_features, &previous_allocator);
+        let previous_checkpoint = match previous_checkpoint {
+            Ok(checkpoint) => checkpoint,
+            Err(error) => {
+                // Every caller has already mutated the live sketch session.
+                // Even failure to serialize the pre-edit cache must therefore
+                // restore its exact retained authority before returning.
+                self.session = previous_session;
+                return Err(error);
+            }
+        };
         let previous_computed_input = self.computed_input;
         let previous_computed_snapshot = self.computed_snapshot.clone();
         let previous_computed_preview_input = self.computed_preview_input;
@@ -10430,6 +11044,26 @@ impl RetainedEditorCoordinator {
                 return Err(error);
             }
         };
+        if let Err(error) = self.lineage.record(
+            &replay,
+            self.editor.geometry_tool_variant(),
+            &previous_checkpoint,
+            &next,
+            self.session.parameter_batch(),
+            self.session.external_snapshot_set(),
+        ) {
+            self.session = previous_session;
+            self.features = previous_features;
+            self.computed_evaluation_allocator = previous_allocator;
+            self.computed_input = previous_computed_input;
+            self.computed_snapshot = previous_computed_snapshot;
+            self.computed_preview_input = previous_computed_preview_input;
+            self.computed_preview_snapshot = previous_computed_preview_snapshot;
+            self.computed_fillet_preview = previous_computed_fillet_preview;
+            self.computed_evaluation_problem = previous_computed_evaluation_problem;
+            self.computed_preview_evaluation_problem = previous_computed_preview_evaluation_problem;
+            return Err(error.into());
+        }
         self.history.truncate(self.history_cursor + 1);
         self.history.push(next);
         self.history_cursor += 1;
@@ -10480,6 +11114,7 @@ impl RetainedEditorCoordinator {
         }
         let after = candidate.identity();
         let next = checkpoint(&self.session, &candidate, &candidate_allocator)?;
+        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
         self.features = candidate;
         self.computed_evaluation_allocator = candidate_allocator;
         self.computed_input = Some(snapshot.input());
@@ -10488,7 +11123,7 @@ impl RetainedEditorCoordinator {
         self.computed_preview_input = None;
         self.computed_fillet_preview = None;
         self.computed_evaluation_problem = None;
-        self.record_feature_mutation(next, replay);
+        self.publish_staged_feature_mutation(staged_lineage, next, replay);
         Ok(ComputedFeatureMutation {
             value,
             before,
@@ -10602,6 +11237,7 @@ impl RetainedEditorCoordinator {
                 }
             }
         }
+        self.retain_current_computed_evaluation_high_water();
         if self.features.identity() == before {
             return None;
         }
@@ -10613,6 +11249,12 @@ impl RetainedEditorCoordinator {
             after: self.features.clone(),
             dispositions: recorded_computed_feature_dispositions(self.computed_snapshot.as_ref()?),
         })
+    }
+
+    fn retain_current_computed_evaluation_high_water(&mut self) {
+        self.lineage
+            .retain_computed_evaluation_high_water(self.computed_evaluation_allocator.high_water())
+            .expect("coordinator lineage must retain its registered computed-evaluation cursor");
     }
 
     fn reconcile_selection(&mut self) {
@@ -13171,6 +13813,100 @@ mod tests {
         ComputedFilletCornerAuthoringRequest, ComputedFilletCurvePick,
     };
 
+    fn authored_action_payload(
+        action: &geosolve_sketch_lineage::LineageActionDefinition,
+    ) -> Option<&geosolve_sketch_lineage::VersionedActionPayload> {
+        match action {
+            geosolve_sketch_lineage::LineageActionDefinition::ImportedBaseline { .. } => None,
+            geosolve_sketch_lineage::LineageActionDefinition::GeometryRecipe { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::Constraint { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::Dimension { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::Trim { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::Parameter { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::Binding { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::External { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::Operation { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::ComputedFeature { action }
+            | geosolve_sketch_lineage::LineageActionDefinition::Annotation { action } => {
+                Some(action)
+            }
+        }
+    }
+
+    fn assert_no_disposable_action_fields(value: &serde_json::Value) {
+        match value {
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    assert_no_disposable_action_fields(value);
+                }
+            }
+            serde_json::Value::Object(object) => {
+                for (field, value) in object {
+                    assert!(
+                        !matches!(
+                            field.as_str(),
+                            "lifecycle"
+                                | "sketch_revisions"
+                                | "sketch_identity_high_water"
+                                | "computed_evaluation"
+                                | "revision"
+                                | "next_id"
+                                | "next_feature_id"
+                                | "next_corner_id"
+                                | "digest"
+                                | "next_step_id"
+                                | "next_output_id"
+                                | "next_reservation_id"
+                        ),
+                        "authored action retained disposable `{field}` at {value}"
+                    );
+                    assert_no_disposable_action_fields(value);
+                }
+            }
+            serde_json::Value::Null
+            | serde_json::Value::Bool(_)
+            | serde_json::Value::Number(_)
+            | serde_json::Value::String(_) => {}
+        }
+    }
+
+    fn assert_canonical_authored_actions_are_semantic_and_lifecycle_free(
+        coordinator: &RetainedEditorCoordinator,
+        expected_actions: usize,
+    ) {
+        let canonical = coordinator.lineage_json().expect("canonical lineage");
+        let restored = geosolve_sketch_lineage::LineageDocument::from_json(&canonical)
+            .expect("strict canonical lineage restore");
+        let actions = restored
+            .steps()
+            .iter()
+            .filter_map(|step| authored_action_payload(&step.action))
+            .collect::<Vec<_>>();
+        assert_eq!(actions.len(), expected_actions);
+        for action in actions {
+            let intent = action
+                .parameters
+                .get("authored_intent")
+                .expect("closed semantic authored intent");
+            assert_eq!(
+                intent.get("version").and_then(serde_json::Value::as_u64),
+                Some(1)
+            );
+            assert!(intent.get("body").is_some(), "semantic intent body");
+            assert!(
+                action.parameters.contains_key("authored_owner_fields"),
+                "semantic owner fields"
+            );
+            assert!(
+                action.parameters.contains_key("compiled_materialization"),
+                "authenticated compiled materialization"
+            );
+            assert_no_disposable_action_fields(
+                &serde_json::to_value(action).expect("authored action value"),
+            );
+        }
+    }
+
     macro_rules! auto_relations {
         ($relation:expr; $count:expr) => {
             vec![crate::ConstructionRelationDefinition::auto_inference($relation); $count]
@@ -13759,6 +14495,131 @@ mod tests {
                 .expect("unsuppressed payload"),
             preview_payload
         );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one lifecycle regression keeps publish, delete, cold replay, Undo and Redo evidence adjacent"
+    )]
+    fn m83_delete_of_profile_offset_tombstones_and_restores_its_exact_lineage_owner() {
+        let (mut coordinator, scene, _) = profile_offset_rectangle_fixture();
+        let mut state = OffsetAuthoringState::default();
+        select_profile_offset_rectangle(&mut coordinator, &mut state, &scene);
+        let metadata = coordinator
+            .prepare_offset_authoring_preview(&state, "lineage Profile Offset")
+            .expect("accepted Offset preview");
+        coordinator
+            .apply_offset_authoring_preview(&mut state)
+            .expect("publish Profile Offset");
+        let owner = coordinator.lineage_document().steps()[1].id;
+        let high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&coordinator, 1);
+        let live_cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(
+            &coordinator
+                .lineage_session_json()
+                .expect("live Profile Offset lineage session"),
+        )
+        .expect("cold live Profile Offset replay");
+        assert_eq!(
+            live_cold.design_json(),
+            coordinator.checkpoint().design_json()
+        );
+        SketchDocument::from_draft_v5_json(live_cold.design_json())
+            .expect("cold live Profile Offset draft-v5 remains strictly valid");
+
+        let mut selection = metadata
+            .provisional_points
+            .iter()
+            .copied()
+            .map(SelectionItem::Point)
+            .chain(
+                metadata
+                    .target_spans
+                    .iter()
+                    .copied()
+                    .map(SelectionItem::Curve),
+            )
+            .chain(
+                metadata
+                    .provisional_constraints
+                    .iter()
+                    .copied()
+                    .map(SelectionItem::Constraint),
+            )
+            .collect::<Vec<_>>();
+        selection.push(SelectionItem::Dimension(metadata.dimension));
+        coordinator.editor_mut().set_selection(selection);
+        let expected = coordinator.session().design_identity();
+        coordinator
+            .delete_selected(expected)
+            .expect("delete complete Profile Offset action");
+
+        assert!(matches!(
+            coordinator
+                .lineage_document()
+                .step(owner)
+                .map(|step| step.state),
+            Some(geosolve_sketch_lineage::LineageStepState::Tombstoned)
+        ));
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&coordinator, 1);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(
+            &coordinator
+                .lineage_session_json()
+                .expect("canonical lineage session"),
+        )
+        .expect("cold deleted-Offset replay");
+        assert_eq!(cold.design_json(), coordinator.checkpoint().design_json());
+        if cold.design_uses_draft_v5() {
+            SketchDocument::from_draft_v5_json(cold.design_json())
+                .expect("cold deleted-Offset draft-v5 remains strictly valid");
+        } else {
+            SketchDocument::from_json(cold.design_json())
+                .expect("cold deleted-Offset canonical-v4 remains strictly valid");
+        }
+
+        coordinator.undo().expect("restore Profile Offset action");
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&coordinator, 1);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        assert!(matches!(
+            coordinator
+                .lineage_document()
+                .step(owner)
+                .map(|step| step.state),
+            Some(geosolve_sketch_lineage::LineageStepState::Live)
+        ));
+        assert!(metadata.target_spans.iter().all(|span| {
+            coordinator
+                .session()
+                .design_document()
+                .curve(span.curve)
+                .is_some()
+        }));
+        coordinator
+            .redo()
+            .expect("delete Profile Offset action again");
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&coordinator, 1);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        assert!(matches!(
+            coordinator
+                .lineage_document()
+                .step(owner)
+                .map(|step| step.state),
+            Some(geosolve_sketch_lineage::LineageStepState::Tombstoned)
+        ));
     }
 
     #[test]
@@ -16217,14 +17078,18 @@ mod tests {
             .expect("staging completed");
 
         cancellation.cancel();
-        assert!(!coordinator.publish_staged_construction_in_controller(
-            staged,
-            ReplayAction::ConstructionPlan {
-                expected: Box::new(expected),
-                plan,
-            },
-            &mut controller,
-        ));
+        assert!(
+            !coordinator
+                .publish_staged_construction_in_controller(
+                    staged,
+                    ReplayAction::ConstructionPlan {
+                        expected: Box::new(expected),
+                        plan,
+                    },
+                    &mut controller,
+                )
+                .expect("controlled pre-commit lineage staging")
+        );
         assert!(matches!(
             controller.outcome_unchecked::<()>(),
             OperationOutcome::Cancelled {
@@ -16545,12 +17410,21 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::default_trait_access)]
+    #[allow(clippy::default_trait_access, clippy::too_many_lines)]
     fn parameter_batch_wrapper_stamps_exact_attempt_and_stale_revision_does_not_attempt() {
         let mut document = SketchDocument::new(1.0).expect("document");
+        let rectangle = document
+            .add_rectangle("parameter target", [0.0, 0.0], 1.0, 1.0)
+            .expect("rectangle");
         let parameter = document
             .add_parameter("input", DocumentParameterKind::Length)
             .expect("parameter");
+        document
+            .add_parameter_binding(
+                parameter,
+                geosolve_sketch::DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]),
+            )
+            .expect("parameter binding");
         let initial = ParameterBatch::new(
             1,
             vec![ParameterBatchEntry {
@@ -16569,6 +17443,16 @@ mod tests {
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         let history = coordinator.history_len();
         let transcript = coordinator.transcript().len();
+        let lineage_attempt = |coordinator: &RetainedEditorCoordinator| {
+            serde_json::from_str::<serde_json::Value>(
+                &coordinator
+                    .lineage_session_json()
+                    .expect("lineage session JSON"),
+            )
+            .expect("lineage session value")["latest_attempt"]
+                .clone()
+        };
+        let initial_lineage_attempt = lineage_attempt(&coordinator);
         let replacement = ParameterBatch::new(
             2,
             vec![ParameterBatchEntry {
@@ -16598,6 +17482,58 @@ mod tests {
         );
         assert_eq!(coordinator.history_len(), history);
         assert_eq!(coordinator.transcript().len(), transcript);
+        let accepted_lineage_attempt = lineage_attempt(&coordinator);
+        assert_eq!(accepted_lineage_attempt["disposition"], "accepted");
+        assert_ne!(
+            accepted_lineage_attempt["external_inputs"],
+            initial_lineage_attempt["external_inputs"]
+        );
+
+        let incompatible = ParameterBatch::new(
+            3,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Angle(0.5),
+            }],
+        )
+        .expect("incompatible batch");
+        let rejected = coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                incompatible,
+                DocumentSolveRequest::default(),
+            )
+            .expect("typed failed parameter attempt");
+        assert!(rejected.published_accepted.is_none());
+        let rejected_lineage_attempt = lineage_attempt(&coordinator);
+        assert_eq!(rejected_lineage_attempt["disposition"], "failed");
+        assert_ne!(
+            rejected_lineage_attempt["external_inputs"],
+            accepted_lineage_attempt["external_inputs"]
+        );
+        let lineage_before_reattempt = coordinator
+            .lineage_session_json()
+            .expect("failed lineage session");
+        coordinator
+            .reattempt(coordinator.session().design_identity())
+            .expect("failed-input reattempt");
+        let reattempt_lineage = lineage_attempt(&coordinator);
+        assert_eq!(reattempt_lineage["disposition"], "failed");
+        assert_eq!(
+            reattempt_lineage["external_inputs"],
+            rejected_lineage_attempt["external_inputs"]
+        );
+        assert_eq!(coordinator.history_len(), history);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&lineage_before_reattempt)
+                .expect("failed lineage value")["undo"],
+            serde_json::from_str::<serde_json::Value>(
+                &coordinator
+                    .lineage_session_json()
+                    .expect("reattempt lineage session")
+            )
+            .expect("reattempt lineage value")["undo"]
+        );
 
         let attempt = coordinator.session().last_attempt().identity();
         let stale = ParameterBatch::new(
@@ -16845,6 +17781,12 @@ mod tests {
         .expect("session");
         assert!(session.accepted_state().is_some());
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let initial_lineage: serde_json::Value = serde_json::from_str(
+            &coordinator
+                .lineage_session_json()
+                .expect("initial lineage session"),
+        )
+        .expect("initial lineage value");
         coordinator
             .apply_edit(
                 coordinator.session().design_identity(),
@@ -16863,6 +17805,17 @@ mod tests {
                 DocumentSolveRequest::default(),
             )
             .expect("replace snapshots");
+        let current_lineage: serde_json::Value = serde_json::from_str(
+            &coordinator
+                .lineage_session_json()
+                .expect("current lineage session"),
+        )
+        .expect("current lineage value");
+        assert_eq!(current_lineage["latest_attempt"]["disposition"], "accepted");
+        assert_ne!(
+            current_lineage["latest_attempt"]["external_inputs"],
+            initial_lineage["latest_attempt"]["external_inputs"]
+        );
         let assert_current_external_point = |coordinator: &RetainedEditorCoordinator| {
             let accepted = coordinator
                 .session()
@@ -16981,7 +17934,10 @@ mod tests {
         coordinator
             .undo()
             .expect("undo with incompatible current snapshots");
-        assert_eq!(coordinator.session().external_snapshot_set(), &current);
+        assert_eq!(
+            coordinator.session().latest_attempt_external_snapshot_set(),
+            &current
+        );
         assert_eq!(
             coordinator
                 .session()
@@ -17061,6 +18017,16 @@ mod tests {
         .expect("session");
         let accepted = session.accepted_state().expect("accepted").identity();
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let lineage_attempt = |coordinator: &RetainedEditorCoordinator| {
+            serde_json::from_str::<serde_json::Value>(
+                &coordinator
+                    .lineage_session_json()
+                    .expect("lineage session JSON"),
+            )
+            .expect("lineage session value")["latest_attempt"]
+                .clone()
+        };
+        let initial_lineage_attempt = lineage_attempt(&coordinator);
         let wrong_kind = ExternalSnapshotSet::new(
             2,
             vec![ExternalSnapshotEntry {
@@ -17117,6 +18083,12 @@ mod tests {
                 .identity(),
             accepted
         );
+        let wrong_kind_lineage_attempt = lineage_attempt(&coordinator);
+        assert_eq!(wrong_kind_lineage_attempt["disposition"], "failed");
+        assert_ne!(
+            wrong_kind_lineage_attempt["external_inputs"],
+            initial_lineage_attempt["external_inputs"]
+        );
 
         coordinator
             .replace_external_snapshot_set(
@@ -17129,6 +18101,12 @@ mod tests {
                 DocumentSolveRequest::default(),
             )
             .expect("unavailable attempt");
+        let missing_lineage_attempt = lineage_attempt(&coordinator);
+        assert_eq!(missing_lineage_attempt["disposition"], "failed");
+        assert_ne!(
+            missing_lineage_attempt["external_inputs"],
+            wrong_kind_lineage_attempt["external_inputs"]
+        );
         assert!(matches!(
             coordinator.session().last_attempt().failure().and_then(|failure| failure.external_snapshot_error()),
             Some(ExternalSnapshotInputError::MissingBinding { binding: actual }) if *actual == binding
@@ -17857,19 +18835,1525 @@ mod tests {
             },
         ];
 
-        for proposal in proposals {
+        for (index, proposal) in proposals.into_iter().enumerate() {
             let outcome = coordinator
                 .apply_construction(coordinator.session().design_identity(), &proposal)
                 .expect("ordinary construction");
             assert!(outcome.published_accepted.is_some());
             assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
+            assert_canonical_authored_actions_are_semantic_and_lifecycle_free(
+                &coordinator,
+                index + 1,
+            );
         }
 
         let saved = coordinator.checkpoint().clone();
         let canonical_design = saved.design_json().to_owned();
+        let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(
+            &coordinator
+                .lineage_session_json()
+                .expect("canonical construction lineage"),
+        )
+        .expect("cold construction rematerialization");
+        assert_eq!(cold.design_json(), canonical_design);
+        if cold.design_uses_draft_v5() {
+            SketchDocument::from_draft_v5_json(cold.design_json())
+                .expect("valid cold draft-v5 construction document");
+        } else {
+            SketchDocument::from_json(cold.design_json())
+                .expect("valid cold canonical-v4 construction document");
+        }
         coordinator.reload(&saved).expect("checkpoint reload");
         assert_eq!(coordinator.checkpoint().design_json(), canonical_design);
         assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
+    }
+
+    #[test]
+    fn m83_direct_owner_rewrite_keeps_semantic_action_bytes_lifecycle_free() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty accepted session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let created = coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([1.0, 2.0]),
+                },
+            )
+            .expect("authored point");
+        let point = created.value.points[0];
+        let owner = coordinator.lineage_document().steps()[1].id;
+        let before_action = serde_json::to_value(&coordinator.lineage_document().steps()[1].action)
+            .expect("initial semantic action");
+        let high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point,
+                    position: [3.0, 4.0],
+                },
+            )
+            .expect("direct owner rewrite");
+
+        assert_eq!(coordinator.lineage_document().steps().len(), 2);
+        assert_eq!(coordinator.lineage_document().steps()[1].id, owner);
+        let after_action = serde_json::to_value(&coordinator.lineage_document().steps()[1].action)
+            .expect("rewritten semantic action");
+        assert_ne!(
+            after_action, before_action,
+            "owner fields must be rewritten"
+        );
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&coordinator, 1);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water,
+            "coordinate write-back allocates no identity"
+        );
+
+        let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(
+            &coordinator
+                .lineage_session_json()
+                .expect("rewritten lineage session"),
+        )
+        .expect("cold rewritten materialization");
+        let cold_document = if cold.design_uses_draft_v5() {
+            SketchDocument::from_draft_v5_json(cold.design_json())
+                .expect("valid cold draft-v5 document")
+        } else {
+            SketchDocument::from_json(cold.design_json()).expect("valid cold canonical document")
+        };
+        assert_eq!(
+            cold_document
+                .point(point)
+                .expect("rewritten point")
+                .position
+                .map(f64::to_bits),
+            [3.0_f64.to_bits(), 4.0_f64.to_bits()]
+        );
+
+        coordinator.undo().expect("undo owner rewrite");
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&coordinator, 1);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+        coordinator.redo().expect("redo owner rewrite");
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&coordinator, 1);
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water
+        );
+    }
+
+    #[test]
+    fn m83_workspace_validation_rejects_a_self_asserted_accepted_materialization_digest() {
+        let retained = RetainedSketchDocumentSession::new(
+            SketchDocument::new(10.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted retained session");
+        let coordinator = RetainedEditorCoordinator::new(retained).expect("coordinator");
+        let mut lineage = geosolve_sketch_lineage::LineageSession::from_session_json(
+            &coordinator
+                .lineage_session_json()
+                .expect("canonical lineage session"),
+        )
+        .expect("decoded lineage session");
+        let external_inputs = lineage
+            .last_accepted()
+            .expect("initial accepted authority")
+            .external_inputs
+            .clone();
+        lineage
+            .accept_current(
+                lineage.identity(),
+                external_inputs,
+                geosolve_sketch_lineage::LineageDigest::from_bytes([0x83; 32]),
+            )
+            .expect("structurally authenticated but unverified authority");
+        let forged = lineage
+            .to_canonical_session_json()
+            .expect("canonical forged session");
+
+        let error = RetainedEditorCoordinator::validate_lineage_accepted_external_inputs(
+            &forged,
+            Some(&ParameterBatch::default()),
+            Some(&ExternalSnapshotSet::default()),
+        )
+        .expect_err("workspace authority must independently reproduce its accepted digest");
+        assert!(matches!(
+            error,
+            CoordinatorError::Lineage(message)
+                if message.contains("materialization digest does not match")
+        ));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one atomic restore regression keeps forged authority, history lifecycle and cache seeding assertions together"
+    )]
+    fn restore_lineage_session_rejects_self_asserted_acceptance_and_merges_high_waters() {
+        let retained = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted retained session");
+
+        let mut hostile_target =
+            RetainedEditorCoordinator::new(retained.clone()).expect("hostile restore target");
+        let mut asserted = geosolve_sketch_lineage::LineageSession::from_session_json(
+            &hostile_target
+                .lineage_session_json()
+                .expect("canonical lineage session"),
+        )
+        .expect("decoded lineage session");
+        let external_inputs = asserted
+            .last_accepted()
+            .expect("initial accepted authority")
+            .external_inputs
+            .clone();
+        asserted
+            .accept_current(
+                asserted.identity(),
+                external_inputs,
+                geosolve_sketch_lineage::LineageDigest::from_bytes([0x83; 32]),
+            )
+            .expect("structurally self-asserted acceptance");
+        let asserted_json = asserted
+            .to_canonical_session_json()
+            .expect("canonical self-asserted session");
+        let before_hostile = hostile_target
+            .lineage_session_json()
+            .expect("authority before hostile restore");
+        let rejected = hostile_target
+            .restore_lineage_session_json(&asserted_json)
+            .is_err();
+        let hostile_atomic = hostile_target
+            .lineage_session_json()
+            .is_ok_and(|after| after == before_hostile);
+
+        let mut source =
+            RetainedEditorCoordinator::new(retained.clone()).expect("source coordinator");
+        source
+            .apply_construction(
+                source.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([1.0, 2.0]),
+                },
+            )
+            .expect("shared first point");
+        source
+            .apply_construction(
+                source.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([9.0, 7.0]),
+                },
+            )
+            .expect("abandoned second point");
+        source.undo().expect("retain second point only in Redo");
+        let abandoned_high_water = source.session().persistent_identity_high_water().clone();
+        let abandoned_revisions = source.session().revision_high_water();
+        let candidate_json = source
+            .lineage_session_json()
+            .expect("history-bearing candidate");
+
+        let mut target = RetainedEditorCoordinator::new(retained).expect("restore target");
+        target
+            .apply_construction(
+                target.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([1.0, 2.0]),
+                },
+            )
+            .expect("same current semantic program");
+        target
+            .restore_lineage_session_json(&candidate_json)
+            .expect("genuine cold-authenticated lineage restore");
+        let merged_high_water = target
+            .session()
+            .persistent_identity_high_water()
+            .merged(&abandoned_high_water)
+            .is_ok_and(|merged| merged == *target.session().persistent_identity_high_water());
+        let restored_revisions = target.session().revision_high_water();
+        let merged_revisions = restored_revisions.design().get()
+            >= abandoned_revisions.design().get()
+            && restored_revisions.attempt().get() >= abandoned_revisions.attempt().get()
+            && match (
+                restored_revisions.accepted(),
+                abandoned_revisions.accepted(),
+            ) {
+                (_, None) => true,
+                (Some(restored), Some(abandoned)) => restored.get() >= abandoned.get(),
+                (None, Some(_)) => false,
+            };
+        let live = checkpoint(
+            &target.session,
+            &target.features,
+            &target.computed_evaluation_allocator,
+        )
+        .expect("actual restored live checkpoint");
+        let seeded_from_live = target.history.iter().all(|cached| {
+            cached.design_json == live.design_json
+                && cached.design_is_draft_v5 == live.design_is_draft_v5
+                && cached.accepted_json == live.accepted_json
+                && cached.accepted_is_draft_v5 == live.accepted_is_draft_v5
+                && cached.accepted_belongs_to_current_design
+                    == live.accepted_belongs_to_current_design
+                && cached.sketch_identity_high_water == live.sketch_identity_high_water
+                && cached.feature_lifecycle == live.feature_lifecycle
+                && cached.evaluation_allocator == live.evaluation_allocator
+        });
+
+        assert!(rejected, "self-asserted acceptance must fail closed");
+        assert!(hostile_atomic, "rejected restoration must be atomic");
+        assert!(
+            merged_high_water,
+            "abandoned native IDs must remain reserved"
+        );
+        assert!(
+            merged_revisions,
+            "every sketch lifecycle cursor must be merged"
+        );
+        assert!(
+            seeded_from_live,
+            "disposable history slots must start from the actual restored live checkpoint"
+        );
+    }
+
+    #[test]
+    fn restore_lineage_session_eagerly_rejects_forged_historical_acceptance() {
+        let retained = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted retained session");
+        let mut source =
+            RetainedEditorCoordinator::new(retained.clone()).expect("source coordinator");
+        source
+            .apply_construction(
+                source.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([1.0, 2.0]),
+                },
+            )
+            .expect("history-producing point");
+        let mut forged = geosolve_sketch_lineage::LineageSession::from_session_json(
+            &source
+                .lineage_session_json()
+                .expect("canonical source lineage"),
+        )
+        .expect("decoded source lineage");
+        forged.undo().expect("Undo").expect("Undo position");
+        let external_inputs = forged
+            .last_accepted()
+            .expect("historical accepted authority")
+            .external_inputs
+            .clone();
+        forged
+            .accept_current(
+                forged.identity(),
+                external_inputs,
+                geosolve_sketch_lineage::LineageDigest::from_bytes([0x84; 32]),
+            )
+            .expect("self-consistent forged historical acceptance");
+        forged.redo().expect("Redo").expect("Redo position");
+        let forged_json = forged
+            .to_canonical_session_json()
+            .expect("canonical forged history");
+
+        let mut target = RetainedEditorCoordinator::new(retained).expect("restore target");
+        let before = target
+            .lineage_session_json()
+            .expect("target authority before rejection");
+        let error = target
+            .restore_lineage_session_json(&forged_json)
+            .expect_err("historical accepted digest must be authenticated during load");
+        assert!(matches!(
+            error,
+            CoordinatorError::Lineage(message)
+                if message.contains("materialization digest does not match")
+        ));
+        assert_eq!(
+            target
+                .lineage_session_json()
+                .expect("target authority after rejection"),
+            before,
+            "historical authority rejection must be atomic"
+        );
+    }
+
+    #[test]
+    fn restore_lineage_session_reconstructs_every_serialized_attempt_disposition() {
+        use geosolve_sketch_lineage::{
+            LineageEvaluationDisposition, LineageMutation, LineageOpaqueId, LineagePatch,
+            LineageSemanticKey,
+        };
+
+        let retained = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted retained session");
+        let source = RetainedEditorCoordinator::new(retained.clone()).expect("source coordinator");
+        let source_json = source
+            .lineage_session_json()
+            .expect("canonical source lineage");
+        let forged_external = LineageOpaqueId::new("external-inputs:caller-forged")
+            .expect("forged external identity");
+        let forged_diagnostic =
+            LineageSemanticKey::new("caller-forged-attempt").expect("forged diagnostic");
+
+        for disposition in [
+            LineageEvaluationDisposition::Pending,
+            LineageEvaluationDisposition::Failed,
+            LineageEvaluationDisposition::Cancelled,
+            LineageEvaluationDisposition::Exhausted,
+            LineageEvaluationDisposition::Stale,
+        ] {
+            let mut forged =
+                geosolve_sketch_lineage::LineageSession::from_session_json(&source_json)
+                    .expect("decoded source lineage");
+            match disposition {
+                LineageEvaluationDisposition::Pending => {
+                    forged
+                        .apply_patch(LineagePatch::new(
+                            forged.identity(),
+                            vec![LineageMutation::SetEvaluationPolicy {
+                                policy: geosolve_sketch_lineage::LineageEvaluationPolicy::DependencyLocal,
+                            }],
+                        ))
+                        .expect("valid pending edit");
+                }
+                LineageEvaluationDisposition::Failed => {
+                    let failed_step = forged.document().steps()[0].id;
+                    forged
+                        .reject_current(
+                            forged.identity(),
+                            Some(forged_external.clone()),
+                            forged_diagnostic.clone(),
+                            vec![failed_step],
+                        )
+                        .expect("forged failed attempt");
+                }
+                LineageEvaluationDisposition::Cancelled
+                | LineageEvaluationDisposition::Exhausted
+                | LineageEvaluationDisposition::Stale => forged
+                    .record_nonpublishing_attempt(
+                        forged.identity(),
+                        Some(forged_external.clone()),
+                        disposition,
+                        forged_diagnostic.clone(),
+                    )
+                    .expect("forged nonpublishing attempt"),
+                _ => unreachable!(),
+            }
+            let forged_json = forged
+                .to_canonical_session_json()
+                .expect("canonical forged attempt");
+            let mut target =
+                RetainedEditorCoordinator::new(retained.clone()).expect("restore target");
+            target
+                .restore_lineage_session_json(&forged_json)
+                .expect("declarative lineage is valid and must be reconstructed");
+            let restored = geosolve_sketch_lineage::LineageSession::from_session_json(
+                &target
+                    .lineage_session_json()
+                    .expect("restored canonical lineage"),
+            )
+            .expect("decoded restored lineage");
+            let attempt = restored
+                .latest_attempt()
+                .expect("fresh reconstruction attempt");
+            assert_eq!(
+                attempt.disposition,
+                LineageEvaluationDisposition::Accepted,
+                "{disposition:?} must not survive as caller-certified evidence"
+            );
+            assert_eq!(attempt.target, restored.identity());
+            assert!(attempt.materialization_digest.is_some());
+            assert!(attempt.failed_steps.is_empty());
+            assert!(attempt.diagnostic.is_none());
+            assert_ne!(attempt.external_inputs.as_ref(), Some(&forged_external));
+        }
+    }
+
+    #[test]
+    fn m83_accepted_host_input_authority_uses_cold_domain_evidence_not_baseline_cache() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let rectangle = document
+            .add_rectangle("parameter target", [0.0, 0.0], 1.0, 1.0)
+            .expect("rectangle");
+        let parameter = document
+            .add_parameter("width", DocumentParameterKind::Length)
+            .expect("parameter");
+        document
+            .add_parameter_binding(
+                parameter,
+                DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]),
+            )
+            .expect("parameter binding");
+        let initial = ParameterBatch::new(
+            1,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(1.0),
+            }],
+        )
+        .expect("initial parameter batch");
+        let session = RetainedSketchDocumentSession::new_with_parameter_batch(
+            document,
+            initial,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted parameterized session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let replacement = ParameterBatch::new(
+            2,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(2.0),
+            }],
+        )
+        .expect("replacement parameter batch");
+        coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                replacement.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("accepted host-input-only evaluation");
+
+        let validate = |coordinator: &RetainedEditorCoordinator| {
+            RetainedEditorCoordinator::validate_lineage_accepted_external_inputs(
+                &coordinator
+                    .lineage_session_json()
+                    .expect("canonical lineage session"),
+                Some(&replacement),
+                Some(&ExternalSnapshotSet::default()),
+            )
+        };
+        validate(&coordinator)
+            .expect("accepted authority must reproduce independently from retained intent");
+
+        // Preview/cancellation may advance only revision-local generated-ID
+        // cursors after acceptance. That monotonic future-allocation evidence
+        // must not rewrite or invalidate the accepted materialization digest.
+        let next_revision = coordinator
+            .computed_evaluation_allocator
+            .high_water()
+            .next_revision
+            .raw()
+            .saturating_add(17);
+        coordinator
+            .lineage
+            .retain_computed_evaluation_high_water(
+                geosolve_sketch_features::ComputedEvaluationAllocatorHighWater {
+                    next_revision: geosolve_sketch_features::ComputedEvaluationRevision::from_raw(
+                        next_revision,
+                    ),
+                },
+            )
+            .expect("retain revision-local high-water");
+        validate(&coordinator)
+            .expect("revision-local allocator advance must preserve accepted authority");
+    }
+
+    #[test]
+    fn m83_imported_flat_leaf_rewrites_the_baseline_owner_without_appending_an_action() {
+        let (session, points, _, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let baseline = coordinator.lineage_document().steps()[0].id;
+        assert_eq!(coordinator.lineage_document().steps().len(), 1);
+        assert!(matches!(
+            coordinator.lineage_document().steps()[0].action,
+            geosolve_sketch_lineage::LineageActionDefinition::ImportedBaseline { .. }
+        ));
+        let original = coordinator
+            .session()
+            .design_document()
+            .point(points[0])
+            .expect("imported point")
+            .position;
+        let replacement = [original[0] + 0.75, original[1] - 0.5];
+        let high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: replacement,
+                },
+            )
+            .expect("rewrite imported point owner");
+
+        assert_eq!(
+            coordinator.lineage_document().steps().len(),
+            1,
+            "an imported flat edit must not append a generic action"
+        );
+        assert_eq!(coordinator.lineage_document().steps()[0].id, baseline);
+        assert!(matches!(
+            coordinator.lineage_document().steps()[0].action,
+            geosolve_sketch_lineage::LineageActionDefinition::ImportedBaseline { .. }
+        ));
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &high_water,
+            "a coordinate rewrite cannot allocate replacement identity"
+        );
+
+        let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(
+            &coordinator
+                .lineage_session_json()
+                .expect("rewritten imported lineage"),
+        )
+        .expect("cold imported-owner materialization");
+        let cold_document = if cold.design_uses_draft_v5() {
+            SketchDocument::from_draft_v5_json(cold.design_json())
+                .expect("valid cold draft-v5 document")
+        } else {
+            SketchDocument::from_json(cold.design_json()).expect("valid cold canonical document")
+        };
+        assert_eq!(
+            cold_document
+                .point(points[0])
+                .expect("cold rewritten imported point")
+                .position
+                .map(f64::to_bits),
+            replacement.map(f64::to_bits)
+        );
+
+        coordinator.undo().expect("undo imported owner rewrite");
+        assert_eq!(coordinator.lineage_document().steps().len(), 1);
+        assert_eq!(coordinator.lineage_document().steps()[0].id, baseline);
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .point(points[0])
+                .expect("undone imported point")
+                .position
+                .map(f64::to_bits),
+            original.map(f64::to_bits)
+        );
+        coordinator.redo().expect("redo imported owner rewrite");
+        assert_eq!(coordinator.lineage_document().steps().len(), 1);
+        assert_eq!(coordinator.lineage_document().steps()[0].id, baseline);
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .point(points[0])
+                .expect("redone imported point")
+                .position
+                .map(f64::to_bits),
+            replacement.map(f64::to_bits)
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one W6 regression keeps multi-owner projection, atomic rejection, cold reproduction and history traversal evidence together"
+    )]
+    fn m83_w6_one_projected_drag_atomically_rewrites_two_recipe_owners() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty accepted session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        let first = coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([0.0, 0.0]),
+                },
+            )
+            .expect("first authored point")
+            .value
+            .points[0];
+        let first_owner = coordinator.lineage_document().steps()[1].id;
+        let second = coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([2.0, 1.0]),
+                },
+            )
+            .expect("second authored point")
+            .value
+            .points[0];
+        let second_owner = coordinator.lineage_document().steps()[2].id;
+        assert_ne!(first_owner, second_owner);
+
+        coordinator
+            .apply_constraint_action_for(
+                coordinator.session().design_identity(),
+                &[SelectionItem::Point(first), SelectionItem::Point(second)],
+                ConstraintActionRequest {
+                    intent: ConstraintIntent::Coincident,
+                    label: "shared projected position".into(),
+                    contacts: Vec::new(),
+                    relation: None,
+                },
+            )
+            .expect("coincident owner relation");
+        let relation_owner = coordinator.lineage_document().steps()[3].id;
+        let step_count = coordinator.lineage_document().steps().len();
+        assert_eq!(step_count, 4);
+
+        let action_value = |coordinator: &RetainedEditorCoordinator, owner| {
+            serde_json::to_value(
+                &coordinator
+                    .lineage_document()
+                    .step(owner)
+                    .expect("lineage owner")
+                    .action,
+            )
+            .expect("canonical owner action")
+        };
+        let before_owner_actions = [
+            action_value(&coordinator, first_owner),
+            action_value(&coordinator, second_owner),
+        ];
+        let relation_action = action_value(&coordinator, relation_owner);
+        let before_positions = {
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted constrained points")
+                .document();
+            [first, second].map(|point| accepted.point(point).expect("accepted point").position)
+        };
+
+        let _ = coordinator.resolve_projected_point_move(0x83_06, 1, first, [4.0, 3.0]);
+        assert!(
+            coordinator
+                .projected_drag_work_evidence()
+                .is_some_and(|work| work.accepted),
+            "two-owner projection work: {:?}",
+            coordinator.projected_drag_work_evidence()
+        );
+        let projected_positions = {
+            let projected = coordinator
+                .solved_preview_session()
+                .and_then(RetainedSketchDocumentSession::accepted_state_for_current_input)
+                .expect("accepted two-owner projection")
+                .document();
+            [first, second].map(|point| projected.point(point).expect("projected point").position)
+        };
+        let release_position = projected_positions[0];
+        assert_eq!(
+            projected_positions[0].map(f64::to_bits),
+            projected_positions[1].map(f64::to_bits),
+            "Coincident requires both independently owned leaves to move together"
+        );
+        assert_ne!(
+            projected_positions[0].map(f64::to_bits),
+            before_positions[0].map(f64::to_bits)
+        );
+        assert_ne!(
+            projected_positions[1].map(f64::to_bits),
+            before_positions[1].map(f64::to_bits)
+        );
+
+        let release = EditorEffect::CommitPointMove {
+            expected: coordinator.session().design_identity(),
+            point: first,
+            model_position: release_position,
+        };
+        let retained = native_fillet_durable_snapshot(&coordinator);
+        let retained_lineage = coordinator
+            .lineage_session_json()
+            .expect("lineage before forced multi-owner rejection");
+        coordinator
+            .lineage
+            .reject_next_direct_reproduction_for_test();
+        assert!(matches!(
+            coordinator.apply_editor_effect(&release),
+            Err(CoordinatorError::DirectManipulationColdReproductionRejected)
+        ));
+        assert_native_fillet_rejection_is_state_neutral(&coordinator, &retained);
+        assert_eq!(
+            coordinator
+                .lineage_session_json()
+                .expect("lineage after forced multi-owner rejection"),
+            retained_lineage
+        );
+        assert_eq!(coordinator.lineage_document().steps().len(), step_count);
+        assert_eq!(
+            [
+                action_value(&coordinator, first_owner),
+                action_value(&coordinator, second_owner),
+            ],
+            before_owner_actions
+        );
+        assert!(
+            coordinator.solved_preview_session().is_some(),
+            "atomic rejection must preserve a complete retryable projection"
+        );
+
+        coordinator
+            .apply_editor_effect(&release)
+            .expect("retry multi-owner release")
+            .expect("one projected mutation");
+        assert_eq!(coordinator.lineage_document().steps().len(), step_count);
+        assert_eq!(coordinator.history_len(), retained.history_len + 1);
+        assert_eq!(coordinator.history_cursor(), retained.history_cursor + 1);
+        assert_eq!(
+            coordinator.transcript().len(),
+            retained.transcript.len() + 1
+        );
+        assert!(matches!(
+            coordinator.transcript().last(),
+            Some(ReplayAction::Edit {
+                edit: DocumentEdit::SetPointPosition { point, .. },
+                ..
+            }) if *point == first
+        ));
+        let after_owner_actions = [
+            action_value(&coordinator, first_owner),
+            action_value(&coordinator, second_owner),
+        ];
+        assert_ne!(after_owner_actions[0], before_owner_actions[0]);
+        assert_ne!(after_owner_actions[1], before_owner_actions[1]);
+        assert_eq!(
+            action_value(&coordinator, relation_owner),
+            relation_action,
+            "the relation constrains the projection but owns no moved coordinate"
+        );
+
+        let session_json = coordinator
+            .lineage_session_json()
+            .expect("committed multi-owner lineage");
+        let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(&session_json)
+            .expect("cold multi-owner structural materialization");
+        assert_eq!(cold.design_json(), coordinator.checkpoint().design_json());
+        assert_eq!(cold.feature_json(), coordinator.checkpoint().feature_json());
+        let lineage_session =
+            geosolve_sketch_lineage::LineageSession::from_session_json(&session_json)
+                .expect("strict multi-owner lineage session");
+        let cold_evidence = evaluate_lineage_session_cold(&lineage_session)
+            .expect("cold independently accepted multi-owner reproduction");
+        assert_eq!(cold_evidence.lineage(), lineage_session.identity());
+
+        coordinator.undo().expect("undo one multi-owner rewrite");
+        let undone_positions = {
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted undo")
+                .document();
+            [first, second].map(|point| {
+                accepted
+                    .point(point)
+                    .expect("undone point")
+                    .position
+                    .map(f64::to_bits)
+            })
+        };
+        assert_eq!(
+            undone_positions,
+            before_positions.map(|position| position.map(f64::to_bits))
+        );
+        assert_eq!(
+            [
+                action_value(&coordinator, first_owner),
+                action_value(&coordinator, second_owner),
+            ],
+            before_owner_actions
+        );
+
+        coordinator.redo().expect("redo one multi-owner rewrite");
+        let redone_positions = {
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted redo")
+                .document();
+            [first, second].map(|point| {
+                accepted
+                    .point(point)
+                    .expect("redone point")
+                    .position
+                    .map(f64::to_bits)
+            })
+        };
+        assert_eq!(
+            redone_positions,
+            projected_positions.map(|position| position.map(f64::to_bits))
+        );
+        assert_eq!(
+            [
+                action_value(&coordinator, first_owner),
+                action_value(&coordinator, second_owner),
+            ],
+            after_owner_actions
+        );
+        assert_eq!(coordinator.lineage_document().steps().len(), step_count);
+    }
+
+    #[test]
+    fn m83_projected_owner_reproduction_rejection_and_mismatch_are_atomic_and_retryable() {
+        for mismatch in [false, true] {
+            let (mut coordinator, _, center, _, initial_center) = circle_drag_fixture();
+            let _ = coordinator.resolve_projected_point_move(108, 1, center, [1.2, 2.1]);
+            assert!(
+                coordinator
+                    .projected_drag_work_evidence()
+                    .is_some_and(|work| work.accepted)
+            );
+            let model_position = coordinator
+                .solved_preview_session()
+                .and_then(RetainedSketchDocumentSession::accepted_state_for_current_input)
+                .and_then(|accepted| accepted.document().point(center))
+                .map(|point| point.position)
+                .expect("accepted projected center position");
+            let effect = EditorEffect::CommitPointMove {
+                expected: coordinator.session().design_identity(),
+                point: center,
+                model_position,
+            };
+            let retained = native_fillet_durable_snapshot(&coordinator);
+            let lineage = coordinator
+                .lineage_session_json()
+                .expect("lineage before injected cold-reproduction failure");
+
+            if mismatch {
+                coordinator
+                    .lineage
+                    .mismatch_next_direct_reproduction_for_test();
+            } else {
+                coordinator
+                    .lineage
+                    .reject_next_direct_reproduction_for_test();
+            }
+            let error = coordinator
+                .apply_editor_effect(&effect)
+                .expect_err("injected cold reproduction must reject publication");
+            assert!(matches!(
+                (mismatch, error),
+                (
+                    false,
+                    CoordinatorError::DirectManipulationColdReproductionRejected
+                ) | (
+                    true,
+                    CoordinatorError::DirectManipulationColdReproductionMismatch
+                )
+            ));
+            assert_native_fillet_rejection_is_state_neutral(&coordinator, &retained);
+            assert_eq!(
+                coordinator
+                    .lineage_session_json()
+                    .expect("lineage after injected cold-reproduction failure"),
+                lineage
+            );
+            assert!(
+                coordinator.solved_preview_session().is_some(),
+                "a failed atomic publication must remain retryable"
+            );
+
+            coordinator
+                .apply_editor_effect(&effect)
+                .expect("retry after one-shot injection")
+                .expect("retry publishes the projected edit");
+            let moved = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted retried projection")
+                .document()
+                .point(center)
+                .expect("moved circle center")
+                .position;
+            assert_ne!(moved.map(f64::to_bits), initial_center.map(f64::to_bits));
+            assert_eq!(coordinator.history_len(), retained.history_len + 1);
+        }
+    }
+
+    #[test]
+    fn m83_lineage_history_ignores_and_repairs_corrupt_flat_checkpoint_caches() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty accepted session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        for position in [[1.0, 1.0], [2.0, 2.0]] {
+            coordinator
+                .apply_construction(
+                    coordinator.session().design_identity(),
+                    &ConstructionProposal::Point {
+                        point: ConstructionPoint::New(position),
+                    },
+                )
+                .expect("lineage-owned point action");
+        }
+        let two_point_json = checkpoint_document_to_json(coordinator.session().design_document())
+            .expect("two-point design");
+
+        coordinator.history[1].design_json = "{corrupt historical cache".into();
+        coordinator.undo().expect("Undo rebuilds from lineage");
+        assert_eq!(coordinator.session().design_document().points().len(), 1);
+        assert!(
+            SketchDocument::from_json(coordinator.history[1].design_json())
+                .or_else(|_| SketchDocument::from_draft_v5_json(
+                    coordinator.history[1].design_json()
+                ))
+                .is_ok(),
+            "the visited cache slot is refreshed from authoritative lineage"
+        );
+        coordinator.redo().expect("Redo rebuilds from lineage");
+        assert_eq!(
+            checkpoint_document_to_json(coordinator.session().design_document())
+                .expect("redone design"),
+            two_point_json
+        );
+
+        coordinator.history[coordinator.history_cursor].design_json =
+            "{corrupt current cache".into();
+        coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([3.0, 3.0]),
+                },
+            )
+            .expect("new action authenticates the live domains, not the cache");
+        assert_eq!(coordinator.session().design_document().points().len(), 3);
+        assert_eq!(coordinator.history_cursor(), 3);
+        assert_eq!(coordinator.history_len(), 4);
+    }
+
+    #[test]
+    fn undo_redo_cold_replaces_forged_historical_accepted_cache() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty accepted session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let point = coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([1.0, 2.0]),
+                },
+            )
+            .expect("lineage-owned free point")
+            .value
+            .points[0];
+        let expected = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted free point")
+            .document()
+            .point(point)
+            .expect("accepted point")
+            .position;
+        let mut alternate = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted free point")
+            .document()
+            .clone();
+        let forged = [17.0, -9.0];
+        alternate
+            .set_point_position(point, forged)
+            .expect("independently valid alternate underconstrained solution");
+        let (alternate_json, alternate_is_draft_v5) =
+            checkpoint_document_to_json(&alternate).expect("alternate accepted cache");
+        coordinator
+            .lineage
+            .forge_historical_accepted_cache_for_test(alternate_json, alternate_is_draft_v5)
+            .expect("structurally self-consistent historical cache substitution");
+
+        coordinator.undo().expect("Undo cold reconstruction");
+        let undone = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("Undo accepted authority")
+            .document()
+            .point(point)
+            .expect("Undo accepted point")
+            .position;
+        assert_eq!(undone.map(f64::to_bits), expected.map(f64::to_bits));
+        assert_ne!(undone.map(f64::to_bits), forged.map(f64::to_bits));
+
+        coordinator.redo().expect("Redo cold reconstruction");
+        let redone = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("Redo accepted authority")
+            .document()
+            .point(point)
+            .expect("Redo accepted point")
+            .position;
+        assert_eq!(redone.map(f64::to_bits), expected.map(f64::to_bits));
+        assert_ne!(redone.map(f64::to_bits), forged.map(f64::to_bits));
+    }
+
+    #[test]
+    fn m83_preview_evaluation_high_water_is_lineage_owned_and_history_neutral() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        fixture.coordinator.undo().expect("create Redo position");
+        assert!(fixture.coordinator.can_redo());
+        let history = (
+            fixture.coordinator.history_len(),
+            fixture.coordinator.history_cursor(),
+            fixture.coordinator.lineage_identity(),
+        );
+
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "lineage high-water preview",
+            )
+            .expect("accepted computed preview");
+        let preview_high_water = fixture
+            .coordinator
+            .computed_evaluation_allocator
+            .high_water();
+        assert_eq!(
+            (
+                fixture.coordinator.history_len(),
+                fixture.coordinator.history_cursor(),
+                fixture.coordinator.lineage_identity(),
+            ),
+            history,
+            "preview lifecycle must add no edit or lineage revision"
+        );
+        assert!(fixture.coordinator.can_redo(), "preview must preserve Redo");
+
+        let session_json = fixture
+            .coordinator
+            .lineage_session_json()
+            .expect("canonical session with preview high-water");
+        let session_value: serde_json::Value =
+            serde_json::from_str(&session_json).expect("lineage session value");
+        assert_eq!(
+            u64::from_str_radix(
+                session_value["auxiliary_high_waters"]["computed-evaluation-next-revision"]
+                    .as_str()
+                    .expect("opaque evaluation cursor"),
+                16,
+            )
+            .expect("hex evaluation cursor"),
+            preview_high_water.next_revision.raw()
+        );
+        let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(&session_json)
+            .expect("cold materialization retains preview cursor");
+        assert_eq!(cold.computed_evaluation_high_water(), preview_high_water);
+
+        fixture.coordinator.redo().expect("Redo after preview");
+        assert!(
+            fixture
+                .coordinator
+                .computed_evaluation_allocator
+                .high_water()
+                .next_revision
+                .raw()
+                > preview_high_water.next_revision.raw(),
+            "Redo refresh must allocate above the preview-retained cursor"
+        );
+        fixture.coordinator.undo().expect("Undo after Redo refresh");
+        let after_traversal = fixture
+            .coordinator
+            .persistence_checkpoint()
+            .expect("post-traversal checkpoint")
+            .computed_evaluation_high_water();
+        assert!(
+            after_traversal.next_revision.raw() > preview_high_water.next_revision.raw(),
+            "Undo must not restore the pre-preview allocator"
+        );
+    }
+
+    #[test]
+    fn m83_undo_redo_evaluation_publication_is_atomic_and_retryable() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty accepted session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let created = coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([1.0, 2.0]),
+                },
+            )
+            .expect("authored point");
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Point(created.value.points[0])]);
+        coordinator.mark_solving();
+
+        let assert_failed_traversal_is_neutral =
+            |coordinator: &RetainedEditorCoordinator,
+             lineage_json: &str,
+             checkpoint: &str,
+             history: (usize, usize),
+             transcript_len: usize,
+             selection: &[SelectionItem]| {
+                assert_eq!(
+                    coordinator
+                        .lineage_session_json()
+                        .expect("lineage after rejected traversal"),
+                    lineage_json
+                );
+                assert_eq!(
+                    format!(
+                        "{:?}",
+                        coordinator
+                            .persistence_checkpoint()
+                            .expect("checkpoint after rejected traversal")
+                    ),
+                    checkpoint
+                );
+                assert_eq!(
+                    (coordinator.history_len(), coordinator.history_cursor()),
+                    history
+                );
+                assert_eq!(coordinator.transcript().len(), transcript_len);
+                assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Solving);
+                assert_eq!(coordinator.editor().selection(), selection);
+            };
+
+        let before_undo_lineage = coordinator.lineage_session_json().unwrap();
+        let before_undo_checkpoint = format!("{:?}", coordinator.persistence_checkpoint().unwrap());
+        let before_undo_history = (coordinator.history_len(), coordinator.history_cursor());
+        let before_undo_transcript = coordinator.transcript().len();
+        let before_undo_selection = coordinator.editor().selection().to_vec();
+        coordinator
+            .lineage
+            .reject_next_evaluation_publication_for_test();
+        assert!(matches!(
+            coordinator.undo(),
+            Err(CoordinatorError::Lineage(ref message))
+                if message == "injected lineage evaluation-publication failure"
+        ));
+        assert_failed_traversal_is_neutral(
+            &coordinator,
+            &before_undo_lineage,
+            &before_undo_checkpoint,
+            before_undo_history,
+            before_undo_transcript,
+            &before_undo_selection,
+        );
+
+        coordinator.undo().expect("retry Undo");
+        coordinator.mark_solving();
+        let before_redo_lineage = coordinator.lineage_session_json().unwrap();
+        let before_redo_checkpoint = format!("{:?}", coordinator.persistence_checkpoint().unwrap());
+        let before_redo_history = (coordinator.history_len(), coordinator.history_cursor());
+        let before_redo_transcript = coordinator.transcript().len();
+        let before_redo_selection = coordinator.editor().selection().to_vec();
+        coordinator
+            .lineage
+            .reject_next_evaluation_publication_for_test();
+        assert!(matches!(
+            coordinator.redo(),
+            Err(CoordinatorError::Lineage(ref message))
+                if message == "injected lineage evaluation-publication failure"
+        ));
+        assert_failed_traversal_is_neutral(
+            &coordinator,
+            &before_redo_lineage,
+            &before_redo_checkpoint,
+            before_redo_history,
+            before_redo_transcript,
+            &before_redo_selection,
+        );
+        coordinator.redo().expect("retry Redo");
+    }
+
+    #[test]
+    fn m83_previous_checkpoint_failure_rolls_back_the_already_mutated_session() {
+        let (session, points, _, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let retained = retained_state_snapshot(&coordinator);
+        let lineage = coordinator.lineage_session_json().unwrap();
+        let checkpoint = format!("{:?}", coordinator.persistence_checkpoint().unwrap());
+        let computed_input = coordinator.computed_input;
+        let computed_snapshot = format!("{:?}", coordinator.computed_snapshot);
+        let computed_problem = coordinator.computed_evaluation_problem.clone();
+        coordinator.reject_next_previous_checkpoint = true;
+
+        assert!(matches!(
+            coordinator.apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: [-3.0, 2.0],
+                },
+            ),
+            Err(CoordinatorError::InjectedPreviousCheckpointFailure)
+        ));
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(coordinator.lineage_session_json().unwrap(), lineage);
+        assert_eq!(
+            format!("{:?}", coordinator.persistence_checkpoint().unwrap()),
+            checkpoint
+        );
+        assert_eq!(coordinator.computed_input, computed_input);
+        assert_eq!(
+            format!("{:?}", coordinator.computed_snapshot),
+            computed_snapshot
+        );
+        assert_eq!(coordinator.computed_evaluation_problem, computed_problem);
+
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: [-3.0, 2.0],
+                },
+            )
+            .expect("retry accepted edit");
+        assert_eq!(coordinator.history_len(), retained.history + 1);
+        assert_eq!(coordinator.transcript().len(), retained.transcript + 1);
+    }
+
+    #[test]
+    fn m83_delete_of_authored_rectangle_tombstones_its_exact_lineage_owner() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(4.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty accepted session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let created = coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Rectangle {
+                    first: [-2.0, -1.0],
+                    second: [2.0, 1.0],
+                },
+            )
+            .expect("authored rectangle");
+        let rectangle = created.value;
+        let owner = coordinator.lineage_document().steps()[1].id;
+        coordinator
+            .editor_mut()
+            .set_selection(rectangle.points.into_iter().map(SelectionItem::Point));
+
+        coordinator
+            .delete_selected(coordinator.session().design_identity())
+            .expect("delete complete rectangle action");
+
+        assert!(matches!(
+            coordinator
+                .lineage_document()
+                .step(owner)
+                .map(|step| step.state),
+            Some(geosolve_sketch_lineage::LineageStepState::Tombstoned)
+        ));
+        let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(
+            &coordinator
+                .lineage_session_json()
+                .expect("canonical lineage session"),
+        )
+        .expect("cold lineage replay");
+        assert_eq!(cold.design_json(), coordinator.checkpoint().design_json());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one lifecycle regression keeps publish, delete, cold replay, Undo and Redo evidence adjacent"
+    )]
+    fn m83_delete_of_computed_fillet_tombstones_and_restores_its_exact_lineage_owner() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let owner = fixture.coordinator.lineage_document().steps()[1].id;
+        let high_water = fixture
+            .coordinator
+            .feature_document()
+            .lifecycle_high_water();
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&fixture.coordinator, 1);
+        let live_cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(
+            &fixture
+                .coordinator
+                .lineage_session_json()
+                .expect("live computed-Fillet lineage session"),
+        )
+        .expect("cold live computed-Fillet replay");
+        let live_cold_features = ComputedFeatureDocument::from_json(live_cold.feature_json())
+            .expect("strict cold live computed-Fillet document");
+        assert_eq!(
+            live_cold_features.features(),
+            fixture.coordinator.feature_document().features(),
+            "cold replay reproduces exact semantic feature intent"
+        );
+        assert!(
+            live_cold_features.lifecycle_high_water().revision >= high_water.revision,
+            "cold replay retains feature revision high-water"
+        );
+        assert!(
+            live_cold_features
+                .lifecycle_high_water()
+                .allocator
+                .next_feature_id
+                >= high_water.allocator.next_feature_id
+        );
+        assert!(
+            live_cold_features
+                .lifecycle_high_water()
+                .allocator
+                .next_corner_id
+                >= high_water.allocator.next_corner_id
+        );
+        let corners = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .expect("created Fillet set")
+                .definition;
+            fillet
+                .corners
+                .iter()
+                .map(|corner| corner.id)
+                .collect::<Vec<_>>()
+        };
+
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Feature(feature)]);
+        fixture
+            .coordinator
+            .delete_selected(fixture.coordinator.session().design_identity())
+            .expect("delete complete computed Fillet action");
+
+        assert!(matches!(
+            fixture
+                .coordinator
+                .lineage_document()
+                .step(owner)
+                .map(|step| step.state),
+            Some(geosolve_sketch_lineage::LineageStepState::Tombstoned)
+        ));
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&fixture.coordinator, 1);
+        let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(
+            &fixture
+                .coordinator
+                .lineage_session_json()
+                .expect("canonical lineage session"),
+        )
+        .expect("cold deleted-Fillet replay");
+        assert!(
+            ComputedFeatureDocument::from_json(cold.feature_json())
+                .expect("cold feature materialization")
+                .feature(feature)
+                .is_none()
+        );
+        assert!(
+            ComputedFeatureDocument::from_json(cold.feature_json())
+                .expect("strict deleted feature materialization")
+                .lifecycle_high_water()
+                .revision
+                >= high_water.revision,
+            "deletion cannot lower the retained feature revision high-water"
+        );
+
+        fixture.coordinator.undo().expect("restore Fillet action");
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&fixture.coordinator, 1);
+        assert!(matches!(
+            fixture
+                .coordinator
+                .lineage_document()
+                .step(owner)
+                .map(|step| step.state),
+            Some(geosolve_sketch_lineage::LineageStepState::Live)
+        ));
+        let ComputedFeatureDefinition::FilletSet(restored) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("same restored Fillet set")
+            .definition;
+        assert_eq!(
+            restored
+                .corners
+                .iter()
+                .map(|corner| corner.id)
+                .collect::<Vec<_>>(),
+            corners
+        );
+        assert!(
+            fixture
+                .coordinator
+                .feature_document()
+                .lifecycle_high_water()
+                .revision
+                >= high_water.revision,
+            "Undo cannot reuse an older feature revision"
+        );
+
+        fixture
+            .coordinator
+            .redo()
+            .expect("delete Fillet action again");
+        assert_canonical_authored_actions_are_semantic_and_lifecycle_free(&fixture.coordinator, 1);
+        assert!(matches!(
+            fixture
+                .coordinator
+                .lineage_document()
+                .step(owner)
+                .map(|step| step.state),
+            Some(geosolve_sketch_lineage::LineageStepState::Tombstoned)
+        ));
+        assert!(
+            fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .is_none()
+        );
+        assert!(
+            fixture
+                .coordinator
+                .feature_document()
+                .lifecycle_high_water()
+                .revision
+                >= high_water.revision,
+            "Redo cannot reuse an older feature revision"
+        );
     }
 
     #[test]
@@ -20950,11 +23434,13 @@ mod tests {
                 point: points[1],
                 model_position: position,
             })
-            .expect("correct retry")
-            .expect("point mutation");
-        assert!(committed.published_accepted.is_some());
-        assert_eq!(coordinator.history_len(), history + 1);
-        assert_eq!(coordinator.transcript().len(), transcript + 1);
+            .expect("correct retry");
+        assert!(
+            committed.is_none(),
+            "releasing at the exact retained position is an authored no-op"
+        );
+        assert_eq!(coordinator.history_len(), history);
+        assert_eq!(coordinator.transcript().len(), transcript);
         assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
     }
 
@@ -21632,6 +24118,159 @@ mod tests {
         assert_eq!(coordinator.history_len(), retained.history_len);
         assert_eq!(coordinator.history_cursor(), retained.history_cursor);
         assert_eq!(coordinator.transcript(), retained.transcript);
+    }
+
+    #[test]
+    fn m83_lineage_stage_failure_preserves_computed_feature_publication_atomically() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "atomic computed Fillet",
+            )
+            .expect("held computed preview");
+        let retained = native_fillet_durable_snapshot(&fixture.coordinator);
+        let lineage = fixture
+            .coordinator
+            .lineage_session_json()
+            .expect("lineage before forced rejection");
+        let preview_input = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("held preview before rejection")
+            .snapshot
+            .input();
+        fixture.coordinator.lineage.reject_next_record_for_test();
+
+        let error = fixture
+            .coordinator
+            .apply_feature_authoring_preview(metadata.token, &candidate)
+            .expect_err("forced lineage failure must reject publication");
+
+        assert!(matches!(
+            error,
+            CoordinatorError::Lineage(message)
+                if message == "injected lineage record failure"
+        ));
+        assert_native_fillet_rejection_is_state_neutral(&fixture.coordinator, &retained);
+        assert_eq!(
+            fixture
+                .coordinator
+                .lineage_session_json()
+                .expect("lineage after forced rejection"),
+            lineage
+        );
+        let held = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("failed publication retains exact preview");
+        assert_eq!(held.metadata(), &metadata);
+        assert_eq!(held.candidate(), &candidate);
+        assert_eq!(held.snapshot.input(), preview_input);
+    }
+
+    #[test]
+    fn m83_lineage_stage_failure_preserves_native_fillet_cache_atomically() {
+        let mut fixture = standalone_native_fillet_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.corner]);
+        let metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "atomic native Fillet",
+            )
+            .expect("held native-capable preview");
+        fixture
+            .coordinator
+            .native_feature_authoring_availability(metadata.token, &candidate)
+            .expect("prepared native publication");
+        let retained = native_fillet_durable_snapshot(&fixture.coordinator);
+        let lineage = fixture
+            .coordinator
+            .lineage_session_json()
+            .expect("lineage before forced rejection");
+        fixture.coordinator.lineage.reject_next_record_for_test();
+
+        let error = fixture
+            .coordinator
+            .apply_feature_authoring_native_profile(metadata.token, &candidate)
+            .expect_err("forced lineage failure must reject native publication");
+
+        assert!(matches!(
+            error,
+            CoordinatorError::Lineage(message)
+                if message == "injected lineage record failure"
+        ));
+        assert_native_fillet_rejection_is_state_neutral(&fixture.coordinator, &retained);
+        assert_eq!(
+            fixture
+                .coordinator
+                .lineage_session_json()
+                .expect("lineage after forced rejection"),
+            lineage
+        );
+        assert!(matches!(
+            fixture
+                .coordinator
+                .native_fillet_previews
+                .get(&metadata.token),
+            Some(NativeFilletPreviewCache::Prepared(_))
+        ));
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_authoring_preview()
+                .expect("failed native publication retains held preview")
+                .metadata(),
+            &metadata
+        );
+    }
+
+    #[test]
+    fn m83_lineage_stage_failure_preserves_held_fillet_edit_preview_atomically() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let origin = fixture
+            .coordinator
+            .computed_evaluation_input()
+            .expect("current composite input");
+        let replacement = candidate.radius() * 0.75;
+        fixture
+            .coordinator
+            .preview_computed_fillet_radius_exact(origin, feature, replacement)
+            .expect("held radius preview");
+        let retained = native_fillet_durable_snapshot(&fixture.coordinator);
+        let lineage = fixture
+            .coordinator
+            .lineage_session_json()
+            .expect("lineage before forced rejection");
+        fixture.coordinator.lineage.reject_next_record_for_test();
+
+        let error = fixture
+            .coordinator
+            .set_computed_fillet_radius_exact(origin, feature, replacement)
+            .expect_err("forced lineage failure must reject held-preview publication");
+
+        assert!(matches!(
+            error,
+            CoordinatorError::Lineage(message)
+                if message == "injected lineage record failure"
+        ));
+        assert_native_fillet_rejection_is_state_neutral(&fixture.coordinator, &retained);
+        assert_eq!(
+            fixture
+                .coordinator
+                .lineage_session_json()
+                .expect("lineage after forced rejection"),
+            lineage
+        );
+        assert!(fixture.coordinator.computed_fillet_preview.is_some());
+        assert!(fixture.coordinator.computed_preview_snapshot.is_some());
     }
 
     #[test]

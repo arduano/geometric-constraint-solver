@@ -1,0 +1,403 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
+# M83 implementation — Authoritative sketch lineage and deterministic rematerialization
+
+Status: **implementation and qualification in progress; not accepted**. ADR 0039 and
+`docs/M83_GOALS.md` own the scope. M81 remains accepted product authority until an immutable M83
+candidate passes focused human UAT and receives explicit supervising-human approval. GitHub Pages
+publication is deliberately deferred until that approval.
+
+## Product boundary
+
+M83 adds one declarative authority above the existing independently validated domains:
+
+- `geosolve-sketch-lineage` owns canonical action programs, stable typed ports and reservations,
+  exact-CAS patches, retained/latest-attempt/last-accepted authority, and one Undo/Redo history;
+- `geosolve-constraint-editor` compiles complete workbench actions into lineage, materializes them
+  back through ordinary sketch/operation/feature APIs, and performs action-owner reconciliation;
+- workspace v7 persists lineage authority and treats all flat sketch/feature/map data as a
+  disposable authenticated cache; and
+- `geosolve-sketch-lineage-wasm` exposes the same stateful DOM-free engine through
+  `geosolve.lineage.rpc.v0`, with a private data-only TypeScript client in
+  `packages/geosolve-lineage`.
+
+The existing flat Rust sketch APIs remain supported for low-level embedders. The sole demo
+workbench no longer treats its flat coordinator state as peer persistent authority. M83 adds no
+residual, Jacobian, constraint equation, rank rule, priority rule, branch heuristic, or success
+shortcut.
+
+## Implementation ledger
+
+### L1 — canonical lineage and exact identity flow
+
+The new pure safe-Rust lineage crate provides:
+
+- bounded deterministic lineage-document, session and materialization-map codecs;
+- monotonic document, step, output, reservation and revision identities;
+- typed owned, aliased, created, continued and retired output flow;
+- dependency/cycle, kind, namespace, reservation, lifecycle and allocator validation;
+- exact-revision insert, atomic rewrite, suppress, tombstone, cascade/rebind, reorder and complete-
+  program reconcile mutations; and
+- retained program, latest evaluation attempt, last accepted program/materialization evidence,
+  never-reuse lifecycle high-waters and one bounded Undo/Redo history.
+
+`LineageMaterializationMap` distinguishes complete declared ownership from current live writable
+authority. Suppression and tombstoning retain declarations/reservations while removing live
+reverse bindings. Exact writable-leaf declarations keep separate fields of one persistent object,
+such as point X and Y, distinct; coordinator reconciliation authenticates changed leaves through
+that reverse map before emitting one atomic multi-owner rewrite.
+
+Intrinsic Origin/X/Y references are document-bound immutable action parameters. They are not
+step-output `LineageInputBinding`s because no lineage step owns them; datum-backed relations still
+own ordinary Constraint and Source outputs.
+
+### L2 — atomic native materialization
+
+`geosolve-sketch` exposes a narrow reserved-ID materialization batch. It validates the exact base
+document namespace and digest, requested kind/order/count, duplicates, reference closure, source
+ownership, spline-span cursors and merged identity high-water before one atomic publication. It is
+not a general unchecked explicit-ID insertion API.
+
+Canonical parameter and external-snapshot payloads retain exact host-input provenance needed by
+historical prefix evaluation. Retained sessions separately preserve the payload used by the latest
+attempt and the payload that produced accepted authority when a newer host-input attempt fails.
+
+### L3 — complete action catalog
+
+The coordinator bridge covers the frozen M81 surface without a fallback family:
+
+- all 25 `GeometryToolVariant` recipes, including modifiers, intrinsic relations, aliases,
+  variable-cardinality children, roles and explicit recipe branches;
+- all 35 persistent constraint definitions and all eight dimension definitions in both admitted
+  Driving and Reference modes;
+- every selected-curve control/property, rational ordinary/projective mode, role, activation and
+  explicit curve/contact/Fillet/Offset branch family;
+- all 12 `SketchOperationKind`s with typed operands and created/continued/retired identity flow;
+- native Fillet and Profile Offset as native materializations; and
+- computed `FilletSet` feature/corner intent, while generated arcs/fragments remain authenticated
+  revision-local output rather than false persistent native identity.
+
+One separately reviewed 195-row lineage-action catalog freezes those mappings. It complements,
+rather than replaces, the milestone-neutral 271-row authoring/scene golden.
+
+### L4 — strict/local evaluation and failure authority
+
+`StrictChronological` rebuilds every ready prefix from the imported root and independently solves
+and validates it through the sketch and computed-feature owners. Historical non-final prefixes use
+their exact authenticated host-input provenance; the final prefix uses the exact caller-supplied
+inputs. The accepted digest covers evaluator identity, lineage/input identity, retained and
+accepted sketch bytes, computed intent/result evidence and every strict prefix.
+
+`DependencyLocal` computes the exact dirty dependency closure, reconstructs an authenticated
+unchanged prefix without allocator regression, replays the structural suffix, and evaluates only
+the required policy checkpoints. A mandatory cold strict comparison gates publication. Policy
+telemetry reports reusable/reconstructed prefix work, replayed suffix work, exact dirty steps and
+the separate strict-oracle charge.
+
+A structurally valid edit may advance retained lineage and history while a downstream owning
+domain rejects it. The prior complete accepted lineage/materialization remains authority. Stale,
+cancelled, exhausted, malformed or non-finite requests do not add history or publish partial
+state. Projected direct editing is stricter: a missing owner, incomplete inverse or cold-
+reproduction mismatch rejects the complete multi-owner rewrite.
+
+### L5 — workspace v7 and honest migration
+
+Workspace v7 stores the complete lineage session, exact current and accepted host-input payloads,
+annotation placement and optional flat caches. Versions v1-v6 still pass their existing strict
+decoders, then become one honest `ImportedBaseline` root with no invented recipe/event history.
+Existing sketch IDs/high-waters, computed feature/corner/evaluation high-waters, retained-versus-
+accepted authority and valid annotations are preserved where present.
+
+On v7 load, current and historical accepted authority is reproduced through the owning domains.
+A missing, corrupt, stale, swapped or merely independently valid-but-different flat cache is
+discarded. In particular, an alternate solution of an underconstrained accepted sketch cannot
+substitute for the exact cold lineage materialization; allocator-only metadata may remain ahead
+when it satisfies monotonic high-water checks.
+
+### L6 — stateful DOM-free RPC and TypeScript boundary
+
+`geosolve.lineage.rpc.v0` supports create/import/load, inspect, exact patch/reconcile/owner rewrite,
+policy change, engine-owned evaluation, Undo/Redo and canonical export. Envelopes carry
+correlation/session identity and opaque string revisions/IDs. Rust retains state and repeats all
+schema, dependency, host-input and owning-domain checks.
+
+RPC `rewrite_owners` is an atomic exact-CAS batch of structural step rewrites. It is not the
+coordinator's projected-drag reconciliation, which additionally derives every affected owner from
+accepted geometry and requires cold reproduction before publication. Editor-compiled actions carry
+private authenticated materialization intent and are cold-executable through the workbench
+evaluator. A caller-authored generic action with a registered schema may still be retained,
+inspected, reordered and undone as structural lineage, but it deliberately fails cold evaluation
+with `workbench_materialization_unsupported` because the RPC cannot invent missing typed workbench
+intent. The private TypeScript package is therefore a data binding for structural lineage and
+loaded editor-compiled programs, not an OpenSCAD-like executable geometry builder in M83.
+
+Untrusted serialized accepted authority is never accepted from a self-consistent session checksum
+alone. Workspace-v7 restoration cold-reproduces accepted materialization with its exact persisted
+host inputs. The standalone RPC session codec deliberately strips caller-certified current and
+historical acceptance while preserving the complete declarative program/history; an explicit
+ordinary cold `evaluate` call must establish fresh accepted authority before the RPC exposes it.
+The WASM crate has no DOM, `web-sys`, browser storage, renderer, solve callback or start hook. The
+TypeScript package supplies only branded data types, exhaustive catalog constants and request
+builders; it is private and contains no geometry or acceptance logic.
+
+## Finding ledger
+
+### M83-F001 — oversized semantic key for host-bound parameter identity
+
+The first bridge embedded a complete structured host-binding identity into a semantic port key,
+which exceeded the bounded key contract. The repair uses compact deterministic ordinal semantic
+keys while retaining the complete typed identity in action/reservation evidence. The focused
+rational-conic host-binding regression proves import, cold evaluation and reload.
+
+### M83-F002 — historical prefix lost removed host-input provenance
+
+A later edit that removed a parameter binding or external snapshot made an earlier strict prefix
+evaluate with the final input set. The independently reproduced failure reported the earlier
+lineage step as missing its required input. Every baseline/action now retains a bounded canonical
+parameter/snapshot pair authenticated by its external-input stamp; non-final prefixes consume that
+historical pair. Focused regressions cover both parameter removal and external-snapshot removal.
+
+### M83-F003 — retained datum relations lacked complete typed identity mapping
+
+The first catalog bridge omitted draft-v5 `retained_planar_constraints` from Constraint/Source
+materialized identity collection. Inventory-driven datum coverage exposed the missing mapping.
+Both collection classification and persistent-source extraction now include retained planar
+constraints; intrinsic datums themselves remain immutable document-bound parameters, not owned
+outputs.
+
+### M83-F004 — workspace cache admitted a different valid underconstrained solution
+
+The v7 cache check authenticated structural intent and independent validity but did not require
+the cached accepted geometry to equal cold accepted lineage materialization. A regression changed
+an underconstrained accepted point from `[1, 2]` to another independently valid `[17, -9]`; the
+alternate survived before the repair. Cache compatibility now compares exact semantic accepted
+materialization while retaining separate monotonic allocator checks.
+
+### M83-F005 — continuation declarations could steal an unchanged writable leaf
+
+The first reverse-owner check authenticated changed leaves but allowed a later continuation step
+to declare authority over an unchanged predecessor leaf. A self-consistent loaded session could
+therefore move reverse write-back authority without changing cold geometry. Validation now
+recompiles the complete writable-leaf manifest chronologically from authenticated predecessor
+state. `loaded_continuation_manifest_cannot_claim_unchanged_leaf` and the baseline omitted-leaf
+regression reject both ordinary and imported omissions before publication.
+
+### M83-F006 — action ports and lifecycle declarations were caller-forgeable
+
+Writable keys alone did not authenticate ordinary action inputs, outputs, reservations or identity
+flows. Hostile sessions could retarget a same-kind input, add a ghost output/reservation, swap
+persistent reservation IDs or replace `Created` with `Continued`/owned-logical flow while retaining
+byte-identical geometry. The coordinator now recompiles a complete schema-specific action manifest
+from exact prior ports plus the structural delta and compares every input, output, identity flow,
+reservation and writable leaf. Focused hostile regressions cover each forgery and all current,
+accepted, Undo and Redo documents.
+
+### M83-F007 — imported-baseline manifests were not independently complete
+
+An imported root previously trusted its declared writable set after its opaque payload decoded. A
+forged root could omit an authored leaf and still present a structurally valid program. Baseline
+validation now derives every entity, typed persistent output/reservation and writable field from
+the authenticated checkpoint payload and requires an exact manifest match.
+
+### M83-F008 — hostile RPC load could replace a valid in-memory session
+
+RPC load validation initially concentrated on the current document. Complete session validation
+now authenticates current and last-accepted programs plus every Undo/Redo checkpoint before the
+candidate replaces engine state. `forged_load_rejects_atomically_and_preserves_previous_session`
+proves a forged accepted/history manifest returns `invalid_editor_authority` while the previous
+session remains byte-identical.
+
+### M83-F009 — deleting imported geometry rewrote the immutable baseline owner
+
+Persistent deletion was first treated as an ordinary field rewrite. For an imported object this
+removed the object from the root payload while leaving the root's original output manifest, so the
+root no longer authenticated itself. Deleting an imported persistent entity now appends a later
+lifecycle action with explicit `Retired` flow. The baseline payload/output manifest remains
+immutable; Undo removes the retirement action, Redo restores it, and its identity is never reused.
+
+### M83-F010 — revision-local allocator exhaustion poisoned accepted lineage
+
+The frozen `scene.current-native.withheld` row exposed that cold lineage validation consumed the
+host's computed-edge evaluation allocator. A deliberately exhausted revision-local allocator then
+rejected coordinator construction even though native sketch authority and feature intent were
+unchanged and the established product contract was to withhold computed presentation. Cold lineage
+evaluation now uses a deterministic scratch computed identity space; the exact host high-water
+remains session auxiliary lifecycle state and is restored unchanged. A focused owning-layer
+regression plus the previously frozen scene row prove the distinction.
+
+### M83-F011 — truthful computed dispositions rejected accepted native lineage
+
+Cold evaluation initially treated any persistent computed feature that was `Failed`, or any
+bounded computed evaluation whose generated output was withheld, as failure of the complete
+lineage materialization. That contradicted the existing owning-domain contract: independently
+solved native sketch state and persistent feature intent remain authoritative while each computed
+feature truthfully reports `Current`, `Suppressed`, `Failed` or `Withheld`. Cold evidence now
+authenticates that exact disposition and its diagnostic in the materialization digest. Projected
+direct manipulation deliberately retains its stricter all-current publication gate. Focused cold
+evidence and mixed Current/Failed replay/reload regressions cover the distinction.
+
+### M83-F012 — exact-position releases created fictional edits
+
+Releasing a point or projected manipulation at its exact retained position could still stage a
+lineage rewrite and add history/transcript evidence even though no authored value changed. Point
+and multi-owner lineage staging now return no mutation for an exact semantic no-op. The retained
+lineage revision, Undo/Redo cursor, transcript and evaluation authority remain byte-identical, and
+a mismatched release remains retryable before the correct no-op release.
+
+### M83-F013 — abandoned history identities could be rebound
+
+Per-document validation prevented duplicate live identities but did not by itself prevent a
+replacement program from reusing an abandoned step, output, reservation or persistent identity
+with different meaning. `LineageSession` now derives one cross-history identity ledger from
+current, accepted, Undo and Redo documents before admitting a patch, reconcile or decoded session.
+Any changed step key/action schema/manifest, output declaration, reservation declaration or
+persistent binding rejects atomically before entering history. Core and coordinator regressions
+cover current, accepted, Undo, Redo and abandoned-branch reuse. The final authority audit found
+one narrower complete-program hole after a divergent edit had already cleared Redo: the abandoned
+binding was no longer present in any retained document even though its numeric lifecycle cursor
+survived. Reconciliation now also rejects any step, output or reservation ID below the retained
+session high-water unless that exact identity remains bound in retained history. Table-driven core
+coverage exercises all three identity classes after divergence, and the stateful RPC regression
+requires byte-exact atomic rejection.
+
+### M83-F014 — a self-asserted accepted digest could pass workspace validation
+
+A structurally self-consistent session checksum authenticated only what the payload claimed; a
+caller could replace the accepted materialization digest and recompute that checksum. Workspace
+validation now cold-reproduces the asserted accepted program under its exact persisted host inputs
+and compares the resulting owning-domain digest. A self-asserted digest is rejected before it can
+replace live authority.
+
+### M83-F015 — session restore trusted derived acceptance and lost retained lifecycle cursors
+
+Restoring a lineage session could combine a genuine declarative program with unauthenticated flat
+accepted bytes, and could omit never-reuse high-waters retained only by accepted, Undo or Redo
+positions. Restore now stages a cold owning-domain reconstruction, independently reproduces the
+last-accepted program with its historical inputs when retained intent is failed, and merges every
+history-retained sketch/feature/evaluation lifecycle cursor before atomic publication. A hostile
+restore remains byte-neutral; a genuine history-bearing restore preserves abandoned reservations
+and revision high-waters.
+
+### M83-F016 — Undo/Redo trusted forged historical accepted caches
+
+History traversal previously treated its revision-local flat checkpoint as accepted geometry
+authority. For an underconstrained sketch, a different independently valid solution could
+therefore be inserted into that cache and substituted on Undo/Redo. Traversal now restores the
+declarative lineage position and cold-reproduces accepted authority through its owning domains;
+flat checkpoint bytes are repaired only after successful staging. Focused regressions cover corrupt
+design caches, a forged alternate accepted solution and atomic/retryable traversal failure.
+
+### M83-F017 — action identity could change during a rewrite
+
+The structural rewrite path originally authenticated ports and materialized values without making
+the existing action kind, schema and schema version immutable. A caller could therefore reuse one
+step identity for a different action meaning. Rewrite validation now requires those three action-
+identity fields to match the historical declaration exactly; changes must use a newly allocated
+step. Core and RPC regressions cover current, accepted, Undo and Redo authority and preserve the
+stable `invalid_editor_authority` boundary classification.
+
+### M83-F018 — maximum generic persistent IDs could panic output indexing
+
+Generic persistent-ID fallback output indices were derived by adding a family offset to the raw
+bounded ID. At the maximum admitted ID that addition overflowed in debug builds and could panic
+instead of returning a typed result. The mapping now uses a non-overflowing bounded encoding and
+the exact maximum identity is exercised through complete manifest compilation and cold replay.
+
+### M83-F019 — RPC callers could forge nonpublishing evaluation evidence
+
+An early RPC surface let the caller submit a claimed cancelled, exhausted or stale evaluation
+attempt directly. Although such evidence did not publish geometry, it still belonged to the
+engine's execution history and was not caller-certifiable. The method is no longer part of
+`geosolve.lineage.rpc.v0`; an attempted `record_nonpublishing` request returns `unknown_method` and
+leaves the canonical session byte-identical. Only actual bounded engine execution may record an
+evaluation disposition.
+
+### M83-F020 — historical accepted authority was authenticated only on traversal
+
+Workspace restoration cold-authenticated the top-level last-accepted program, but accepted
+authority retained only in Undo or Redo was checked later when the user traversed history. That was
+fail-closed at use but weaker than workspace-v7's load-time authority contract. Restoration now
+walks cloned history, deduplicates every distinct accepted stamp and cold-reproduces each with its
+exact historical host inputs before publishing any workspace field. A forged accepted digest held
+only in an Undo checkpoint rejects eagerly and preserves the target coordinator byte-for-byte.
+
+### M83-F021 — serialized attempt metadata survived workspace reconstruction
+
+A structurally valid workspace could supply a forged latest `Failed`, `Pending`, `Cancelled`,
+`Exhausted` or `Stale` attempt even though the flat scene was rebuilt cold. Restore now derives the
+current host inputs from lineage, executes the ordinary owning-domain evaluator and replaces that
+metadata with fresh accepted-or-failed evidence. All five serialized dispositions are covered; a
+valid retained program reconstructs `Accepted` authority with the real input/materialization stamp
+and no caller diagnostic.
+
+### M83-F022 — wrong-document exact requests were reported as stale revisions
+
+The RPC's direct expected-identity guard collapsed a foreign document and a stale revision into
+`stale_revision`, unlike patch-backed methods which returned `wrong_document`. The direct guard now
+classifies document identity first and revision/digest second. Its focused regression also proves
+the failed request leaves the exported session byte-identical.
+
+## Qualification record
+
+Current focused evidence (development worktree, not a nominated clean candidate):
+
+```bash
+cargo test --locked -p geosolve-sketch-lineage --all-features --no-fail-fast
+```
+
+Result: 29 passed, zero failed: 21 canonical/session tests and eight materialization-map tests.
+
+```bash
+cargo test --locked -p geosolve-constraint-editor \
+  coordinator::lineage::tests --lib
+```
+
+Result: 21 passed, zero failed, including complete-manifest, imported-root and historical-authority
+forgery regressions.
+
+```bash
+cargo test --locked -p geosolve-constraint-editor \
+  --test m83_lineage_behavior \
+  --test m83_lineage_catalog \
+  --test m83_lineage_historical_inputs \
+  --test m83_lineage_operations \
+  --test m83_w2_w3_catalog_lifecycle --no-fail-fast
+```
+
+Result: 21 passed, zero failed. The frozen action catalog has 194 catalog entries plus its header
+(195 physical lines), with SHA-256
+`8a45fde5691f82adb1afb9e30b1d71fff24884667453ab46fd275fe0caad922a`.
+
+```bash
+cargo test --locked -p geosolve-sketch-lineage-wasm --all-features --no-fail-fast
+nix-shell --run 'env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+  cargo test --locked -p geosolve-sketch-lineage-wasm --test m83_rpc_parity \
+  --target wasm32-unknown-unknown'
+npm --prefix packages/geosolve-lineage test
+```
+
+Result: twelve RPC/schema unit tests, one native transcript-parity test, one actual-WASM transcript-
+parity test and both TypeScript compile/runtime checks passed. The frozen RPC transcript has 22
+responses, 97,333 bytes and FNV-1a `d8a40f0902aeee3c`.
+
+Workspace-v7 cold/cache tests pass 4/4; cache-free workbench routing/reload tests pass 2/2; the
+strict v1-v5 migration matrix and v6 compatibility test pass. The imported-deletion M78 collateral
+regression and the revision-local computed-allocator regression pass.
+
+The existing authoring/scene golden remains 271 catalog entries plus its header, with SHA-256
+`cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` at this checkpoint.
+
+Full workspace Clippy/tests, native/WASM RPC parity, Rustdoc, package/licence checks, performance,
+Trunk, the clean release gate, immutable snapshot and served-byte evidence remain pending. No
+clean-candidate claim is made by the focused development runs above.
+
+## Known limitations and next gate
+
+M83 intentionally does not add arbitrary-curve/computed Offset, topology-changing Offset,
+computed-on-computed features, B-rep/PDM naming, formulas/configurations/units, collaboration,
+TypeScript source rewriting, a browser script editor or npm publication.
+
+The next gate is to finish the authority audits, pass the complete release gate from committed
+source, freeze the gate-produced web distribution without rebuilding, and serve that immutable
+candidate on Tailscale for the focused scorecard in `docs/M83_UAT.md`. M83 must not close or deploy
+to GitHub Pages before explicit supervising-human acceptance.

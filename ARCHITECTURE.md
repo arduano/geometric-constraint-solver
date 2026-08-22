@@ -31,13 +31,15 @@ construction/NURBS UAT and certified all-family visual profiles.
   model, inverse controls, tests, ADR and evidence for a future redesign. No prototype API,
   persistence v2, golden expansion or UI remains on `main`. `docs/M82_DEFERRED.md` owns the
   disposition.
-- **Proposed target:** M83 adds an optional host-side `geosolve-sketch-lineage` companion and a
-  separate DOM-free WASM adapter under proposed ADR 0039. Lineage is an editable ordered action
-  program with stable typed outputs and explicitly reserved materialized IDs; the existing flat
-  `SketchDocument` remains the independently validated solver model. Accepted direct manipulation
-  rewrites the owning placement step, and deleting a native Profile Offset step rematerializes
-  without its complete ownership set. `docs/M83_GOALS.md` owns the planned architecture/proof
-  slice. No M83 behavior is implemented or part of the baseline yet.
+- **In-progress target:** M83 makes `LineageDocument` the authoritative editable source for the
+  complete demo workbench under accepted ADR 0039. Flat sketch and computed-feature state are
+  independently validated materializations. Stable typed ports cover all current recipes,
+  relations, dimensions, properties, branches, operations and native/computed Fillet/Offset
+  intent; direct editing atomically rewrites every owner. Strict chronological evaluation is the
+  oracle for dependency-local evaluation, workspace v7 strictly migrates v1-v6 through honest
+  imported baselines, and `geosolve.lineage.rpc.v0` exposes the stateful engine without a DOM.
+  `docs/M83_GOALS.md` owns the full scope. M83 is not accepted product behavior yet; M81 remains
+  the product baseline.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -342,6 +344,39 @@ Offset residual registration/path/incidence/audit assembly remains behind the co
 independent candidate validation deliberately stays separate in `compiler.rs`. Public paths,
 canonical wire DTOs, error strings, registration/incidence/audit order and equations do not change.
 
+### `geosolve-sketch-lineage`
+
+M83 adds a pure safe-Rust orchestration/data crate above the solver domains. It owns canonical
+versioned action documents, stable typed input/output ports, explicit owned/aliased and
+created/continued/retired identity flow, exact-CAS mutations, retained/latest/accepted authority,
+revision-stamped materialization maps and one bounded Undo/Redo history. It owns no sketch or
+feature equation, nonlinear solve, branch search, independent-validation shortcut, renderer or
+browser state. `geosolve-core`, `geosolve-sketch` and `geosolve-linkage` do not depend on it.
+
+The crate validates structural programs and identity flow without knowing private workbench
+recipes. `geosolve-constraint-editor` is the downward consumer/compiler that authenticates its own
+schema-specific materialization intent, reconstructs exact owning-domain checkpoints and performs
+projected multi-owner reconciliation. This split keeps the public lineage model small while
+preventing a caller-editable port manifest from self-certifying editor authority.
+
+### `geosolve-sketch-lineage-wasm`
+
+The separate M83 WASM crate consumes `geosolve-sketch-lineage`, `geosolve-constraint-editor` and
+`geosolve-sketch` through public audit/evaluation seams. It exposes the stateful JSON-string
+`geosolve.lineage.rpc.v0` protocol with no DOM, `web-sys`, storage, renderer, JavaScript solve
+callback or start hook. RPC `rewrite_owners` is an atomic exact-CAS structural batch, not the
+editor's inverse-derived projected-drag transaction. Editor-compiled actions can be cold-evaluated;
+generic caller-authored actions remain structural and fail with
+`workbench_materialization_unsupported` when private materialization intent is absent.
+
+Standalone RPC load strips caller-certified current and historical accepted authority until a
+fresh cold evaluation succeeds. The workbench workspace-v7 loader is deliberately different: it
+uses exact persisted host inputs to cold-reproduce every distinct accepted authority reachable in
+current, Undo and Redo positions, reconstructs the current attempt from fresh owning-domain work,
+and only then admits a disposable flat cache. The private TypeScript package is a data
+binding/request builder, not a geometry engine or an executable OpenSCAD-like authoring language
+in M83.
+
 ### `geosolve-constraint-editor`
 
 Owns presentation-independent sketch interaction policy over public `geosolve-sketch` and
@@ -357,8 +392,9 @@ Owns presentation-independent sketch interaction policy over public `geosolve-sk
 - typed document-edit, preview, commit and cancellation effects; and
 - deterministic transition/replay fixtures for native and WASM qualification.
 
-It depends one way on `geosolve-sketch` and, under ADR 0031, on
-`geosolve-sketch-features`. The unreleased general ADR 0030 operation-authoring facade and its
+It depends one way on `geosolve-sketch`, under ADR 0031 on `geosolve-sketch-features`, and under
+ADR 0039 on `geosolve-sketch-lineage` for authoritative workbench programs and ownership maps. The
+unreleased general ADR 0030 operation-authoring facade and its
 dependency were removed when M66 closed. ADR 0037 narrowly reintroduces a direct
 `geosolve-sketch-ops` dependency for deterministic Profile Offset proposals; the editor still owns
 semantic authoring and the coordinator alone consumes an exact-stamped proposal. These dependencies do not own

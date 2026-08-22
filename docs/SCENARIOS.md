@@ -4299,6 +4299,103 @@ Former UAT PID `3024723` is retired and port `8080` is free. No M82 feature UAT 
 is claimed; existing accepted M81 Pages bytes remain public authority. See
 `docs/M82_DEFERRED.md`.
 
+## M83 authoritative-lineage scenarios
+
+M83 adds no solver equation or geometry family. Its scenarios exercise declarative authority,
+identity, rematerialization and adapter parity above the unchanged owning-domain oracles.
+
+### M83-L1 — complete typed action catalog
+
+Drive all 25 geometry recipes, all current constraint and dimension families/modes, every current
+curve control/property/role/activation/branch family, all 12 operation kinds, native Fillet/Profile
+Offset and computed `FilletSet` through the retained coordinator. Each accepted action publishes
+its exact schema, typed ports/reservations and identity flow, then survives cold reload and
+Undo/Redo. The inventory is closed: a newly added public family without a mapping fails the
+catalog test instead of falling back to an opaque flat edit.
+
+Status: the closed enum/catalog mapping, generic full-family lifecycle matrix and representative
+owning-domain coordinator routes pass. This is not described as literal runtime replay of every
+catalog row; full release qualification and human UAT remain pending.
+
+### M83-L2 — exact owner leaves and atomic multi-owner rewrite
+
+For one persistent point, address X and Y as distinct writable leaves over the same native point
+identity. Repeat across several action owners in one projected drag. Resolve every changed leaf
+only through the revision-stamped reverse materialization map, issue one exact-revision
+`RewriteSteps` patch, cold-rematerialize and compare the reproduced projection before publication.
+Missing, duplicated, suppressed, tombstoned, stale or tampered reverse ownership rejects the
+complete edit without a Move step, partial owner update or history entry.
+
+Status: focused multi-owner, exact-leaf and tampered-map regressions pass. Complete action-manifest
+authentication now also rejects forged continuation leaves, same-kind inputs, outputs, identity
+flows and reservations in current/accepted/Undo/Redo authority. Architecture review and the clean
+candidate gate remain pending.
+
+### M83-L3 — strict/local equivalence with historical host inputs
+
+Build a lineage whose earlier prefix requires a parameter or external snapshot that a later edit
+removes. Strict chronological evaluation must use the exact authenticated historical payload for
+that prefix and the caller payload for the final prefix. After insert, rewrite, suppress, delete,
+reorder, branch/property edit, Undo and Redo, dependency-local evaluation must agree with the cold
+strict oracle on accepted/failure authority, canonical sketch/feature evidence, typed identities,
+ownership and branches. Only reported work may differ.
+
+Status: focused historical-input and strict/local regressions pass; complete collateral
+qualification remains pending.
+
+### M83-L4 — retained failure and one history
+
+Apply a structurally valid earlier-step rewrite that makes a later operation or feature invalid.
+The retained program and one lineage history position advance, the first rejected semantic step is
+reported, and the previous independently accepted lineage/materialization remains visible.
+Projected editing is unavailable against its stale reverse map. Undo/Redo restores exact programs
+and reservations; stale, cancelled, exhausted, malformed and non-finite requests record nothing.
+
+Status: focused retained-authority coverage passes; workbench routing audit and human recovery UAT
+remain pending.
+
+### M83-L5 — workspace-v7 cold authority and migration
+
+Round-trip v7 with retained/accepted lineage, history, host inputs, features/high-waters and
+annotations. Migrate one fixture from every v1-v6 decoder into one honest `ImportedBaseline`, with
+no invented recipe history. Omit, corrupt, swap or replace the flat cache with another
+independently valid underconstrained solution; the loader must discard it and reproduce the exact
+cold accepted lineage materialization. A forged accepted digest, even with a recomputed enclosing
+session checksum, cannot become accepted authority whether it is current or reachable only through
+Undo/Redo. Serialized Pending/Failed/Cancelled/Exhausted/Stale attempt metadata is never trusted;
+the loader replaces it with fresh evidence from the exact lineage-owned host inputs.
+
+Status: migration, exact accepted-cache substitution, forged current/history authority and atomic
+hostile RPC-load regressions pass. Deleting imported persistent geometry now appends an explicit
+`Retired` action without rewriting the baseline manifest. Coordinator restore and Undo/Redo also
+cold-reproduce accepted authority, repair corrupt disposable history caches and retain never-reuse
+high-waters from current, accepted and both history directions. Load-time regressions cover a
+forged historical accepted digest and every non-accepted serialized attempt disposition. Complete
+release qualification remains pending.
+
+### M83-L6 — stateful native/WASM RPC and sole-workbench routing
+
+Replay one correlated `geosolve.lineage.rpc.v0` transcript natively and through DOM-free WASM:
+create/import/load, mutate/reconcile, evaluate, retained failure, Undo/Redo, inspect and export.
+Canonical responses and final retained/accepted authority must agree. A Node/worker-like host must
+initialize without DOM or a start hook. Separately instrument the sole workbench so every
+persistent geometry, relation, dimension, property, role, branch, operation, feature, delete,
+direct-edit and history mutation advances or restores lineage; no writable flat side path or
+second user-visible history remains.
+
+The transcript distinguishes structural RPC mutation from coordinator projection: RPC
+`rewrite_owners` is one exact-CAS batch, while W6 owns inverse-derived projected multi-owner
+reconciliation. A generic caller-authored action without private editor materialization intent is
+retained structurally but must fail evaluation with `workbench_materialization_unsupported`.
+Standalone RPC load strips current and historical accepted authority; workspace-v7 reload instead
+cold-reproduces that authority with exact persisted host inputs.
+
+Status: native RPC accepted-authority parity, DOM-free initialization, TypeScript data-binding and
+closed workbench source-route sentinels pass, together with representative dynamic routing and a
+cache-free reload. The source-route evidence is a closed inventory sentinel rather than runtime
+instrumentation of every route. Release-WASM parity, complete release qualification and immutable-
+candidate human UAT remain pending.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

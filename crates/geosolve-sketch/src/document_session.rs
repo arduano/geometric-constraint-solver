@@ -515,9 +515,14 @@ fn parameter_digest(revision: u64, entries: &[ParameterBatchEntry]) -> Parameter
 
 /// Defensive bound for one immutable host parameter batch.
 pub const MAX_PARAMETER_BATCH_ENTRIES: usize = crate::MAX_DOCUMENT_PARAMETERS;
+/// Current canonical immutable host-parameter batch wire version.
+pub const PARAMETER_BATCH_VERSION_V1: u32 = 1;
+/// Defensive byte limit applied before host-parameter JSON deserialization.
+pub const MAX_PARAMETER_BATCH_JSON_BYTES: usize = 16 * 1024 * 1024;
 
 /// One closed typed canonical host parameter value.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum ParameterValue {
     Length(f64),
     Angle(f64),
@@ -546,14 +551,16 @@ impl ParameterValue {
 }
 
 /// One canonical immutable host parameter entry.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParameterBatchEntry {
     pub parameter: DocumentParameterId,
     pub value: ParameterValue,
 }
 
 /// Canonical deterministic identity of one immutable parameter batch.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(transparent)]
 pub struct ParameterDigest([u8; 32]);
 
 impl ParameterDigest {
@@ -566,6 +573,15 @@ impl ParameterDigest {
 /// Immutable ordered, revisioned host parameter input captured by one attempt.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParameterBatch {
+    revision: u64,
+    digest: ParameterDigest,
+    entries: Vec<ParameterBatchEntry>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ParameterBatchWireV1 {
+    version: u32,
     revision: u64,
     digest: ParameterDigest,
     entries: Vec<ParameterBatchEntry>,
@@ -630,6 +646,94 @@ impl ParameterBatch {
             digest: parameter_digest(revision, &entries),
             entries,
         })
+    }
+
+    /// Reconstructs a batch only when its version, contents, and canonical
+    /// digest agree exactly. Revision zero is reserved for the empty default
+    /// input and cannot certify non-empty values.
+    ///
+    /// # Errors
+    ///
+    /// Rejects unsupported versions, invalid entries, or a digest mismatch.
+    pub fn from_digest(
+        version: u32,
+        revision: u64,
+        digest: ParameterDigest,
+        entries: Vec<ParameterBatchEntry>,
+    ) -> Result<Self, DocumentError> {
+        if version != PARAMETER_BATCH_VERSION_V1 {
+            return Err(DocumentError::InvalidField {
+                field: "parameter batch version",
+                message: format!(
+                    "unsupported version {version}; expected {PARAMETER_BATCH_VERSION_V1}"
+                ),
+            });
+        }
+        let candidate = if revision == 0 && entries.is_empty() {
+            Self::default()
+        } else {
+            Self::new(revision, entries)?
+        };
+        if candidate.digest != digest {
+            return Err(DocumentError::InvalidField {
+                field: "parameter batch digest",
+                message: "claimed digest does not match canonical parameter bytes".into(),
+            });
+        }
+        Ok(candidate)
+    }
+
+    /// Encodes this independently revalidated input as strict canonical JSON.
+    ///
+    /// # Errors
+    ///
+    /// Rejects internally inconsistent evidence, resource overflow, or JSON
+    /// serialization failure.
+    pub fn to_canonical_json(&self) -> Result<String, DocumentError> {
+        let validated = Self::from_digest(
+            PARAMETER_BATCH_VERSION_V1,
+            self.revision,
+            self.digest,
+            self.entries.clone(),
+        )?;
+        let json = serde_json::to_string(&ParameterBatchWireV1 {
+            version: PARAMETER_BATCH_VERSION_V1,
+            revision: validated.revision,
+            digest: validated.digest,
+            entries: validated.entries,
+        })?;
+        if json.len() > MAX_PARAMETER_BATCH_JSON_BYTES {
+            return Err(DocumentError::ResourceLimit {
+                resource: "parameter batch JSON bytes",
+                actual: json.len(),
+                limit: MAX_PARAMETER_BATCH_JSON_BYTES,
+            });
+        }
+        Ok(json)
+    }
+
+    /// Decodes strict bounded JSON and independently validates its canonical
+    /// digest and typed entries.
+    ///
+    /// # Errors
+    ///
+    /// Rejects oversized or malformed JSON, unknown fields, unsupported
+    /// versions, invalid values, or inconsistent digest evidence.
+    pub fn from_json(json: &str) -> Result<Self, DocumentError> {
+        if json.len() > MAX_PARAMETER_BATCH_JSON_BYTES {
+            return Err(DocumentError::ResourceLimit {
+                resource: "parameter batch JSON bytes",
+                actual: json.len(),
+                limit: MAX_PARAMETER_BATCH_JSON_BYTES,
+            });
+        }
+        let decoded: ParameterBatchWireV1 = serde_json::from_str(json)?;
+        Self::from_digest(
+            decoded.version,
+            decoded.revision,
+            decoded.digest,
+            decoded.entries,
+        )
     }
 
     #[must_use]
@@ -1757,7 +1861,7 @@ impl SketchLifecycleRevisionHighWater {
 }
 
 /// One typed document edit. IDs for created objects are returned in [`DocumentCommandEffect`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[non_exhaustive]
 pub enum DocumentEdit {
     CreatePoint {
@@ -1968,6 +2072,67 @@ pub enum DocumentEdit {
     Delete {
         object: DocumentObjectId,
     },
+}
+
+impl DocumentEdit {
+    /// Stable closed semantic key for host-side lineage/action compilers.
+    ///
+    /// This describes authored intent, not a command's revision-local effect.
+    #[must_use]
+    pub const fn semantic_key(&self) -> &'static str {
+        match self {
+            Self::CreatePoint { .. } => "create-point",
+            Self::CreateScalar { .. } => "create-scalar",
+            Self::CreateCurve { .. } => "create-curve",
+            Self::CreateContact { .. } => "create-contact",
+            Self::CreateConstraint { .. } => "create-constraint",
+            Self::CreateDimension { .. } => "create-dimension",
+            Self::CreateProfileOffset { .. } => "create-profile-offset",
+            Self::CreateProfileOffsetGeometry { .. } => "create-profile-offset-geometry",
+            Self::CreatePreparedProfileOffsetGeometry { .. } => {
+                "create-prepared-profile-offset-geometry"
+            }
+            Self::CreatePreparedNativeLineFilletGeometry { .. } => {
+                "create-prepared-native-line-fillet-geometry"
+            }
+            Self::CreateParameter { .. } => "create-parameter",
+            Self::AddParameterBinding { .. } => "add-parameter-binding",
+            Self::RemoveParameterBinding { .. } => "remove-parameter-binding",
+            Self::AddParameterOutput { .. } => "add-parameter-output",
+            Self::RemoveParameterOutput { .. } => "remove-parameter-output",
+            Self::CreateRectangle { .. } => "create-rectangle",
+            Self::CreateMirroredCurve { .. } => "create-mirrored-curve",
+            Self::CreateLineLineFillet { .. } => "create-line-line-fillet",
+            Self::CreateCurveCurveFillet { .. } => "create-curve-curve-fillet",
+            Self::SetPointPosition { .. } => "set-point-position",
+            Self::SetScalarValue { .. } => "set-scalar-value",
+            Self::SetCurveBranch { .. } => "set-curve-branch",
+            Self::SetArcSweep { .. } => "set-arc-sweep",
+            Self::SetLineLineFilletBranch { .. } => "set-line-line-fillet-branch",
+            Self::SetCurveCurveFilletBranch { .. } => "set-curve-curve-fillet-branch",
+            Self::SetConicWeightedMiddle { .. } => "set-conic-weighted-middle",
+            Self::SetRationalConicControl { .. } => "set-rational-conic-control",
+            Self::SetHyperbolaBranch { .. } => "set-hyperbola-branch",
+            Self::InsertBSplineKnot { .. } => "insert-b-spline-knot",
+            Self::InsertMirroredBSplineKnot { .. } => "insert-mirrored-b-spline-knot",
+            Self::TransitionBSplineContact { .. } => "transition-b-spline-contact",
+            Self::InsertNurbsKnot { .. } => "insert-nurbs-knot",
+            Self::TransitionNurbsContact { .. } => "transition-nurbs-contact",
+            Self::SetNurbsWeightGauge { .. } => "set-nurbs-weight-gauge",
+            Self::SetContactStates { .. } => "set-contact-states",
+            Self::SetContactBranches { .. } => "set-contact-branches",
+            Self::SetCircleTangencyBranch { .. } => "set-circle-tangency-branch",
+            Self::SetDimensionMode { .. } => "set-dimension-mode",
+            Self::SetProfileOffsetOperand { .. } => "set-profile-offset-operand",
+            Self::SetOrientedAngleOrientation { .. } => "set-oriented-angle-orientation",
+            Self::SetSourceSuppressed { .. } => "set-source-suppressed",
+            Self::SetGeometryRole { .. } => "set-geometry-role",
+            Self::SetGeometryRoles { .. } => "set-geometry-roles",
+            Self::SetElementUserSuppressed { .. } => "set-element-user-suppressed",
+            Self::SetHostConfigurationActivation { .. } => "set-host-configuration-activation",
+            Self::Delete { .. } => "delete",
+        }
+    }
 }
 
 /// Revision-checked command input.
@@ -2290,6 +2455,9 @@ pub struct RetainedSketchDocumentSession {
     config: SolverConfig,
     parameter_batch: ParameterBatch,
     external_snapshots: ExternalSnapshotSet,
+    external_snapshot_attempt_candidate: Option<ExternalSnapshotSet>,
+    accepted_parameter_batch: Option<ParameterBatch>,
+    accepted_external_snapshots: Option<ExternalSnapshotSet>,
     persistent_identity_high_water: SketchPersistentIdentityHighWater,
     prepared_state_epoch: u32,
 }
@@ -3673,6 +3841,8 @@ impl RetainedSketchDocumentSession {
         );
         let accepted_revision_high_water =
             accepted.as_ref().map(|accepted| accepted.identity.revision);
+        let accepted_parameter_batch = accepted.as_ref().map(|_| parameter_batch.clone());
+        let accepted_external_snapshots = accepted.as_ref().map(|_| external_snapshots.clone());
         let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(controller.outcome(Self {
             design: document,
@@ -3684,6 +3854,9 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
+            external_snapshot_attempt_candidate: None,
+            accepted_parameter_batch,
+            accepted_external_snapshots,
             persistent_identity_high_water,
             prepared_state_epoch,
         }))
@@ -3802,6 +3975,8 @@ impl RetainedSketchDocumentSession {
             .as_ref()
             .map(|accepted| accepted.identity.revision)
             .or(prior_accepted_high_water);
+        let accepted_parameter_batch = accepted.as_ref().map(|_| parameter_batch.clone());
+        let accepted_external_snapshots = accepted.as_ref().map(|_| external_snapshots.clone());
         let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(Self {
             design: document,
@@ -3813,6 +3988,9 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
+            external_snapshot_attempt_candidate: None,
+            accepted_parameter_batch,
+            accepted_external_snapshots,
             persistent_identity_high_water,
             prepared_state_epoch,
         })
@@ -3873,6 +4051,8 @@ impl RetainedSketchDocumentSession {
         if accepted.is_none() {
             return Err(DocumentSessionError::InvalidAcceptedSnapshot);
         }
+        let accepted_parameter_batch = Some(parameter_batch.clone());
+        let accepted_external_snapshots = Some(external_snapshots.clone());
         let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(Self {
             design: document,
@@ -3884,6 +4064,9 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
+            external_snapshot_attempt_candidate: None,
+            accepted_parameter_batch,
+            accepted_external_snapshots,
             persistent_identity_high_water,
             prepared_state_epoch,
         })
@@ -3974,6 +4157,86 @@ impl RetainedSketchDocumentSession {
             session.reattempt(identity, request)?;
         } else if !same_design {
             session.retain_candidate(design, (), None)?;
+        }
+        Ok(session)
+    }
+
+    /// Restores separate retained and accepted graphs with distinct current
+    /// and last-accepted host-input payloads.
+    ///
+    /// This is the retained-failure recovery path used by authoritative
+    /// workspace persistence. The accepted graph is first independently
+    /// certified under its exact historical inputs. The retained graph is then
+    /// attempted once under the exact current inputs; rejection preserves the
+    /// older accepted graph and its input provenance.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid graphs, foreign identities, invalid accepted provenance,
+    /// exhausted lifecycle revisions, or malformed current host inputs.
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_design_with_accepted_and_distinct_inputs(
+        design: SketchDocument,
+        accepted: SketchDocument,
+        revisions: SketchLifecycleRevisionHighWater,
+        current_parameters: ParameterBatch,
+        current_snapshots: ExternalSnapshotSet,
+        accepted_parameters: ParameterBatch,
+        accepted_snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
+        design.validate()?;
+        accepted.validate()?;
+        if design.id() != accepted.id() {
+            return Err(DocumentSessionError::ForeignDesign {
+                expected: accepted.id(),
+                actual: design.id(),
+            });
+        }
+        let same_design = design == accepted;
+        let accepted_design_revision = next_revision(revisions.design.0, "design")?;
+        let accepted_attempt_revision = next_revision(revisions.attempt.0, "attempt")?;
+        let accepted_revision = revisions
+            .accepted
+            .map_or(Ok(0), |revision| next_revision(revision.0, "accepted"))?;
+        let certification_request = if same_design && request.drag.is_none() {
+            request
+        } else {
+            DocumentSolveRequest::default()
+        };
+        let accepted_snapshot_fallback = accepted_snapshots.clone();
+        let mut session = Self::new_at_from_exact_accepted(
+            accepted,
+            accepted_parameters,
+            accepted_snapshots,
+            certification_request,
+            config,
+            accepted_design_revision,
+            accepted_attempt_revision,
+            revisions.accepted,
+            accepted_revision,
+        )?;
+        session.request = request;
+        let inputs_changed = session.parameter_batch != current_parameters
+            || session.external_snapshots != current_snapshots;
+        let snapshots_changed = session.external_snapshots != current_snapshots;
+        let attempted_snapshots = snapshots_changed.then(|| current_snapshots.clone());
+        session.parameter_batch = current_parameters;
+        session.external_snapshots = current_snapshots;
+        if same_design {
+            if inputs_changed || request.drag.is_some() {
+                let identity = session.design_identity;
+                session.reattempt(identity, request)?;
+            }
+        } else {
+            session.retain_candidate(design, (), None)?;
+        }
+        if session.accepted_state_for_current_input().is_none()
+            && let Some(attempted_snapshots) = attempted_snapshots
+        {
+            session.external_snapshot_attempt_candidate = Some(attempted_snapshots);
+            session.external_snapshots = accepted_snapshot_fallback;
         }
         Ok(session)
     }
@@ -4097,6 +4360,53 @@ impl RetainedSketchDocumentSession {
         Ok(session)
     }
 
+    /// Restores current-design accepted authority under its historical inputs,
+    /// then attempts the same retained design under distinct current inputs.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same validation and certification failures as
+    /// [`Self::restore_current_design_with_accepted_and_inputs`], plus any
+    /// lifecycle failure from the exact current-input reattempt.
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_current_design_with_accepted_and_distinct_inputs(
+        design: SketchDocument,
+        accepted: SketchDocument,
+        revisions: SketchLifecycleRevisionHighWater,
+        current_parameters: ParameterBatch,
+        current_snapshots: ExternalSnapshotSet,
+        accepted_parameters: ParameterBatch,
+        accepted_snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
+        let accepted_snapshot_fallback = accepted_snapshots.clone();
+        let mut session = Self::restore_current_design_with_accepted_and_inputs(
+            design,
+            accepted,
+            revisions,
+            accepted_parameters,
+            accepted_snapshots,
+            request,
+            config,
+        )?;
+        let snapshots_changed = session.external_snapshots != current_snapshots;
+        let attempted_snapshots = snapshots_changed.then(|| current_snapshots.clone());
+        if session.parameter_batch != current_parameters || snapshots_changed {
+            session.parameter_batch = current_parameters;
+            session.external_snapshots = current_snapshots;
+            let identity = session.design_identity;
+            session.reattempt(identity, request)?;
+        }
+        if session.accepted_state_for_current_input().is_none()
+            && let Some(attempted_snapshots) = attempted_snapshots
+        {
+            session.external_snapshot_attempt_candidate = Some(attempted_snapshots);
+            session.external_snapshots = accepted_snapshot_fallback;
+        }
+        Ok(session)
+    }
+
     #[must_use]
     pub const fn design_identity(&self) -> SketchDesignIdentity {
         self.design_identity
@@ -4118,6 +4428,43 @@ impl RetainedSketchDocumentSession {
     #[must_use]
     pub const fn external_snapshot_set(&self) -> &ExternalSnapshotSet {
         &self.external_snapshots
+    }
+
+    /// Returns the exact external snapshot payload evaluated by the latest
+    /// attempt. This may differ from [`Self::external_snapshot_set`] after a
+    /// rejected candidate, because the active set remains the prior accepted
+    /// input while attempt provenance must retain the rejected payload exactly.
+    #[must_use]
+    pub fn latest_attempt_external_snapshot_set(&self) -> &ExternalSnapshotSet {
+        if let Some(candidate) = self.external_snapshot_attempt_candidate.as_ref()
+            && candidate.revision() == self.last_attempt.input().external_snapshot_set_revision()
+            && candidate.digest() == self.last_attempt.input().external_snapshot_set_digest()
+        {
+            candidate
+        } else {
+            &self.external_snapshots
+        }
+    }
+
+    /// Returns the exact parameter payload that produced the retained accepted
+    /// authority, even when a newer host-input attempt has failed.
+    #[must_use]
+    pub const fn accepted_parameter_batch(&self) -> Option<&ParameterBatch> {
+        self.accepted_parameter_batch.as_ref()
+    }
+
+    /// Returns the exact external snapshot payload that produced the retained
+    /// accepted authority, even when a newer host-input attempt has failed.
+    #[must_use]
+    pub const fn accepted_external_snapshot_set(&self) -> Option<&ExternalSnapshotSet> {
+        self.accepted_external_snapshots.as_ref()
+    }
+
+    fn replace_accepted_state(&mut self, accepted: SketchAcceptedDocumentState) {
+        self.accepted_revision_high_water = Some(accepted.identity.revision);
+        self.accepted_parameter_batch = Some(self.parameter_batch.clone());
+        self.accepted_external_snapshots = Some(self.external_snapshots.clone());
+        self.accepted = Some(accepted);
     }
 
     /// Returns field-opaque never-reuse cursors for this complete retained lifecycle.
@@ -4827,8 +5174,7 @@ impl RetainedSketchDocumentSession {
         let mut attempt = attempt;
         attempt.continuation_parent_input = Some(preview.prepared_input());
         self.last_attempt = attempt;
-        self.accepted_revision_high_water = Some(published_accepted.revision);
-        self.accepted = Some(accepted);
+        self.replace_accepted_state(accepted);
         Ok(controller.outcome(RetainedDocumentTransactionOutcome {
             value: DocumentCommandEffect::UpdatedPoint(point),
             design: design_identity,
@@ -5060,8 +5406,7 @@ impl RetainedSketchDocumentSession {
         self.request = request;
         self.last_attempt = attempt.clone();
         if let Some(accepted) = accepted {
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(controller.outcome(attempt))
     }
@@ -5250,8 +5595,7 @@ impl RetainedSketchDocumentSession {
         attempt.continuation_parent_input = Some(preview.prepared_input());
         self.last_attempt = attempt.clone();
         if let Some(accepted) = accepted {
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(controller.outcome(attempt))
     }
@@ -5417,8 +5761,7 @@ impl RetainedSketchDocumentSession {
         self.request = request;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(&self.last_attempt)
     }
@@ -5486,8 +5829,7 @@ impl RetainedSketchDocumentSession {
         self.request = request;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(&self.last_attempt)
     }
@@ -5598,8 +5940,7 @@ impl RetainedSketchDocumentSession {
         self.request = request;
         self.last_attempt = attempt.clone();
         if let Some(accepted) = accepted {
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(controller.outcome(attempt))
     }
@@ -5669,10 +6010,10 @@ impl RetainedSketchDocumentSession {
         );
         self.request = request;
         self.last_attempt = attempt;
+        self.external_snapshot_attempt_candidate = Some(snapshots.clone());
         if let Some(accepted) = accepted {
             self.external_snapshots = snapshots;
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(&self.last_attempt)
     }
@@ -5751,6 +6092,7 @@ impl RetainedSketchDocumentSession {
                 }
                 self.request = request;
                 self.last_attempt = attempt.clone();
+                self.external_snapshot_attempt_candidate = Some(snapshots);
                 debug_assert!(accepted.is_none());
                 return Ok(controller.outcome(attempt));
             }
@@ -5783,10 +6125,10 @@ impl RetainedSketchDocumentSession {
         }
         self.request = request;
         self.last_attempt = attempt.clone();
+        self.external_snapshot_attempt_candidate = Some(snapshots.clone());
         if let Some(accepted) = accepted {
             self.external_snapshots = snapshots;
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(controller.outcome(attempt))
     }
@@ -6079,8 +6421,7 @@ impl RetainedSketchDocumentSession {
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(RetainedDocumentTransactionOutcome {
             value,
@@ -6153,8 +6494,7 @@ impl RetainedSketchDocumentSession {
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(RetainedDocumentTransactionOutcome {
             value,
@@ -6320,8 +6660,7 @@ impl RetainedSketchDocumentSession {
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
-            self.accepted_revision_high_water = Some(accepted.identity.revision);
-            self.accepted = Some(accepted);
+            self.replace_accepted_state(accepted);
         }
         Ok(Some(RetainedDocumentTransactionOutcome {
             value,

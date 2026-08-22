@@ -239,12 +239,13 @@ the computed all-family Offset prototype unfit for the intended CAD workflow. Ro
 `archive/m82-certified-computed-offset-2026-08-21` (`d1e2613`). The rejected Tailscale listener is
 retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
 
-M83 is planned, not implemented. It proposes ADR 0039's optional sketch-lineage companion: stable
-ordered action/output identity, explicit reserved native identities, deterministic flat
-rematerialization, direct-edit rewrite of the owning placement step, whole-step native Profile
-Offset deletion and a separate DOM-free TypeScript/WASM boundary. `docs/M83_GOALS.md` is the
-authoritative scope. The ordinary workbench and accepted M81 flat product remain unchanged during
-planning.
+M83 is in progress and not accepted. Under accepted ADR 0039, `LineageDocument` becomes the
+authoritative source for the complete demo workbench; flat sketch and feature state are derived.
+The milestone covers all 25 geometry variants, the complete current relation/dimension/property/
+branch surface, every current sketch operation, native and computed Fillet/Offset intent,
+strict-versus-dependency-local evaluation, workspace v7 with honest v1-v6 migration, atomic
+multi-owner direct editing and stateful DOM-free `geosolve.lineage.rpc.v0`. `docs/M83_GOALS.md` is
+the authoritative scope. M81 remains accepted product authority until M83 closes.
 
 ## Read first
 
@@ -254,7 +255,7 @@ planning.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`, plus proposed
+7. `docs/adr/0001-*.md` through `docs/adr/0037-*.md`, plus accepted-for-M83-implementation
    `docs/adr/0039-sketch-lineage-and-deterministic-rematerialization.md`.
 8. `docs/M72_GOALS.md` — completed M72 bulk-fix and public-release milestone.
 9. `docs/M73_GOALS.md` — completed retained-authoring consolidation and public-release milestone.
@@ -278,8 +279,11 @@ planning.
     accepted focused scorecard and exact public closeout.
 18. `docs/M82_DEFERRED.md` — closed computed all-family Offset exploration, exact rollback evidence
     and the archive branch holding the full unaccepted prototype/ADR.
-19. `docs/M83_GOALS.md` — planned sketch-lineage architecture, stable-identity proof, owner-rewrite
-    semantics and DOM-free TypeScript/WASM boundary.
+19. `docs/M83_GOALS.md` — in-progress authoritative full-workbench lineage, complete catalog,
+    deterministic evaluation, workspace-v7 migration and stateful RPC contract.
+20. `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — implementation/finding/qualification
+    ledger and the pending immutable-candidate human scorecard. They are pre-UAT evidence, not a
+    milestone-close claim.
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -657,9 +661,10 @@ restores the exact M81 product tree and the complete discarded prototype is arch
 qualification, immutable Tailscale byte verification and supervising-human acceptance; approval
 descendant `b582b82` passes exact Pages publication. Do not route Offset through computed features,
 admit a topology-changing fallback or treat M81's private module moves as new behavior.
-M83 is the next planned milestone. Do not broaden its representative architecture proof into full
-workbench migration, arbitrary topology naming or TypeScript source rewriting before the explicit
-identity-reservation and cold-rematerialization gates pass.
+M83 is the current in-progress milestone. Commit `56d1eda`'s narrow proof is superseded: do not use
+it to defer full catalog, computed-feature or workbench-v7 migration. Implement the complete
+`docs/M83_GOALS.md` authority/identity gates while continuing to exclude arbitrary B-rep naming,
+M82's rejected arbitrary-curve Offset and TypeScript source rewriting.
 Clean F005 source `d400c4a8201f6afc531f5b504424d6430dbf3937` passes the complete
 release gate. Its immutable seven-file snapshot `/tmp/geosolve-m70b-f005-uat.Q5c9Wi` was served at
 `http://100.94.63.83:8080/` for M70B; every file and `/` byte-matched the snapshot, whose ordered-
@@ -759,9 +764,11 @@ Durable milestone and cleanup records:
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
-- `docs/M83_GOALS.md` (planned versioned sketch-lineage and deterministic-rematerialization proof)
-- `docs/adr/0039-sketch-lineage-and-deterministic-rematerialization.md` (proposed M83 ownership,
-  identity, rebuild and TypeScript boundary)
+- `docs/M83_GOALS.md` (in-progress authoritative full-workbench lineage and migration contract)
+- `docs/M83_IMPLEMENTATION.md` (implementation, authority-finding and qualification ledger)
+- `docs/M83_UAT.md` (pending immutable-candidate focused scorecard)
+- `docs/adr/0039-sketch-lineage-and-deterministic-rematerialization.md` (accepted M83 authority,
+  typed identity, strict/local rebuild, workspace-v7 and stateful RPC decision)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -2203,7 +2203,7 @@ pub(crate) mod wasm {
 
     use super::persistence::{
         LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, OLDER_V2_STORAGE_KEY, OLDER_V3_STORAGE_KEY,
-        PREVIOUS_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot,
+        OLDER_V4_STORAGE_KEY, PREVIOUS_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot,
         coordinator_from_reproduction_payload, coordinator_from_snapshot,
         reproduction_payload_from_coordinator,
     };
@@ -2266,6 +2266,7 @@ pub(crate) mod wasm {
                 .flatten()
                 .or_else(|| storage.get_item(PREVIOUS_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(OLDER_STORAGE_KEY).ok().flatten())
+                .or_else(|| storage.get_item(OLDER_V4_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(OLDER_V3_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(OLDER_V2_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(LEGACY_STORAGE_KEY).ok().flatten())
@@ -8503,6 +8504,8 @@ pub(crate) mod wasm {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use geosolve_constraint_editor::{
         ActivePointerGesture, ActivePointerGestureKind, AuthoringOperand, AuthoringOutcome,
         AuthoringState, AuthoringTool, ComputedSceneState, ConstraintEditor, ConstraintIntent,
@@ -8553,6 +8556,129 @@ mod tests {
         revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
         route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
     };
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the closed workbench route inventory is intentionally audited as one source-complete sentinel"
+    )]
+    fn m83_w11_persistent_workbench_route_inventory_is_closed() {
+        let production_sources = [
+            ("workbench", include_str!("mod.rs")),
+            ("action surface", include_str!("action_surface.rs")),
+            ("effect adapter", include_str!("effect_adapter.rs")),
+            ("geometry palette", include_str!("geometry_palette.rs")),
+            ("icons", include_str!("icons.rs")),
+            ("panels", include_str!("panels.rs")),
+            ("persistence", include_str!("persistence.rs")),
+            ("platform", include_str!("platform.rs")),
+            ("samples", include_str!("samples.rs")),
+            ("scene", include_str!("scene.rs")),
+        ]
+        .map(|(name, source)| {
+            (
+                name,
+                source
+                    .split_once("#[cfg(test)]\nmod tests")
+                    .map_or(source, |(production, _)| production),
+            )
+        });
+
+        let routes = [
+            (
+                "geometry, direct edit, and curve controls",
+                "apply_editor_effect",
+            ),
+            ("relations and dimensions", "apply_authoring"),
+            ("dimension target", "set_dimension_display_target"),
+            (
+                "Profile Offset direction",
+                "flip_selected_profile_offset_direction",
+            ),
+            ("numeric curve property", "set_curve_numeric_property"),
+            ("rational middle control", "set_curve_rational_middle"),
+            ("arc sweep branch", "set_curve_sweep"),
+            ("hyperbola branch", "set_curve_hyperbola_branch"),
+            ("NURBS gauge branch", "set_curve_nurbs_gauge"),
+            ("geometry role", "toggle_selected_geometry_role"),
+            ("contact branch", "set_contact_branches"),
+            ("angle branch", "set_selected_angle_orientation"),
+            ("native deletion", "delete_selected"),
+            ("computed-feature deletion", "remove_computed_feature"),
+            ("computed-corner deletion", "remove_computed_corner"),
+            ("computed Fillet radius", "set_computed_fillet_radius"),
+            (
+                "computed-feature suppression",
+                "set_computed_feature_suppressed",
+            ),
+            (
+                "computed Fillet publication",
+                "apply_feature_authoring_preview",
+            ),
+            (
+                "computed Fillet direct edit",
+                "apply_feature_authoring_editor_effect",
+            ),
+            (
+                "native Fillet publication",
+                "apply_feature_authoring_native_profile",
+            ),
+            (
+                "Profile Offset publication",
+                "apply_offset_authoring_preview",
+            ),
+            ("Undo", "undo"),
+            ("Redo", "redo"),
+        ];
+        assert_eq!(
+            routes
+                .iter()
+                .map(|(_, method)| *method)
+                .collect::<BTreeSet<_>>()
+                .len(),
+            routes.len(),
+            "each persistent workbench route must have one inventory identity"
+        );
+        for (family, method) in routes {
+            assert!(
+                production_sources
+                    .iter()
+                    .any(|(_, source)| source.contains(&format!(".{method}("))),
+                "missing sole-coordinator route for {family}: {method}"
+            );
+        }
+
+        for forbidden in [
+            ".session_mut(",
+            ".feature_document_mut(",
+            ".checkpoint(",
+            ".transcript(",
+            "DocumentEdit::",
+            "history.push(",
+            "history_cursor =",
+        ] {
+            for (name, source) in production_sources {
+                assert!(
+                    !source.contains(forbidden),
+                    "the {name} must not retain a writable flat/history side path: {forbidden}"
+                );
+            }
+        }
+        let effect_adapter = production_sources
+            .iter()
+            .find_map(|(name, source)| (*name == "effect adapter").then_some(*source))
+            .expect("effect-adapter production source");
+        let publication = effect_adapter
+            .find("coordinator.apply_editor_effect(effect)")
+            .expect("construction publication route");
+        let acknowledgement = effect_adapter
+            .find("coordinator.acknowledge_construction_commit")
+            .expect("construction acknowledgement route");
+        assert!(
+            publication < acknowledgement,
+            "geometry construction must publish through the coordinator before acknowledgement"
+        );
+    }
 
     fn rejected_constraint_fixture() -> (
         RetainedEditorCoordinator,
@@ -11228,8 +11354,7 @@ mod tests {
         (coordinator, candidate)
     }
 
-    #[test]
-    fn native_profile_apply_action_uses_exact_headless_availability_reason() {
+    fn assert_single_corner_native_profile_presentation() {
         let (coordinator, _, candidate, _, _, _) = native_line_fillet_fixture();
         let applicable = native_fillet_apply_presentation(
             &coordinator,
@@ -11240,6 +11365,17 @@ mod tests {
         assert!(!applicable.disabled);
         assert_eq!(applicable.reason, None);
 
+        let inactive = native_fillet_apply_presentation(
+            &coordinator,
+            None,
+            FeatureAuthoringStage::PickFirstFilletCurve,
+        );
+        assert!(!inactive.visible);
+        assert!(inactive.disabled);
+        assert_eq!(inactive.reason, None);
+    }
+
+    fn assert_grouped_native_profile_presentation() {
         let (mut grouped, _, points) = grouped_fillet_fixture();
         let mut grouped_state = FeatureAuthoringState::default();
         let (grouped_candidate, _) =
@@ -11255,7 +11391,9 @@ mod tests {
             unavailable.reason.as_deref(),
             Some("Native profile output currently requires exactly one line-line corner")
         );
+    }
 
+    fn assert_high_valence_native_profile_presentation() {
         let (high_valence, high_valence_candidate) = high_valence_native_line_fillet_fixture();
         let high_valence_unavailable = native_fillet_apply_presentation(
             &high_valence,
@@ -11268,15 +11406,16 @@ mod tests {
             high_valence_unavailable.reason.as_deref(),
             Some("shared corner must be owned only by the two selected source lines")
         );
+    }
 
-        let inactive = native_fillet_apply_presentation(
-            &coordinator,
-            None,
-            FeatureAuthoringStage::PickFirstFilletCurve,
-        );
-        assert!(!inactive.visible);
-        assert!(inactive.disabled);
-        assert_eq!(inactive.reason, None);
+    #[test]
+    fn native_profile_apply_action_uses_exact_headless_availability_reason() {
+        // Each fixture owns a complete retained coordinator. Execute the
+        // product's mutually exclusive workbench states in disjoint frames so
+        // the default-stack test does not retain three whole workbenches.
+        assert_single_corner_native_profile_presentation();
+        assert_grouped_native_profile_presentation();
+        assert_high_valence_native_profile_presentation();
     }
 
     #[test]

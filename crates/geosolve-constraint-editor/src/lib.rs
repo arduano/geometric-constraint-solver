@@ -43,11 +43,14 @@ pub use coordinator::{
     EditorMutation, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
     EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome,
     FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
-    FeatureAuthoringTransaction, GeometryRoleSelectionState, LifecycleDto, LifecycleStatus,
-    MeasurementPublication, MutationOutcome, ProblemsDto, ProfileOffsetDirectionMetadata,
-    ProfileOffsetDirectionState, ProjectedDragRejectionStage, ProjectedDragWorkEvidence,
-    RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
-    SelectedCurvePropertyMetadata, display_dimension_target,
+    FeatureAuthoringTransaction, GeometryRoleSelectionState, LINEAGE_DOMAIN_EVALUATOR,
+    LifecycleDto, LifecycleStatus, LineageDomainEvaluationEvidence, LineageDomainEvaluationFailure,
+    LineageEvaluationWorkEvidence, MeasurementPublication, MutationOutcome, ProblemsDto,
+    ProfileOffsetDirectionMetadata, ProfileOffsetDirectionState, ProjectedDragRejectionStage,
+    ProjectedDragWorkEvidence, RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint,
+    RetainedEditorCoordinator, SelectedCurvePropertyMetadata, display_dimension_target,
+    evaluate_lineage_session_cold, evaluate_lineage_session_cold_with_inputs,
+    lineage_external_input_stamp,
 };
 pub use curve_controls::{
     SceneCurveControl, SceneCurveControlGripGeometry, SceneCurveControlGuide,
@@ -203,7 +206,10 @@ impl Viewport {
 }
 
 /// Selectable identity understood by the headless editor.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
+)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum SelectionItem {
     Point(DesignPointId),
     Curve(CurveSpan),
@@ -3255,7 +3261,13 @@ impl ConstructionCommitToken {
 }
 
 /// A point operand used by a construction proposal.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum ConstructionPoint {
     Existing {
         id: DesignPointId,
@@ -3270,7 +3282,8 @@ pub enum ConstructionPoint {
 /// Applying a proposal uses only public [`SketchDocument`] allocation APIs.  It is
 /// deliberately separate from [`geosolve_sketch::DocumentEdit`], whose single-edit shape cannot
 /// refer to identities allocated by preceding point/scalar creations.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ConstructionProposal {
     Point {
         point: ConstructionPoint,
@@ -3387,7 +3400,8 @@ pub enum ConstructionProposal {
 }
 
 /// Explicit authoring state for conic construction tools.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConicConstructionOptions {
     pub minor_axis_ratio: f64,
     /// Retained for source compatibility with hosts that store one common conic
@@ -3421,7 +3435,8 @@ impl Default for ConicConstructionOptions {
 }
 
 /// Explicit NURBS creation topology and homogeneous weights.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NurbsConstructionOptions {
     pub form: DocumentBSplineForm,
     pub degree: u32,
@@ -9940,7 +9955,8 @@ fn draft_point_slot(draft: &Draft, stage_index: usize) -> Option<DraftPointSlot>
 ///
 /// An intent is not an equation identity. The headless coordinator resolves it
 /// to one [`ResolvedConstraintKind`] from typed selected operands.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ConstraintIntent {
     Lock,
     Coincident,
@@ -9955,6 +9971,28 @@ pub enum ConstraintIntent {
     Continuity,
     Concentric,
     Collinear,
+}
+
+impl ConstraintIntent {
+    /// Stable semantic key for the user's unresolved contextual intent.
+    #[must_use]
+    pub const fn semantic_key(self) -> &'static str {
+        match self {
+            Self::Lock => "lock",
+            Self::Coincident => "coincident",
+            Self::Horizontal => "horizontal",
+            Self::Vertical => "vertical",
+            Self::Parallel => "parallel",
+            Self::Perpendicular => "perpendicular",
+            Self::Equal => "equal",
+            Self::Midpoint => "midpoint",
+            Self::Symmetric => "symmetric",
+            Self::Tangent => "tangent",
+            Self::Continuity => "continuity",
+            Self::Concentric => "concentric",
+            Self::Collinear => "collinear",
+        }
+    }
 }
 
 /// Exact persistent constraint family selected by contextual dispatch.
@@ -9987,6 +10025,38 @@ pub enum ResolvedConstraintKind {
 }
 
 impl ResolvedConstraintKind {
+    /// Stable semantic key for the exact persistent relation selected by
+    /// contextual dispatch.
+    #[must_use]
+    pub const fn semantic_key(self) -> &'static str {
+        match self {
+            Self::FixedPoint => "fixed-point",
+            Self::CoincidentWithOrigin => "coincident-with-origin",
+            Self::PointOnDatumAxis => "point-on-datum-axis",
+            Self::CoincidentPoints => "coincident-points",
+            Self::PointOnCurve => "point-on-curve",
+            Self::CurveContact => "curve-contact",
+            Self::HorizontalLine => "horizontal-line",
+            Self::VerticalLine => "vertical-line",
+            Self::HorizontalPoints => "horizontal-points",
+            Self::VerticalPoints => "vertical-points",
+            Self::ConcentricCurves => "concentric-curves",
+            Self::CollinearSupports => "collinear-supports",
+            Self::CollinearWithDatumAxis => "collinear-with-datum-axis",
+            Self::ParallelLines => "parallel-lines",
+            Self::PerpendicularLines => "perpendicular-lines",
+            Self::RadialLine => "radial-line",
+            Self::EqualLength => "equal-length",
+            Self::EqualRadius => "equal-radius",
+            Self::EqualCurvature => "equal-curvature",
+            Self::Midpoint => "midpoint",
+            Self::SymmetricAboutLine => "symmetric-about-line",
+            Self::SymmetricAboutDatumAxis => "symmetric-about-datum-axis",
+            Self::CurveTangency => "curve-tangency",
+            Self::EndpointContinuity => "endpoint-continuity",
+        }
+    }
+
     /// Selection-specific presentation label; equations remain domain-owned.
     #[must_use]
     pub const fn label(self) -> &'static str {
@@ -10020,7 +10090,8 @@ impl ResolvedConstraintKind {
 }
 
 /// Complete M55 alpha dimension action vocabulary.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DimensionKind {
     PointDistance,
     SegmentLength,
@@ -10029,8 +10100,23 @@ pub enum DimensionKind {
     OrientedAngle,
 }
 
+impl DimensionKind {
+    /// Stable semantic key for the exact manual dimension family.
+    #[must_use]
+    pub const fn semantic_key(self) -> &'static str {
+        match self {
+            Self::PointDistance => "point-distance",
+            Self::SegmentLength => "segment-length",
+            Self::Radius => "radius",
+            Self::Diameter => "diameter",
+            Self::OrientedAngle => "oriented-angle",
+        }
+    }
+}
+
 /// Explicit branch state for one newly constructed curve contact.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ContactActionChoice {
     pub support: DocumentCurveSpanRef,
     pub domain: ContactDomain,
@@ -10040,7 +10126,8 @@ pub struct ContactActionChoice {
 }
 
 /// Typed request for one relation action over the coordinator's current selection.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConstraintActionRequest {
     pub intent: ConstraintIntent,
     pub label: String,
@@ -10049,14 +10136,16 @@ pub struct ConstraintActionRequest {
 }
 
 /// Explicit non-contact branch state for a contextual relation.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum ConstraintRelationChoice {
     EqualCurvature(DocumentCurveCurvatureRelation),
     Continuity(DocumentCurveContinuity),
 }
 
 /// Typed request for one dimension action over the coordinator's current selection.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DimensionActionRequest {
     pub kind: DimensionKind,
     pub mode: DocumentDimensionMode,

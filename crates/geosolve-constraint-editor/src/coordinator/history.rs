@@ -2,13 +2,52 @@
 
 //! Private retained-history publication and restore helpers.
 
+use super::lineage::CoordinatorLineage;
 use super::{
-    ComputedEvaluationAllocator, ComputedFeatureDocument, CoordinatorError, MutationOutcome,
-    ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator, RetainedSketchDocumentSession,
-    SketchDocument, SketchLifecycleRevisionHighWater,
+    ComputedEvaluationAllocator, ComputedFeatureDocument, ComputedFeatureEvaluationState,
+    CoordinatorError, MutationOutcome, OperationOutcome, ReplayAction, RestoreCheckpoint,
+    RetainedEditorCoordinator, RetainedSketchDocumentSession, SketchDocument,
+    SketchLifecycleRevisionHighWater, bounded_geometry_control, evaluate_computed_features,
 };
 
 impl RetainedEditorCoordinator {
+    /// Reifies every independently accepted projected value as retained design
+    /// intent on scratch state. Lower-level sketch clients keep their ordinary
+    /// single-point edit semantics; the lineage-authoritative workbench needs
+    /// the complete accepted projection so every changed leaf can be routed
+    /// back to its exact owner step and reproduced without a drag seed.
+    pub(super) fn promote_direct_manipulation_projection(
+        &self,
+        candidate: &RetainedSketchDocumentSession,
+    ) -> Result<RetainedSketchDocumentSession, CoordinatorError> {
+        let accepted = candidate
+            .accepted_state_for_current_input()
+            .ok_or(CoordinatorError::DirectManipulationColdReproductionRejected)?;
+        let accepted_document = accepted.document().clone();
+        let input = candidate.last_attempt().input();
+        let request = input.publication_request().without_temporary_targets();
+        let promoted =
+            RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
+                accepted_document.clone(),
+                accepted_document,
+                self.session.revision_high_water(),
+                candidate.parameter_batch().clone(),
+                candidate.latest_attempt_external_snapshot_set().clone(),
+                request,
+                input.solver_config(),
+            )?;
+        if promoted.design_identity() != candidate.design_identity()
+            || promoted.last_attempt().identity() != candidate.last_attempt().identity()
+            || promoted
+                .accepted_state_for_current_input()
+                .map(geosolve_sketch::SketchAcceptedDocumentState::identity)
+                != Some(accepted.identity())
+        {
+            return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+        }
+        Ok(promoted)
+    }
+
     pub(super) fn stage_feature_mutation_checkpoint(
         &self,
         features: &ComputedFeatureDocument,
@@ -16,11 +55,152 @@ impl RetainedEditorCoordinator {
         checkpoint(&self.session, features, &self.computed_evaluation_allocator)
     }
 
-    pub(super) fn record_feature_mutation(
+    pub(super) fn stage_feature_mutation_lineage(
+        &self,
+        next: &RestoreCheckpoint,
+        replay: &ReplayAction,
+    ) -> Result<CoordinatorLineage, CoordinatorError> {
+        // Flat checkpoints are disposable materialization caches. Always
+        // authenticate the mutation against the live retained domains rather
+        // than trusting a historical cache slot as design authority.
+        let previous = checkpoint(
+            &self.session,
+            &self.features,
+            &self.computed_evaluation_allocator,
+        )?;
+        let mut lineage = self.lineage.clone();
+        lineage.record(
+            replay,
+            self.editor.geometry_tool_variant(),
+            &previous,
+            next,
+            self.session.parameter_batch(),
+            self.session.external_snapshot_set(),
+        )?;
+        Ok(lineage)
+    }
+
+    /// Stages one direct-manipulation owner rewrite and proves it through a
+    /// fresh owning-domain evaluation before any live coordinator field can be
+    /// published. The proof intentionally allocates computed output only in a
+    /// scratch allocator; rejection therefore cannot consume a live identity.
+    pub(super) fn stage_direct_manipulation_lineage(
+        &self,
+        next: &RestoreCheckpoint,
+        replay: &ReplayAction,
+        candidate_session: &RetainedSketchDocumentSession,
+    ) -> Result<Option<CoordinatorLineage>, CoordinatorError> {
+        let previous = checkpoint(
+            &self.session,
+            &self.features,
+            &self.computed_evaluation_allocator,
+        )?;
+        let mut lineage = self.lineage.clone();
+        if !lineage.direct_manipulation_has_authored_change(&previous, next)? {
+            return Ok(None);
+        }
+        lineage.record_direct_manipulation(
+            replay,
+            self.editor.geometry_tool_variant(),
+            &previous,
+            next,
+            self.session.parameter_batch(),
+            self.session.external_snapshot_set(),
+        )?;
+        let materialized = lineage.materialize()?.into_restore_checkpoint();
+
+        #[cfg(test)]
+        if lineage.take_direct_reproduction_rejection_for_test() {
+            return Err(CoordinatorError::DirectManipulationColdReproductionRejected);
+        }
+
+        let design = checkpoint_document_from_json(
+            materialized.design_json(),
+            materialized.design_uses_draft_v5(),
+        )?;
+        let attempt_input = candidate_session.last_attempt().input();
+        let request = attempt_input
+            .candidate_request()
+            .without_temporary_targets()
+            .without_previous_state_preferences();
+        let cold_session =
+            RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
+                design.clone(),
+                design,
+                materialized.revisions(),
+                candidate_session.parameter_batch().clone(),
+                candidate_session
+                    .latest_attempt_external_snapshot_set()
+                    .clone(),
+                request,
+                attempt_input.solver_config(),
+            )?;
+        let cold_accepted = cold_session
+            .accepted_state_for_current_input()
+            .ok_or(CoordinatorError::DirectManipulationColdReproductionRejected)?;
+        let (cold_accepted_json, cold_accepted_is_draft_v5) =
+            checkpoint_document_to_json(cold_accepted.document())?;
+        if !next.accepted_belongs_to_current_design()
+            || next.accepted_json() != Some(cold_accepted_json.as_str())
+            || next.accepted_uses_draft_v5() != cold_accepted_is_draft_v5
+        {
+            return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+        }
+
+        let materialized_features =
+            ComputedFeatureDocument::from_json(materialized.feature_json())?;
+        let expected_features = ComputedFeatureDocument::from_json(next.feature_json())?;
+        if materialized_features.id() != expected_features.id()
+            || materialized_features.sketch_document() != expected_features.sketch_document()
+            || materialized_features.features() != expected_features.features()
+        {
+            return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+        }
+
+        let mut scratch_allocator = ComputedEvaluationAllocator::from_high_water(
+            materialized.computed_evaluation_high_water(),
+        );
+        let evaluated = evaluate_computed_features(
+            &cold_session,
+            &materialized_features,
+            &mut scratch_allocator,
+            bounded_geometry_control(),
+        )?;
+        let OperationOutcome::Completed {
+            value: cold_features,
+            ..
+        } = evaluated
+        else {
+            return Err(CoordinatorError::DirectManipulationColdReproductionRejected);
+        };
+        if cold_features
+            .feature_evaluations()
+            .iter()
+            .any(|evaluation| {
+                matches!(
+                    evaluation.state,
+                    ComputedFeatureEvaluationState::Failed { .. }
+                )
+            })
+        {
+            return Err(CoordinatorError::DirectManipulationColdReproductionRejected);
+        }
+
+        #[cfg(test)]
+        if lineage.take_direct_reproduction_mismatch_for_test() {
+            return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+        }
+
+        Ok(Some(lineage))
+    }
+
+    pub(super) fn publish_staged_feature_mutation(
         &mut self,
+        lineage: CoordinatorLineage,
         next: RestoreCheckpoint,
         replay: ReplayAction,
     ) {
+        self.lineage = lineage;
         self.history.truncate(self.history_cursor + 1);
         self.history.push(next);
         self.history_cursor += 1;
@@ -95,7 +275,6 @@ pub(super) fn restore_sketch_checkpoint(
     current: &RetainedSketchDocumentSession,
     checkpoint: &RestoreCheckpoint,
     revisions: SketchLifecycleRevisionHighWater,
-    accepted_restore: AcceptedCheckpointRestore,
 ) -> Result<RetainedSketchDocumentSession, CoordinatorError> {
     let high_water = current
         .persistent_identity_high_water()
@@ -109,11 +288,11 @@ pub(super) fn restore_sketch_checkpoint(
         .without_temporary_targets()
         .without_previous_state_preferences();
     let parameters = current.parameter_batch().clone();
-    let snapshots = current.external_snapshot_set().clone();
+    let snapshots = current.latest_attempt_external_snapshot_set().clone();
     let mut restored = if let Some(json) = &checkpoint.accepted_json {
         let mut accepted = checkpoint_document_from_json(json, checkpoint.accepted_is_draft_v5)?;
         accepted.retain_persistent_identity_high_water(&high_water)?;
-        let exact = if checkpoint.accepted_belongs_to_current_design {
+        if checkpoint.accepted_belongs_to_current_design {
             RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
                 design.clone(),
                 accepted,
@@ -133,27 +312,7 @@ pub(super) fn restore_sketch_checkpoint(
                 request,
                 input.solver_config(),
             )
-        };
-        match (exact, accepted_restore) {
-            (Ok(restored), _) => restored,
-            (Err(error), AcceptedCheckpointRestore::RequireExact) => return Err(error.into()),
-            (Err(_), AcceptedCheckpointRestore::PreferCurrentInputTruth) => {
-                // Parameter values and external snapshots are host state rather than
-                // sketch history. A historical accepted materialization can therefore
-                // cease to certify after those inputs change. Restore the historical
-                // design as a fresh attempt under the exact current inputs; it may
-                // publish a newly accepted state or retain a typed input failure, but
-                // the older accepted geometry must never masquerade as current.
-                RetainedSketchDocumentSession::restore_design_with_inputs(
-                    design,
-                    revisions,
-                    parameters,
-                    snapshots,
-                    request,
-                    input.solver_config(),
-                )?
-            }
-        }
+        }?
     } else {
         RetainedSketchDocumentSession::restore_design_with_inputs(
             design,
@@ -168,10 +327,139 @@ pub(super) fn restore_sketch_checkpoint(
     Ok(restored)
 }
 
-#[derive(Clone, Copy)]
-pub(super) enum AcceptedCheckpointRestore {
-    /// Persistence reload treats the stored accepted payload as a strict contract.
-    RequireExact,
-    /// History restores design intent under host inputs that are not historical state.
-    PreferCurrentInputTruth,
+/// Rebuilds one retained lineage history position without trusting the flat
+/// accepted-document bytes embedded in any materialization checkpoint. The
+/// current program is solved under the host's current inputs; if it rejects,
+/// the lineage session's independently authenticated last-accepted program is
+/// solved under its exact historical inputs and retained as distinct visible
+/// authority.
+pub(super) fn restore_sketch_checkpoint_from_lineage(
+    current: &RetainedSketchDocumentSession,
+    lineage: &CoordinatorLineage,
+    checkpoint: &RestoreCheckpoint,
+    revisions: SketchLifecycleRevisionHighWater,
+    parameters: &geosolve_sketch::ParameterBatch,
+    snapshots: &geosolve_sketch::ExternalSnapshotSet,
+) -> Result<RetainedSketchDocumentSession, CoordinatorError> {
+    let high_water = current
+        .persistent_identity_high_water()
+        .merged(&checkpoint.sketch_identity_high_water)?;
+    let mut design =
+        checkpoint_document_from_json(&checkpoint.design_json, checkpoint.design_is_draft_v5)?;
+    design.retain_persistent_identity_high_water(&high_water)?;
+    let input = current.last_attempt().input();
+    let request = input
+        .candidate_request()
+        .without_temporary_targets()
+        .without_previous_state_preferences();
+    let parameters = parameters.clone();
+    let snapshots = snapshots.clone();
+    let solver_config = input.solver_config();
+    let mut evaluated =
+        RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
+            design.clone(),
+            design.clone(),
+            revisions,
+            parameters.clone(),
+            snapshots.clone(),
+            request,
+            solver_config,
+        )
+        .or_else(|_| {
+            // Many ordinary retained programs intentionally store unsolved
+            // authoring seeds. If exact no-optimization certification rejects,
+            // solve those seeds normally. Direct-manipulation lineage instead
+            // stores a complete accepted projection, so it takes the exact
+            // branch above and cannot drift by a later solver ULP.
+            RetainedSketchDocumentSession::restore_design_with_inputs(
+                design.clone(),
+                revisions,
+                parameters.clone(),
+                snapshots.clone(),
+                request,
+                solver_config,
+            )
+        })?;
+    if let Some(evaluated_accepted) = evaluated.accepted_state_for_current_input() {
+        let revisions_already_retained =
+            lifecycle_high_water_covers(current.revision_high_water(), revisions);
+        if revisions_already_retained
+            && current
+                .accepted_state_for_current_input()
+                .is_some_and(|accepted| {
+                    current.design_document() == evaluated.design_document()
+                        && accepted.document() == evaluated_accepted.document()
+                })
+        {
+            // Feature-only history is entitled to preserve exact sketch
+            // identities and audit rows, but only after a fresh cold solve has
+            // authenticated both retained and accepted documents. A forged
+            // historical accepted cache therefore cannot enter this shortcut.
+            let mut unchanged = current.clone();
+            unchanged.retain_persistent_identity_high_water(&high_water)?;
+            return Ok(unchanged);
+        }
+        evaluated.retain_persistent_identity_high_water(&high_water)?;
+        return Ok(evaluated);
+    }
+
+    let Some((accepted_checkpoint, accepted_inputs)) =
+        lineage.materialize_last_accepted_with_inputs()?
+    else {
+        evaluated.retain_persistent_identity_high_water(&high_water)?;
+        return Ok(evaluated);
+    };
+    lineage.validate_accepted_external_inputs(
+        Some(accepted_inputs.parameters()),
+        Some(accepted_inputs.snapshots()),
+    )?;
+    let accepted_checkpoint = accepted_checkpoint.into_restore_checkpoint();
+    let mut accepted_design = checkpoint_document_from_json(
+        accepted_checkpoint.design_json(),
+        accepted_checkpoint.design_uses_draft_v5(),
+    )?;
+    accepted_design.retain_persistent_identity_high_water(&high_water)?;
+    let accepted_evaluation = RetainedSketchDocumentSession::restore_design_with_inputs(
+        accepted_design,
+        revisions,
+        accepted_inputs.parameters().clone(),
+        accepted_inputs.snapshots().clone(),
+        request,
+        solver_config,
+    )?;
+    let accepted = accepted_evaluation
+        .accepted_state_for_current_input()
+        .ok_or_else(|| {
+            CoordinatorError::Lineage(
+                "last-accepted lineage program did not independently reproduce accepted sketch authority"
+                    .into(),
+            )
+        })?;
+    let mut restored =
+        RetainedSketchDocumentSession::restore_design_with_accepted_and_distinct_inputs(
+            design,
+            accepted.document().clone(),
+            revisions,
+            parameters,
+            snapshots,
+            accepted_inputs.parameters().clone(),
+            accepted_inputs.snapshots().clone(),
+            request,
+            solver_config,
+        )?;
+    restored.retain_persistent_identity_high_water(&high_water)?;
+    Ok(restored)
+}
+
+fn lifecycle_high_water_covers(
+    current: SketchLifecycleRevisionHighWater,
+    required: SketchLifecycleRevisionHighWater,
+) -> bool {
+    current.design().get() >= required.design().get()
+        && current.attempt().get() >= required.attempt().get()
+        && match (current.accepted(), required.accepted()) {
+            (_, None) => true,
+            (Some(current), Some(required)) => current.get() >= required.get(),
+            (None, Some(_)) => false,
+        }
 }

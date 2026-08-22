@@ -132,6 +132,13 @@ plus all seven public files exact-verify at aggregate
 `5692d4a994d9d14b2bd867dd8740af0f83c497fa88888cc189b7b1fcc0a994ca`. Pages is final public-byte
 authority while the separately built Tailscale snapshot remains accepted UAT evidence. M79 is
 complete; `6874aa1` remains qualified product authority.
+M80's native face/open-chain Profile Offset, native line-line Fillet publication and arc-angle
+propagation are complete and publicly verified. M81's behavior-preserving core-architecture
+consolidation is complete and publicly verified. M82's computed arbitrary-curve Offset exploration
+was explicitly rejected, archived and fully removed from `main`; M81 remains accepted product
+authority. M83 is in progress under ADR 0039: it adds authoritative full-workbench action lineage,
+stable typed identity flow, deterministic rematerialization, workspace v7 and a DOM-free stateful
+Rust/WASM/TypeScript boundary. The implementation is not yet accepted or published.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
@@ -157,6 +164,13 @@ Physics, collision and a production rendering system remain out of scope.
     publicly verified geometry-family/variant contract, implementation ledger and scorecard.
 15. `docs/M79_GOALS.md`, `docs/M79_IMPLEMENTATION.md` and `docs/M79_UAT.md` — completed and
     publicly verified inference-cycling/recovery contract, implementation ledger and scorecard.
+16. `docs/M80_GOALS.md`, `docs/M80_IMPLEMENTATION.md` and `docs/M80_UAT.md` — completed native
+    Profile Offset/Fillet contract and public closeout.
+17. `docs/M81_GOALS.md`, `docs/M81_IMPLEMENTATION.md` and `docs/M81_UAT.md` — completed core-
+    architecture consolidation and public closeout.
+18. `docs/M82_DEFERRED.md` — rejected Offset exploration, archive and exact rollback record.
+19. `docs/M83_GOALS.md`, `docs/M83_IMPLEMENTATION.md` and `docs/M83_UAT.md` — in-progress
+    authoritative-lineage scope, implementation/finding ledger and pending UAT scorecard.
 
 ## Workspace
 
@@ -166,6 +180,11 @@ Physics, collision and a production rendering system remain out of scope.
 - `geosolve-sketch-ops` — deterministic equation-free split/trim/extend/construction proposals over complete stamped sketch snapshots; no residuals, solver state or private publication path.
 - `geosolve-sketch-topology` — read-only revision-stamped production wires, regions, holes and exact source provenance with explicit bounded completeness; no solver or B-rep state.
 - `geosolve-sketch-features` — separately versioned persistent computed-feature intent and independently validated revision-local output over exact accepted sketch snapshots; no residuals, solver variables, canonical sketch schema or B-rep state.
+- `geosolve-sketch-lineage` — canonical versioned sketch-action programs, stable typed identity
+  flow, exact-CAS transactions, retained/accepted authority, materialization ownership maps and one
+  Undo/Redo history; no equations, renderer or browser state.
+- `geosolve-sketch-lineage-wasm` — DOM-free stateful JSON-string RPC adapter over Rust-owned
+  lineage/editor validation; no storage, renderer, start hook or JavaScript geometry logic.
 - `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking,
   selection, gestures, exact geometry-family recipes, selected-curve control cages/properties,
   constraint/dimension and computed-feature authoring, and typed editor effects over public

@@ -185,6 +185,27 @@ pub enum SketchOperationKind {
     ProfileOffset,
 }
 
+impl SketchOperationKind {
+    /// Stable closed semantic key for lineage and host audit catalogs.
+    #[must_use]
+    pub const fn semantic_key(self) -> &'static str {
+        match self {
+            Self::Split => "split",
+            Self::Break => "break",
+            Self::Trim => "trim",
+            Self::Extend => "extend",
+            Self::Mirror => "mirror",
+            Self::Chamfer => "chamfer",
+            Self::AssociativeFillet => "associative-fillet",
+            Self::Rectangle => "rectangle",
+            Self::RegularPolygon => "regular-polygon",
+            Self::Slot => "slot",
+            Self::LinearPattern => "linear-pattern",
+            Self::ProfileOffset => "profile-offset",
+        }
+    }
+}
+
 /// Complete immutable document/accepted-state input used to prepare one proposal.
 #[derive(Clone, Debug)]
 pub struct SketchOperationSnapshot {

@@ -7,6 +7,32 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ### Added
 
+- M83's in-progress authoritative sketch-lineage layer: the new pure safe-Rust
+  `geosolve-sketch-lineage` crate provides canonical typed action programs, stable
+  owned/aliased/created/continued/retired identity flow, exact-CAS mutations,
+  retained/latest-attempt/last-accepted authority, deterministic strict/local
+  rematerialization evidence and one Undo/Redo history. The complete demo workbench
+  now routes its frozen 25 geometry recipes, existing constraints/dimensions,
+  curve properties/branches, all 12 native operations and computed `FilletSet`
+  intent through lineage; workspace v7 strictly migrates v1-v6 as honest imported
+  baselines and treats flat scene/feature/map data as authenticated disposable
+  caches. A separate DOM-free `geosolve-sketch-lineage-wasm` crate exposes the
+  stateful `geosolve.lineage.rpc.v0` protocol, with a private data-only TypeScript
+  client. M81 remains accepted product authority until clean qualification and
+  focused M83 human UAT approve an immutable candidate.
+- M83 authority hardening recompiles complete editor-action manifests—inputs, outputs, identity
+  flows, persistent reservations and writable leaves—for current, accepted and historical
+  programs before load or evaluation. Imported deletion now appends explicit `Retired` lineage,
+  hostile RPC load is atomic, and cold validation uses deterministic scratch identities for
+  revision-local computed output while preserving the exact host allocator high-water separately.
+- M83 cold/history hardening authenticates truthful Current/Suppressed/Failed/Withheld computed
+  dispositions without rejecting independently accepted native intent, treats exact-position
+  releases as authored no-ops, rejects cross-history identity rebinding, cold-verifies asserted
+  accepted digests and rebuilds Undo/Redo authority without trusting disposable flat caches.
+  Final authority review additionally rejects consumed numeric identity reuse after divergent
+  Redo abandonment, cold-authenticates every historical accepted stamp during workspace load,
+  reconstructs serialized attempt metadata from exact lineage-owned host inputs, and aligns RPC
+  wrong-document versus stale-revision errors.
 - Typed retained-design, solve-attempt and accepted-state identities/views for
   repairable unsolved sketch intent, optional finite candidate geometry and separate
   v1-v4 design/accepted persistence with host-owned revision high-water metadata.
