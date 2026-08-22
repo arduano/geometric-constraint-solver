@@ -1640,6 +1640,305 @@ mod tests {
         );
     }
 
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one frozen matrix keeps all six historical schemas, migration authority, and cold-v7 evidence directly comparable"
+    )]
+    fn m83_w9_frozen_v1_v6_fixtures_migrate_through_one_imported_baseline_and_cold_v7() {
+        const FIXTURES: &str =
+            include_str!("../../tests/fixtures/m83_workspace_migrations_v1_v6.jsonl");
+        // Each row was captured with the exact outer field language introduced
+        // by the named historical source. Nested canonical-v4 sketch and
+        // computed-feature-v1 bytes are themselves strict frozen codecs.
+        const HISTORICAL_SOURCES: [&str; 6] = [
+            "ba711c3", "d9cef77", "c1b0336", "941177c", "4b16db3", "8b5cfa5",
+        ];
+        const HISTORICAL_FIELDS: [&[&str]; 6] = [
+            &["accepted_json", "design_json", "revisions", "version"],
+            &["accepted", "design", "revisions", "version"],
+            &[
+                "accepted",
+                "accepted_belongs_to_current_design",
+                "design",
+                "revisions",
+                "version",
+            ],
+            &[
+                "accepted",
+                "accepted_belongs_to_current_design",
+                "computed_evaluation_high_water",
+                "design",
+                "feature_lifecycle_high_water",
+                "features_json",
+                "revisions",
+                "version",
+            ],
+            &[
+                "accepted",
+                "accepted_belongs_to_current_design",
+                "computed_evaluation_high_water",
+                "design",
+                "feature_lifecycle_high_water",
+                "features_json",
+                "revisions",
+                "sketch_identity_high_water",
+                "version",
+            ],
+            &[
+                "accepted",
+                "accepted_belongs_to_current_design",
+                "annotation_layout_json",
+                "computed_evaluation_high_water",
+                "design",
+                "feature_lifecycle_high_water",
+                "features_json",
+                "revisions",
+                "sketch_identity_high_water",
+                "version",
+            ],
+        ];
+
+        let fixtures = FIXTURES.lines().collect::<Vec<_>>();
+        assert_eq!(fixtures.len(), 6, "the frozen matrix must remain v1-v6");
+        for (offset, input) in fixtures.into_iter().enumerate() {
+            let legacy_version = u32::try_from(offset + 1).expect("version fits u32");
+            let source = HISTORICAL_SOURCES[offset];
+            let raw: serde_json::Value = serde_json::from_str(input)
+                .unwrap_or_else(|error| panic!("workspace v{legacy_version} ({source}): {error}"));
+            assert_eq!(raw["version"], serde_json::json!(legacy_version));
+            let mut actual_fields = raw
+                .as_object()
+                .expect("frozen workspace object")
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            actual_fields.sort_unstable();
+            assert_eq!(
+                actual_fields, HISTORICAL_FIELDS[offset],
+                "workspace v{legacy_version} must retain the exact field set emitted at {source}"
+            );
+            let mut unknown_field = raw.clone();
+            unknown_field
+                .as_object_mut()
+                .expect("frozen workspace object")
+                .insert("not_in_historical_schema".into(), serde_json::json!(true));
+            assert!(
+                WorkspaceSnapshot::decode(
+                    &serde_json::to_string(&unknown_field).expect("unknown-field probe")
+                )
+                .is_err(),
+                "workspace v{legacy_version} decoder admitted a foreign outer field"
+            );
+
+            let retained_json = if legacy_version == 1 {
+                raw["design_json"].as_str().expect("v1 retained sketch")
+            } else {
+                raw["design"]["json"]
+                    .as_str()
+                    .expect("v2-v6 retained sketch")
+            };
+            let accepted_json = if legacy_version == 1 {
+                raw["accepted_json"].as_str().expect("v1 accepted sketch")
+            } else {
+                raw["accepted"]["json"]
+                    .as_str()
+                    .expect("v2-v6 accepted sketch")
+            };
+            assert_ne!(
+                retained_json, accepted_json,
+                "fixture must exercise retained failure over older accepted authority"
+            );
+
+            let migrated = WorkspaceSnapshot::decode(input).unwrap_or_else(|error| {
+                panic!("workspace v{legacy_version} ({source}) did not migrate: {error}")
+            });
+            assert_eq!(migrated.version, 7);
+            assert!(migrated.lineage_session_json.is_none());
+            assert!(!migrated.accepted_belongs_to_current_design);
+            assert_eq!(migrated.design.json, retained_json);
+            assert_eq!(
+                migrated
+                    .accepted
+                    .as_ref()
+                    .map(|payload| payload.json.as_str()),
+                Some(accepted_json)
+            );
+            assert_eq!(migrated.revisions.design, 2);
+            assert_eq!(migrated.revisions.attempt, 2);
+            assert_eq!(migrated.revisions.accepted, Some(1));
+            let retained = migrated.design_document().expect("retained document");
+            let accepted = migrated
+                .accepted_document()
+                .expect("accepted document decode")
+                .expect("older accepted document");
+            assert_eq!(retained.constraints().len(), 2);
+            assert_eq!(accepted.constraints().len(), 1);
+            assert_eq!(retained.id(), accepted.id());
+            let restored_flat = migrated
+                .restore_session(DocumentSolveRequest::default(), SolverConfig::default())
+                .expect("restore retained failure and older accepted scene");
+            assert!(restored_flat.accepted_state().is_some());
+            assert!(restored_flat.accepted_state_for_current_input().is_none());
+
+            if legacy_version < 4 {
+                assert!(
+                    migrated
+                        .feature_document()
+                        .expect("derived empty feature document")
+                        .features()
+                        .is_empty()
+                );
+                assert_eq!(
+                    migrated.computed_evaluation_high_water,
+                    default_evaluation_high_water()
+                );
+            } else {
+                assert_eq!(
+                    migrated.features_json,
+                    raw["features_json"].as_str().expect("legacy feature bytes")
+                );
+                let features = migrated
+                    .feature_document()
+                    .expect("preserved computed feature document");
+                assert_eq!(features.features().len(), 1);
+                assert_eq!(features.features()[0].label, "fixture computed Fillet");
+                assert_eq!(
+                    serde_json::to_value(migrated.feature_lifecycle_high_water)
+                        .expect("feature high-water value"),
+                    raw["feature_lifecycle_high_water"]
+                );
+                assert_eq!(
+                    serde_json::to_value(migrated.computed_evaluation_high_water)
+                        .expect("evaluation high-water value"),
+                    raw["computed_evaluation_high_water"]
+                );
+            }
+            if legacy_version >= 5 {
+                assert_eq!(
+                    serde_json::to_value(&migrated.sketch_identity_high_water)
+                        .expect("sketch high-water value"),
+                    raw["sketch_identity_high_water"]
+                );
+            } else {
+                assert_eq!(
+                    migrated.sketch_identity_high_water,
+                    derive_sketch_identity_high_water(&migrated.design, migrated.accepted.as_ref())
+                        .expect("derived historical sketch high-water")
+                );
+            }
+            assert_eq!(
+                migrated.annotation_layout().entries().len(),
+                usize::from(legacy_version == 6),
+                "only workspace v6 can carry annotation placement"
+            );
+
+            let imported = coordinator_from_snapshot(&migrated)
+                .expect("construct one honest imported-baseline coordinator");
+            let lineage: serde_json::Value =
+                serde_json::from_str(&imported.lineage_json().expect("canonical imported lineage"))
+                    .expect("lineage value");
+            let steps = lineage["steps"].as_array().expect("lineage steps");
+            assert_eq!(steps.len(), 1, "migration cannot invent recipe history");
+            assert_eq!(steps[0]["key"], serde_json::json!("imported-baseline"));
+            assert_eq!(
+                steps[0]["action"]["kind"],
+                serde_json::json!("imported_baseline")
+            );
+            assert_eq!(
+                imported.history_len(),
+                1,
+                "the baseline position is retained without a fictional pre-import action"
+            );
+            assert_eq!(imported.history_cursor(), 0);
+            assert!(!imported.can_undo());
+            assert!(!imported.can_redo());
+
+            let encoded_v7 = migrated.encode().expect("canonical v7 migration output");
+            let encoded_value: serde_json::Value =
+                serde_json::from_str(&encoded_v7).expect("v7 value");
+            assert_eq!(encoded_value["version"], serde_json::json!(7));
+            assert!(encoded_value["lineage_session_json"].is_string());
+            let canonical_v7 = WorkspaceSnapshot::decode(&encoded_v7).unwrap_or_else(|error| {
+                panic!(
+                    "workspace v{legacy_version} re-encoded v7 did not cold-authenticate: {error}"
+                )
+            });
+            let canonical_accepted = canonical_v7
+                .accepted_document()
+                .expect("canonical v7 accepted document")
+                .expect("canonical v7 older accepted authority");
+            assert_eq!(
+                canonical_accepted.constraints(),
+                accepted.constraints(),
+                "v7 re-encode changed older accepted geometry from workspace v{legacy_version}"
+            );
+            assert_eq!(canonical_accepted.points(), accepted.points());
+            assert_eq!(canonical_accepted.curves(), accepted.curves());
+
+            let mut cache_free = encoded_value;
+            let object = cache_free.as_object_mut().expect("workspace v7 object");
+            for field in [
+                "lineage_materialization_map_json",
+                "design",
+                "accepted",
+                "accepted_belongs_to_current_design",
+                "sketch_identity_high_water",
+                "features_json",
+                "feature_lifecycle_high_water",
+                "computed_evaluation_high_water",
+                "revisions",
+            ] {
+                object.remove(field);
+            }
+            let cold = WorkspaceSnapshot::decode(
+                &serde_json::to_string(&cache_free).expect("cache-free v7 workspace"),
+            )
+            .expect("cache-free cold lineage reconstruction");
+            assert_eq!(cold.design.json, retained_json);
+            let cold_accepted = cold
+                .accepted_document()
+                .expect("cache-free accepted document")
+                .expect("cache-free older accepted authority");
+            assert_eq!(cold_accepted.constraints(), accepted.constraints());
+            assert_eq!(cold_accepted.points(), accepted.points());
+            assert_eq!(cold_accepted.curves(), accepted.curves());
+            assert_eq!(
+                cold.features_json, canonical_v7.features_json,
+                "feature intent changed during cache-free reload"
+            );
+            assert_eq!(
+                cold.sketch_identity_high_water,
+                canonical_v7.sketch_identity_high_water
+            );
+            assert_eq!(
+                cold.feature_lifecycle_high_water,
+                canonical_v7.feature_lifecycle_high_water
+            );
+            assert_eq!(
+                cold.computed_evaluation_high_water,
+                canonical_v7.computed_evaluation_high_water
+            );
+            assert_eq!(
+                cold.annotation_layout().entries(),
+                canonical_v7.annotation_layout().entries()
+            );
+            let restored_cold =
+                coordinator_from_snapshot(&cold).expect("cache-free v7 coordinator reconstruction");
+            assert!(restored_cold.session().accepted_state().is_some());
+            assert!(
+                restored_cold
+                    .session()
+                    .accepted_state_for_current_input()
+                    .is_none()
+            );
+            let cold_lineage: serde_json::Value =
+                serde_json::from_str(&restored_cold.lineage_json().expect("cold imported lineage"))
+                    .expect("cold lineage value");
+            assert_eq!(cold_lineage["steps"].as_array().map(Vec::len), Some(1));
+        }
+    }
+
     fn restored_annotation_layout(
         snapshot: &WorkspaceSnapshot,
     ) -> (DocumentId, Vec<AnnotationLayoutEntry>) {
@@ -4397,9 +4696,9 @@ mod tests {
     #[test]
     #[allow(
         clippy::too_many_lines,
-        reason = "one regression follows all legacy versions through the same current sidecar invariant"
+        reason = "one compatibility probe follows a current draft payload through every legacy payload adapter"
     )]
-    fn v5_round_trips_draft_v5_and_migrates_v4_v3_v2_and_v1() {
+    fn current_draft_payload_remains_compatible_with_legacy_workspace_adapters() {
         use geosolve_sketch::{
             CurveDefinition, CurveSpan, DocumentCurveTrimView, DocumentTrimBoundary,
             DocumentTrimParameter,
