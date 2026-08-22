@@ -245,7 +245,23 @@ The milestone covers all 25 geometry variants, the complete current relation/dim
 branch surface, every current sketch operation, native and computed Fillet/Offset intent,
 strict-versus-dependency-local evaluation, workspace v7 with honest v1-v6 migration, atomic
 multi-owner direct editing and stateful DOM-free `geosolve.lineage.rpc.v0`. `docs/M83_GOALS.md` is
-the authoritative scope. M81 remains accepted product authority until M83 closes.
+the authoritative scope. Completion hardening adds genuine cold direct-edit witnesses,
+accepted-prefix native-Fillet continuation, a frozen honest v1-v6 migration corpus and correlated
+TypeScript/RPC response validation. M83-F031 additionally binds TypeScript parameters/results to
+their method and immutable serialized request, authenticates retained-CAS/result/lifecycle identity
+and bounded evaluation-plan cross-fields, and enforces the shared request byte bound without
+changing sketch equations. M83-F032/F033 make strict cold replay the publication authority in both
+directions: its exact accepted graph replaces or promotes provisional live materialization, while
+a strict cold rejection can never be hidden by a live success. M83-F034/F035 finish the late-
+failure audit by restoring auxiliary lineage high-water on post-refresh checkpoint failure and
+staging legacy flat reload through final lineage import before one live swap. M83-F036 closes the
+feature-only publication seam: exact held computed previews publish unchanged when their sketch
+bytes already equal strict-cold authority, while a different cold underconstrained witness rebuilds
+computed output and publishes both owners atomically. M83-F037 through F040 finish accepted-
+identity and inferred-construction publication hardening: canonical byte changes always allocate a
+fresh accepted revision, same-byte reload cannot skip a higher saved lifecycle, construction
+acknowledgement follows every fallible lineage operation, and public construction results report
+the final strict-cold accepted identity. M81 remains accepted product authority until M83 closes.
 
 ## Read first
 

@@ -987,7 +987,7 @@ fn evaluate_sketch_prefix_with_exact_inputs(
     native_fillet: Option<&geosolve_sketch::DocumentPreparedNativeLineFilletGeometry>,
 ) -> Result<RetainedSketchDocumentSession, LineageDomainEvaluationFailure> {
     let revisions = SketchLifecycleRevisionHighWater::from_raw(0, 0, None);
-    let request = DocumentSolveRequest::default().without_previous_state_preferences();
+    let request = DocumentSolveRequest::default();
 
     if let (Some(previous), Some(request)) = (previous_accepted, native_fillet) {
         return evaluate_native_fillet_continuation(
@@ -1022,45 +1022,73 @@ fn evaluate_sketch_prefix_with_exact_inputs(
         return Ok(exact);
     }
 
-    let session = if let Some(previous) = previous_accepted {
-        let accepted = match previous.encoding {
-            "draft_v5" => SketchDocument::from_draft_v5_json(&previous.sketch_json),
-            "canonical_v4" => SketchDocument::from_json(&previous.sketch_json),
-            _ => {
-                return Err(LineageDomainEvaluationFailure::new(
-                    "sketch_evaluation_error",
-                    "lineage-evaluation-sketch-error",
-                    "the prior accepted prefix uses an unknown sketch encoding",
-                ));
-            }
-        }
-        .map_err(|error| {
-            LineageDomainEvaluationFailure::new(
-                "sketch_evaluation_error",
-                "lineage-evaluation-sketch-error",
-                error.to_string(),
+    if let Some(previous) = previous_accepted {
+        let previous_design =
+            decode_prefix_sketch(previous.retained_encoding, &previous.retained_sketch_json)?;
+        let previous_accepted = decode_prefix_sketch(previous.encoding, &previous.sketch_json)?;
+        let continuation = design
+            .prepare_continuation_seed(&previous_design, &previous_accepted)
+            .map_err(|error| sketch_evaluation_failure(error.to_string()))?;
+
+        // The continuation seed is derived only from independently accepted
+        // upstream evidence: unchanged retained leaves receive their exact
+        // accepted values, while every newly authored or rewritten leaf keeps
+        // the downstream action value. Certify it without optimization first.
+        // This preserves an already-satisfied underconstrained prefix exactly
+        // and cannot admit an arbitrary caller-supplied witness.
+        if let Ok(exact) =
+            RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
+                design.clone(),
+                continuation.clone(),
+                revisions,
+                parameters.clone(),
+                snapshots.clone(),
+                request,
+                SolverConfig::default(),
             )
-        })?;
-        RetainedSketchDocumentSession::restore_design_with_accepted_and_distinct_inputs(
+        {
+            return Ok(exact);
+        }
+
+        // When the authored action genuinely requires movement, solve from the
+        // authenticated continuation seed and then bind that independently
+        // accepted result back to the retained downstream design.
+        let continued = RetainedSketchDocumentSession::new_with_inputs(
+            continuation,
+            parameters.clone(),
+            snapshots.clone(),
+            request,
+            SolverConfig::default(),
+        )
+        .map_err(|error| sketch_evaluation_failure(error.to_string()))?;
+        let accepted = continued
+            .accepted_state_for_current_input()
+            .ok_or_else(|| {
+                sketch_evaluation_failure(
+                    "the authenticated ordinary continuation seed was not accepted",
+                )
+            })?
+            .document()
+            .clone();
+        return RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
             design.clone(),
             accepted,
             revisions,
             parameters.clone(),
             snapshots.clone(),
-            previous.parameters.clone(),
-            previous.snapshots.clone(),
             request,
             SolverConfig::default(),
         )
-    } else {
-        RetainedSketchDocumentSession::new_with_inputs(
-            design.clone(),
-            parameters.clone(),
-            snapshots.clone(),
-            request,
-            SolverConfig::default(),
-        )
-    };
+        .map_err(|error| sketch_evaluation_failure(error.to_string()));
+    }
+
+    let session = RetainedSketchDocumentSession::new_with_inputs(
+        design.clone(),
+        parameters.clone(),
+        snapshots.clone(),
+        request,
+        SolverConfig::default(),
+    );
     session.map_err(|error| {
         LineageDomainEvaluationFailure::new(
             "sketch_evaluation_error",

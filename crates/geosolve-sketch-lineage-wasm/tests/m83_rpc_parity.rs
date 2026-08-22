@@ -551,6 +551,11 @@ fn rpc_transcript() -> String {
         "undo",
         json!({ "expected": identity }),
     );
+    assert_eq!(undone["result"]["latest_attempt"]["disposition"], "pending");
+    assert_eq!(
+        undone["result"]["last_accepted"]["lineage"]["revision"],
+        "0000000000000001"
+    );
     identity =
         serde_json::from_value(undone["result"]["identity"].clone()).expect("undone identity");
     let redone = request(
@@ -560,6 +565,11 @@ fn rpc_transcript() -> String {
         Some(&session_id),
         "redo",
         json!({ "expected": identity }),
+    );
+    assert_eq!(redone["result"]["latest_attempt"]["disposition"], "pending");
+    assert_eq!(
+        redone["result"]["last_accepted"]["lineage"]["revision"],
+        "0000000000000001"
     );
     identity =
         serde_json::from_value(redone["result"]["identity"].clone()).expect("redone identity");

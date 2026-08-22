@@ -5634,26 +5634,45 @@ workbench honestly to workspace v7 and expose the same stateful engine through
   created/continued/retired mappings, whole-step ownership and dependency-safe delete/rebind.
 - [x] Integrate native Fillet/Profile Offset and computed `FilletSet`. Retain stable feature/corner
   lineage ports while keeping computed evaluated fragments authenticated revision-local derived
-  geometry rather than assigning false persistent native identity.
+  geometry rather than assigning false persistent native identity. Feature-only publication must
+  authenticate the strict-cold sketch beside feature intent, preserve an exact held preview when
+  that authority is byte-identical and rebuild computed output only when canonical sketch bytes
+  differ.
 - [x] Implement cold `StrictChronological` evaluation as the oracle, then optimized
   `DependencyLocal` dirty-closure evaluation. Differentially prove identical accepted/failure
   authority, canonical sketch/feature digests, identities, ownership, branches and hard validity
-  after every supported edit class.
+  after every supported edit class. Topology-sensitive native Fillet replay consumes the
+  independently accepted upstream prefix and authenticates its prepared plan, reserved identities
+  and complete materialized topology before the resulting seed can be solved and accepted.
 - [x] Reconcile every accepted direct manipulation by atomically rewriting all affected owner
   steps. Reject missing inverses, partial owner updates and failed cold reproduction; never append
   a generic Move step or persist sampled derived coordinates.
 - [x] Preserve exact retained-versus-accepted failure authority, reservations and one history
-  position for structurally valid failing edits. Stale, cancelled, exhausted, malformed and
-  non-finite requests publish and record nothing; Undo/Redo restores exact programs and identities.
+  position for structurally valid edits rejected by strict cold evaluation. A provisional live
+  rejection cannot bypass the strict oracle: cold acceptance promotes the same attempt, while a
+  provisional live success cannot survive cold rejection. Stale, cancelled, exhausted, malformed
+  and non-finite requests publish and record nothing; Undo/Redo restores exact programs and
+  identities. Exact canonical accepted-byte replacement is a complete no-op only when the bytes
+  match; changed bytes allocate a fresh accepted revision, and same-byte legacy reload cannot skip
+  a higher saved lifecycle. Inferred construction completes every fallible lineage/checkpoint step
+  before positive acknowledgement and returns only the final strict-cold accepted identity.
 - [x] Introduce workspace v7 with authoritative retained/accepted lineage, history cursor and
   high-waters plus an authenticated disposable flat cache. Strictly migrate workspaces v1-v6
   through honest `ImportedBaseline` roots, preserving available flat/feature/high-water/annotation
-  state without synthesizing authoring history.
+  state without synthesizing authoring history. A checked-in six-row historical-schema fixture
+  exercises retained-invalid/older-accepted authority and cache-free cold v7 reconstruction.
 - [x] Add the DOM-free stateful `geosolve.lineage.rpc.v0` session protocol with versioned envelopes,
   opaque string IDs/revisions, deterministic errors and native/WASM transcript parity. It owns no
-  DOM, storage, renderer, start hook or TypeScript geometry logic.
+  DOM, storage, renderer, start hook or TypeScript geometry logic. Under M83-F031, the private
+  TypeScript client uses method-indexed parameter/result types, fail-closes on malformed,
+  method-incompatible or uncorrelated envelopes/results, including mutable-request, stale-CAS,
+  session-start authority and evaluation-plan forgeries, preserves the prior authenticated session,
+  and rejects requests above the shared 16 MiB UTF-8 bound before transport.
 - [x] Prove the sole workbench has no writable flat side path or nested user history. Pass focused
   M83-W1–W11 catalog/identity/policy/migration/RPC/workbench tests and unchanged domain baselines.
+  Exhaustiveness evidence is described precisely: closed catalog/source-route inventories and
+  generic lifecycle mechanics cover the whole admitted surface, while genuine coordinator/browser
+  execution is representative except where a named matrix explicitly drives every row.
 - [ ] Pass the complete clean release gate from committed source, receive focused architecture/API
   review and nominate an immutable byte-verified Tailscale candidate.
 - [ ] Pass and record M83-W12 human UAT, freeze the accepted artifact, publish it to GitHub Pages

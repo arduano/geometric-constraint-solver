@@ -113,6 +113,30 @@ fn exact_computed_preview_scene(
     .unwrap()
 }
 
+fn assert_current_accepted_matches_strict_cold(coordinator: &RetainedEditorCoordinator) {
+    let lineage = coordinator.lineage_session_json().unwrap();
+    let ledger = coordinator.lineage_host_input_ledger_json().unwrap();
+    let cold = RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+        &lineage,
+        Some(&ledger),
+        coordinator.session().parameter_batch(),
+        coordinator.session().external_snapshot_set(),
+    )
+    .unwrap();
+    let accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .unwrap();
+    let live_json = if cold.accepted_uses_draft_v5() {
+        accepted.document().to_draft_v5_json()
+    } else {
+        accepted.document().to_canonical_json()
+    }
+    .unwrap();
+    assert_eq!(cold.accepted_json(), Some(live_json.as_str()));
+    assert!(cold.accepted_belongs_to_current_design());
+}
+
 fn circle_fixture() -> (
     RetainedEditorCoordinator,
     EditorScene,
@@ -656,6 +680,7 @@ fn prepared_curve_control_preview_commits_exact_patch_as_one_history_step() {
     let before_history = coordinator.history_len();
     coordinator.apply_editor_effect(commit).unwrap().unwrap();
     assert_eq!(coordinator.history_len(), before_history + 1);
+    assert_current_accepted_matches_strict_cold(&coordinator);
     assert_eq!(
         coordinator
             .session()

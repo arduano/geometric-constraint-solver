@@ -279,11 +279,37 @@ authority and one Undo/Redo history. Its public action payload is data-only; equ
 independent validation and branch semantics remain in their existing domain owners. Public
 `LineageSession::accept_current` is a trusted host-materializer publication seam: decoding a
 self-consistent session does not independently verify its materialization digest. Workspace v7
-cold-reproduces every untrusted current/historical accepted authority through the owning domains,
-then reconstructs current attempt evidence before exposing it. The standalone
+reconstructs a current accepted program by consuming canonical accepted sketch evidence from cold
+owning-domain evaluation of the exact current lineage/input pair. A rejected current program uses
+the same evidence contract for the exact older accepted lineage/input pair. Neither path
+independently solves flattened intent after that evidence is authenticated. The standalone
 `geosolve.lineage.rpc.v0` loader instead strips caller-certified current and historical acceptance
 while preserving declarative history, then requires an explicit ordinary cold evaluation before
 accepted authority can surface again.
+
+M83-F032 additively exposes
+`RetainedSketchDocumentSession::replace_current_accepted_materialization` for an owning host that
+has already produced canonical accepted geometry through an independent evaluator. It is not a
+general accepted-state injection API: the call requires the exact current `PreparedSketchInput`,
+independently certifies the supplied finite graph under the retained request and host inputs,
+requires compatible retained topology and either the current accepted publication or the exact
+current rejected attempt, and rejects atomically. Successful replacement preserves design and
+attempt identities, attempt/provenance and allocator high-waters. It preserves an existing current
+accepted identity only when the canonical accepted bytes are exactly unchanged. Any changed bytes
+allocate exactly the next accepted revision, as does promotion of a live-rejected attempt; numeric
+equality is deliberately insufficient because signed-zero bytes participate in canonical lineage
+authority. Only the process-local prepared-state epoch otherwise advances, deliberately making
+outstanding prepared jobs stale.
+Projected direct manipulation does not use this substitution policy: its caller witness must still
+equal genuine cold evidence exactly. Ordinary coordinator mutation results now report accepted
+identity after this canonical replacement/promotion boundary rather than echoing the provisional
+live attempt disposition.
+
+M83-F036 changes only private retained-coordinator publication ordering. Computed-feature-only
+mutations authenticate strict-cold sketch evidence and publish the exact already-evaluated preview
+when its accepted sketch bytes match; a different cold graph causes scratch replacement and
+computed reevaluation before the atomic swap. No public type, signature, wire field, solver rule or
+successful caller-visible feature identity changes.
 
 Generic caller-authored action payloads remain a structural lineage extension point, but M83 does
 not promise that a registered schema alone is executable workbench intent. Only editor-compiled
@@ -297,9 +323,24 @@ The new `geosolve-sketch-lineage-wasm` crate is a DOM-free stateful JSON-string 
 `geosolve.lineage.rpc.v0` discriminator is intentionally versioned as a pre-release protocol;
 opaque string IDs/revisions and closed method/result/error variants must be preserved within that
 protocol version. The private `@geosolve/lineage-bindings` TypeScript package is data-only and is
-not published to npm. Workspace v7 is demo-application persistence, not canonical sketch schema:
-it strictly migrates v1-v6 through `ImportedBaseline`, and its flat sketch/feature/map fields are
-disposable caches. Canonical sketch input/output remains v1-v4/v4 and draft v5 remains unsupported.
+not published to npm. Its provisional `LineageRpcClient.call` API is now method-indexed through
+closed parameter/result maps instead of accepting a caller-selected result type. Exact runtime
+decoders authenticate method-specific result shape, result/envelope identity and evaluation
+cross-fields, exact serialized request/CAS identity, session-start authority stripping and bounded
+lifecycle arrays; closed error unions mirror Rust. Undo and Redo return the same authoritative
+snapshot shape as inspection, including the restored policy and historical accepted authority,
+rather than an identity-only transition. The client also mirrors the bounded policy/accepted-
+authority history implied by successful mutations. On standalone load it parses each historical
+document policy from the exact serialized request while treating every accepted stamp as stripped,
+matching Rust's untrusted-load contract; Undo/Redo snapshots must match that retained checkpoint.
+An unchanged generic mutation that requests an evaluation-policy transition is rejected before it
+can alter the client's retained correlation state.
+`RPC_MAX_REQUEST_BYTES` and
+`LineageRpcRequestError` expose the matching 16 MiB UTF-8 preflight contract. These checks protect
+the data-binding boundary and do not make TypeScript a second lineage or geometry validator.
+Workspace v7 is demo-application persistence, not canonical sketch schema: it strictly migrates
+v1-v6 through `ImportedBaseline`, and its flat sketch/feature/map fields are disposable caches.
+Canonical sketch input/output remains v1-v4/v4 and draft v5 remains unsupported.
 The additive public coordinator string codecs are deliberately lower-level parts of that
 application bundle: `lineage_session_json()` carries generic declarative session/history authority,
 while `lineage_host_input_ledger_json()` carries the bounded exact host-only pairs needed by

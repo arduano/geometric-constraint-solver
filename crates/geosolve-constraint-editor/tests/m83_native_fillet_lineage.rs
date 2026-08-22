@@ -10,10 +10,10 @@ use geosolve_constraint_editor::{
     evaluate_lineage_session_cold_with_inputs,
 };
 use geosolve_sketch::{
-    CurveDefinition, CurveId, DesignPointId, DocumentEdit, DocumentNativeLineFilletIds,
-    DocumentParameterKind, DocumentParameterTarget, DocumentSolveRequest, ParameterBatch,
-    ParameterBatchEntry, ParameterValue, RetainedSketchDocumentSession, SketchDocument,
-    SolverConfig,
+    CurveDefinition, CurveId, DesignPointId, DocumentConstraintDefinition, DocumentEdit,
+    DocumentNativeLineFilletIds, DocumentParameterKind, DocumentParameterTarget,
+    DocumentSolveRequest, ParameterBatch, ParameterBatchEntry, ParameterValue,
+    RetainedSketchDocumentSession, SketchDocument, SolverConfig,
 };
 use geosolve_sketch_lineage::{
     LineageActionDefinition, LineageEvaluationPolicy, LineageMaterializationMap, LineageMutation,
@@ -539,6 +539,34 @@ fn host_only_radius_inputs_after_native_fillet_keep_action_and_identity_exact() 
     )
     .expect("cold replay under the current host-only radius");
     assert_eq!(cold.validated_prefix_count(), 4);
+    let lineage_json = coordinator
+        .lineage_session_json()
+        .expect("host-current lineage JSON");
+    let ledger_json = coordinator
+        .lineage_host_input_ledger_json()
+        .expect("host-current input ledger");
+    let cold = RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+        &lineage_json,
+        Some(&ledger_json),
+        &current_batch,
+        &geosolve_sketch::ExternalSnapshotSet::default(),
+    )
+    .expect("cold host-only accepted authority");
+    let live_accepted = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("live host-only accepted authority");
+    let live_accepted_json = if cold.accepted_uses_draft_v5() {
+        live_accepted.document().to_draft_v5_json()
+    } else {
+        live_accepted.document().to_canonical_json()
+    }
+    .expect("encode live host-only accepted authority");
+    assert_eq!(
+        cold.accepted_json(),
+        Some(live_accepted_json.as_str()),
+        "host-only publication must expose the exact strict-cold accepted geometry"
+    );
 }
 
 #[test]
@@ -661,4 +689,124 @@ fn abandoned_native_fillet_ids_remain_retired_after_undo_and_divergence() {
     let cold = evaluate_lineage_session_cold(&lineage)
         .expect("cold replay after native-Fillet history divergence");
     assert_eq!(cold.validated_prefix_count(), 2);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exact restore plus Undo/Redo authority regression keeps the accepted native-Fillet bytes and lifecycle assertions adjacent"
+)]
+fn rejected_current_restore_and_history_publish_exact_older_accepted_native_fillet() {
+    let (document, corners) = two_corner_document();
+    let initial = retained(document);
+    let mut coordinator =
+        RetainedEditorCoordinator::new(initial.clone()).expect("live coordinator");
+    let ids = publish_native_fillet(&mut coordinator, corners[0].corner, 0.5, "fallback native");
+    let center = coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("accepted native Fillet")
+        .document()
+        .point(ids.center)
+        .expect("accepted Fillet center")
+        .position;
+    coordinator
+        .apply_edit(
+            coordinator.session().design_identity(),
+            DocumentEdit::CreateConstraint {
+                label: "accepted center anchor".into(),
+                definition: DocumentConstraintDefinition::FixedPoint {
+                    point: ids.center,
+                    target: center,
+                },
+            },
+        )
+        .expect("accepted center anchor");
+    let accepted_before = coordinator
+        .session()
+        .export_accepted_json()
+        .expect("accepted export")
+        .expect("accepted native-Fillet bytes");
+    let rejected = coordinator
+        .apply_edit(
+            coordinator.session().design_identity(),
+            DocumentEdit::CreateConstraint {
+                label: "conflicting center anchor".into(),
+                definition: DocumentConstraintDefinition::FixedPoint {
+                    point: ids.center,
+                    target: [center[0] + 1.0, center[1] + 1.0],
+                },
+            },
+        )
+        .expect("structurally valid conflicting anchor");
+    assert!(rejected.published_accepted.is_none());
+    assert_eq!(
+        coordinator
+            .session()
+            .export_accepted_json()
+            .expect("retained accepted export")
+            .expect("older accepted bytes"),
+        accepted_before
+    );
+    let mut expected_restored_accepted =
+        SketchDocument::from_json(&accepted_before).expect("accepted native-Fillet document");
+    expected_restored_accepted
+        .retain_persistent_identity_high_water(
+            coordinator.session().persistent_identity_high_water(),
+        )
+        .expect("accepted document retains rejected-action high-water");
+    let expected_restored_accepted = expected_restored_accepted
+        .to_canonical_json()
+        .expect("canonical restored accepted bytes");
+
+    let lineage_json = coordinator
+        .lineage_session_json()
+        .expect("rejected lineage session");
+    let mut restored = RetainedEditorCoordinator::new(initial).expect("restore target");
+    restored
+        .restore_lineage_session_json(&lineage_json)
+        .expect("cold rejected-current restore");
+    assert_eq!(
+        restored
+            .session()
+            .export_accepted_json()
+            .expect("restored accepted export")
+            .expect("restored older accepted bytes"),
+        expected_restored_accepted,
+        "restore may advance only allocator high-water over the exact cold-authenticated native-Fillet bytes"
+    );
+    assert!(
+        restored
+            .session()
+            .accepted_state_for_current_input()
+            .is_none()
+    );
+    assert_ids_exist(&restored, &ids);
+
+    coordinator.undo().expect("Undo rejected anchor");
+    assert_eq!(
+        coordinator
+            .session()
+            .export_accepted_json()
+            .expect("Undo accepted export")
+            .expect("Undo accepted bytes"),
+        expected_restored_accepted
+    );
+    assert_finite_accepted(&coordinator);
+    coordinator.redo().expect("Redo rejected anchor");
+    assert_eq!(
+        coordinator
+            .session()
+            .export_accepted_json()
+            .expect("Redo accepted export")
+            .expect("Redo older accepted bytes"),
+        expected_restored_accepted,
+        "Redo must retain the exact authenticated fallback plus monotonic high-water rather than a second solve"
+    );
+    assert!(
+        coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .is_none()
+    );
 }

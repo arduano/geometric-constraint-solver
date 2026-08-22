@@ -359,6 +359,32 @@ schema-specific materialization intent, reconstructs exact owning-domain checkpo
 projected multi-owner reconciliation. This split keeps the public lineage model small while
 preventing a caller-editable port manifest from self-certifying editor authority.
 
+Cold checkpoint evaluation is chronological, not a bag of independent fresh solves. Each accepted
+prefix can seed the next topology-sensitive action; native Fillet reauthenticates its prepared plan,
+reserved identities and complete materialized topology against that accepted upstream prefix before
+ordinary solve and independent validation. Projected owner reconciliation consumes genuine cold
+accepted evidence rather than treating a staged flat accepted cache as its own witness. For
+ordinary mutations, the provisional live solve is never a competing authority: exact strict-cold
+acceptance replaces an already accepted live graph or promotes the same live-rejected attempt, and
+strict-cold rejection either retains the failed lineage position or rolls a provisional live
+success back atomically. Projected manipulation keeps its narrower exact caller/cold equality gate.
+Feature-only mutations also authenticate strict-cold accepted sketch bytes. They retain the exact
+already-evaluated preview snapshot and allocator when those bytes match, but replace accepted sketch
+authority and rebuild computed output when cold replay selects a different valid underconstrained
+materialization; either branch publishes sketch, feature, allocator and history state together.
+The lower accepted-materialization seam treats only exact canonical accepted bytes as an identity-
+preserving no-op. Any byte change, including a signed-zero change that ordinary floating-point
+equality would hide, allocates the next accepted revision. Legacy flat reload may preserve a same-
+byte live session only when its revision lifecycle already covers the saved high-water.
+Authenticated inferred construction is prepared completely in clones: strict replay, accepted-
+graph replacement, computed refresh, final checkpoint and lineage high-water all succeed before
+the editor token is marked published and one infallible live swap occurs. Its public result is
+derived from that final canonical session, never the provisional trial solve.
+Every fallible post-refresh checkpoint restores the prior lineage auxiliary high-water with the
+flat and feature owners. The public legacy flat-reload compatibility seam likewise prepares its
+session, feature sidecar, allocator, computed evidence, final checkpoint and imported lineage
+entirely off to the side before one publication.
+
 ### `geosolve-sketch-lineage-wasm`
 
 The separate M83 WASM crate consumes `geosolve-sketch-lineage`, `geosolve-constraint-editor` and
@@ -372,11 +398,22 @@ generic caller-authored actions remain structural and fail with
 Standalone RPC load strips caller-certified current and historical accepted authority until a
 fresh cold evaluation succeeds. The workbench workspace-v7 loader is deliberately different: it
 uses exact persisted current/accepted inputs, authenticated action provenance and a private bounded
-coordinator ledger for host-only historical pairs to cold-reproduce every distinct accepted
-authority reachable in current, Undo and Redo positions. It reconstructs the current attempt from
-fresh owning-domain work and only then admits a disposable flat cache. The ledger does not enter
-the generic lineage-session or RPC schema. The private TypeScript package is a data binding/request
-builder, not a geometry engine or an executable OpenSCAD-like authoring language in M83.
+coordinator ledger for host-only historical pairs. A current accepted program is reconstructed by
+consuming canonical owning-domain accepted evidence from cold evaluation of its exact current
+lineage identity and inputs. A rejected current program uses the same evidence contract at its exact
+older accepted lineage identity and input pair. Neither route independently re-solves flattened
+intent after authenticating that evidence. Undo and Redo authorities are eagerly authenticated
+before any disposable flat cache is admitted. The ledger
+does not enter the generic lineage-session or RPC schema. Honest legacy imported roots may carry a
+distinct embedded older-accepted sketch/input pair; its independently reproduced digest, not
+payload-marker presence, selects that branch. The private TypeScript package is a data binding/
+request builder, not a geometry engine or an executable OpenSCAD-like authoring language in M83.
+It derives parameters and results from the selected RPC method, validates exact envelope and
+method-specific result shape, immutable serialized request and retained-CAS identity,
+envelope/result session and document identity, session-start lifecycle/authority postconditions,
+closed error codes and evaluation-plan/cross-field consistency before retaining session state, and
+rejects a serialized UTF-8 request above the shared 16 MiB Rust bound before transport. It does not
+duplicate action, lineage, geometry or acceptance validation.
 
 ### `geosolve-constraint-editor`
 

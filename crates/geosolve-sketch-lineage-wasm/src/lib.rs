@@ -334,29 +334,31 @@ impl LineageRpcEngine {
     fn undo(&mut self, params: &ExpectedParams) -> Result<Value, RpcFailure> {
         self.ensure_expected(params.expected)?;
         let mut candidate = self.session()?.clone();
-        let identity = candidate
+        candidate
             .undo()
             .map_err(RpcFailure::lineage)?
             .ok_or_else(|| {
                 RpcFailure::new("nothing_to_undo", "lineage history has no prior entry")
             })?;
         validate_session_semantics(&candidate)?;
+        let result = snapshot_value(&candidate)?;
         self.session = Some(candidate);
-        Ok(json!({ "identity": identity_value(identity) }))
+        Ok(result)
     }
 
     fn redo(&mut self, params: &ExpectedParams) -> Result<Value, RpcFailure> {
         self.ensure_expected(params.expected)?;
         let mut candidate = self.session()?.clone();
-        let identity = candidate
+        candidate
             .redo()
             .map_err(RpcFailure::lineage)?
             .ok_or_else(|| {
                 RpcFailure::new("nothing_to_redo", "lineage history has no later entry")
             })?;
         validate_session_semantics(&candidate)?;
+        let result = snapshot_value(&candidate)?;
         self.session = Some(candidate);
-        Ok(json!({ "identity": identity_value(identity) }))
+        Ok(result)
     }
 
     #[allow(
@@ -1457,12 +1459,28 @@ mod tests {
             json!({ "expected": snapshot["result"]["identity"] }),
         );
         assert_eq!(undone["ok"], true);
+        assert_eq!(
+            undone["result"]["evaluation_policy"],
+            "strict_chronological"
+        );
+        assert_eq!(undone["result"]["latest_attempt"]["disposition"], "pending");
+        assert_eq!(undone["result"]["can_redo"], true);
         let restored = request(&mut engine, Some(session_id), "inspect", json!({}));
         assert_eq!(
             restored["result"]["evaluation_policy"],
             "strict_chronological"
         );
         assert_eq!(restored["result"]["can_redo"], true);
+        let redone = request(
+            &mut engine,
+            Some(session_id),
+            "redo",
+            json!({ "expected": restored["result"]["identity"] }),
+        );
+        assert_eq!(redone["ok"], true);
+        assert_eq!(redone["result"]["evaluation_policy"], "dependency_local");
+        assert_eq!(redone["result"]["latest_attempt"]["disposition"], "pending");
+        assert_eq!(redone["result"]["can_undo"], true);
     }
 
     #[test]
@@ -1627,6 +1645,8 @@ mod tests {
             json!({ "expected": loaded["result"]["identity"] }),
         );
         assert_eq!(undone["ok"], true, "{undone:#}");
+        assert_eq!(undone["result"]["latest_attempt"]["disposition"], "pending");
+        assert!(undone["result"]["last_accepted"].is_null());
         let inspected = request(
             &mut restored,
             Some(restored_session_id),

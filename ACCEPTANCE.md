@@ -2963,32 +2963,56 @@ that the expanded product has received supervising-human acceptance.
 - [x] M83-W2 passes for every current `DocumentConstraintDefinition` and
   `DocumentDimensionDefinition`, including Driving/Reference modes, source/scalar ownership,
   suppression, annotation keys and all explicit orientations/sides. Create/edit/delete,
-  Undo/Redo and cold reload preserve exact identities.
+  Undo/Redo and cold reload preserve exact identities through the closed inventory-driven
+  lifecycle matrix; genuine coordinator materialization covers representative constraint and
+  dimension families rather than claiming a separate runtime replay for every catalog row.
 - [x] M83-W3 passes for every current curve-control/property family, rational ordinary/projective
   mode, arc/ellipse sweep, hyperbola branch, NURBS gauge, contact/tangency/Fillet/Offset branch,
   Profile/Construction role and activation state. Each writable value rewrites its declared owner;
-  existing read-only ownership reasons remain enforced.
+  existing read-only ownership reasons remain enforced. Catalog closure and generic lifecycle
+  mechanics are exhaustive; genuine coordinator materialization is representative.
 - [x] M83-W4 passes for `Split`, `Break`, `Trim`, `Extend`, `Mirror`, `Chamfer`,
   `AssociativeFillet`, `Rectangle`, `RegularPolygon`, `Slot`, `LinearPattern` and `ProfileOffset`.
   Each stores typed inputs/parameters and complete created/continued/retired identity evidence;
-  whole-step deletion is exact and live dependents require an explicit typed cascade/rebind.
+  all 12 genuinely publish and cold-rematerialize. Representative delete/rebind/order cases plus
+  generic lineage lifecycle mechanics prove exact whole-step deletion and explicit dependent
+  cascade/rebind behavior.
 - [x] M83-W5 passes for native Fillet/Profile Offset and computed `FilletSet`. Stable native
   outputs and stable computed feature/corner ports survive source/parameter rematerialization;
   generated computed fragments remain revision-local. Deleting each action removes exactly its
-  complete owned intent/materialization without affecting unrelated identities.
+  complete owned intent/materialization without affecting unrelated identities. Consecutive native
+  Fillets, host-only radius inputs, Undo/divergence and prepared-plan/ID/topology forgeries are
+  covered at the owning coordinator and sketch boundaries.
 - [x] M83-W6 proves accepted direct manipulation emits one exact-revision atomic `RewriteSteps`
   transaction containing every affected recipe/relation/dimension/operation/feature/import owner.
   No Move step, partial owner update, inferred discrete branch or sampled derived-coordinate write
-  may publish. Cold independent reproduction must match the accepted projection.
-- [x] A structurally valid explicit edit whose downstream evaluation fails advances retained
-  lineage/history once while preserving the previous complete accepted lineage/materialization,
-  accepted revision and live allocator authority. Projected editing cannot use the stale reverse
-  map. Undo/Redo restores exact programs/reservations; stale, cancelled, exhausted, malformed,
-  non-finite and ID-exhausted requests record and publish nothing.
+  may publish. Genuine cold evidence must match the accepted projection; a different valid
+  underconstrained witness with identical topology rejects atomically and remains retryable.
+- [x] A structurally valid explicit edit whose strict cold downstream evaluation fails advances
+  retained lineage/history once while preserving the previous complete accepted lineage/
+  materialization, accepted revision and live allocator authority. A provisional live rejection
+  that strict replay accepts instead promotes that same design/attempt with canonical cold geometry
+  and one new accepted revision; a live success that strict replay rejects cannot publish.
+  Projected editing cannot use the stale reverse map. Undo/Redo restores exact programs/
+  reservations; stale, cancelled, exhausted, malformed, non-finite and ID-exhausted requests
+  record and publish nothing. Post-refresh checkpoint failure restores auxiliary lineage high-water
+  with every flat/feature owner, and legacy flat reload publishes only after its final checkpoint
+  and imported lineage have both been staged successfully. Feature-only create/configure/delete/
+  suppress publication authenticates strict-cold sketch authority in the same transaction: an
+  identical sketch retains the exact held computed revision, while different cold bytes replace
+  the sketch and rebuild computed output before any owner publishes. Only exact canonical accepted
+  bytes preserve an accepted identity; any byte change allocates the next revision, including
+  signed-zero changes hidden by numeric equality. The legacy same-byte shortcut is legal only when
+  live revision lifecycle covers the saved high-water. Inferred construction prepares strict
+  replay, accepted replacement, computed refresh, final checkpoint and lineage high-water before
+  positive acknowledgement and reports the final canonical accepted identity for both ordinary and
+  controlled publication.
 - [x] `StrictChronological` cold evaluation is the correctness oracle. M83-W7 differential tests
   prove `DependencyLocal` produces identical accepted/failure authority, canonical sketch and
   feature digests, logical/materialized identities, ownership, branch state and hard-validity
-  evidence after every supported edit class; only policy telemetry/work counts may differ.
+  evidence after every supported edit class; only policy telemetry/work counts may differ. Ordinary
+  publication consults the oracle regardless of provisional live disposition, and returned
+  accepted identity is derived only after replacement or promotion completes.
 - [x] Every topology-sensitive step consumes authenticated current upstream materialization, every
   attempt carries exact lineage/external-input stamps and work/cancellation state, and exact CAS
   prevents stale or partial publication under both evaluation policies.
@@ -2998,7 +3022,10 @@ that the expanded product has received supervising-human acceptance.
 - [x] M83-W9 migrates every workspace version v1-v6 through its existing strict decoder and an
   honest `ImportedBaseline`. Exact state available in each version—including retained-versus-
   accepted authority, sketch IDs/high-waters, computed `FilletSet` intent/high-waters, external
-  state and annotations—is preserved without fictional recipes, events or pre-import history.
+  state and annotations—is preserved without fictional recipes, events or pre-import history. The
+  six checked-in historical-schema rows are 20,950 bytes with SHA-256
+  `af5e6398578dc02bc37df0a4ad8b9b0ff96295c98e6dff3992db652b4d29d4a1`; each re-encodes and
+  cache-free reloads through cold v7 authority.
 - [x] Workspace-v7 flat sketch/feature/map cache data is accepted only after lineage/input/
   namespace/high-water/identity/provenance/independent-validity verification. Missing, corrupt,
   stale or swapped cache data is discarded; a cold rebuild reproduces the same accepted authority.
@@ -3010,10 +3037,18 @@ that the expanded product has received supervising-human acceptance.
   retained failure, atomic structural owner rewrite, Undo/Redo, inspect and export, including
   canonical replies and final retained/accepted session authority. The coordinator's distinct
   projected multi-owner reconciliation remains owned by M83-W6. Worker/Node-like initialization
-  passes.
-- [x] M83-W11 instrumentation proves every current persistent workbench mutation routes through
-  lineage, no writable flat side path or nested user history remains, and a cache-free reload
-  reconstructs the same accepted scene and feature state.
+  passes. Stable error classes cover wrong-kind ports, invalid transitions and ID/revision
+  exhaustion. Under M83-F031, the TypeScript client uses closed method-indexed parameters/results,
+  validates exact envelope/result shape, immutable serialized request and retained-CAS correlation,
+  load/import authority/lifecycle postconditions, closed error codes and bounded evaluation-plan/
+  cross-field consistency, and preserves its prior session after any malformed reply. An outgoing
+  request above the shared 16 MiB UTF-8 bound is rejected before transport. Type and runtime package
+  checks pass on the development worktree. The frozen
+  transcript is 28 responses, 117,156 bytes and FNV-1a `7063e9c6b5b5248c`.
+- [x] M83-W11's closed source-route inventory plus all-operation and representative dynamic tests
+  prove every admitted persistent workbench route enters or restores lineage, no writable flat side
+  path or nested user history remains, and a cache-free reload reconstructs the same accepted scene
+  and feature state. This is not described as dynamic browser instrumentation of every catalog row.
 - [ ] Focused M83-W1–W11 tests pass with unchanged sketch/operation/topology/feature/editor/
   persistence suites and reviewed 271-row golden authority. Formatting/diff hygiene,
   warnings-denied workspace Clippy/Rustdoc, locked all-feature tests, native/WASM parity,

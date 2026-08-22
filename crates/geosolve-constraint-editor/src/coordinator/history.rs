@@ -11,8 +11,9 @@ use super::{
     ComputedEvaluationAllocator, ComputedFeatureDocument, ComputedFeatureEvaluationState,
     CoordinatorError, DocumentParameterTarget, MutationOutcome, OperationOutcome, ReplayAction,
     RestoreCheckpoint, RetainedEditorCoordinator, RetainedSketchDocumentSession, SketchDocument,
-    SketchLifecycleRevisionHighWater, bounded_geometry_control, dimension_target_scalar,
-    evaluate_computed_features,
+    SketchLifecycleRevisionHighWater, StagedSketchFeaturePublication, bounded_geometry_control,
+    dimension_target_scalar, evaluate_computed_features,
+    replace_session_accepted_from_lineage_evidence,
 };
 
 impl RetainedEditorCoordinator {
@@ -55,36 +56,143 @@ impl RetainedEditorCoordinator {
         Ok(promoted)
     }
 
-    pub(super) fn stage_feature_mutation_checkpoint(
+    /// Stages a computed-feature-only action against a canonical cold sketch.
+    ///
+    /// Feature intent does not alter retained sketch topology, but recording the
+    /// action still performs a fresh strict lineage evaluation.  That evaluation
+    /// may select a different valid solution for an underconstrained imported
+    /// baseline, so its accepted evidence and the computed snapshot must publish
+    /// together rather than leaving the pre-action live sketch cache in place.
+    pub(super) fn stage_feature_mutation_publication(
         &self,
         features: &ComputedFeatureDocument,
-    ) -> Result<RestoreCheckpoint, CoordinatorError> {
-        checkpoint(&self.session, features, &self.computed_evaluation_allocator)
+        provisional_allocator: &ComputedEvaluationAllocator,
+        provisional_snapshot: &super::ComputedFeatureSnapshot,
+        replay: &ReplayAction,
+    ) -> Result<StagedSketchFeaturePublication, CoordinatorError> {
+        self.stage_sketch_feature_mutation_publication(
+            self.session.clone(),
+            features,
+            provisional_allocator,
+            provisional_snapshot,
+            replay,
+        )
     }
 
-    pub(super) fn stage_feature_mutation_lineage(
+    /// Stages a sketch-changing action that also carries computed-feature
+    /// state. Strict cold lineage evaluation owns accepted geometry. Exact
+    /// provisional computed evidence is retained when its accepted sketch
+    /// bytes already equal that authority; otherwise output and allocator are
+    /// rebuilt from the canonical session. The action is then recorded a
+    /// second time from the untouched live lineage so the final checkpoint and
+    /// authority enter history atomically.
+    pub(super) fn stage_sketch_feature_mutation_publication(
         &self,
-        next: &RestoreCheckpoint,
+        mut session: RetainedSketchDocumentSession,
+        features: &ComputedFeatureDocument,
+        provisional_allocator: &ComputedEvaluationAllocator,
+        provisional_snapshot: &super::ComputedFeatureSnapshot,
         replay: &ReplayAction,
-    ) -> Result<CoordinatorLineage, CoordinatorError> {
-        // Flat checkpoints are disposable materialization caches. Always
-        // authenticate the mutation against the live retained domains rather
-        // than trusting a historical cache slot as design authority.
+    ) -> Result<StagedSketchFeaturePublication, CoordinatorError> {
         let previous = checkpoint(
             &self.session,
             &self.features,
             &self.computed_evaluation_allocator,
         )?;
-        let mut lineage = self.lineage.clone();
-        lineage.record(
-            replay,
-            self.editor.geometry_tool_variant(),
-            &previous,
-            next,
-            self.session.parameter_batch(),
-            self.session.external_snapshot_set(),
-        )?;
-        Ok(lineage)
+        let provisional = checkpoint(&session, features, provisional_allocator)?;
+        let original_lineage = self.lineage.clone();
+        let mut first_lineage = original_lineage.clone();
+        let first_evaluation = first_lineage
+            .record(
+                replay,
+                self.editor.geometry_tool_variant(),
+                &previous,
+                &provisional,
+                session.parameter_batch(),
+                session.external_snapshot_set(),
+            )?
+            .ok_or_else(|| {
+                CoordinatorError::Lineage(
+                    "accepted sketch-feature mutation produced rejected cold lineage evidence"
+                        .into(),
+                )
+            })?;
+        let provisional_accepted_matches_cold = provisional.accepted_belongs_to_current_design()
+            && provisional.accepted_json() == Some(first_evaluation.accepted_sketch_json())
+            && provisional.accepted_uses_draft_v5() == first_evaluation.accepted_uses_draft_v5();
+        let (computed_evaluation_allocator, computed_snapshot) =
+            if provisional_accepted_matches_cold {
+                let accepted_input = session.accepted_prepared_input().ok_or_else(|| {
+                    CoordinatorError::Lineage(
+                        "accepted sketch-feature mutation lost its provisional accepted input"
+                            .into(),
+                    )
+                })?;
+                if provisional_snapshot.input().sketch != accepted_input
+                    || provisional_snapshot.input().features != features.identity()
+                {
+                    return Err(CoordinatorError::Lineage(
+                        "accepted sketch-feature mutation carried stale provisional computed output"
+                            .into(),
+                    ));
+                }
+                (provisional_allocator.clone(), provisional_snapshot.clone())
+            } else {
+                replace_session_accepted_from_lineage_evidence(
+                    &mut session,
+                    Some(&first_evaluation),
+                )?;
+                let mut allocator = self.computed_evaluation_allocator.clone();
+                let evaluated = evaluate_computed_features(
+                    &session,
+                    features,
+                    &mut allocator,
+                    bounded_geometry_control(),
+                )?;
+                let OperationOutcome::Completed {
+                    value: snapshot, ..
+                } = evaluated
+                else {
+                    return Err(CoordinatorError::ComputedFeatureWorkStopped);
+                };
+                (allocator, snapshot)
+            };
+        let checkpoint = checkpoint(&session, features, &computed_evaluation_allocator)?;
+
+        let mut lineage = original_lineage;
+        let final_evaluation = lineage
+            .record(
+                replay,
+                self.editor.geometry_tool_variant(),
+                &previous,
+                &checkpoint,
+                session.parameter_batch(),
+                session.external_snapshot_set(),
+            )?
+            .ok_or_else(|| {
+                CoordinatorError::Lineage(
+                    "canonical sketch-feature mutation became rejected during final lineage recording"
+                        .into(),
+                )
+            })?;
+        if final_evaluation.accepted_sketch_json() != first_evaluation.accepted_sketch_json()
+            || final_evaluation.accepted_uses_draft_v5()
+                != first_evaluation.accepted_uses_draft_v5()
+        {
+            return Err(CoordinatorError::Lineage(
+                "canonical sketch-feature accepted geometry changed during final lineage recording"
+                    .into(),
+            ));
+        }
+        lineage
+            .retain_computed_evaluation_high_water(checkpoint.computed_evaluation_high_water())?;
+        Ok(StagedSketchFeaturePublication {
+            lineage,
+            session,
+            computed_evaluation_allocator,
+            computed_snapshot,
+            checkpoint,
+        })
     }
 
     /// Stages one direct-manipulation owner rewrite and proves it through a
@@ -231,6 +339,23 @@ impl RetainedEditorCoordinator {
         self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.reconcile_selection();
+    }
+
+    /// Atomically installs a feature-only publication after its sketch and
+    /// computed output have both been rebuilt from strict-cold authority.
+    pub(super) fn publish_staged_computed_feature_mutation(
+        &mut self,
+        staged: StagedSketchFeaturePublication,
+        features: ComputedFeatureDocument,
+        replay: ReplayAction,
+    ) {
+        self.session = staged.session;
+        self.features = features;
+        self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
+        self.computed_input = Some(staged.computed_snapshot.input());
+        self.computed_snapshot = Some(staged.computed_snapshot);
+        self.computed_evaluation_problem = None;
+        self.publish_staged_feature_mutation(staged.lineage, staged.checkpoint, replay);
     }
 }
 
@@ -535,8 +660,12 @@ pub(super) fn restore_sketch_checkpoint_from_lineage(
         return Ok(evaluated);
     }
 
-    let Some((accepted_checkpoint, accepted_inputs, _embedded_accepted_baseline)) =
-        lineage.materialize_last_accepted_with_inputs()?
+    let Some((
+        _accepted_checkpoint,
+        accepted_inputs,
+        _embedded_accepted_baseline,
+        accepted_evidence,
+    )) = lineage.materialize_last_accepted_with_inputs()?
     else {
         evaluated.retain_persistent_identity_high_water(&high_water)?;
         return Ok(evaluated);
@@ -545,32 +674,15 @@ pub(super) fn restore_sketch_checkpoint_from_lineage(
         Some(accepted_inputs.parameters()),
         Some(accepted_inputs.snapshots()),
     )?;
-    let accepted_checkpoint = accepted_checkpoint.into_restore_checkpoint();
     let mut accepted_design = checkpoint_document_from_json(
-        accepted_checkpoint.design_json(),
-        accepted_checkpoint.design_uses_draft_v5(),
+        accepted_evidence.accepted_sketch_json(),
+        accepted_evidence.accepted_uses_draft_v5(),
     )?;
     accepted_design.retain_persistent_identity_high_water(&high_water)?;
-    let accepted_evaluation = RetainedSketchDocumentSession::restore_design_with_inputs(
-        accepted_design,
-        revisions,
-        accepted_inputs.parameters().clone(),
-        accepted_inputs.snapshots().clone(),
-        request,
-        solver_config,
-    )?;
-    let accepted = accepted_evaluation
-        .accepted_state_for_current_input()
-        .ok_or_else(|| {
-            CoordinatorError::Lineage(
-                "last-accepted lineage program did not independently reproduce accepted sketch authority"
-                    .into(),
-            )
-        })?;
     let mut restored =
         RetainedSketchDocumentSession::restore_design_with_accepted_and_distinct_inputs(
             design,
-            accepted.document().clone(),
+            accepted_design,
             revisions,
             parameters,
             snapshots,

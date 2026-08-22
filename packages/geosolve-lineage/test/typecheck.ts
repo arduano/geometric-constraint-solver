@@ -89,7 +89,12 @@ const response = client.call("evaluate", {
   host_inputs: hostInputs,
 });
 if (response.ok) {
-  void response.result;
+  void response.result.disposition;
+  if (response.result.disposition === "accepted") {
+    void response.result.evidence.materialization_digest;
+  } else {
+    void response.result.evidence.code;
+  }
   // @ts-expect-error a successful envelope cannot contain an error branch
   void response.error;
 } else {
@@ -97,6 +102,55 @@ if (response.ok) {
   // @ts-expect-error a failed envelope cannot contain a result branch
   void response.result;
 }
+const snapshot = client.call("inspect", {});
+if (snapshot.ok) {
+  void snapshot.result.can_undo;
+  void snapshot.result.document;
+  // @ts-expect-error inspect returns a snapshot, not an export payload
+  void snapshot.result.session_json;
+}
+const mutation = client.call("mutate", { patch: patch.patch() });
+if (mutation.ok) {
+  void mutation.result.inserted_steps;
+  // @ts-expect-error mutate returns mutation evidence, not a snapshot
+  void mutation.result.can_undo;
+}
+const undone = client.call("undo", { expected: identity });
+if (undone.ok) {
+  void undone.result.evaluation_policy;
+  void undone.result.last_accepted;
+  // @ts-expect-error Undo returns restored snapshot authority, not mutation evidence
+  void undone.result.tombstoned_steps;
+}
+const exported = client.call("export", {});
+if (exported.ok) {
+  void exported.result.session_json;
+  // @ts-expect-error export does not return lineage-only JSON
+  void exported.result.lineage_json;
+}
+// @ts-expect-error inspect accepts no fields
+void client.call("inspect", { unexpected: true });
+// @ts-expect-error load requires session_json
+void client.call("load", {});
+// @ts-expect-error evaluate requires host_inputs
+void client.call("evaluate", { expected: identity });
+// @ts-expect-error set_policy accepts only registered policy keys
+void client.call("set_policy", { expected: identity, policy: "future" });
+// @ts-expect-error mutate requires the closed Rust LineagePatch shape
+void client.call("mutate", { patch: null });
+void client.call("rewrite_owners", {
+  // @ts-expect-error mutation kinds and fields are closed
+  patch: { expected: identity, mutations: [{ kind: "future_mutation" }] },
+});
+void client.call("rewrite_owners", {
+  patch: {
+    expected: identity,
+    // @ts-expect-error rewrite_owners accepts only existing-step rewrite mutations
+    mutations: [{ kind: "tombstone", step: "0000000000000001" }],
+  },
+});
+// @ts-expect-error callers cannot select an arbitrary asserted result type
+void client.call<{ readonly forged: true }>("inspect", {});
 // @ts-expect-error caller-certified acceptance is not part of the closed RPC surface
 void client.call("accept", {});
 // @ts-expect-error caller-certified rejection is not part of the closed RPC surface

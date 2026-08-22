@@ -21,22 +21,24 @@ use std::sync::{
 use geosolve_sketch_lineage::{
     ImportedBaselineAction, ImportedBaselineEncoding, LineageActionDefinition, LineageActionKind,
     LineageAuxiliaryHighWater, LineageDeveloperKey, LineageDigest, LineageDocument,
-    LineageDocumentId, LineageDocumentIdentity, LineageInputBinding, LineageMaterializationMap,
-    LineageMaterializationMapError, LineageMaterializedIdentity, LineageMaterializedLeaf,
-    LineageMutation, LineageOpaqueId, LineageOutput, LineageOutputId, LineageOutputIdentity,
-    LineageOutputIdentityFlow, LineageOutputKind, LineageOutputRef, LineagePatch,
-    LineageReservation, LineageReservationId, LineageReservationKind, LineageSemanticKey,
-    LineageSession, LineageStep, LineageStepId, LineageStepRewrite, LineageWritableLeaf,
-    VersionedActionPayload, lineage_content_digest,
+    LineageDocumentId, LineageDocumentIdentity, LineageEvaluationDisposition, LineageInputBinding,
+    LineageMaterializationMap, LineageMaterializationMapError, LineageMaterializedIdentity,
+    LineageMaterializedLeaf, LineageMutation, LineageOpaqueId, LineageOutput, LineageOutputId,
+    LineageOutputIdentity, LineageOutputIdentityFlow, LineageOutputKind, LineageOutputRef,
+    LineagePatch, LineageReservation, LineageReservationId, LineageReservationKind,
+    LineageSemanticKey, LineageSession, LineageStep, LineageStepId, LineageStepRewrite,
+    LineageWritableLeaf, VersionedActionPayload, lineage_content_digest,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use thiserror::Error;
 
+use super::history::checkpoint;
 use super::lineage_evaluation::LineageDomainEvaluationEvidence;
 use super::{
-    CoordinatorError, ExternalSnapshotSet, MutationOutcome, ParameterBatch, ReplayAction,
-    RestoreCheckpoint, RetainedEditorCoordinator,
+    CoordinatorError, ExternalSnapshotSet, MutationOutcome, OperationOutcome, ParameterBatch,
+    ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator, bounded_geometry_control,
+    evaluate_computed_features,
 };
 use crate::{GeometryToolVariant, SelectionItem};
 use host_inputs::{DecodedLineageHostInputs, LineageHostInputLedger, LineageHostInputProvenance};
@@ -238,27 +240,8 @@ impl LineageCheckpoint {
     }
 
     fn structural_value(&self) -> Result<Value, LineageBridgeError> {
-        let document = serde_json::from_str::<Value>(&self.design_json)?;
-        let document = if self.design_is_draft_v5 {
-            document
-        } else {
-            // The persistent sketch codec deliberately chooses canonical-v4
-            // whenever the current document fits that closed language. Lineage
-            // diffs need one semantic shape across a later transition into the
-            // extended draft-v5 side tables, otherwise one geometry-role edit
-            // looks like removal and reinsertion of the complete sketch.
-            serde_json::json!({
-                "version": 5,
-                "document": document,
-                "geometry_roles": [],
-                "user_inactive_elements": [],
-                "host_activation": null,
-                "parameters": [],
-                "parameter_bindings": [],
-                "parameter_outputs": [],
-                "external_bindings": [],
-            })
-        };
+        let document =
+            normalized_sketch_document_value(&self.design_json, self.design_is_draft_v5)?;
         Ok(serde_json::json!({
             "design": {
                 "document": document,
@@ -540,6 +523,58 @@ impl LineageCheckpoint {
         Ok(semantic_structural_value(self)?
             == semantic_structural_value(&Self::capture(checkpoint))?)
     }
+}
+
+fn normalized_sketch_document_value(
+    json: &str,
+    is_draft_v5: bool,
+) -> Result<Value, LineageBridgeError> {
+    let document = serde_json::from_str::<Value>(json)?;
+    if is_draft_v5 {
+        return Ok(document);
+    }
+    // The persistent sketch codec deliberately chooses canonical-v4 whenever
+    // the current document fits that closed language. Lineage comparisons need
+    // one semantic shape across a later transition into the extended draft-v5
+    // side tables, otherwise one role or host-binding edit looks like removal
+    // and reinsertion of the complete sketch.
+    Ok(serde_json::json!({
+        "version": 5,
+        "document": document,
+        "geometry_roles": [],
+        "user_inactive_elements": [],
+        "host_activation": null,
+        "parameters": [],
+        "parameter_bindings": [],
+        "parameter_outputs": [],
+        "external_bindings": [],
+    }))
+}
+
+fn semantic_accepted_sketch_value(
+    json: &str,
+    is_draft_v5: bool,
+) -> Result<Value, LineageBridgeError> {
+    let mut value = normalized_sketch_document_value(json, is_draft_v5)?;
+    let document = value
+        .as_object_mut()
+        .ok_or(LineageBridgeError::InvalidMaterialization(
+            "accepted sketch materialization must be an object",
+        ))?;
+    strip_design_allocator_fields(document)?;
+    Ok(value)
+}
+
+fn accepted_materialization_semantically_matches(
+    expected_json: &str,
+    expected_is_draft_v5: bool,
+    evaluated_json: &str,
+    evaluated_is_draft_v5: bool,
+) -> Result<bool, LineageBridgeError> {
+    Ok(
+        semantic_accepted_sketch_value(expected_json, expected_is_draft_v5)?
+            == semantic_accepted_sketch_value(evaluated_json, evaluated_is_draft_v5)?,
+    )
 }
 
 fn semantic_structural_value(checkpoint: &LineageCheckpoint) -> Result<Value, LineageBridgeError> {
@@ -923,13 +958,31 @@ impl CoordinatorLineage {
             mismatch_next_direct_reproduction: Arc::new(AtomicBool::new(false)),
         };
         value.retain_computed_evaluation_high_water(checkpoint.computed_evaluation_high_water())?;
-        if accepted_current || checkpoint.accepted_json().is_none() {
-            value.record_evaluation(
+        if accepted_current {
+            let expected_accepted = checkpoint
+                .accepted_json()
+                .map(|json| (json, checkpoint.accepted_uses_draft_v5()))
+                .ok_or(LineageBridgeError::AcceptedMaterializationMismatch)?;
+            match value.record_evaluation(
                 parameters,
                 snapshots,
-                accepted_current,
+                true,
                 allocators.next_step_id,
-            )?;
+                Some(expected_accepted),
+            ) {
+                Ok(_) => {}
+                Err(
+                    LineageBridgeError::AcceptedMaterializationMismatch
+                    | LineageBridgeError::AcceptedEvaluationRejected(_),
+                ) => value.record_embedded_imported_accepted_evaluation(
+                    parameters,
+                    snapshots,
+                    expected_accepted,
+                )?,
+                Err(error) => return Err(error),
+            }
+        } else if checkpoint.accepted_json().is_none() {
+            value.record_evaluation(parameters, snapshots, false, allocators.next_step_id, None)?;
         } else {
             let accepted_parameters =
                 accepted_parameters.ok_or(LineageBridgeError::AcceptedExternalInputMismatch)?;
@@ -952,6 +1005,16 @@ impl CoordinatorLineage {
             if accepted.external_inputs() != &accepted_inputs {
                 return Err(LineageBridgeError::AcceptedExternalInputMismatch);
             }
+            if !accepted_materialization_semantically_matches(
+                checkpoint
+                    .accepted_json()
+                    .ok_or(LineageBridgeError::AcceptedMaterializationMismatch)?,
+                checkpoint.accepted_uses_draft_v5(),
+                accepted.accepted_sketch_json(),
+                accepted.accepted_uses_draft_v5(),
+            )? {
+                return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+            }
             value.session.accept_current(
                 value.session.identity(),
                 Some(accepted_inputs),
@@ -963,7 +1026,7 @@ impl CoordinatorLineage {
                 accepted_snapshots,
                 &required,
             )?;
-            value.record_evaluation(parameters, snapshots, false, allocators.next_step_id)?;
+            value.record_evaluation(parameters, snapshots, false, allocators.next_step_id, None)?;
         }
         Ok(value)
     }
@@ -1151,7 +1214,7 @@ impl CoordinatorLineage {
         after: &RestoreCheckpoint,
         parameters: &ParameterBatch,
         snapshots: &ExternalSnapshotSet,
-    ) -> Result<(), LineageBridgeError> {
+    ) -> Result<Option<LineageDomainEvaluationEvidence>, LineageBridgeError> {
         self.record_with_owner_mode(
             replay,
             variant,
@@ -1161,7 +1224,6 @@ impl CoordinatorLineage {
             snapshots,
             OwnerRewriteMode::Ordinary,
         )
-        .map(|_| ())
     }
 
     pub(super) fn direct_manipulation_has_authored_change(
@@ -1314,11 +1376,14 @@ impl CoordinatorLineage {
             self.host_input_ledger = previous_ledger;
             return Err(LineageBridgeError::ReproductionMismatch);
         }
+        let accepted_current =
+            after.accepted_belongs_to_current_design() && after.accepted_json().is_some();
         let evaluation = match self.record_evaluation(
             parameters,
             snapshots,
-            after.accepted_belongs_to_current_design() && after.accepted_json().is_some(),
+            accepted_current,
             failed_step.unwrap_or_else(|| self.session.document().steps()[0].id),
+            None,
         ) {
             Ok(evaluation) => evaluation,
             Err(error) => {
@@ -1344,7 +1409,7 @@ impl CoordinatorLineage {
         after: &RestoreCheckpoint,
         parameters: &ParameterBatch,
         snapshots: &ExternalSnapshotSet,
-    ) -> Result<LineageStepId, LineageBridgeError> {
+    ) -> Result<Option<LineageDomainEvaluationEvidence>, LineageBridgeError> {
         if !self.materialize()?.semantically_matches(before)? {
             return Err(LineageBridgeError::ReproductionMismatch);
         }
@@ -1423,16 +1488,17 @@ impl CoordinatorLineage {
             self.host_input_ledger = previous_ledger;
             return Err(LineageBridgeError::ReproductionMismatch);
         }
-        if let Err(error) = self.record_evaluation(
-            parameters,
-            snapshots,
-            after.accepted_belongs_to_current_design() && after.accepted_json().is_some(),
-            step_id,
-        ) {
-            self.session = previous;
-            self.host_input_ledger = previous_ledger;
-            return Err(error);
-        }
+        let accepted_current =
+            after.accepted_belongs_to_current_design() && after.accepted_json().is_some();
+        let evaluation =
+            match self.record_evaluation(parameters, snapshots, accepted_current, step_id, None) {
+                Ok(evaluation) => evaluation,
+                Err(error) => {
+                    self.session = previous;
+                    self.host_input_ledger = previous_ledger;
+                    return Err(error);
+                }
+            };
         if let Err(error) =
             self.retain_computed_evaluation_high_water(after.computed_evaluation_high_water())
         {
@@ -1440,7 +1506,7 @@ impl CoordinatorLineage {
             self.host_input_ledger = previous_ledger;
             return Err(error);
         }
-        Ok(step_id)
+        Ok(evaluation)
     }
 
     fn complete_deleted_owner_steps(
@@ -1604,7 +1670,18 @@ impl CoordinatorLineage {
                 "unsupported imported-baseline bridge version",
             ));
         }
-        let Some(provenance) = imported.accepted_host_inputs else {
+        let provenance = if let Some(provenance) = imported.accepted_host_inputs {
+            provenance
+        } else if imported.checkpoint.accepted_belongs_to_current_design
+            && imported.checkpoint.accepted_json.is_some()
+        {
+            // An honest current-design flat-session import may carry an exact
+            // independently certified accepted graph whose coordinates differ
+            // from its retained seeds. Its current host provenance is already
+            // the baseline's authored input provenance; no duplicate sidecar
+            // payload is needed merely to authenticate that accepted branch.
+            imported.host_inputs
+        } else {
             return Ok(None);
         };
         let checkpoint = imported
@@ -1962,8 +2039,15 @@ impl CoordinatorLineage {
 
     pub(super) fn materialize_last_accepted_with_inputs(
         &self,
-    ) -> Result<Option<(LineageCheckpoint, DecodedLineageHostInputs, bool)>, LineageBridgeError>
-    {
+    ) -> Result<
+        Option<(
+            LineageCheckpoint,
+            DecodedLineageHostInputs,
+            bool,
+            LineageDomainEvaluationEvidence,
+        )>,
+        LineageBridgeError,
+    > {
         let Some(document) = self.session.last_accepted_document() else {
             return Ok(None);
         };
@@ -2000,15 +2084,13 @@ impl CoordinatorLineage {
             prefix.host_inputs
         };
         let evaluation_session = LineageSession::new(document.clone())?;
-        if super::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
+        if let Ok(evaluation) = super::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
             &evaluation_session,
             inputs.parameters(),
             inputs.snapshots(),
-        )
-        .is_ok_and(|evaluation| {
-            evaluation.materialization_digest() == authority.materialization_digest
-        }) {
-            return Ok(Some((prefix.checkpoint, inputs, false)));
+        ) && evaluation.materialization_digest() == authority.materialization_digest
+        {
+            return Ok(Some((prefix.checkpoint, inputs, false, evaluation)));
         }
         let embedded = super::lineage_evaluation::
             evaluate_lineage_embedded_accepted_baseline_cold_with_inputs(
@@ -2039,7 +2121,54 @@ impl CoordinatorLineage {
         if &embedded_stamp != stamp || embedded_prefix.host_inputs != inputs {
             return Err(LineageBridgeError::AcceptedExternalInputMismatch);
         }
-        Ok(Some((embedded_prefix.checkpoint, inputs, true)))
+        let [baseline] = document.steps() else {
+            return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+        };
+        let LineageActionDefinition::ImportedBaseline { baseline } = &baseline.action else {
+            return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+        };
+        let imported: ImportedCoordinatorBaseline = serde_json::from_str(&baseline.payload)?;
+        let embedded_is_distinct_historical =
+            !imported.checkpoint.accepted_belongs_to_current_design;
+        Ok(Some((
+            embedded_prefix.checkpoint,
+            inputs,
+            embedded_is_distinct_historical,
+            embedded,
+        )))
+    }
+
+    pub(super) fn cold_historical_accepted_evidence_checkpoint(
+        &self,
+    ) -> Result<Option<LineageCheckpoint>, LineageBridgeError> {
+        let Some((mut checkpoint, _inputs, _embedded_accepted_baseline, evidence)) =
+            self.materialize_last_accepted_with_inputs()?
+        else {
+            return Ok(None);
+        };
+        checkpoint.accepted_json = Some(evidence.accepted_sketch_json().to_owned());
+        checkpoint.accepted_is_draft_v5 = evidence.accepted_uses_draft_v5();
+        checkpoint.accepted_belongs_to_current_design = false;
+        Ok(Some(checkpoint))
+    }
+
+    pub(super) fn cold_current_accepted_evidence_checkpoint(
+        &self,
+        parameters: &ParameterBatch,
+        snapshots: &ExternalSnapshotSet,
+    ) -> Result<Option<LineageCheckpoint>, LineageBridgeError> {
+        let Some(evidence) = self.reproduce_current_accepted_evaluation(parameters, snapshots)?
+        else {
+            return Ok(None);
+        };
+        if evidence.lineage() != self.session.identity() {
+            return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+        }
+        let mut checkpoint = self.materialize()?;
+        checkpoint.accepted_json = Some(evidence.accepted_sketch_json().to_owned());
+        checkpoint.accepted_is_draft_v5 = evidence.accepted_uses_draft_v5();
+        checkpoint.accepted_belongs_to_current_design = true;
+        Ok(Some(checkpoint))
     }
 
     fn retained_sessions(&self) -> Result<Vec<LineageSession>, LineageBridgeError> {
@@ -2273,6 +2402,30 @@ impl CoordinatorLineage {
         Self::validate_session_accepted_external_inputs(&self.session, parameters, snapshots)
     }
 
+    pub(super) fn current_evaluation_is_accepted(&self) -> bool {
+        self.session.latest_attempt().is_some_and(|attempt| {
+            attempt.target == self.session.identity()
+                && matches!(attempt.disposition, LineageEvaluationDisposition::Accepted)
+        })
+    }
+
+    pub(super) fn retain_validated_visible_accepted_external_inputs(
+        &mut self,
+        parameters: Option<&ParameterBatch>,
+        snapshots: Option<&ExternalSnapshotSet>,
+    ) -> Result<(), LineageBridgeError> {
+        self.validate_accepted_external_inputs(parameters, snapshots)?;
+        match (parameters, snapshots) {
+            (Some(parameters), Some(snapshots)) => {
+                let required = self.accepted_external_input_stamps()?;
+                self.host_input_ledger
+                    .retain_accepted_pair(parameters, snapshots, &required)
+            }
+            (None, None) => Ok(()),
+            _ => Err(LineageBridgeError::AcceptedExternalInputMismatch),
+        }
+    }
+
     pub(super) fn reproduce_current_accepted_evaluation(
         &self,
         parameters: &ParameterBatch,
@@ -2292,30 +2445,9 @@ impl CoordinatorLineage {
             .external_inputs
             .as_ref()
             .ok_or(LineageBridgeError::AcceptedExternalInputMismatch)?;
-        let (_, historical_inputs, embedded_accepted_baseline) = self
+        let (_, _historical_inputs, embedded_accepted_baseline, evaluation) = self
             .materialize_last_accepted_with_inputs()?
             .ok_or(LineageBridgeError::AcceptedExternalInputMismatch)?;
-        let evaluation_session = LineageSession::new(document.clone())?;
-        let evaluation = if embedded_accepted_baseline {
-            super::lineage_evaluation::evaluate_lineage_embedded_accepted_baseline_cold_with_inputs(
-                &evaluation_session,
-                historical_inputs.parameters(),
-                historical_inputs.snapshots(),
-            )
-        } else {
-            super::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
-                &evaluation_session,
-                historical_inputs.parameters(),
-                historical_inputs.snapshots(),
-            )
-        }
-        .map_err(|failure| {
-            LineageBridgeError::AcceptedEvaluationRejected(format!(
-                "{}: {}",
-                failure.code(),
-                failure.message()
-            ))
-        })?;
         if evaluation.external_inputs() != authority_inputs {
             return Err(LineageBridgeError::AcceptedExternalInputMismatch);
         }
@@ -2908,58 +3040,147 @@ impl CoordinatorLineage {
         snapshots: &ExternalSnapshotSet,
         accepted_current: bool,
         failed_step: LineageStepId,
+        expected_accepted: Option<(&str, bool)>,
     ) -> Result<Option<LineageDomainEvaluationEvidence>, LineageBridgeError> {
         let previous_session = self.session.clone();
         let previous_ledger = self.host_input_ledger.clone();
         let result = (|| {
             let identity = self.session.identity();
             let external_inputs = external_input_stamp(parameters, snapshots)?;
-            if accepted_current {
-                // Accepted lineage authority is always the digest of a fresh
-                // owning-domain rebuild. The transaction-local checkpoint remains
-                // useful for retained-intent comparison, but it is not allowed to
-                // self-certify accepted geometry or computed-feature output.
-                // Evaluate the retained program itself, without session-local
-                // auxiliary allocator high-waters. Those cursors protect future
-                // revision-local generated identities but are deliberately not
-                // part of reproducible accepted lineage authority.
-                let evaluation_session = LineageSession::new(self.session.document().clone())?;
-                let evaluation =
-                    super::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
-                        &evaluation_session,
-                        parameters,
-                        snapshots,
-                    )
-                    .map_err(|failure| {
-                        LineageBridgeError::AcceptedEvaluationRejected(format!(
-                            "{}: {}",
-                            failure.code(),
-                            failure.message()
-                        ))
-                    })?;
-                if evaluation.external_inputs() != &external_inputs {
-                    return Err(LineageBridgeError::AcceptedExternalInputMismatch);
+            // Accepted lineage authority is always the result of a fresh
+            // owning-domain rebuild, even when the transaction-local live
+            // solve reported rejection. The live result remains useful as a
+            // staged hint, but it cannot overrule strict chronological
+            // materialization in either direction.
+            //
+            // Evaluate the retained program itself, without session-local
+            // auxiliary allocator high-waters. Those cursors protect future
+            // revision-local generated identities but are deliberately not
+            // part of reproducible accepted lineage authority.
+            let evaluation_session = LineageSession::new(self.session.document().clone())?;
+            let already_accepted_same_authority =
+                self.session.last_accepted().is_some_and(|authority| {
+                    authority.lineage == identity
+                        && authority.external_inputs.as_ref() == Some(&external_inputs)
+                });
+            match super::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
+                &evaluation_session,
+                parameters,
+                snapshots,
+            ) {
+                Ok(evaluation) if accepted_current || !already_accepted_same_authority => {
+                    if evaluation.external_inputs() != &external_inputs {
+                        return Err(LineageBridgeError::AcceptedExternalInputMismatch);
+                    }
+                    if let Some((expected_json, expected_is_draft_v5)) = expected_accepted
+                        && !accepted_materialization_semantically_matches(
+                            expected_json,
+                            expected_is_draft_v5,
+                            evaluation.accepted_sketch_json(),
+                            evaluation.accepted_uses_draft_v5(),
+                        )?
+                    {
+                        return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+                    }
+                    self.session.accept_current(
+                        identity,
+                        Some(external_inputs),
+                        evaluation.materialization_digest(),
+                    )?;
+                    let required = self.accepted_external_input_stamps()?;
+                    self.host_input_ledger
+                        .retain_accepted_pair(parameters, snapshots, &required)?;
+                    Ok(Some(evaluation))
                 }
-                self.session.accept_current(
-                    identity,
-                    Some(external_inputs),
-                    evaluation.materialization_digest(),
-                )?;
-                let required = self.accepted_external_input_stamps()?;
-                self.host_input_ledger
-                    .retain_accepted_pair(parameters, snapshots, &required)?;
-                Ok(Some(evaluation))
-            } else {
-                self.session.reject_current(
-                    identity,
-                    Some(external_inputs),
-                    LineageSemanticKey::new("owning-domain-rejected")?,
-                    vec![failed_step],
-                )?;
-                let required = self.accepted_external_input_stamps()?;
-                self.host_input_ledger.retain_required(&required)?;
-                Ok(None)
+                // A failed no-history solve request (for example a temporary
+                // drag target) is not represented by the lineage program or
+                // immutable host-input stamp. Cold acceptance of the already
+                // accepted same pair therefore cannot authenticate that newer
+                // request. Retain the live rejection after still consulting
+                // the strict oracle.
+                Ok(_) => {
+                    self.session.reject_current(
+                        identity,
+                        Some(external_inputs),
+                        LineageSemanticKey::new("owning-domain-rejected")?,
+                        vec![failed_step],
+                    )?;
+                    let required = self.accepted_external_input_stamps()?;
+                    self.host_input_ledger.retain_required(&required)?;
+                    Ok(None)
+                }
+                Err(failure) if accepted_current => {
+                    Err(LineageBridgeError::AcceptedEvaluationRejected(format!(
+                        "{}: {}",
+                        failure.code(),
+                        failure.message()
+                    )))
+                }
+                Err(failure) => {
+                    let cold_failed_step = failure.failed_step().unwrap_or(failed_step);
+                    self.session.reject_current(
+                        identity,
+                        Some(external_inputs),
+                        LineageSemanticKey::new(failure.diagnostic())?,
+                        vec![cold_failed_step],
+                    )?;
+                    let required = self.accepted_external_input_stamps()?;
+                    self.host_input_ledger.retain_required(&required)?;
+                    Ok(None)
+                }
             }
+        })();
+        if result.is_err() {
+            self.session = previous_session;
+            self.host_input_ledger = previous_ledger;
+        }
+        result
+    }
+
+    fn record_embedded_imported_accepted_evaluation(
+        &mut self,
+        parameters: &ParameterBatch,
+        snapshots: &ExternalSnapshotSet,
+        expected_accepted: (&str, bool),
+    ) -> Result<(), LineageBridgeError> {
+        let previous_session = self.session.clone();
+        let previous_ledger = self.host_input_ledger.clone();
+        let result = (|| {
+            let identity = self.session.identity();
+            let external_inputs = external_input_stamp(parameters, snapshots)?;
+            let evaluation_session = LineageSession::new(self.session.document().clone())?;
+            let evaluation = super::lineage_evaluation::
+                evaluate_lineage_embedded_accepted_baseline_cold_with_inputs(
+                    &evaluation_session,
+                    parameters,
+                    snapshots,
+                )
+                .map_err(|failure| {
+                    LineageBridgeError::AcceptedEvaluationRejected(format!(
+                        "{}: {}",
+                        failure.code(),
+                        failure.message()
+                    ))
+                })?;
+            if evaluation.external_inputs() != &external_inputs {
+                return Err(LineageBridgeError::AcceptedExternalInputMismatch);
+            }
+            if !accepted_materialization_semantically_matches(
+                expected_accepted.0,
+                expected_accepted.1,
+                evaluation.accepted_sketch_json(),
+                evaluation.accepted_uses_draft_v5(),
+            )? {
+                return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+            }
+            self.session.accept_current(
+                identity,
+                Some(external_inputs),
+                evaluation.materialization_digest(),
+            )?;
+            let required = self.accepted_external_input_stamps()?;
+            self.host_input_ledger
+                .retain_accepted_pair(parameters, snapshots, &required)
         })();
         if result.is_err() {
             self.session = previous_session;
@@ -2974,7 +3195,7 @@ impl CoordinatorLineage {
         parameters: &ParameterBatch,
         snapshots: &ExternalSnapshotSet,
         accepted_current: bool,
-    ) -> Result<(), LineageBridgeError> {
+    ) -> Result<Option<LineageDomainEvaluationEvidence>, LineageBridgeError> {
         #[cfg(test)]
         if self
             .reject_next_evaluation_publication
@@ -2991,8 +3212,7 @@ impl CoordinatorLineage {
             .rev()
             .find(|step| matches!(step.state, geosolve_sketch_lineage::LineageStepState::Live))
             .map_or_else(|| self.session.document().steps()[0].id, |step| step.id);
-        self.record_evaluation(parameters, snapshots, accepted_current, failed_step)
-            .map(|_| ())
+        self.record_evaluation(parameters, snapshots, accepted_current, failed_step, None)
     }
 }
 
@@ -3944,17 +4164,58 @@ impl RetainedEditorCoordinator {
         let outcome = proposal
             .apply(&mut trial)
             .map_err(|error| CoordinatorError::Lineage(error.to_string()))?;
-        let result = super::mutation_from(&outcome);
-        let staged = self.stage_construction_publication(trial)?;
+        let mut result = super::mutation_from(&outcome);
+        let mut staged = self.stage_construction_publication(trial)?;
         let previous = self.persistence_checkpoint()?;
-        self.lineage.record_operation(
+        let mut lineage = self.lineage.clone();
+        let evaluation = lineage.record_operation(
             proposal,
             &previous,
             &staged.checkpoint,
             staged.session.parameter_batch(),
             staged.session.external_snapshot_set(),
         )?;
+        if evaluation.is_some() {
+            super::replace_session_accepted_from_lineage_evidence(
+                &mut staged.session,
+                evaluation.as_ref(),
+            )?;
+            let mut allocator = self.computed_evaluation_allocator.clone();
+            let (computed_input, computed_snapshot, computed_evaluation_problem) =
+                match evaluate_computed_features(
+                    &staged.session,
+                    &self.features,
+                    &mut allocator,
+                    bounded_geometry_control(),
+                ) {
+                    Ok(OperationOutcome::Completed { value, .. }) => {
+                        (Some(value.input()), Some(value), None)
+                    }
+                    Ok(stopped) => (
+                        None,
+                        None,
+                        Some(format!(
+                            "computed-feature evaluation stopped: {:?}",
+                            stopped.report().stopping_reason
+                        )),
+                    ),
+                    Err(error) => (None, None, Some(error.to_string())),
+                };
+            staged.computed_evaluation_allocator = allocator;
+            staged.computed_input = computed_input;
+            staged.computed_snapshot = computed_snapshot;
+            staged.computed_evaluation_problem = computed_evaluation_problem;
+            staged.checkpoint = checkpoint(
+                &staged.session,
+                &self.features,
+                &staged.computed_evaluation_allocator,
+            )?;
+            lineage.retain_computed_evaluation_high_water(
+                staged.checkpoint.computed_evaluation_high_water(),
+            )?;
+        }
 
+        self.lineage = lineage;
         self.session = staged.session;
         self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
         self.computed_input = staged.computed_input;
@@ -3966,6 +4227,7 @@ impl RetainedEditorCoordinator {
         self.editor.invalidate_for_retained_state_change(false);
         self.clear_transient();
         self.reconcile_selection();
+        result.published_accepted = self.session.last_attempt().accepted_state_identity();
         Ok(result)
     }
 }
@@ -8137,8 +8399,9 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DocumentEdit, DocumentSolveRequest, GeometryRole,
-        OperationControl, OperationOutcome, RetainedSketchDocumentSession, SketchDocument,
+        CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentEdit,
+        DocumentSolveRequest, ExternalSnapshotSet, GeometryRole, OperationControl,
+        OperationOutcome, ParameterBatch, RetainedSketchDocumentSession, SketchDocument,
         SolverConfig,
     };
     use geosolve_sketch_features::{
@@ -8146,11 +8409,12 @@ mod tests {
     };
     use geosolve_sketch_lineage::{
         LineageActionDefinition, LineageDeveloperKey, LineageDocument, LineageDocumentId,
-        LineageMaterializationMap, LineageMutation, LineageOpaqueId, LineageOutput,
-        LineageOutputId, LineageOutputIdentity, LineageOutputIdentityFlow, LineageOutputKind,
-        LineageOutputRef, LineagePatch, LineageReservation, LineageReservationId,
-        LineageReservationKind, LineageSemanticKey, LineageSession, LineageStep, LineageStepId,
-        LineageStepRewrite, LineageWritableLeaf, VersionedActionPayload,
+        LineageEvaluationDisposition, LineageMaterializationMap, LineageMutation, LineageOpaqueId,
+        LineageOutput, LineageOutputId, LineageOutputIdentity, LineageOutputIdentityFlow,
+        LineageOutputKind, LineageOutputRef, LineagePatch, LineageReservation,
+        LineageReservationId, LineageReservationKind, LineageSemanticKey, LineageSession,
+        LineageStep, LineageStepId, LineageStepRewrite, LineageWritableLeaf,
+        VersionedActionPayload,
     };
     use geosolve_sketch_ops::{
         LineEndpoint, SketchOperationRequest, SketchOperationResult, SketchOperationSnapshot,
@@ -8421,6 +8685,223 @@ mod tests {
             ))
             .expect("bump document revision without changing manifest semantics");
         document
+    }
+
+    #[test]
+    fn live_rejected_valid_checkpoint_publishes_strict_cold_accepted_authority() {
+        let coordinator = coordinator(SketchDocument::new(1.0).expect("document"));
+        let mut lineage = coordinator.lineage.clone();
+        let baseline = lineage.session.document().steps()[0].id;
+        let replacement = with_bumped_label(
+            lineage.session.document().clone(),
+            "live-rejected-cold-accepted",
+        );
+        lineage
+            .session
+            .reconcile(lineage.session.identity(), replacement)
+            .expect("one valid pending lineage checkpoint");
+        let target = lineage.session.identity();
+        let history = (lineage.session.undo_len(), lineage.session.redo_len());
+        assert_eq!(
+            lineage
+                .session
+                .latest_attempt()
+                .expect("pending live checkpoint")
+                .disposition,
+            LineageEvaluationDisposition::Pending
+        );
+
+        let evidence = lineage
+            .record_evaluation(
+                &ParameterBatch::default(),
+                &ExternalSnapshotSet::default(),
+                false,
+                baseline,
+                None,
+            )
+            .expect("strict cold acceptance must overrule the live rejection report")
+            .expect("cold accepted evidence");
+
+        let attempt = lineage
+            .session
+            .latest_attempt()
+            .expect("accepted cold attempt");
+        assert_eq!(attempt.target, target);
+        assert_eq!(attempt.disposition, LineageEvaluationDisposition::Accepted);
+        assert_eq!(
+            attempt.materialization_digest,
+            Some(evidence.materialization_digest())
+        );
+        assert!(attempt.failed_steps.is_empty());
+        let authority = lineage
+            .session
+            .last_accepted()
+            .expect("current accepted lineage authority");
+        assert_eq!(authority.lineage, target);
+        assert_eq!(
+            authority.materialization_digest,
+            evidence.materialization_digest()
+        );
+        assert_eq!(
+            (lineage.session.undo_len(), lineage.session.redo_len()),
+            history,
+            "evaluation publication cannot create another history position"
+        );
+    }
+
+    #[test]
+    fn live_and_strict_cold_rejection_retain_failed_lineage_authority() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let point = document.add_point("fixed", [0.0, 0.0]).expect("point");
+        document
+            .add_constraint(
+                "original fixed point",
+                DocumentConstraintDefinition::FixedPoint {
+                    point,
+                    target: [0.0, 0.0],
+                },
+            )
+            .expect("original fixed point");
+        let mut coordinator = coordinator(document);
+        let accepted_before = coordinator
+            .lineage
+            .session
+            .last_accepted()
+            .cloned()
+            .expect("initial accepted authority");
+
+        let rejected = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreateConstraint {
+                    label: "conflicting fixed point".into(),
+                    definition: DocumentConstraintDefinition::FixedPoint {
+                        point,
+                        target: [1.0, 0.0],
+                    },
+                },
+            )
+            .expect("genuine owning-domain rejection remains retained");
+
+        assert!(rejected.published_accepted.is_none());
+        let attempt = coordinator
+            .lineage
+            .session
+            .latest_attempt()
+            .expect("retained failed attempt");
+        let cold_failure =
+            crate::coordinator::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
+                &LineageSession::new(coordinator.lineage.session.document().clone())
+                    .expect("strict evaluation session"),
+                &ParameterBatch::default(),
+                &ExternalSnapshotSet::default(),
+            )
+            .expect_err("the conflicting fixed point fails strict cold evaluation");
+        assert_eq!(attempt.disposition, LineageEvaluationDisposition::Failed);
+        assert_eq!(
+            attempt.diagnostic.as_ref().map(LineageSemanticKey::as_str),
+            Some(cold_failure.diagnostic())
+        );
+        assert_eq!(
+            attempt.failed_steps,
+            vec![
+                cold_failure
+                    .failed_step()
+                    .expect("strict prefix failure attribution")
+            ]
+        );
+        assert_eq!(
+            coordinator.lineage.session.last_accepted(),
+            Some(&accepted_before),
+            "a genuine rejection must preserve the complete previous accepted authority"
+        );
+
+        let mut falsely_accepted = coordinator.lineage.clone();
+        let failed_step = attempt.failed_steps[0];
+        let retained_session = falsely_accepted
+            .to_canonical_session_json()
+            .expect("retained session before false acceptance");
+        let retained_ledger = falsely_accepted
+            .to_canonical_host_input_ledger_json()
+            .expect("retained ledger before false acceptance");
+        let error = falsely_accepted
+            .record_evaluation(
+                &ParameterBatch::default(),
+                &ExternalSnapshotSet::default(),
+                true,
+                failed_step,
+                None,
+            )
+            .expect_err("a live acceptance report cannot overrule strict cold rejection");
+        assert!(matches!(
+            error,
+            LineageBridgeError::AcceptedEvaluationRejected(_)
+        ));
+        assert_eq!(
+            falsely_accepted
+                .to_canonical_session_json()
+                .expect("session after false acceptance"),
+            retained_session
+        );
+        assert_eq!(
+            falsely_accepted
+                .to_canonical_host_input_ledger_json()
+                .expect("ledger after false acceptance"),
+            retained_ledger,
+            "cold rejection must roll back lineage session and host-input ledger together"
+        );
+    }
+
+    #[test]
+    fn accepted_live_report_rolls_back_when_cold_bytes_mismatch_staged_acceptance() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        document.add_point("point", [1.0, 2.0]).expect("point");
+        let coordinator = coordinator(document);
+        let mut lineage = coordinator.lineage.clone();
+        let failed_step = lineage.session.document().steps()[0].id;
+        let mut mismatched = serde_json::from_str::<Value>(
+            coordinator
+                .checkpoint()
+                .accepted_json()
+                .expect("accepted sketch bytes"),
+        )
+        .expect("accepted sketch value");
+        mismatched["points"][0]["position"] = json!([9.0, 10.0]);
+        let mismatched = serde_json::to_string(&mismatched).expect("mismatched accepted bytes");
+        let retained_session = lineage
+            .to_canonical_session_json()
+            .expect("retained session before mismatch");
+        let retained_ledger = lineage
+            .to_canonical_host_input_ledger_json()
+            .expect("retained input ledger before mismatch");
+
+        let error = lineage
+            .record_evaluation(
+                &ParameterBatch::default(),
+                &ExternalSnapshotSet::default(),
+                true,
+                failed_step,
+                Some((&mismatched, false)),
+            )
+            .expect_err("mismatched staged/cold accepted bytes must reject");
+
+        assert!(matches!(
+            error,
+            LineageBridgeError::AcceptedMaterializationMismatch
+        ));
+        assert_eq!(
+            lineage
+                .to_canonical_session_json()
+                .expect("session after mismatch"),
+            retained_session
+        );
+        assert_eq!(
+            lineage
+                .to_canonical_host_input_ledger_json()
+                .expect("input ledger after mismatch"),
+            retained_ledger,
+            "failed accepted publication must roll back session and ledger together"
+        );
     }
 
     #[test]

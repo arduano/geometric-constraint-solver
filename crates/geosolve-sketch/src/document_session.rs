@@ -2334,6 +2334,58 @@ mod exact_preview_release_tests {
     use super::*;
 
     #[test]
+    fn exact_canonical_evidence_can_promote_a_live_rejected_attempt() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let point = document.add_point("free", [0.0, 0.0]).unwrap();
+        let mut session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let prior_accepted = session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .identity();
+        let input = session.last_attempt.input;
+        let attempt = session.next_attempt_identity().unwrap();
+        let (rejected, published) = publish_retained_attempt(
+            &session.design,
+            &input,
+            attempt,
+            Some(prior_accepted),
+            next_accepted_revision(session.accepted_revision_high_water),
+            RetainedAttemptExecution::failure(
+                SketchAttemptFailureKind::Solve,
+                "synthetic live rejection before independent cold acceptance".into(),
+            ),
+        );
+        assert!(published.is_none());
+        session.last_attempt = rejected;
+        assert!(session.accepted_state_for_current_input().is_none());
+        let expected = session.prepared_input();
+        let revisions = session.revision_high_water();
+        let mut canonical = session.design.clone();
+        canonical.set_point_position(point, [3.0, 4.0]).unwrap();
+
+        session
+            .replace_current_accepted_materialization(expected, canonical.clone())
+            .unwrap();
+
+        assert_eq!(session.design_identity.revision(), revisions.design());
+        assert_eq!(session.last_attempt.identity, attempt);
+        assert_eq!(session.last_attempt.input, input);
+        assert_eq!(session.last_attempt.parent_accepted, Some(prior_accepted));
+        let promoted = session.accepted_state_for_current_input().unwrap();
+        assert_eq!(promoted.document(), &canonical);
+        assert_eq!(promoted.originating_attempt(), attempt);
+        assert_eq!(
+            promoted.identity().revision().get(),
+            prior_accepted.revision().get() + 1
+        );
+    }
+
+    #[test]
     fn bounded_dense_exhaustion_is_a_typed_exact_release_error() {
         let completed_controller = OperationController::new(OperationControl::unlimited());
         assert_eq!(
@@ -4793,6 +4845,148 @@ impl RetainedSketchDocumentSession {
         let commit = patch.commit;
         *self = patch.candidate;
         Ok(commit)
+    }
+
+    /// Replaces only the current accepted materialization with an exact,
+    /// independently certifiable graph while preserving every lifecycle
+    /// identity and the retained attempt's candidate-guidance provenance.
+    ///
+    /// This is the publication seam for an owning host whose canonical
+    /// evaluator rematerializes the same retained design independently after
+    /// the ordinary transaction has already allocated its design, attempt and
+    /// accepted identities. The supplied graph is never trusted by inspection:
+    /// it is certified without optimization under the current publication
+    /// request and exact attempted host inputs, projected back through the
+    /// current retained topology, and published only through the existing
+    /// accepted attempt machinery. For a rejected external-snapshot update,
+    /// successful certification also promotes that exact attempted snapshot
+    /// set to the active accepted set.
+    ///
+    /// No design or attempt revision advances. Exact evidence that is already
+    /// byte-for-byte represented by the current accepted document is a true
+    /// no-op and preserves that complete accepted state. Any changed accepted
+    /// document allocates exactly the next accepted revision, as does promotion
+    /// of a live-rejected attempt, only after the graph passes the same exact
+    /// certification. No history or persistent allocator revision advances.
+    /// Changed publication advances the process-local prepared-state epoch so
+    /// work captured against the superseded accepted evidence cannot later pass
+    /// compare-and-swap. Historical accepted authority beneath a different
+    /// current design is never modified unless this exact current attempt is
+    /// independently promoted.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale complete prepared input, a foreign or topology-incompatible
+    /// graph, or any graph that cannot be independently certified exactly under
+    /// the current inputs. A current rejected attempt may be promoted only by
+    /// such exact evidence; callers cannot promote an older design or attempt.
+    pub fn replace_current_accepted_materialization(
+        &mut self,
+        expected: PreparedSketchInput,
+        mut accepted: SketchDocument,
+    ) -> Result<(), DocumentSessionError> {
+        let actual = self.current_prepared_input();
+        if actual != expected {
+            return Err(DocumentSessionError::StalePreparedPatch {
+                expected: Box::new(expected),
+                actual: Box::new(actual),
+            });
+        }
+        let current_accepted_identity = self
+            .accepted_state_for_current_input()
+            .map(SketchAcceptedDocumentState::identity);
+        if accepted.id() != self.design.id() {
+            return Err(DocumentSessionError::ForeignDesign {
+                expected: self.design.id(),
+                actual: accepted.id(),
+            });
+        }
+        accepted.retain_persistent_identity_high_water(&self.persistent_identity_high_water)?;
+        if accepted.effective_activity().activation_digest()
+            != self.design.effective_activity().activation_digest()
+        {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+
+        let publication_snapshots = self.latest_attempt_external_snapshot_set().clone();
+        let resolved =
+            resolve_attempt_inputs(&self.design, &self.parameter_batch, &publication_snapshots)
+                .map_err(|_| DocumentSessionError::InvalidAcceptedSnapshot)?;
+        let design_mappings = self
+            .design
+            .lower_with_resolved_parameters(&resolved)?
+            .into_parts()
+            .1;
+        let input = self.last_attempt.input;
+        let mut execution = certify_exact_retained_snapshot(
+            &accepted,
+            &self.parameter_batch,
+            &publication_snapshots,
+            input.publication_request(),
+            self.config,
+        )
+        .map_err(|_| DocumentSessionError::InvalidAcceptedSnapshot)?;
+        let (_, accepted_runtime, accepted_mappings, _) = execution
+            .accepted
+            .as_ref()
+            .ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?;
+        if !accepted_mappings.has_compatible_runtime_topology(&design_mappings) {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+        let mut projected = self.design.clone();
+        projected.project_accepted_state(accepted_runtime.sketch(), accepted_mappings)?;
+        let accepted_json = accepted.to_draft_v5_json()?;
+        if projected.to_draft_v5_json()? != accepted_json {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+        // Semantic catalog reservations deliberately live outside the frozen
+        // sketch JSON schema. Canonical cold evidence therefore cannot carry
+        // them, but the current retained design still owns them. Publish the
+        // independently projected graph so those host-side ownership guards
+        // survive without changing any canonical accepted bytes.
+        execution
+            .accepted
+            .as_mut()
+            .ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?
+            .0 = projected;
+
+        let current_accepted_json = self
+            .accepted_state_for_current_input()
+            .map(|current| current.document().to_draft_v5_json())
+            .transpose()?;
+        if current_accepted_json.as_deref() == Some(accepted_json.as_str()) {
+            return Ok(());
+        }
+
+        let attempt_identity = self.last_attempt.identity;
+        let parent_accepted = self.last_attempt.parent_accepted;
+        let continuation_parent_input = self.last_attempt.continuation_parent_input;
+        let accepted_revision = next_accepted_revision(self.accepted_revision_high_water);
+        let (mut attempt, published) = publish_retained_attempt(
+            &self.design,
+            &input,
+            attempt_identity,
+            parent_accepted,
+            accepted_revision,
+            execution,
+        );
+        let published = published.ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?;
+        let published_identity = published.identity();
+        if attempt.identity() != attempt_identity
+            || attempt.accepted_state_identity() != Some(published_identity)
+            || current_accepted_identity.is_some_and(|identity| identity == published_identity)
+        {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+        let prepared_state_epoch = next_prepared_state_epoch()?;
+        attempt.continuation_parent_input = continuation_parent_input;
+        self.external_snapshots = publication_snapshots;
+        self.external_snapshot_attempt_candidate = None;
+        self.last_attempt = attempt;
+        self.replace_accepted_state(published);
+        self.prepared_state_epoch = prepared_state_epoch;
+        debug_assert_ne!(self.current_prepared_input(), expected);
+        Ok(())
     }
 
     /// Retains one valid typed edit even when its solve attempt rejects.

@@ -4342,7 +4342,11 @@ strict oracle on accepted/failure authority, canonical sketch/feature evidence, 
 ownership and branches. Only reported work may differ.
 
 Status: focused historical-input and strict/local regressions pass; complete collateral
-qualification remains pending.
+qualification remains pending. Native Fillet adds the topology-sensitive witness: strict and local
+evaluation must continue from the independently accepted upstream prefix, reauthenticate the
+prepared geometric plan and exact materialized identity delta, then independently validate the
+result. Consecutive Fillets and an opposed retained seed cover both terminal and reusable-prefix
+positions.
 
 ### M83-L4 — retained failure and one history
 
@@ -4352,8 +4356,8 @@ reported, and the previous independently accepted lineage/materialization remain
 Projected editing is unavailable against its stale reverse map. Undo/Redo restores exact programs
 and reservations; stale, cancelled, exhausted, malformed and non-finite requests record nothing.
 
-Status: focused retained-authority coverage passes; workbench routing audit and human recovery UAT
-remain pending.
+Status: focused retained-authority coverage and the closed workbench route inventory plus
+representative dynamic routing pass; human recovery UAT remains pending.
 
 ### M83-L5 — workspace-v7 cold authority and migration
 
@@ -4375,7 +4379,13 @@ forged historical accepted digest and every non-accepted serialized attempt disp
 bounded private workspace ledger additionally retains an accepted host-only input pair that exists
 only in Redo, while Undo/Redo continue to evaluate the selected program under current live host
 inputs. A failed current attempt rebuilds its visible accepted program from that stamped ledger
-entry rather than an older action-time payload. Complete release qualification remains pending.
+entry rather than an older action-time payload. The frozen v1-v6 matrix contains six honest
+historical outer schemas, 20,950 bytes total, SHA-256
+`af5e6398578dc02bc37df0a4ad8b9b0ff96295c98e6dff3992db652b4d29d4a1`; every row retains a
+failed current design over older accepted geometry, becomes exactly one imported root, re-encodes
+to v7 and cache-free cold reloads. Embedded legacy acceptance is selected by its independently
+reproduced authority digest, not merely by the presence of older input payloads. Complete release
+qualification remains pending.
 
 ### M83-L6 — stateful native/WASM RPC and sole-workbench routing
 
@@ -4396,9 +4406,13 @@ cold-reproduces that authority with exact persisted host inputs.
 
 Status: native RPC accepted-authority parity, DOM-free initialization, TypeScript data-binding and
 closed workbench source-route sentinels pass, together with representative dynamic routing and a
-cache-free reload. The source-route evidence is a closed inventory sentinel rather than runtime
-instrumentation of every route. Release-WASM parity, complete release qualification and immutable-
-candidate human UAT remain pending.
+cache-free reload. Wrong-kind ports, invalid transitions and identity/revision exhaustion retain
+stable discriminated error codes. The TypeScript client rejects malformed, method-incompatible or
+uncorrelated envelopes/results without replacing its retained session, and rejects a request above
+the Rust UTF-8 byte bound before invoking transport. The exact native/actual-WASM transcript has
+28 responses, 117,156 bytes and FNV-1a `7063e9c6b5b5248c`. The source-route evidence is a closed
+inventory sentinel rather than runtime instrumentation of every route. Complete release
+qualification and immutable-candidate human UAT remain pending.
 
 ### M83-F026 — projected editing preserves host-owned scalar fallbacks
 
@@ -4411,6 +4425,191 @@ remain unaffected because they have no scalar fallback. The focused M77-F009 rat
 regression, all 16 curve-control coordinator cases and a driving-dimension unit regression cover
 both scalar target families. The pre-repair `9bbbedd` candidate is withdrawn and no artifact from
 its failed clean gate may be nominated.
+
+### M83-F027 — projected editing requires a genuine cold accepted witness
+
+Stage a projected rewrite of an underconstrained point, then replace only the claimed accepted
+checkpoint with a different finite and independently valid solution having identical topology. The
+lineage owner must derive fresh cold evidence from the rewritten program and exact current host
+inputs rather than certifying the caller-supplied witness. The substitution rejects the complete
+transaction with no history, lineage, allocator or accepted-state change; the exact genuine
+projection remains immediately retryable.
+
+### M83-F028 — topology-sensitive native Fillet replay requires accepted-prefix continuation
+
+Create one or two native line-line Fillets whose retained upstream seed differs from its accepted
+solution, then cold-evaluate the lineage under both strict and dependency-local policies. Each
+Fillet must consume the exact independently accepted upstream prefix. Its serialized prepared plan,
+source definitions and tangents, branch/orientation choices, reserved identities, complete
+materialized topology, labels and unaffected objects must all reauthenticate before any numerical
+seed is accepted. Forged request geometry, plan data, IDs or topology rejects at the owning step
+without changing accepted authority, history or allocator high-water. Undo followed by a divergent
+Fillet keeps abandoned identities retired, and host-only radius inputs preserve the action and
+local fallback while changing accepted geometry. The final result remains subject to the ordinary
+solve and independent hard-residual validation; no Fillet equation or Jacobian changes.
+
+### M83-F029 — legacy imported roots lost distinct older accepted authority
+
+Load an honest v1-v6 workspace whose retained sketch is invalid while an older accepted sketch is
+still visible. Migration must create one imported baseline only, preserving both branches and their
+exact input provenance without inventing authoring history. Cold v7 validation selects the retained
+or embedded-accepted branch by the published materialization digest and independently reproduces
+it. Ordinary host-only acceptance that happens to share the same imported root must not be mistaken
+for the embedded legacy branch, and input-free structural decode must not require the private
+historical-input ledger before that workspace companion is attached. The six-row frozen migration
+matrix plus failed-current and Redo-only host-input regressions prove both distinctions and
+cache-free reconstruction.
+
+### M83-F030 — historical accepted restoration must consume exact cold evidence
+
+Create and accept a native Fillet, move and constrain its accepted center so the topology-sensitive
+accepted geometry differs from its flattened authored seed, then retain a later conflicting center
+constraint. Restore the lineage directly, traverse Undo/Redo, and reload a workspace-v7 payload
+with every disposable flat field removed. The rejected current attempt must remain retained while
+the exact older accepted sketch bytes are restored modulo monotonic never-reuse high-water; no
+independent solve of flattened historical intent may replace them. Every restored coordinate is
+finite and the independently validated normalized hard residual is at most `1e-9`. A companion
+current-accepted native Fillet proves that cache-free current-design recovery consumes canonical
+accepted evidence from the exact current lineage/input pair rather than independently solving
+flattened intent or misclassifying it as historical fallback evidence.
+
+### M83-F031 — TypeScript RPC results are method-bound, correlated and bounded
+
+After establishing one valid client session, return syntactically valid successful envelopes whose
+result belongs to another RPC method, carries a foreign document identity, contains an unknown or
+missing field, or makes accepted/failed evaluation disposition, attempt, evidence and authority
+disagree. Repeat with an unknown stable-shaped error code and with a malformed successful
+`create`/`load` result. Every case must throw a typed response violation before changing retained
+session state; the next ordinary call must still target the previously authenticated session.
+Successful exact-CAS methods must also target the client's retained current identity using the
+immutable parameters serialized before transport. `load` must return Pending with caller-supplied
+accepted authority stripped; `import` must invent neither history nor evaluation authority.
+Mutation/history revisions, snapshot lifecycle booleans/lengths and dependency-plan ordering/state
+must match the Rust method contract. In particular, a generic mutation containing an evaluation-
+policy change cannot report `changed: false` unless its final requested policy is the retained
+policy; rejection must leave that retained policy transactional. Result arrays above the shared
+retained-step bound reject.
+
+Compile-time calls must derive their exact parameter and result types from the selected method and
+must not permit a caller-asserted success type or extra fields on an empty parameter object. A
+serialized UTF-8 request above 16 MiB must throw `LineageRpcRequestError` with
+`request_too_large` before transport is invoked, rather than trusting Rust's necessarily
+uncorrelated pre-envelope rejection. Closed RPC/evaluation error-code inventories must equal the
+Rust sources. These are TypeScript protocol-boundary invariants only: Rust remains the sole action,
+lineage, geometry and acceptance validator.
+
+### M83-F032 — strict cold replay owns accepted publication
+
+Remove the driving radius from the flexible line-circle Fillet specimen, then apply a raw retained
+edit to its center. The ordinary live solve and strict cold replay may choose different valid
+coordinates because the graph is underconstrained; that difference must neither reject the authored
+edit nor let live cache geometry outrank the lineage program. Publication advances history exactly
+once and the coordinator's accepted sketch bytes must equal fresh cold current-authority evidence.
+
+Repeat at the session owner by replacing current accepted geometry under an exact prepared-input
+stamp. Exact finite topology-compatible geometry preserves design and attempt identities while
+invalidating already prepared work through only the private epoch; accepted identity behavior is
+the byte-exact contract in M83-F037. A coherent current rejected attempt may instead be promoted by
+the same exact evidence: design and attempt identity remain unchanged and precisely the next
+accepted revision is allocated. A stale stamp, foreign or invalid graph, older design/attempt or
+incompatible topology rejects without mutation. Finally, construct a
+coordinator from an underconstrained low-level session whose current accepted graph is distinct from
+retained intent; import must authenticate those exact accepted bytes and retain current accepted
+authority rather than silently choosing another valid solution.
+
+Offset publication, native-Fillet publication, recorded source-edit reanchor, host-parameter and
+external-snapshot changes, reattempt, Undo and Redo are collateral sketch-changing routes. Each must
+stage canonical accepted geometry and recomputed feature state before one live swap. Computed-
+feature-only publication is covered separately by M83-F036.
+
+### M83-F033 — strict cold acceptance promotes a live-rejected attempt
+
+Start from an exactly accepted constrained sketch under a live policy that cannot complete a moved
+candidate, then apply an ordinary retained edit. The provisional sketch attempt rejects, while
+strict chronological replay under canonical owning-domain policy accepts from the authenticated
+prefix. The mutation must publish the exact cold graph on the same design and attempt identities,
+allocate exactly one accepted revision, advance lineage/history only once and return that final
+accepted identity to the caller.
+
+Repeat with a genuinely conflicting retained edit. When strict replay also rejects, retain the
+failed lineage attempt with its cold diagnostic/first failed step and leave the prior accepted
+scene, allocator authority and public result unmodified. Finally inject an accepted live witness
+that disagrees with required cold authority: the complete flat session, lineage, host-input ledger,
+features, history and returned result roll back atomically. Imported-baseline fallback remains
+separately authenticated, and projected manipulation continues to reject any caller/cold mismatch.
+A carried radial-Normal scene case additionally proves that a former live-rejected fixed-point edit
+now exposes the promoted strict-cold accepted graph while retained intent remains divergent; its
+subsequent contact seed is still measured from accepted rather than retained geometry.
+
+### M83-F034 — post-refresh checkpoint failure retains every owner
+
+Begin an ordinary sketch edit, allow computed-feature refresh to advance its staged evaluation
+allocator/high-water, then inject failure into the immediately following checkpoint. The complete
+pre-edit session, accepted graph, lineage session and host-input ledger, feature state, computed
+allocator/snapshot/problem, persistence checkpoint, history and transcript must remain exact. A
+retry without injection publishes precisely one mutation and one history position.
+
+### M83-F035 — legacy flat reload is one staged publication
+
+Keep a coordinator with newer retained state, selection, lifecycle, computed state and more than
+one history position, then request public compatibility reload of an older valid flat checkpoint.
+Inject failure after the restored sketch, feature sidecar, allocator and computed snapshot have
+been prepared but before imported-lineage construction publishes. Every live owner, selection,
+lifecycle, history and transcript must remain byte/identity exact. Retrying the same reload without
+injection succeeds and starts the documented one-position compatibility history.
+
+### M83-F036 — feature-only publication retains preview truth and cold sketch authority
+
+Publish computed `FilletSet` create/configure/delete/suppress intent against an ordinary current
+sketch whose exact accepted bytes already equal strict chronological replay. The durable computed
+snapshot must retain the exact evaluation revision and geometry that the coordinator exposed as the
+accepted preview; publication must not silently evaluate a replacement at pointer release. Repeat
+from an underconstrained imported baseline for which strict replay selects a different valid
+accepted graph even though feature intent changes no sketch topology. That path must replace the
+scratch session from genuine cold evidence, reevaluate computed output against those canonical
+bytes, reauthenticate the final checkpoint from the untouched prior lineage and publish session,
+feature intent, allocator, computed snapshot and one history position atomically. Any failure
+retains the complete previous authority.
+
+### M83-F037 — canonical accepted bytes own accepted identity
+
+Replace an already current accepted materialization with independently certified evidence under
+the exact prepared-input stamp. Byte-identical canonical evidence is a complete no-op: document,
+attempt, accepted identity, audit, redundancy, host provenance, allocator and prepared epoch remain
+unchanged. Any canonical byte change allocates exactly the next accepted revision while preserving
+design/attempt identity and invalidating outstanding prepared work. Include a free-point `+0.0` to
+`-0.0` replacement: ordinary numeric equality must not hide the byte and digest change. Rejected-
+attempt promotion follows the same fresh-revision rule. Stale, foreign, invalid, older or topology-
+incompatible evidence rejects atomically.
+
+### M83-F038 — same-byte reload still honors saved lifecycle high-water
+
+Create two coordinators from identical accepted sketch bytes, then advance only the saved owner's
+attempt/accepted lifecycle. Reload that checkpoint into the lower-lifecycle owner. The byte-
+preserving shortcut must not run: restoration allocates above every saved/current design, attempt
+and accepted high-water, preserves exact sketch semantics, and a subsequent reattempt advances
+again without revision reuse.
+
+### M83-F039 — inferred-construction acknowledgement follows complete preparation
+
+Reproduce M79's center rectangle followed by a Midpoint Line whose inferred Horizontal direction
+is fully redundant and must be omitted from the effective plan. Inject lineage-record failure after
+the accepted trial and computed staging. The complete coordinator, accepted graph, lineage/input
+ledger, allocators, checkpoint, history and transcript remain exact; the original pending token is
+not positively acknowledgeable. Retry the same effect: every fallible strict-cold, replacement,
+computed, checkpoint and lineage-high-water step completes first, the authenticated original plan
+is then marked published, and one infallible swap adds exactly one effective-plan history position.
+
+### M83-F040 — construction results describe final strict-cold authority
+
+From an underconstrained imported baseline whose provisional accepted bytes differ from strict
+chronological replay, publish one construction through both ordinary and controlled APIs. Strict
+cold evidence must exist, replace the staged accepted graph, rebuild computed companions and gate
+publication. Each returned design, attempt and accepted identity equals the final live canonical
+session, not the provisional trial result; history advances once. The inherited M83-F033
+strict-cold rejection regression and M83-F039 pending-token transaction regression jointly prove
+that a live-success construction cannot publish or acknowledge a pending token after cold
+rejection; F040 adds exact final-identity coverage for accepted ordinary and controlled paths.
 
 ## Frozen near-singular fixtures
 

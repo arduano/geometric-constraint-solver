@@ -837,10 +837,33 @@ impl WorkspaceSnapshot {
         )
         .map_err(|error| error.to_string())?;
         let current_is_accepted = lineage_current_is_accepted(&lineage_session_json)?;
+        // Both branches consume canonical owning-domain accepted bytes from
+        // cold-authenticated lineage evaluation. Current authority is tied to
+        // the exact retained lineage identity and current inputs; a rejected
+        // current program instead carries the exact older accepted lineage
+        // evidence used for its visible fallback scene.
+        let accepted_evidence = if current_is_accepted {
+            Some(
+                RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+                    &lineage_session_json,
+                    lineage_host_input_ledger_json.as_deref(),
+                    &parameter_batch,
+                    &external_snapshot_set,
+                )
+                .map_err(|error| error.to_string())?,
+            )
+        } else {
+            RetainedEditorCoordinator::lineage_cold_historical_accepted_evidence_checkpoint(
+                &lineage_session_json,
+                lineage_host_input_ledger_json.as_deref(),
+                accepted_parameter_batch.as_ref(),
+                accepted_external_snapshot_set.as_ref(),
+            )
+            .map_err(|error| error.to_string())?
+        };
         let materialized = cold_materialize_with_inputs(
             &materialized_intent,
-            accepted_materialized_intent.as_ref(),
-            current_is_accepted,
+            accepted_evidence.as_ref(),
             parameter_batch.clone(),
             external_snapshot_set.clone(),
             accepted_parameter_batch.clone(),
@@ -1274,8 +1297,7 @@ fn lineage_current_is_accepted(input: &str) -> Result<bool, String> {
 #[allow(clippy::too_many_lines)]
 fn cold_materialize_with_inputs(
     intent: &RestoreCheckpoint,
-    accepted_intent: Option<&RestoreCheckpoint>,
-    current_is_accepted: bool,
+    accepted_evidence: Option<&RestoreCheckpoint>,
     parameter_batch: ParameterBatch,
     external_snapshot_set: ExternalSnapshotSet,
     accepted_parameter_batch: Option<ParameterBatch>,
@@ -1290,54 +1312,32 @@ fn cold_materialize_with_inputs(
     design
         .retain_persistent_identity_high_water(intent.sketch_identity_high_water())
         .map_err(|error| error.to_string())?;
-    let mut session = if current_is_accepted {
-        RetainedSketchDocumentSession::restore_design_with_inputs(
-            design,
-            intent.revisions(),
-            parameter_batch,
-            external_snapshot_set,
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-    } else if let Some(accepted_intent) = accepted_intent {
+    let mut session = if let Some(accepted_evidence) = accepted_evidence {
         let accepted_parameter_batch = accepted_parameter_batch.ok_or_else(|| {
             "accepted lineage authority is missing exact parameter input".to_owned()
         })?;
         let accepted_external_snapshot_set = accepted_external_snapshot_set.ok_or_else(|| {
             "accepted lineage authority is missing exact external snapshot input".to_owned()
         })?;
-        let mut accepted_design = if accepted_intent.design_uses_draft_v5() {
-            SketchDocument::from_draft_v5_json(accepted_intent.design_json())
+        let accepted_json = accepted_evidence.accepted_json().ok_or_else(|| {
+            "cold-authenticated accepted lineage evidence is missing sketch bytes".to_owned()
+        })?;
+        let mut accepted_design = if accepted_evidence.accepted_uses_draft_v5() {
+            SketchDocument::from_draft_v5_json(accepted_json)
         } else {
-            SketchDocument::from_json(accepted_intent.design_json())
+            SketchDocument::from_json(accepted_json)
         }
         .map_err(|error| error.to_string())?;
         accepted_design
-            .retain_persistent_identity_high_water(accepted_intent.sketch_identity_high_water())
+            .retain_persistent_identity_high_water(accepted_evidence.sketch_identity_high_water())
             .map_err(|error| error.to_string())?;
-        let accepted_session = RetainedSketchDocumentSession::restore_design_with_inputs(
-            accepted_design,
-            accepted_intent.revisions(),
-            accepted_parameter_batch.clone(),
-            accepted_external_snapshot_set.clone(),
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .map_err(|error| error.to_string())?;
-        let accepted = accepted_session
-            .accepted_state_for_current_input()
-            .ok_or_else(|| {
-                "last-accepted lineage does not reproduce under its exact host inputs".to_owned()
-            })?
-            .document()
-            .clone();
         let same_retained_program = intent.design_uses_draft_v5()
-            == accepted_intent.design_uses_draft_v5()
-            && intent.design_json() == accepted_intent.design_json();
+            == accepted_evidence.design_uses_draft_v5()
+            && intent.design_json() == accepted_evidence.design_json();
         if same_retained_program {
             RetainedSketchDocumentSession::restore_current_design_with_accepted_and_distinct_inputs(
                 design,
-                accepted,
+                accepted_design,
                 intent.revisions(),
                 parameter_batch,
                 external_snapshot_set,
@@ -1349,7 +1349,7 @@ fn cold_materialize_with_inputs(
         } else {
             RetainedSketchDocumentSession::restore_design_with_accepted_and_distinct_inputs(
                 design,
-                accepted,
+                accepted_design,
                 intent.revisions(),
                 parameter_batch,
                 external_snapshot_set,
@@ -1614,8 +1614,8 @@ mod tests {
         AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveId, CurveSpan,
         DesignPointId, DocumentBSplineForm, DocumentCenterRef, DocumentCommandEffect,
         DocumentConstraintDefinition, DocumentDirectionSense, DocumentEdit, DocumentError,
-        DocumentExternalPointRef, DocumentId, DocumentLineSupportRef, DocumentObjectId,
-        DocumentParameterKind, DocumentParameterTarget, DocumentSolveRequest,
+        DocumentExternalPointRef, DocumentId, DocumentLineSupportRef, DocumentNativeLineFilletIds,
+        DocumentObjectId, DocumentParameterKind, DocumentParameterTarget, DocumentSolveRequest,
         ExternalFeatureKindV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
         ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet, GeometryRole,
         ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
@@ -1628,6 +1628,90 @@ mod tests {
         default_evaluation_high_water, derive_sketch_identity_high_water, parse_annotation_kind,
         reproduction_payload_from_coordinator,
     };
+
+    fn publish_native_fillet(
+        coordinator: &mut RetainedEditorCoordinator,
+        corner: DesignPointId,
+    ) -> DocumentNativeLineFilletIds {
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("native-Fillet authoring snapshot");
+        let accepted = snapshot.sketch_document().clone();
+        let mut authoring = FeatureAuthoringState::default();
+        assert!(matches!(
+            authoring.activate(&snapshot, &accepted, FeatureAuthoringTool::Fillet, &[]),
+            FeatureAuthoringOutcome::ModeEntered(_)
+        ));
+        assert!(matches!(
+            authoring.set_options(
+                &snapshot,
+                geosolve_constraint_editor::FeatureAuthoringOptions {
+                    fillet_radius: Some(0.5),
+                    ..geosolve_constraint_editor::FeatureAuthoringOptions::default()
+                },
+            ),
+            FeatureAuthoringOutcome::Collecting { .. }
+        ));
+        let transaction = coordinator
+            .transact_feature_authoring_pick_items(
+                &mut authoring,
+                &[(SelectionItem::Point(corner), None)],
+                "workspace native Fillet",
+            )
+            .expect("native-Fillet candidate transaction");
+        let FeatureAuthoringOutcome::PreviewRequested { candidate, .. } = transaction.outcome
+        else {
+            panic!("line-line corner must produce a native-Fillet preview");
+        };
+        let preview = transaction.preview.expect("held native-Fillet preview");
+        coordinator
+            .native_feature_authoring_availability(preview.token, &candidate)
+            .expect("native-Fillet publication availability");
+        coordinator
+            .apply_feature_authoring_native_profile(preview.token, &candidate)
+            .expect("native-Fillet publication")
+            .value
+    }
+
+    fn current_native_fillet_corner() -> (RetainedEditorCoordinator, DocumentNativeLineFilletIds) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let start = document
+            .add_point("horizontal start", [0.0, 0.0])
+            .expect("start");
+        let corner = document
+            .add_point("sharp corner", [4.0, 0.0])
+            .expect("corner");
+        let end = document.add_point("vertical end", [4.0, 4.0]).expect("end");
+        document
+            .add_curve(
+                "horizontal parent",
+                CurveDefinition::Line {
+                    start,
+                    end: corner,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("horizontal line");
+        document
+            .add_curve(
+                "vertical parent",
+                CurveDefinition::Line {
+                    start: corner,
+                    end,
+                    branch_direction: [0.0, 1.0],
+                },
+            )
+            .expect("vertical line");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .expect("accepted line corner");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let ids = publish_native_fillet(&mut coordinator, corner);
+        (coordinator, ids)
+    }
 
     #[test]
     fn workspace_decode_rejects_an_oversized_envelope_before_json_parsing() {
@@ -2483,6 +2567,283 @@ mod tests {
             alternate_position.map(f64::to_bits)
         );
         assert_eq!(recovered.accepted, baseline.accepted);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one cache-free workspace regression keeps current native-Fillet evidence, disposable-cache removal, exact bytes, and independent validity adjacent"
+    )]
+    fn workspace_v7_cache_free_reload_consumes_exact_current_accepted_native_fillet() {
+        let (mut coordinator, ids) = current_native_fillet_corner();
+        let center = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted native Fillet")
+            .document()
+            .point(ids.center)
+            .expect("accepted Fillet center")
+            .position;
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreateConstraint {
+                    label: "current center anchor".into(),
+                    definition: DocumentConstraintDefinition::FixedPoint {
+                        point: ids.center,
+                        target: [center[0] + 1.0, center[1] + 0.75],
+                    },
+                },
+            )
+            .expect("accepted current center anchor");
+        let accepted_before = coordinator
+            .session()
+            .export_accepted_json()
+            .expect("accepted export")
+            .expect("accepted native-Fillet bytes");
+        let lineage_json = coordinator
+            .lineage_session_json()
+            .expect("current accepted lineage session");
+        let ledger_json = coordinator
+            .lineage_host_input_ledger_json()
+            .expect("current accepted host-input ledger");
+        let intent = RetainedEditorCoordinator::lineage_materialization_checkpoint(&lineage_json)
+            .expect("current lineage intent");
+        assert_ne!(
+            accepted_before,
+            intent.design_json(),
+            "the fixture must carry topology-sensitive accepted native-Fillet geometry distinct from flattened authored intent"
+        );
+        let evidence =
+            RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+                &lineage_json,
+                Some(&ledger_json),
+                coordinator.session().parameter_batch(),
+                coordinator.session().external_snapshot_set(),
+            )
+            .expect("cold current accepted evidence");
+        assert!(evidence.accepted_belongs_to_current_design());
+        assert_eq!(
+            evidence.accepted_json(),
+            Some(accepted_before.as_str()),
+            "the public current-authority adapter must expose the exact owning-domain bytes"
+        );
+
+        let encoded = WorkspaceSnapshot::from_coordinator(&coordinator)
+            .expect("workspace")
+            .encode()
+            .expect("workspace JSON");
+        let mut cache_free: serde_json::Value =
+            serde_json::from_str(&encoded).expect("workspace value");
+        let object = cache_free.as_object_mut().expect("workspace object");
+        for field in [
+            "lineage_materialization_map_json",
+            "design",
+            "accepted",
+            "accepted_belongs_to_current_design",
+            "sketch_identity_high_water",
+            "features_json",
+            "feature_lifecycle_high_water",
+            "computed_evaluation_high_water",
+            "annotation_layout_json",
+            "revisions",
+        ] {
+            object.remove(field);
+        }
+
+        let decoded = WorkspaceSnapshot::decode(
+            &serde_json::to_string(&cache_free).expect("cache-free workspace JSON"),
+        )
+        .expect("cache-free current native-Fillet reconstruction");
+        assert!(decoded.accepted_belongs_to_current_design);
+        assert_eq!(
+            decoded
+                .accepted_document()
+                .expect("decoded accepted payload")
+                .expect("decoded current accepted document")
+                .to_canonical_json()
+                .expect("decoded accepted canonical bytes"),
+            accepted_before,
+            "workspace decode must consume authenticated current accepted evidence rather than re-solve flattened intent"
+        );
+        let restored = coordinator_from_snapshot(&decoded).expect("restored coordinator");
+        assert_eq!(
+            restored
+                .session()
+                .export_accepted_json()
+                .expect("restored accepted export")
+                .expect("restored current accepted bytes"),
+            accepted_before
+        );
+        let accepted = restored
+            .session()
+            .accepted_state_for_current_input()
+            .expect("restored current accepted state");
+        assert!(accepted.document().point(ids.center).is_some());
+        assert!(accepted.document().curve(ids.arc).is_some());
+        assert!(
+            accepted
+                .document()
+                .points()
+                .iter()
+                .all(|point| point.position.into_iter().all(f64::is_finite))
+        );
+        let report = accepted.solve_result().unstable_core_report();
+        assert!(report.hard_residuals_validated, "{report:#?}");
+        assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one cache-free workspace regression keeps native-Fillet authoring, retained rejection, exact accepted bytes, identity high-water, and independent validity adjacent"
+    )]
+    fn workspace_v7_cache_free_reload_publishes_exact_older_accepted_native_fillet() {
+        let (mut coordinator, ids) = current_native_fillet_corner();
+        let center = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted native Fillet")
+            .document()
+            .point(ids.center)
+            .expect("accepted Fillet center")
+            .position;
+        let anchored_center = [center[0] + 1.0, center[1] + 0.75];
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreateConstraint {
+                    label: "accepted center anchor".into(),
+                    definition: DocumentConstraintDefinition::FixedPoint {
+                        point: ids.center,
+                        target: anchored_center,
+                    },
+                },
+            )
+            .expect("accepted center anchor");
+        let accepted_before = coordinator
+            .session()
+            .export_accepted_json()
+            .expect("accepted export")
+            .expect("accepted native-Fillet bytes");
+        let rejected = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreateConstraint {
+                    label: "conflicting center anchor".into(),
+                    definition: DocumentConstraintDefinition::FixedPoint {
+                        point: ids.center,
+                        target: [anchored_center[0] + 1.0, anchored_center[1] + 1.0],
+                    },
+                },
+            )
+            .expect("structurally valid conflicting anchor");
+        assert!(rejected.published_accepted.is_none());
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_none()
+        );
+        assert_eq!(
+            coordinator
+                .session()
+                .export_accepted_json()
+                .expect("retained accepted export")
+                .expect("older accepted bytes"),
+            accepted_before
+        );
+        let mut expected =
+            SketchDocument::from_json(&accepted_before).expect("accepted native-Fillet document");
+        expected
+            .retain_persistent_identity_high_water(
+                coordinator.session().persistent_identity_high_water(),
+            )
+            .expect("retain rejected-action identity high-water");
+        let expected = expected
+            .to_canonical_json()
+            .expect("canonical expected accepted bytes");
+
+        let encoded = WorkspaceSnapshot::from_coordinator(&coordinator)
+            .expect("workspace")
+            .encode()
+            .expect("workspace JSON");
+        let accepted_intent =
+            RetainedEditorCoordinator::lineage_last_accepted_materialization_checkpoint(
+                &coordinator.lineage_session_json().expect("lineage session"),
+            )
+            .expect("accepted lineage materialization")
+            .expect("accepted lineage checkpoint");
+        assert_ne!(
+            accepted_before,
+            accepted_intent.design_json(),
+            "the fixture must preserve a topology-sensitive accepted native-Fillet result distinct from its flattened authored seed"
+        );
+        let mut cache_free: serde_json::Value =
+            serde_json::from_str(&encoded).expect("workspace value");
+        let object = cache_free.as_object_mut().expect("workspace object");
+        for field in [
+            "lineage_materialization_map_json",
+            "design",
+            "accepted",
+            "accepted_belongs_to_current_design",
+            "sketch_identity_high_water",
+            "features_json",
+            "feature_lifecycle_high_water",
+            "computed_evaluation_high_water",
+            "annotation_layout_json",
+            "revisions",
+        ] {
+            object.remove(field);
+        }
+
+        let decoded = WorkspaceSnapshot::decode(
+            &serde_json::to_string(&cache_free).expect("cache-free workspace JSON"),
+        )
+        .expect("cache-free cold lineage reconstruction");
+        assert_eq!(
+            decoded
+                .accepted_document()
+                .expect("decoded accepted payload")
+                .expect("decoded historical accepted document")
+                .to_canonical_json()
+                .expect("decoded accepted canonical bytes"),
+            expected,
+            "the workspace decoder itself must publish the exact authenticated accepted evidence"
+        );
+        let restored = coordinator_from_snapshot(&decoded).expect("restored coordinator");
+        assert!(restored.session().last_attempt().failure().is_some());
+        assert!(
+            restored
+                .session()
+                .accepted_state_for_current_input()
+                .is_none()
+        );
+        assert_eq!(
+            restored
+                .session()
+                .export_accepted_json()
+                .expect("restored accepted export")
+                .expect("restored older accepted bytes"),
+            expected,
+            "cache-free restore may advance only allocator high-water over the exact cold-authenticated native-Fillet bytes"
+        );
+        let accepted = restored
+            .session()
+            .accepted_state()
+            .expect("restored historical accepted state");
+        assert!(accepted.document().point(ids.center).is_some());
+        assert!(accepted.document().curve(ids.arc).is_some());
+        assert!(
+            accepted
+                .document()
+                .points()
+                .iter()
+                .all(|point| point.position.into_iter().all(f64::is_finite))
+        );
+        let report = accepted.solve_result().unstable_core_report();
+        assert!(report.hard_residuals_validated, "{report:#?}");
+        assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
     }
 
     #[test]
@@ -4282,7 +4643,11 @@ mod tests {
     }
 
     #[test]
-    fn v5_current_design_provenance_restores_flexible_fillet_bytes_exactly() {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one cache-free current-authority regression keeps flexible-Fillet setup, historical-route rejection, and exact restored bytes adjacent"
+    )]
+    fn workspace_v7_cache_free_current_design_solve_restores_flexible_fillet_exactly() {
         let fixture = alpha_scenario(AlphaScenarioKind::FilletLineCircle, 1.0)
             .expect("line-circle fillet fixture");
         let AlphaScenarioIds::FilletLineCircle(ids) = fixture.ids else {
@@ -4337,11 +4702,49 @@ mod tests {
         let accepted_json_before = accepted_before
             .to_canonical_json()
             .expect("accepted canonical bytes");
+        let current_lineage = coordinator
+            .lineage_session_json()
+            .expect("current accepted lineage session");
+        let current_ledger = coordinator
+            .lineage_host_input_ledger_json()
+            .expect("current accepted host-input ledger");
+        let historical_error =
+            RetainedEditorCoordinator::lineage_cold_historical_accepted_evidence_checkpoint(
+                &current_lineage,
+                Some(&current_ledger),
+                coordinator.session().accepted_parameter_batch(),
+                coordinator.session().accepted_external_snapshot_set(),
+            )
+            .expect_err("current accepted authority is not historical fallback evidence");
+        assert!(
+            historical_error
+                .to_string()
+                .contains("requires a rejected current lineage attempt")
+        );
 
-        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("capture v5");
+        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("capture v7");
         assert!(snapshot.accepted_belongs_to_current_design);
-        let decoded =
-            WorkspaceSnapshot::decode(&snapshot.encode().expect("encode v5")).expect("decode v5");
+        let mut cache_free: serde_json::Value =
+            serde_json::from_str(&snapshot.encode().expect("encode v7")).expect("workspace value");
+        let object = cache_free.as_object_mut().expect("workspace object");
+        for field in [
+            "lineage_materialization_map_json",
+            "design",
+            "accepted",
+            "accepted_belongs_to_current_design",
+            "sketch_identity_high_water",
+            "features_json",
+            "feature_lifecycle_high_water",
+            "computed_evaluation_high_water",
+            "annotation_layout_json",
+            "revisions",
+        ] {
+            object.remove(field);
+        }
+        let decoded = WorkspaceSnapshot::decode(
+            &serde_json::to_string(&cache_free).expect("cache-free workspace JSON"),
+        )
+        .expect("cache-free v7 decode");
         assert!(decoded.accepted_belongs_to_current_design);
         let restored = decoded
             .restore_session(DocumentSolveRequest::default(), SolverConfig::default())

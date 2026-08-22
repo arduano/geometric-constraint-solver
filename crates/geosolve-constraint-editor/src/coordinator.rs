@@ -2123,6 +2123,12 @@ pub enum CoordinatorError {
     #[cfg(test)]
     #[error("injected previous-checkpoint failure")]
     InjectedPreviousCheckpointFailure,
+    #[cfg(test)]
+    #[error("injected post-refresh checkpoint failure")]
+    InjectedPostRefreshCheckpointFailure,
+    #[cfg(test)]
+    #[error("injected reload lineage-import failure")]
+    InjectedReloadLineageImportFailure,
 }
 
 impl From<lineage::LineageBridgeError> for CoordinatorError {
@@ -2161,6 +2167,10 @@ pub struct RetainedEditorCoordinator {
     offset_authoring_distance_origin: Option<Box<OffsetAuthoringDistanceOrigin>>,
     #[cfg(test)]
     reject_next_previous_checkpoint: bool,
+    #[cfg(test)]
+    reject_next_post_refresh_checkpoint: bool,
+    #[cfg(test)]
+    reject_next_reload_lineage_import: bool,
 }
 
 /// Fully prepared, infallibly publishable state for one accepted inferred
@@ -2176,6 +2186,15 @@ struct StagedConstructionPublication {
     checkpoint: RestoreCheckpoint,
 }
 
+/// Complete fallible lineage preparation for an accepted construction.
+/// Publication moves these values into the live coordinator without another
+/// checkpoint, cold reproduction, computed evaluation, or lineage mutation.
+struct PreparedConstructionPublication {
+    lineage: CoordinatorLineage,
+    staged: StagedConstructionPublication,
+    replay: ReplayAction,
+}
+
 /// Complete fallible Undo/Redo result. Publication only moves these prepared
 /// values into the live coordinator, so a traversal, restore, evaluation, or
 /// evidence failure cannot expose a partially restored workbench.
@@ -2189,6 +2208,35 @@ struct StagedHistoryPublication {
     computed_evaluation_problem: Option<String>,
     history_checkpoint: RestoreCheckpoint,
     target: usize,
+}
+
+/// Fully authenticated sketch-plus-feature lineage transaction. Strict cold
+/// evidence owns the accepted graph; an exact provisional computed result is
+/// retained only when that graph is byte-identical, otherwise every computed
+/// companion is rebuilt before these fields can reach the live owner.
+struct StagedSketchFeaturePublication {
+    lineage: CoordinatorLineage,
+    session: RetainedSketchDocumentSession,
+    computed_evaluation_allocator: ComputedEvaluationAllocator,
+    computed_snapshot: ComputedFeatureSnapshot,
+    checkpoint: RestoreCheckpoint,
+}
+
+fn replace_session_accepted_from_lineage_evidence(
+    session: &mut RetainedSketchDocumentSession,
+    evidence: Option<&LineageDomainEvaluationEvidence>,
+) -> Result<(), CoordinatorError> {
+    let Some(evidence) = evidence else {
+        return Ok(());
+    };
+    let accepted = if evidence.accepted_uses_draft_v5() {
+        SketchDocument::from_draft_v5_json(evidence.accepted_sketch_json())?
+    } else {
+        SketchDocument::from_json(evidence.accepted_sketch_json())?
+    };
+    let expected = session.prepared_input();
+    session.replace_current_accepted_materialization(expected, accepted)?;
+    Ok(())
 }
 
 /// Exact non-persistent whole-feature candidate accepted during one published
@@ -2423,6 +2471,10 @@ impl RetainedEditorCoordinator {
             offset_authoring_distance_origin: None,
             #[cfg(test)]
             reject_next_previous_checkpoint: false,
+            #[cfg(test)]
+            reject_next_post_refresh_checkpoint: false,
+            #[cfg(test)]
+            reject_next_reload_lineage_import: false,
         };
         coordinator.refresh_computed_features();
         coordinator.history.push(checkpoint(
@@ -2621,6 +2673,117 @@ impl RetainedEditorCoordinator {
         let lineage = CoordinatorLineage::from_session_json(lineage_session_json)?;
         Ok(lineage
             .materialize_last_accepted()?
+            .map(lineage::LineageCheckpoint::into_restore_checkpoint))
+    }
+
+    /// Cold-authenticates the exact owning-domain accepted sketch evidence for
+    /// a workspace-v7 current accepted lineage program.
+    ///
+    /// This is the current-authority counterpart to
+    /// [`Self::lineage_cold_historical_accepted_evidence_checkpoint`]. It
+    /// verifies the persisted current lineage identity, exact host inputs and
+    /// accepted materialization digest through chronological owning-domain
+    /// evaluation, then returns those canonical accepted sketch bytes marked
+    /// as belonging to the current retained design. Callers must consume
+    /// [`RestoreCheckpoint::accepted_json`] directly rather than independently
+    /// solving flattened retained intent.
+    ///
+    /// When a bounded historical-input ledger is supplied, every current,
+    /// Undo and Redo accepted authority is authenticated before evidence is
+    /// returned. The compatibility path without a ledger authenticates the
+    /// visible current authority and remains subject to eager history
+    /// validation during coordinator restoration.
+    ///
+    /// # Errors
+    ///
+    /// Returns a strict session, ledger, external-input, cold-evaluation, or
+    /// accepted-materialization mismatch without returning flat evidence.
+    pub fn lineage_cold_current_accepted_evidence_checkpoint(
+        lineage_session_json: &str,
+        lineage_host_input_ledger_json: Option<&str>,
+        parameters: &ParameterBatch,
+        snapshots: &ExternalSnapshotSet,
+    ) -> Result<RestoreCheckpoint, CoordinatorError> {
+        let mut lineage = if let Some(ledger) = lineage_host_input_ledger_json {
+            CoordinatorLineage::from_session_and_host_input_ledger_json(
+                lineage_session_json,
+                ledger,
+            )?
+        } else {
+            CoordinatorLineage::from_session_json(lineage_session_json)?
+        };
+        if lineage_host_input_ledger_json.is_some() {
+            lineage.validate_complete_accepted_authority(Some(parameters), Some(snapshots))?;
+        } else {
+            lineage.retain_validated_visible_accepted_external_inputs(
+                Some(parameters),
+                Some(snapshots),
+            )?;
+        }
+        if !lineage.current_evaluation_is_accepted() {
+            return Err(CoordinatorError::Lineage(
+                "current accepted evidence requires an accepted current lineage attempt".into(),
+            ));
+        }
+        lineage
+            .cold_current_accepted_evidence_checkpoint(parameters, snapshots)?
+            .map(lineage::LineageCheckpoint::into_restore_checkpoint)
+            .ok_or_else(|| {
+                CoordinatorError::Lineage(
+                    "accepted current lineage attempt has no authenticated current evidence".into(),
+                )
+            })
+    }
+
+    /// Cold-authenticates the exact historical accepted sketch evidence needed
+    /// when a workspace-v7 current lineage attempt is rejected.
+    ///
+    /// Unlike [`Self::lineage_last_accepted_materialization_checkpoint`], the
+    /// returned checkpoint carries the owning-domain accepted sketch bytes
+    /// produced by chronological lineage evaluation and marks them as distinct
+    /// from current retained intent. When the bounded
+    /// historical-input ledger is present, it first authenticates every
+    /// visible, Undo, and Redo accepted authority. The compatibility path for
+    /// older v7 payloads without that companion authenticates the visible
+    /// accepted authority here and remains subject to eager history validation
+    /// when the coordinator is restored. Callers must consume
+    /// [`RestoreCheckpoint::accepted_json`] directly; independently solving
+    /// the flattened retained design would create a second authority.
+    ///
+    /// # Errors
+    ///
+    /// Returns a strict session, ledger, external-input, cold-evaluation, or
+    /// accepted-materialization mismatch without returning flat evidence.
+    pub fn lineage_cold_historical_accepted_evidence_checkpoint(
+        lineage_session_json: &str,
+        lineage_host_input_ledger_json: Option<&str>,
+        accepted_parameters: Option<&ParameterBatch>,
+        accepted_snapshots: Option<&ExternalSnapshotSet>,
+    ) -> Result<Option<RestoreCheckpoint>, CoordinatorError> {
+        let mut lineage = if let Some(ledger) = lineage_host_input_ledger_json {
+            CoordinatorLineage::from_session_and_host_input_ledger_json(
+                lineage_session_json,
+                ledger,
+            )?
+        } else {
+            CoordinatorLineage::from_session_json(lineage_session_json)?
+        };
+        if lineage_host_input_ledger_json.is_some() {
+            lineage
+                .validate_complete_accepted_authority(accepted_parameters, accepted_snapshots)?;
+        } else {
+            lineage.retain_validated_visible_accepted_external_inputs(
+                accepted_parameters,
+                accepted_snapshots,
+            )?;
+        }
+        if lineage.current_evaluation_is_accepted() {
+            return Err(CoordinatorError::Lineage(
+                "historical accepted evidence requires a rejected current lineage attempt".into(),
+            ));
+        }
+        Ok(lineage
+            .cold_historical_accepted_evidence_checkpoint()?
             .map(lineage::LineageCheckpoint::into_restore_checkpoint))
     }
 
@@ -4070,18 +4233,21 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::OffsetPreviewMismatch);
         }
-        let next = checkpoint(
-            candidate_session,
-            &self.features,
-            &preview.computed_allocator,
-        )?;
+        let provisional_session = candidate_session.clone();
+        let provisional_allocator = preview.computed_allocator.clone();
         let expected = self.session.design_identity();
         let replay = ReplayAction::Edit {
             expected,
             edit: preview.edit.clone(),
             computed_features: None,
         };
-        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
+        let staged = self.stage_sketch_feature_mutation_publication(
+            provisional_session,
+            &self.features,
+            &provisional_allocator,
+            &preview.computed_snapshot,
+            &replay,
+        )?;
         let effect =
             DocumentCommandEffect::CreatedProfileOffset(Box::new(DocumentProfileOffsetIds {
                 target: preview.metadata.distance,
@@ -4092,7 +4258,8 @@ impl RetainedEditorCoordinator {
             .offset_authoring_preview
             .take()
             .ok_or(CoordinatorError::OffsetPreviewMismatch)?;
-        let committed = match self.session.commit_prepared_patch(preview.patch) {
+        let mut cas_session = self.session.clone();
+        let committed = match cas_session.commit_prepared_patch(preview.patch) {
             Ok(committed) => committed,
             Err(error) => {
                 self.clear_transient();
@@ -4103,13 +4270,14 @@ impl RetainedEditorCoordinator {
             self.clear_transient();
             return Err(CoordinatorError::OffsetPreviewMismatch);
         }
-        self.computed_evaluation_allocator = preview.computed_allocator;
-        self.computed_input = Some(preview.computed_input);
-        self.computed_snapshot = Some(preview.computed_snapshot);
+        self.session = staged.session;
+        self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
+        self.computed_input = Some(staged.computed_snapshot.input());
+        self.computed_snapshot = Some(staged.computed_snapshot);
         self.computed_evaluation_problem = None;
         let model_scale = self.session.design_document().model_scale();
         let _ = state.activate(preview.next_operand_index, model_scale);
-        self.publish_staged_feature_mutation(staged_lineage, next, replay);
+        self.publish_staged_feature_mutation(staged.lineage, staged.checkpoint, replay);
         Ok(MutationOutcome {
             value: effect,
             design: committed.design_identity(),
@@ -4951,26 +5119,27 @@ impl RetainedEditorCoordinator {
             return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
         }
         require_current_feature_authoring_evaluation(&preview.snapshot, preview.metadata.feature)?;
-        let next = self.stage_feature_mutation_checkpoint(&preview.features)?;
         let replay = ReplayAction::CreateComputedFillet {
             expected: preview.expected,
             label: preview.label.clone(),
             radius: preview.candidate.radius(),
             corners: preview.candidate.persistent_corners(),
         };
-        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
+        let feature = preview.metadata.feature;
+        let staged = self.stage_feature_mutation_publication(
+            &preview.features,
+            &self.computed_evaluation_allocator,
+            &preview.snapshot,
+            &replay,
+        )?;
+        require_current_feature_authoring_evaluation(&staged.computed_snapshot, feature)?;
         let preview = self
             .feature_authoring_preview
             .take()
             .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
         let before = self.features.identity();
         let after = preview.features.identity();
-        let feature = preview.metadata.feature;
-        self.features = preview.features;
-        self.computed_input = Some(preview.snapshot.input());
-        self.computed_snapshot = Some(preview.snapshot);
-        self.computed_evaluation_problem = None;
-        self.publish_staged_feature_mutation(staged_lineage, next, replay);
+        self.publish_staged_computed_feature_mutation(staged, preview.features, replay);
         Ok(ComputedFeatureMutation {
             value: feature,
             before,
@@ -5032,7 +5201,7 @@ impl RetainedEditorCoordinator {
                 return Err(failure.coordinator_error());
             }
         }
-        let (replay, staged_lineage) = {
+        let (replay, staged) = {
             let Some(NativeFilletPreviewCache::Prepared(publication)) =
                 self.native_fillet_previews.get(&token)
             else {
@@ -5043,9 +5212,20 @@ impl RetainedEditorCoordinator {
                 edit: publication.edit.clone(),
                 computed_features: None,
             };
-            let staged_lineage =
-                self.stage_feature_mutation_lineage(&publication.checkpoint, &replay)?;
-            (replay, staged_lineage)
+            let candidate_session = publication
+                .patch
+                .preview()
+                .accepted_session()
+                .ok_or(CoordinatorError::NativeFilletPreviewMismatch)?
+                .clone();
+            let staged = self.stage_sketch_feature_mutation_publication(
+                candidate_session,
+                &self.features,
+                &publication.computed_allocator,
+                &publication.computed_snapshot,
+                &replay,
+            )?;
+            (replay, staged)
         };
         let Some(NativeFilletPreviewCache::Prepared(publication)) =
             self.native_fillet_previews.remove(&token)
@@ -5059,11 +5239,12 @@ impl RetainedEditorCoordinator {
             ids,
             edit: _,
             patch,
-            computed_snapshot,
-            computed_allocator,
-            checkpoint,
+            computed_snapshot: _,
+            computed_allocator: _,
+            checkpoint: _,
         } = *publication;
-        let committed = match self.session.commit_prepared_patch(patch) {
+        let mut cas_session = self.session.clone();
+        let committed = match cas_session.commit_prepared_patch(patch) {
             Ok(committed) => committed,
             Err(error) => {
                 self.clear_transient();
@@ -5074,12 +5255,13 @@ impl RetainedEditorCoordinator {
             self.clear_transient();
             return Err(CoordinatorError::NativeFilletPreviewMismatch);
         }
-        self.computed_evaluation_allocator = computed_allocator;
-        self.computed_input = Some(computed_snapshot.input());
-        self.computed_snapshot = Some(computed_snapshot);
+        self.session = staged.session;
+        self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
+        self.computed_input = Some(staged.computed_snapshot.input());
+        self.computed_snapshot = Some(staged.computed_snapshot);
         self.computed_evaluation_problem = None;
         self.clear_feature_authoring_preview();
-        self.publish_staged_feature_mutation(staged_lineage, checkpoint, replay);
+        self.publish_staged_feature_mutation(staged.lineage, staged.checkpoint, replay);
         Ok(MutationOutcome {
             value: ids,
             design: committed.design_identity(),
@@ -5542,18 +5724,14 @@ impl RetainedEditorCoordinator {
         }
         require_current_feature_authoring_evaluation(&snapshot, feature)?;
         let after = candidate.identity();
-        let next = checkpoint(&self.session, &candidate, &candidate_allocator)?;
-        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
-        self.features = candidate;
-        self.computed_evaluation_allocator = candidate_allocator;
-        self.computed_input = Some(snapshot.input());
-        self.computed_snapshot = Some(snapshot);
-        self.computed_preview_snapshot = None;
-        self.computed_preview_input = None;
-        self.computed_fillet_preview = None;
-        self.computed_evaluation_problem = None;
-        self.computed_preview_evaluation_problem = None;
-        self.publish_staged_feature_mutation(staged_lineage, next, replay);
+        let staged = self.stage_feature_mutation_publication(
+            &candidate,
+            &candidate_allocator,
+            &snapshot,
+            &replay,
+        )?;
+        require_current_feature_authoring_evaluation(&staged.computed_snapshot, feature)?;
+        self.publish_staged_computed_feature_mutation(staged, candidate, replay);
         Ok(ComputedFeatureMutation {
             value: (),
             before,
@@ -6055,7 +6233,6 @@ impl RetainedEditorCoordinator {
             return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
         }
         require_current_feature_authoring_evaluation(&preview.snapshot, feature)?;
-        let next = self.stage_feature_mutation_checkpoint(&preview.features)?;
         let radius = preview.radius;
         let corners = preview.corners.clone();
         let replay = ReplayAction::SetComputedFilletConfiguration {
@@ -6064,21 +6241,20 @@ impl RetainedEditorCoordinator {
             radius,
             corners,
         };
-        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
+        let staged = self.stage_feature_mutation_publication(
+            &preview.features,
+            &self.computed_evaluation_allocator,
+            &preview.snapshot,
+            &replay,
+        )?;
+        require_current_feature_authoring_evaluation(&staged.computed_snapshot, feature)?;
         let preview = self
             .computed_fillet_preview
             .take()
             .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
         let before = self.features.identity();
         let after = preview.features.identity();
-        self.features = preview.features;
-        self.computed_input = Some(preview.snapshot.input());
-        self.computed_snapshot = Some(preview.snapshot);
-        self.computed_preview_snapshot = None;
-        self.computed_preview_input = None;
-        self.computed_evaluation_problem = None;
-        self.computed_preview_evaluation_problem = None;
-        self.publish_staged_feature_mutation(staged_lineage, next, replay);
+        self.publish_staged_computed_feature_mutation(staged, preview.features, replay);
         Ok(ComputedFeatureMutation {
             value: (),
             before,
@@ -7368,21 +7544,34 @@ impl RetainedEditorCoordinator {
     /// # Errors
     ///
     /// Returns JSON, foreign-document, accepted-snapshot, solve-setup, or revision errors.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "legacy flat reload stages every fallible sketch, feature, computed and lineage owner before one atomic publication"
+    )]
     pub fn reload(&mut self, saved_checkpoint: &RestoreCheckpoint) -> Result<(), CoordinatorError> {
         let current_checkpoint = checkpoint(
             &self.session,
             &self.features,
             &self.computed_evaluation_allocator,
         )?;
-        let sketch_unchanged = self.session.accepted_state_for_current_input().is_some()
+        let current = self.session.revision_high_water();
+        let saved = saved_checkpoint.revisions;
+        let current_covers_saved_lifecycle = current.design().get() >= saved.design().get()
+            && current.attempt().get() >= saved.attempt().get()
+            && match saved.accepted() {
+                Some(saved) => current
+                    .accepted()
+                    .is_some_and(|current| current.get() >= saved.get()),
+                None => true,
+            };
+        let sketch_unchanged = current_covers_saved_lifecycle
+            && self.session.accepted_state_for_current_input().is_some()
             && saved_checkpoint.design_json == current_checkpoint.design_json
             && saved_checkpoint.design_is_draft_v5 == current_checkpoint.design_is_draft_v5
             && saved_checkpoint.accepted_json == current_checkpoint.accepted_json
             && saved_checkpoint.accepted_is_draft_v5 == current_checkpoint.accepted_is_draft_v5
             && saved_checkpoint.accepted_belongs_to_current_design
                 == current_checkpoint.accepted_belongs_to_current_design;
-        let current = self.session.revision_high_water();
-        let saved = saved_checkpoint.revisions;
         let accepted = match (current.accepted(), saved.accepted()) {
             (Some(first), Some(second)) => Some(first.get().max(second.get())),
             (Some(value), None) | (None, Some(value)) => Some(value.get()),
@@ -7416,40 +7605,69 @@ impl RetainedEditorCoordinator {
             return Err(ComputedFeatureSnapshotError::FeatureDocumentForDifferentSketch.into());
         }
         restored_features.rebase_after_restore(retained_features)?;
-        self.computed_evaluation_allocator
-            .retain_high_water(saved_checkpoint.evaluation_allocator);
-        if let Some(restored) = restored {
-            self.session = restored;
+        let restored_session = if let Some(restored) = restored {
+            restored
         } else {
             let high_water = self
                 .session
                 .persistent_identity_high_water()
                 .merged(&saved_checkpoint.sketch_identity_high_water)?;
-            self.session
-                .retain_persistent_identity_high_water(&high_water)?;
+            let mut session = self.session.clone();
+            session.retain_persistent_identity_high_water(&high_water)?;
+            session
+        };
+        let mut restored_allocator = self.computed_evaluation_allocator.clone();
+        restored_allocator.retain_high_water(saved_checkpoint.evaluation_allocator);
+        let (computed_input, computed_snapshot, computed_evaluation_problem) =
+            match evaluate_computed_features(
+                &restored_session,
+                &restored_features,
+                &mut restored_allocator,
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => {
+                    (Some(value.input()), Some(value), None)
+                }
+                Ok(stopped) => (
+                    None,
+                    None,
+                    Some(format!(
+                        "computed-feature evaluation stopped: {:?}",
+                        stopped.report().stopping_reason
+                    )),
+                ),
+                Err(error) => (None, None, Some(error.to_string())),
+            };
+        let reloaded_checkpoint =
+            checkpoint(&restored_session, &restored_features, &restored_allocator)?;
+        #[cfg(test)]
+        if std::mem::take(&mut self.reject_next_reload_lineage_import) {
+            return Err(CoordinatorError::InjectedReloadLineageImportFailure);
         }
-        self.features = restored_features;
-        self.editor.invalidate_for_retained_state_change(true);
-        self.clear_transient();
-        self.refresh_computed_features();
-        self.history.clear();
-        let reloaded_checkpoint = checkpoint(
-            &self.session,
-            &self.features,
-            &self.computed_evaluation_allocator,
-        )?;
-        self.lineage = CoordinatorLineage::import(
+        let restored_lineage = CoordinatorLineage::import(
             geosolve_sketch_lineage::LineageDocumentId::from_raw(
-                self.session.design_document().id().0.as_u128(),
+                restored_session.design_document().id().0.as_u128(),
             ),
             &reloaded_checkpoint,
-            self.session.parameter_batch(),
-            self.session.external_snapshot_set(),
-            self.session.accepted_parameter_batch(),
-            self.session.accepted_external_snapshot_set(),
-            self.session.accepted_state_for_current_input().is_some(),
+            restored_session.parameter_batch(),
+            restored_session.external_snapshot_set(),
+            restored_session.accepted_parameter_batch(),
+            restored_session.accepted_external_snapshot_set(),
+            restored_session
+                .accepted_state_for_current_input()
+                .is_some(),
         )?;
-        self.history.push(reloaded_checkpoint);
+
+        self.session = restored_session;
+        self.lineage = restored_lineage;
+        self.features = restored_features;
+        self.computed_evaluation_allocator = restored_allocator;
+        self.computed_input = computed_input;
+        self.computed_snapshot = computed_snapshot;
+        self.computed_evaluation_problem = computed_evaluation_problem;
+        self.editor.invalidate_for_retained_state_change(true);
+        self.clear_transient();
+        self.history = vec![reloaded_checkpoint];
         self.history_cursor = 0;
         self.transcript.clear();
         self.reconcile_selection();
@@ -7722,13 +7940,13 @@ impl RetainedEditorCoordinator {
         };
         let previous_session = self.session.clone();
         let outcome = self.session.apply(expected, edit)?;
-        let result = MutationOutcome {
+        let mut result = MutationOutcome {
             value: outcome.value().clone(),
             design: outcome.design_identity(),
             attempt: outcome.attempt_identity(),
             published_accepted: outcome.published_accepted_identity(),
         };
-        self.record_mutation(replay, previous_session)?;
+        result.published_accepted = self.record_mutation(replay, previous_session)?;
         Ok(result)
     }
 
@@ -7807,19 +8025,36 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
         }
-        let next = checkpoint(&candidate_session, &transition.after, &candidate_allocator)?;
-        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
+        let staged = self.stage_sketch_feature_mutation_publication(
+            candidate_session,
+            &transition.after,
+            &candidate_allocator,
+            &snapshot,
+            &replay,
+        )?;
+        if recorded_computed_feature_dispositions(&staged.computed_snapshot)
+            != transition.dispositions
+        {
+            return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+        }
+        let independently_reanchored = staged
+            .computed_snapshot
+            .reanchored_feature_document(&transition.after)?;
+        if !computed_feature_document_semantics_match(&transition.after, &independently_reanchored)
+        {
+            return Err(CoordinatorError::ComputedFeatureReanchorNotDurable);
+        }
 
-        self.session = candidate_session;
+        self.session = staged.session;
         self.features = transition.after.clone();
-        self.computed_evaluation_allocator = candidate_allocator;
-        self.computed_input = Some(snapshot.input());
-        self.computed_snapshot = Some(snapshot);
+        self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
+        self.computed_input = Some(staged.computed_snapshot.input());
+        self.computed_snapshot = Some(staged.computed_snapshot);
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
         self.computed_fillet_preview = None;
         self.computed_evaluation_problem = None;
-        self.publish_staged_feature_mutation(staged_lineage, next, replay);
+        self.publish_staged_feature_mutation(staged.lineage, staged.checkpoint, replay);
         Ok(())
     }
 
@@ -8421,8 +8656,8 @@ impl RetainedEditorCoordinator {
         let outcome = self.session.transact(expected, |document| {
             document.rebind_external_binding(binding, expected_kind, expected_topology)
         })?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::RebindExternalBinding {
                 expected,
                 binding,
@@ -8451,29 +8686,15 @@ impl RetainedEditorCoordinator {
         self.ensure_expected(expected)?;
         let mut session = self.session.clone();
         let attempt = session.update_parameter_batch(expected, batch, request)?;
-        let result = MutationOutcome {
+        let mut result = MutationOutcome {
             value: (),
             design: attempt.design_identity(),
             attempt: attempt.identity(),
             published_accepted: attempt.accepted_state_identity(),
         };
-        let evaluated = checkpoint(
-            &session,
-            &self.features,
-            &self.computed_evaluation_allocator,
-        )?;
-        let mut lineage = self.lineage.clone();
-        lineage.publish_current_evaluation(
-            &evaluated,
-            session.parameter_batch(),
-            session.external_snapshot_set(),
-            session.accepted_state_for_current_input().is_some(),
-        )?;
-        self.session = session;
-        self.lineage = lineage;
-        self.editor.invalidate_for_retained_state_change(true);
-        self.clear_transient();
-        self.refresh_computed_features();
+        let (lineage, staged) = self.stage_current_input_publication(session)?;
+        self.publish_staged_current_input(lineage, staged);
+        result.published_accepted = self.session.last_attempt().accepted_state_identity();
         Ok(result)
     }
 
@@ -8498,29 +8719,15 @@ impl RetainedEditorCoordinator {
         self.ensure_expected(expected)?;
         let mut session = self.session.clone();
         let attempt = session.update_external_snapshot_set(expected, snapshots.clone(), request)?;
-        let result = MutationOutcome {
+        let mut result = MutationOutcome {
             value: (),
             design: attempt.design_identity(),
             attempt: attempt.identity(),
             published_accepted: attempt.accepted_state_identity(),
         };
-        let evaluated = checkpoint(
-            &session,
-            &self.features,
-            &self.computed_evaluation_allocator,
-        )?;
-        let mut lineage = self.lineage.clone();
-        lineage.publish_current_evaluation(
-            &evaluated,
-            session.parameter_batch(),
-            &snapshots,
-            session.accepted_state_for_current_input().is_some(),
-        )?;
-        self.session = session;
-        self.lineage = lineage;
-        self.editor.invalidate_for_retained_state_change(true);
-        self.clear_transient();
-        self.refresh_computed_features();
+        let (lineage, staged) = self.stage_current_input_publication(session)?;
+        self.publish_staged_current_input(lineage, staged);
+        result.published_accepted = self.session.last_attempt().accepted_state_identity();
         Ok(result)
     }
 
@@ -8559,13 +8766,13 @@ impl RetainedEditorCoordinator {
         let outcome = self.session.transact(expected, |document| {
             proposal.apply_with_role(document, role)
         })?;
-        let result = MutationOutcome {
+        let mut result = MutationOutcome {
             value: outcome.value().clone(),
             design: outcome.design_identity(),
             attempt: outcome.attempt_identity(),
             published_accepted: outcome.published_accepted_identity(),
         };
-        self.record_mutation(replay, previous_session)?;
+        result.published_accepted = self.record_mutation(replay, previous_session)?;
         Ok(result)
     }
 
@@ -8664,7 +8871,7 @@ impl RetainedEditorCoordinator {
         else {
             return Ok(controller.outcome_unchecked());
         };
-        let value = Self::validate_construction_plan_trial(&trial, &outcome)?;
+        let mut value = Self::validate_construction_plan_trial(&trial, &outcome)?;
         let Some(staged) =
             self.stage_construction_publication_in_controller(trial, &mut controller)?
         else {
@@ -8680,6 +8887,12 @@ impl RetainedEditorCoordinator {
         )? {
             return Ok(controller.outcome_unchecked());
         }
+        value.design = self.session.design_identity();
+        value.attempt = self.session.last_attempt().identity();
+        value.published_accepted = self
+            .session
+            .accepted_state_for_current_input()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
         Ok(controller.outcome(value))
     }
 
@@ -8691,22 +8904,24 @@ impl RetainedEditorCoordinator {
         trial: RetainedSketchDocumentSession,
         outcome: &geosolve_sketch::RetainedDocumentTransactionOutcome<ConstructionCommitResult>,
     ) -> Result<MutationOutcome<ConstructionCommitResult>, CoordinatorError> {
-        let result = Self::validate_construction_plan_trial(&trial, outcome)?;
+        let mut result = Self::validate_construction_plan_trial(&trial, outcome)?;
         let staged = self.stage_construction_publication(trial)?;
-        if effective_plan != authenticated_plan
-            && !self
-                .editor
-                .mark_construction_commit_published(expected, authenticated_plan)
-        {
-            return Err(CoordinatorError::InferredConstructionCommitMismatch);
-        }
-        self.publish_staged_construction(
+        let prepared = self.prepare_staged_construction(
             staged,
             ReplayAction::ConstructionPlan {
                 expected: Box::new(*expected),
                 plan: effective_plan.clone(),
             },
         )?;
+        result.design = prepared.staged.session.design_identity();
+        result.attempt = prepared.staged.session.last_attempt().identity();
+        result.published_accepted = prepared
+            .staged
+            .session
+            .accepted_state_for_current_input()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
+        self.mark_pending_construction_commit_published(expected, authenticated_plan)?;
+        self.publish_prepared_construction(prepared);
         Ok(result)
     }
 
@@ -8852,6 +9067,50 @@ impl RetainedEditorCoordinator {
         })
     }
 
+    /// Stages a host-input-only attempt or reattempt under strict cold lineage
+    /// authority. No live session, computed allocator, or presentation cache is
+    /// touched until the canonical accepted graph and its computed companions
+    /// are completely prepared.
+    fn stage_current_input_publication(
+        &self,
+        mut session: RetainedSketchDocumentSession,
+    ) -> Result<(CoordinatorLineage, StagedConstructionPublication), CoordinatorError> {
+        let preliminary = checkpoint(
+            &session,
+            &self.features,
+            &self.computed_evaluation_allocator,
+        )?;
+        let mut lineage = self.lineage.clone();
+        let evaluation = lineage.publish_current_evaluation(
+            &preliminary,
+            session.parameter_batch(),
+            session.latest_attempt_external_snapshot_set(),
+            session.accepted_state_for_current_input().is_some(),
+        )?;
+        replace_session_accepted_from_lineage_evidence(&mut session, evaluation.as_ref())?;
+        let staged = self.stage_construction_publication(session)?;
+        lineage.retain_computed_evaluation_high_water(
+            staged.checkpoint.computed_evaluation_high_water(),
+        )?;
+        Ok((lineage, staged))
+    }
+
+    fn publish_staged_current_input(
+        &mut self,
+        lineage: CoordinatorLineage,
+        staged: StagedConstructionPublication,
+    ) {
+        self.lineage = lineage;
+        self.session = staged.session;
+        self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
+        self.computed_input = staged.computed_input;
+        self.computed_snapshot = staged.computed_snapshot;
+        self.computed_evaluation_problem = staged.computed_evaluation_problem;
+        self.editor.invalidate_for_retained_state_change(true);
+        self.clear_transient();
+        self.reconcile_selection();
+    }
+
     fn stage_construction_publication_in_controller(
         &self,
         session: RetainedSketchDocumentSession,
@@ -8886,21 +9145,18 @@ impl RetainedEditorCoordinator {
         }))
     }
 
-    fn publish_staged_construction(
-        &mut self,
-        staged: StagedConstructionPublication,
+    fn prepare_staged_construction(
+        &self,
+        mut staged: StagedConstructionPublication,
         replay: ReplayAction,
-    ) -> Result<(), CoordinatorError> {
-        let published_plan = match &replay {
-            ReplayAction::ConstructionPlan { expected, plan } => Some((expected.as_ref(), plan)),
-            _ => None,
-        };
+    ) -> Result<PreparedConstructionPublication, CoordinatorError> {
         let previous = checkpoint(
             &self.session,
             &self.features,
             &self.computed_evaluation_allocator,
         )?;
-        self.lineage.record(
+        let mut lineage = self.lineage.clone();
+        let evaluation = lineage.record(
             &replay,
             self.editor.geometry_tool_variant(),
             &previous,
@@ -8908,6 +9164,74 @@ impl RetainedEditorCoordinator {
             staged.session.parameter_batch(),
             staged.session.external_snapshot_set(),
         )?;
+        let Some(evaluation) = evaluation else {
+            return Err(CoordinatorError::InferredConstructionNotAccepted);
+        };
+        replace_session_accepted_from_lineage_evidence(&mut staged.session, Some(&evaluation))?;
+        let mut allocator = self.computed_evaluation_allocator.clone();
+        let (computed_input, computed_snapshot, computed_evaluation_problem) =
+            match evaluate_computed_features(
+                &staged.session,
+                &self.features,
+                &mut allocator,
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => {
+                    (Some(value.input()), Some(value), None)
+                }
+                Ok(stopped) => (
+                    None,
+                    None,
+                    Some(format!(
+                        "computed-feature evaluation stopped: {:?}",
+                        stopped.report().stopping_reason
+                    )),
+                ),
+                Err(error) => (None, None, Some(error.to_string())),
+            };
+        staged.computed_evaluation_allocator = allocator;
+        staged.computed_input = computed_input;
+        staged.computed_snapshot = computed_snapshot;
+        staged.computed_evaluation_problem = computed_evaluation_problem;
+        staged.checkpoint = checkpoint(
+            &staged.session,
+            &self.features,
+            &staged.computed_evaluation_allocator,
+        )?;
+        lineage.retain_computed_evaluation_high_water(
+            staged.checkpoint.computed_evaluation_high_water(),
+        )?;
+        Ok(PreparedConstructionPublication {
+            lineage,
+            staged,
+            replay,
+        })
+    }
+
+    fn mark_pending_construction_commit_published(
+        &mut self,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+    ) -> Result<(), CoordinatorError> {
+        if self.editor.pending_construction_commit_token().is_none() {
+            return Ok(());
+        }
+        if !self
+            .editor
+            .mark_construction_commit_published(expected, plan)
+        {
+            return Err(CoordinatorError::InferredConstructionCommitMismatch);
+        }
+        Ok(())
+    }
+
+    fn publish_prepared_construction(&mut self, prepared: PreparedConstructionPublication) {
+        let PreparedConstructionPublication {
+            lineage,
+            staged,
+            replay,
+        } = prepared;
+        self.lineage = lineage;
         self.session = staged.session;
         self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
         self.computed_input = staged.computed_input;
@@ -8916,16 +9240,10 @@ impl RetainedEditorCoordinator {
         self.history.truncate(self.history_cursor + 1);
         self.history.push(staged.checkpoint);
         self.history_cursor += 1;
-        if let Some((expected, plan)) = published_plan {
-            let _ = self
-                .editor
-                .mark_construction_commit_published(expected, plan);
-        }
         self.transcript.push(replay);
         self.editor.invalidate_for_retained_state_change(false);
         self.clear_transient();
         self.reconcile_selection();
-        Ok(())
     }
 
     fn publish_staged_construction_in_controller(
@@ -8934,13 +9252,21 @@ impl RetainedEditorCoordinator {
         replay: ReplayAction,
         controller: &mut OperationController,
     ) -> Result<bool, CoordinatorError> {
+        let pending_plan = match &replay {
+            ReplayAction::ConstructionPlan { expected, plan } => Some((**expected, plan.clone())),
+            _ => None,
+        };
+        let prepared = self.prepare_staged_construction(staged, replay)?;
         if controller
             .checkpoint(OperationCheckpoint::BeforeCommit)
             .is_err()
         {
             return Ok(false);
         }
-        self.publish_staged_construction(staged, replay)?;
+        if let Some((expected, plan)) = pending_plan {
+            self.mark_pending_construction_commit_published(&expected, &plan)?;
+        }
+        self.publish_prepared_construction(prepared);
         Ok(true)
     }
 
@@ -9030,8 +9356,8 @@ impl RetainedEditorCoordinator {
                 })?
             }
         };
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::ConstraintAction {
                 expected,
                 selection,
@@ -9260,8 +9586,8 @@ impl RetainedEditorCoordinator {
                 mode,
             )
         })?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::DimensionAction {
                 expected,
                 selection,
@@ -9660,8 +9986,8 @@ impl RetainedEditorCoordinator {
         let outcome = self
             .session
             .apply(expected, DocumentEdit::SetContactBranches { edits })?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::SetContactBranches {
                 expected,
                 selection,
@@ -9708,8 +10034,8 @@ impl RetainedEditorCoordinator {
                 orientation,
             },
         )?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::SetAngleOrientation {
                 expected,
                 dimension,
@@ -9760,8 +10086,8 @@ impl RetainedEditorCoordinator {
                 mode,
             )
         })?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::PointDistance {
                 expected,
                 points: [first, second],
@@ -9838,8 +10164,8 @@ impl RetainedEditorCoordinator {
                 mode,
             )
         })?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::SegmentLength {
                 expected,
                 curve,
@@ -9882,8 +10208,8 @@ impl RetainedEditorCoordinator {
         let outcome = self
             .session
             .apply(expected, DocumentEdit::SetDimensionMode { dimension, mode })?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::SetDimensionMode {
                 expected,
                 dimension,
@@ -9960,8 +10286,8 @@ impl RetainedEditorCoordinator {
             document.remove_many_with_dependents(&objects)?;
             Ok(objects)
         })?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::Delete {
                 expected,
                 selection,
@@ -10048,8 +10374,8 @@ impl RetainedEditorCoordinator {
             }
             Ok(sources)
         })?;
-        let result = mutation_from(&outcome);
-        self.record_mutation(
+        let mut result = mutation_from(&outcome);
+        result.published_accepted = self.record_mutation(
             ReplayAction::SetSuppressed {
                 expected,
                 selection,
@@ -10073,23 +10399,8 @@ impl RetainedEditorCoordinator {
         let request = self.session.last_attempt().input().candidate_request();
         let mut session = self.session.clone();
         let attempt = session.reattempt(expected, request)?.identity();
-        let evaluated = checkpoint(
-            &session,
-            &self.features,
-            &self.computed_evaluation_allocator,
-        )?;
-        let mut lineage = self.lineage.clone();
-        lineage.publish_current_evaluation(
-            &evaluated,
-            session.parameter_batch(),
-            session.external_snapshot_set(),
-            session.accepted_state_for_current_input().is_some(),
-        )?;
-        self.session = session;
-        self.lineage = lineage;
-        self.editor.invalidate_for_retained_state_change(true);
-        self.clear_transient();
-        self.refresh_computed_features();
+        let (lineage, staged) = self.stage_current_input_publication(session)?;
+        self.publish_staged_current_input(lineage, staged);
         self.transcript.push(ReplayAction::Reattempt { expected });
         Ok(attempt)
     }
@@ -10972,7 +11283,7 @@ impl RetainedEditorCoordinator {
                 .max(target_revisions.attempt().get()),
             accepted,
         );
-        let session = restore_sketch_checkpoint_from_lineage(
+        let mut session = restore_sketch_checkpoint_from_lineage(
             &self.session,
             &lineage,
             &target_checkpoint,
@@ -10991,6 +11302,14 @@ impl RetainedEditorCoordinator {
         features.rebase_after_restore(retained_features)?;
         let mut computed_evaluation_allocator = self.computed_evaluation_allocator.clone();
         computed_evaluation_allocator.retain_high_water(target_checkpoint.evaluation_allocator);
+        let preliminary = checkpoint(&session, &features, &computed_evaluation_allocator)?;
+        let evaluation = lineage.publish_current_evaluation(
+            &preliminary,
+            session.parameter_batch(),
+            session.latest_attempt_external_snapshot_set(),
+            session.accepted_state_for_current_input().is_some(),
+        )?;
+        replace_session_accepted_from_lineage_evidence(&mut session, evaluation.as_ref())?;
         let (computed_input, computed_snapshot, computed_evaluation_problem) =
             match evaluate_computed_features(
                 &session,
@@ -11012,12 +11331,8 @@ impl RetainedEditorCoordinator {
                 Err(error) => (None, None, Some(error.to_string())),
             };
         let checkpoint = checkpoint(&session, &features, &computed_evaluation_allocator)?;
-        lineage.publish_current_evaluation(
-            &checkpoint,
-            session.parameter_batch(),
-            session.latest_attempt_external_snapshot_set(),
-            session.accepted_state_for_current_input().is_some(),
-        )?;
+        lineage
+            .retain_computed_evaluation_high_water(checkpoint.computed_evaluation_high_water())?;
         // The disposable history slot retains the lifecycle frozen at that
         // user-visible position, while its accepted bytes are refreshed only
         // from the independently rebuilt live domains. Session-global
@@ -11071,17 +11386,23 @@ impl RetainedEditorCoordinator {
         &mut self,
         replay: ReplayAction,
         previous_session: RetainedSketchDocumentSession,
-    ) -> Result<(), CoordinatorError> {
+    ) -> Result<Option<SketchAcceptedStateIdentity>, CoordinatorError> {
         let previous = self.computed_snapshot.clone();
         self.record_mutation_continuing(replay, previous.as_ref(), previous_session)
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one atomic sketch-plus-feature publication keeps canonical replay, computed continuation and complete rollback visibly ordered"
+    )]
     fn record_mutation_continuing(
         &mut self,
         mut replay: ReplayAction,
         previous: Option<&ComputedFeatureSnapshot>,
         previous_session: RetainedSketchDocumentSession,
-    ) -> Result<(), CoordinatorError> {
+    ) -> Result<Option<SketchAcceptedStateIdentity>, CoordinatorError> {
+        let original_replay = replay.clone();
+        let previous_lineage = self.lineage.clone();
         let preserve_pending_plan = matches!(&replay, ReplayAction::ConstructionPlan { .. });
         let recorded_edit = match &replay {
             ReplayAction::Edit { edit, .. } => Some(edit.clone()),
@@ -11126,14 +11447,27 @@ impl RetainedEditorCoordinator {
         {
             *recorded = computed_features.map(Box::new);
         }
-        let next = match checkpoint(
+        #[cfg(test)]
+        let next_checkpoint = if std::mem::take(&mut self.reject_next_post_refresh_checkpoint) {
+            Err(CoordinatorError::InjectedPostRefreshCheckpointFailure)
+        } else {
+            checkpoint(
+                &self.session,
+                &self.features,
+                &self.computed_evaluation_allocator,
+            )
+        };
+        #[cfg(not(test))]
+        let next_checkpoint = checkpoint(
             &self.session,
             &self.features,
             &self.computed_evaluation_allocator,
-        ) {
+        );
+        let mut next = match next_checkpoint {
             Ok(next) => next,
             Err(error) => {
                 self.session = previous_session;
+                self.lineage = previous_lineage;
                 self.features = previous_features;
                 self.computed_evaluation_allocator = previous_allocator;
                 self.computed_input = previous_computed_input;
@@ -11147,7 +11481,7 @@ impl RetainedEditorCoordinator {
                 return Err(error);
             }
         };
-        if let Err(error) = self.lineage.record(
+        let evaluation = match self.lineage.record(
             &replay,
             self.editor.geometry_tool_variant(),
             &previous_checkpoint,
@@ -11155,17 +11489,153 @@ impl RetainedEditorCoordinator {
             self.session.parameter_batch(),
             self.session.external_snapshot_set(),
         ) {
-            self.session = previous_session;
-            self.features = previous_features;
-            self.computed_evaluation_allocator = previous_allocator;
+            Ok(evaluation) => evaluation,
+            Err(error) => {
+                self.session = previous_session;
+                self.lineage = previous_lineage;
+                self.features = previous_features;
+                self.computed_evaluation_allocator = previous_allocator;
+                self.computed_input = previous_computed_input;
+                self.computed_snapshot = previous_computed_snapshot;
+                self.computed_preview_input = previous_computed_preview_input;
+                self.computed_preview_snapshot = previous_computed_preview_snapshot;
+                self.computed_fillet_preview = previous_computed_fillet_preview;
+                self.computed_evaluation_problem = previous_computed_evaluation_problem;
+                self.computed_preview_evaluation_problem =
+                    previous_computed_preview_evaluation_problem;
+                return Err(error.into());
+            }
+        };
+        if let Some(first_evaluation) = evaluation {
+            if let Err(error) = replace_session_accepted_from_lineage_evidence(
+                &mut self.session,
+                Some(&first_evaluation),
+            ) {
+                self.session = previous_session;
+                self.lineage = previous_lineage;
+                self.features = previous_features;
+                self.computed_evaluation_allocator = previous_allocator;
+                self.computed_input = previous_computed_input;
+                self.computed_snapshot = previous_computed_snapshot;
+                self.computed_preview_input = previous_computed_preview_input;
+                self.computed_preview_snapshot = previous_computed_preview_snapshot;
+                self.computed_fillet_preview = previous_computed_fillet_preview;
+                self.computed_evaluation_problem = previous_computed_evaluation_problem;
+                self.computed_preview_evaluation_problem =
+                    previous_computed_preview_evaluation_problem;
+                return Err(error);
+            }
+
+            // The first pass exists only to derive canonical cold accepted
+            // geometry. Re-run computed continuation/reanchor once from the
+            // pre-transaction state against that canonical session, then
+            // record the final atomic sketch+feature lineage action.
+            self.features = previous_features.clone();
+            self.computed_evaluation_allocator = previous_allocator.clone();
             self.computed_input = previous_computed_input;
-            self.computed_snapshot = previous_computed_snapshot;
+            self.computed_snapshot = previous_computed_snapshot.clone();
             self.computed_preview_input = previous_computed_preview_input;
-            self.computed_preview_snapshot = previous_computed_preview_snapshot;
-            self.computed_fillet_preview = previous_computed_fillet_preview;
-            self.computed_evaluation_problem = previous_computed_evaluation_problem;
-            self.computed_preview_evaluation_problem = previous_computed_preview_evaluation_problem;
-            return Err(error.into());
+            self.computed_preview_snapshot = previous_computed_preview_snapshot.clone();
+            self.computed_fillet_preview = previous_computed_fillet_preview.clone();
+            self.computed_evaluation_problem = previous_computed_evaluation_problem.clone();
+            self.computed_preview_evaluation_problem =
+                previous_computed_preview_evaluation_problem.clone();
+            replay = original_replay;
+            let computed_features =
+                self.refresh_computed_features_continuing(previous, true, recorded_edit.as_ref());
+            if let ReplayAction::Edit {
+                computed_features: recorded,
+                ..
+            } = &mut replay
+            {
+                *recorded = computed_features.map(Box::new);
+            }
+            next = match checkpoint(
+                &self.session,
+                &self.features,
+                &self.computed_evaluation_allocator,
+            ) {
+                Ok(next) => next,
+                Err(error) => {
+                    self.session = previous_session;
+                    self.lineage = previous_lineage;
+                    self.features = previous_features;
+                    self.computed_evaluation_allocator = previous_allocator;
+                    self.computed_input = previous_computed_input;
+                    self.computed_snapshot = previous_computed_snapshot;
+                    self.computed_preview_input = previous_computed_preview_input;
+                    self.computed_preview_snapshot = previous_computed_preview_snapshot;
+                    self.computed_fillet_preview = previous_computed_fillet_preview;
+                    self.computed_evaluation_problem = previous_computed_evaluation_problem;
+                    self.computed_preview_evaluation_problem =
+                        previous_computed_preview_evaluation_problem;
+                    return Err(error);
+                }
+            };
+            self.lineage = previous_lineage.clone();
+            let final_evaluation = match self.lineage.record(
+                &replay,
+                self.editor.geometry_tool_variant(),
+                &previous_checkpoint,
+                &next,
+                self.session.parameter_batch(),
+                self.session.external_snapshot_set(),
+            ) {
+                Ok(Some(evaluation)) => evaluation,
+                Ok(None) => {
+                    self.session = previous_session;
+                    self.lineage = previous_lineage;
+                    self.features = previous_features;
+                    self.computed_evaluation_allocator = previous_allocator;
+                    self.computed_input = previous_computed_input;
+                    self.computed_snapshot = previous_computed_snapshot;
+                    self.computed_preview_input = previous_computed_preview_input;
+                    self.computed_preview_snapshot = previous_computed_preview_snapshot;
+                    self.computed_fillet_preview = previous_computed_fillet_preview;
+                    self.computed_evaluation_problem = previous_computed_evaluation_problem;
+                    self.computed_preview_evaluation_problem =
+                        previous_computed_preview_evaluation_problem;
+                    return Err(CoordinatorError::Lineage(
+                        "canonical accepted publication became rejected during final lineage recording"
+                            .into(),
+                    ));
+                }
+                Err(error) => {
+                    self.session = previous_session;
+                    self.lineage = previous_lineage;
+                    self.features = previous_features;
+                    self.computed_evaluation_allocator = previous_allocator;
+                    self.computed_input = previous_computed_input;
+                    self.computed_snapshot = previous_computed_snapshot;
+                    self.computed_preview_input = previous_computed_preview_input;
+                    self.computed_preview_snapshot = previous_computed_preview_snapshot;
+                    self.computed_fillet_preview = previous_computed_fillet_preview;
+                    self.computed_evaluation_problem = previous_computed_evaluation_problem;
+                    self.computed_preview_evaluation_problem =
+                        previous_computed_preview_evaluation_problem;
+                    return Err(error.into());
+                }
+            };
+            if final_evaluation.accepted_sketch_json() != first_evaluation.accepted_sketch_json()
+                || final_evaluation.accepted_uses_draft_v5()
+                    != first_evaluation.accepted_uses_draft_v5()
+            {
+                self.session = previous_session;
+                self.lineage = previous_lineage;
+                self.features = previous_features;
+                self.computed_evaluation_allocator = previous_allocator;
+                self.computed_input = previous_computed_input;
+                self.computed_snapshot = previous_computed_snapshot;
+                self.computed_preview_input = previous_computed_preview_input;
+                self.computed_preview_snapshot = previous_computed_preview_snapshot;
+                self.computed_fillet_preview = previous_computed_fillet_preview;
+                self.computed_evaluation_problem = previous_computed_evaluation_problem;
+                self.computed_preview_evaluation_problem =
+                    previous_computed_preview_evaluation_problem;
+                return Err(CoordinatorError::Lineage(
+                    "canonical accepted publication changed during final lineage recording".into(),
+                ));
+            }
         }
         self.history.truncate(self.history_cursor + 1);
         self.history.push(next);
@@ -11176,7 +11646,7 @@ impl RetainedEditorCoordinator {
             .invalidate_for_retained_state_change(!preserve_pending_plan && !preserve_pending_ack);
         self.clear_transient();
         self.reconcile_selection();
-        Ok(())
+        Ok(self.session.last_attempt().accepted_state_identity())
     }
 
     fn mutate_features<T>(
@@ -11216,17 +11686,13 @@ impl RetainedEditorCoordinator {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
         let after = candidate.identity();
-        let next = checkpoint(&self.session, &candidate, &candidate_allocator)?;
-        let staged_lineage = self.stage_feature_mutation_lineage(&next, &replay)?;
-        self.features = candidate;
-        self.computed_evaluation_allocator = candidate_allocator;
-        self.computed_input = Some(snapshot.input());
-        self.computed_snapshot = Some(snapshot);
-        self.computed_preview_snapshot = None;
-        self.computed_preview_input = None;
-        self.computed_fillet_preview = None;
-        self.computed_evaluation_problem = None;
-        self.publish_staged_feature_mutation(staged_lineage, next, replay);
+        let staged = self.stage_feature_mutation_publication(
+            &candidate,
+            &candidate_allocator,
+            &snapshot,
+            &replay,
+        )?;
+        self.publish_staged_computed_feature_mutation(staged, candidate, replay);
         Ok(ComputedFeatureMutation {
             value,
             before,
@@ -13896,9 +14362,10 @@ fn native_fillet_document_unavailable(error: DocumentError) -> CoordinatorError 
 mod tests {
     use super::*;
     use crate::{
-        AuthoringOutcome, AuthoringState, ConstructionPoint, EditorScene, EditorTool,
-        FeatureAuthoringOutcome, FeatureAuthoringStage, FeatureAuthoringState, Modifiers,
-        OffsetAuthoringWarning, OffsetAuthoringWarningKind, PickTolerance, PointerInput,
+        AuthoringOutcome, AuthoringState, ConstructionPoint, DraftInferenceRelation,
+        DraftInferenceStatus, EditorScene, EditorTool, FeatureAuthoringOutcome,
+        FeatureAuthoringStage, FeatureAuthoringState, GeometryToolVariant, InferredRelation,
+        Modifiers, OffsetAuthoringWarning, OffsetAuthoringWarningKind, PickTolerance, PointerInput,
         ScreenPoint, Viewport,
     };
     use geosolve_sketch::{
@@ -14008,6 +14475,34 @@ mod tests {
                 &serde_json::to_value(action).expect("authored action value"),
             );
         }
+    }
+
+    fn assert_current_accepted_matches_strict_cold(coordinator: &RetainedEditorCoordinator) {
+        let lineage = coordinator
+            .lineage_session_json()
+            .expect("current lineage session");
+        let ledger = coordinator
+            .lineage_host_input_ledger_json()
+            .expect("current lineage host-input ledger");
+        let cold = RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+            &lineage,
+            Some(&ledger),
+            coordinator.session().parameter_batch(),
+            coordinator.session().external_snapshot_set(),
+        )
+        .expect("strict-cold current accepted authority");
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("live current accepted authority");
+        let live_json = if cold.accepted_uses_draft_v5() {
+            accepted.document().to_draft_v5_json()
+        } else {
+            accepted.document().to_canonical_json()
+        }
+        .expect("encode live current accepted authority");
+        assert_eq!(cold.accepted_json(), Some(live_json.as_str()));
+        assert!(cold.accepted_belongs_to_current_design());
     }
 
     macro_rules! auto_relations {
@@ -17215,6 +17710,338 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact owner regression preserves the M79 effective-plan gesture, complete failed authority, acknowledgement ordering, and one-position retry"
+    )]
+    fn m83_f039_inferred_construction_acknowledgement_follows_complete_lineage_preparation() {
+        const POINTER_ID: u64 = 0x83_0039;
+
+        fn accepted_scene(
+            coordinator: &RetainedEditorCoordinator,
+            viewport: Viewport,
+        ) -> EditorScene {
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted state");
+            EditorScene::from_accepted_for_design(
+                accepted.identity().revision().get(),
+                accepted.design_identity(),
+                accepted.document(),
+                coordinator.session().design_document(),
+                viewport,
+                0.25,
+            )
+            .expect("editor scene")
+            .with_retained_session(coordinator.session())
+            .expect("authenticated editor scene")
+        }
+
+        fn authoring(
+            preferred_candidate: Option<crate::DraftInferenceCandidateId>,
+        ) -> DraftAuthoringInput {
+            DraftAuthoringInput {
+                inference: DraftInferenceInput {
+                    suppressed: false,
+                    preferred_candidate,
+                },
+                regularized: false,
+            }
+        }
+
+        fn pointer(scene: &EditorScene, model_position: [f64; 2]) -> PointerInput {
+            PointerInput {
+                pointer_id: POINTER_ID,
+                position: scene.viewport.model_to_screen(model_position),
+                modifiers: Modifiers::default(),
+            }
+        }
+
+        fn press(
+            coordinator: &mut RetainedEditorCoordinator,
+            scene: &EditorScene,
+            model_position: [f64; 2],
+            preferred_candidate: Option<crate::DraftInferenceCandidateId>,
+        ) -> Vec<EditorEffect> {
+            coordinator.pointer_down_with_draft_authoring(
+                scene,
+                pointer(scene, model_position),
+                authoring(preferred_candidate),
+            )
+        }
+
+        fn commit_and_acknowledge(
+            coordinator: &mut RetainedEditorCoordinator,
+            effects: &[EditorEffect],
+        ) {
+            let commit = effects
+                .iter()
+                .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+                .expect("construction-plan effect");
+            let EditorEffect::CommitConstructionPlan { token, .. } = commit else {
+                unreachable!("filtered construction-plan effect")
+            };
+            coordinator
+                .apply_editor_effect(commit)
+                .expect("accepted construction publication")
+                .expect("construction mutation");
+            assert!(
+                coordinator
+                    .acknowledge_construction_commit(*token, true)
+                    .iter()
+                    .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+            );
+        }
+
+        let viewport = Viewport::new([1_000.0, 800.0], [0.0, 0.0], 50.0).expect("viewport");
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(10.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted empty session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        let initial_scene = accepted_scene(&coordinator, viewport);
+        let _ = coordinator
+            .editor_mut()
+            .activate_geometry_tool(GeometryToolVariant::CenterRectangle);
+        assert!(
+            press(&mut coordinator, &initial_scene, [0.0, 0.0], None)
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::PreviewConstruction(_)))
+        );
+        let rectangle = press(&mut coordinator, &initial_scene, [2.0, 1.0], None);
+        commit_and_acknowledge(&mut coordinator, &rectangle);
+
+        let rectangle_scene = accepted_scene(&coordinator, viewport);
+        let _ = coordinator
+            .editor_mut()
+            .activate_geometry_tool(GeometryToolVariant::MidpointLine);
+        let _ = press(&mut coordinator, &rectangle_scene, [0.0, 0.0], None);
+        coordinator.editor_mut().pointer_move_with_draft_authoring(
+            &rectangle_scene,
+            pointer(&rectangle_scene, [2.0, 0.0]),
+            authoring(None),
+        );
+        let resolution = coordinator
+            .editor()
+            .draft_inference_resolution()
+            .expect("midpoint candidate cohort");
+        let DraftInferenceStatus::Resolved { candidate } = resolution.status else {
+            panic!("expected ranked midpoint candidate: {resolution:?}");
+        };
+        let selected = resolution
+            .candidates
+            .iter()
+            .find(|value| value.id == candidate)
+            .expect("selected midpoint candidate");
+        assert!(matches!(
+            selected.relations.as_slice(),
+            [
+                DraftInferenceRelation::Midpoint { .. },
+                DraftInferenceRelation::Horizontal
+            ]
+        ));
+
+        let terminal = press(
+            &mut coordinator,
+            &rectangle_scene,
+            [2.0, 0.0],
+            Some(candidate),
+        );
+        let commit = terminal
+            .iter()
+            .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+            .expect("default midpoint construction plan")
+            .clone();
+        let EditorEffect::CommitConstructionPlan {
+            expected,
+            token,
+            plan,
+        } = &commit
+        else {
+            unreachable!("filtered construction-plan effect")
+        };
+        assert!(coordinator.editor.authenticates_construction_commit(
+            *token,
+            expected.as_ref(),
+            plan
+        ));
+
+        let complete_authority = format!("{coordinator:#?}");
+        let lineage = coordinator
+            .lineage_session_json()
+            .expect("lineage session before rejection");
+        let ledger = coordinator
+            .lineage_host_input_ledger_json()
+            .expect("lineage host-input ledger before rejection");
+        let checkpoint = format!(
+            "{:?}",
+            coordinator
+                .persistence_checkpoint()
+                .expect("checkpoint before rejection")
+        );
+        let history = (coordinator.history_len(), coordinator.history_cursor());
+        let transcript = coordinator.transcript().to_vec();
+        let allocator = coordinator.computed_evaluation_allocator.high_water();
+        let sketch_allocator = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+
+        coordinator.lineage.reject_next_record_for_test();
+        assert!(matches!(
+            coordinator.apply_editor_effect(&commit),
+            Err(CoordinatorError::Lineage(ref message))
+                if message == "injected lineage record failure"
+        ));
+
+        assert_eq!(format!("{coordinator:#?}"), complete_authority);
+        assert_eq!(
+            coordinator
+                .lineage_session_json()
+                .expect("lineage session after rejection"),
+            lineage
+        );
+        assert_eq!(
+            coordinator
+                .lineage_host_input_ledger_json()
+                .expect("lineage host-input ledger after rejection"),
+            ledger
+        );
+        assert_eq!(
+            format!(
+                "{:?}",
+                coordinator
+                    .persistence_checkpoint()
+                    .expect("checkpoint after rejection")
+            ),
+            checkpoint
+        );
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            history
+        );
+        assert_eq!(coordinator.transcript(), transcript);
+        assert_eq!(
+            coordinator.computed_evaluation_allocator.high_water(),
+            allocator
+        );
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &sketch_allocator
+        );
+        assert!(coordinator.editor.authenticates_construction_commit(
+            *token,
+            expected.as_ref(),
+            plan
+        ));
+        assert_eq!(
+            coordinator.editor.pending_construction_commit_token(),
+            Some(*token)
+        );
+
+        let prepared_input = coordinator.session().accepted_prepared_input();
+        let mut rejected_acknowledgement = coordinator.editor.clone();
+        assert!(
+            rejected_acknowledgement
+                .acknowledge_construction_commit_for_input(
+                    *token,
+                    true,
+                    prepared_input.as_ref(),
+                    true,
+                )
+                .is_empty(),
+            "failed preparation must not be positively acknowledgeable"
+        );
+
+        let published = coordinator
+            .apply_editor_effect(&commit)
+            .expect("retry after fallible lineage preparation")
+            .expect("one inferred construction mutation");
+        let EditorMutation::InferredConstruction(result) = published.value else {
+            panic!("expected inferred construction result")
+        };
+        assert!(published.published_accepted.is_some());
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            (history.0 + 1, history.1 + 1)
+        );
+        assert_eq!(coordinator.transcript().len(), transcript.len() + 1);
+        let ReplayAction::ConstructionPlan {
+            plan: effective_plan,
+            ..
+        } = coordinator
+            .transcript()
+            .last()
+            .expect("one effective-plan replay")
+        else {
+            panic!("expected construction-plan replay")
+        };
+        assert_eq!(effective_plan.relations.len() + 1, plan.relations.len());
+        assert!(effective_plan.relations.iter().all(|relation| {
+            relation.provenance != ConstructionRelationProvenance::AutoInference
+                || !matches!(relation.relation, InferredRelation::Horizontal { .. })
+        }));
+        assert!(effective_plan.relations.iter().any(|relation| {
+            relation.provenance == ConstructionRelationProvenance::AutoInference
+                && matches!(relation.relation, InferredRelation::Midpoint { .. })
+        }));
+        assert_eq!(
+            result
+                .constraints
+                .iter()
+                .filter(|constraint| {
+                    constraint.provenance == ConstructionRelationProvenance::AutoInference
+                })
+                .count(),
+            1
+        );
+
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted midpoint line");
+        assert!(
+            accepted
+                .document()
+                .points()
+                .iter()
+                .all(|point| point.position.into_iter().all(f64::is_finite))
+        );
+        assert!(
+            accepted
+                .solve_result()
+                .acceptance_hard_residual_max
+                .is_some_and(|residual| residual.is_finite() && residual <= 1.0e-9)
+        );
+
+        let successful_input = coordinator.session().accepted_prepared_input();
+        let mut accepted_acknowledgement = coordinator.editor.clone();
+        assert!(
+            accepted_acknowledgement
+                .acknowledge_construction_commit_for_input(
+                    *token,
+                    true,
+                    successful_input.as_ref(),
+                    true,
+                )
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview)),
+            "complete preparation must become positively acknowledgeable before the infallible swap"
+        );
+        assert!(
+            coordinator
+                .acknowledge_construction_commit(*token, true)
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+        );
+        assert_eq!(coordinator.editor.pending_construction_commit_token(), None);
+    }
+
+    #[test]
     fn controlled_inferred_report_includes_computed_staging_work() {
         let mut fixture = computed_fillet_editor_fixture();
         let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
@@ -17587,6 +18414,7 @@ mod tests {
         assert_eq!(coordinator.transcript().len(), transcript);
         let accepted_lineage_attempt = lineage_attempt(&coordinator);
         assert_eq!(accepted_lineage_attempt["disposition"], "accepted");
+        assert_current_accepted_matches_strict_cold(&coordinator);
         assert_ne!(
             accepted_lineage_attempt["external_inputs"],
             initial_lineage_attempt["external_inputs"]
@@ -17908,6 +18736,7 @@ mod tests {
                 DocumentSolveRequest::default(),
             )
             .expect("replace snapshots");
+        assert_current_accepted_matches_strict_cold(&coordinator);
         let current_lineage: serde_json::Value = serde_json::from_str(
             &coordinator
                 .lineage_session_json()
@@ -18806,15 +19635,27 @@ mod tests {
         ];
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         let expected = coordinator.session().design_identity();
+        let _ = coordinator.resolve_projected_point_move(310, 1, first, [3.0, 2.0]);
+        assert!(
+            coordinator
+                .projected_drag_work_evidence()
+                .is_some_and(|work| work.accepted),
+            "the supported projected move must produce accepted owner-rewrite evidence"
+        );
+        let projected = coordinator
+            .solved_preview_session()
+            .and_then(RetainedSketchDocumentSession::accepted_state_for_current_input)
+            .and_then(|accepted| accepted.document().point(first))
+            .map(|point| point.position)
+            .expect("accepted projected point position");
         coordinator
-            .apply_edit(
+            .apply_editor_effect(&EditorEffect::CommitPointMove {
                 expected,
-                DocumentEdit::SetPointPosition {
-                    point: first,
-                    position: [3.0, 2.0],
-                },
-            )
-            .expect("move");
+                point: first,
+                model_position: projected,
+            })
+            .expect("projected move")
+            .expect("one projected owner rewrite");
 
         coordinator.undo().expect("undo");
 
@@ -18840,6 +19681,7 @@ mod tests {
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         let expected = coordinator.session().design_identity();
         let attempt = coordinator.reattempt(expected).expect("reattempt");
+        assert_current_accepted_matches_strict_cold(&coordinator);
 
         assert_eq!(coordinator.transcript().len(), 1);
         assert!(matches!(
@@ -20061,6 +20903,545 @@ mod tests {
     }
 
     #[test]
+    fn m83_f032_raw_flexible_fillet_move_publishes_exact_cold_authority() {
+        let fixture =
+            alpha_scenario(AlphaScenarioKind::FilletLineCircle, 1.0).expect("fillet fixture");
+        let AlphaScenarioIds::FilletLineCircle(ids) = fixture.ids else {
+            panic!("line-circle Fillet IDs")
+        };
+        let session = RetainedSketchDocumentSession::new(
+            fixture.document,
+            fixture.request,
+            SolverConfig::default(),
+        )
+        .expect("accepted Fillet session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::Delete {
+                    object: DocumentObjectId::Dimension(ids.fillet.radius_dimension),
+                },
+            )
+            .expect("delete the Fillet radius dimension");
+
+        let initial_center = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("flexible accepted Fillet")
+            .document()
+            .point(ids.fillet.center)
+            .expect("Fillet center")
+            .position;
+        let history_len = coordinator.history_len();
+        let history_cursor = coordinator.history_cursor();
+        let moved = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: ids.fillet.center,
+                    position: [initial_center[0] + 0.2, initial_center[1] + 0.15],
+                },
+            )
+            .expect("authenticated chronological continuation reproduces the raw move");
+        assert!(moved.published_accepted.is_some());
+        assert_eq!(coordinator.history_len(), history_len + 1);
+        assert_eq!(coordinator.history_cursor(), history_cursor + 1);
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted moved Fillet")
+            .document();
+        let moved_center = accepted
+            .point(ids.fillet.center)
+            .expect("moved Fillet center")
+            .position;
+        assert_ne!(
+            moved_center.map(f64::to_bits),
+            initial_center.map(f64::to_bits)
+        );
+
+        let lineage = coordinator
+            .lineage_session_json()
+            .expect("lineage after raw move");
+        let ledger = coordinator
+            .lineage_host_input_ledger_json()
+            .expect("host-input ledger after raw move");
+        let cold = RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+            &lineage,
+            Some(&ledger),
+            coordinator.session().parameter_batch(),
+            coordinator.session().external_snapshot_set(),
+        )
+        .expect("genuine cold raw-move authority");
+        assert_eq!(
+            cold.accepted_json(),
+            coordinator.checkpoint().accepted_json(),
+            "live accepted bytes and cold lineage authority must be identical"
+        );
+    }
+
+    #[test]
+    fn m83_f033_live_rejected_edit_returns_strict_cold_published_identity() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let point = document.add_point("fixed", [0.0, 0.0]).expect("point");
+        document
+            .add_constraint(
+                "fixed",
+                DocumentConstraintDefinition::FixedPoint {
+                    point,
+                    target: [0.0, 0.0],
+                },
+            )
+            .expect("fixed-point constraint");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig {
+                max_iterations: 0,
+                ..SolverConfig::default()
+            },
+        )
+        .expect("initially satisfied fixed-point session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        let outcome = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point,
+                    position: [1.0, 0.0],
+                },
+            )
+            .expect("strict cold replay accepts the retained point edit");
+
+        let current = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("strict cold publication promoted the live-rejected edit");
+        assert_eq!(
+            outcome.published_accepted,
+            Some(current.identity()),
+            "the public mutation outcome must report canonical publication"
+        );
+        assert_eq!(outcome.design, current.design_identity());
+        assert_eq!(outcome.attempt, current.originating_attempt());
+        assert_eq!(
+            current
+                .document()
+                .point(point)
+                .expect("accepted fixed point")
+                .position
+                .map(f64::to_bits),
+            [0.0_f64.to_bits(), 0.0_f64.to_bits()],
+            "cold accepted geometry follows the fixed constraint"
+        );
+        assert_current_accepted_matches_strict_cold(&coordinator);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn m83_f033_live_rejected_host_inputs_return_strict_cold_published_identities() {
+        let config = SolverConfig {
+            max_iterations: 0,
+            ..SolverConfig::default()
+        };
+
+        let mut parameter_document = SketchDocument::new(1.0).expect("parameter document");
+        let rectangle = parameter_document
+            .add_rectangle("parameter target", [0.0, 0.0], 1.0, 1.0)
+            .expect("rectangle");
+        let parameter = parameter_document
+            .add_parameter("width", DocumentParameterKind::Length)
+            .expect("parameter");
+        parameter_document
+            .add_parameter_binding(
+                parameter,
+                DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]),
+            )
+            .expect("parameter binding");
+        let initial_parameters = ParameterBatch::new(
+            1,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(1.0),
+            }],
+        )
+        .expect("initial parameters");
+        let parameter_session = RetainedSketchDocumentSession::new_with_parameter_batch(
+            parameter_document,
+            initial_parameters,
+            DocumentSolveRequest::default(),
+            config,
+        )
+        .expect("initially satisfied parameter session");
+        let mut parameter_coordinator =
+            RetainedEditorCoordinator::new(parameter_session).expect("parameter coordinator");
+        let replacement_parameters = ParameterBatch::new(
+            2,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(2.0),
+            }],
+        )
+        .expect("replacement parameters");
+        let parameter_outcome = parameter_coordinator
+            .replace_parameter_batch(
+                parameter_coordinator.session().design_identity(),
+                replacement_parameters,
+                DocumentSolveRequest::default(),
+            )
+            .expect("strict cold replay accepts the host-parameter change");
+        let parameter_accepted = parameter_coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("cold-promoted parameter authority");
+        assert_eq!(
+            parameter_outcome.published_accepted,
+            Some(parameter_accepted.identity())
+        );
+        assert_current_accepted_matches_strict_cold(&parameter_coordinator);
+
+        let mut external_document = SketchDocument::new(1.0).expect("external document");
+        let point = external_document
+            .add_point("external point", [1.0, 2.0])
+            .expect("point");
+        let binding = external_document
+            .add_external_binding("external", ExternalFeatureKindV1::Point, None)
+            .expect("binding");
+        external_document
+            .add_constraint(
+                "external coincidence",
+                DocumentConstraintDefinition::ExternalPointCoincident {
+                    point,
+                    external: DocumentExternalPointRef { binding },
+                },
+            )
+            .expect("external constraint");
+        let initial_snapshots =
+            ExternalSnapshotSet::new(1, vec![external_point_entry(binding, [1.0, 2.0])])
+                .expect("initial snapshots");
+        let external_session = RetainedSketchDocumentSession::new_with_inputs(
+            external_document,
+            ParameterBatch::default(),
+            initial_snapshots,
+            DocumentSolveRequest::default(),
+            config,
+        )
+        .expect("initially satisfied external session");
+        let mut external_coordinator =
+            RetainedEditorCoordinator::new(external_session).expect("external coordinator");
+        let replacement_snapshots =
+            ExternalSnapshotSet::new(2, vec![external_point_entry(binding, [3.0, 4.0])])
+                .expect("replacement snapshots");
+        let external_outcome = external_coordinator
+            .replace_external_snapshot_set(
+                external_coordinator.session().design_identity(),
+                replacement_snapshots,
+                DocumentSolveRequest::default(),
+            )
+            .expect("strict cold replay accepts the external-snapshot change");
+        let external_accepted = external_coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("cold-promoted external authority");
+        assert_eq!(
+            external_outcome.published_accepted,
+            Some(external_accepted.identity())
+        );
+        assert_current_accepted_matches_strict_cold(&external_coordinator);
+    }
+
+    #[test]
+    fn m83_f032_initial_import_authenticates_distinct_current_accepted_baseline() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("point");
+        let second = document.add_point("second", [2.0, 0.0]).expect("point");
+        let line = document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start: first,
+                    end: second,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        document
+            .add_constraint(
+                "horizontal",
+                DocumentConstraintDefinition::Horizontal {
+                    line: CurveSpan::line(line),
+                },
+            )
+            .expect("horizontal");
+        let mut session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted underconstrained line session");
+        let moved = session
+            .apply(
+                session.design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: first,
+                    position: [3.0, 2.0],
+                },
+            )
+            .expect("low-level session accepts transient-guided move");
+        assert!(moved.published_accepted_identity().is_some());
+        let (expected_accepted_json, expected_accepted_is_draft_v5) = checkpoint_document_to_json(
+            session
+                .accepted_state_for_current_input()
+                .expect("distinct current accepted baseline")
+                .document(),
+        )
+        .expect("canonical accepted baseline");
+
+        let coordinator =
+            RetainedEditorCoordinator::new(session).expect("honest accepted baseline import");
+        assert_eq!(
+            coordinator.checkpoint().accepted_json(),
+            Some(expected_accepted_json.as_str())
+        );
+        assert_eq!(
+            coordinator.checkpoint().accepted_uses_draft_v5(),
+            expected_accepted_is_draft_v5
+        );
+        assert!(
+            coordinator
+                .checkpoint()
+                .accepted_belongs_to_current_design()
+        );
+        assert!(
+            coordinator.lineage.current_evaluation_is_accepted(),
+            "import must record accepted current lineage authority"
+        );
+
+        let lineage = coordinator
+            .lineage_session_json()
+            .expect("imported lineage session");
+        let ledger = coordinator
+            .lineage_host_input_ledger_json()
+            .expect("imported host-input ledger");
+        let mut decoded =
+            CoordinatorLineage::from_session_and_host_input_ledger_json(&lineage, &ledger)
+                .expect("decode imported authority");
+        assert!(decoded.current_evaluation_is_accepted());
+        decoded
+            .validate_complete_accepted_authority(
+                coordinator.session().accepted_parameter_batch(),
+                coordinator.session().accepted_external_snapshot_set(),
+            )
+            .expect("validate imported authority");
+        assert!(decoded.current_evaluation_is_accepted());
+        let cold = RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+            &lineage,
+            Some(&ledger),
+            coordinator.session().parameter_batch(),
+            coordinator.session().external_snapshot_set(),
+        )
+        .expect("embedded accepted baseline cold authentication");
+        assert_eq!(cold.accepted_json(), Some(expected_accepted_json.as_str()));
+        assert_eq!(cold.accepted_uses_draft_v5(), expected_accepted_is_draft_v5);
+        assert!(cold.accepted_belongs_to_current_design());
+    }
+
+    fn underconstrained_imported_polyline_coordinator() -> (
+        RetainedEditorCoordinator,
+        [DesignPointId; 4],
+        (String, bool),
+    ) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let points = [
+            document.add_point("p0", [0.0, 0.0]).expect("p0"),
+            document.add_point("p1", [4.0, 0.0]).expect("p1"),
+            document.add_point("p2", [4.0, 4.0]).expect("p2"),
+            document.add_point("p3", [8.0, 4.0]).expect("p3"),
+        ];
+        let curve = document
+            .add_curve(
+                "underconstrained polyline",
+                CurveDefinition::Polyline {
+                    points: points.to_vec(),
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]],
+                },
+            )
+            .expect("polyline");
+        document
+            .add_constraint(
+                "horizontal first span",
+                DocumentConstraintDefinition::Horizontal {
+                    line: CurveSpan { curve, segment: 0 },
+                },
+            )
+            .expect("horizontal constraint");
+        let mut session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted underconstrained polyline");
+        let moved = session
+            .apply(
+                session.design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: [0.0, 2.0],
+                },
+            )
+            .expect("transient-guided baseline move");
+        assert!(moved.published_accepted_identity().is_some());
+        let embedded_accepted = checkpoint_document_to_json(
+            session
+                .accepted_state_for_current_input()
+                .expect("distinct accepted import")
+                .document(),
+        )
+        .expect("embedded accepted bytes");
+
+        let coordinator =
+            RetainedEditorCoordinator::new(session).expect("accepted baseline import");
+        assert_eq!(
+            coordinator.checkpoint().accepted_json(),
+            Some(embedded_accepted.0.as_str())
+        );
+        (coordinator, points, embedded_accepted)
+    }
+
+    #[test]
+    fn m83_f036_feature_only_mutation_publishes_cold_sketch_and_computed_output_atomically() {
+        let (mut coordinator, points, embedded_accepted) =
+            underconstrained_imported_polyline_coordinator();
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("canonical feature-authoring snapshot");
+        let accepted_document = snapshot.sketch_document().clone();
+        let mut authoring = FeatureAuthoringState::default();
+        let candidate = match authoring.activate(
+            &snapshot,
+            &accepted_document,
+            FeatureAuthoringTool::Fillet,
+            &[(SelectionItem::Point(points[1]), None)],
+        ) {
+            FeatureAuthoringOutcome::PreviewRequested { candidate, .. } => candidate,
+            other => panic!("expected imported-baseline Fillet candidate, got {other:?}"),
+        };
+        let feature = apply_grouped_fillet(&mut coordinator, &candidate);
+
+        assert_ne!(
+            coordinator.checkpoint().accepted_json(),
+            Some(embedded_accepted.0.as_str()),
+            "the fixture must force strict replay to choose a distinct valid underconstrained root"
+        );
+        assert_current_accepted_matches_strict_cold(&coordinator);
+        assert!(
+            coordinator.feature_document().feature(feature).is_some(),
+            "feature intent and canonical sketch must publish together"
+        );
+        let snapshot = coordinator
+            .computed_snapshot()
+            .expect("canonical computed snapshot");
+        assert_eq!(
+            snapshot.input().sketch,
+            coordinator
+                .session()
+                .accepted_prepared_input()
+                .expect("canonical accepted input")
+        );
+        assert!(matches!(
+            computed_feature_state(snapshot, feature),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+    }
+
+    #[test]
+    fn m83_f040_construction_outcome_reports_cold_published_identity() {
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Point {
+                point: ConstructionPoint::New([10.0, 10.0]),
+            },
+            curve_roles: Vec::new(),
+            relations: Vec::new(),
+        };
+
+        for controlled in [false, true] {
+            let (mut coordinator, _, embedded_accepted) =
+                underconstrained_imported_polyline_coordinator();
+            let expected = coordinator
+                .session()
+                .accepted_prepared_input()
+                .expect("accepted imported-baseline input");
+            let before_accepted_revision = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted imported baseline")
+                .identity()
+                .revision()
+                .get();
+            let outcome = if controlled {
+                let OperationOutcome::Completed { value, .. } = coordinator
+                    .apply_construction_plan_controlled(
+                        &expected,
+                        &plan,
+                        OperationControl::unlimited(),
+                    )
+                    .expect("controlled construction publication")
+                else {
+                    panic!("controlled construction did not complete")
+                };
+                value
+            } else {
+                coordinator
+                    .apply_construction_plan(&expected, &plan)
+                    .expect("construction publication")
+            };
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("strict-cold accepted construction");
+
+            assert_ne!(
+                coordinator.checkpoint().accepted_json(),
+                Some(embedded_accepted.0.as_str()),
+                "the fixture must force strict replay to replace the provisional underconstrained root"
+            );
+            assert_eq!(outcome.design, coordinator.session().design_identity());
+            assert_eq!(
+                outcome.attempt,
+                coordinator.session().last_attempt().identity()
+            );
+            assert_eq!(outcome.published_accepted, Some(accepted.identity()));
+            assert_eq!(
+                accepted.identity().revision().get(),
+                before_accepted_revision + 2,
+                "provisional live acceptance and changed strict-cold replacement each allocate one accepted revision"
+            );
+            let lineage = coordinator
+                .lineage_session_json()
+                .expect("construction lineage session");
+            let ledger = coordinator
+                .lineage_host_input_ledger_json()
+                .expect("construction host-input ledger");
+            let cold =
+                RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+                    &lineage,
+                    Some(&ledger),
+                    coordinator.session().parameter_batch(),
+                    coordinator.session().external_snapshot_set(),
+                )
+                .expect("strict-cold construction evidence");
+            assert_eq!(
+                coordinator.checkpoint().accepted_json(),
+                cold.accepted_json()
+            );
+            assert_current_accepted_matches_strict_cold(&coordinator);
+        }
+    }
+
+    #[test]
     fn m83_lineage_history_ignores_and_repairs_corrupt_flat_checkpoint_caches() {
         let session = RetainedSketchDocumentSession::new(
             SketchDocument::new(1.0).expect("document"),
@@ -20412,6 +21793,141 @@ mod tests {
             .expect("retry accepted edit");
         assert_eq!(coordinator.history_len(), retained.history + 1);
         assert_eq!(coordinator.transcript().len(), retained.transcript + 1);
+    }
+
+    #[test]
+    fn m83_post_refresh_checkpoint_failure_rolls_back_lineage_auxiliary_high_water() {
+        let (session, points, _, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let retained = retained_state_snapshot(&coordinator);
+        let lineage = coordinator.lineage_session_json().unwrap();
+        let ledger = coordinator.lineage_host_input_ledger_json().unwrap();
+        let checkpoint = format!("{:?}", coordinator.persistence_checkpoint().unwrap());
+        let feature_identity = coordinator.features.identity();
+        let evaluation_high_water = coordinator.computed_evaluation_allocator.high_water();
+        let computed_input = coordinator.computed_input;
+        let computed_snapshot = format!("{:?}", coordinator.computed_snapshot);
+        let computed_problem = coordinator.computed_evaluation_problem.clone();
+        coordinator.reject_next_post_refresh_checkpoint = true;
+
+        assert!(matches!(
+            coordinator.apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: [-3.0, 2.0],
+                },
+            ),
+            Err(CoordinatorError::InjectedPostRefreshCheckpointFailure)
+        ));
+
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(coordinator.lineage_session_json().unwrap(), lineage);
+        assert_eq!(
+            coordinator.lineage_host_input_ledger_json().unwrap(),
+            ledger
+        );
+        assert_eq!(
+            format!("{:?}", coordinator.persistence_checkpoint().unwrap()),
+            checkpoint
+        );
+        assert_eq!(coordinator.features.identity(), feature_identity);
+        assert_eq!(
+            coordinator.computed_evaluation_allocator.high_water(),
+            evaluation_high_water
+        );
+        assert_eq!(coordinator.computed_input, computed_input);
+        assert_eq!(
+            format!("{:?}", coordinator.computed_snapshot),
+            computed_snapshot
+        );
+        assert_eq!(coordinator.computed_evaluation_problem, computed_problem);
+
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: [-3.0, 2.0],
+                },
+            )
+            .expect("retry accepted edit");
+        assert_eq!(coordinator.history_len(), retained.history + 1);
+        assert_eq!(coordinator.transcript().len(), retained.transcript + 1);
+    }
+
+    #[test]
+    fn m83_legacy_reload_lineage_import_failure_is_atomically_state_neutral() {
+        let (session, points, _, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let saved = coordinator
+            .persistence_checkpoint()
+            .expect("saved checkpoint");
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: [-3.0, 2.0],
+                },
+            )
+            .expect("newer retained edit");
+        coordinator
+            .editor
+            .set_selection([SelectionItem::Point(points[1])]);
+        coordinator.mark_solving();
+
+        let retained = retained_state_snapshot(&coordinator);
+        let lineage = coordinator.lineage_session_json().unwrap();
+        let ledger = coordinator.lineage_host_input_ledger_json().unwrap();
+        let checkpoint = format!("{:?}", coordinator.persistence_checkpoint().unwrap());
+        let feature_identity = coordinator.features.identity();
+        let evaluation_high_water = coordinator.computed_evaluation_allocator.high_water();
+        let computed_input = coordinator.computed_input;
+        let computed_snapshot = format!("{:?}", coordinator.computed_snapshot);
+        let computed_problem = coordinator.computed_evaluation_problem.clone();
+        let lifecycle = coordinator.lifecycle();
+        let selection = coordinator.editor.selection().to_vec();
+        let history = (coordinator.history_len(), coordinator.history_cursor());
+        coordinator.reject_next_reload_lineage_import = true;
+
+        assert!(matches!(
+            coordinator.reload(&saved),
+            Err(CoordinatorError::InjectedReloadLineageImportFailure)
+        ));
+
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(coordinator.lineage_session_json().unwrap(), lineage);
+        assert_eq!(
+            coordinator.lineage_host_input_ledger_json().unwrap(),
+            ledger
+        );
+        assert_eq!(
+            format!("{:?}", coordinator.persistence_checkpoint().unwrap()),
+            checkpoint
+        );
+        assert_eq!(coordinator.features.identity(), feature_identity);
+        assert_eq!(
+            coordinator.computed_evaluation_allocator.high_water(),
+            evaluation_high_water
+        );
+        assert_eq!(coordinator.computed_input, computed_input);
+        assert_eq!(
+            format!("{:?}", coordinator.computed_snapshot),
+            computed_snapshot
+        );
+        assert_eq!(coordinator.computed_evaluation_problem, computed_problem);
+        assert_eq!(coordinator.lifecycle(), lifecycle);
+        assert_eq!(coordinator.editor.selection(), selection);
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            history
+        );
+
+        coordinator.reload(&saved).expect("retry flat reload");
+        assert_eq!(coordinator.history_len(), 1);
+        assert_eq!(coordinator.history_cursor(), 0);
+        assert!(coordinator.transcript().is_empty());
     }
 
     #[test]
@@ -21434,6 +22950,53 @@ mod tests {
     }
 
     #[test]
+    fn m83_same_byte_reload_honors_higher_saved_lifecycle_high_water() {
+        let (session, _, _, _) = fixed_line_session();
+        let mut saved_owner =
+            RetainedEditorCoordinator::new(session.clone()).expect("saved coordinator");
+        let mut reloaded = RetainedEditorCoordinator::new(session).expect("reload coordinator");
+
+        saved_owner
+            .reattempt(saved_owner.session().design_identity())
+            .expect("advance the saved attempt and accepted high-water");
+        let saved = saved_owner
+            .persistence_checkpoint()
+            .expect("saved persistence checkpoint");
+        let before = reloaded.checkpoint();
+        assert_eq!(saved.design_json(), before.design_json());
+        assert_eq!(saved.accepted_json(), before.accepted_json());
+        assert!(
+            saved.revisions.attempt().get()
+                > reloaded.session().revision_high_water().attempt().get()
+        );
+
+        reloaded
+            .reload(&saved)
+            .expect("same-byte reload with higher saved lifecycle");
+        let restored = reloaded.session().revision_high_water();
+        assert!(restored.design().get() > saved.revisions.design().get());
+        assert!(restored.attempt().get() > saved.revisions.attempt().get());
+        assert!(
+            restored
+                .accepted()
+                .expect("restored accepted high-water")
+                .get()
+                > saved
+                    .revisions
+                    .accepted()
+                    .expect("saved accepted high-water")
+                    .get()
+        );
+
+        reloaded
+            .reattempt(reloaded.session().design_identity())
+            .expect("reattempt after reload");
+        assert!(
+            reloaded.session().revision_high_water().attempt().get() > restored.attempt().get()
+        );
+    }
+
+    #[test]
     fn suppression_delete_and_selection_reconciliation_use_persistent_ids() {
         let (session, _, _, _) = fixed_line_session();
         let constraint = session.design_document().constraints()[0].id;
@@ -22154,6 +23717,24 @@ mod tests {
                 .is_some_and(|residual| residual <= 1.0e-9)
         );
         let committed_document = committed.document().clone();
+        let lineage_json = coordinator
+            .lineage_session_json()
+            .expect("projected Fillet lineage");
+        let ledger_json = coordinator
+            .lineage_host_input_ledger_json()
+            .expect("projected Fillet host-input ledger");
+        let cold = RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+            &lineage_json,
+            Some(&ledger_json),
+            coordinator.session().parameter_batch(),
+            coordinator.session().external_snapshot_set(),
+        )
+        .expect("cold projected Fillet authority");
+        assert_eq!(
+            cold.accepted_json(),
+            coordinator.checkpoint().accepted_json(),
+            "the projected route publishes the exact genuine cold accepted witness"
+        );
         coordinator.undo().expect("undo exact fillet release");
         assert_eq!(
             coordinator

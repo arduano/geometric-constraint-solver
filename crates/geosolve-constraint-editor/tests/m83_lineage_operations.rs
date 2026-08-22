@@ -494,6 +494,9 @@ fn assert_cold_matches(coordinator: &RetainedEditorCoordinator) {
     let session = coordinator
         .lineage_session_json()
         .expect("canonical lineage session");
+    let ledger = coordinator
+        .lineage_host_input_ledger_json()
+        .expect("canonical lineage host-input ledger");
     let lineage = LineageSession::from_session_json(&session).expect("strict lineage session");
     assert_eq!(coordinator.lineage_identity(), lineage.identity());
     assert_eq!(
@@ -506,8 +509,66 @@ fn assert_cold_matches(coordinator: &RetainedEditorCoordinator) {
     assert_eq!(coordinator.can_redo(), lineage.can_redo());
     let cold = RetainedEditorCoordinator::lineage_materialization_checkpoint(&session)
         .expect("cold operation materialization");
-    assert_eq!(cold.design_json(), coordinator.checkpoint().design_json());
-    assert_eq!(cold.feature_json(), coordinator.checkpoint().feature_json());
+    let live = coordinator.checkpoint();
+    assert_eq!(cold.design_json(), live.design_json());
+    assert_eq!(cold.feature_json(), live.feature_json());
+    let accepted = if live.accepted_belongs_to_current_design() {
+        RetainedEditorCoordinator::lineage_cold_current_accepted_evidence_checkpoint(
+            &session,
+            Some(&ledger),
+            coordinator.session().parameter_batch(),
+            coordinator.session().external_snapshot_set(),
+        )
+        .expect("cold current operation accepted authority")
+    } else {
+        RetainedEditorCoordinator::lineage_cold_historical_accepted_evidence_checkpoint(
+            &session,
+            Some(&ledger),
+            coordinator.session().accepted_parameter_batch(),
+            coordinator.session().accepted_external_snapshot_set(),
+        )
+        .expect("cold historical operation accepted authority")
+        .expect("retained historical operation authority")
+    };
+    assert_eq!(
+        accepted.accepted_uses_draft_v5(),
+        live.accepted_uses_draft_v5(),
+        "accepted operation encoding must agree with strict-cold authority"
+    );
+    let mut canonical = if accepted.accepted_uses_draft_v5() {
+        SketchDocument::from_draft_v5_json(
+            accepted
+                .accepted_json()
+                .expect("cold accepted operation document"),
+        )
+    } else {
+        SketchDocument::from_json(
+            accepted
+                .accepted_json()
+                .expect("cold accepted operation document"),
+        )
+    }
+    .expect("decode cold accepted operation document");
+    canonical
+        .retain_persistent_identity_high_water(
+            coordinator.session().persistent_identity_high_water(),
+        )
+        .expect("merge operation lifecycle high-water");
+    let canonical = if accepted.accepted_uses_draft_v5() {
+        canonical.to_draft_v5_json()
+    } else {
+        canonical.to_canonical_json()
+    }
+    .expect("encode cold accepted operation document");
+    assert_eq!(
+        Some(canonical.as_str()),
+        live.accepted_json(),
+        "live operation geometry must equal strict-cold authority modulo monotonic lifecycle high-water"
+    );
+    assert_eq!(
+        accepted.accepted_belongs_to_current_design(),
+        live.accepted_belongs_to_current_design()
+    );
     let map = RetainedEditorCoordinator::lineage_materialization_map_json_for_session(&session)
         .expect("operation ownership map");
     RetainedEditorCoordinator::validate_lineage_materialization_map_json(&session, &map)
