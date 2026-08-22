@@ -6,19 +6,81 @@ use geosolve_sketch::{
     RetainedSketchDocumentSession, SketchDocument, SolverConfig,
 };
 use geosolve_sketch_lineage::{
-    LineageActionDefinition, LineageDeveloperKey, LineageDocumentId, LineageInputBinding,
-    LineageMutation, LineageOpaqueId, LineageOutput, LineageOutputId, LineageOutputKind,
-    LineageOutputRef, LineagePatch, LineageReservation, LineageReservationId,
-    LineageReservationKind, LineageSemanticKey, LineageSession, LineageStep, LineageStepId,
-    LineageStepRewrite, VersionedActionPayload,
+    LineageActionDefinition, LineageDeveloperKey, LineageDigest, LineageDocument,
+    LineageDocumentId, LineageEvaluationPolicy, LineageInputBinding, LineageMutation,
+    LineageOpaqueId, LineageOutput, LineageOutputId, LineageOutputKind, LineageOutputRef,
+    LineagePatch, LineageReservation, LineageReservationId, LineageReservationKind,
+    LineageRevision, LineageSemanticKey, LineageSession, LineageStep, LineageStepId,
+    LineageStepRewrite, VersionedActionPayload, lineage_content_digest,
 };
 use geosolve_sketch_lineage_wasm::{LINEAGE_RPC_PROTOCOL, LineageRpcEngine};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test;
 
 const GOLDEN: &str = include_str!("fixtures/m83_rpc_transcript.golden.txt");
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct TestDocumentWire {
+    version: u32,
+    document_id: LineageDocumentId,
+    revision: LineageRevision,
+    next_step_id: LineageStepId,
+    next_output_id: LineageOutputId,
+    next_reservation_id: LineageReservationId,
+    evaluation_policy: LineageEvaluationPolicy,
+    steps: Vec<LineageStep>,
+    digest: LineageDigest,
+}
+
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+struct TestDocumentCanonicalPayload<'a> {
+    version: u32,
+    document_id: LineageDocumentId,
+    revision: LineageRevision,
+    next_step_id: LineageStepId,
+    next_output_id: LineageOutputId,
+    next_reservation_id: LineageReservationId,
+    evaluation_policy: LineageEvaluationPolicy,
+    steps: &'a [LineageStep],
+}
+
+impl TestDocumentWire {
+    fn refresh_digest(&mut self) {
+        let payload = TestDocumentCanonicalPayload {
+            version: self.version,
+            document_id: self.document_id,
+            revision: self.revision,
+            next_step_id: self.next_step_id,
+            next_output_id: self.next_output_id,
+            next_reservation_id: self.next_reservation_id,
+            evaluation_policy: self.evaluation_policy,
+            steps: &self.steps,
+        };
+        self.digest = lineage_content_digest(
+            &serde_json::to_vec(&payload).expect("canonical test document payload"),
+        );
+    }
+}
+
+fn boundary_document_json(document_id: LineageDocumentId, revision: u64, next_id: u64) -> String {
+    let mut wire: TestDocumentWire = serde_json::from_str(
+        &LineageDocument::with_id(document_id)
+            .to_canonical_json()
+            .expect("empty lineage JSON"),
+    )
+    .expect("empty lineage wire");
+    wire.revision = LineageRevision::from_raw(revision);
+    wire.next_step_id = LineageStepId::from_raw(next_id);
+    wire.next_output_id = LineageOutputId::from_raw(next_id);
+    wire.next_reservation_id = LineageReservationId::from_raw(next_id);
+    wire.refresh_digest();
+    serde_json::to_string(&wire).expect("boundary lineage JSON")
+}
 
 fn host_inputs() -> Value {
     json!({
@@ -61,6 +123,28 @@ fn point_step() -> LineageStep {
             key: LineageSemanticKey::new("point").expect("reservation key"),
             kind: LineageReservationKind::Point,
             persistent_id: LineageOpaqueId::new("sketch:point:1").expect("persistent point ID"),
+        }],
+    )
+}
+
+fn boundary_point_step() -> LineageStep {
+    LineageStep::new(
+        LineageStepId::from_raw(u64::MAX),
+        LineageDeveloperKey::new("boundary-point").expect("developer key"),
+        "Boundary point",
+        point_action([1, 2]),
+        vec![LineageOutput {
+            id: LineageOutputId::from_raw(u64::MAX),
+            key: LineageSemanticKey::new("point").expect("output key"),
+            kind: LineageOutputKind::Point,
+            reservation: Some(LineageReservationId::from_raw(u64::MAX)),
+        }],
+        vec![LineageReservation {
+            id: LineageReservationId::from_raw(u64::MAX),
+            key: LineageSemanticKey::new("point").expect("reservation key"),
+            kind: LineageReservationKind::Point,
+            persistent_id: LineageOpaqueId::new("sketch:point:boundary")
+                .expect("persistent point ID"),
         }],
     )
 }
@@ -270,6 +354,50 @@ fn rpc_transcript() -> String {
     );
     identity =
         serde_json::from_value(inserted["result"]["identity"].clone()).expect("inserted identity");
+
+    let wrong_port = request(
+        &mut engine,
+        &mut transcript,
+        "05a",
+        Some(&session_id),
+        "mutate",
+        json!({
+            "patch": LineagePatch::new(
+                identity,
+                vec![LineageMutation::Rebind {
+                    step: LineageStepId::from_raw(3),
+                    input: LineageSemanticKey::new("point").expect("input key"),
+                    target: LineageOutputRef {
+                        document: document_id,
+                        step: LineageStepId::from_raw(2),
+                        output: LineageOutputId::from_raw(2),
+                        kind: LineageOutputKind::Scalar,
+                    },
+                }],
+            ),
+        }),
+    );
+    assert_eq!(wrong_port["error"]["code"], "wrong_port_kind");
+
+    let invalid_transition = request(
+        &mut engine,
+        &mut transcript,
+        "05b",
+        Some(&session_id),
+        "mutate",
+        json!({
+            "patch": LineagePatch::new(
+                identity,
+                vec![LineageMutation::Tombstone {
+                    step: LineageStepId::from_raw(2),
+                }],
+            ),
+        }),
+    );
+    assert_eq!(
+        invalid_transition["error"]["code"],
+        "invalid_state_transition"
+    );
 
     let rejected_materialization = request(
         &mut engine,
@@ -507,6 +635,74 @@ fn rpc_transcript() -> String {
         json!({}),
     );
     assert_eq!(wrong_session["error"]["code"], "wrong_session");
+
+    let mut id_boundary_engine = LineageRpcEngine::new();
+    let id_boundary = request(
+        &mut id_boundary_engine,
+        &mut transcript,
+        "22",
+        None,
+        "import",
+        json!({
+            "lineage_json": boundary_document_json(
+                LineageDocumentId::from_raw(0x8300_0000_0000_0022),
+                0,
+                u64::MAX,
+            ),
+        }),
+    );
+    let id_boundary_session = id_boundary["session_id"]
+        .as_str()
+        .expect("ID-boundary session ID");
+    let id_exhausted = request(
+        &mut id_boundary_engine,
+        &mut transcript,
+        "23",
+        Some(id_boundary_session),
+        "mutate",
+        json!({
+            "patch": LineagePatch::new(
+                serde_json::from_value(id_boundary["result"]["identity"].clone())
+                    .expect("ID-boundary identity"),
+                vec![LineageMutation::Insert {
+                    before: None,
+                    step: Box::new(boundary_point_step()),
+                }],
+            ),
+        }),
+    );
+    assert_eq!(id_exhausted["error"]["code"], "id_exhausted");
+
+    let mut revision_boundary_engine = LineageRpcEngine::new();
+    let revision_boundary = request(
+        &mut revision_boundary_engine,
+        &mut transcript,
+        "24",
+        None,
+        "import",
+        json!({
+            "lineage_json": boundary_document_json(
+                LineageDocumentId::from_raw(0x8300_0000_0000_0024),
+                u64::MAX,
+                1,
+            ),
+        }),
+    );
+    let revision_boundary_session = revision_boundary["session_id"]
+        .as_str()
+        .expect("revision-boundary session ID");
+    let revision_exhausted = request(
+        &mut revision_boundary_engine,
+        &mut transcript,
+        "25",
+        Some(revision_boundary_session),
+        "set_policy",
+        json!({
+            "expected": revision_boundary["result"]["identity"],
+            "policy": "dependency_local",
+        }),
+    );
+    assert_eq!(revision_exhausted["error"]["code"], "revision_exhausted");
 
     transcript.join("\n") + "\n"
 }

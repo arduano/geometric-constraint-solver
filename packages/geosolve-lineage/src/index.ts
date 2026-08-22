@@ -567,15 +567,27 @@ export interface RpcTransport {
   request(request: string): string;
 }
 
-export interface RpcResponse<Result = JsonValue> {
+export interface RpcSuccessResponse<Result extends JsonValue = JsonValue> {
   readonly protocol: typeof RPC_PROTOCOL;
-  readonly request_id: string | null;
-  readonly method: string | null;
-  readonly session_id: LineageSessionId | null;
-  readonly ok: boolean;
-  readonly result?: Result;
-  readonly error?: { readonly code: string; readonly message: string };
+  readonly request_id: string;
+  readonly method: RpcMethod;
+  readonly session_id: LineageSessionId;
+  readonly ok: true;
+  readonly result: Result;
 }
+
+export interface RpcErrorResponse {
+  readonly protocol: typeof RPC_PROTOCOL;
+  readonly request_id: string;
+  readonly method: RpcMethod;
+  readonly session_id: LineageSessionId | null;
+  readonly ok: false;
+  readonly error: { readonly code: string; readonly message: string };
+}
+
+export type RpcResponse<Result extends JsonValue = JsonValue> =
+  | RpcSuccessResponse<Result>
+  | RpcErrorResponse;
 
 export const RPC_PROTOCOL = "geosolve.lineage.rpc.v0" as const;
 
@@ -594,10 +606,29 @@ export type RpcMethod =
   | "export"
   | "export_lineage";
 
-/** Thin typed transport wrapper; all validation remains in Rust. */
+export type RpcResponseViolation =
+  | "invalid_json"
+  | "invalid_envelope"
+  | "protocol_mismatch"
+  | "request_id_mismatch"
+  | "method_mismatch"
+  | "session_id_mismatch";
+
+/** A transport response was not a correlated `geosolve.lineage.rpc.v0` envelope. */
+export class LineageRpcResponseError extends Error {
+  readonly violation: RpcResponseViolation;
+
+  constructor(violation: RpcResponseViolation, message: string) {
+    super(message);
+    this.name = "LineageRpcResponseError";
+    this.violation = violation;
+  }
+}
+
+/** Thin typed transport wrapper; Rust remains the sole lineage/geometry validator. */
 export class LineageRpcClient {
   readonly #transport: RpcTransport;
-  #request = 0;
+  #request = 0n;
   #session: LineageSessionId | null = null;
 
   constructor(transport: RpcTransport) {
@@ -607,22 +638,172 @@ export class LineageRpcClient {
   call<Result extends JsonValue>(method: RpcMethod, params: JsonValue): RpcResponse<Result> {
     const requestId = String(++this.#request);
     const startsSession = method === "create" || method === "load" || method === "import";
-    const response = JSON.parse(
+    const requestSession = startsSession ? null : this.#session;
+    const response = parseRpcResponse<Result>(
       this.#transport.request(
         JSON.stringify({
           protocol: RPC_PROTOCOL,
           request_id: requestId,
-          session_id: startsSession ? null : this.#session,
+          session_id: requestSession,
           method,
           params,
         }),
       ),
-    ) as RpcResponse<Result>;
-    if (response.ok && response.session_id !== null) {
+      requestId,
+      method,
+      requestSession,
+      startsSession,
+    );
+    if (response.ok) {
       this.#session = response.session_id;
     }
     return response;
   }
+}
+
+function parseRpcResponse<Result extends JsonValue>(
+  raw: string,
+  requestId: string,
+  method: RpcMethod,
+  requestSession: LineageSessionId | null,
+  startsSession: boolean,
+): RpcResponse<Result> {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw) as unknown;
+  } catch {
+    throw responseError("invalid_json", "lineage RPC response is not valid JSON");
+  }
+  if (!isJsonObject(value)) {
+    throw responseError("invalid_envelope", "lineage RPC response must be a JSON object");
+  }
+  if (typeof value.protocol !== "string") {
+    throw responseError("invalid_envelope", "lineage RPC response protocol must be a string");
+  }
+  if (value.protocol !== RPC_PROTOCOL) {
+    throw responseError(
+      "protocol_mismatch",
+      `lineage RPC response protocol \`${value.protocol}\` does not match \`${RPC_PROTOCOL}\``,
+    );
+  }
+  if (typeof value.request_id !== "string") {
+    throw responseError("invalid_envelope", "lineage RPC response request_id must be a string");
+  }
+  if (value.request_id !== requestId) {
+    throw responseError(
+      "request_id_mismatch",
+      `lineage RPC response request_id \`${value.request_id}\` does not match \`${requestId}\``,
+    );
+  }
+  if (typeof value.method !== "string") {
+    throw responseError("invalid_envelope", "lineage RPC response method must be a string");
+  }
+  if (value.method !== method) {
+    throw responseError(
+      "method_mismatch",
+      `lineage RPC response method \`${value.method}\` does not match \`${method}\``,
+    );
+  }
+  if (value.session_id !== null && typeof value.session_id !== "string") {
+    throw responseError(
+      "invalid_envelope",
+      "lineage RPC response session_id must be a string or null",
+    );
+  }
+  if (typeof value.ok !== "boolean") {
+    throw responseError("invalid_envelope", "lineage RPC response ok must be a boolean");
+  }
+
+  const responseSession = value.session_id as string | null;
+  if (startsSession) {
+    const validStartingSession = value.ok
+      ? typeof responseSession === "string" && responseSession.length > 0
+      : responseSession === null;
+    if (!validStartingSession) {
+      throw responseError(
+        "session_id_mismatch",
+        "lineage RPC session-start response has an invalid correlated session_id",
+      );
+    }
+  } else if (responseSession !== requestSession || (value.ok && responseSession === null)) {
+    throw responseError(
+      "session_id_mismatch",
+      "lineage RPC response session_id does not match the targeted session",
+    );
+  }
+
+  const requiredKeys = value.ok
+    ? ["method", "ok", "protocol", "request_id", "result", "session_id"]
+    : ["error", "method", "ok", "protocol", "request_id", "session_id"];
+  if (!hasExactKeys(value, requiredKeys)) {
+    throw responseError(
+      "invalid_envelope",
+      value.ok
+        ? "successful lineage RPC response must contain exactly one result"
+        : "failed lineage RPC response must contain exactly one error",
+    );
+  }
+  if (value.ok) {
+    if (!isJsonValue(value.result)) {
+      throw responseError("invalid_envelope", "lineage RPC result is not a finite JSON value");
+    }
+    return value as unknown as RpcSuccessResponse<Result>;
+  }
+  if (
+    !isJsonObject(value.error) ||
+    !hasExactKeys(value.error, ["code", "message"]) ||
+    typeof value.error.code !== "string" ||
+    !/^[a-z][a-z0-9_]*$/u.test(value.error.code) ||
+    typeof value.error.message !== "string" ||
+    value.error.message.length === 0
+  ) {
+    throw responseError(
+      "invalid_envelope",
+      "lineage RPC error must contain only a stable code and non-empty message",
+    );
+  }
+  return value as unknown as RpcErrorResponse;
+}
+
+function responseError(
+  violation: RpcResponseViolation,
+  message: string,
+): LineageRpcResponseError {
+  return new LineageRpcResponseError(violation, message);
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  const pending: unknown[] = [value];
+  while (pending.length > 0) {
+    const item = pending.pop();
+    if (
+      item === null ||
+      typeof item === "string" ||
+      typeof item === "boolean" ||
+      (typeof item === "number" && Number.isFinite(item))
+    ) {
+      continue;
+    }
+    if (Array.isArray(item)) {
+      for (const child of item) pending.push(child);
+      continue;
+    }
+    if (isJsonObject(item)) {
+      for (const child of Object.values(item)) pending.push(child);
+      continue;
+    }
+    return false;
+  }
+  return true;
 }
 
 export function developerKey(value: string): DeveloperKey {

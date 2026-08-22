@@ -731,13 +731,26 @@ impl RpcFailure {
         let code = match &error {
             LineageDocumentError::StalePatch { .. } => "stale_revision",
             LineageDocumentError::WrongPatchDocument { .. } => "wrong_document",
+            LineageDocumentError::WrongOutputKind { .. }
+            | LineageDocumentError::ReservationKindMismatch { .. }
+            | LineageDocumentError::RebindKindMismatch { .. } => "wrong_port_kind",
+            LineageDocumentError::RetiredOutputReference { .. }
+            | LineageDocumentError::ConsumedOutputReference { .. }
+            | LineageDocumentError::LiveDependent { .. }
+            | LineageDocumentError::InvalidBaselinePosition { .. }
+            | LineageDocumentError::NonSequentialReplacementRevision { .. }
+            | LineageDocumentError::AllocatorRegression { .. }
+            | LineageDocumentError::InvalidEvaluationAttempt { .. }
+            | LineageDocumentError::EmptyPatch
+            | LineageDocumentError::TombstonedStep { .. } => "invalid_state_transition",
+            LineageDocumentError::IdExhausted => "id_exhausted",
+            LineageDocumentError::RevisionExhausted => "revision_exhausted",
             LineageDocumentError::InvalidFailedStep { .. } => "invalid_failed_step",
             LineageDocumentError::JsonResourceLimit { .. }
             | LineageDocumentError::SessionJsonResourceLimit { .. }
             | LineageDocumentError::ResourceLimit { .. } => "resource_limit",
-            LineageDocumentError::CrossHistoryIdentityRebinding { .. } => {
-                "invalid_editor_authority"
-            }
+            LineageDocumentError::CrossHistoryIdentityRebinding { .. }
+            | LineageDocumentError::InvalidSessionAuthority { .. } => "invalid_editor_authority",
             _ => "lineage_rejected",
         };
         Self::new(code, error.to_string())
@@ -784,12 +797,12 @@ mod tests {
         RetainedSketchDocumentSession, SketchDocument, SolverConfig,
     };
     use geosolve_sketch_lineage::{
-        LineageActionDefinition, LineageDeveloperKey, LineageDocument, LineageDocumentId,
-        LineageEvaluationPolicy, LineageInputBinding, LineageMutation, LineageOpaqueId,
-        LineageOutput, LineageOutputId, LineageOutputKind, LineageOutputRef, LineagePatch,
-        LineageReservation, LineageReservationId, LineageReservationKind, LineageSemanticKey,
-        LineageSession, LineageStep, LineageStepId, LineageStepRewrite, LineageWritableLeaf,
-        VersionedActionPayload,
+        LineageActionDefinition, LineageDeveloperKey, LineageDocument, LineageDocumentError,
+        LineageDocumentId, LineageEvaluationPolicy, LineageInputBinding, LineageMutation,
+        LineageOpaqueId, LineageOutput, LineageOutputId, LineageOutputKind, LineageOutputRef,
+        LineagePatch, LineageReservation, LineageReservationId, LineageReservationKind,
+        LineageRevision, LineageSemanticKey, LineageSession, LineageStep, LineageStepId,
+        LineageStepRewrite, LineageWritableLeaf, VersionedActionPayload,
     };
     use serde_json::{Value, json};
 
@@ -1062,6 +1075,203 @@ mod tests {
         )
         .expect("response JSON");
         assert_eq!(wrong["error"]["code"], "unsupported_protocol");
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one closed table keeps every public lineage failure class and stable RPC code directly comparable"
+    )]
+    fn lineage_failures_have_stable_discriminated_rpc_error_classes() {
+        let document = LineageDocumentId::from_raw(0x83_0010);
+        let step = LineageStepId::from_raw(1);
+        let provider = LineageStepId::from_raw(2);
+        let output = LineageOutputId::from_raw(1);
+        let reservation = LineageReservationId::from_raw(1);
+        let successor = LineageOutputRef {
+            document,
+            step: provider,
+            output: LineageOutputId::from_raw(2),
+            kind: LineageOutputKind::Point,
+        };
+        let cases = [
+            (
+                LineageDocumentError::WrongOutputKind {
+                    step,
+                    expected: LineageOutputKind::Point,
+                    actual: LineageOutputKind::Scalar,
+                },
+                "wrong_port_kind",
+            ),
+            (
+                LineageDocumentError::ReservationKindMismatch {
+                    step,
+                    reservation,
+                    output: LineageOutputKind::Scalar,
+                },
+                "wrong_port_kind",
+            ),
+            (
+                LineageDocumentError::RebindKindMismatch {
+                    step,
+                    input: "point".into(),
+                    expected: LineageOutputKind::Point,
+                    actual: LineageOutputKind::Scalar,
+                },
+                "wrong_port_kind",
+            ),
+            (
+                LineageDocumentError::RetiredOutputReference {
+                    step,
+                    provider,
+                    output,
+                },
+                "invalid_state_transition",
+            ),
+            (
+                LineageDocumentError::ConsumedOutputReference {
+                    step,
+                    provider,
+                    output,
+                    successor,
+                },
+                "invalid_state_transition",
+            ),
+            (
+                LineageDocumentError::LiveDependent {
+                    deleted: provider,
+                    dependent: step,
+                },
+                "invalid_state_transition",
+            ),
+            (
+                LineageDocumentError::InvalidBaselinePosition { step },
+                "invalid_state_transition",
+            ),
+            (
+                LineageDocumentError::NonSequentialReplacementRevision {
+                    expected: LineageRevision::from_raw(2),
+                    actual: LineageRevision::from_raw(3),
+                },
+                "invalid_state_transition",
+            ),
+            (
+                LineageDocumentError::AllocatorRegression {
+                    allocator: "step",
+                    minimum: "2".into(),
+                    actual: "1".into(),
+                },
+                "invalid_state_transition",
+            ),
+            (
+                LineageDocumentError::InvalidEvaluationAttempt {
+                    message: "invalid test transition",
+                },
+                "invalid_state_transition",
+            ),
+            (LineageDocumentError::EmptyPatch, "invalid_state_transition"),
+            (
+                LineageDocumentError::TombstonedStep { step },
+                "invalid_state_transition",
+            ),
+            (LineageDocumentError::IdExhausted, "id_exhausted"),
+            (
+                LineageDocumentError::RevisionExhausted,
+                "revision_exhausted",
+            ),
+            (
+                LineageDocumentError::InvalidSessionAuthority {
+                    message: "invalid test authority",
+                },
+                "invalid_editor_authority",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let response: Value = serde_json::from_str(&super::encode_response(
+                Some("classification"),
+                Some("mutate"),
+                Some("lineage:test"),
+                Err(super::RpcFailure::lineage(error)),
+            ))
+            .expect("classified response JSON");
+            assert_eq!(response["ok"], false);
+            assert_eq!(response["error"]["code"], expected_code);
+            assert!(response.get("result").is_none());
+        }
+    }
+
+    #[test]
+    fn wrong_port_and_invalid_transition_rpc_requests_reject_atomically() {
+        let document_id = LineageDocumentId::from_raw(0x83_0011);
+        let mut engine = LineageRpcEngine::new();
+        let imported = request(
+            &mut engine,
+            None,
+            "import",
+            json!({
+                "lineage_json": two_step_document(document_id)
+                    .to_canonical_json()
+                    .expect("two-step lineage JSON"),
+            }),
+        );
+        assert_eq!(imported["ok"], true, "{imported:#}");
+        let session_id = imported["session_id"].as_str().expect("session ID");
+        let expected = serde_json::from_value(imported["result"]["identity"].clone())
+            .expect("imported identity");
+        let before = request(&mut engine, Some(session_id), "export", json!({}));
+
+        let wrong_kind = request(
+            &mut engine,
+            Some(session_id),
+            "mutate",
+            json!({
+                "patch": LineagePatch::new(
+                    expected,
+                    vec![LineageMutation::Rebind {
+                        step: LineageStepId::from_raw(2),
+                        input: LineageSemanticKey::new("point").expect("input key"),
+                        target: LineageOutputRef {
+                            document: document_id,
+                            step: LineageStepId::from_raw(1),
+                            output: LineageOutputId::from_raw(1),
+                            kind: LineageOutputKind::Scalar,
+                        },
+                    }],
+                ),
+            }),
+        );
+        assert_eq!(wrong_kind["ok"], false, "{wrong_kind:#}");
+        assert_eq!(wrong_kind["error"]["code"], "wrong_port_kind");
+        assert_eq!(
+            request(&mut engine, Some(session_id), "export", json!({})),
+            before,
+            "wrong-port rejection must preserve the exact session",
+        );
+
+        let invalid_transition = request(
+            &mut engine,
+            Some(session_id),
+            "mutate",
+            json!({
+                "patch": LineagePatch::new(
+                    expected,
+                    vec![LineageMutation::Tombstone {
+                        step: LineageStepId::from_raw(1),
+                    }],
+                ),
+            }),
+        );
+        assert_eq!(invalid_transition["ok"], false, "{invalid_transition:#}");
+        assert_eq!(
+            invalid_transition["error"]["code"],
+            "invalid_state_transition"
+        );
+        assert_eq!(
+            request(&mut engine, Some(session_id), "export", json!({})),
+            before,
+            "invalid transition must preserve the exact session",
+        );
     }
 
     #[test]

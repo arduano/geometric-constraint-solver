@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import {
   LineagePatchBuilder,
   LineageRpcClient,
+  LineageRpcResponseError,
   actionKindKeys,
   annotationKeys,
   bindingKeys,
@@ -157,3 +158,138 @@ assert.equal(requests[0].session_id, null);
 assert.equal(requests[1].session_id, "lineage:00000000000000000000000000000083");
 assert.equal(requests[2].method, "evaluate");
 assert.equal(requests[2].session_id, "lineage:00000000000000000000000000000083");
+
+const validStartResponse = (request) => ({
+  protocol: "geosolve.lineage.rpc.v0",
+  request_id: request.request_id,
+  method: request.method,
+  session_id: "lineage:00000000000000000000000000000083",
+  ok: true,
+  result: {},
+});
+
+const malformedResponseCases = [
+  ["invalid JSON", "invalid_json", () => "{"],
+  ["non-object envelope", "invalid_envelope", () => "[]"],
+  [
+    "wrong protocol",
+    "protocol_mismatch",
+    (response) => JSON.stringify({ ...response, protocol: "geosolve.lineage.rpc.v1" }),
+  ],
+  [
+    "wrong request correlation",
+    "request_id_mismatch",
+    (response) => JSON.stringify({ ...response, request_id: "other" }),
+  ],
+  [
+    "wrong method correlation",
+    "method_mismatch",
+    (response) => JSON.stringify({ ...response, method: "inspect" }),
+  ],
+  [
+    "successful start without a session",
+    "session_id_mismatch",
+    (response) => JSON.stringify({ ...response, session_id: null }),
+  ],
+  [
+    "missing result",
+    "invalid_envelope",
+    (response) => {
+      const { result: _result, ...withoutResult } = response;
+      return JSON.stringify(withoutResult);
+    },
+  ],
+  [
+    "simultaneous result and error",
+    "invalid_envelope",
+    (response) =>
+      JSON.stringify({ ...response, error: { code: "impossible", message: "both branches" } }),
+  ],
+  [
+    "failed response with a result instead of an error",
+    "invalid_envelope",
+    (response) => JSON.stringify({ ...response, session_id: null, ok: false }),
+  ],
+  [
+    "unknown envelope member",
+    "invalid_envelope",
+    (response) => JSON.stringify({ ...response, extension: true }),
+  ],
+  [
+    "non-finite JSON number",
+    "invalid_envelope",
+    (response) => JSON.stringify(response).replace('"result":{}', '"result":1e400'),
+  ],
+  [
+    "malformed structured error",
+    "invalid_envelope",
+    (response) => {
+      const { result: _result, ...failure } = response;
+      return JSON.stringify({
+        ...failure,
+        session_id: null,
+        ok: false,
+        error: { code: "Not-Stable", message: "" },
+      });
+    },
+  ],
+];
+
+for (const [label, violation, encode] of malformedResponseCases) {
+  const invalidClient = new LineageRpcClient({
+    request(request) {
+      const envelope = JSON.parse(request);
+      return encode(validStartResponse(envelope));
+    },
+  });
+  assert.throws(
+    () => invalidClient.call("create", {}),
+    (error) => {
+      assert.ok(error instanceof LineageRpcResponseError, label);
+      assert.equal(error.violation, violation, label);
+      return true;
+    },
+  );
+}
+
+const correlatedRequests = [];
+let correlatedCall = 0;
+const correlatedClient = new LineageRpcClient({
+  request(request) {
+    const envelope = JSON.parse(request);
+    correlatedRequests.push(envelope);
+    correlatedCall += 1;
+    if (correlatedCall === 1) return JSON.stringify(validStartResponse(envelope));
+    if (correlatedCall === 2) {
+      return JSON.stringify({
+        ...validStartResponse(envelope),
+        session_id: "lineage:0000000000000000000000000000bad0",
+      });
+    }
+    return JSON.stringify({
+      protocol: "geosolve.lineage.rpc.v0",
+      request_id: envelope.request_id,
+      method: envelope.method,
+      session_id: envelope.session_id,
+      ok: false,
+      error: { code: "domain_rejected", message: "test rejection" },
+    });
+  },
+});
+correlatedClient.call("create", {});
+assert.throws(
+  () => correlatedClient.call("inspect", {}),
+  (error) => {
+    assert.ok(error instanceof LineageRpcResponseError);
+    assert.equal(error.violation, "session_id_mismatch");
+    return true;
+  },
+);
+const ordinaryFailure = correlatedClient.call("inspect", {});
+assert.equal(ordinaryFailure.ok, false);
+assert.equal(ordinaryFailure.error.code, "domain_rejected");
+assert.equal(
+  correlatedRequests[2].session_id,
+  "lineage:00000000000000000000000000000083",
+  "a malformed response must not replace the retained client session",
+);

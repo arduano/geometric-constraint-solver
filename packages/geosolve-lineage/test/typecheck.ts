@@ -80,7 +80,7 @@ void annotations["annotation-layout"]({});
 void patch.patch();
 
 declare const client: LineageRpcClient;
-void client.call("evaluate", {
+const response = client.call("evaluate", {
   expected: {
     document: identity.document,
     revision: identity.revision,
@@ -88,6 +88,15 @@ void client.call("evaluate", {
   },
   host_inputs: hostInputs,
 });
+if (response.ok) {
+  void response.result;
+  // @ts-expect-error a successful envelope cannot contain an error branch
+  void response.error;
+} else {
+  void response.error.code;
+  // @ts-expect-error a failed envelope cannot contain a result branch
+  void response.result;
+}
 // @ts-expect-error caller-certified acceptance is not part of the closed RPC surface
 void client.call("accept", {});
 // @ts-expect-error caller-certified rejection is not part of the closed RPC surface
