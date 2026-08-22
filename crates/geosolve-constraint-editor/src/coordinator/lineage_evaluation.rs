@@ -8,7 +8,7 @@
 
 use geosolve_sketch::{
     DocumentSolveRequest, ExternalSnapshotSet, ParameterBatch, RetainedSketchDocumentSession,
-    SketchDocument, SolverConfig,
+    SketchDocument, SketchLifecycleRevisionHighWater, SolverConfig,
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedFeatureDocument, ComputedFeatureEvaluationState,
@@ -32,6 +32,8 @@ pub struct LineageDomainEvaluationEvidence {
     lineage: LineageDocumentIdentity,
     external_inputs: LineageOpaqueId,
     materialization_digest: LineageDigest,
+    accepted_encoding: &'static str,
+    accepted_sketch_json: String,
     sketch_digest: LineageDigest,
     feature_digest: LineageDigest,
     computed_feature_count: usize,
@@ -138,6 +140,20 @@ impl LineageDomainEvaluationEvidence {
     #[must_use]
     pub const fn materialization_digest(&self) -> LineageDigest {
         self.materialization_digest
+    }
+
+    /// Exact encoding selected by the owning sketch domain for the accepted
+    /// cold materialization. This remains crate-private because callers should
+    /// normally consume the authenticated digest rather than flat cache bytes.
+    pub(super) fn accepted_uses_draft_v5(&self) -> bool {
+        matches!(self.accepted_encoding, "draft_v5")
+    }
+
+    /// Canonical accepted sketch bytes produced by the genuine cold lineage
+    /// evaluation. Projected owner reconciliation uses these bytes to prove
+    /// that its staged flat projection is exactly reproducible.
+    pub(super) fn accepted_sketch_json(&self) -> &str {
+        &self.accepted_sketch_json
     }
 
     /// Digest of the independently accepted sketch payload.
@@ -346,6 +362,89 @@ pub fn evaluate_lineage_session_cold_with_inputs(
     parameters: &ParameterBatch,
     snapshots: &ExternalSnapshotSet,
 ) -> Result<LineageDomainEvaluationEvidence, LineageDomainEvaluationFailure> {
+    evaluate_lineage_session_cold_with_inputs_and_branch(
+        session,
+        parameters,
+        snapshots,
+        EvaluationBranch::Retained,
+    )
+}
+
+/// Cold-authenticates the older accepted sketch embedded in one honest legacy
+/// imported baseline. This is used only while constructing or validating the
+/// retained-invalid/older-accepted authority split; ordinary current
+/// evaluation always uses [`evaluate_lineage_session_cold_with_inputs`].
+pub(super) fn evaluate_lineage_embedded_accepted_baseline_cold_with_inputs(
+    session: &LineageSession,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+) -> Result<LineageDomainEvaluationEvidence, LineageDomainEvaluationFailure> {
+    evaluate_lineage_session_cold_with_inputs_and_branch(
+        session,
+        parameters,
+        snapshots,
+        EvaluationBranch::EmbeddedAcceptedBaseline,
+    )
+}
+
+/// Reproduces the exact accepted authority, preferring the ordinary retained
+/// branch and using the embedded legacy branch only when that is the digest
+/// the session actually published.
+pub(super) fn evaluate_lineage_accepted_authority_cold_with_inputs(
+    session: &LineageSession,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+) -> Result<LineageDomainEvaluationEvidence, LineageDomainEvaluationFailure> {
+    let authority = session
+        .last_accepted()
+        .ok_or_else(no_accepted_prefix_failure)?;
+    let document = session
+        .last_accepted_document()
+        .ok_or_else(no_accepted_prefix_failure)?;
+    let expected = authority.materialization_digest;
+    let accepted_session = LineageSession::new(document.clone()).map_err(|error| {
+        LineageDomainEvaluationFailure::new(
+            "lineage_session_invalid",
+            "lineage-evaluation-session-invalid",
+            error.to_string(),
+        )
+    })?;
+    let ordinary =
+        evaluate_lineage_session_cold_with_inputs(&accepted_session, parameters, snapshots);
+    if let Ok(evaluation) = &ordinary
+        && evaluation.materialization_digest() == expected
+    {
+        return ordinary;
+    }
+    let embedded = evaluate_lineage_embedded_accepted_baseline_cold_with_inputs(
+        &accepted_session,
+        parameters,
+        snapshots,
+    );
+    if let Ok(evaluation) = &embedded
+        && evaluation.materialization_digest() == expected
+    {
+        return embedded;
+    }
+    ordinary.or(embedded)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EvaluationBranch {
+    Retained,
+    EmbeddedAcceptedBaseline,
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one linear authority pipeline keeps strict rebuild, exact host inputs, independent sketch acceptance, computed-feature acceptance, and evidence hashing visibly ordered"
+)]
+fn evaluate_lineage_session_cold_with_inputs_and_branch(
+    session: &LineageSession,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+    branch: EvaluationBranch,
+) -> Result<LineageDomainEvaluationEvidence, LineageDomainEvaluationFailure> {
     let external_inputs = lineage_external_input_stamp(parameters, snapshots)?;
     let session_json = session.to_canonical_session_json().map_err(|error| {
         LineageDomainEvaluationFailure::new(
@@ -365,12 +464,21 @@ pub fn evaluate_lineage_session_cold_with_inputs(
         authority.external_inputs.as_ref() == Some(&external_inputs)
             && session.last_accepted_document().is_some()
     });
-    let local_result = (session.document().evaluation_policy()
-        == LineageEvaluationPolicy::DependencyLocal)
+    let local_result = (branch == EvaluationBranch::Retained
+        && session.document().evaluation_policy() == LineageEvaluationPolicy::DependencyLocal)
         .then(|| {
             evaluate_dependency_local_run(&lineage, parameters, snapshots, accepted_inputs_match)
         });
-    let strict_result = evaluate_strict_run(&lineage, parameters, snapshots);
+    let strict_result = match branch {
+        EvaluationBranch::Retained => evaluate_strict_run(&lineage, parameters, snapshots),
+        EvaluationBranch::EmbeddedAcceptedBaseline => lineage
+            .embedded_accepted_baseline_prefixes()
+            .map_err(|error| materialization_failure(&error))?
+            .ok_or_else(no_accepted_prefix_failure)
+            .and_then(|prefixes| {
+                evaluate_strict_run_from_prefixes(&lineage, prefixes, parameters, snapshots)
+            }),
+    };
     let (strict, work) = match (local_result, strict_result) {
         (None, Ok(strict)) => {
             let prefix_count = strict.prefixes.len();
@@ -487,6 +595,8 @@ pub fn evaluate_lineage_session_cold_with_inputs(
         lineage: session.identity(),
         external_inputs,
         materialization_digest,
+        accepted_encoding: accepted.accepted_encoding,
+        accepted_sketch_json: accepted.accepted_sketch_json,
         sketch_digest: accepted.sketch_digest,
         feature_digest: accepted.feature_digest,
         computed_feature_count: accepted.computed_features.len(),
@@ -505,8 +615,18 @@ fn evaluate_strict_run(
     let prefixes = lineage
         .strict_ready_prefixes()
         .map_err(|error| materialization_failure(&error))?;
+    evaluate_strict_run_from_prefixes(lineage, prefixes, parameters, snapshots)
+}
+
+fn evaluate_strict_run_from_prefixes(
+    lineage: &CoordinatorLineage,
+    prefixes: Vec<super::lineage::LineageMaterializedPrefix>,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+) -> Result<StrictEvaluationRun, LineageDomainEvaluationFailure> {
     let mut accepted_prefixes = Vec::with_capacity(prefixes.len());
     let mut accepted_final = None;
+    let mut previous_accepted = None;
     let mut final_checkpoint = None;
     let mut final_step = None;
     let prefix_count = prefixes.len();
@@ -521,10 +641,17 @@ fn evaluate_strict_run(
                 prefix.host_inputs().snapshots(),
             )
         };
+        let native_fillet = lineage
+            .native_fillet_continuation_plan(step)
+            .map_err(|error| materialization_failure(&error))?;
         let accepted = evaluate_checkpoint_cold(
             &prefix.checkpoint().clone().into_restore_checkpoint(),
             prefix_parameters,
             prefix_snapshots,
+            prefix.host_inputs().parameters(),
+            prefix.host_inputs().snapshots(),
+            previous_accepted.as_ref(),
+            native_fillet.as_ref(),
         )
         .map_err(|failure| failure.with_failed_step(step))?;
         accepted_prefixes.push(AcceptedPrefixEvidence {
@@ -536,6 +663,14 @@ fn evaluate_strict_run(
         });
         final_checkpoint = Some(prefix.checkpoint().clone());
         final_step = Some(step);
+        previous_accepted = Some(PreviousAcceptedCheckpoint {
+            retained_encoding: accepted.retained_encoding,
+            retained_sketch_json: accepted.retained_sketch_json.clone(),
+            encoding: accepted.accepted_encoding,
+            sketch_json: accepted.accepted_sketch_json.clone(),
+            parameters: prefix_parameters.clone(),
+            snapshots: prefix_snapshots.clone(),
+        });
         accepted_final = Some(accepted);
     }
     Ok(StrictEvaluationRun {
@@ -557,6 +692,7 @@ fn evaluate_dependency_local_run(
         .map_err(|error| materialization_failure(&error))?;
     let checkpoint_count = materialized.evaluation_checkpoints().len();
     let mut accepted_final = None;
+    let mut previous_accepted = None;
     for (index, prefix) in materialized.evaluation_checkpoints().iter().enumerate() {
         let is_final = index + 1 == checkpoint_count;
         let (prefix_parameters, prefix_snapshots) = if is_final {
@@ -567,12 +703,27 @@ fn evaluate_dependency_local_run(
                 prefix.host_inputs().snapshots(),
             )
         };
+        let native_fillet = lineage
+            .native_fillet_continuation_plan(prefix.step())
+            .map_err(|error| materialization_failure(&error))?;
         let accepted = evaluate_checkpoint_cold(
             &prefix.checkpoint().clone().into_restore_checkpoint(),
             prefix_parameters,
             prefix_snapshots,
+            prefix.host_inputs().parameters(),
+            prefix.host_inputs().snapshots(),
+            previous_accepted.as_ref(),
+            native_fillet.as_ref(),
         )
         .map_err(|failure| failure.with_failed_step(prefix.step()))?;
+        previous_accepted = Some(PreviousAcceptedCheckpoint {
+            retained_encoding: accepted.retained_encoding,
+            retained_sketch_json: accepted.retained_sketch_json.clone(),
+            encoding: accepted.accepted_encoding,
+            sketch_json: accepted.accepted_sketch_json.clone(),
+            parameters: prefix_parameters.clone(),
+            snapshots: prefix_snapshots.clone(),
+        });
         accepted_final = Some(accepted);
     }
     Ok(DependencyLocalEvaluationRun {
@@ -639,6 +790,10 @@ fn evaluate_checkpoint_cold(
     checkpoint: &super::RestoreCheckpoint,
     parameters: &ParameterBatch,
     snapshots: &ExternalSnapshotSet,
+    authored_parameters: &ParameterBatch,
+    authored_snapshots: &ExternalSnapshotSet,
+    previous_accepted: Option<&PreviousAcceptedCheckpoint>,
+    native_fillet: Option<&geosolve_sketch::DocumentPreparedNativeLineFilletGeometry>,
 ) -> Result<AcceptedCheckpointEvidence, LineageDomainEvaluationFailure> {
     let design = if checkpoint.design_uses_draft_v5() {
         SketchDocument::from_draft_v5_json(checkpoint.design_json())
@@ -674,7 +829,15 @@ fn evaluate_checkpoint_cold(
         "canonical_v4"
     };
     let retained_sketch_json = checkpoint.design_json().to_owned();
-    let sketch_session = evaluate_sketch_prefix_with_exact_inputs(&design, parameters, snapshots)?;
+    let sketch_session = evaluate_sketch_prefix_with_exact_inputs(
+        &design,
+        parameters,
+        snapshots,
+        authored_parameters,
+        authored_snapshots,
+        previous_accepted,
+        native_fillet,
+    )?;
     let accepted = sketch_session
         .accepted_state_for_current_input()
         .ok_or_else(|| {
@@ -818,21 +981,181 @@ fn evaluate_sketch_prefix_with_exact_inputs(
     design: &SketchDocument,
     parameters: &ParameterBatch,
     snapshots: &ExternalSnapshotSet,
+    authored_parameters: &ParameterBatch,
+    authored_snapshots: &ExternalSnapshotSet,
+    previous_accepted: Option<&PreviousAcceptedCheckpoint>,
+    native_fillet: Option<&geosolve_sketch::DocumentPreparedNativeLineFilletGeometry>,
 ) -> Result<RetainedSketchDocumentSession, LineageDomainEvaluationFailure> {
-    RetainedSketchDocumentSession::new_with_inputs(
-        design.clone(),
-        parameters.clone(),
-        snapshots.clone(),
-        DocumentSolveRequest::default().without_previous_state_preferences(),
-        SolverConfig::default(),
-    )
-    .map_err(|error| {
+    let revisions = SketchLifecycleRevisionHighWater::from_raw(0, 0, None);
+    let request = DocumentSolveRequest::default().without_previous_state_preferences();
+
+    if let (Some(previous), Some(request)) = (previous_accepted, native_fillet) {
+        return evaluate_native_fillet_continuation(
+            design,
+            parameters,
+            snapshots,
+            authored_parameters,
+            authored_snapshots,
+            previous,
+            request,
+        );
+    }
+
+    // A projected owner rewrite deliberately reifies one independently accepted
+    // solution into retained intent. Certify that exact solution before asking
+    // the nonlinear solver to rediscover it: a fresh solve may return an equally
+    // valid underconstrained solution with different floating-point bits. Native
+    // Fillet transitions take the authenticated continuation path above first;
+    // their materialized graph must never bypass reauthentication merely because
+    // it is independently valid in isolation.
+    if let Ok(exact) =
+        RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
+            design.clone(),
+            design.clone(),
+            revisions,
+            parameters.clone(),
+            snapshots.clone(),
+            request,
+            SolverConfig::default(),
+        )
+    {
+        return Ok(exact);
+    }
+
+    let session = if let Some(previous) = previous_accepted {
+        let accepted = match previous.encoding {
+            "draft_v5" => SketchDocument::from_draft_v5_json(&previous.sketch_json),
+            "canonical_v4" => SketchDocument::from_json(&previous.sketch_json),
+            _ => {
+                return Err(LineageDomainEvaluationFailure::new(
+                    "sketch_evaluation_error",
+                    "lineage-evaluation-sketch-error",
+                    "the prior accepted prefix uses an unknown sketch encoding",
+                ));
+            }
+        }
+        .map_err(|error| {
+            LineageDomainEvaluationFailure::new(
+                "sketch_evaluation_error",
+                "lineage-evaluation-sketch-error",
+                error.to_string(),
+            )
+        })?;
+        RetainedSketchDocumentSession::restore_design_with_accepted_and_distinct_inputs(
+            design.clone(),
+            accepted,
+            revisions,
+            parameters.clone(),
+            snapshots.clone(),
+            previous.parameters.clone(),
+            previous.snapshots.clone(),
+            request,
+            SolverConfig::default(),
+        )
+    } else {
+        RetainedSketchDocumentSession::new_with_inputs(
+            design.clone(),
+            parameters.clone(),
+            snapshots.clone(),
+            request,
+            SolverConfig::default(),
+        )
+    };
+    session.map_err(|error| {
         LineageDomainEvaluationFailure::new(
             "sketch_evaluation_error",
             "lineage-evaluation-sketch-error",
             error.to_string(),
         )
     })
+}
+
+fn evaluate_native_fillet_continuation(
+    design: &SketchDocument,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+    authored_parameters: &ParameterBatch,
+    authored_snapshots: &ExternalSnapshotSet,
+    previous: &PreviousAcceptedCheckpoint,
+    prepared: &geosolve_sketch::DocumentPreparedNativeLineFilletGeometry,
+) -> Result<RetainedSketchDocumentSession, LineageDomainEvaluationFailure> {
+    let previous_design =
+        decode_prefix_sketch(previous.retained_encoding, &previous.retained_sketch_json)?;
+    let previous_accepted = decode_prefix_sketch(previous.encoding, &previous.sketch_json)?;
+    // Host inputs can change without appending a lineage action. Reconstruct
+    // the complete upstream prefix under the Fillet action's authenticated
+    // authoring-time inputs before reauthenticating its frozen prepared plan;
+    // the current host payload is a later reattempt, not permission to
+    // reinterpret history against changed geometry.
+    let authored_upstream =
+        RetainedSketchDocumentSession::restore_current_design_with_accepted_and_distinct_inputs(
+            previous_design.clone(),
+            previous_accepted,
+            SketchLifecycleRevisionHighWater::from_raw(0, 0, None),
+            authored_parameters.clone(),
+            authored_snapshots.clone(),
+            previous.parameters.clone(),
+            previous.snapshots.clone(),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .map_err(|error| sketch_evaluation_failure(error.to_string()))?;
+    let authored_upstream_accepted = authored_upstream
+        .accepted_state_for_current_input()
+        .ok_or_else(|| {
+            sketch_evaluation_failure(
+                "the native Fillet upstream prefix is not accepted under its authoring inputs",
+            )
+        })?;
+    let accepted_seed = authored_upstream_accepted
+        .document()
+        .prepare_materialized_native_line_fillet_seed(&previous_design, design, prepared)
+        .map_err(|error| sketch_evaluation_failure(error.to_string()))?;
+    RetainedSketchDocumentSession::restore_current_design_with_accepted_and_distinct_inputs(
+        design.clone(),
+        accepted_seed,
+        SketchLifecycleRevisionHighWater::from_raw(0, 0, None),
+        parameters.clone(),
+        snapshots.clone(),
+        authored_parameters.clone(),
+        authored_snapshots.clone(),
+        DocumentSolveRequest::default().without_previous_state_preferences(),
+        SolverConfig::default(),
+    )
+    .map_err(|error| sketch_evaluation_failure(error.to_string()))
+}
+
+fn decode_prefix_sketch(
+    encoding: &str,
+    json: &str,
+) -> Result<SketchDocument, LineageDomainEvaluationFailure> {
+    match encoding {
+        "draft_v5" => SketchDocument::from_draft_v5_json(json),
+        "canonical_v4" => SketchDocument::from_json(json),
+        _ => {
+            return Err(sketch_evaluation_failure(
+                "the lineage prefix uses an unknown sketch encoding",
+            ));
+        }
+    }
+    .map_err(|error| sketch_evaluation_failure(error.to_string()))
+}
+
+fn sketch_evaluation_failure(message: impl Into<String>) -> LineageDomainEvaluationFailure {
+    LineageDomainEvaluationFailure::new(
+        "sketch_evaluation_error",
+        "lineage-evaluation-sketch-error",
+        message,
+    )
+}
+
+struct PreviousAcceptedCheckpoint {
+    retained_encoding: &'static str,
+    retained_sketch_json: String,
+    encoding: &'static str,
+    sketch_json: String,
+    parameters: ParameterBatch,
+    snapshots: ExternalSnapshotSet,
 }
 
 /// Computes the canonical engine-owned identity for an exact pair of immutable

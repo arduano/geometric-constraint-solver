@@ -2,7 +2,11 @@
 
 //! Private retained-history publication and restore helpers.
 
-use super::lineage::CoordinatorLineage;
+use std::collections::BTreeMap;
+
+use geosolve_sketch::ScalarValueEdit;
+
+use super::lineage::{CoordinatorLineage, external_input_stamp};
 use super::{
     ComputedEvaluationAllocator, ComputedFeatureDocument, ComputedFeatureEvaluationState,
     CoordinatorError, DocumentParameterTarget, MutationOutcome, OperationOutcome, ReplayAction,
@@ -87,6 +91,10 @@ impl RetainedEditorCoordinator {
     /// fresh owning-domain evaluation before any live coordinator field can be
     /// published. The proof intentionally allocates computed output only in a
     /// scratch allocator; rejection therefore cannot consume a live identity.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one atomic publication proof keeps host-input, cold sketch, accepted-witness and computed-feature authentication visibly ordered"
+    )]
     pub(super) fn stage_direct_manipulation_lineage(
         &self,
         next: &RestoreCheckpoint,
@@ -102,14 +110,28 @@ impl RetainedEditorCoordinator {
         if !lineage.direct_manipulation_has_authored_change(&previous, next)? {
             return Ok(None);
         }
-        lineage.record_direct_manipulation(
+        let live_external_inputs = external_input_stamp(
+            self.session.parameter_batch(),
+            self.session.external_snapshot_set(),
+        )?;
+        let candidate_external_inputs = external_input_stamp(
+            candidate_session.parameter_batch(),
+            candidate_session.latest_attempt_external_snapshot_set(),
+        )?;
+        if live_external_inputs != candidate_external_inputs {
+            return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+        }
+        let cold_evaluation = lineage.record_direct_manipulation(
             replay,
             self.editor.geometry_tool_variant(),
             &previous,
             next,
-            self.session.parameter_batch(),
-            self.session.external_snapshot_set(),
+            candidate_session.parameter_batch(),
+            candidate_session.latest_attempt_external_snapshot_set(),
         )?;
+        if cold_evaluation.external_inputs() != &candidate_external_inputs {
+            return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+        }
         let materialized = lineage.materialize()?.into_restore_checkpoint();
 
         #[cfg(test)]
@@ -121,6 +143,11 @@ impl RetainedEditorCoordinator {
             materialized.design_json(),
             materialized.design_uses_draft_v5(),
         )?;
+        if next.accepted_json() != Some(cold_evaluation.accepted_sketch_json())
+            || next.accepted_uses_draft_v5() != cold_evaluation.accepted_uses_draft_v5()
+        {
+            return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+        }
         let accepted = current_accepted_document(next)?;
         let attempt_input = candidate_session.last_attempt().input();
         let request = attempt_input
@@ -139,15 +166,8 @@ impl RetainedEditorCoordinator {
                 request,
                 attempt_input.solver_config(),
             )?;
-        let cold_accepted = cold_session
-            .accepted_state_for_current_input()
-            .ok_or(CoordinatorError::DirectManipulationColdReproductionRejected)?;
-        let (cold_accepted_json, cold_accepted_is_draft_v5) =
-            checkpoint_document_to_json(cold_accepted.document())?;
-        if next.accepted_json() != Some(cold_accepted_json.as_str())
-            || next.accepted_uses_draft_v5() != cold_accepted_is_draft_v5
-        {
-            return Err(CoordinatorError::DirectManipulationColdReproductionMismatch);
+        if cold_session.accepted_state_for_current_input().is_none() {
+            return Err(CoordinatorError::DirectManipulationColdReproductionRejected);
         }
 
         let materialized_features =
@@ -222,6 +242,7 @@ fn preserve_host_parameter_fallbacks(
     retained: &SketchDocument,
     promoted: &mut SketchDocument,
 ) -> Result<(), CoordinatorError> {
+    let mut fallbacks = BTreeMap::new();
     for binding in retained.parameter_bindings() {
         let scalar = match binding.target {
             DocumentParameterTarget::DrivingDimension(dimension) => {
@@ -242,7 +263,27 @@ fn preserve_host_parameter_fallbacks(
                 "host parameter targets a missing fallback scalar",
             ))?
             .value;
-        promoted.set_scalar_value(scalar, fallback)?;
+        if promoted
+            .scalar(scalar)
+            .is_some_and(|value| value.value.to_bits() == fallback.to_bits())
+        {
+            continue;
+        }
+        if fallbacks
+            .insert(scalar, fallback)
+            .is_some_and(|previous| previous.to_bits() != fallback.to_bits())
+        {
+            return Err(CoordinatorError::InvalidActionInput(
+                "host bindings disagree on one retained fallback scalar",
+            ));
+        }
+    }
+    if !fallbacks.is_empty() {
+        let edits = fallbacks
+            .into_iter()
+            .map(|(scalar, value)| ScalarValueEdit::new(scalar, value))
+            .collect::<Vec<_>>();
+        promoted.set_scalar_values(&edits)?;
     }
     Ok(())
 }
@@ -384,6 +425,10 @@ pub(super) fn restore_sketch_checkpoint(
 /// the lineage session's independently authenticated last-accepted program is
 /// solved under its exact historical inputs and retained as distinct visible
 /// authority.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one fail-closed restore pipeline keeps lifecycle high-water, exact current authority, ordinary solve and historical fallback adjacent"
+)]
 pub(super) fn restore_sketch_checkpoint_from_lineage(
     current: &RetainedSketchDocumentSession,
     lineage: &CoordinatorLineage,
@@ -406,9 +451,59 @@ pub(super) fn restore_sketch_checkpoint_from_lineage(
     let parameters = parameters.clone();
     let snapshots = snapshots.clone();
     let solver_config = input.solver_config();
-    let mut evaluated =
-        RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
-            design.clone(),
+    if let Some(evaluation) =
+        lineage.reproduce_current_accepted_evaluation(&parameters, &snapshots)?
+    {
+        let mut accepted = checkpoint_document_from_json(
+            evaluation.accepted_sketch_json(),
+            evaluation.accepted_uses_draft_v5(),
+        )?;
+        accepted.retain_persistent_identity_high_water(&high_water)?;
+        let revisions_already_retained =
+            lifecycle_high_water_covers(current.revision_high_water(), revisions);
+        if revisions_already_retained
+            && current
+                .accepted_state_for_current_input()
+                .is_some_and(|current_accepted| {
+                    current.design_document() == &design && current_accepted.document() == &accepted
+                })
+        {
+            // Feature-only history keeps exact sketch lifecycle identities,
+            // but only after the lineage owner has freshly authenticated the
+            // complete accepted program and its exact host inputs above.
+            let mut unchanged = current.clone();
+            unchanged.retain_persistent_identity_high_water(&high_water)?;
+            return Ok(unchanged);
+        }
+        let mut restored =
+            RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
+                design,
+                accepted,
+                revisions,
+                parameters,
+                snapshots,
+                request,
+                solver_config,
+            )?;
+        restored.retain_persistent_identity_high_water(&high_water)?;
+        return Ok(restored);
+    }
+    let exact = RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
+        design.clone(),
+        design.clone(),
+        revisions,
+        parameters.clone(),
+        snapshots.clone(),
+        request,
+        solver_config,
+    );
+    let mut evaluated = exact.or_else(|_| {
+        // Many ordinary retained programs intentionally store unsolved
+        // authoring seeds. If exact no-optimization certification rejects,
+        // solve those seeds normally. Direct-manipulation lineage instead
+        // stores a complete accepted projection, so it takes the exact
+        // branch above and cannot drift by a later solver ULP.
+        RetainedSketchDocumentSession::restore_design_with_inputs(
             design.clone(),
             revisions,
             parameters.clone(),
@@ -416,21 +511,7 @@ pub(super) fn restore_sketch_checkpoint_from_lineage(
             request,
             solver_config,
         )
-        .or_else(|_| {
-            // Many ordinary retained programs intentionally store unsolved
-            // authoring seeds. If exact no-optimization certification rejects,
-            // solve those seeds normally. Direct-manipulation lineage instead
-            // stores a complete accepted projection, so it takes the exact
-            // branch above and cannot drift by a later solver ULP.
-            RetainedSketchDocumentSession::restore_design_with_inputs(
-                design.clone(),
-                revisions,
-                parameters.clone(),
-                snapshots.clone(),
-                request,
-                solver_config,
-            )
-        })?;
+    })?;
     if let Some(evaluated_accepted) = evaluated.accepted_state_for_current_input() {
         let revisions_already_retained =
             lifecycle_high_water_covers(current.revision_high_water(), revisions);
@@ -454,7 +535,7 @@ pub(super) fn restore_sketch_checkpoint_from_lineage(
         return Ok(evaluated);
     }
 
-    let Some((accepted_checkpoint, accepted_inputs)) =
+    let Some((accepted_checkpoint, accepted_inputs, _embedded_accepted_baseline)) =
         lineage.materialize_last_accepted_with_inputs()?
     else {
         evaluated.retain_persistent_identity_high_water(&high_water)?;

@@ -33,6 +33,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use thiserror::Error;
 
+use super::lineage_evaluation::LineageDomainEvaluationEvidence;
 use super::{
     CoordinatorError, ExternalSnapshotSet, MutationOutcome, ParameterBatch, ReplayAction,
     RestoreCheckpoint, RetainedEditorCoordinator,
@@ -186,6 +187,8 @@ struct ImportedCoordinatorBaseline {
     version: u32,
     checkpoint: LineageCheckpoint,
     host_inputs: LineageHostInputProvenance,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    accepted_host_inputs: Option<LineageHostInputProvenance>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -495,6 +498,20 @@ impl LineageCheckpoint {
         self.accepted_json.clone_from(&evaluated.accepted_json);
         self.accepted_is_draft_v5 = evaluated.accepted_is_draft_v5;
         self.accepted_belongs_to_current_design = evaluated.accepted_belongs_to_current_design;
+    }
+
+    fn embedded_accepted_branch(&self) -> Result<Option<Self>, LineageBridgeError> {
+        let Some(accepted_json) = self.accepted_json.as_ref() else {
+            return Ok(None);
+        };
+        let mut accepted = self.clone();
+        accepted.design_json.clone_from(accepted_json);
+        accepted.design_is_draft_v5 = self.accepted_is_draft_v5;
+        accepted.accepted_json = Some(accepted_json.clone());
+        accepted.accepted_is_draft_v5 = self.accepted_is_draft_v5;
+        accepted.accepted_belongs_to_current_design = true;
+        accepted.canonicalize_persistent_documents()?;
+        Ok(Some(accepted))
     }
 
     pub(super) fn into_restore_checkpoint(self) -> RestoreCheckpoint {
@@ -825,19 +842,38 @@ impl LineageBridgeError {
 }
 
 impl CoordinatorLineage {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one import boundary keeps baseline identity, retained/accepted host provenance, owning-domain authentication, and initial authority publication adjacent"
+    )]
     pub(super) fn import(
         document: LineageDocumentId,
         checkpoint: &RestoreCheckpoint,
         parameters: &ParameterBatch,
         snapshots: &ExternalSnapshotSet,
+        accepted_parameters: Option<&ParameterBatch>,
+        accepted_snapshots: Option<&ExternalSnapshotSet>,
         accepted_current: bool,
     ) -> Result<Self, LineageBridgeError> {
+        let accepted_host_inputs = match (
+            checkpoint.accepted_json(),
+            accepted_parameters,
+            accepted_snapshots,
+            accepted_current,
+        ) {
+            (Some(_), Some(_), Some(_), true) | (None, None, None, false) => None,
+            (Some(_), Some(parameters), Some(snapshots), false) => {
+                Some(LineageHostInputProvenance::capture(parameters, snapshots)?)
+            }
+            _ => return Err(LineageBridgeError::AcceptedExternalInputMismatch),
+        };
         let mut lineage = LineageDocument::with_id(document);
         let allocators = lineage.allocator_high_water();
         let baseline = ImportedCoordinatorBaseline {
             version: 1,
             checkpoint: LineageCheckpoint::capture(checkpoint),
             host_inputs: LineageHostInputProvenance::capture(parameters, snapshots)?,
+            accepted_host_inputs,
         };
         let baseline_value = authored_structural_value(&baseline.checkpoint)?;
         let entities = collect_materialized_entities(&baseline_value);
@@ -887,12 +923,48 @@ impl CoordinatorLineage {
             mismatch_next_direct_reproduction: Arc::new(AtomicBool::new(false)),
         };
         value.retain_computed_evaluation_high_water(checkpoint.computed_evaluation_high_water())?;
-        value.record_evaluation(
-            parameters,
-            snapshots,
-            accepted_current,
-            allocators.next_step_id,
-        )?;
+        if accepted_current || checkpoint.accepted_json().is_none() {
+            value.record_evaluation(
+                parameters,
+                snapshots,
+                accepted_current,
+                allocators.next_step_id,
+            )?;
+        } else {
+            let accepted_parameters =
+                accepted_parameters.ok_or(LineageBridgeError::AcceptedExternalInputMismatch)?;
+            let accepted_snapshots =
+                accepted_snapshots.ok_or(LineageBridgeError::AcceptedExternalInputMismatch)?;
+            let accepted = super::lineage_evaluation::
+                evaluate_lineage_embedded_accepted_baseline_cold_with_inputs(
+                    &value.session,
+                    accepted_parameters,
+                    accepted_snapshots,
+                )
+                .map_err(|failure| {
+                    LineageBridgeError::AcceptedEvaluationRejected(format!(
+                        "{}: {}",
+                        failure.code(),
+                        failure.message()
+                    ))
+                })?;
+            let accepted_inputs = external_input_stamp(accepted_parameters, accepted_snapshots)?;
+            if accepted.external_inputs() != &accepted_inputs {
+                return Err(LineageBridgeError::AcceptedExternalInputMismatch);
+            }
+            value.session.accept_current(
+                value.session.identity(),
+                Some(accepted_inputs),
+                accepted.materialization_digest(),
+            )?;
+            let required = value.accepted_external_input_stamps()?;
+            value.host_input_ledger.retain_accepted_pair(
+                accepted_parameters,
+                accepted_snapshots,
+                &required,
+            )?;
+            value.record_evaluation(parameters, snapshots, false, allocators.next_step_id)?;
+        }
         Ok(value)
     }
 
@@ -1089,6 +1161,7 @@ impl CoordinatorLineage {
             snapshots,
             OwnerRewriteMode::Ordinary,
         )
+        .map(|_| ())
     }
 
     pub(super) fn direct_manipulation_has_authored_change(
@@ -1112,7 +1185,7 @@ impl CoordinatorLineage {
         after: &RestoreCheckpoint,
         parameters: &ParameterBatch,
         snapshots: &ExternalSnapshotSet,
-    ) -> Result<(), LineageBridgeError> {
+    ) -> Result<LineageDomainEvaluationEvidence, LineageBridgeError> {
         self.record_with_owner_mode(
             replay,
             variant,
@@ -1121,7 +1194,8 @@ impl CoordinatorLineage {
             parameters,
             snapshots,
             OwnerRewriteMode::DirectManipulation,
-        )
+        )?
+        .ok_or(LineageBridgeError::ReproductionMismatch)
     }
 
     #[allow(
@@ -1138,7 +1212,7 @@ impl CoordinatorLineage {
         parameters: &ParameterBatch,
         snapshots: &ExternalSnapshotSet,
         owner_mode: OwnerRewriteMode,
-    ) -> Result<(), LineageBridgeError> {
+    ) -> Result<Option<LineageDomainEvaluationEvidence>, LineageBridgeError> {
         #[cfg(test)]
         if self.reject_next_record.swap(false, Ordering::SeqCst) {
             return Err(LineageBridgeError::InjectedRecordFailure);
@@ -1240,16 +1314,19 @@ impl CoordinatorLineage {
             self.host_input_ledger = previous_ledger;
             return Err(LineageBridgeError::ReproductionMismatch);
         }
-        if let Err(error) = self.record_evaluation(
+        let evaluation = match self.record_evaluation(
             parameters,
             snapshots,
             after.accepted_belongs_to_current_design() && after.accepted_json().is_some(),
             failed_step.unwrap_or_else(|| self.session.document().steps()[0].id),
         ) {
-            self.session = previous;
-            self.host_input_ledger = previous_ledger;
-            return Err(error);
-        }
+            Ok(evaluation) => evaluation,
+            Err(error) => {
+                self.session = previous;
+                self.host_input_ledger = previous_ledger;
+                return Err(error);
+            }
+        };
         if let Err(error) =
             self.retain_computed_evaluation_high_water(after.computed_evaluation_high_water())
         {
@@ -1257,7 +1334,7 @@ impl CoordinatorLineage {
             self.host_input_ledger = previous_ledger;
             return Err(error);
         }
-        Ok(())
+        Ok(evaluation)
     }
 
     pub(super) fn record_operation(
@@ -1501,6 +1578,97 @@ impl CoordinatorLineage {
         Ok(prefixes)
     }
 
+    /// Returns the one honest legacy accepted branch embedded in an imported
+    /// baseline whose retained design was already invalid when migration
+    /// began. The branch changes no lineage action, identity, or history: it
+    /// only selects the exact older accepted sketch bytes and host inputs for
+    /// independent owning-domain authentication.
+    pub(super) fn embedded_accepted_baseline_prefixes(
+        &self,
+    ) -> Result<Option<Vec<LineageMaterializedPrefix>>, LineageBridgeError> {
+        Self::embedded_accepted_baseline_prefixes_for_document(self.session.document())
+    }
+
+    fn embedded_accepted_baseline_prefixes_for_document(
+        document: &LineageDocument,
+    ) -> Result<Option<Vec<LineageMaterializedPrefix>>, LineageBridgeError> {
+        let [step] = document.steps() else {
+            return Ok(None);
+        };
+        let LineageActionDefinition::ImportedBaseline { baseline } = &step.action else {
+            return Ok(None);
+        };
+        let imported: ImportedCoordinatorBaseline = serde_json::from_str(&baseline.payload)?;
+        if imported.version != 1 {
+            return Err(LineageBridgeError::InvalidMaterialization(
+                "unsupported imported-baseline bridge version",
+            ));
+        }
+        let Some(provenance) = imported.accepted_host_inputs else {
+            return Ok(None);
+        };
+        let checkpoint = imported
+            .checkpoint
+            .embedded_accepted_branch()?
+            .ok_or(LineageBridgeError::AcceptedMaterializationMismatch)?;
+        let plan = document.dependency_plan_for(
+            geosolve_sketch_lineage::LineageEvaluationPolicy::StrictChronological,
+            [],
+        )?;
+        if !matches!(
+            plan.as_slice(),
+            [entry]
+                if entry.step == step.id
+                    && matches!(
+                        entry.state,
+                        geosolve_sketch_lineage::LineageStepEvaluationState::Ready
+                    )
+        ) {
+            return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+        }
+        Ok(Some(vec![LineageMaterializedPrefix {
+            step: step.id,
+            checkpoint,
+            host_inputs: provenance.decode()?,
+        }]))
+    }
+
+    /// Decodes the semantic prepared plan retained by one native Fillet action.
+    /// Cold evaluation never accepts it by inspection: the sketch domain
+    /// reauthenticates its geometry against the independently accepted upstream
+    /// prefix and its reserved identities against the materialized output graph.
+    pub(super) fn native_fillet_continuation_plan(
+        &self,
+        step: LineageStepId,
+    ) -> Result<Option<geosolve_sketch::DocumentPreparedNativeLineFilletGeometry>, LineageBridgeError>
+    {
+        let step = self.session.document().step(step).ok_or(
+            LineageBridgeError::InvalidMaterialization(
+                "lineage evaluation references a missing step",
+            ),
+        )?;
+        let LineageActionDefinition::Operation { action } = &step.action else {
+            return Ok(None);
+        };
+        if action.schema.as_str()
+            != "geosolve.document-edit.v1.create-prepared-native-line-fillet-geometry"
+        {
+            return Ok(None);
+        }
+        let intent = persisted_intent_object(action)?;
+        validate_persisted_intent_keys(
+            intent,
+            &["version", "body", AUTHORED_OUTPUT_FIELD_MANIFEST],
+        )?;
+        let body = persisted_object_field(intent, "body")?;
+        validate_exact_object_keys(body, &["CreatePreparedNativeLineFilletGeometry"])?;
+        let edit = persisted_object_field(body, "CreatePreparedNativeLineFilletGeometry")?;
+        validate_exact_object_keys(edit, &["prepared"])?;
+        Ok(Some(persisted_field::<
+            geosolve_sketch::DocumentPreparedNativeLineFilletGeometry,
+        >(edit, "prepared")?))
+    }
+
     /// Reconstructs the largest unchanged accepted prefix, structurally
     /// replays the current suffix, and returns only the checkpoints that the
     /// dependency-local owning-domain evaluator must inspect: the reusable
@@ -1589,13 +1757,58 @@ impl CoordinatorLineage {
         let reconstructed_prefix_count = reusable_prefix_count;
         let mut evaluation_checkpoints = Vec::new();
 
-        if let Some(anchor) = anchor {
+        if let Some(anchor) = anchor.as_ref() {
+            // A reusable structural anchor can contain a native topology
+            // transition whose retained numerical seeds deliberately differ
+            // from its accepted preview. Preserve an independently accepted
+            // barrier immediately before and after every such transition;
+            // otherwise evaluating only the terminal anchor would skip the
+            // semantic reauthentication needed to reconstruct its exact
+            // accepted continuation. Ordinary anchors retain the one-checkpoint
+            // fast path.
+            let prefix_step_ids = current
+                .steps()
+                .iter()
+                .take(common_prefix_len)
+                .map(|step| step.id)
+                .collect::<BTreeSet<_>>();
+            let ready_prefixes = Self::materialize_document_prefixes_for_policy(
+                current,
+                geosolve_sketch_lineage::LineageEvaluationPolicy::StrictChronological,
+                &[],
+            )?;
+            let reusable_prefixes = ready_prefixes
+                .iter()
+                .take_while(|prefix| prefix_step_ids.contains(&prefix.step))
+                .collect::<Vec<_>>();
+            for (index, prefix) in reusable_prefixes.iter().enumerate() {
+                let step =
+                    current
+                        .step(prefix.step)
+                        .ok_or(LineageBridgeError::InvalidMaterialization(
+                            "dependency-local anchor references a missing step",
+                        ))?;
+                if !is_native_line_fillet_materialization_step(step) {
+                    continue;
+                }
+                if let Some(upstream) = index
+                    .checked_sub(1)
+                    .and_then(|upstream| reusable_prefixes.get(upstream))
+                {
+                    push_distinct_evaluation_checkpoint(
+                        &mut evaluation_checkpoints,
+                        (*upstream).clone(),
+                    );
+                }
+                push_distinct_evaluation_checkpoint(&mut evaluation_checkpoints, (*prefix).clone());
+            }
             // Re-authenticate the reconstructed reusable anchor. This is one
             // real owning-domain evaluation and is charged by policy telemetry.
-            evaluation_checkpoints.push(anchor);
+            push_distinct_evaluation_checkpoint(&mut evaluation_checkpoints, anchor.clone());
         }
 
         let mut replayed_suffix_count = 0_usize;
+        let mut last_ready_step = anchor.as_ref().map(|prefix| prefix.step);
         for (step, plan) in current
             .steps()
             .iter()
@@ -1608,19 +1821,39 @@ impl CoordinatorLineage {
             ) {
                 continue;
             }
+            if is_native_line_fillet_materialization_step(step)
+                && let (Some(upstream_step), Some(upstream_checkpoint), Some(upstream_inputs)) = (
+                    last_ready_step,
+                    checkpoint.as_ref(),
+                    final_host_inputs.as_ref(),
+                )
+            {
+                push_distinct_evaluation_checkpoint(
+                    &mut evaluation_checkpoints,
+                    LineageMaterializedPrefix {
+                        step: upstream_step,
+                        checkpoint: upstream_checkpoint.clone(),
+                        host_inputs: upstream_inputs.clone(),
+                    },
+                );
+            }
             let host_inputs = apply_materialization_step(current, &mut checkpoint, step)?;
             final_host_inputs = Some(host_inputs.clone());
             replayed_suffix_count = replayed_suffix_count.saturating_add(1);
-            if dirty.contains(&step.id) {
-                evaluation_checkpoints.push(LineageMaterializedPrefix {
-                    step: step.id,
-                    checkpoint: checkpoint
-                        .as_ref()
-                        .ok_or(LineageBridgeError::MissingBaseline)?
-                        .clone(),
-                    host_inputs,
-                });
+            if dirty.contains(&step.id) || is_native_line_fillet_materialization_step(step) {
+                push_distinct_evaluation_checkpoint(
+                    &mut evaluation_checkpoints,
+                    LineageMaterializedPrefix {
+                        step: step.id,
+                        checkpoint: checkpoint
+                            .as_ref()
+                            .ok_or(LineageBridgeError::MissingBaseline)?
+                            .clone(),
+                        host_inputs,
+                    },
+                );
             }
+            last_ready_step = Some(step.id);
         }
 
         let final_checkpoint = checkpoint.ok_or(LineageBridgeError::MissingBaseline)?;
@@ -1640,11 +1873,14 @@ impl CoordinatorLineage {
             .last()
             .is_none_or(|prefix| prefix.step != final_step)
         {
-            evaluation_checkpoints.push(LineageMaterializedPrefix {
-                step: final_step,
-                checkpoint: final_checkpoint.clone(),
-                host_inputs: final_host_inputs,
-            });
+            push_distinct_evaluation_checkpoint(
+                &mut evaluation_checkpoints,
+                LineageMaterializedPrefix {
+                    step: final_step,
+                    checkpoint: final_checkpoint.clone(),
+                    host_inputs: final_host_inputs,
+                },
+            );
         }
 
         if let Some(high_water) = self.session.auxiliary_high_water(&LineageSemanticKey::new(
@@ -1682,21 +1918,52 @@ impl CoordinatorLineage {
     pub(super) fn materialize_last_accepted(
         &self,
     ) -> Result<Option<LineageCheckpoint>, LineageBridgeError> {
-        self.session
-            .last_accepted_document()
-            .map(|document| {
-                Self::materialize_document_for_policy(
-                    document,
-                    geosolve_sketch_lineage::LineageEvaluationPolicy::StrictChronological,
-                    &[],
-                )
-            })
-            .transpose()
+        let Some(document) = self.session.last_accepted_document() else {
+            return Ok(None);
+        };
+        let authority = self
+            .session
+            .last_accepted()
+            .ok_or(LineageBridgeError::AcceptedExternalInputMismatch)?;
+        let distinct_embedded_baseline = match document.steps() {
+            [step] => match &step.action {
+                LineageActionDefinition::ImportedBaseline { baseline } => {
+                    let imported: ImportedCoordinatorBaseline =
+                        serde_json::from_str(&baseline.payload)?;
+                    imported.accepted_host_inputs.is_some()
+                        && !imported.checkpoint.accepted_belongs_to_current_design
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        if distinct_embedded_baseline
+            && let Some(mut embedded) =
+                Self::embedded_accepted_baseline_prefixes_for_document(document)?
+        {
+            let prefix = embedded
+                .pop()
+                .ok_or(LineageBridgeError::AcceptedMaterializationMismatch)?;
+            let embedded_inputs = external_input_stamp(
+                prefix.host_inputs.parameters(),
+                prefix.host_inputs.snapshots(),
+            )?;
+            if authority.external_inputs.as_ref() == Some(&embedded_inputs) {
+                return Ok(Some(prefix.checkpoint));
+            }
+        }
+        Self::materialize_document_for_policy(
+            document,
+            geosolve_sketch_lineage::LineageEvaluationPolicy::StrictChronological,
+            &[],
+        )
+        .map(Some)
     }
 
     pub(super) fn materialize_last_accepted_with_inputs(
         &self,
-    ) -> Result<Option<(LineageCheckpoint, DecodedLineageHostInputs)>, LineageBridgeError> {
+    ) -> Result<Option<(LineageCheckpoint, DecodedLineageHostInputs, bool)>, LineageBridgeError>
+    {
         let Some(document) = self.session.last_accepted_document() else {
             return Ok(None);
         };
@@ -1717,6 +1984,11 @@ impl CoordinatorLineage {
         .ok_or(LineageBridgeError::MissingBaseline)?;
         let inputs = if let Some(inputs) = self.host_input_ledger.decoded_entry(stamp)? {
             inputs
+        } else if let Some(inputs) = declared_host_inputs(document)?.into_iter().find(|inputs| {
+            external_input_stamp(inputs.parameters(), inputs.snapshots())
+                .is_ok_and(|candidate| &candidate == stamp)
+        }) {
+            inputs
         } else {
             let prefix_stamp = external_input_stamp(
                 prefix.host_inputs.parameters(),
@@ -1727,7 +1999,47 @@ impl CoordinatorLineage {
             }
             prefix.host_inputs
         };
-        Ok(Some((prefix.checkpoint, inputs)))
+        let evaluation_session = LineageSession::new(document.clone())?;
+        if super::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
+            &evaluation_session,
+            inputs.parameters(),
+            inputs.snapshots(),
+        )
+        .is_ok_and(|evaluation| {
+            evaluation.materialization_digest() == authority.materialization_digest
+        }) {
+            return Ok(Some((prefix.checkpoint, inputs, false)));
+        }
+        let embedded = super::lineage_evaluation::
+            evaluate_lineage_embedded_accepted_baseline_cold_with_inputs(
+                &evaluation_session,
+                inputs.parameters(),
+                inputs.snapshots(),
+            )
+            .map_err(|failure| {
+                LineageBridgeError::AcceptedEvaluationRejected(format!(
+                    "{}: {}",
+                    failure.code(),
+                    failure.message()
+                ))
+            })?;
+        if embedded.materialization_digest() != authority.materialization_digest {
+            return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+        }
+        let embedded_lineage =
+            Self::from_session_json(&evaluation_session.to_canonical_session_json()?)?;
+        let embedded_prefix = embedded_lineage
+            .embedded_accepted_baseline_prefixes()?
+            .and_then(|mut prefixes| prefixes.pop())
+            .ok_or(LineageBridgeError::AcceptedMaterializationMismatch)?;
+        let embedded_stamp = external_input_stamp(
+            embedded_prefix.host_inputs.parameters(),
+            embedded_prefix.host_inputs.snapshots(),
+        )?;
+        if &embedded_stamp != stamp || embedded_prefix.host_inputs != inputs {
+            return Err(LineageBridgeError::AcceptedExternalInputMismatch);
+        }
+        Ok(Some((embedded_prefix.checkpoint, inputs, true)))
     }
 
     fn retained_sessions(&self) -> Result<Vec<LineageSession>, LineageBridgeError> {
@@ -1961,6 +2273,93 @@ impl CoordinatorLineage {
         Self::validate_session_accepted_external_inputs(&self.session, parameters, snapshots)
     }
 
+    pub(super) fn reproduce_current_accepted_evaluation(
+        &self,
+        parameters: &ParameterBatch,
+        snapshots: &ExternalSnapshotSet,
+    ) -> Result<Option<LineageDomainEvaluationEvidence>, LineageBridgeError> {
+        let (Some(document), Some(authority)) = (
+            self.session.last_accepted_document(),
+            self.session.last_accepted(),
+        ) else {
+            return Ok(None);
+        };
+        if authority.lineage != document.identity() {
+            return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+        }
+        let current_inputs = external_input_stamp(parameters, snapshots)?;
+        let authority_inputs = authority
+            .external_inputs
+            .as_ref()
+            .ok_or(LineageBridgeError::AcceptedExternalInputMismatch)?;
+        let (_, historical_inputs, embedded_accepted_baseline) = self
+            .materialize_last_accepted_with_inputs()?
+            .ok_or(LineageBridgeError::AcceptedExternalInputMismatch)?;
+        let evaluation_session = LineageSession::new(document.clone())?;
+        let evaluation = if embedded_accepted_baseline {
+            super::lineage_evaluation::evaluate_lineage_embedded_accepted_baseline_cold_with_inputs(
+                &evaluation_session,
+                historical_inputs.parameters(),
+                historical_inputs.snapshots(),
+            )
+        } else {
+            super::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
+                &evaluation_session,
+                historical_inputs.parameters(),
+                historical_inputs.snapshots(),
+            )
+        }
+        .map_err(|failure| {
+            LineageBridgeError::AcceptedEvaluationRejected(format!(
+                "{}: {}",
+                failure.code(),
+                failure.message()
+            ))
+        })?;
+        if evaluation.external_inputs() != authority_inputs {
+            return Err(LineageBridgeError::AcceptedExternalInputMismatch);
+        }
+        if evaluation.materialization_digest() != authority.materialization_digest {
+            return Err(LineageBridgeError::AcceptedMaterializationMismatch);
+        }
+        if embedded_accepted_baseline {
+            // This authority belongs to the older accepted branch embedded in
+            // the imported root, never to the retained invalid branch even
+            // though both intentionally share one lineage action identity.
+            return Ok(None);
+        }
+        if authority_inputs != &current_inputs {
+            // The historical authority has been authenticated under its own
+            // exact payload, but it is not an accepted witness for the host's
+            // current inputs. Continue through the ordinary current-program
+            // solve and retain this authority only as the distinct fallback.
+            return Ok(None);
+        }
+        let current = self.session.document();
+        let same_program = current.id() == document.id()
+            && current.evaluation_policy() == document.evaluation_policy()
+            && current.steps().len() == document.steps().len()
+            && document.steps().iter().zip(current.steps()).try_fold(
+                true,
+                |equivalent, (accepted, retained)| {
+                    Ok::<_, LineageBridgeError>(
+                        equivalent && steps_materialization_equivalent(accepted, retained)?,
+                    )
+                },
+            )?;
+        if !same_program {
+            // Undo/Redo rebases the selected retained program to a fresh
+            // revision while preserving older accepted authority. The exact
+            // historical evaluation above must still be authenticated, but it
+            // is current-design authority only when the declarative programs
+            // are materialization-equivalent; otherwise the caller must solve
+            // the selected current program and retain the older acceptance as
+            // a distinct fallback.
+            return Ok(None);
+        }
+        Ok(Some(evaluation))
+    }
+
     fn validate_session_accepted_external_inputs(
         session: &LineageSession,
         parameters: Option<&ParameterBatch>,
@@ -1973,7 +2372,7 @@ impl CoordinatorLineage {
             snapshots,
         ) {
             (None, None, None, None) => Ok(()),
-            (Some(document), Some(authority), Some(parameters), Some(snapshots)) => {
+            (Some(_document), Some(authority), Some(parameters), Some(snapshots)) => {
                 let expected = external_input_stamp(parameters, snapshots)?;
                 if authority.external_inputs.as_ref() != Some(&expected) {
                     return Err(LineageBridgeError::AcceptedExternalInputMismatch);
@@ -1983,10 +2382,9 @@ impl CoordinatorLineage {
                 // cache and may legitimately lag a host-input-only solve. Rebuild
                 // the exact accepted program through the ordinary sketch and
                 // computed-feature owners before trusting its authority digest.
-                let accepted_session = LineageSession::new(document.clone())?;
-                let evaluation =
-                    super::lineage_evaluation::evaluate_lineage_session_cold_with_inputs(
-                        &accepted_session,
+                let evaluation = super::lineage_evaluation::
+                    evaluate_lineage_accepted_authority_cold_with_inputs(
+                        session,
                         parameters,
                         snapshots,
                     )
@@ -2510,7 +2908,7 @@ impl CoordinatorLineage {
         snapshots: &ExternalSnapshotSet,
         accepted_current: bool,
         failed_step: LineageStepId,
-    ) -> Result<(), LineageBridgeError> {
+    ) -> Result<Option<LineageDomainEvaluationEvidence>, LineageBridgeError> {
         let previous_session = self.session.clone();
         let previous_ledger = self.host_input_ledger.clone();
         let result = (|| {
@@ -2550,6 +2948,7 @@ impl CoordinatorLineage {
                 let required = self.accepted_external_input_stamps()?;
                 self.host_input_ledger
                     .retain_accepted_pair(parameters, snapshots, &required)?;
+                Ok(Some(evaluation))
             } else {
                 self.session.reject_current(
                     identity,
@@ -2559,8 +2958,8 @@ impl CoordinatorLineage {
                 )?;
                 let required = self.accepted_external_input_stamps()?;
                 self.host_input_ledger.retain_required(&required)?;
+                Ok(None)
             }
-            Ok(())
         })();
         if result.is_err() {
             self.session = previous_session;
@@ -2593,6 +2992,7 @@ impl CoordinatorLineage {
             .find(|step| matches!(step.state, geosolve_sketch_lineage::LineageStepState::Live))
             .map_or_else(|| self.session.document().steps()[0].id, |step| step.id);
         self.record_evaluation(parameters, snapshots, accepted_current, failed_step)
+            .map(|_| ())
     }
 }
 
@@ -3233,6 +3633,14 @@ fn validate_imported_baseline_manifest(
         ));
     }
     imported.host_inputs.decode()?;
+    if let Some(inputs) = &imported.accepted_host_inputs {
+        if imported.checkpoint.accepted_json.is_none() {
+            return Err(LineageBridgeError::InvalidMaterialization(
+                "imported accepted host inputs require an embedded accepted sketch",
+            ));
+        }
+        inputs.decode()?;
+    }
     let value = authored_structural_value(&imported.checkpoint)?;
     let entities = collect_materialized_entities(&value);
     let first_output = step.outputs.first().map(|output| output.id).ok_or(
@@ -3289,6 +3697,27 @@ fn has_workbench_materialization_parameters(action: &LineageActionDefinition) ->
     ]
     .into_iter()
     .any(|parameter| payload.parameters.contains_key(parameter))
+}
+
+fn is_native_line_fillet_materialization_step(step: &LineageStep) -> bool {
+    matches!(
+        &step.action,
+        LineageActionDefinition::Operation { action }
+            if action.schema.as_str()
+                == "geosolve.document-edit.v1.create-prepared-native-line-fillet-geometry"
+    )
+}
+
+fn push_distinct_evaluation_checkpoint(
+    checkpoints: &mut Vec<LineageMaterializedPrefix>,
+    checkpoint: LineageMaterializedPrefix,
+) {
+    if checkpoints
+        .last()
+        .is_none_or(|existing| existing.step != checkpoint.step)
+    {
+        checkpoints.push(checkpoint);
+    }
 }
 
 fn apply_materialization_step(
@@ -3363,10 +3792,9 @@ fn action_host_input_provenance(
 fn declared_host_inputs(
     document: &LineageDocument,
 ) -> Result<Vec<DecodedLineageHostInputs>, LineageBridgeError> {
-    document
-        .steps()
-        .iter()
-        .map(|step| match &step.action {
+    let mut declared = Vec::new();
+    for step in document.steps() {
+        match &step.action {
             LineageActionDefinition::ImportedBaseline { baseline } => {
                 let imported: ImportedCoordinatorBaseline =
                     serde_json::from_str(&baseline.payload)?;
@@ -3375,11 +3803,15 @@ fn declared_host_inputs(
                         "unsupported imported-baseline bridge version",
                     ));
                 }
-                imported.host_inputs.decode()
+                declared.push(imported.host_inputs.decode()?);
+                if let Some(inputs) = imported.accepted_host_inputs {
+                    declared.push(inputs.decode()?);
+                }
             }
-            action => action_host_input_provenance(action)?.decode(),
-        })
-        .collect()
+            action => declared.push(action_host_input_provenance(action)?.decode()?),
+        }
+    }
+    Ok(declared)
 }
 
 fn retain_host_input_candidate(
@@ -3478,6 +3910,7 @@ fn steps_materialization_equivalent(
                 serde_json::from_str(&current_baseline.payload)?;
             Ok(accepted.version == current.version
                 && accepted.host_inputs == current.host_inputs
+                && accepted.accepted_host_inputs == current.accepted_host_inputs
                 && semantic_structural_value(&accepted.checkpoint)?
                     == semantic_structural_value(&current.checkpoint)?)
         }

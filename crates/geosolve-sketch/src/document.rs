@@ -1767,6 +1767,25 @@ impl GeometryRoleEdit {
     }
 }
 
+/// One scalar value replacement in an atomic validated batch.
+///
+/// The scalar identity and domain remain unchanged. Contact parameters, active
+/// associative-Fillet endpoint angles, and selected NURBS gauge weights retain
+/// their existing dedicated transaction requirements.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScalarValueEdit {
+    pub scalar: DesignScalarId,
+    pub value: f64,
+}
+
+impl ScalarValueEdit {
+    #[must_use]
+    pub const fn new(scalar: DesignScalarId, value: f64) -> Self {
+        Self { scalar, value }
+    }
+}
+
 /// One explicit host-configuration activity decision.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "state", content = "element", rename_all = "snake_case")]
@@ -9029,57 +9048,123 @@ impl SketchDocument {
         id: DesignScalarId,
         value: f64,
     ) -> Result<(), DocumentError> {
+        self.set_scalar_values(&[ScalarValueEdit::new(id, value)])
+    }
+
+    /// Atomically replaces several scalar values without changing identity or domain.
+    ///
+    /// The complete batch is bounded by [`MAX_DOCUMENT_OBJECTS`], clones the document once,
+    /// applies every validated value to that candidate, and validates the resulting graph once.
+    /// This permits coordinated edits whose intermediate scalar combinations would be invalid.
+    /// Each scalar may occur only once. All dedicated scalar-ownership guards are identical to
+    /// [`Self::set_scalar_value`]. A batch whose values are all bit-identical to retained state
+    /// succeeds without cloning or revalidating the unchanged document.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an empty or oversized batch, repeated or missing scalar identity,
+    /// contact-owned scalar, active associative-Fillet endpoint angle, selected NURBS gauge
+    /// weight, value outside its scalar domain, or invalid resulting graph. Rejection leaves the
+    /// complete document unchanged.
+    pub fn set_scalar_values(&mut self, edits: &[ScalarValueEdit]) -> Result<(), DocumentError> {
+        if edits.is_empty() {
+            return invalid("scalar edits", "batch must not be empty");
+        }
+        if edits.len() > MAX_DOCUMENT_OBJECTS {
+            return Err(DocumentError::ResourceLimit {
+                resource: "scalar edits",
+                actual: edits.len(),
+                limit: MAX_DOCUMENT_OBJECTS,
+            });
+        }
+
         let activity = self.compute_effective_activity();
-        if self.contacts.iter().any(|contact| contact.parameter == id) {
-            return invalid(
-                "scalar edit",
-                "contact-owned scalars require an atomic contact-state edit",
-            );
+
+        let contact_owned = self
+            .contacts
+            .iter()
+            .map(|contact| contact.parameter)
+            .collect::<BTreeSet<_>>();
+        let active_fillet_arcs = self
+            .constraints
+            .iter()
+            .filter(|constraint| activity.is_active(constraint.id))
+            .filter_map(|constraint| match &constraint.definition {
+                DocumentConstraintDefinition::LineLineFillet { arc, .. }
+                | DocumentConstraintDefinition::CurveCurveFillet { arc, .. } => Some(*arc),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        let mut active_fillet_angles = BTreeSet::new();
+        let mut nurbs_gauge_weights = BTreeSet::new();
+        for curve in &self.curves {
+            match &curve.definition {
+                CurveDefinition::CircularArc {
+                    start_angle,
+                    end_angle,
+                    ..
+                } if active_fillet_arcs.contains(&curve.id) => {
+                    active_fillet_angles.insert(*start_angle);
+                    active_fillet_angles.insert(*end_angle);
+                }
+                CurveDefinition::Nurbs { gauge_weight, .. } => {
+                    nurbs_gauge_weights.insert(*gauge_weight);
+                }
+                _ => {}
+            }
         }
-        if self.curves.iter().any(|curve| {
-            let CurveDefinition::CircularArc {
-                start_angle,
-                end_angle,
-                ..
-            } = &curve.definition
-            else {
-                return false;
-            };
-            (*start_angle == id || *end_angle == id)
-                && self.constraints.iter().any(|constraint| {
-                    activity.is_active(constraint.id)
-                        && matches!(
-                            constraint.definition,
-                            DocumentConstraintDefinition::LineLineFillet { arc, .. }
-                                | DocumentConstraintDefinition::CurveCurveFillet { arc, .. }
-                                if arc == curve.id
-                        )
-                })
-        }) {
-            return invalid(
-                "scalar edit",
-                "active line-fillet endpoint angles are derived from parent contacts",
-            );
-        }
-        if self.curves.iter().any(|curve| {
-            matches!(
-                &curve.definition,
-                CurveDefinition::Nurbs { gauge_weight, .. } if *gauge_weight == id
-            )
-        }) {
-            return invalid(
-                "scalar edit",
-                "the selected NURBS gauge weight requires an explicit gauge transaction",
-            );
-        }
-        let mut candidate = self.clone();
-        let scalar = candidate
+        let scalar_states = self
             .scalars
-            .iter_mut()
-            .find(|scalar| scalar.id == id)
-            .ok_or_else(|| unknown("scalar", id.0))?;
-        validate_scalar_value(value, scalar.domain)?;
-        scalar.value = value;
+            .iter()
+            .map(|scalar| (scalar.id, (scalar.domain, scalar.value)))
+            .collect::<BTreeMap<_, _>>();
+        let mut requested_scalars = BTreeSet::new();
+        let mut replacements = BTreeMap::new();
+        for edit in edits {
+            if !requested_scalars.insert(edit.scalar) {
+                return invalid(
+                    "scalar edits",
+                    format!("scalar {} occurs more than once", edit.scalar),
+                );
+            }
+            if contact_owned.contains(&edit.scalar) {
+                return invalid(
+                    "scalar edit",
+                    "contact-owned scalars require an atomic contact-state edit",
+                );
+            }
+            if active_fillet_angles.contains(&edit.scalar) {
+                return invalid(
+                    "scalar edit",
+                    "active line-fillet endpoint angles are derived from parent contacts",
+                );
+            }
+            if nurbs_gauge_weights.contains(&edit.scalar) {
+                return invalid(
+                    "scalar edit",
+                    "the selected NURBS gauge weight requires an explicit gauge transaction",
+                );
+            }
+            let (domain, retained_value) = scalar_states
+                .get(&edit.scalar)
+                .copied()
+                .ok_or_else(|| unknown("scalar", edit.scalar.0))?;
+            validate_scalar_value(edit.value, domain)?;
+            if retained_value.to_bits() != edit.value.to_bits() {
+                replacements.insert(edit.scalar, edit.value);
+            }
+        }
+
+        if replacements.is_empty() {
+            return Ok(());
+        }
+
+        let mut candidate = self.clone();
+        for scalar in &mut candidate.scalars {
+            if let Some(value) = replacements.get(&scalar.id) {
+                scalar.value = *value;
+            }
+        }
         candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())

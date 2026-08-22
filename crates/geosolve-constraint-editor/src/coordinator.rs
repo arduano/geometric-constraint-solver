@@ -2391,6 +2391,8 @@ impl RetainedEditorCoordinator {
             &initial_checkpoint,
             session.parameter_batch(),
             session.external_snapshot_set(),
+            session.accepted_parameter_batch(),
+            session.accepted_external_snapshot_set(),
             session.accepted_state_for_current_input().is_some(),
         )?;
         let mut coordinator = Self {
@@ -2636,11 +2638,17 @@ impl RetainedEditorCoordinator {
         } else {
             SketchDocument::from_json(checkpoint.design_json())?
         };
+        let default_parameters = ParameterBatch::default();
+        let default_snapshots = ExternalSnapshotSet::default();
+        let accepted_parameters = checkpoint.accepted_json().map(|_| &default_parameters);
+        let accepted_snapshots = checkpoint.accepted_json().map(|_| &default_snapshots);
         let lineage = CoordinatorLineage::import(
             geosolve_sketch_lineage::LineageDocumentId::from_raw(document.id().0.as_u128()),
             checkpoint,
-            &ParameterBatch::default(),
-            &ExternalSnapshotSet::default(),
+            &default_parameters,
+            &default_snapshots,
+            accepted_parameters,
+            accepted_snapshots,
             checkpoint.accepted_belongs_to_current_design() && checkpoint.accepted_json().is_some(),
         )?;
         Ok(lineage.to_canonical_session_json()?)
@@ -7437,6 +7445,8 @@ impl RetainedEditorCoordinator {
             &reloaded_checkpoint,
             self.session.parameter_batch(),
             self.session.external_snapshot_set(),
+            self.session.accepted_parameter_batch(),
+            self.session.accepted_external_snapshot_set(),
             self.session.accepted_state_for_current_input().is_some(),
         )?;
         self.history.push(reloaded_checkpoint);
@@ -19956,6 +19966,98 @@ mod tests {
             assert_ne!(moved.map(f64::to_bits), initial_center.map(f64::to_bits));
             assert_eq!(coordinator.history_len(), retained.history_len + 1);
         }
+    }
+
+    #[test]
+    fn m83_projected_owner_rejects_valid_same_topology_wrong_accepted_witness() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty accepted session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let point = coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([1.0, 2.0]),
+                },
+            )
+            .expect("lineage-owned free point")
+            .value
+            .points[0];
+
+        let expected = coordinator.session().design_identity();
+        let edit = DocumentEdit::SetPointPosition {
+            point,
+            position: [3.0, 4.0],
+        };
+        let mut projected = coordinator.session().clone();
+        let outcome = projected
+            .apply(expected, edit.clone())
+            .expect("valid projected edit");
+        assert!(outcome.published_accepted_identity().is_some());
+        let projected = coordinator
+            .promote_direct_manipulation_projection(&projected)
+            .expect("drag-free projected intent");
+        let replay = ReplayAction::Edit {
+            expected,
+            edit,
+            computed_features: None,
+        };
+        let exact_next = checkpoint(
+            &projected,
+            &coordinator.features,
+            &coordinator.computed_evaluation_allocator,
+        )
+        .expect("exact projected checkpoint");
+        let mut wrong_next = exact_next.clone();
+        let mut wrong_accepted = if wrong_next.accepted_uses_draft_v5() {
+            SketchDocument::from_draft_v5_json(
+                wrong_next
+                    .accepted_json()
+                    .expect("projected accepted witness"),
+            )
+        } else {
+            SketchDocument::from_json(
+                wrong_next
+                    .accepted_json()
+                    .expect("projected accepted witness"),
+            )
+        }
+        .expect("accepted projected witness with matching topology");
+        wrong_accepted
+            .set_point_position(point, [8.0, 9.0])
+            .expect("different valid underconstrained solution");
+        let (wrong_json, wrong_is_draft_v5) =
+            checkpoint_document_to_json(&wrong_accepted).expect("canonical wrong witness");
+        wrong_next.accepted_json = Some(wrong_json);
+        wrong_next.accepted_is_draft_v5 = wrong_is_draft_v5;
+
+        let retained = native_fillet_durable_snapshot(&coordinator);
+        let retained_lineage = coordinator
+            .lineage_session_json()
+            .expect("lineage before wrong-witness proof");
+        assert!(matches!(
+            coordinator.stage_direct_manipulation_lineage(&wrong_next, &replay, &projected),
+            Err(CoordinatorError::DirectManipulationColdReproductionMismatch)
+        ));
+        assert_native_fillet_rejection_is_state_neutral(&coordinator, &retained);
+        assert_eq!(
+            coordinator
+                .lineage_session_json()
+                .expect("lineage after wrong-witness rejection"),
+            retained_lineage
+        );
+
+        assert!(
+            coordinator
+                .stage_direct_manipulation_lineage(&exact_next, &replay, &projected)
+                .expect("exact cold witness remains retryable")
+                .is_some()
+        );
+        assert_native_fillet_rejection_is_state_neutral(&coordinator, &retained);
     }
 
     #[test]
