@@ -89,8 +89,9 @@ changing architecture consolidation. M83 implements accepted ADR 0039: authorita
 full-workbench sketch lineage, stable typed identity flow, deterministic strict/local
 rematerialization, atomic owner-step reconciliation, workspace v7 and a DOM-free stateful
 TypeScript/WASM boundary. `docs/M83_GOALS.md` owns the scope and `docs/M83_IMPLEMENTATION.md` owns
-the current evidence. Implementation is present but not accepted; M81 remains product authority
-until clean qualification, immutable Tailscale UAT and explicit human approval pass.
+the current evidence. Implementation, clean qualification, independent review and immutable
+Tailscale nomination pass; M83 is still not accepted, and M81 remains product authority until
+focused human UAT and explicit approval pass.
 M76's
 implementation,
 feature refinements,
@@ -5602,10 +5603,11 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: authoritative sketch lineage and deterministic rematerialization
 
-Status: **in progress; not accepted**. `docs/M83_GOALS.md` owns the complete scope and ADR 0039 is
-accepted for M83 implementation. This plan supersedes commit `56d1eda`'s narrow architecture slice;
-that commit remains historical evidence, not an active acceptance contract. ADR number 0038 stays
-with the inactive archived M82 exploration.
+Status: **clean-qualified immutable candidate nominated; human UAT pending; not accepted**.
+`docs/M83_GOALS.md` owns the complete scope and ADR 0039 is accepted for M83 implementation. This
+plan supersedes commit `56d1eda`'s narrow architecture slice; that commit remains historical
+evidence, not an active acceptance contract. ADR number 0038 stays with the inactive archived M82
+exploration.
 
 Goal: make `LineageDocument` the sole persistent design authority for the complete current demo
 workbench. Flat sketch and computed-feature documents/results become independently validated
@@ -5673,10 +5675,25 @@ workbench honestly to workspace v7 and expose the same stateful engine through
   Exhaustiveness evidence is described precisely: closed catalog/source-route inventories and
   generic lifecycle mechanics cover the whole admitted surface, while genuine coordinator/browser
   execution is representative except where a named matrix explicitly drives every row.
-- [ ] Pass the complete clean release gate from committed source, receive focused architecture/API
+- [x] Pass the complete clean release gate from committed source, receive focused architecture/API
   review and nominate an immutable byte-verified Tailscale candidate.
 - [ ] Pass and record M83-W12 human UAT, freeze the accepted artifact, publish it to GitHub Pages
   and verify the exact public bytes before closing M83.
+
+Nomination evidence: exact product source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
+`25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, passed
+`env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'` from a clean worktree on
+2026-08-23 with log SHA-256
+`b38c7c5a46408e5237109b3ac64d6c75f340479920baefaa933189c90ae7692e`. Two independent
+architecture/publication audits found no release blocker. Without rebuilding, the gate-produced
+seven-file distribution was frozen read-only at `/tmp/geosolve-m83-uat.RwXTfs`; its C-locale
+ordered-manifest aggregate is
+`ee2695ca55e803cbdeb8f6cd5a1ff632e59fe583428807f36e29ad5f2fbebd51`. Proxy-disabled identity
+requests for `/` plus all seven files passed exact status/media/length/encoding/body checks first
+on `:18080` and then at `http://100.94.63.83:8080/`; both result ledgers have SHA-256
+`3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`. The retained service
+continues to serve only those frozen bytes for M83-W12. GitHub Pages and milestone closure remain
+blocked on explicit human approval.
 
 Gate: every current workbench action survives cold lineage rematerialization with exact typed
 identity flow; direct editing rewrites every owner atomically; all current native operations and

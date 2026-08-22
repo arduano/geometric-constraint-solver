@@ -4304,6 +4304,12 @@ is claimed; existing accepted M81 Pages bytes remain public authority. See
 M83 adds no solver equation or geometry family. Its scenarios exercise declarative authority,
 identity, rematerialization and adapter parity above the unchanged owning-domain oracles.
 
+Qualification status: exact source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
+`25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, passes the complete clean release gate and focused
+architecture/publication review. Its exact no-rebuild seven-file snapshot is byte-verified at
+`http://100.94.63.83:8080/`. The scenarios remain candidate evidence rather than accepted product
+behavior until M83-W12 human UAT and explicit approval pass.
+
 ### M83-L1 — complete typed action catalog
 
 Drive all 25 geometry recipes, all current constraint and dimension families/modes, every current
@@ -4315,7 +4321,7 @@ catalog test instead of falling back to an opaque flat edit.
 
 Status: the closed enum/catalog mapping, generic full-family lifecycle matrix and representative
 owning-domain coordinator routes pass. This is not described as literal runtime replay of every
-catalog row; full release qualification and human UAT remain pending.
+catalog row; complete clean release qualification passes and human UAT remains pending.
 
 ### M83-L2 — exact owner leaves and atomic multi-owner rewrite
 
@@ -4330,7 +4336,7 @@ Status: focused multi-owner, exact-leaf and tampered-map regressions pass. Compl
 authentication now also rejects forged continuation leaves, same-kind inputs, outputs, identity
 flows and reservations in current/accepted/Undo/Redo authority. Tagged `domain` and
 `neighborhood` branch values remain stable atomic owner leaves when their serialized variant shape
-changes. Architecture review and the clean candidate gate remain pending.
+changes. Architecture review and the clean candidate gate pass.
 
 ### M83-L3 — strict/local equivalence with historical host inputs
 
@@ -4341,8 +4347,8 @@ reorder, branch/property edit, Undo and Redo, dependency-local evaluation must a
 strict oracle on accepted/failure authority, canonical sketch/feature evidence, typed identities,
 ownership and branches. Only reported work may differ.
 
-Status: focused historical-input and strict/local regressions pass; complete collateral
-qualification remains pending. Native Fillet adds the topology-sensitive witness: strict and local
+Status: focused historical-input and strict/local regressions plus complete collateral clean
+qualification pass. Native Fillet adds the topology-sensitive witness: strict and local
 evaluation must continue from the independently accepted upstream prefix, reauthenticate the
 prepared geometric plan and exact materialized identity delta, then independently validate the
 result. Consecutive Fillets and an opposed retained seed cover both terminal and reusable-prefix
@@ -4385,7 +4391,7 @@ historical outer schemas, 20,950 bytes total, SHA-256
 failed current design over older accepted geometry, becomes exactly one imported root, re-encodes
 to v7 and cache-free cold reloads. Embedded legacy acceptance is selected by its independently
 reproduced authority digest, not merely by the presence of older input payloads. Complete release
-qualification remains pending.
+qualification passes; migration/reload interaction feel remains in human UAT.
 
 ### M83-L6 — stateful native/WASM RPC and sole-workbench routing
 
@@ -4412,7 +4418,7 @@ uncorrelated envelopes/results without replacing its retained session, and rejec
 the Rust UTF-8 byte bound before invoking transport. The exact native/actual-WASM transcript has
 28 responses, 117,156 bytes and FNV-1a `7063e9c6b5b5248c`. The source-route evidence is a closed
 inventory sentinel rather than runtime instrumentation of every route. Complete release
-qualification and immutable-candidate human UAT remain pending.
+qualification and immutable nomination pass; human UAT remains pending.
 
 ### M83-F026 — projected editing preserves host-owned scalar fallbacks
 

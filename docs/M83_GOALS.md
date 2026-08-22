@@ -2,17 +2,18 @@
 
 # M83 — authoritative sketch lineage and deterministic rematerialization
 
-Status: **in progress; not accepted**. M83 is a full-workbench architecture and migration
-milestone. `LineageDocument` becomes the authoritative editable source for the GeoSolve demo
-workbench; flat `SketchDocument`, `ComputedFeatureDocument` and evaluated feature geometry are
-derived materializations. ADR 0039 is accepted for M83 implementation.
+Status: **clean-qualified immutable candidate nominated; human UAT pending; not accepted**. M83 is
+a full-workbench architecture and migration milestone. `LineageDocument` becomes the authoritative
+editable source for the GeoSolve demo workbench; flat `SketchDocument`,
+`ComputedFeatureDocument` and evaluated feature geometry are derived materializations. ADR 0039 is
+accepted for M83 implementation.
 
 This document supersedes the narrower M83 proof planned in commit `56d1eda`. That commit remains
 in Git history as the original design record, but its line/Horizontal/rectangle/Profile Offset
 slice, host-side sidecar posture, opaque flat-document root, and exclusion of the ordinary
-workbench and computed features are not the active M83 contract. The expanded implementation is
-present and under qualification; no criterion below is accepted product behavior until the frozen
-candidate passes the remaining gates and explicit human UAT.
+workbench and computed features are not the active M83 contract. The expanded implementation,
+focused reviews, clean gate and immutable Tailscale nomination pass; no criterion below is accepted
+product behavior until the frozen candidate passes explicit human UAT.
 
 M81 remains the accepted product baseline while M83 is in progress. M82 remains a closed,
 archived exploration; M83 does not restore its computed arbitrary-curve Offset prototype.
@@ -364,6 +365,10 @@ Arbitrary TypeScript source rewriting and a workbench script editor remain outsi
 10. Close only after the approved UAT scorecard, frozen-artifact evidence and standard exact
     GitHub Pages publication are recorded.
 
+Steps 1–9 pass for source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
+`25a47e821cc80ff62d1891cfc7095d10fb2ec87f`. Its exact no-rebuild seven-file snapshot is
+byte-verified and retained at `http://100.94.63.83:8080/`; step 10 remains blocked on human UAT.
+
 ## Acceptance scenarios
 
 ### M83-W1 — complete geometry catalog
@@ -469,8 +474,9 @@ verified on GitHub Pages.
 - Formatting/diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature tests,
   native/WASM parity, performance, licence/package checks, Trunk and the complete release gate pass
   from committed source.
-- Focused architecture/API review, immutable Tailscale UAT, a frozen acceptance artifact and exact
-  GitHub Pages publication are required before M83 can be closed.
+- Focused architecture/API review and immutable byte-verified Tailscale nomination pass. Human
+  UAT, explicit acceptance and exact GitHub Pages publication are still required before M83 can be
+  closed.
 
 ## Explicit non-goals
 

@@ -138,14 +138,15 @@ consolidation is complete and publicly verified. M82's computed arbitrary-curve 
 was explicitly rejected, archived and fully removed from `main`; M81 remains accepted product
 authority. M83 is in progress under ADR 0039: it adds authoritative full-workbench action lineage,
 stable typed identity flow, deterministic rematerialization, workspace v7 and a DOM-free stateful
-Rust/WASM/TypeScript boundary. The implementation is not yet accepted or published.
+Rust/WASM/TypeScript boundary. Its clean-qualified immutable Tailscale candidate is nominated for
+human UAT; the implementation is not yet accepted or published.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and milestone status.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — authoritative roadmap, with M74-M79 closed.
+3. `PLAN.md` — authoritative roadmap, with M72-M82 closed.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.

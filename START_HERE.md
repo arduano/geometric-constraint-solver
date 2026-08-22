@@ -239,8 +239,9 @@ the computed all-family Offset prototype unfit for the intended CAD workflow. Ro
 `archive/m82-certified-computed-offset-2026-08-21` (`d1e2613`). The rejected Tailscale listener is
 retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
 
-M83 is in progress and not accepted. Under accepted ADR 0039, `LineageDocument` becomes the
-authoritative source for the complete demo workbench; flat sketch and feature state are derived.
+M83 has a clean-qualified immutable candidate but is not accepted. Under accepted ADR 0039,
+`LineageDocument` becomes the authoritative source for the complete demo workbench; flat sketch
+and feature state are derived.
 The milestone covers all 25 geometry variants, the complete current relation/dimension/property/
 branch surface, every current sketch operation, native and computed Fillet/Offset intent,
 strict-versus-dependency-local evaluation, workspace v7 with honest v1-v6 migration, atomic
@@ -261,7 +262,9 @@ computed output and publishes both owners atomically. M83-F037 through F040 fini
 identity and inferred-construction publication hardening: canonical byte changes always allocate a
 fresh accepted revision, same-byte reload cannot skip a higher saved lifecycle, construction
 acknowledgement follows every fallible lineage operation, and public construction results report
-the final strict-cold accepted identity. M81 remains accepted product authority until M83 closes.
+the final strict-cold accepted identity. Exact source `d378f7b3`, tree `25a47e8`, passes the clean
+gate, focused review and immutable byte-verified Tailscale nomination; human UAT remains pending.
+M81 remains accepted product authority until M83 closes.
 
 ## Read first
 
@@ -780,9 +783,9 @@ Durable milestone and cleanup records:
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
-- `docs/M83_GOALS.md` (in-progress authoritative full-workbench lineage and migration contract)
-- `docs/M83_IMPLEMENTATION.md` (implementation, authority-finding and qualification ledger)
-- `docs/M83_UAT.md` (pending immutable-candidate focused scorecard)
+- `docs/M83_GOALS.md` (clean-qualified authoritative full-workbench lineage and migration contract)
+- `docs/M83_IMPLEMENTATION.md` (implementation, authority-finding, qualification and nomination ledger)
+- `docs/M83_UAT.md` (nominated immutable-candidate scorecard pending human UAT)
 - `docs/adr/0039-sketch-lineage-and-deterministic-rematerialization.md` (accepted M83 authority,
   typed identity, strict/local rebuild, workspace-v7 and stateful RPC decision)
 

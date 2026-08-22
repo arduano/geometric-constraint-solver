@@ -2,9 +2,9 @@
 
 # M83 focused UAT — Authoritative sketch lineage
 
-Status: **candidate not yet nominated; human UAT pending**. This scorecard will be bound to the
-exact clean-gate source, immutable no-rebuild snapshot and byte-verified Tailscale endpoint after
-mechanical qualification. M81 remains accepted public product authority meanwhile.
+Status: **clean-qualified immutable candidate nominated; human UAT pending**. This scorecard is
+bound to the exact clean-gate source, immutable no-rebuild snapshot and byte-verified Tailscale
+endpoint below. M81 remains accepted public product authority meanwhile.
 
 M83 deliberately preserves existing sketch mathematics and visible authoring behavior while
 replacing persistent workbench authority. Human review should therefore focus on end-to-end
@@ -12,11 +12,26 @@ editing/history/reload behavior and failure recovery rather than inspecting inte
 
 ## Candidate authority
 
-- Product source/tree: pending clean nomination.
-- Clean release-gate log and digest: pending.
-- Immutable no-rebuild snapshot and ordered file aggregate: pending.
-- Tailscale endpoint: pending.
-- Exact `/` plus asset byte/media/length verification: pending.
+- Product source: `d378f7b31f56b43af787202dc1ebb92b7d199f84`.
+- Product tree: `25a47e821cc80ff62d1891cfc7095d10fb2ec87f`.
+- Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 on
+  2026-08-23 at 02:06:03 AEST; log `/tmp/geosolve-m83-release-gate.log`, SHA-256
+  `b38c7c5a46408e5237109b3ac64d6c75f340479920baefaa933189c90ae7692e`.
+- Immutable no-rebuild snapshot: `/tmp/geosolve-m83-uat.RwXTfs` (directory `0555`; seven regular
+  non-symlink files `0444`).
+- Ordered file-manifest aggregate:
+  `ee2695ca55e803cbdeb8f6cd5a1ff632e59fe583428807f36e29ad5f2fbebd51`.
+- Tailscale endpoint: `http://100.94.63.83:8080/`, served only from that snapshot by
+  `geosolve-m83-uat.service` (nomination PID `1273798`).
+- Exact served-byte verification: temporary
+  `/tmp/geosolve-m83-temp-verify.GLWzwt/results.tsv` and retained
+  `/tmp/geosolve-m83-final-verify.yMsi3f/results.tsv`, each SHA-256
+  `3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`.
+
+Both verification passes cover `/` plus all seven files with HTTP 200, direct Tailscale address,
+zero redirects, no `Location` or `Content-Encoding`, exact media type/length/SHA/body, and root
+equality with `index.html`. The temporary `:18080` listener is retired; the retained endpoint stays
+live through this UAT. GitHub Pages is intentionally unchanged until approval.
 
 ## Focused scorecard
 

@@ -268,9 +268,10 @@ M83 implements and qualifies this decision only after proving:
 - complete workbench mutation routing through lineage with no writable flat side path; and
 - native/DOM-free-WASM `geosolve.lineage.rpc.v0` transcript parity.
 
-M83 remains in progress until automated qualification, focused architecture/API review,
-immutable-candidate human UAT and standard exact GitHub Pages publication all pass. Acceptance of
-this ADR authorizes implementation; it is not milestone/product acceptance.
+M83 remains in progress until immutable-candidate human UAT and standard exact GitHub Pages
+publication pass. Automated qualification and focused architecture/API review pass for the
+nominated candidate; acceptance of this ADR authorizes implementation and is still not
+milestone/product acceptance.
 
 ## Consequences
 

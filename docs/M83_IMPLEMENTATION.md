@@ -2,10 +2,10 @@
 
 # M83 implementation — Authoritative sketch lineage and deterministic rematerialization
 
-Status: **implementation and qualification in progress; not accepted**. ADR 0039 and
-`docs/M83_GOALS.md` own the scope. M81 remains accepted product authority until an immutable M83
-candidate passes focused human UAT and receives explicit supervising-human approval. GitHub Pages
-publication is deliberately deferred until that approval.
+Status: **implementation and clean qualification complete; immutable candidate nominated; human
+UAT pending; not accepted**. ADR 0039 and `docs/M83_GOALS.md` own the scope. M81 remains accepted
+product authority until the immutable M83 candidate passes focused human UAT and receives explicit
+supervising-human approval. GitHub Pages publication is deliberately deferred until that approval.
 
 ## Product boundary
 
@@ -716,8 +716,8 @@ canonical identity and scene.
 
 ## Qualification record
 
-Current focused and collateral evidence (development worktree, not yet a nominated clean
-candidate):
+Earlier development-stage focused and collateral evidence, before the clean nomination recorded
+below:
 
 ```bash
 cargo test --locked -p geosolve-sketch-lineage --all-features --no-fail-fast
@@ -829,9 +829,64 @@ timed out only while a duplicate concurrent oracle consumed the host each passed
 The fixture remains 271 catalog entries plus its header, with SHA-256
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` at this checkpoint.
 
-The clean committed-source release gate, its workspace-wide Clippy/tests/Rustdoc and performance/
-licence/package/Trunk stages, immutable snapshot and served-byte evidence remain pending. No clean-
-candidate claim is made by the development runs above.
+### Clean candidate qualification and immutable nomination
+
+Exact product source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
+`25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, ran the following from a clean worktree and exited
+zero on 2026-08-23 at 02:06:03 AEST:
+
+```bash
+env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The log is `/tmp/geosolve-m83-release-gate.log`, 324,204 bytes, SHA-256
+`b38c7c5a46408e5237109b3ac64d6c75f340479920baefaa933189c90ae7692e`. The gate passed Cargo
+metadata/offline resolution, formatting and diff hygiene, warnings-denied all-target/all-feature
+workspace Clippy, locked all-feature workspace tests, the exact clean 271-row golden oracle,
+M70/M71/M74/M75/M76/M77/M79/M83 native/WASM parity, the demo WASM check, TypeScript install/
+compile/runtime checks, warnings-denied Rustdoc, benchmark compilation, M14 and M32 budgets, the
+ignored 256-moving-body sparse crossover in 127.73 seconds, licence/package checks and Trunk
+0.21.14 release assembly. The only diagnostics were the repository's pre-existing non-failing
+Cargo notices for packages declaring both `license` and `license-file`.
+
+Two independent focused architecture/API/publication audits found no release blocker. They
+confirmed downward crate dependencies, stable typed identity/ownership, strict-cold publication,
+canonical-byte accepted identity, staged failure atomicity, construction-token acknowledgement and
+final-identity reporting. Two future-hardening notes are deliberately non-blocking: combine the
+existing strict-cold-rejection and pending-token regressions in one case, and carry the
+authenticated token inside a prepared publication if this currently synchronous seam ever becomes
+asynchronous.
+
+Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
+`/tmp/geosolve-m83-uat.RwXTfs`, byte-compared with the source before and after freezing, and made
+read-only: directory `0555`, seven regular non-symlink files `0444`. The C-locale ordered manifest
+has aggregate SHA-256
+`ee2695ca55e803cbdeb8f6cd5a1ff632e59fe583428807f36e29ad5f2fbebd51`:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `API_COMPATIBILITY.md` | 35,307 | `b81b2c03fce26f78f3dca7702543fd6d0c63d98e09b4605071d512d4d2395389` |
+| `LICENSE` | 35,148 | `ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e` |
+| `THIRD_PARTY_LICENSES.md` | 3,120 | `61a118f17bbdb7a1ad563fceabeb26b0cf9d03eac77048bb0a20a639faa11803` |
+| `geosolve-demo-web-2819e61d7e58f9ff.js` | 33,750 | `9ce23fee79972aaa64f5c2353b35f2fbec7b15faa19493caac2af923bbe15ffc` |
+| `geosolve-demo-web-2819e61d7e58f9ff_bg.wasm` | 9,914,526 | `0d71b4a21592238d61d9b041e56864d40937bc963b91721e16fa38443bd2b998` |
+| `index.html` | 31,033 | `8e9e058305c72c237ca5b912b92aa51d02a0ec8d44ad74bd29aebc6f27da89ba` |
+| `styles-a41d7984178d1121.css` | 38,291 | `957c7809eab90b61a2a72266af8f8660390b8c04fcce7b6c9e06398582097bbf` |
+
+Temporary service `geosolve-m83-temp-uat.service`, PID `1270424`, first served only that snapshot
+at `100.94.63.83:18080`. Proxy-disabled, cache-bypassed requests with identity encoding for `/`
+and every file returned HTTP 200 from the exact Tailscale address with zero redirects, no
+`Location` or `Content-Encoding`, exact media type, `Content-Length`, downloaded length, SHA-256
+and body bytes; `/` equals `index.html`. Evidence is
+`/tmp/geosolve-m83-temp-verify.GLWzwt/results.tsv`, SHA-256
+`3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`.
+
+Only after that pass, `geosolve-m83-uat.service`, PID `1273798`, began serving the identical frozen
+directory at `http://100.94.63.83:8080/`. The independent eight-request final ledger at
+`/tmp/geosolve-m83-final-verify.yMsi3f/results.tsv` is byte-identical and has the same SHA-256; its
+fetched manifest matches the frozen aggregate above. The temporary listener was then retired.
+The retained service remains live for M83-W12 human UAT. These evidence-only documentation changes
+are descendants of the nominated source/tree and do not rebuild or replace its product bytes.
 
 ## Known limitations and next gate
 
@@ -839,7 +894,8 @@ M83 intentionally does not add arbitrary-curve/computed Offset, topology-changin
 computed-on-computed features, B-rep/PDM naming, formulas/configurations/units, collaboration,
 TypeScript source rewriting, a browser script editor or npm publication.
 
-The next gate is to finish the authority audits, pass the complete release gate from committed
-source, freeze the gate-produced web distribution without rebuilding, and serve that immutable
-candidate on Tailscale for the focused scorecard in `docs/M83_UAT.md`. M83 must not close or deploy
-to GitHub Pages before explicit supervising-human acceptance.
+The remaining gate is the focused scorecard in `docs/M83_UAT.md` and explicit supervising-human
+acceptance. M83 must not close or deploy to GitHub Pages before that decision. If UAT opens a
+finding, the immutable candidate is withdrawn and the exact owning-layer defect workflow applies;
+otherwise these same nominated semantics proceed through the standard Pages build and exact
+hosted-byte verification.

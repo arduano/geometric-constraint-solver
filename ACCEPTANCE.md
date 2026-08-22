@@ -2928,7 +2928,7 @@ M82's mechanical qualification as product evidence.
 
 ## M83 acceptance: authoritative sketch lineage and deterministic rematerialization
 
-Status: **mechanical implementation criteria pass; clean nomination and human UAT remain
+Status: **mechanical criteria, clean nomination and focused review pass; human UAT remains
 pending**. `docs/M83_GOALS.md` is the authoritative scope and ADR 0039 is accepted for
 implementation. This section supersedes commit `56d1eda`'s narrow proof criteria without claiming
 that the expanded product has received supervising-human acceptance.
@@ -3049,11 +3049,11 @@ that the expanded product has received supervising-human acceptance.
   prove every admitted persistent workbench route enters or restores lineage, no writable flat side
   path or nested user history remains, and a cache-free reload reconstructs the same accepted scene
   and feature state. This is not described as dynamic browser instrumentation of every catalog row.
-- [ ] Focused M83-W1–W11 tests pass with unchanged sketch/operation/topology/feature/editor/
+- [x] Focused M83-W1–W11 tests pass with unchanged sketch/operation/topology/feature/editor/
   persistence suites and reviewed 271-row golden authority. Formatting/diff hygiene,
   warnings-denied workspace Clippy/Rustdoc, locked all-feature tests, native/WASM parity,
   performance, licence/package, Trunk and the complete release gate pass from committed source.
-- [ ] Focused architecture/API review accepts authority, dependency direction, typed identity flow,
+- [x] Focused architecture/API review accepts authority, dependency direction, typed identity flow,
   strict/local equivalence, multi-owner rewrite, migration/cache truthfulness and RPC state. No
   criterion is waived because the earlier narrow proof compiled.
 - [ ] M83-W12 passes on an immutable Tailscale candidate across complete workbench authoring,
@@ -3061,6 +3061,24 @@ that the expanded product has received supervising-human acceptance.
   direct editing, failure recovery, Undo/Redo and workspace reload/migration. Findings are closed
   or explicitly dispositioned, and the accepted frozen bytes are deployed and exactly verified on
   GitHub Pages before milestone closure.
+
+Exact source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
+`25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, passes the complete clean release gate with log
+SHA-256 `b38c7c5a46408e5237109b3ac64d6c75f340479920baefaa933189c90ae7692e`. The gate includes the
+unchanged 271-row golden oracle, native/WASM M70/M71/M74/M75/M76/M77/M79/M83 parity, TypeScript
+compile/runtime checks, workspace Clippy/tests/Rustdoc, benchmark compilation, all three release
+performance gates, licence/package checks and Trunk 0.21.14 assembly. The only diagnostics are the
+pre-existing non-failing Cargo notices for packages declaring both `license` and `license-file`.
+
+The exact no-rebuild seven-file output is frozen at `/tmp/geosolve-m83-uat.RwXTfs` with directory
+mode `0555`, regular-file modes `0444` and ordered-manifest aggregate
+`ee2695ca55e803cbdeb8f6cd5a1ff632e59fe583428807f36e29ad5f2fbebd51`. Temporary `:18080` and
+retained `http://100.94.63.83:8080/` verification each pass eight proxy-disabled, cache-bypassed,
+identity-encoded HTTP checks with exact body/media/length and no redirect, `Location` or
+`Content-Encoding`; `/` equals `index.html`. Both result ledgers have SHA-256
+`3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`. Two independent focused
+reviews found no release blocker. The retained service remains live for M83-W12; no Pages or
+milestone-acceptance claim is made before explicit human approval.
 
 M83 explicitly excludes new geometry/constraint families, arbitrary-curve/computed Offset,
 topology-changing Offset construction, computed-on-computed feature chains, false persistent
