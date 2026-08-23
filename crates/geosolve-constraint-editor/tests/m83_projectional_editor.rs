@@ -9,7 +9,7 @@ use geosolve_sketch::{DesignPointId, DocumentId, PersistentId};
 use geosolve_sketch_intent::{
     GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
     IntentPatchOperation, IntentPatchPolicy, IntentPlanDisposition, IntentPortRole,
-    IntentPortSelector, IntentSessionId, IntentUnit, LeafField,
+    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -366,5 +366,34 @@ fn logical_selection_source_edit_and_closure_delete_share_the_intent_history() {
             .len(),
         2,
         "create plus organization rename remain after undoing deletion",
+    );
+}
+
+#[test]
+fn canonical_restore_cold_rebuilds_without_a_flat_coordinator() {
+    let (session, point, viewport) = fixture();
+    let json = session.coordinator().intent().to_canonical_json().unwrap();
+    let identity = session.coordinator().intent().identity();
+    let document = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .validation
+        .document;
+    let restored =
+        ProjectionalEditorSession::restore(IntentSession::from_json(&json).unwrap(), document, 1.0)
+            .unwrap();
+    assert_eq!(restored.coordinator().intent().identity(), identity);
+    assert_pair(point_position(&restored, point), [1.0, 2.0]);
+    assert_pair(
+        restored
+            .scene(viewport, 0.5)
+            .unwrap()
+            .points
+            .iter()
+            .find(|candidate| candidate.id == point)
+            .unwrap()
+            .model_position,
+        [1.0, 2.0],
     );
 }

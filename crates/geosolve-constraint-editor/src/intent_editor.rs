@@ -7,15 +7,17 @@
 //! [`ProjectionalIntentCoordinator`]; [`ConstraintEditor`] contributes only
 //! disposable selection, hover and pointer-gesture state.
 
-use geosolve_sketch::{DesignPointId, OperationControl};
-use geosolve_sketch_intent::{IntentPatch, IntentPlanDisposition, IntentSessionIdentity, NodeId};
+use geosolve_sketch::{DesignPointId, DocumentId, OperationControl};
+use geosolve_sketch_intent::{
+    IntentPatch, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
+};
 use thiserror::Error;
 
 use crate::{
-    ConstraintEditor, EditorEffect, EditorError, EditorScene, IntentInspectorProjection,
-    IntentSourceEditError, IntentSourceTokenId, IntentWorkbenchProjection, Modifiers, PointerInput,
-    ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
-    SelectionItem, Viewport,
+    ColdIntentMaterializer, ConstraintEditor, EditorEffect, EditorError, EditorScene,
+    IntentInspectorProjection, IntentSourceEditError, IntentSourceTokenId,
+    IntentWorkbenchProjection, Modifiers, PointerInput, ProjectionalCoordinatorError,
+    ProjectionalIntentCoordinator, ProjectionalPatchOutcome, SelectionItem, Viewport,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -61,6 +63,26 @@ impl ProjectionalEditorSession {
         )
     }
 
+    /// Restores canonical intent through an independently cold-rebuilt native
+    /// authority and installs no second durable coordinator or history.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed materializer/session/authentication failure. Persisted
+    /// flat geometry is intentionally not accepted through this constructor.
+    pub fn restore(
+        intent: IntentSession,
+        document: DocumentId,
+        model_scale: f64,
+    ) -> Result<Self, ProjectionalEditorError> {
+        let materializer = ColdIntentMaterializer::with_default_policy(document, model_scale)
+            .map_err(ProjectionalCoordinatorError::from)?;
+        Ok(Self::new(ProjectionalIntentCoordinator::restore(
+            intent,
+            materializer,
+        )?))
+    }
+
     /// Creates a session with explicit transient editor and solve-work policy.
     #[must_use]
     pub const fn with_editor_and_control(
@@ -87,6 +109,14 @@ impl ProjectionalEditorSession {
     #[must_use]
     pub const fn editor(&self) -> &ConstraintEditor {
         &self.editor
+    }
+
+    /// Mutable disposable interaction state for presentation adapters.
+    ///
+    /// Durable effects emitted here must still return through the typed methods
+    /// on this session; this accessor grants no document or history authority.
+    pub fn editor_mut(&mut self) -> &mut ConstraintEditor {
+        &mut self.editor
     }
 
     /// Builds the durable editor-owned Outline/source/History projection.
