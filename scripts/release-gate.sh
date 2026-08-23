@@ -65,6 +65,7 @@ for package in \
   geosolve-sketch \
   geosolve-linkage \
   geosolve-sketch-features \
+  geosolve-sketch-intent \
   geosolve-sketch-ops \
   geosolve-sketch-topology \
   geosolve-constraint-editor
