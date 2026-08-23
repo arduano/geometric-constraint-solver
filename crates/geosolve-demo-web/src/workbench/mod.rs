@@ -362,6 +362,86 @@ impl WorkbenchPresentationCounters {
     }
 }
 
+/// Browser-side result of consuming headless projectional geometry effects.
+///
+/// Preview and inference effects are already reflected in the disposable
+/// [`geosolve_constraint_editor::ConstraintEditor`]. Only the authenticated
+/// construction terminal may cross into durable intent, and it does so through
+/// [`geosolve_constraint_editor::ProjectionalEditorSession`] exactly once.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct ProjectionalConstructionDispatch {
+    accepted_terminal: bool,
+    rejected_terminal: bool,
+    error: Option<String>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn dispatch_projectional_construction_effects(
+    editor: &mut geosolve_constraint_editor::ProjectionalEditorSession,
+    preview: &mut Option<geosolve_constraint_editor::ConstructionPreview>,
+    effects: Vec<geosolve_constraint_editor::EditorEffect>,
+) -> ProjectionalConstructionDispatch {
+    use geosolve_constraint_editor::EditorEffect;
+
+    let mut outcome = ProjectionalConstructionDispatch::default();
+    let mut pending = std::collections::VecDeque::from(effects);
+    while let Some(effect) = pending.pop_front() {
+        match effect {
+            EditorEffect::PreviewConstruction(next) => *preview = Some(next),
+            EditorEffect::ClearConstructionPreview => *preview = None,
+            EditorEffect::CommitConstructionPlan { .. } => {
+                match editor.apply_construction_editor_effect(&effect) {
+                    Ok(terminal) => {
+                        outcome.accepted_terminal = true;
+                        pending.extend(terminal.effects);
+                    }
+                    Err(error) => {
+                        outcome.rejected_terminal = true;
+                        outcome.error = Some(error.to_string());
+                    }
+                }
+            }
+            EditorEffect::CommitConstruction { .. } => {
+                outcome.rejected_terminal = true;
+                outcome.error = Some(
+                    "projectional geometry requires an authenticated construction plan".into(),
+                );
+            }
+            EditorEffect::DraftInferenceChanged(_)
+            | EditorEffect::SelectionChanged(_)
+            | EditorEffect::HoverChanged(_)
+            | EditorEffect::PreviewPointMove { .. }
+            | EditorEffect::ClearPointPreview
+            | EditorEffect::PreviewCurveControl { .. }
+            | EditorEffect::ClearCurveControlPreview
+            | EditorEffect::FilletBranchPreviewChanged { .. }
+            | EditorEffect::ClearComputedFeaturePreview
+            | EditorEffect::ClearComputedFeatureContactPreview => {}
+            EditorEffect::RequestProjectedPointMove { .. }
+            | EditorEffect::CommitPointMove { .. }
+            | EditorEffect::RequestCurveControlPreview { .. }
+            | EditorEffect::CommitCurveControl { .. }
+            | EditorEffect::PreviewOffsetAuthoringDistance { .. }
+            | EditorEffect::FinishOffsetAuthoringDistance { .. }
+            | EditorEffect::RestoreOffsetAuthoringDistance { .. }
+            | EditorEffect::PreviewComputedFeatureRadius { .. }
+            | EditorEffect::CommitComputedFeatureRadius { .. }
+            | EditorEffect::RestoreComputedFeatureRadius { .. }
+            | EditorEffect::PreviewComputedFeatureContact { .. }
+            | EditorEffect::CommitComputedFeatureContact { .. }
+            | EditorEffect::RestoreComputedFeatureContact { .. }
+            | EditorEffect::CommitComputedFilletAction { .. } => {
+                outcome.rejected_terminal = true;
+                outcome.error = Some(
+                    "the geometry-authoring adapter received an unrelated durable effect".into(),
+                );
+            }
+        }
+    }
+    outcome
+}
+
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CanvasPointerCaptureKind {
@@ -633,56 +713,87 @@ struct PointerMoveQueue {
     scheduled_generation: Option<u64>,
 }
 
-/// Coalesces projectional pointer samples without carrying flat-authoring
-/// state into the v8 adapter. The newest sample always wins; a terminal event
-/// drains it synchronously before pointer-up authenticates that exact sample.
+/// Coalesces projectional pointer samples while reusing the presentation-only
+/// modifier/candidate envelope shared by geometry drafting. The queue carries
+/// no durable flat coordinator or history; the newest sample always wins and a
+/// terminal event drains it synchronously before exact publication.
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Default)]
 struct ProjectionalPointerMoveQueue {
-    pending: Option<geosolve_constraint_editor::PointerInput>,
-    next_generation: u64,
-    scheduled_generation: Option<u64>,
+    inner: PointerMoveQueue,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(test, allow(dead_code))]
 impl ProjectionalPointerMoveQueue {
     fn push(&mut self, input: geosolve_constraint_editor::PointerInput) -> Option<u64> {
-        self.pending = Some(input);
-        if self.scheduled_generation.is_some() {
-            return None;
-        }
-        self.next_generation = self.next_generation.wrapping_add(1);
-        self.scheduled_generation = Some(self.next_generation);
-        Some(self.next_generation)
+        self.inner.push_with_painted_item(input, None)
     }
 
-    fn take_for_frame(
+    fn observe_for_pointer_down(
         &mut self,
-        generation: u64,
-    ) -> Option<geosolve_constraint_editor::PointerInput> {
-        if self.scheduled_generation != Some(generation) {
-            return None;
-        }
-        self.scheduled_generation = None;
-        self.pending.take()
+        input: geosolve_constraint_editor::PointerInput,
+    ) -> DraftingPointerSample {
+        self.inner.observe_for_pointer_down(input)
+    }
+
+    fn observe(&mut self, input: geosolve_constraint_editor::PointerInput) {
+        let _ = self.inner.observe(input);
+    }
+
+    fn take_for_frame(&mut self, generation: u64) -> Option<DraftingPointerSample> {
+        self.inner.take_for_frame(generation)
     }
 
     fn cancel_frame(&mut self, generation: u64) {
-        if self.scheduled_generation == Some(generation) {
-            self.scheduled_generation = None;
-        }
+        self.inner.cancel_frame(generation);
     }
 
-    fn drain_before_terminal(&mut self) -> Option<geosolve_constraint_editor::PointerInput> {
-        self.scheduled_generation = None;
-        self.pending.take()
+    fn drain_before_terminal(&mut self) -> Option<DraftingPointerSample> {
+        self.inner.drain_before_terminal()
     }
 
     fn invalidate(&mut self) -> bool {
-        let changed = self.scheduled_generation.is_some() || self.pending.is_some();
-        self.scheduled_generation = None;
-        self.pending = None;
+        let changed = self.inner.scheduled_generation.is_some() || self.inner.pending.is_some();
+        self.inner.invalidate_before_immediate_action();
         changed
+    }
+
+    fn clear_stationary_sample(&mut self) -> bool {
+        self.inner.clear_stationary_sample()
+    }
+
+    fn window_blur(&mut self, owns_queued_sample: bool) -> Option<DraftingPointerSample> {
+        self.inner.window_blur(owns_queued_sample)
+    }
+
+    fn stationary_authoring_state(
+        &mut self,
+        modifiers: geosolve_constraint_editor::Modifiers,
+        owns_queued_sample: bool,
+    ) -> Option<DraftingPointerSample> {
+        self.inner
+            .stationary_authoring_state(modifiers, owns_queued_sample)
+    }
+
+    fn drain_before_stationary_cycle(
+        &mut self,
+        owns_queued_sample: bool,
+    ) -> Option<DraftingPointerSample> {
+        self.inner.drain_before_stationary_cycle(owns_queued_sample)
+    }
+
+    fn stationary_candidate(
+        &mut self,
+        candidate: geosolve_constraint_editor::DraftInferenceCandidateId,
+        owns_queued_sample: bool,
+    ) -> Option<DraftingPointerSample> {
+        self.inner
+            .stationary_candidate(candidate, owns_queued_sample)
+    }
+
+    const fn last_input(&self) -> Option<geosolve_constraint_editor::PointerInput> {
+        self.inner.last_input
     }
 }
 
@@ -2633,6 +2744,9 @@ pub(crate) mod wasm {
         grid_visible: bool,
         pointer_moves: Rc<RefCell<super::ProjectionalPointerMoveQueue>>,
         captured_pointer: Option<i32>,
+        geometry_palette: super::geometry_palette::GeometryPaletteState,
+        option_overlay: super::OptionOverlayState,
+        construction_preview: Option<ConstructionPreview>,
         notice: String,
     }
 
@@ -2759,6 +2873,9 @@ pub(crate) mod wasm {
             grid_visible: true,
             pointer_moves: Rc::new(RefCell::new(super::ProjectionalPointerMoveQueue::default())),
             captured_pointer: None,
+            geometry_palette: super::geometry_palette::GeometryPaletteState::default(),
+            option_overlay: super::OptionOverlayState::default(),
+            construction_preview: None,
             notice,
         };
         let scene = workbench.authority.scene(
@@ -2776,14 +2893,15 @@ pub(crate) mod wasm {
     }
 
     fn set_projectional_surface_availability(document: &Document) -> Result<(), JsValue> {
-        // Selection and point direct manipulation are fully projectional.
-        // Geometry authoring remains unavailable until a typed draft-to-intent
-        // translation exists at the headless boundary.
+        // Selection, point direct manipulation, and the complete typed geometry
+        // catalog are projectional. Relations, dimensions, computed features,
+        // and Offset stay visibly unavailable until their own intent bridges
+        // are activated.
         set_disabled(&required(document, "wb-tool-select")?, false)?;
         for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
             set_disabled(
                 &required(document, &format!("wb-tool-family-{}", family.key()))?,
-                true,
+                false,
             )?;
         }
         for (key, _, _) in super::action_surface::CONSTRAINT_ACTIONS {
@@ -2807,14 +2925,10 @@ pub(crate) mod wasm {
                 set_disabled(&button, true)?;
             }
         }
-        for id in ["wb-offset-trigger", "wb-geometry-role"] {
-            set_disabled(&required(document, id)?, true)?;
-        }
+        set_disabled(&required(document, "wb-offset-trigger")?, true)?;
+        set_disabled(&required(document, "wb-geometry-role")?, false)?;
         for action in [
             "new",
-            "cancel",
-            "finish",
-            "geometry-role",
             "copy-repro",
             "reproduction-open",
             "problems",
@@ -2827,6 +2941,13 @@ pub(crate) mod wasm {
                 set_disabled(&button, true)?;
             }
         }
+        for action in ["cancel", "finish", "geometry-role", "options-close"] {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-action=\"{action}\"]"))?
+            {
+                set_disabled(&button, false)?;
+            }
+        }
         Ok(())
     }
 
@@ -2837,6 +2958,261 @@ pub(crate) mod wasm {
                 super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
             )
             .ok()
+    }
+
+    fn projectional_geometry_authoring_active(wb: &ProjectionalWorkbench) -> bool {
+        wb.editor().editor().geometry_tool_variant().is_some()
+            && wb.editor().editor().tool() != EditorTool::Select
+    }
+
+    fn render_projectional_authoring_status(
+        document: &Document,
+        wb: &ProjectionalWorkbench,
+    ) -> Result<(), JsValue> {
+        let editor = wb.editor().editor();
+        let active = projectional_geometry_authoring_active(wb);
+        set_hidden(&required(document, "wb-draft-guide")?, !active)?;
+        let status = editor.geometry_draft_status();
+        required(document, "wb-draft-guide-text")?.set_text_content(Some(
+            &status.as_ref().map_or_else(
+                || "Select a geometry recipe".to_owned(),
+                super::geometry_palette::status_text,
+            ),
+        ));
+        let finish = required(document, "wb-guide-finish")?;
+        let can_finish = editor.can_complete_draft();
+        set_hidden(&finish, !active || !can_finish)?;
+        set_disabled(&finish, !can_finish)?;
+        if let Some(button) =
+            document.query_selector(".wb-palette-terminal [data-wb-action=\"finish\"]")?
+        {
+            set_disabled(&button, !can_finish)?;
+        }
+
+        required(document, "wb-tool-select")?.set_attribute(
+            "aria-pressed",
+            if editor.tool() == EditorTool::Select {
+                "true"
+            } else {
+                "false"
+            },
+        )?;
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
+            let selected = wb.geometry_palette.selected(family);
+            let button = required(document, &format!("wb-tool-family-{}", family.key()))?;
+            button.set_attribute(
+                "aria-pressed",
+                if editor.geometry_tool_variant() == Some(selected) {
+                    "true"
+                } else {
+                    "false"
+                },
+            )?;
+            button.set_attribute(
+                "aria-label",
+                &format!(
+                    "{} · {}",
+                    super::geometry_palette::family_label(family),
+                    super::geometry_palette::variant_label(selected),
+                ),
+            )?;
+            if let Some(label) = button.query_selector(".wb-family-selection")? {
+                label.set_text_content(Some(super::geometry_palette::variant_label(selected)));
+            }
+            if let Some(icon) = button.query_selector(".wb-geometry-icon")? {
+                icon.set_inner_html(&super::icons::geometry_variant_icon_markup(selected));
+            }
+        }
+
+        let role = editor.authoring_geometry_role();
+        let role_button = required(document, "wb-geometry-role")?;
+        role_button.set_attribute(
+            "aria-pressed",
+            if role == GeometryRole::Construction {
+                "true"
+            } else {
+                "false"
+            },
+        )?;
+        role_button.set_attribute(
+            "aria-label",
+            "Toggle the role assigned to newly authored curves",
+        )?;
+        let root = required(document, "workbench-root")?;
+        root.set_attribute(
+            "data-geometry-authoring-role",
+            if role == GeometryRole::Construction {
+                "construction"
+            } else {
+                "profile"
+            },
+        )?;
+        root.set_attribute(
+            "data-canvas-cursor",
+            super::canvas_cursor_key_with_curve_control(
+                editor.tool(),
+                false,
+                false,
+                false,
+                false,
+                editor.hover_state(),
+                editor.active_pointer_gesture(),
+            ),
+        )?;
+        Ok(())
+    }
+
+    fn render_projectional_tool_options_overlay(
+        document: &Document,
+        wb: &ProjectionalWorkbench,
+    ) -> Result<(), JsValue> {
+        let open = wb.option_overlay.open;
+        let overlay = required(document, "wb-tool-options-overlay")?;
+        set_hidden(&overlay, open.is_none())?;
+        required(document, "workbench-root")?.set_attribute(
+            "data-option-overlay",
+            open.map_or("none", super::OptionOverlayKind::key),
+        )?;
+        required(document, "wb-tool-options-title")?.set_text_content(Some(
+            open.map_or("Tool options", super::OptionOverlayKind::title),
+        ));
+        for family in geosolve_constraint_editor::GeometryToolFamily::ALL {
+            set_option_invoker_expanded(
+                document,
+                &format!("wb-tool-family-{}", family.key()),
+                super::OptionOverlayKind::GeometryFamily(family),
+                open,
+            )?;
+        }
+        let family = match open {
+            Some(super::OptionOverlayKind::GeometryFamily(family)) => Some(family),
+            _ => None,
+        };
+        let selected = family.map(|family| wb.geometry_palette.selected(family));
+        if let (Some(family), Some(selected)) = (family, selected) {
+            let list = required(document, "wb-geometry-variant-list")?;
+            list.set_attribute(
+                "aria-label",
+                &format!(
+                    "{} geometry variants",
+                    super::geometry_palette::family_label(family),
+                ),
+            )?;
+            let family_key = family.key();
+            let selected_key = selected.key();
+            let menu_changed = list.get_attribute("data-geometry-family").as_deref()
+                != Some(family_key)
+                || list
+                    .get_attribute("data-selected-geometry-variant")
+                    .as_deref()
+                    != Some(selected_key);
+            if menu_changed {
+                list.set_inner_html(&super::geometry_palette::variant_menu_markup(
+                    family, selected,
+                ));
+                list.set_attribute("data-geometry-family", family_key)?;
+                list.set_attribute("data-selected-geometry-variant", selected_key)?;
+            }
+        }
+        set_hidden(
+            &required(document, "wb-option-panel-geometry-family")?,
+            family.is_none(),
+        )?;
+        for id in [
+            "wb-option-panel-equal",
+            "wb-option-panel-tangent",
+            "wb-option-panel-continuity",
+            "wb-option-panel-dimension",
+            "wb-option-panel-fillet",
+            "wb-option-panel-offset",
+            "wb-option-panel-construction-display",
+        ] {
+            set_hidden(&required(document, id)?, true)?;
+        }
+
+        let editor = wb.editor().editor();
+        let conic_tool = selected
+            .map(GeometryToolVariant::editor_tool)
+            .filter(|tool| {
+                matches!(
+                    tool,
+                    EditorTool::Ellipse
+                        | EditorTool::EllipticalArc
+                        | EditorTool::RationalQuadraticConic
+                        | EditorTool::Parabola
+                        | EditorTool::Hyperbola
+                )
+            });
+        let nurbs_open = selected.is_some_and(|variant| variant.editor_tool() == EditorTool::Nurbs);
+        set_hidden(
+            &required(document, "wb-option-panel-conic")?,
+            conic_tool.is_none(),
+        )?;
+        set_hidden(&required(document, "wb-option-panel-nurbs")?, !nurbs_open)?;
+        for (id, visible) in [
+            (
+                "wb-conic-ratio-field",
+                matches!(
+                    conic_tool,
+                    Some(EditorTool::Ellipse | EditorTool::EllipticalArc)
+                ),
+            ),
+            (
+                "wb-conic-weight-field",
+                conic_tool == Some(EditorTool::RationalQuadraticConic),
+            ),
+            (
+                "wb-conic-arc-sweep-field",
+                conic_tool == Some(EditorTool::EllipticalArc),
+            ),
+            (
+                "wb-conic-trim-start-field",
+                matches!(
+                    conic_tool,
+                    Some(EditorTool::Parabola | EditorTool::Hyperbola)
+                ),
+            ),
+            (
+                "wb-conic-trim-end-field",
+                matches!(
+                    conic_tool,
+                    Some(EditorTool::Parabola | EditorTool::Hyperbola)
+                ),
+            ),
+            (
+                "wb-conic-semi-conjugate-field",
+                conic_tool == Some(EditorTool::Hyperbola),
+            ),
+            (
+                "wb-conic-hyperbola-branch-field",
+                conic_tool == Some(EditorTool::Hyperbola),
+            ),
+            (
+                "wb-conic-rational-help",
+                conic_tool == Some(EditorTool::RationalQuadraticConic),
+            ),
+            (
+                "wb-conic-elliptical-arc-help",
+                conic_tool == Some(EditorTool::EllipticalArc),
+            ),
+        ] {
+            set_hidden(&required(document, id)?, !visible)?;
+        }
+        if conic_tool == Some(EditorTool::EllipticalArc)
+            && let Ok(select) =
+                required(document, "wb-conic-arc-sweep")?.dyn_into::<HtmlSelectElement>()
+        {
+            select.set_value(match editor.conic_options().arc_sweep {
+                DocumentArcSweep::CounterClockwise => "counter-clockwise",
+                DocumentArcSweep::Clockwise => "clockwise",
+            });
+        }
+        if conic_tool == Some(EditorTool::RationalQuadraticConic) {
+            let (_, help) =
+                super::rational_conic_construction_copy(editor.conic_options().middle_weight);
+            required(document, "wb-conic-rational-help")?.set_text_content(Some(help));
+        }
+        Ok(())
     }
 
     fn render_projectional(
@@ -2915,7 +3291,8 @@ pub(crate) mod wasm {
             "{:.1} px / unit",
             wb.camera.pixels_per_model_unit,
         )));
-        required(document, "wb-draft-guide")?.set_attribute("hidden", "")?;
+        render_projectional_authoring_status(document, &wb)?;
+        render_projectional_tool_options_overlay(document, &wb)?;
         let root = required(document, "workbench-root")?;
         root.set_attribute("data-editor-adapter", "projectional-intent")?;
         root.set_attribute(
@@ -2958,8 +3335,8 @@ pub(crate) mod wasm {
                 &[],
                 &[],
                 hover,
-                None,
-                None,
+                wb.construction_preview.as_ref(),
+                wb.editor().editor().draft_inference_resolution(),
                 None,
                 None,
                 None,
@@ -2979,6 +3356,20 @@ pub(crate) mod wasm {
                 super::WorkbenchRenderScope::Durable => "durable",
             },
         )?;
+        required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
+        let coordinate = super::coordinate_hud(
+            wb.camera.viewport(),
+            wb.pointer_moves.borrow().last_input(),
+            wb.editor().editor().draft_inference_resolution(),
+        );
+        let coordinate_element = required(document, "wb-pointer-coordinate")?;
+        coordinate_element.set_text_content(Some(&coordinate.text));
+        coordinate_element.set_attribute("title", &coordinate.title)?;
+        coordinate_element.set_attribute(
+            "data-inference-adjusted",
+            if coordinate.adjusted { "true" } else { "false" },
+        )?;
+        render_projectional_authoring_status(document, wb)?;
         Ok(())
     }
 
@@ -3028,6 +3419,34 @@ pub(crate) mod wasm {
         Some(pointer_id)
     }
 
+    fn dispatch_projectional_effects(
+        wb: &mut ProjectionalWorkbench,
+        effects: Vec<EditorEffect>,
+    ) -> super::ProjectionalConstructionDispatch {
+        let ProjectionalWorkbench {
+            authority,
+            construction_preview,
+            ..
+        } = wb;
+        let editor = authority
+            .projectional_mut()
+            .expect("projectional adapter owns projectional authority");
+        let outcome = super::dispatch_projectional_construction_effects(
+            editor,
+            construction_preview,
+            effects,
+        );
+        if outcome.accepted_terminal {
+            wb.notice = "Construction retained".into();
+        } else if outcome.rejected_terminal {
+            wb.notice = outcome.error.as_ref().map_or_else(
+                || "Construction was rejected; adjust the retained draft".into(),
+                |error| format!("Construction was rejected; adjust the retained draft: {error}"),
+            );
+        }
+        outcome
+    }
+
     fn cancel_projectional_interaction(
         viewport: &Element,
         wb: &mut ProjectionalWorkbench,
@@ -3044,8 +3463,10 @@ pub(crate) mod wasm {
         let retired_frame = wb.pointer_moves.borrow_mut().invalidate();
         let had_capture = wb.captured_pointer.is_some();
         let effects = wb.editor_mut().cancel_interaction();
+        let effect_count = effects.len();
+        let _ = dispatch_projectional_effects(wb, effects);
         release_projectional_pointer_capture(viewport, wb, release_platform_capture);
-        let changed = retired_frame || had_capture || !effects.is_empty();
+        let changed = retired_frame || had_capture || effect_count != 0;
         if changed {
             wb.notice = notice.into();
         }
@@ -3062,7 +3483,7 @@ pub(crate) mod wasm {
         let frame_workbench = Rc::clone(workbench);
         let frame_pointer_moves = Rc::clone(pointer_moves);
         let frame = Closure::once_into_js(move || {
-            let Some(input) = frame_pointer_moves.borrow_mut().take_for_frame(generation) else {
+            let Some(sample) = frame_pointer_moves.borrow_mut().take_for_frame(generation) else {
                 return;
             };
             {
@@ -3070,7 +3491,7 @@ pub(crate) mod wasm {
                 if wb
                     .captured_pointer
                     .and_then(|pointer_id| u64::try_from(pointer_id).ok())
-                    .is_some_and(|pointer_id| pointer_id != input.pointer_id)
+                    .is_some_and(|pointer_id| pointer_id != sample.input.pointer_id)
                 {
                     return;
                 }
@@ -3078,7 +3499,13 @@ pub(crate) mod wasm {
                     wb.notice = "Projectional pointer preview has no accepted scene".into();
                     return;
                 };
-                if let Err(error) = wb.editor_mut().pointer_move(&scene, input) {
+                if projectional_geometry_authoring_active(&wb) {
+                    let effects = wb
+                        .editor_mut()
+                        .editor_mut()
+                        .pointer_move_with_draft_authoring(&scene, sample.input, sample.authoring);
+                    let _ = dispatch_projectional_effects(&mut wb, effects);
+                } else if let Err(error) = wb.editor_mut().pointer_move(&scene, sample.input) {
                     wb.notice = format!("Projectional pointer preview was retained: {error}");
                 }
             }
@@ -3127,6 +3554,40 @@ pub(crate) mod wasm {
             };
             event.prevent_default();
             wb.pointer_moves.borrow_mut().invalidate();
+            if projectional_geometry_authoring_active(&wb) {
+                let sample = wb
+                    .pointer_moves
+                    .borrow_mut()
+                    .observe_for_pointer_down(input);
+                let effects = wb
+                    .editor_mut()
+                    .editor_mut()
+                    .pointer_down_with_draft_authoring(&scene, sample.input, sample.authoring);
+                let outcome = dispatch_projectional_effects(&mut wb, effects);
+                if !outcome.accepted_terminal && !outcome.rejected_terminal {
+                    wb.notice = wb
+                        .editor()
+                        .editor()
+                        .geometry_draft_status()
+                        .as_ref()
+                        .map_or_else(
+                            || "Geometry recipe active".into(),
+                            super::geometry_palette::status_text,
+                        );
+                }
+                let presentation = if outcome.accepted_terminal {
+                    super::WorkbenchPresentationEvent::PointerRelease
+                } else {
+                    super::WorkbenchPresentationEvent::PointerMoveFrame
+                };
+                drop(wb);
+                let _ = present_projectional_pointer_event(
+                    &down_document,
+                    &down_workbench,
+                    presentation,
+                );
+                return;
+            }
             let effects = match wb.editor_mut().pointer_down(&scene, input) {
                 Ok(effects) => effects,
                 Err(error) => {
@@ -3258,7 +3719,8 @@ pub(crate) mod wasm {
             let mut failure = None;
             for sample in pending
                 .into_iter()
-                .filter(|sample| sample.pointer_id == input.pointer_id)
+                .filter(|sample| sample.input.pointer_id == input.pointer_id)
+                .map(|sample| sample.input)
                 .chain(std::iter::once(input))
             {
                 let Some(scene) = projectional_scene(&wb) else {
@@ -3270,6 +3732,7 @@ pub(crate) mod wasm {
                     break;
                 }
             }
+            up_pointer_moves.borrow_mut().observe(input);
             if let Some(error) = failure {
                 cancel_projectional_interaction(
                     &up_viewport,
@@ -3369,11 +3832,12 @@ pub(crate) mod wasm {
             if wb.captured_pointer.is_some() {
                 return;
             }
-            let retired_frame = leave_pointer_moves.borrow_mut().invalidate();
+            let retired_frame = leave_pointer_moves.borrow_mut().clear_stationary_sample();
             let effects = wb.editor_mut().editor_mut().pointer_leave();
             if !retired_frame && effects.is_empty() {
                 return;
             }
+            let _ = dispatch_projectional_effects(&mut wb, effects);
             drop(wb);
             let _ = present_projectional_pointer_event(
                 &leave_document,
@@ -3385,25 +3849,106 @@ pub(crate) mod wasm {
             .add_event_listener_with_callback("pointerleave", leave.as_ref().unchecked_ref())?;
         leave.forget();
 
+        let finish_click_tracker =
+            Rc::new(RefCell::new(super::FinishDoubleClickTracker::default()));
+        let click_document = document.clone();
+        let click_workbench = Rc::clone(workbench);
+        let click_viewport = viewport.clone();
+        let click_tracker = Rc::clone(&finish_click_tracker);
+        let click = Closure::<dyn FnMut(MouseEvent)>::new(move |event: MouseEvent| {
+            let (step_back, finish) = {
+                let wb = click_workbench.borrow();
+                if client_screen_point(
+                    &click_viewport,
+                    wb.camera.viewport(),
+                    f64::from(event.client_x()),
+                    f64::from(event.client_y()),
+                )
+                .is_none()
+                {
+                    click_tracker.borrow_mut().first_click = None;
+                    return;
+                }
+                let status = wb.editor().editor().geometry_draft_status();
+                let finish = event.detail() == 2
+                    && status
+                        .as_ref()
+                        .is_some_and(super::finish_double_click_eligible);
+                let step_back = click_tracker
+                    .borrow_mut()
+                    .observe_click(event.detail(), status.as_ref());
+                (step_back, finish)
+            };
+            if !finish {
+                return;
+            }
+            event.prevent_default();
+            event.stop_propagation();
+            let mut wb = click_workbench.borrow_mut();
+            wb.pointer_moves.borrow_mut().invalidate();
+            if step_back {
+                let effects = wb.editor_mut().editor_mut().step_back_draft();
+                let _ = dispatch_projectional_effects(&mut wb, effects);
+            }
+            let effects = projectional_scene(&wb).map_or_else(Vec::new, |scene| {
+                wb.editor_mut()
+                    .editor_mut()
+                    .complete_draft(scene.design_identity)
+            });
+            let outcome = dispatch_projectional_effects(&mut wb, effects);
+            let presentation = if outcome.accepted_terminal {
+                super::WorkbenchPresentationEvent::PointerRelease
+            } else {
+                super::WorkbenchPresentationEvent::PointerMoveFrame
+            };
+            drop(wb);
+            let _ =
+                present_projectional_pointer_event(&click_document, &click_workbench, presentation);
+        });
+        viewport.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
+        click.forget();
+
         let blur_document = document.clone();
         let blur_workbench = Rc::clone(workbench);
         let blur_viewport = viewport.clone();
         let blur = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
             let mut wb = blur_workbench.borrow_mut();
-            if !cancel_projectional_interaction(
-                &blur_viewport,
-                &mut wb,
-                None,
-                true,
-                "Projectional interaction canceled because the window lost focus",
-            ) {
+            let stationary_sample = {
+                let owns_queued_sample = projectional_geometry_authoring_active(&wb);
+                wb.pointer_moves
+                    .borrow_mut()
+                    .window_blur(owns_queued_sample)
+            };
+            let refreshed_modifier_state = stationary_sample.is_some();
+            let canceled = wb.captured_pointer.is_some()
+                && cancel_projectional_interaction(
+                    &blur_viewport,
+                    &mut wb,
+                    None,
+                    true,
+                    "Projectional interaction canceled because the window lost focus",
+                );
+            if let Some(sample) = stationary_sample
+                && let Some(scene) = projectional_scene(&wb)
+            {
+                let effects = wb
+                    .editor_mut()
+                    .editor_mut()
+                    .pointer_move_with_draft_authoring(&scene, sample.input, sample.authoring);
+                let _ = dispatch_projectional_effects(&mut wb, effects);
+            }
+            if !canceled && !refreshed_modifier_state {
                 return;
             }
             drop(wb);
             let _ = present_projectional_pointer_event(
                 &blur_document,
                 &blur_workbench,
-                super::WorkbenchPresentationEvent::InteractionCancellation,
+                if canceled {
+                    super::WorkbenchPresentationEvent::InteractionCancellation
+                } else {
+                    super::WorkbenchPresentationEvent::PointerMoveFrame
+                },
             );
         });
         super::platform::window()?
@@ -3442,12 +3987,123 @@ pub(crate) mod wasm {
         let click_document = document.clone();
         let click_workbench = Rc::clone(workbench);
         let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(target) = event
+            let Some(origin) = event
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
             else {
                 return;
             };
+            let target = origin
+                .closest(concat!(
+                    "[data-wb-tool], [data-wb-geometry-family], ",
+                    "[data-wb-geometry-variant], [data-wb-action]"
+                ))
+                .ok()
+                .flatten()
+                .unwrap_or(origin);
+
+            if target.get_attribute("data-wb-tool").as_deref() == Some("select") {
+                let mut wb = click_workbench.borrow_mut();
+                if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Geometry authoring canceled",
+                    );
+                }
+                wb.option_overlay.close();
+                let effects = wb
+                    .editor_mut()
+                    .editor_mut()
+                    .activate_tool(EditorTool::Select);
+                let _ = dispatch_projectional_effects(&mut wb, effects);
+                wb.notice = "Select active".into();
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                return;
+            }
+            if let Some(family) = target
+                .get_attribute("data-wb-geometry-family")
+                .as_deref()
+                .and_then(super::geometry_palette::family_from_key)
+            {
+                let mut wb = click_workbench.borrow_mut();
+                if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Active interaction canceled before changing geometry tools",
+                    );
+                }
+                let variant = wb.geometry_palette.selected(family);
+                wb.option_overlay
+                    .open(super::OptionOverlayKind::GeometryFamily(family));
+                match update_construction_options_for_variant(
+                    &click_document,
+                    wb.editor_mut().editor_mut(),
+                    variant,
+                ) {
+                    Ok(()) => {
+                        let effects = wb.editor_mut().editor_mut().activate_geometry_tool(variant);
+                        let _ = dispatch_projectional_effects(&mut wb, effects);
+                        wb.notice = format!(
+                            "{} · {} active",
+                            super::geometry_palette::family_label(family),
+                            super::geometry_palette::variant_label(variant),
+                        );
+                    }
+                    Err(error) => wb.notice = error,
+                }
+                let focus = super::geometry_palette::variant_button_id(variant);
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                focus_by_id(&click_document, &focus);
+                return;
+            }
+            if let Some(variant) = target
+                .get_attribute("data-wb-geometry-variant")
+                .as_deref()
+                .and_then(super::geometry_palette::variant_from_key)
+            {
+                let mut wb = click_workbench.borrow_mut();
+                if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Active interaction canceled before changing geometry variants",
+                    );
+                }
+                wb.geometry_palette.remember(variant);
+                wb.option_overlay
+                    .open(super::OptionOverlayKind::GeometryFamily(variant.family()));
+                match update_construction_options_for_variant(
+                    &click_document,
+                    wb.editor_mut().editor_mut(),
+                    variant,
+                ) {
+                    Ok(()) => {
+                        let effects = wb.editor_mut().editor_mut().activate_geometry_tool(variant);
+                        let _ = dispatch_projectional_effects(&mut wb, effects);
+                        wb.notice = format!(
+                            "{} active · repeat after creation",
+                            super::geometry_palette::variant_label(variant),
+                        );
+                    }
+                    Err(error) => wb.notice = error,
+                }
+                let focus = super::geometry_palette::variant_button_id(variant);
+                drop(wb);
+                let _ = render_projectional(&click_document, &click_workbench);
+                focus_by_id(&click_document, &focus);
+                return;
+            }
+
             let owns_inline_edit = target
                 .closest("[data-intent-edit], [data-intent-source-token]")
                 .is_ok_and(|owner| owner.is_some());
@@ -3473,25 +4129,42 @@ pub(crate) mod wasm {
                 .flatten()
                 .and_then(|target| target.get_attribute("data-wb-action"));
             let mut wb = click_workbench.borrow_mut();
-            if action.is_some()
-                && let Ok(viewport) = required(&click_document, "wb-viewport")
-            {
-                cancel_projectional_interaction(
-                    &viewport,
-                    &mut wb,
-                    None,
-                    true,
-                    "Active interaction canceled before the design action",
-                );
-            }
+            let mut durable = false;
             match action.as_deref() {
-                Some("undo") => projectional_history_action(&mut wb, super::HistoryShortcut::Undo),
-                Some("redo") => projectional_history_action(&mut wb, super::HistoryShortcut::Redo),
+                Some("undo") | Some("redo") => {
+                    if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                        let _ = cancel_projectional_interaction(
+                            &viewport,
+                            &mut wb,
+                            None,
+                            true,
+                            "Active interaction canceled before history navigation",
+                        );
+                    }
+                    projectional_history_action(
+                        &mut wb,
+                        if action.as_deref() == Some("undo") {
+                            super::HistoryShortcut::Undo
+                        } else {
+                            super::HistoryShortcut::Redo
+                        },
+                    );
+                    durable = true;
+                }
                 Some("clear-selection") => {
                     wb.editor_mut().set_selected_declaration(None);
                     wb.notice = "Design declaration selection cleared".into();
                 }
                 Some("delete") => {
+                    if let Ok(viewport) = required(&click_document, "wb-viewport") {
+                        let _ = cancel_projectional_interaction(
+                            &viewport,
+                            &mut wb,
+                            None,
+                            true,
+                            "Active interaction canceled before deletion",
+                        );
+                    }
                     let Some(node) = wb.editor().selected_declaration() else {
                         wb.notice = "Select a design declaration to delete".into();
                         drop(wb);
@@ -3502,10 +4175,65 @@ pub(crate) mod wasm {
                         |error| error.to_string(),
                         |_| "Design declaration and dependent closure deleted".into(),
                     );
+                    durable = true;
+                }
+                Some("finish") => {
+                    wb.pointer_moves.borrow_mut().invalidate();
+                    let effects = projectional_scene(&wb).map_or_else(Vec::new, |scene| {
+                        wb.editor_mut()
+                            .editor_mut()
+                            .complete_draft(scene.design_identity)
+                    });
+                    let outcome = dispatch_projectional_effects(&mut wb, effects);
+                    durable = outcome.accepted_terminal;
+                    if !outcome.accepted_terminal && !outcome.rejected_terminal {
+                        wb.notice = "This geometry recipe is not ready to finish".into();
+                    }
+                }
+                Some("cancel") => {
+                    wb.pointer_moves.borrow_mut().invalidate();
+                    let effects = wb.editor_mut().editor_mut().escape_geometry_tool();
+                    let _ = dispatch_projectional_effects(&mut wb, effects);
+                    if wb.editor().editor().tool() == EditorTool::Select {
+                        wb.option_overlay.close();
+                        wb.notice = "Select active".into();
+                    } else {
+                        wb.notice =
+                            "Current shape canceled; geometry variant remains active".into();
+                    }
+                }
+                Some("options-close") => {
+                    wb.pointer_moves.borrow_mut().invalidate();
+                    let effects = wb
+                        .editor_mut()
+                        .editor_mut()
+                        .activate_tool(EditorTool::Select);
+                    let _ = dispatch_projectional_effects(&mut wb, effects);
+                    wb.option_overlay.close();
+                    wb.notice = "Tool options closed; Select active".into();
+                }
+                Some("geometry-role") => {
+                    let role = match wb.editor().editor().authoring_geometry_role() {
+                        GeometryRole::Profile => GeometryRole::Construction,
+                        GeometryRole::Construction => GeometryRole::Profile,
+                    };
+                    wb.editor_mut()
+                        .editor_mut()
+                        .set_authoring_geometry_role(role);
+                    wb.notice = format!(
+                        "New curve authoring role set to {}",
+                        if role == GeometryRole::Construction {
+                            "Construction"
+                        } else {
+                            "Profile"
+                        },
+                    );
                 }
                 Some(_) | None => return,
             }
-            save_projectional(&wb);
+            if durable {
+                save_projectional(&wb);
+            }
             drop(wb);
             let _ = render_projectional(&click_document, &click_workbench);
         });
@@ -3515,10 +4243,39 @@ pub(crate) mod wasm {
         let change_document = document.clone();
         let change_workbench = Rc::clone(workbench);
         let change = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(input) = event
+            let Some(target) = event
                 .target()
-                .and_then(|target| target.dyn_into::<HtmlInputElement>().ok())
+                .and_then(|target| target.dyn_into::<Element>().ok())
             else {
+                return;
+            };
+            if target
+                .closest("#wb-tool-options-overlay")
+                .is_ok_and(|owner| owner.is_some())
+            {
+                let mut wb = change_workbench.borrow_mut();
+                let Some(variant) = wb.editor().editor().geometry_tool_variant() else {
+                    return;
+                };
+                wb.notice = update_construction_options_for_variant(
+                    &change_document,
+                    wb.editor_mut().editor_mut(),
+                    variant,
+                )
+                .map_or_else(
+                    |error| error,
+                    |()| {
+                        format!(
+                            "{} options updated",
+                            super::geometry_palette::variant_label(variant),
+                        )
+                    },
+                );
+                drop(wb);
+                let _ = render_projectional(&change_document, &change_workbench);
+                return;
+            }
+            let Ok(input) = target.dyn_into::<HtmlInputElement>() else {
                 return;
             };
             if input.get_attribute("data-intent-edit").as_deref() != Some("name") {
@@ -3633,7 +4390,160 @@ pub(crate) mod wasm {
         let keyboard_document = document.clone();
         let keyboard_workbench = Rc::clone(workbench);
         let keyboard = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            if !event.ctrl_key()
+                && !event.meta_key()
+                && !event.alt_key()
+                && let Some(current) = event
+                    .target()
+                    .and_then(|target| target.dyn_into::<Element>().ok())
+                    .and_then(|target| target.closest("[data-wb-geometry-variant]").ok().flatten())
+                    .and_then(|target| target.get_attribute("data-wb-geometry-variant"))
+                    .as_deref()
+                    .and_then(super::geometry_palette::variant_from_key)
+                && let Some(next) = super::geometry_variant_keyboard_target(current, &event.key())
+            {
+                event.prevent_default();
+                if let Ok(element) = required(
+                    &keyboard_document,
+                    &super::geometry_palette::variant_button_id(next),
+                ) && let Ok(button) = element.dyn_into::<HtmlElement>()
+                {
+                    button.click();
+                }
+                return;
+            }
             if keyboard_target_is_editable_or_dialog(&event) {
+                return;
+            }
+            if event.key() == "Tab" {
+                let pending = {
+                    let wb = keyboard_workbench.borrow();
+                    let owns = projectional_geometry_authoring_active(&wb);
+                    wb.pointer_moves
+                        .borrow_mut()
+                        .drain_before_stationary_cycle(owns)
+                };
+                if let Some(sample) = pending {
+                    let mut wb = keyboard_workbench.borrow_mut();
+                    if let Some(scene) = projectional_scene(&wb) {
+                        let effects = wb
+                            .editor_mut()
+                            .editor_mut()
+                            .pointer_move_with_draft_authoring(
+                                &scene,
+                                sample.input,
+                                sample.authoring,
+                            );
+                        let _ = dispatch_projectional_effects(&mut wb, effects);
+                    }
+                }
+                let next = keyboard_workbench
+                    .borrow()
+                    .editor()
+                    .editor()
+                    .draft_inference_resolution()
+                    .and_then(
+                        geosolve_constraint_editor::DraftInferenceResolution::next_cycle_candidate_id,
+                    );
+                if let Some(next) = next {
+                    event.prevent_default();
+                    let sample = {
+                        let wb = keyboard_workbench.borrow();
+                        let owns = projectional_geometry_authoring_active(&wb);
+                        wb.pointer_moves
+                            .borrow_mut()
+                            .stationary_candidate(next, owns)
+                    };
+                    if let Some(sample) = sample {
+                        let mut wb = keyboard_workbench.borrow_mut();
+                        if let Some(scene) = projectional_scene(&wb) {
+                            let effects = wb
+                                .editor_mut()
+                                .editor_mut()
+                                .pointer_move_with_draft_authoring(
+                                    &scene,
+                                    sample.input,
+                                    sample.authoring,
+                                );
+                            let _ = dispatch_projectional_effects(&mut wb, effects);
+                        }
+                        drop(wb);
+                        let _ = present_projectional_pointer_event(
+                            &keyboard_document,
+                            &keyboard_workbench,
+                            super::WorkbenchPresentationEvent::PointerMoveFrame,
+                        );
+                    }
+                    return;
+                }
+            }
+            if event.key().eq_ignore_ascii_case("f")
+                && !event.repeat()
+                && !event.shift_key()
+                && !event.ctrl_key()
+                && !event.meta_key()
+                && !event.alt_key()
+            {
+                let available = keyboard_workbench
+                    .borrow()
+                    .editor()
+                    .editor()
+                    .geometry_draft_status()
+                    .is_some_and(|status| {
+                        status.completed_stages > 0 && status.branch.sweep.is_some()
+                    });
+                if available {
+                    event.prevent_default();
+                    let mut wb = keyboard_workbench.borrow_mut();
+                    wb.pointer_moves.borrow_mut().invalidate();
+                    let effects = wb.editor_mut().editor_mut().flip_geometry_draft_branch();
+                    let _ = dispatch_projectional_effects(&mut wb, effects);
+                    wb.notice = "Complementary arc sweep selected".into();
+                    drop(wb);
+                    let _ = render_projectional(&keyboard_document, &keyboard_workbench);
+                    return;
+                }
+            }
+            if event.key() == "Enter"
+                && projectional_geometry_authoring_active(&keyboard_workbench.borrow())
+            {
+                event.prevent_default();
+                let mut wb = keyboard_workbench.borrow_mut();
+                wb.pointer_moves.borrow_mut().invalidate();
+                let effects = projectional_scene(&wb).map_or_else(Vec::new, |scene| {
+                    wb.editor_mut()
+                        .editor_mut()
+                        .complete_draft(scene.design_identity)
+                });
+                let outcome = dispatch_projectional_effects(&mut wb, effects);
+                let presentation = if outcome.accepted_terminal {
+                    super::WorkbenchPresentationEvent::PointerRelease
+                } else {
+                    super::WorkbenchPresentationEvent::PointerReleaseWithoutTransaction
+                };
+                drop(wb);
+                let _ = present_projectional_pointer_event(
+                    &keyboard_document,
+                    &keyboard_workbench,
+                    presentation,
+                );
+                return;
+            }
+            if matches!(event.key().as_str(), "Delete" | "Backspace")
+                && projectional_geometry_authoring_active(&keyboard_workbench.borrow())
+            {
+                event.prevent_default();
+                let mut wb = keyboard_workbench.borrow_mut();
+                wb.pointer_moves.borrow_mut().invalidate();
+                let effects = wb.editor_mut().editor_mut().step_back_draft();
+                if effects.is_empty() {
+                    wb.notice = "No unfinished geometry stage to remove".into();
+                } else {
+                    let _ = dispatch_projectional_effects(&mut wb, effects);
+                    wb.notice = "Latest unfinished geometry stage removed".into();
+                }
+                drop(wb);
+                let _ = render_projectional(&keyboard_document, &keyboard_workbench);
                 return;
             }
             if event.key() == "Escape" {
@@ -3642,14 +4552,25 @@ pub(crate) mod wasm {
                     return;
                 };
                 let mut wb = keyboard_workbench.borrow_mut();
-                if !cancel_projectional_interaction(
-                    &viewport,
-                    &mut wb,
-                    None,
-                    true,
-                    "Projectional interaction canceled",
-                ) {
-                    return;
+                if wb.captured_pointer.is_some() {
+                    let _ = cancel_projectional_interaction(
+                        &viewport,
+                        &mut wb,
+                        None,
+                        true,
+                        "Projectional interaction canceled",
+                    );
+                } else {
+                    wb.pointer_moves.borrow_mut().invalidate();
+                    let effects = wb.editor_mut().editor_mut().escape_geometry_tool();
+                    let _ = dispatch_projectional_effects(&mut wb, effects);
+                    if wb.editor().editor().tool() == EditorTool::Select {
+                        wb.option_overlay.close();
+                        wb.notice = "Select active".into();
+                    } else {
+                        wb.notice =
+                            "Current shape canceled; geometry variant remains active".into();
+                    }
                 }
                 drop(wb);
                 let _ = present_projectional_pointer_event(
@@ -3688,6 +4609,51 @@ pub(crate) mod wasm {
         });
         document.add_event_listener_with_callback("keydown", keyboard.as_ref().unchecked_ref())?;
         keyboard.forget();
+
+        for event_name in ["keydown", "keyup"] {
+            let modifier_document = document.clone();
+            let modifier_workbench = Rc::clone(workbench);
+            let modifier = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+                if !matches!(event.key().as_str(), "Shift" | "Control" | "Meta")
+                    || (event_name == "keydown" && event.repeat())
+                {
+                    return;
+                }
+                let sample = {
+                    let wb = modifier_workbench.borrow();
+                    let owns = projectional_geometry_authoring_active(&wb);
+                    wb.pointer_moves.borrow_mut().stationary_authoring_state(
+                        Modifiers {
+                            shift: event.shift_key(),
+                            control: event.ctrl_key(),
+                            command: event.meta_key(),
+                        },
+                        owns,
+                    )
+                };
+                let Some(sample) = sample else {
+                    return;
+                };
+                let mut wb = modifier_workbench.borrow_mut();
+                let Some(scene) = projectional_scene(&wb) else {
+                    return;
+                };
+                let effects = wb
+                    .editor_mut()
+                    .editor_mut()
+                    .pointer_move_with_draft_authoring(&scene, sample.input, sample.authoring);
+                let _ = dispatch_projectional_effects(&mut wb, effects);
+                drop(wb);
+                let _ = present_projectional_pointer_event(
+                    &modifier_document,
+                    &modifier_workbench,
+                    super::WorkbenchPresentationEvent::PointerMoveFrame,
+                );
+            });
+            document
+                .add_event_listener_with_callback(event_name, modifier.as_ref().unchecked_ref())?;
+            modifier.forget();
+        }
         Ok(())
     }
 
@@ -10098,14 +11064,15 @@ mod tests {
         CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, DismissibleDisclosure,
         DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
         ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
-        PointerMoveQueue, ProjectionalPointerMoveQueue, ReproductionFocusReturn,
-        WorkbenchDocumentAuthority, WorkbenchPresentationCounters, WorkbenchPresentationEvent,
-        WorkbenchRenderScope, annotation_family_name, annotation_inspector_presentation,
-        apply_native_fillet_profile, apply_validated_reproduction, canvas_cursor_key,
-        canvas_cursor_key_with_curve_control, canvas_pointer_capture_kind,
-        canvas_pointer_move_owner, change_owns_option_control_click, compose_editor_scene,
-        coordinate_hud, current_problem_items, curve_control_inspector_detail,
-        curve_control_inspector_markup, draft_inference_preference_is_stale,
+        PointerMoveQueue, ProjectionalConstructionDispatch, ProjectionalPointerMoveQueue,
+        ReproductionFocusReturn, WorkbenchDocumentAuthority, WorkbenchPresentationCounters,
+        WorkbenchPresentationEvent, WorkbenchRenderScope, annotation_family_name,
+        annotation_inspector_presentation, apply_native_fillet_profile,
+        apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
+        canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
+        compose_editor_scene, coordinate_hud, current_problem_items,
+        curve_control_inspector_detail, curve_control_inspector_markup,
+        dispatch_projectional_construction_effects, draft_inference_preference_is_stale,
         feature_apply_returns_focus_to_select, foreground_overlay_escape_owner,
         geometry_sweep_flip_available, geometry_variant_keyboard_target, history_shortcut,
         native_fillet_apply_presentation, observe_feature_authoring_preview_lifecycle,
@@ -10206,63 +11173,75 @@ mod tests {
         )
     }
 
+    fn run_projectional_test_with_large_stack(name: &str, test: impl FnOnce() + Send + 'static) {
+        std::thread::Builder::new()
+            .name(name.to_owned())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(test)
+            .expect("spawn projectional browser test")
+            .join()
+            .expect("projectional browser test thread");
+    }
+
     #[test]
     fn projectional_v8_routes_scene_save_history_and_design_markup_through_one_authority() {
-        let (mut authority, node) = projectional_workbench_fixture();
-        assert!(authority.is_projectional());
-        assert!(authority.flat_ref().is_none());
-        assert!(authority.scene(test_viewport(), 0.5).is_some());
-        assert!(
-            authority
-                .snapshot()
-                .unwrap()
-                .encode()
-                .unwrap()
-                .contains("\"version\":8")
-        );
+        run_projectional_test_with_large_stack("projectional-v8-authority", || {
+            let (mut authority, node) = projectional_workbench_fixture();
+            assert!(authority.is_projectional());
+            assert!(authority.flat_ref().is_none());
+            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(
+                authority
+                    .snapshot()
+                    .unwrap()
+                    .encode()
+                    .unwrap()
+                    .contains("\"version\":8")
+            );
 
-        let projectional = authority.projectional_mut().unwrap();
-        assert!(projectional.set_selected_declaration(Some(node)));
-        let markup = projectional_design_markup(projectional);
-        assert_eq!(markup.declaration_count, 1);
-        assert!(markup.outline.contains("aria-selected=\"true\""));
-        assert!(markup.source.contains("wb-intent-source-token"));
-        assert!(
-            markup
-                .history
-                .contains("data-intent-history-state=\"applied\"")
-        );
-        assert!(markup.inspector.contains("data-intent-edit=\"name\""));
-        let projection = projectional.workbench_projection();
-        let name_token = projection
-            .structured_source
-            .tokens
-            .iter()
-            .find(|token| {
-                matches!(
-                    token.target,
-                    geosolve_constraint_editor::IntentSourceTokenTarget::NodeName { .. }
-                )
-            })
-            .unwrap()
-            .id;
-        projectional
-            .edit_source_token(&projection, name_token, "\"renamed point\"")
-            .unwrap();
-        assert!(
-            projectional_design_markup(projectional)
-                .inspector
-                .contains("renamed point")
-        );
+            let projectional = authority.projectional_mut().unwrap();
+            assert!(projectional.set_selected_declaration(Some(node)));
+            let markup = projectional_design_markup(projectional);
+            assert_eq!(markup.declaration_count, 1);
+            assert!(markup.outline.contains("aria-selected=\"true\""));
+            assert!(markup.source.contains("wb-intent-source-token"));
+            assert!(
+                markup
+                    .history
+                    .contains("data-intent-history-state=\"applied\"")
+            );
+            assert!(markup.inspector.contains("data-intent-edit=\"name\""));
+            let projection = projectional.workbench_projection();
+            let name_token = projection
+                .structured_source
+                .tokens
+                .iter()
+                .find(|token| {
+                    matches!(
+                        token.target,
+                        geosolve_constraint_editor::IntentSourceTokenTarget::NodeName { .. }
+                    )
+                })
+                .unwrap()
+                .id;
+            projectional
+                .edit_source_token(&projection, name_token, "\"renamed point\"")
+                .unwrap();
+            assert!(
+                projectional_design_markup(projectional)
+                    .inspector
+                    .contains("renamed point")
+            );
 
-        assert!(authority.step_history(true).unwrap());
-        assert!(authority.scene(test_viewport(), 0.5).is_some());
-        assert!(authority.step_history(true).unwrap());
-        assert!(authority.scene(test_viewport(), 0.5).is_none());
-        assert!(authority.step_history(false).unwrap());
-        assert!(authority.scene(test_viewport(), 0.5).is_some());
-        assert!(authority.step_history(false).unwrap());
-        assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(authority.step_history(true).unwrap());
+            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(authority.step_history(true).unwrap());
+            assert!(authority.scene(test_viewport(), 0.5).is_none());
+            assert!(authority.step_history(false).unwrap());
+            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(authority.step_history(false).unwrap());
+            assert!(authority.scene(test_viewport(), 0.5).is_some());
+        });
     }
 
     #[test]
@@ -10275,7 +11254,10 @@ mod tests {
         let mut queue = ProjectionalPointerMoveQueue::default();
         let first = queue.push(input(100.0)).expect("first RAF generation");
         assert_eq!(queue.push(input(110.0)), None);
-        assert_eq!(queue.take_for_frame(first), Some(input(110.0)));
+        assert_eq!(
+            queue.take_for_frame(first).map(|sample| sample.input),
+            Some(input(110.0))
+        );
         assert_eq!(queue.take_for_frame(first), None);
 
         let failed = queue.push(input(120.0)).expect("failed RAF generation");
@@ -10285,11 +11267,17 @@ mod tests {
             .expect("replacement RAF generation");
         assert_ne!(retried, failed);
         assert_eq!(queue.take_for_frame(failed), None);
-        assert_eq!(queue.take_for_frame(retried), Some(input(125.0)));
+        assert_eq!(
+            queue.take_for_frame(retried).map(|sample| sample.input),
+            Some(input(125.0))
+        );
 
         let stale = queue.push(input(130.0)).expect("terminal RAF generation");
         assert_eq!(queue.push(input(140.0)), None);
-        assert_eq!(queue.drain_before_terminal(), Some(input(140.0)));
+        assert_eq!(
+            queue.drain_before_terminal().map(|sample| sample.input),
+            Some(input(140.0))
+        );
         assert_eq!(queue.take_for_frame(stale), None);
         assert!(!queue.invalidate());
 
@@ -10299,226 +11287,313 @@ mod tests {
     }
 
     #[test]
-    fn projectional_queued_drag_commits_only_the_exact_terminal_sample_once() {
-        let (mut authority, _node) = projectional_workbench_fixture();
-        let projectional = authority.projectional_mut().unwrap();
-        let point = projectional
-            .coordinator()
-            .presentation_session()
-            .unwrap()
-            .design_document()
-            .points()
-            .first()
-            .expect("fixture point")
-            .id;
-        let viewport = test_viewport();
-        let pointer = |model_position| PointerInput {
-            pointer_id: 83,
-            position: viewport.model_to_screen(model_position),
-            modifiers: Modifiers::default(),
-        };
-        let position = |session: &ProjectionalEditorSession| {
-            session
+    fn projectional_browser_geometry_dispatch_commits_one_typed_terminal() {
+        run_projectional_test_with_large_stack("projectional-browser-geometry-terminal", || {
+            let (mut authority, _node) = projectional_workbench_fixture();
+            let projectional = authority.projectional_mut().unwrap();
+            projectional
+                .editor_mut()
+                .set_authoring_geometry_role(GeometryRole::Construction);
+            let activation = projectional
+                .editor_mut()
+                .activate_geometry_tool(GeometryToolVariant::Segment);
+            assert!(activation.is_empty());
+            let history_before = projectional
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len();
+            let viewport = test_viewport();
+            let input = |model_position| PointerInput {
+                pointer_id: 831,
+                position: viewport.model_to_screen(model_position),
+                modifiers: Modifiers::default(),
+            };
+            let mut preview = None;
+
+            let scene = projectional.scene(viewport, 0.5).unwrap();
+            let effects = projectional.editor_mut().pointer_down_with_draft_authoring(
+                &scene,
+                input([-1.0, -1.0]),
+                super::effect_adapter::draft_authoring_input(Modifiers::default(), None),
+            );
+            let first =
+                dispatch_projectional_construction_effects(projectional, &mut preview, effects);
+            assert_eq!(first, ProjectionalConstructionDispatch::default());
+            assert!(preview.is_some());
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before,
+                "a staged browser click must remain transient",
+            );
+
+            let scene = projectional.scene(viewport, 0.5).unwrap();
+            let effects = projectional.editor_mut().pointer_down_with_draft_authoring(
+                &scene,
+                input([1.0, -1.0]),
+                super::effect_adapter::draft_authoring_input(Modifiers::default(), None),
+            );
+            let terminal =
+                dispatch_projectional_construction_effects(projectional, &mut preview, effects);
+            assert!(terminal.accepted_terminal);
+            assert!(!terminal.rejected_terminal);
+            assert!(terminal.error.is_none());
+            assert!(preview.is_none());
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before + 1,
+            );
+            let design = projectional
                 .coordinator()
                 .presentation_session()
                 .unwrap()
-                .accepted_state_for_current_input()
-                .unwrap()
-                .document()
-                .point(point)
-                .unwrap()
-                .position
-        };
-        let initial_identity = projectional.coordinator().intent().identity();
-        let initial_history = projectional
-            .coordinator()
-            .intent()
-            .history_projection()
-            .applied
-            .len();
-        let scene = projectional.scene(viewport, 0.5).unwrap();
-        projectional
-            .pointer_down(&scene, pointer([2.0, 3.0]))
-            .unwrap();
+                .design_document();
+            assert_eq!(design.curves().len(), 1);
+            assert_eq!(
+                design.geometry_role(design.curves()[0].id),
+                Some(GeometryRole::Construction)
+            );
+        });
+    }
 
-        let mut queue = ProjectionalPointerMoveQueue::default();
-        let generation = queue.push(pointer([3.0, 4.0])).unwrap();
-        assert_eq!(queue.push(pointer([4.0, 5.0])), None);
-        let newest_frame = queue.take_for_frame(generation).unwrap();
-        let scene = projectional.scene(viewport, 0.5).unwrap();
-        projectional.pointer_move(&scene, newest_frame).unwrap();
-        assert_eq!(
-            position(projectional).map(f64::to_bits),
-            [4.0_f64, 5.0].map(f64::to_bits),
-        );
-        assert_eq!(
-            projectional.coordinator().intent().identity(),
-            initial_identity
-        );
-        assert_eq!(
-            projectional
+    #[test]
+    fn projectional_queued_drag_commits_only_the_exact_terminal_sample_once() {
+        run_projectional_test_with_large_stack("projectional-queued-drag-commit", || {
+            let (mut authority, _node) = projectional_workbench_fixture();
+            let projectional = authority.projectional_mut().unwrap();
+            let point = projectional
+                .coordinator()
+                .presentation_session()
+                .unwrap()
+                .design_document()
+                .points()
+                .first()
+                .expect("fixture point")
+                .id;
+            let viewport = test_viewport();
+            let pointer = |model_position| PointerInput {
+                pointer_id: 83,
+                position: viewport.model_to_screen(model_position),
+                modifiers: Modifiers::default(),
+            };
+            let position = |session: &ProjectionalEditorSession| {
+                session
+                    .coordinator()
+                    .presentation_session()
+                    .unwrap()
+                    .accepted_state_for_current_input()
+                    .unwrap()
+                    .document()
+                    .point(point)
+                    .unwrap()
+                    .position
+            };
+            let initial_identity = projectional.coordinator().intent().identity();
+            let initial_history = projectional
                 .coordinator()
                 .intent()
                 .history_projection()
                 .applied
-                .len(),
-            initial_history,
-            "a resolved pointer frame must not enter durable history",
-        );
-
-        let stale_terminal_frame = queue.push(pointer([5.0, 6.0])).unwrap();
-        assert_eq!(queue.push(pointer([6.0, 7.0])), None);
-        let pending = queue.drain_before_terminal().unwrap();
-        assert_eq!(queue.take_for_frame(stale_terminal_frame), None);
-        let scene = projectional.scene(viewport, 0.5).unwrap();
-        projectional.pointer_move(&scene, pending).unwrap();
-        let exact_terminal = pointer([7.0, 8.0]);
-        let scene = projectional.scene(viewport, 0.5).unwrap();
-        projectional.pointer_move(&scene, exact_terminal).unwrap();
-        assert_eq!(
-            projectional.coordinator().intent().identity(),
-            initial_identity
-        );
-
-        let scene = projectional.scene(viewport, 0.5).unwrap();
-        let outcome = projectional.pointer_up(&scene, exact_terminal).unwrap();
-        assert!(outcome.transaction.is_some());
-        assert_eq!(
-            position(projectional).map(f64::to_bits),
-            [7.0_f64, 8.0].map(f64::to_bits),
-        );
-        assert_eq!(
+                .len();
+            let scene = projectional.scene(viewport, 0.5).unwrap();
             projectional
-                .coordinator()
-                .intent()
-                .history_projection()
-                .applied
-                .len(),
-            initial_history + 1,
-        );
-        projectional.undo().unwrap().unwrap();
-        assert_eq!(
-            position(projectional).map(f64::to_bits),
-            [2.0_f64, 3.0].map(f64::to_bits),
-        );
+                .pointer_down(&scene, pointer([2.0, 3.0]))
+                .unwrap();
+
+            let mut queue = ProjectionalPointerMoveQueue::default();
+            let generation = queue.push(pointer([3.0, 4.0])).unwrap();
+            assert_eq!(queue.push(pointer([4.0, 5.0])), None);
+            let newest_frame = queue.take_for_frame(generation).unwrap().input;
+            let scene = projectional.scene(viewport, 0.5).unwrap();
+            projectional.pointer_move(&scene, newest_frame).unwrap();
+            assert_eq!(
+                position(projectional).map(f64::to_bits),
+                [4.0_f64, 5.0].map(f64::to_bits),
+            );
+            assert_eq!(
+                projectional.coordinator().intent().identity(),
+                initial_identity
+            );
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                initial_history,
+                "a resolved pointer frame must not enter durable history",
+            );
+
+            let stale_terminal_frame = queue.push(pointer([5.0, 6.0])).unwrap();
+            assert_eq!(queue.push(pointer([6.0, 7.0])), None);
+            let pending = queue.drain_before_terminal().unwrap().input;
+            assert_eq!(queue.take_for_frame(stale_terminal_frame), None);
+            let scene = projectional.scene(viewport, 0.5).unwrap();
+            projectional.pointer_move(&scene, pending).unwrap();
+            let exact_terminal = pointer([7.0, 8.0]);
+            let scene = projectional.scene(viewport, 0.5).unwrap();
+            projectional.pointer_move(&scene, exact_terminal).unwrap();
+            assert_eq!(
+                projectional.coordinator().intent().identity(),
+                initial_identity
+            );
+
+            let scene = projectional.scene(viewport, 0.5).unwrap();
+            let outcome = projectional.pointer_up(&scene, exact_terminal).unwrap();
+            assert!(outcome.transaction.is_some());
+            assert_eq!(
+                position(projectional).map(f64::to_bits),
+                [7.0_f64, 8.0].map(f64::to_bits),
+            );
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                initial_history + 1,
+            );
+            projectional.undo().unwrap().unwrap();
+            assert_eq!(
+                position(projectional).map(f64::to_bits),
+                [2.0_f64, 3.0].map(f64::to_bits),
+            );
+        });
     }
 
     #[test]
     fn projectional_queued_drag_cancellation_restores_accepted_authority_without_history() {
-        let (mut authority, _node) = projectional_workbench_fixture();
-        let projectional = authority.projectional_mut().unwrap();
-        let point = projectional
-            .coordinator()
-            .presentation_session()
-            .unwrap()
-            .design_document()
-            .points()
-            .first()
-            .expect("fixture point")
-            .id;
-        let viewport = test_viewport();
-        let pointer = |model_position| PointerInput {
-            pointer_id: 84,
-            position: viewport.model_to_screen(model_position),
-            modifiers: Modifiers::default(),
-        };
-        let history_before = projectional
-            .coordinator()
-            .intent()
-            .history_projection()
-            .applied
-            .len();
-        let scene = projectional.scene(viewport, 0.5).unwrap();
-        projectional
-            .pointer_down(&scene, pointer([2.0, 3.0]))
-            .unwrap();
-        let mut queue = ProjectionalPointerMoveQueue::default();
-        let generation = queue.push(pointer([-3.0, 5.0])).unwrap();
-        let sample = queue.take_for_frame(generation).unwrap();
-        let scene = projectional.scene(viewport, 0.5).unwrap();
-        projectional.pointer_move(&scene, sample).unwrap();
-        assert_eq!(
-            projectional
+        run_projectional_test_with_large_stack("projectional-queued-drag-cancel", || {
+            let (mut authority, _node) = projectional_workbench_fixture();
+            let projectional = authority.projectional_mut().unwrap();
+            let point = projectional
                 .coordinator()
                 .presentation_session()
                 .unwrap()
-                .accepted_state_for_current_input()
-                .unwrap()
-                .document()
-                .point(point)
-                .unwrap()
-                .position
-                .map(f64::to_bits),
-            [-3.0_f64, 5.0].map(f64::to_bits),
-        );
-
-        let stale = queue.push(pointer([9.0, 9.0])).unwrap();
-        assert!(queue.invalidate());
-        assert_eq!(queue.take_for_frame(stale), None);
-        projectional.cancel_interaction();
-        assert_eq!(
-            projectional
-                .coordinator()
-                .presentation_session()
-                .unwrap()
-                .accepted_state_for_current_input()
-                .unwrap()
-                .document()
-                .point(point)
-                .unwrap()
-                .position
-                .map(f64::to_bits),
-            [2.0_f64, 3.0].map(f64::to_bits),
-        );
-        assert_eq!(
-            projectional
+                .design_document()
+                .points()
+                .first()
+                .expect("fixture point")
+                .id;
+            let viewport = test_viewport();
+            let pointer = |model_position| PointerInput {
+                pointer_id: 84,
+                position: viewport.model_to_screen(model_position),
+                modifiers: Modifiers::default(),
+            };
+            let history_before = projectional
                 .coordinator()
                 .intent()
                 .history_projection()
                 .applied
-                .len(),
-            history_before,
-        );
-        let cancellation = super::WorkbenchPresentationEvent::InteractionCancellation.policy();
-        assert!(!cancellation.saves_workspace);
-        assert_eq!(cancellation.render_scope, WorkbenchRenderScope::Durable);
+                .len();
+            let scene = projectional.scene(viewport, 0.5).unwrap();
+            projectional
+                .pointer_down(&scene, pointer([2.0, 3.0]))
+                .unwrap();
+            let mut queue = ProjectionalPointerMoveQueue::default();
+            let generation = queue.push(pointer([-3.0, 5.0])).unwrap();
+            let sample = queue.take_for_frame(generation).unwrap().input;
+            let scene = projectional.scene(viewport, 0.5).unwrap();
+            projectional.pointer_move(&scene, sample).unwrap();
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .presentation_session()
+                    .unwrap()
+                    .accepted_state_for_current_input()
+                    .unwrap()
+                    .document()
+                    .point(point)
+                    .unwrap()
+                    .position
+                    .map(f64::to_bits),
+                [-3.0_f64, 5.0].map(f64::to_bits),
+            );
+
+            let stale = queue.push(pointer([9.0, 9.0])).unwrap();
+            assert!(queue.invalidate());
+            assert_eq!(queue.take_for_frame(stale), None);
+            projectional.cancel_interaction();
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .presentation_session()
+                    .unwrap()
+                    .accepted_state_for_current_input()
+                    .unwrap()
+                    .document()
+                    .point(point)
+                    .unwrap()
+                    .position
+                    .map(f64::to_bits),
+                [2.0_f64, 3.0].map(f64::to_bits),
+            );
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                history_before,
+            );
+            let cancellation = super::WorkbenchPresentationEvent::InteractionCancellation.policy();
+            assert!(!cancellation.saves_workspace);
+            assert_eq!(cancellation.render_scope, WorkbenchRenderScope::Durable);
+        });
     }
 
     #[test]
     fn flat_v6_routes_through_history_free_projectional_bootstrap_authority() {
-        let coordinator = RetainedEditorCoordinator::new(
-            RetainedSketchDocumentSession::new(
-                SketchDocument::new(1.0).unwrap(),
-                DocumentSolveRequest::default(),
-                SolverConfig::default(),
+        run_projectional_test_with_large_stack("projectional-flat-v6-bootstrap", || {
+            let coordinator = RetainedEditorCoordinator::new(
+                RetainedSketchDocumentSession::new(
+                    SketchDocument::new(1.0).unwrap(),
+                    DocumentSolveRequest::default(),
+                    SolverConfig::default(),
+                )
+                .unwrap(),
             )
-            .unwrap(),
-        )
-        .unwrap();
-        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).unwrap();
-        let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
-        let authority = WorkbenchDocumentAuthority::from_snapshot(&decoded).unwrap();
-        assert!(authority.is_projectional());
-        assert!(authority.flat_ref().is_none());
-        let projectional = authority.projectional_ref().unwrap();
-        assert_eq!(
-            projectional
-                .coordinator()
-                .intent()
-                .history_projection()
-                .applied
-                .len(),
-            0
-        );
-        assert!(authority.scene(test_viewport(), 0.5).is_some());
-        assert!(
-            authority
-                .snapshot()
-                .unwrap()
-                .encode()
-                .unwrap()
-                .contains("\"version\":8")
-        );
+            .unwrap();
+            let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).unwrap();
+            let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
+            let authority = WorkbenchDocumentAuthority::from_snapshot(&decoded).unwrap();
+            assert!(authority.is_projectional());
+            assert!(authority.flat_ref().is_none());
+            let projectional = authority.projectional_ref().unwrap();
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                0
+            );
+            assert!(authority.scene(test_viewport(), 0.5).is_some());
+            assert!(
+                authority
+                    .snapshot()
+                    .unwrap()
+                    .encode()
+                    .unwrap()
+                    .contains("\"version\":8")
+            );
+        });
     }
 
     fn rejected_constraint_fixture() -> (
