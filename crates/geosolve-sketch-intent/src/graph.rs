@@ -1369,7 +1369,7 @@ fn validate_declaration_schema<T>(
         });
     }
     if !matches!(kind, IntentNodeKind::Bootstrap { .. }) {
-        validate_declaration_inputs(node, &schema, inputs)?;
+        validate_declaration_inputs(node, kind, &schema, inputs)?;
     }
 
     for (key, value) in fields {
@@ -1400,6 +1400,7 @@ fn validate_declaration_schema<T>(
 
 fn validate_declaration_inputs<T>(
     node: NodeId,
+    kind: &IntentNodeKind,
     schema: &crate::IntentNodeSchema,
     inputs: &BTreeMap<InputSlot, T>,
 ) -> Result<(), IntentGraphError> {
@@ -1433,10 +1434,19 @@ fn validate_declaration_inputs<T>(
                 slot: InputSlot::new(cardinality.role, cardinality.maximum),
             });
         }
-        for index in 0..actual {
-            let slot = InputSlot::new(cardinality.role, index);
-            if !inputs.contains_key(&slot) {
-                return Err(IntentGraphError::MissingRequiredInput { node, slot });
+        // Geometry recipes retain the semantic authored-point slot on each
+        // output port. Any subset may alias pre-existing points while the
+        // remaining slots allocate new native points, so those optional
+        // aliases are intentionally sparse. Exact relation, dimension,
+        // aggregate and operation operand lists remain contiguous.
+        let sparse_geometry_points =
+            matches!(kind, IntentNodeKind::Geometry { .. }) && cardinality.role == InputRole::Point;
+        if !sparse_geometry_points {
+            for index in 0..actual {
+                let slot = InputSlot::new(cardinality.role, index);
+                if !inputs.contains_key(&slot) {
+                    return Err(IntentGraphError::MissingRequiredInput { node, slot });
+                }
             }
         }
     }
