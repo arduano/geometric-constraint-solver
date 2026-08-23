@@ -20,6 +20,7 @@ use thiserror::Error;
 use crate::{
     AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
     ConstraintEditor, EditorEffect, EditorError, EditorScene, IntentBootstrapError,
+    IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,
     IntentInspectorProjection, IntentSourceEditError, IntentSourceTokenId,
     IntentValidationEvidence, IntentWorkbenchProjection, Modifiers, PickTolerance, PointerInput,
     ProjectionalAuthoringError, ProjectionalCoordinatorError, ProjectionalIntentCoordinator,
@@ -495,6 +496,23 @@ impl ProjectionalEditorSession {
         self.apply_patch(patch)
     }
 
+    /// Applies one schema-generated Inspector edit through the ordinary typed
+    /// exact-CAS patch vocabulary and sole intent history.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stale Inspector coordinate, a typed-value mismatch, or the
+    /// ordinary projectional planning/materialization error.
+    pub fn edit_inspector(
+        &mut self,
+        inspector: &IntentInspectorProjection,
+        target: &IntentInspectorEditTarget,
+        value: IntentInspectorEditValue,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let patch = inspector.patch_for_edit(self.coordinator.intent(), target, value)?;
+        self.apply_patch(patch)
+    }
+
     /// Steps the sole intent history backward.
     ///
     /// # Errors
@@ -927,6 +945,8 @@ pub enum ProjectionalEditorError {
     Scene(#[from] EditorError),
     #[error(transparent)]
     SourceEdit(#[from] IntentSourceEditError),
+    #[error(transparent)]
+    InspectorEdit(#[from] IntentInspectorEditError),
     #[error(transparent)]
     Bootstrap(#[from] IntentBootstrapError),
     #[error(transparent)]

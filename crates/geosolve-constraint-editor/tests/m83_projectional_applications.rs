@@ -3,9 +3,9 @@
 use geosolve_constraint_editor::{
     AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
     ColdIntentMaterializer, ConstraintIntent, DimensionKind as AuthoringDimensionKind,
-    IntentNativeBinding, ProjectionalAuthoringError, ProjectionalEditorSession,
-    ProjectionalIntentCoordinator, ResolvedConstraintKind, SelectionItem,
-    projectional_application_patch,
+    IntentInspectorEditTarget, IntentInspectorEditValue, IntentInspectorField, IntentNativeBinding,
+    ProjectionalAuthoringError, ProjectionalEditorSession, ProjectionalIntentCoordinator,
+    ResolvedConstraintKind, SelectionItem, projectional_application_patch,
 };
 use geosolve_sketch::{
     CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentId, PersistentId,
@@ -991,5 +991,76 @@ fn projectional_editor_routes_authoring_through_its_sole_coordinator() {
             .design_document()
             .constraints()
             .is_empty()
+    );
+}
+
+#[test]
+fn projectional_editor_authenticates_inspector_edits_into_the_same_history() {
+    let mut coordinator = coordinator(0x8300_7207);
+    create(&mut coordinator, [("point", point("point", [1.0, 2.0]))]);
+    let node = *coordinator.intent().graph().nodes().keys().next().unwrap();
+    let mut editor = ProjectionalEditorSession::new(coordinator);
+    assert!(editor.set_selected_declaration(Some(node)));
+    let projection = editor.workbench_projection();
+    let inspector = editor.selected_inspector(&projection).unwrap();
+    let leaf = inspector
+        .fields
+        .iter()
+        .find_map(|field| match field {
+            IntentInspectorField::Instance { leaf, .. } if leaf.field == LeafField::X => {
+                Some(*leaf)
+            }
+            _ => None,
+        })
+        .unwrap();
+    let history_before = editor
+        .coordinator()
+        .intent()
+        .history_projection()
+        .applied
+        .len();
+
+    let outcome = editor
+        .edit_inspector(
+            &inspector,
+            &IntentInspectorEditTarget::Instance { leaf },
+            IntentInspectorEditValue::Literal {
+                literal: coordinate(9.0),
+            },
+        )
+        .unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(
+        editor
+            .coordinator()
+            .intent()
+            .history_projection()
+            .applied
+            .len(),
+        history_before + 1
+    );
+    assert_eq!(
+        editor
+            .coordinator()
+            .presentation_session()
+            .unwrap()
+            .design_document()
+            .points()[0]
+            .position
+            .map(f64::to_bits),
+        [9.0, 2.0].map(f64::to_bits)
+    );
+
+    assert!(editor.undo().unwrap().is_some());
+    assert_eq!(
+        editor
+            .coordinator()
+            .presentation_session()
+            .unwrap()
+            .design_document()
+            .points()[0]
+            .position
+            .map(f64::to_bits),
+        [1.0, 2.0].map(f64::to_bits)
     );
 }
