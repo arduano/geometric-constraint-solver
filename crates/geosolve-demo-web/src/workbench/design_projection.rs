@@ -40,9 +40,10 @@ pub(crate) fn outline_markup(
         let _ = write!(
             markup,
             concat!(
-                "<section class=\"wb-intent-cell\" data-intent-cell=\"{}\">",
+                "<section class=\"wb-intent-cell\" data-intent-cell=\"{}\" data-intent-drop-cell=\"{}\">",
                 "<header><h3>{}</h3><span>{} declaration{}</span></header>"
             ),
+            cell.cell,
             cell.cell,
             escape_html(cell.name.as_str()),
             cell.declarations.len(),
@@ -52,8 +53,15 @@ pub(crate) fn outline_markup(
                 "s"
             },
         );
-        for declaration in &cell.declarations {
-            push_declaration_button(&mut markup, declaration, selection);
+        for (index, declaration) in cell.declarations.iter().enumerate() {
+            push_declaration_button(
+                &mut markup,
+                declaration,
+                cell.cell,
+                index > 0,
+                index + 1 < cell.declarations.len(),
+                selection,
+            );
         }
         markup.push_str("</section>");
     }
@@ -63,6 +71,9 @@ pub(crate) fn outline_markup(
 fn push_declaration_button(
     markup: &mut String,
     declaration: &IntentOutlineDeclaration,
+    cell: geosolve_sketch_intent::CellId,
+    can_move_up: bool,
+    can_move_down: bool,
     selection: Option<DesignProjectionSelection>,
 ) {
     let selected = selection.is_some_and(|selection| selection.node == declaration.node);
@@ -76,20 +87,34 @@ fn push_declaration_button(
     let _ = write!(
         markup,
         concat!(
+            "<div class=\"wb-intent-row-wrap\" data-intent-node=\"{}\" data-intent-cell=\"{}\">",
             "<button type=\"button\" class=\"wb-intent-row{}\" ",
             "id=\"wb-intent-node-{}\" data-intent-node=\"{}\" ",
+            "data-intent-drop-before=\"{}\" data-intent-cell=\"{}\" ",
             "data-intent-state=\"{}\" draggable=\"true\" role=\"treeitem\" ",
             "aria-selected=\"{}\"><span class=\"wb-intent-kind\">{}</span>",
-            "<span class=\"wb-intent-name\">{}</span><small>{}</small></button>"
+            "<span class=\"wb-intent-name\">{}</span><small>{}</small></button>",
+            "<span class=\"wb-intent-row-actions\" aria-label=\"Reorder declaration\">",
+            "<button type=\"button\" data-intent-move=\"up\" data-intent-node=\"{}\"{} aria-label=\"Move declaration up\">↑</button>",
+            "<button type=\"button\" data-intent-move=\"down\" data-intent-node=\"{}\"{} aria-label=\"Move declaration down\">↓</button>",
+            "</span></div>"
         ),
+        declaration.node,
+        cell,
         if selected { " selected" } else { "" },
         declaration.node,
         declaration.node,
+        declaration.node,
+        cell,
         state,
         selected,
         escape_html(node_family_label(&declaration.kind)),
         escape_html(declaration.name.as_str()),
         escape_html(&humanize_debug(&declaration.kind)),
+        declaration.node,
+        if can_move_up { "" } else { " disabled" },
+        declaration.node,
+        if can_move_down { "" } else { " disabled" },
     );
 }
 

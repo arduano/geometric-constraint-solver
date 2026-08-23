@@ -350,6 +350,11 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-design-source:empty::before { content: "Structured source will appear for the current design."; }
 .wb-design-history:empty::before { content: "Committed design transactions will appear here."; }
 .wb-intent-cell { margin-bottom: 0.45rem; }
+.wb-intent-cell[data-intent-drop-active="true"] {
+  border-radius: 0.2rem;
+  outline: 1px dashed #7a653f;
+  outline-offset: 2px;
+}
 .wb-intent-cell h3,
 .wb-design-history h3 {
   margin: 0.25rem 0.25rem 0.2rem;
@@ -370,6 +375,30 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   background: transparent;
   text-align: left;
 }
+.wb-intent-row-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+.wb-intent-row-wrap[data-intent-drop-active="true"] { box-shadow: inset 0 2px #d29a45; }
+.wb-intent-row-actions {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  opacity: 0;
+}
+.wb-intent-row-wrap:hover .wb-intent-row-actions,
+.wb-intent-row-wrap:focus-within .wb-intent-row-actions { opacity: 1; }
+.wb-intent-row-actions button {
+  min-width: 1.35rem;
+  min-height: 0;
+  padding: 0 0.18rem;
+  border-color: transparent;
+  color: #87918f;
+  background: transparent;
+  font-size: 0.58rem;
+}
+.wb-intent-row-actions button:hover:not(:disabled) { color: #edca88; background: #312c24; }
+.wb-intent-row-actions button:disabled { opacity: 0.2; }
 .wb-intent-row:hover { border-color: #3a4241; background: #272c2c; }
 .wb-intent-row.selected { border-color: #7a653f; color: #f2d39a; background: #3b3325; }
 .wb-intent-row[data-intent-state="invalid"] { border-color: #8a4d48; background: #382827; }
