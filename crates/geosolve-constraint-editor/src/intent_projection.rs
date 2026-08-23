@@ -69,6 +69,166 @@ pub struct IntentInspectorProjection {
     pub fields: Vec<IntentInspectorField>,
 }
 
+/// Stable editable coordinate exposed by one schema-generated Inspector.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "target", rename_all = "snake_case", deny_unknown_fields)]
+pub enum IntentInspectorEditTarget {
+    Suppressed,
+    Definition { field: IntentFieldKey },
+    Instance { leaf: LeafRef },
+}
+
+/// Typed value submitted by an Inspector control.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "value", rename_all = "snake_case", deny_unknown_fields)]
+pub enum IntentInspectorEditValue {
+    Suppressed { suppressed: bool },
+    Literal { literal: IntentLiteral },
+}
+
+impl IntentInspectorProjection {
+    /// Converts one current schema-generated Inspector coordinate into the
+    /// ordinary unordered exact-CAS patch vocabulary.
+    ///
+    /// The caller supplies an already parsed typed literal. This method
+    /// authenticates the complete Inspector projection and target against the
+    /// current session before returning a patch; browser field names or stale
+    /// markup therefore cannot address an arbitrary graph leaf.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stale-projection, target-kind, unknown-field, or literal-kind
+    /// error without mutating the session.
+    pub fn patch_for_edit(
+        &self,
+        session: &IntentSession,
+        target: &IntentInspectorEditTarget,
+        value: IntentInspectorEditValue,
+    ) -> Result<IntentPatch, IntentInspectorEditError> {
+        let current = IntentWorkbenchProjection::from_session(session)
+            .inspector(session, self.node)
+            .ok_or(IntentInspectorEditError::StaleProjection)?;
+        if current != *self {
+            return Err(IntentInspectorEditError::StaleProjection);
+        }
+        let operation = match (target, value) {
+            (
+                IntentInspectorEditTarget::Suppressed,
+                IntentInspectorEditValue::Suppressed { suppressed },
+            ) => IntentPatchOperation::SetSuppressed {
+                node: self.node,
+                suppressed,
+            },
+            (
+                IntentInspectorEditTarget::Definition { field },
+                IntentInspectorEditValue::Literal { literal },
+            ) => {
+                let schema = self.fields.iter().find_map(|candidate| match candidate {
+                    IntentInspectorField::Definition { schema, .. } if &schema.field == field => {
+                        Some(schema)
+                    }
+                    _ => None,
+                });
+                let schema = schema.ok_or(IntentInspectorEditError::UnknownTarget)?;
+                if !inspector_literal_matches(schema.literal, &literal) {
+                    return Err(IntentInspectorEditError::InvalidLiteral);
+                }
+                IntentPatchOperation::SetDefinitionField {
+                    node: self.node,
+                    field: field.clone(),
+                    value: literal,
+                }
+            }
+            (
+                IntentInspectorEditTarget::Instance { leaf },
+                IntentInspectorEditValue::Literal { literal },
+            ) => {
+                if !self.fields.iter().any(|candidate| {
+                    matches!(candidate, IntentInspectorField::Instance { leaf: candidate, .. } if candidate == leaf)
+                }) || !inspector_leaf_literal_matches(leaf.field, &literal)
+                {
+                    return Err(IntentInspectorEditError::InvalidLiteral);
+                }
+                IntentPatchOperation::SetInstanceLeaf {
+                    leaf: *leaf,
+                    value: literal,
+                }
+            }
+            _ => return Err(IntentInspectorEditError::TargetValueMismatch),
+        };
+        Ok(IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![operation],
+        ))
+    }
+}
+
+fn inspector_literal_matches(
+    schema: geosolve_sketch_intent::IntentLiteralSchema,
+    literal: &IntentLiteral,
+) -> bool {
+    use geosolve_sketch_intent::IntentLiteralSchema as S;
+    matches!(
+        (schema, literal),
+        (S::Boolean, IntentLiteral::Boolean(_))
+            | (S::Integer, IntentLiteral::Integer(_))
+            | (S::Natural, IntentLiteral::Natural(_))
+            | (S::Text, IntentLiteral::Text(_))
+            | (S::Enum, IntentLiteral::Enum(_))
+            | (S::Point, IntentLiteral::Point(_))
+    ) || matches!(
+        (schema, literal),
+        (
+            S::Quantity(expected),
+            IntentLiteral::Quantity { unit: actual, .. }
+        ) if expected == *actual
+    )
+}
+
+fn inspector_leaf_literal_matches(
+    field: geosolve_sketch_intent::LeafField,
+    literal: &IntentLiteral,
+) -> bool {
+    use geosolve_sketch_intent::{IntentUnit, LeafField};
+    matches!(
+        (field, literal),
+        (
+            LeafField::X | LeafField::Y,
+            IntentLiteral::Quantity {
+                unit: IntentUnit::Length,
+                ..
+            }
+        ) | (
+            LeafField::Angle,
+            IntentLiteral::Quantity {
+                unit: IntentUnit::Angle,
+                ..
+            }
+        ) | (
+            LeafField::Value | LeafField::Weight | LeafField::Parameter,
+            IntentLiteral::Quantity {
+                unit: IntentUnit::Dimensionless,
+                ..
+            }
+        )
+    )
+}
+
+/// Rejected schema-generated Inspector mutation.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum IntentInspectorEditError {
+    #[error("the Inspector projection is stale")]
+    StaleProjection,
+    #[error("the Inspector target is not present in the current schema")]
+    UnknownTarget,
+    #[error("the Inspector literal does not match the target schema")]
+    InvalidLiteral,
+    #[error("the Inspector target and submitted value kinds disagree")]
+    TargetValueMismatch,
+}
+
 /// Stable index of one recognized editable token in a generated source view.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]

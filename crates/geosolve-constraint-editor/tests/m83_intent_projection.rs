@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, IntentInspectorField, IntentNativeBinding, IntentSourceEditError,
+    ColdIntentMaterializer, IntentInspectorEditError, IntentInspectorEditTarget,
+    IntentInspectorEditValue, IntentInspectorField, IntentNativeBinding, IntentSourceEditError,
     IntentSourceTokenTarget, IntentWorkbenchProjection, ProjectionalIntentCoordinator,
 };
 use geosolve_sketch::{DocumentId, PersistentId};
@@ -119,17 +120,27 @@ fn outline_inspector_source_and_history_project_one_stable_declaration() {
 
     let inspector = projection.inspector(coordinator.intent(), node).unwrap();
     assert_eq!(inspector.node, node);
-    assert_eq!(inspector.fields.len(), 2);
-    assert!(inspector.fields.iter().all(|field| matches!(
-        field,
-        IntentInspectorField::Instance {
-            value: Some(IntentLiteral::Quantity {
-                unit: IntentUnit::Length,
-                ..
-            }),
-            ..
-        }
-    )));
+    assert_eq!(
+        inspector
+            .fields
+            .iter()
+            .filter(|field| matches!(field, IntentInspectorField::Instance { .. }))
+            .count(),
+        2
+    );
+    assert!(inspector.fields.iter().all(|field| {
+        matches!(field, IntentInspectorField::Definition { .. })
+            || matches!(
+                field,
+                IntentInspectorField::Instance {
+                    value: Some(IntentLiteral::Quantity {
+                        unit: IntentUnit::Length,
+                        ..
+                    }),
+                    ..
+                }
+            )
+    }));
     let accepted = coordinator
         .accepted_materialization()
         .unwrap()
@@ -284,4 +295,77 @@ fn instance_source_token_commits_through_native_materialization_once() {
         [8.5, 2.0],
     );
     assert_eq!(coordinator.intent().history_projection().applied.len(), 2);
+}
+
+#[test]
+fn inspector_edits_authenticate_schema_coordinates_and_retain_invalid_intent() {
+    let mut coordinator = coordinator();
+    let create = IntentPatch::new(
+        coordinator.intent().identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("point"),
+            draft: Box::new(point([1.0, 2.0])),
+            cell: None,
+        }],
+    );
+    let outcome = coordinator.apply_patch(create).unwrap();
+    let node = outcome.aliases.node(&key("point")).unwrap();
+    let projection = IntentWorkbenchProjection::from_session(coordinator.intent());
+    let inspector = projection.inspector(coordinator.intent(), node).unwrap();
+    let leaf = inspector
+        .fields
+        .iter()
+        .find_map(|field| match field {
+            IntentInspectorField::Instance { leaf, .. } if leaf.field == LeafField::X => {
+                Some(*leaf)
+            }
+            _ => None,
+        })
+        .unwrap();
+    let patch = inspector
+        .patch_for_edit(
+            coordinator.intent(),
+            &IntentInspectorEditTarget::Instance { leaf },
+            IntentInspectorEditValue::Literal {
+                literal: coordinate(7.0),
+            },
+        )
+        .unwrap();
+    coordinator.apply_patch(patch).unwrap();
+    assert_eq!(coordinator.intent().history_projection().applied.len(), 2);
+
+    assert_eq!(
+        inspector.patch_for_edit(
+            coordinator.intent(),
+            &IntentInspectorEditTarget::Instance { leaf },
+            IntentInspectorEditValue::Literal {
+                literal: coordinate(8.0),
+            },
+        ),
+        Err(IntentInspectorEditError::StaleProjection)
+    );
+
+    let current = IntentWorkbenchProjection::from_session(coordinator.intent());
+    let current = current.inspector(coordinator.intent(), node).unwrap();
+    assert_eq!(
+        current.patch_for_edit(
+            coordinator.intent(),
+            &IntentInspectorEditTarget::Suppressed,
+            IntentInspectorEditValue::Literal {
+                literal: IntentLiteral::Boolean(true),
+            },
+        ),
+        Err(IntentInspectorEditError::TargetValueMismatch)
+    );
+    assert_eq!(
+        current.patch_for_edit(
+            coordinator.intent(),
+            &IntentInspectorEditTarget::Instance { leaf },
+            IntentInspectorEditValue::Literal {
+                literal: IntentLiteral::Boolean(true),
+            },
+        ),
+        Err(IntentInspectorEditError::InvalidLiteral)
+    );
 }

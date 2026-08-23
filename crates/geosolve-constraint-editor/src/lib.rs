@@ -118,6 +118,7 @@ pub use intent_editor::{
     ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
 };
 pub use intent_projection::{
+    IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,
     IntentInspectorField, IntentInspectorProjection, IntentOutlineCell, IntentOutlineDeclaration,
     IntentSourceEditError, IntentSourceToken, IntentSourceTokenId, IntentSourceTokenTarget,
     IntentStructuredSource, IntentWorkbenchProjection,
