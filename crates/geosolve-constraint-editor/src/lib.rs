@@ -15,6 +15,7 @@ mod curve_controls;
 mod feature_authoring;
 mod geometry_tools;
 mod inference;
+mod intent;
 mod offset_authoring;
 
 pub use annotations::{
@@ -80,6 +81,11 @@ pub use geosolve_sketch_topology::{
     OffsetDirectedSpan, OffsetEndpointRef, OffsetEndpointRole, OffsetTraversal,
 };
 pub use inference::*;
+pub use intent::{
+    ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
+    IntentMaterializationMap, IntentNativeBinding, IntentNativeWritableLeaf,
+    IntentNodeMaterialization, IntentValidationEvidence,
+};
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,
     OffsetAuthoringGuidance, OffsetAuthoringHover, OffsetAuthoringOperand, OffsetAuthoringOutcome,

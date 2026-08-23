@@ -585,9 +585,12 @@ version = "0.2.0"
 dependencies = [
  "geosolve-sketch",
  "geosolve-sketch-features",
+ "geosolve-sketch-intent",
  "geosolve-sketch-ops",
  "geosolve-sketch-topology",
  "proptest",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "wasm-bindgen-test",
 ]
