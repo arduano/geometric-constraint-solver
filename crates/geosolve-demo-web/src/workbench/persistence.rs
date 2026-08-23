@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use geosolve_constraint_editor::{
     AnnotationLayoutEntry, AnnotationLayoutKey, AnnotationLayoutState, AnnotationPlacement,
-    EditorScene, RestoreCheckpoint, RetainedEditorCoordinator, SceneAnnotationGeometry,
-    SceneAnnotationKind, SceneConstraintGlyph, SelectionItem, Viewport,
+    EditorScene, ProjectionalEditorSession, RestoreCheckpoint, RetainedEditorCoordinator,
+    SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph, SelectionItem, Viewport,
 };
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
@@ -500,25 +500,61 @@ impl WorkspaceSnapshot {
         ))
     }
 
-    /// Captures one projectional workspace with the complete canonical intent
-    /// authority and the exact independently restorable flat materialization.
-    pub(crate) fn from_intent_session_and_coordinator(
-        intent: &IntentSession,
-        coordinator: &RetainedEditorCoordinator,
+    /// Captures one projectional workspace from its sole durable authority.
+    ///
+    /// The flat documents in workspace v8 are authenticated reconstruction
+    /// evidence only. They are derived from the projectional coordinator's
+    /// last accepted cold materialization and never from a second retained
+    /// editor coordinator or history.
+    pub(crate) fn from_projectional_editor(
+        projectional: &ProjectionalEditorSession,
     ) -> Result<Self, String> {
-        let checkpoint = coordinator
-            .persistence_checkpoint()
-            .map_err(|error| error.to_string())?;
-        let mut snapshot =
-            Self::from_checkpoint(&checkpoint, coordinator.editor().annotation_layout());
-        snapshot.version = PROJECTIONAL_WORKSPACE_VERSION;
-        snapshot.intent_session_json = Some(
-            intent
-                .to_canonical_json()
-                .map_err(|error| error.to_string())?,
-        );
-        snapshot.origin = WorkspaceSnapshotOrigin::ProjectionalV8;
-        snapshot.validated()
+        let coordinator = projectional.coordinator();
+        let intent = coordinator.intent();
+        let materialization = coordinator.accepted_materialization().ok_or_else(|| {
+            "projectional workspace has no independently accepted materialization".to_owned()
+        })?;
+        let native = &materialization.session;
+        let accepted = native
+            .accepted_state_for_current_input()
+            .ok_or_else(|| {
+                "projectional workspace has no current accepted native scene".to_owned()
+            })?
+            .document();
+        let design = native.design_document();
+        let features = ComputedFeatureDocument::new(design.id());
+        let revisions = native.revision_high_water();
+        let accepted_belongs_to_current_design = intent
+            .accepted()
+            .is_some_and(|authority| authority.target == intent.semantic_identity());
+
+        Self {
+            version: PROJECTIONAL_WORKSPACE_VERSION,
+            design: document_payload(design)?,
+            accepted: Some(document_payload(accepted)?),
+            accepted_belongs_to_current_design,
+            sketch_identity_high_water: native.persistent_identity_high_water().clone(),
+            features_json: features.to_json().map_err(|error| error.to_string())?,
+            feature_lifecycle_high_water: features.lifecycle_high_water(),
+            computed_evaluation_high_water: default_evaluation_high_water(),
+            annotation_layout_json: encode_annotation_layout(
+                projectional.editor().annotation_layout(),
+            ),
+            revisions: WorkspaceRevisions {
+                design: revisions.design().get(),
+                attempt: revisions.attempt().get(),
+                accepted: revisions
+                    .accepted()
+                    .map(geosolve_sketch::SketchAcceptedRevision::get),
+            },
+            intent_session_json: Some(
+                intent
+                    .to_canonical_json()
+                    .map_err(|error| error.to_string())?,
+            ),
+            origin: WorkspaceSnapshotOrigin::ProjectionalV8,
+        }
+        .validated()
     }
 
     fn from_checkpoint(
@@ -944,6 +980,11 @@ impl WorkspaceSnapshot {
 pub(crate) fn coordinator_from_snapshot(
     snapshot: &WorkspaceSnapshot,
 ) -> Result<RetainedEditorCoordinator, String> {
+    if snapshot.intent_session_json.is_some() {
+        return Err(
+            "workspace v8 must restore through its sole projectional editor authority".into(),
+        );
+    }
     let session =
         snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
     let cached_layout = snapshot.annotation_layout();
@@ -960,20 +1001,60 @@ pub(crate) fn coordinator_from_snapshot(
     Ok(coordinator)
 }
 
-/// Restores both authorities from workspace v8. Callers must publish this pair
-/// atomically; restoring only the flat coordinator would discard design intent.
-#[allow(
-    dead_code,
-    reason = "wired by the coordinator-owned projectional session slice"
-)]
-pub(crate) fn projectional_workspace_from_snapshot(
+/// Cold-restores workspace v8 into its sole projectional editor authority.
+///
+/// Stored flat documents are comparison evidence only. They are never
+/// installed into a parallel retained editor coordinator. Computed-feature
+/// sidecars fail closed until their declarations have an authenticated
+/// projectional materializer path.
+pub(crate) fn projectional_editor_from_snapshot(
     snapshot: &WorkspaceSnapshot,
-) -> Result<(IntentSession, RetainedEditorCoordinator), String> {
+) -> Result<ProjectionalEditorSession, String> {
     let intent = snapshot
         .intent_session()?
         .ok_or_else(|| "workspace does not contain projectional intent authority".to_owned())?;
-    let coordinator = coordinator_from_snapshot(snapshot)?;
-    Ok((intent, coordinator))
+    let features = snapshot.feature_document()?;
+    if !features.features().is_empty() {
+        return Err(
+            "workspace v8 computed features are unsupported until projectional feature lowering is authenticated"
+                .into(),
+        );
+    }
+    let stored_design = snapshot.design_document()?;
+    let stored_accepted = snapshot.accepted_document()?;
+    let mut projectional =
+        ProjectionalEditorSession::restore(intent, stored_design.id(), stored_design.model_scale())
+            .map_err(|error| error.to_string())?;
+
+    let rebuilt = projectional.coordinator().accepted_materialization();
+    match (rebuilt, stored_accepted.as_ref()) {
+        (Some(rebuilt), Some(stored_accepted)) => {
+            let rebuilt_session = &rebuilt.session;
+            let rebuilt_accepted = rebuilt_session
+                .accepted_state_for_current_input()
+                .ok_or_else(|| {
+                    "cold projectional restore omitted current accepted native evidence".to_owned()
+                })?;
+            if rebuilt_session.design_document() != &stored_design
+                || rebuilt_accepted.document() != stored_accepted
+            {
+                return Err(
+                    "cold projectional reconstruction disagrees with stored flat evidence".into(),
+                );
+            }
+        }
+        (None, None) => {}
+        _ => {
+            return Err(
+                "cold projectional reconstruction and stored accepted authority disagree".into(),
+            );
+        }
+    }
+
+    let layout =
+        compatible_annotation_layout_for_projectional(&projectional, &snapshot.annotation_layout());
+    projectional.editor_mut().restore_annotation_layout(layout);
+    Ok(projectional)
 }
 
 fn compatible_annotation_layout(
@@ -999,6 +1080,35 @@ fn compatible_annotation_layout(
         return AnnotationLayoutState::default();
     };
 
+    compatible_annotation_layout_entries(cached, design, &scene)
+}
+
+fn compatible_annotation_layout_for_projectional(
+    projectional: &ProjectionalEditorSession,
+    cached: &AnnotationLayoutState,
+) -> AnnotationLayoutState {
+    let Some(session) = projectional.coordinator().presentation_session() else {
+        return AnnotationLayoutState::default();
+    };
+    let design = session.design_document();
+    let Some(_accepted) = session.accepted_state_for_current_input() else {
+        return AnnotationLayoutState::default();
+    };
+    let Ok(viewport) = Viewport::new([1024.0, 768.0], [0.0, 0.0], 1.0) else {
+        return AnnotationLayoutState::default();
+    };
+    let Ok(scene) = projectional.scene(viewport, 0.5) else {
+        return AnnotationLayoutState::default();
+    };
+
+    compatible_annotation_layout_entries(cached, design, &scene)
+}
+
+fn compatible_annotation_layout_entries(
+    cached: &AnnotationLayoutState,
+    design: &SketchDocument,
+    scene: &EditorScene,
+) -> AnnotationLayoutState {
     AnnotationLayoutState::from_entries(cached.entries().into_iter().filter(|entry| {
         if entry.key.document != design.id() || !layout_item_source_is_current(*entry, design) {
             return false;
@@ -1013,6 +1123,21 @@ fn compatible_annotation_layout(
             })
             .is_some_and(|annotation| layout_form_is_compatible(*entry, annotation))
     }))
+}
+
+fn document_payload(document: &SketchDocument) -> Result<WorkspaceDocumentPayload, String> {
+    match document.to_canonical_json() {
+        Ok(json) => Ok(WorkspaceDocumentPayload {
+            encoding: WorkspaceDocumentEncoding::CanonicalV4,
+            json,
+        }),
+        Err(_) => Ok(WorkspaceDocumentPayload {
+            encoding: WorkspaceDocumentEncoding::DraftV5,
+            json: document
+                .to_draft_v5_json()
+                .map_err(|error| error.to_string())?,
+        }),
+    }
 }
 
 fn layout_item_source_is_current(entry: AnnotationLayoutEntry, design: &SketchDocument) -> bool {
@@ -1196,11 +1321,12 @@ mod tests {
     use geosolve_constraint_editor::{
         AnnotationLayoutEntry, AnnotationLayoutKey, AnnotationLayoutState, AnnotationPlacement,
         AuthoringMutation, AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool,
-        ComputedEdgeGeometry, ComputedFeatureEvaluationState, ComputedSceneState, ConstraintIntent,
-        EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOutcome, FeatureAuthoringState,
-        FeatureAuthoringTool, Modifiers, PointerInput, RetainedEditorCoordinator,
-        SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph, ScreenPoint,
-        SelectionItem, Viewport,
+        ColdIntentMaterializer, ComputedEdgeGeometry, ComputedFeatureEvaluationState,
+        ComputedSceneState, ConstraintIntent, EditorScene, FeatureAuthoringCandidate,
+        FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool, Modifiers,
+        PointerInput, ProjectionalEditorSession, ProjectionalIntentCoordinator,
+        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationKind,
+        SceneConstraintGlyph, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1212,16 +1338,16 @@ mod tests {
         alpha_scenario,
     };
     use geosolve_sketch_intent::{
-        GeometryRecipeKind, IntentEvaluation, IntentKey, IntentNodeDraft, IntentNodeKind,
-        IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentSession, IntentSessionId,
-        MaterializationEvidence,
+        GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
+        IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector, IntentSession,
+        IntentSessionId, IntentUnit, LeafField,
     };
 
     use super::{
         WorkspaceSnapshot, WorkspaceSnapshotV8, annotation_kind_key,
         coordinator_from_reproduction_payload, coordinator_from_snapshot,
         default_evaluation_high_water, derive_sketch_identity_high_water, parse_annotation_kind,
-        projectional_workspace_from_snapshot, reproduction_payload_from_coordinator,
+        projectional_editor_from_snapshot, reproduction_payload_from_coordinator,
         workspace_v8_digest,
     };
 
@@ -1244,58 +1370,61 @@ mod tests {
     }
 
     fn m83_projectional_fixture() -> (WorkspaceSnapshot, IntentSession, SketchDocument) {
-        let mut document = SketchDocument::new(1.0).expect("document");
-        document
-            .add_point("projectional point", [1.25, -2.5])
-            .expect("point");
-        let coordinator = RetainedEditorCoordinator::new(
-            RetainedSketchDocumentSession::new(
-                document,
-                DocumentSolveRequest::default(),
-                SolverConfig::default(),
-            )
-            .expect("accepted session"),
+        let document = DocumentId(PersistentId::from_u128(0x8308_u128 << 64));
+        let mut coordinator = ProjectionalIntentCoordinator::empty(
+            IntentSessionId::from_raw(0x8308),
+            ColdIntentMaterializer::with_default_policy(document, 1.0).expect("cold materializer"),
         )
-        .expect("coordinator");
-        let accepted = coordinator
-            .session()
+        .expect("projectional coordinator");
+        let primary = IntentPortSelector::Node {
+            role: IntentPortRole::Primary,
+            index: 0,
+        };
+        let draft = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::SketchPoint,
+            },
+            IntentKey::new("ProjectionalPoint").expect("symbol"),
+        )
+        .with_instance_leaf(
+            primary,
+            LeafField::X,
+            IntentLiteral::Quantity {
+                value: 1.25,
+                unit: IntentUnit::Length,
+            },
+        )
+        .with_instance_leaf(
+            primary,
+            LeafField::Y,
+            IntentLiteral::Quantity {
+                value: -2.5,
+                unit: IntentUnit::Length,
+            },
+        );
+        let patch = IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: IntentKey::new("point").expect("alias"),
+                draft: Box::new(draft),
+                cell: None,
+            }],
+        );
+        coordinator.apply_patch(patch).expect("materialize point");
+        let projectional = ProjectionalEditorSession::new(coordinator);
+        let accepted = projectional
+            .coordinator()
+            .accepted_materialization()
+            .expect("accepted materialization")
+            .session
             .accepted_state_for_current_input()
             .expect("accepted state")
             .document()
             .clone();
-        let accepted_json = accepted.to_draft_v5_json().expect("draft-v5 evidence");
-
-        let mut intent =
-            IntentSession::with_id(IntentSessionId::from_raw(0x8308)).expect("intent session");
-        let patch = IntentPatch::new(
-            intent.identity(),
-            IntentPatchPolicy::RetainFailedIntent,
-            vec![IntentPatchOperation::CreateNode {
-                alias: IntentKey::new("point").expect("alias"),
-                draft: Box::new(IntentNodeDraft::new(
-                    IntentNodeKind::Geometry {
-                        recipe: GeometryRecipeKind::SketchPoint,
-                    },
-                    IntentKey::new("ProjectionalPoint").expect("symbol"),
-                )),
-                cell: None,
-            }],
-        );
-        let plan = intent
-            .plan_patch(patch, |candidate| IntentEvaluation::Accepted {
-                evidence: MaterializationEvidence::new_host_artifacts(
-                    candidate.external_inputs().identity(),
-                    accepted_json.into_bytes(),
-                    br#"{"logical_native_ownership":"fixture"}"#.to_vec(),
-                    br#"{"hard_validity":"valid","maximum_normalized_hard_residual":0.0}"#.to_vec(),
-                )
-                .expect("materialization evidence"),
-            })
-            .expect("intent plan");
-        intent.commit_plan(plan).expect("intent commit");
+        let intent = projectional.coordinator().intent().clone();
         let snapshot =
-            WorkspaceSnapshot::from_intent_session_and_coordinator(&intent, &coordinator)
-                .expect("workspace v8");
+            WorkspaceSnapshot::from_projectional_editor(&projectional).expect("workspace v8");
         (snapshot, intent, accepted)
     }
 
@@ -3234,6 +3363,11 @@ mod tests {
         let decoded = WorkspaceSnapshot::decode(&encoded).expect("decode workspace v8");
         assert_eq!(decoded.encode().expect("re-encode workspace v8"), encoded);
         assert_eq!(
+            coordinator_from_snapshot(&decoded)
+                .expect_err("v8 must not install a parallel flat coordinator"),
+            "workspace v8 must restore through its sole projectional editor authority",
+        );
+        assert_eq!(
             decoded
                 .intent_session()
                 .expect("decode intent")
@@ -3246,17 +3380,33 @@ mod tests {
         );
         assert_eq!(
             decoded.accepted_document().expect("accepted flat state"),
-            Some(accepted)
+            Some(accepted.clone())
         );
-        let (restored_intent, restored) =
-            projectional_workspace_from_snapshot(&decoded).expect("restore both authorities");
-        assert_eq!(restored_intent.identity(), intent.identity());
+        let restored =
+            projectional_editor_from_snapshot(&decoded).expect("cold-restore projectional editor");
+        assert_eq!(
+            restored.coordinator().intent().identity(),
+            intent.identity()
+        );
         assert!(
             restored
-                .session()
+                .coordinator()
+                .presentation_session()
+                .expect("presentation session")
                 .accepted_state_for_current_input()
                 .is_some(),
-            "v8 must retain exact accepted flat evidence needed for immediate canvas restoration",
+            "v8 must cold-rebuild the exact accepted scene for immediate canvas restoration",
+        );
+        assert_eq!(
+            restored
+                .coordinator()
+                .accepted_materialization()
+                .expect("cold accepted materialization")
+                .session
+                .accepted_state_for_current_input()
+                .expect("accepted state")
+                .document(),
+            &accepted,
         );
     }
 
