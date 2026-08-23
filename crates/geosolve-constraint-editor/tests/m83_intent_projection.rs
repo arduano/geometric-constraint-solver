@@ -5,7 +5,7 @@ use geosolve_constraint_editor::{
     IntentInspectorEditValue, IntentInspectorField, IntentNativeBinding, IntentSourceEditError,
     IntentSourceTokenTarget, IntentWorkbenchProjection, ProjectionalIntentCoordinator,
 };
-use geosolve_sketch::{DocumentId, PersistentId};
+use geosolve_sketch::{CurveDefinition, DocumentId, PersistentId};
 use geosolve_sketch_intent::{
     CellTarget, GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
     IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector,
@@ -43,6 +43,30 @@ fn point(position: [f64; 2]) -> IntentNodeDraft {
         selector(IntentPortRole::Primary),
         LeafField::Y,
         coordinate(position[1]),
+    )
+}
+
+fn circle(radius: f64) -> IntentNodeDraft {
+    IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::CenterRadiusCircle,
+        },
+        key("circle.main"),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Center),
+        LeafField::X,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Center),
+        LeafField::Y,
+        coordinate(0.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Target),
+        LeafField::Value,
+        coordinate(radius),
     )
 }
 
@@ -367,5 +391,75 @@ fn inspector_edits_authenticate_schema_coordinates_and_retain_invalid_intent() {
             },
         ),
         Err(IntentInspectorEditError::InvalidLiteral)
+    );
+}
+
+#[test]
+fn inspector_value_leaf_preserves_its_projected_quantity_unit() {
+    let mut coordinator = coordinator();
+    let outcome = coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("circle"),
+                draft: Box::new(circle(2.0)),
+                cell: None,
+            }],
+        ))
+        .unwrap();
+    let node = outcome.aliases.node(&key("circle")).unwrap();
+    let projection = IntentWorkbenchProjection::from_session(coordinator.intent());
+    let inspector = projection.inspector(coordinator.intent(), node).unwrap();
+    let leaf = inspector
+        .fields
+        .iter()
+        .find_map(|field| match field {
+            IntentInspectorField::Instance {
+                leaf,
+                value:
+                    Some(IntentLiteral::Quantity {
+                        unit: IntentUnit::Length,
+                        ..
+                    }),
+                ..
+            } if leaf.field == LeafField::Value => Some(*leaf),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        inspector.patch_for_edit(
+            coordinator.intent(),
+            &IntentInspectorEditTarget::Instance { leaf },
+            IntentInspectorEditValue::Literal {
+                literal: IntentLiteral::Quantity {
+                    value: 3.5,
+                    unit: IntentUnit::Angle,
+                },
+            },
+        ),
+        Err(IntentInspectorEditError::InvalidLiteral)
+    );
+    let patch = inspector
+        .patch_for_edit(
+            coordinator.intent(),
+            &IntentInspectorEditTarget::Instance { leaf },
+            IntentInspectorEditValue::Literal {
+                literal: coordinate(3.5),
+            },
+        )
+        .unwrap();
+    coordinator.apply_patch(patch).unwrap();
+    let document = coordinator
+        .accepted_materialization()
+        .unwrap()
+        .session
+        .design_document();
+    let CurveDefinition::Circle { radius, .. } = document.curves()[0].definition else {
+        panic!("fixture must remain a circle");
+    };
+    assert_eq!(
+        document.scalar(radius).unwrap().value.to_bits(),
+        3.5_f64.to_bits()
     );
 }

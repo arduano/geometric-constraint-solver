@@ -143,10 +143,16 @@ impl IntentInspectorProjection {
                 IntentInspectorEditTarget::Instance { leaf },
                 IntentInspectorEditValue::Literal { literal },
             ) => {
-                if !self.fields.iter().any(|candidate| {
-                    matches!(candidate, IntentInspectorField::Instance { leaf: candidate, .. } if candidate == leaf)
-                }) || !inspector_leaf_literal_matches(leaf.field, &literal)
-                {
+                let current = self.fields.iter().find_map(|candidate| match candidate {
+                    IntentInspectorField::Instance {
+                        leaf: candidate,
+                        value,
+                        ..
+                    } if candidate == leaf => Some(value.as_ref()),
+                    _ => None,
+                });
+                let current = current.ok_or(IntentInspectorEditError::UnknownTarget)?;
+                if !inspector_leaf_literal_matches(leaf.field, current, &literal) {
                     return Err(IntentInspectorEditError::InvalidLiteral);
                 }
                 IntentPatchOperation::SetInstanceLeaf {
@@ -188,30 +194,25 @@ fn inspector_literal_matches(
 
 fn inspector_leaf_literal_matches(
     field: geosolve_sketch_intent::LeafField,
+    current: Option<&IntentLiteral>,
     literal: &IntentLiteral,
 ) -> bool {
     use geosolve_sketch_intent::{IntentUnit, LeafField};
+    let IntentLiteral::Quantity { unit: actual, .. } = literal else {
+        return false;
+    };
+    if let Some(IntentLiteral::Quantity { unit: expected, .. }) = current {
+        return expected == actual;
+    }
     matches!(
-        (field, literal),
-        (
-            LeafField::X | LeafField::Y,
-            IntentLiteral::Quantity {
-                unit: IntentUnit::Length,
-                ..
-            }
-        ) | (
-            LeafField::Angle,
-            IntentLiteral::Quantity {
-                unit: IntentUnit::Angle,
-                ..
-            }
-        ) | (
-            LeafField::Value | LeafField::Weight | LeafField::Parameter,
-            IntentLiteral::Quantity {
-                unit: IntentUnit::Dimensionless,
-                ..
-            }
-        )
+        (field, actual),
+        (LeafField::X | LeafField::Y, IntentUnit::Length)
+            | (LeafField::Angle, IntentUnit::Angle)
+            | (
+                LeafField::Weight | LeafField::Parameter,
+                IntentUnit::Dimensionless
+            )
+            | (LeafField::Value, _)
     )
 }
 
