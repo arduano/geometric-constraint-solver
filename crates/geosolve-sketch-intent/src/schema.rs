@@ -476,6 +476,77 @@ fn constraint_schema(kind: ConstraintKind) -> IntentNodeSchema {
             }
         }
     }
+    let contact_count = match kind {
+        C::PointOnCurve | C::LineCurveTangency | C::CurveDirection => 1,
+        C::LineCircleTangency
+        | C::CircleArcTangency
+        | C::CurveCurveContact
+        | C::CurveCurveTangency
+        | C::EqualCurvature
+        | C::EndpointContinuity
+        | C::LineLineFillet
+        | C::CurveCurveFillet => 2,
+        _ => 0,
+    };
+    for index in 0..contact_count {
+        let prefix = match (contact_count, index) {
+            (1, _) => "contact",
+            (_, 0) => "first_contact",
+            _ => "second_contact",
+        };
+        fields.extend([
+            field(
+                &format!("{prefix}_parameter"),
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                &format!("{prefix}_winding"),
+                IntentLiteralSchema::Integer,
+                false,
+            ),
+            field(
+                &format!("{prefix}_domain"),
+                IntentLiteralSchema::Enum,
+                false,
+            ),
+            field(
+                &format!("{prefix}_domain_lower"),
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                &format!("{prefix}_domain_upper"),
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                &format!("{prefix}_domain_period"),
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                &format!("{prefix}_neighborhood"),
+                IntentLiteralSchema::Enum,
+                false,
+            ),
+            field(
+                &format!("{prefix}_neighborhood_lower"),
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                &format!("{prefix}_neighborhood_upper"),
+                IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                false,
+            ),
+            field(
+                &format!("{prefix}_orientation"),
+                IntentLiteralSchema::Enum,
+                false,
+            ),
+        ]);
+    }
     schema(inputs, Vec::new(), fields, (0, 0))
 }
 

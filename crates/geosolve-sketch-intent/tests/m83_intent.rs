@@ -2206,6 +2206,153 @@ fn compound_recipe_fields_generate_exact_topology_without_hidden_native_points()
 }
 
 #[test]
+fn contact_bearing_relations_retain_complete_explicit_contact_cell_fields() {
+    let contact_cases = [
+        (ConstraintKind::PointOnCurve, 1_usize),
+        (ConstraintKind::LineCurveTangency, 1),
+        (ConstraintKind::CurveDirection, 1),
+        (ConstraintKind::LineCircleTangency, 2),
+        (ConstraintKind::CircleArcTangency, 2),
+        (ConstraintKind::CurveCurveContact, 2),
+        (ConstraintKind::CurveCurveTangency, 2),
+        (ConstraintKind::EqualCurvature, 2),
+        (ConstraintKind::EndpointContinuity, 2),
+        (ConstraintKind::LineLineFillet, 2),
+        (ConstraintKind::CurveCurveFillet, 2),
+    ];
+    for (constraint, contact_count) in contact_cases {
+        let schema = IntentNodeKind::Constraint { constraint }.schema(0);
+        let expected_prefixes = if contact_count == 1 {
+            vec!["contact"]
+        } else {
+            vec!["first_contact", "second_contact"]
+        };
+        for prefix in expected_prefixes {
+            for suffix in [
+                "parameter",
+                "winding",
+                "domain",
+                "domain_lower",
+                "domain_upper",
+                "domain_period",
+                "neighborhood",
+                "neighborhood_lower",
+                "neighborhood_upper",
+                "orientation",
+            ] {
+                let name = format!("{prefix}_{suffix}");
+                assert!(
+                    schema
+                        .fields
+                        .iter()
+                        .any(|field| field.field.0.as_str() == name),
+                    "{constraint:?} omits {name}"
+                );
+            }
+        }
+        let node = IntentNodeKind::Constraint { constraint };
+        let expected_reservations = 2 * contact_count + 2;
+        let session =
+            IntentSession::with_id(IntentSessionId::from_raw(0x8325_1000 + constraint as u128))
+                .unwrap();
+        let case = DeclarationSchemaCase {
+            label: format!("contact.{constraint:?}"),
+            kind: node,
+            dynamic_children: 0,
+        };
+        let draft = minimal_schema_draft(&case, "contact-cell");
+        let patch = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("contact-cell"),
+                draft: Box::new(draft),
+                cell: None,
+            }],
+        );
+        let result = session.plan_patch(patch, accepted);
+        assert!(
+            matches!(
+                result,
+                Err(IntentPlanError::Graph(IntentGraphError::UnknownNode(_)))
+            ),
+            "{constraint:?} did not reach dependency resolution: {result:?}"
+        );
+        assert_eq!(
+            node_port_reservation_count_for_test(constraint, contact_count),
+            expected_reservations
+        );
+    }
+}
+
+fn node_port_reservation_count_for_test(constraint: ConstraintKind, contact_count: usize) -> usize {
+    let mut session =
+        IntentSession::with_id(IntentSessionId::from_raw(0x8325_2000 + constraint as u128))
+            .unwrap();
+    let mut operations = Vec::new();
+    for index in 0..2 {
+        operations.push(IntentPatchOperation::CreateNode {
+            alias: key(&format!("point-{index}")),
+            draft: Box::new(point_draft(&format!("point {index}"))),
+            cell: None,
+        });
+        operations.push(IntentPatchOperation::CreateNode {
+            alias: key(&format!("curve-{index}")),
+            draft: Box::new(IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Segment,
+                },
+                key(&format!("curve {index}")),
+            )),
+            cell: None,
+        });
+    }
+    let case = DeclarationSchemaCase {
+        label: format!("contact.{constraint:?}"),
+        kind: IntentNodeKind::Constraint { constraint },
+        dynamic_children: 0,
+    };
+    let schema = case.kind.schema(0);
+    let mut draft = IntentNodeDraft::new(case.kind, key("contact relation"));
+    for cardinality in schema.inputs {
+        for index in 0..cardinality.minimum {
+            let source = match cardinality.role {
+                InputRole::Point => alias_port(
+                    &format!("point-{}", index.min(1)),
+                    IntentPortRole::Primary,
+                    0,
+                ),
+                InputRole::Curve => {
+                    alias_port(&format!("curve-{}", index.min(1)), IntentPortRole::Curve, 0)
+                }
+                InputRole::Span => {
+                    alias_port(&format!("curve-{}", index.min(1)), IntentPortRole::Span, 0)
+                }
+                _ => return 2 * contact_count + 2,
+            };
+            draft = draft.with_input(InputSlot::new(cardinality.role, index), source);
+        }
+    }
+    for field in schema.fields.iter().filter(|field| field.required) {
+        draft = draft.with_field(field.field.clone(), literal_for_schema(field.literal));
+    }
+    operations.push(IntentPatchOperation::CreateNode {
+        alias: key("relation"),
+        draft: Box::new(draft),
+        cell: None,
+    });
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        operations,
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    let node = plan.aliases().node(&key("relation")).unwrap();
+    session.commit_plan(plan).unwrap();
+    session.graph().node(node).unwrap().reservations.len()
+}
+
+#[test]
 #[allow(
     clippy::too_many_lines,
     reason = "one lifecycle fixture proves both successful alias rebind and atomic cycle rejection"
