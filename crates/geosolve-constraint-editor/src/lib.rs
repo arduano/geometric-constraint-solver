@@ -138,7 +138,7 @@ pub use intent_projection::{
 };
 pub use intent_rpc::{
     IntentRpcFailure, IntentRpcOutcome, IntentRpcRequest, IntentRpcSession, IntentRpcSnapshot,
-    IntentRpcSuccess,
+    IntentRpcSuccess, MAX_INTENT_RPC_REQUEST_BYTES,
 };
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,

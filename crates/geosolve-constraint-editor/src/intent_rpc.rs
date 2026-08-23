@@ -16,6 +16,13 @@ use crate::{
     IntentWorkbenchProjection, ProjectionalIntentCoordinator,
 };
 
+/// Maximum accepted byte length for one DOM-free intent RPC request.
+///
+/// The session and graph codecs have their own larger persistence bounds. RPC
+/// requests are deliberately narrower so an untrusted host message cannot
+/// force an unbounded JSON parse before those inner limits are reached.
+pub const MAX_INTENT_RPC_REQUEST_BYTES: usize = 16 * 1024 * 1024;
+
 /// Closed version-one RPC request vocabulary.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
@@ -191,15 +198,27 @@ impl IntentRpcSession {
     /// fails after all values have already been validated.
     #[must_use]
     pub fn apply_json(&mut self, request: &str) -> String {
-        let outcome = match serde_json::from_str(request) {
-            Ok(request) => self.apply(request),
-            Err(error) => IntentRpcOutcome::Failure {
+        let outcome = if request.len() > MAX_INTENT_RPC_REQUEST_BYTES {
+            IntentRpcOutcome::Failure {
                 failure: IntentRpcFailure {
-                    code: "invalid_request".to_owned(),
-                    message: error.to_string(),
+                    code: "request_too_large".to_owned(),
+                    message: format!(
+                        "intent RPC request exceeds {MAX_INTENT_RPC_REQUEST_BYTES} bytes"
+                    ),
                     identity: Some(self.coordinator.intent().identity()),
                 },
-            },
+            }
+        } else {
+            match serde_json::from_str(request) {
+                Ok(request) => self.apply(request),
+                Err(error) => IntentRpcOutcome::Failure {
+                    failure: IntentRpcFailure {
+                        code: "invalid_request".to_owned(),
+                        message: error.to_string(),
+                        identity: Some(self.coordinator.intent().identity()),
+                    },
+                },
+            }
         };
         serde_json::to_string(&outcome).expect("closed RPC response is infallibly serializable")
     }
