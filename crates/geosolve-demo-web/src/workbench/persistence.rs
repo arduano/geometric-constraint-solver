@@ -1546,6 +1546,16 @@ mod tests {
         (snapshot, intent, accepted)
     }
 
+    fn run_m83_persistence_test(name: &str, test: impl FnOnce() + Send + 'static) {
+        std::thread::Builder::new()
+            .name(name.to_owned())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(test)
+            .expect("spawn projectional persistence test")
+            .join()
+            .expect("projectional persistence test thread");
+    }
+
     #[test]
     fn m80_profile_offset_annotation_cache_identity_round_trips() {
         let key = annotation_kind_key(SceneAnnotationKind::ProfileOffset);
@@ -3473,6 +3483,13 @@ mod tests {
 
     #[test]
     fn m83_workspace_v8_round_trips_canonical_intent_and_flat_accepted_authority_exactly() {
+        run_m83_persistence_test("m83-v8-round-trip", || {
+            m83_workspace_v8_round_trips_canonical_intent_and_flat_accepted_authority_exactly_body(
+            );
+        });
+    }
+
+    fn m83_workspace_v8_round_trips_canonical_intent_and_flat_accepted_authority_exactly_body() {
         let (snapshot, intent, accepted) = m83_projectional_fixture();
         assert_eq!(snapshot.version, 8);
         assert!(snapshot.legacy_bootstrap().is_none());
@@ -3530,6 +3547,12 @@ mod tests {
 
     #[test]
     fn m83_workspace_v8_rejects_forged_or_noncanonical_intent_authority() {
+        run_m83_persistence_test("m83-v8-rejection", || {
+            m83_workspace_v8_rejects_forged_or_noncanonical_intent_authority_body();
+        });
+    }
+
+    fn m83_workspace_v8_rejects_forged_or_noncanonical_intent_authority_body() {
         let (snapshot, _, _) = m83_projectional_fixture();
         let encoded = snapshot.encode().expect("canonical workspace v8");
         let mut wire: WorkspaceSnapshotV8 =
@@ -3571,6 +3594,12 @@ mod tests {
 
     #[test]
     fn m83_workspace_v7_is_explicitly_rejected_as_abandoned() {
+        run_m83_persistence_test("m83-v7-rejection", || {
+            m83_workspace_v7_is_explicitly_rejected_as_abandoned_body();
+        });
+    }
+
+    fn m83_workspace_v7_is_explicitly_rejected_as_abandoned_body() {
         let error = WorkspaceSnapshot::decode(r#"{"version":7}"#)
             .expect_err("abandoned workspace v7 must reject");
         assert_eq!(
@@ -3585,6 +3614,16 @@ mod tests {
         reason = "one six-version table proves every historical strict decoder feeds the same typed bootstrap boundary"
     )]
     fn m83_legacy_v1_through_v6_restore_as_structured_bootstrap_input() {
+        run_m83_persistence_test("m83-legacy-migration", || {
+            m83_legacy_v1_through_v6_restore_as_structured_bootstrap_input_body();
+        });
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one six-version table proves every historical strict decoder feeds the same typed bootstrap boundary"
+    )]
+    fn m83_legacy_v1_through_v6_restore_as_structured_bootstrap_input_body() {
         let session = RetainedSketchDocumentSession::new(
             SketchDocument::new(1.0).expect("document"),
             DocumentSolveRequest::default(),
