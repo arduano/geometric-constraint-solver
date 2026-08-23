@@ -91,7 +91,45 @@ pub enum IntentPatchOperation {
     },
 }
 
+/// Closed deterministic operation category used by transaction/history
+/// projection. Payloads remain authenticated by the exact plan and session
+/// digests; this compact category is intended for durable UI/audit copy.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IntentPatchOperationKind {
+    CreateNode,
+    DeleteNode,
+    SetSuppressed,
+    SetDefinitionField,
+    SetInstanceLeaf,
+    RebindInput,
+    RenameNode,
+    MoveDeclaration,
+    CreateCell,
+    DeleteCell,
+    ReorderCells,
+    ReplaceExternalInputs,
+}
+
 impl IntentPatchOperation {
+    #[must_use]
+    pub const fn kind(&self) -> IntentPatchOperationKind {
+        match self {
+            Self::CreateNode { .. } => IntentPatchOperationKind::CreateNode,
+            Self::DeleteNode { .. } => IntentPatchOperationKind::DeleteNode,
+            Self::SetSuppressed { .. } => IntentPatchOperationKind::SetSuppressed,
+            Self::SetDefinitionField { .. } => IntentPatchOperationKind::SetDefinitionField,
+            Self::SetInstanceLeaf { .. } => IntentPatchOperationKind::SetInstanceLeaf,
+            Self::RebindInput { .. } => IntentPatchOperationKind::RebindInput,
+            Self::RenameNode { .. } => IntentPatchOperationKind::RenameNode,
+            Self::MoveDeclaration { .. } => IntentPatchOperationKind::MoveDeclaration,
+            Self::CreateCell { .. } => IntentPatchOperationKind::CreateCell,
+            Self::DeleteCell { .. } => IntentPatchOperationKind::DeleteCell,
+            Self::ReorderCells { .. } => IntentPatchOperationKind::ReorderCells,
+            Self::ReplaceExternalInputs { .. } => IntentPatchOperationKind::ReplaceExternalInputs,
+        }
+    }
+
     pub(crate) fn canonical_bytes(&self) -> Vec<u8> {
         serde_json::to_vec(self).expect("intent patch operation is infallibly serializable")
     }
@@ -185,6 +223,20 @@ impl IntentSemanticDiff {
     #[must_use]
     pub const fn requires_materialization(&self) -> bool {
         self.graph_changed || self.instance_changed || self.external_inputs_changed
+    }
+
+    /// All declaration identities affected by the transaction, independent
+    /// of which projection authored it.
+    #[must_use]
+    pub fn affected_nodes(&self) -> BTreeSet<NodeId> {
+        self.created_nodes
+            .iter()
+            .chain(&self.deleted_nodes)
+            .chain(&self.definition_nodes)
+            .chain(&self.instance_nodes)
+            .chain(&self.organization_nodes)
+            .copied()
+            .collect()
     }
 
     pub(crate) fn absorb_deleted(&mut self, nodes: &BTreeSet<NodeId>) {

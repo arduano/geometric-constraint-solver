@@ -13,9 +13,9 @@ use crate::model::{
     BootstrapNativeKind, InputRole, InputSlot, IntentChildSchema, IntentFieldKey,
     IntentGraphIdentity, IntentIdentityFlow, IntentInstanceState, IntentLiteral,
     IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentPortKind, IntentPortRef,
-    IntentPortSelector, IntentSemanticIdentity, LeafField, LeafRef, MAX_INTENT_NODE_FIELDS,
-    MAX_INTENT_NODE_INPUTS, PatchPortRef, PortSpec, checked_child_count, child_port_specs,
-    literal_matches_leaf, node_port_specs,
+    IntentPortSelector, IntentReservationLedgerIdentity, LeafField, LeafRef,
+    MAX_INTENT_NODE_FIELDS, MAX_INTENT_NODE_INPUTS, PatchPortRef, PortSpec, checked_child_count,
+    child_port_specs, literal_matches_leaf, node_port_specs,
 };
 
 /// Strict canonical graph wire version.
@@ -24,6 +24,8 @@ pub const INTENT_GRAPH_VERSION: u32 = 1;
 pub const MAX_INTENT_GRAPH_JSON_BYTES: usize = 64 * 1024 * 1024;
 /// Maximum declarations retained in one graph.
 pub const MAX_INTENT_NODES: usize = 65_536;
+/// Maximum never-reused native reservations retained by one session.
+pub const MAX_INTENT_RESERVATION_LEDGER_ENTRIES: usize = 1_048_576;
 
 /// Monotonic stable-ID cursors. History restore never lowers these values.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -122,6 +124,334 @@ pub struct IntentReservation {
     pub paired_with: Option<ReservationId>,
 }
 
+/// Current declaration disposition of one never-reused reservation record.
+/// Tombstoned records may become declared again through Undo, but the record
+/// and its identity are never removed or reused.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IntentReservationState {
+    Declared,
+    Suppressed,
+    Tombstoned,
+}
+
+/// Durable typed ownership metadata for one native reservation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentReservationRecord {
+    pub id: ReservationId,
+    pub kind: IntentNativeReservationKind,
+    pub owner_node: NodeId,
+    pub owner_port: PortId,
+    pub paired_with: Option<ReservationId>,
+    pub state: IntentReservationState,
+}
+
+/// Monotonic session-level reservation and tombstone authority.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentReservationLedger {
+    pub(crate) revision: Revision,
+    entries: BTreeMap<ReservationId, IntentReservationRecord>,
+}
+
+impl IntentReservationLedger {
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            revision: Revision::from_raw(0),
+            entries: BTreeMap::new(),
+        }
+    }
+
+    #[must_use]
+    pub const fn entries(&self) -> &BTreeMap<ReservationId, IntentReservationRecord> {
+        &self.entries
+    }
+
+    #[must_use]
+    pub const fn revision(&self) -> Revision {
+        self.revision
+    }
+
+    #[must_use]
+    /// Returns the exact revisioned identity of all durable records.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if serialization of this closed schema fails.
+    pub fn identity(&self) -> IntentReservationLedgerIdentity {
+        IntentReservationLedgerIdentity(ComponentIdentity {
+            revision: self.revision,
+            digest: digest_bytes(
+                &serde_json::to_vec(&(self.revision, &self.entries))
+                    .expect("reservation ledger is infallibly serializable"),
+            ),
+        })
+    }
+
+    pub(crate) fn reconcile(&mut self, graph: &IntentGraph) -> Result<bool, IntentGraphError> {
+        let mut changed = false;
+        for node in graph.nodes.values() {
+            for reservation in node.reservations.values() {
+                let owner_port = node
+                    .ports
+                    .values()
+                    .find_map(|port| match port.flow {
+                        IntentIdentityFlow::Created {
+                            reservation: candidate,
+                        } if candidate == reservation.id => Some(port.id),
+                        _ => None,
+                    })
+                    .ok_or(IntentGraphError::UnusedReservation {
+                        node: node.id,
+                        reservation: reservation.id,
+                    })?;
+                let record = IntentReservationRecord {
+                    id: reservation.id,
+                    kind: reservation.kind,
+                    owner_node: node.id,
+                    owner_port,
+                    paired_with: reservation.paired_with,
+                    state: if node.suppressed {
+                        IntentReservationState::Suppressed
+                    } else {
+                        IntentReservationState::Declared
+                    },
+                };
+                if let Some(existing) = self.entries.get_mut(&reservation.id) {
+                    if (
+                        existing.id,
+                        existing.kind,
+                        existing.owner_node,
+                        existing.owner_port,
+                        existing.paired_with,
+                    ) != (
+                        record.id,
+                        record.kind,
+                        record.owner_node,
+                        record.owner_port,
+                        record.paired_with,
+                    ) {
+                        return Err(IntentGraphError::ReservationLedgerMismatch {
+                            reservation: reservation.id,
+                        });
+                    }
+                    if existing.state != record.state {
+                        existing.state = record.state;
+                        changed = true;
+                    }
+                } else {
+                    if self.entries.len() == MAX_INTENT_RESERVATION_LEDGER_ENTRIES {
+                        return Err(IntentGraphError::ResourceLimit {
+                            resource: "reservation ledger entries",
+                            actual: self.entries.len() + 1,
+                            limit: MAX_INTENT_RESERVATION_LEDGER_ENTRIES,
+                        });
+                    }
+                    self.entries.insert(reservation.id, record);
+                    changed = true;
+                }
+            }
+        }
+        for record in self.entries.values_mut() {
+            if graph
+                .nodes
+                .get(&record.owner_node)
+                .and_then(|node| node.reservations.get(&record.id))
+                .is_none()
+                && record.state != IntentReservationState::Tombstoned
+            {
+                record.state = IntentReservationState::Tombstoned;
+                changed = true;
+            }
+        }
+        self.validate_against_graph(graph)?;
+        Ok(changed)
+    }
+
+    pub(crate) fn validate_against_graph(
+        &self,
+        graph: &IntentGraph,
+    ) -> Result<(), IntentGraphError> {
+        self.validate()?;
+        self.validate_graph_metadata(graph)?;
+        for node in graph.nodes.values() {
+            for reservation in node.reservations.values() {
+                let record = &self.entries[&reservation.id];
+                let expected_state = if node.suppressed {
+                    IntentReservationState::Suppressed
+                } else {
+                    IntentReservationState::Declared
+                };
+                if record.state != expected_state {
+                    return Err(IntentGraphError::ReservationLedgerMismatch {
+                        reservation: reservation.id,
+                    });
+                }
+            }
+        }
+        for record in self.entries.values() {
+            let exists = graph
+                .nodes
+                .get(&record.owner_node)
+                .is_some_and(|node| node.reservations.contains_key(&record.id));
+            if exists == (record.state == IntentReservationState::Tombstoned) {
+                return Err(IntentGraphError::ReservationLedgerMismatch {
+                    reservation: record.id,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Validates durable reservation ownership for any current or historical
+    /// graph without requiring its historical disposition to equal the
+    /// ledger's current disposition.
+    pub(crate) fn validate_graph_metadata(
+        &self,
+        graph: &IntentGraph,
+    ) -> Result<(), IntentGraphError> {
+        self.validate()?;
+        for node in graph.nodes.values() {
+            for reservation in node.reservations.values() {
+                let Some(record) = self.entries.get(&reservation.id) else {
+                    return Err(IntentGraphError::ReservationLedgerMismatch {
+                        reservation: reservation.id,
+                    });
+                };
+                if record.kind != reservation.kind
+                    || record.owner_node != node.id
+                    || record.paired_with != reservation.paired_with
+                    || !node.ports.values().any(|port| {
+                        port.id == record.owner_port
+                            && port.flow
+                                == IntentIdentityFlow::Created {
+                                    reservation: reservation.id,
+                                }
+                    })
+                {
+                    return Err(IntentGraphError::ReservationLedgerMismatch {
+                        reservation: reservation.id,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_superset_of(&self, historical: &Self) -> Result<(), IntentGraphError> {
+        self.validate()?;
+        historical.validate()?;
+        if historical.revision > self.revision {
+            return Err(IntentGraphError::ReservationLedgerRevisionRegression {
+                historical: historical.revision,
+                current: self.revision,
+            });
+        }
+        for (id, record) in &historical.entries {
+            let Some(current) = self.entries.get(id) else {
+                return Err(IntentGraphError::ReservationLedgerMismatch { reservation: *id });
+            };
+            if (
+                record.id,
+                record.kind,
+                record.owner_node,
+                record.owner_port,
+                record.paired_with,
+            ) != (
+                current.id,
+                current.kind,
+                current.owner_node,
+                current.owner_port,
+                current.paired_with,
+            ) {
+                return Err(IntentGraphError::ReservationLedgerMismatch { reservation: *id });
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), IntentGraphError> {
+        if self.entries.len() > MAX_INTENT_RESERVATION_LEDGER_ENTRIES {
+            return Err(IntentGraphError::ResourceLimit {
+                resource: "reservation ledger entries",
+                actual: self.entries.len(),
+                limit: MAX_INTENT_RESERVATION_LEDGER_ENTRIES,
+            });
+        }
+        for (id, record) in &self.entries {
+            if *id != record.id {
+                return Err(IntentGraphError::MapKeyMismatch {
+                    kind: "reservation ledger",
+                });
+            }
+            if let Some(pair) = record.paired_with {
+                let Some(companion) = self.entries.get(&pair) else {
+                    return Err(IntentGraphError::ReservationLedgerMismatch {
+                        reservation: record.id,
+                    });
+                };
+                let valid = companion.paired_with == Some(record.id)
+                    && companion.owner_node == record.owner_node
+                    && companion.state == record.state
+                    && matches!(
+                        (record.kind, companion.kind),
+                        (
+                            IntentNativeReservationKind::Constraint,
+                            IntentNativeReservationKind::ConstraintSource
+                        ) | (
+                            IntentNativeReservationKind::ConstraintSource,
+                            IntentNativeReservationKind::Constraint
+                        ) | (
+                            IntentNativeReservationKind::Dimension,
+                            IntentNativeReservationKind::DimensionSource
+                        ) | (
+                            IntentNativeReservationKind::DimensionSource,
+                            IntentNativeReservationKind::Dimension
+                        )
+                    );
+                if !valid {
+                    return Err(IntentGraphError::ReservationLedgerMismatch {
+                        reservation: record.id,
+                    });
+                }
+                let owner_first = match (record.kind, companion.kind) {
+                    (
+                        IntentNativeReservationKind::Constraint,
+                        IntentNativeReservationKind::ConstraintSource,
+                    )
+                    | (
+                        IntentNativeReservationKind::Dimension,
+                        IntentNativeReservationKind::DimensionSource,
+                    ) => record.id.raw().checked_add(1) == Some(companion.id.raw()),
+                    (
+                        IntentNativeReservationKind::ConstraintSource,
+                        IntentNativeReservationKind::Constraint,
+                    )
+                    | (
+                        IntentNativeReservationKind::DimensionSource,
+                        IntentNativeReservationKind::Dimension,
+                    ) => companion.id.raw().checked_add(1) == Some(record.id.raw()),
+                    _ => false,
+                };
+                if !owner_first {
+                    return Err(IntentGraphError::ReservationLedgerMismatch {
+                        reservation: record.id,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Default for IntentReservationLedger {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 /// One stable typed schema-generated output.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -158,6 +488,7 @@ pub struct IntentChild {
 #[serde(deny_unknown_fields)]
 pub struct IntentNode {
     pub id: NodeId,
+    pub symbol: crate::IntentKey,
     pub kind: IntentNodeKind,
     pub suppressed: bool,
     pub inputs: BTreeMap<crate::InputSlot, IntentPortRef>,
@@ -219,6 +550,13 @@ impl IntentGraph {
     #[must_use]
     pub fn node(&self, id: NodeId) -> Option<&IntentNode> {
         self.nodes.get(&id)
+    }
+
+    /// Resolves one durable developer-facing symbol independently of display
+    /// name and organization order.
+    #[must_use]
+    pub fn node_by_symbol(&self, symbol: &crate::IntentKey) -> Option<&IntentNode> {
+        self.nodes.values().find(|node| &node.symbol == symbol)
     }
 
     #[must_use]
@@ -318,9 +656,13 @@ impl IntentGraph {
         let mut ports = BTreeMap::<PortId, (NodeId, &IntentPort)>::new();
         let mut reservations = BTreeSet::new();
         let mut children = BTreeSet::new();
+        let mut symbols = BTreeSet::new();
         for (id, node) in &self.nodes {
             if *id != node.id {
                 return Err(IntentGraphError::MapKeyMismatch { kind: "node" });
+            }
+            if !symbols.insert(&node.symbol) {
+                return Err(IntentGraphError::DuplicateSymbol(node.symbol.clone()));
             }
             if node.inputs.len() > MAX_INTENT_NODE_INPUTS {
                 return Err(IntentGraphError::ResourceLimit {
@@ -770,6 +1112,17 @@ pub enum IntentGraphError {
     },
     #[error("identity {kind} is duplicated")]
     DuplicateIdentity { kind: &'static str },
+    #[error("developer symbol `{0}` is duplicated")]
+    DuplicateSymbol(crate::IntentKey),
+    #[error("reservation ledger metadata mismatches reservation {reservation}")]
+    ReservationLedgerMismatch { reservation: ReservationId },
+    #[error(
+        "historical reservation-ledger revision {historical} exceeds current revision {current}"
+    )]
+    ReservationLedgerRevisionRegression {
+        historical: Revision,
+        current: Revision,
+    },
     #[error("invalid child ordering on node {node}")]
     InvalidChildOrder { node: NodeId },
     #[error("invalid child schema on node {node}")]
@@ -1146,6 +1499,7 @@ pub(crate) fn finish_allocated_draft(
 
     Ok(IntentNode {
         id: allocated.id,
+        symbol: allocated.draft.symbol,
         kind: allocated.draft.kind,
         suppressed: allocated.draft.suppressed,
         inputs,
@@ -1526,19 +1880,4 @@ fn validate_identity_flow(
         }
     }
     Ok(())
-}
-
-// Used by integration layers when stamping materializer requests without
-// giving organization state semantic authority.
-#[allow(dead_code)]
-fn semantic_identity_placeholder(
-    graph: &IntentGraph,
-    instance: &IntentInstanceState,
-    external: crate::IntentExternalInputsIdentity,
-) -> IntentSemanticIdentity {
-    IntentSemanticIdentity {
-        graph: graph.identity(),
-        instance: instance.identity(),
-        external_inputs: external,
-    }
 }

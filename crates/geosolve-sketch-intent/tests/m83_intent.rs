@@ -3,12 +3,13 @@
 use std::collections::BTreeSet;
 
 use geosolve_sketch_intent::{
-    BootstrapNativeKind, ConstraintKind, DimensionKind, GeometryRecipeKind, IdentityTransitionKind,
-    InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation, IntentEvaluationFailure,
-    IntentEvaluationFailureKind, IntentGraphError, IntentIdentityFlow, IntentKey, IntentLiteral,
-    IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPlanError, IntentPortKind, IntentPortRole,
-    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField, LeafRef,
+    BootstrapNativeKind, CellTarget, ConstraintKind, DeletePolicy, DimensionKind,
+    GeometryRecipeKind, IdentityTransitionKind, InputRole, InputSlot, IntentBootstrapObject,
+    IntentEvaluation, IntentEvaluationFailure, IntentEvaluationFailureKind, IntentGraphError,
+    IntentIdentityFlow, IntentKey, IntentLiteral, IntentNativeReservationKind, IntentNodeDraft,
+    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchOperationKind, IntentPatchPolicy,
+    IntentPlanDisposition, IntentPlanError, IntentPortKind, IntentPortRole, IntentPortSelector,
+    IntentReservationState, IntentSession, IntentSessionId, IntentUnit, LeafField, LeafRef,
     MaterializationEvidence, NodeId, OperationKind, PatchPortRef,
 };
 
@@ -69,12 +70,11 @@ fn bootstrap_draft(kind: BootstrapNativeKind, name: &str) -> IntentNodeDraft {
 
 fn accepted(candidate: &geosolve_sketch_intent::IntentCandidate) -> IntentEvaluation {
     IntentEvaluation::Accepted {
-        evidence: MaterializationEvidence::new_independently_validated(
+        evidence: MaterializationEvidence::new_host_artifacts(
             candidate.external_inputs().identity(),
             format!("materialized:{:?}", candidate.semantic_identity()).into_bytes(),
             b"owners".to_vec(),
-            b"independent-residual-validation".to_vec(),
-            true,
+            b"host-validation-artifact".to_vec(),
         )
         .unwrap(),
     }
@@ -114,37 +114,46 @@ fn closed_geometry_catalog_has_all_twenty_five_recipes() {
 
 #[test]
 fn unordered_patch_permutations_allocate_identical_nodes_ports_and_bytes() {
-    fn operations() -> Vec<IntentPatchOperation> {
+    fn operations_with_aliases(
+        left: &str,
+        right: &str,
+        relation_alias: &str,
+    ) -> Vec<IntentPatchOperation> {
         let relation = IntentNodeDraft::new(
             IntentNodeKind::Constraint {
                 constraint: ConstraintKind::Coincident,
             },
             key("Coincident"),
         )
-        .with_input(InputSlot::new(InputRole::Point, 0), alias_point("a"))
-        .with_input(InputSlot::new(InputRole::Point, 1), alias_point("b"));
+        .with_input(InputSlot::new(InputRole::Point, 0), alias_point(left))
+        .with_input(InputSlot::new(InputRole::Point, 1), alias_point(right));
         vec![
             IntentPatchOperation::CreateNode {
-                alias: key("constraint"),
+                alias: key(relation_alias),
                 draft: Box::new(relation),
                 cell: None,
             },
             IntentPatchOperation::CreateNode {
-                alias: key("b"),
+                alias: key(right),
                 draft: Box::new(point_draft("B")),
                 cell: None,
             },
             IntentPatchOperation::CreateNode {
-                alias: key("a"),
+                alias: key(left),
                 draft: Box::new(point_draft("A")),
                 cell: None,
             },
         ]
     }
 
+    fn operations() -> Vec<IntentPatchOperation> {
+        operations_with_aliases("a", "b", "constraint")
+    }
+
     let id = IntentSessionId::from_raw(0x8301);
     let mut first = IntentSession::with_id(id).unwrap();
     let mut second = IntentSession::with_id(id).unwrap();
+    let mut renamed_aliases = IntentSession::with_id(id).unwrap();
     let first_patch = IntentPatch::new(
         first.identity(),
         IntentPatchPolicy::RetainFailedIntent,
@@ -157,16 +166,30 @@ fn unordered_patch_permutations_allocate_identical_nodes_ports_and_bytes() {
         IntentPatchPolicy::RetainFailedIntent,
         reversed,
     );
+    let renamed_alias_patch = IntentPatch::new(
+        renamed_aliases.identity(),
+        IntentPatchPolicy::RetainFailedIntent,
+        operations_with_aliases("temporary-left", "temporary-right", "temporary-relation"),
+    );
     let first_plan = first.plan_patch(first_patch, accepted).unwrap();
     let second_plan = second.plan_patch(second_patch, accepted).unwrap();
+    let renamed_alias_plan = renamed_aliases
+        .plan_patch(renamed_alias_patch, accepted)
+        .unwrap();
     assert_eq!(first_plan.aliases(), second_plan.aliases());
     assert_eq!(first_plan.target(), second_plan.target());
+    assert_eq!(first_plan.target(), renamed_alias_plan.target());
     assert_eq!(first_plan.token(), second_plan.token());
     first.commit_plan(first_plan).unwrap();
     second.commit_plan(second_plan).unwrap();
+    renamed_aliases.commit_plan(renamed_alias_plan).unwrap();
     assert_eq!(
         first.to_canonical_json().unwrap(),
         second.to_canonical_json().unwrap()
+    );
+    assert_eq!(
+        first.to_canonical_json().unwrap(),
+        renamed_aliases.to_canonical_json().unwrap()
     );
     assert_eq!(
         first.graph().canonical_schedule().unwrap(),
@@ -608,6 +631,7 @@ fn authored_curve_handles_and_logical_ports_never_masquerade_as_native_sketch_id
             .unwrap();
         assert_eq!(handle.kind, IntentPortKind::HandlePoint);
         assert_eq!(handle.flow, IntentIdentityFlow::OwnedLogical);
+        assert!(handle.writable.is_empty());
     }
     assert_eq!(
         circle
@@ -1116,6 +1140,13 @@ fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory()
             handles,
             "logical handle inventory for {recipe:?}"
         );
+        assert!(
+            node.ports
+                .values()
+                .filter(|port| port.kind == IntentPortKind::HandlePoint)
+                .all(|port| port.writable.is_empty()),
+            "derived handles must not expose generic instance leaves for {recipe:?}"
+        );
         assert_eq!(
             node.ports
                 .values()
@@ -1275,4 +1306,414 @@ fn rebind_updates_schema_alias_flow_and_rejects_a_new_identity_cycle_atomically(
     ));
     assert_eq!(session.identity(), before_cycle);
     assert_eq!(session.allocator_high_water(), allocator);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one focused lifecycle keeps exact ledger metadata and every disposition transition together"
+)]
+fn durable_reservation_ledger_tracks_pairs_suppression_delete_undo_redo_and_reload() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8330)).unwrap();
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("constraint"),
+            draft: Box::new(IntentNodeDraft::new(
+                IntentNodeKind::Constraint {
+                    constraint: ConstraintKind::PointOnCurve,
+                },
+                key("constraint.point-on-curve"),
+            )),
+            cell: None,
+        }],
+    );
+    let plan = session
+        .plan_patch(patch, |candidate| {
+            assert_eq!(
+                candidate.semantic_identity().reservations,
+                candidate.reservations().identity()
+            );
+            assert!(candidate.reservations().entries().values().all(|record| {
+                record.state == IntentReservationState::Declared
+                    && candidate.graph().node(record.owner_node).is_some()
+            }));
+            accepted(candidate)
+        })
+        .unwrap();
+    let node = plan.aliases().node(&key("constraint")).unwrap();
+    session.commit_plan(plan).unwrap();
+
+    let node_reservations = session.graph().node(node).unwrap().reservations.clone();
+    assert!(!node_reservations.is_empty());
+    for reservation in node_reservations.values() {
+        let record = &session.reservations().entries()[&reservation.id];
+        assert_eq!(record.kind, reservation.kind);
+        assert_eq!(record.owner_node, node);
+        assert_eq!(record.paired_with, reservation.paired_with);
+        assert_eq!(record.state, IntentReservationState::Declared);
+        let owning_port = session
+            .graph()
+            .node(node)
+            .unwrap()
+            .port(record.owner_port)
+            .unwrap();
+        assert_eq!(
+            owning_port.flow,
+            IntentIdentityFlow::Created {
+                reservation: reservation.id
+            }
+        );
+    }
+    let constraint_reservation = node_reservations
+        .values()
+        .find(|reservation| reservation.kind == IntentNativeReservationKind::Constraint)
+        .unwrap();
+    let source = &session.reservations().entries()[&constraint_reservation.paired_with.unwrap()];
+    assert_eq!(source.kind, IntentNativeReservationKind::ConstraintSource);
+    assert_eq!(source.paired_with, Some(constraint_reservation.id));
+
+    let suppress = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::SetSuppressed {
+            node,
+            suppressed: true,
+        }],
+    );
+    let before_suppress_revision = session.reservations().revision();
+    let plan = session.plan_patch(suppress, accepted).unwrap();
+    session.commit_plan(plan).unwrap();
+    assert_eq!(
+        session.reservations().revision().raw(),
+        before_suppress_revision.raw() + 1
+    );
+    assert!(node_reservations.keys().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Suppressed
+    }));
+
+    session.undo().unwrap().unwrap();
+    assert!(node_reservations.keys().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Declared
+    }));
+    session.redo().unwrap().unwrap();
+    assert!(node_reservations.keys().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Suppressed
+    }));
+
+    let unsuppress = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::SetSuppressed {
+            node,
+            suppressed: false,
+        }],
+    );
+    let plan = session.plan_patch(unsuppress, accepted).unwrap();
+    session.commit_plan(plan).unwrap();
+    let delete = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::DeleteNode {
+            node,
+            policy: DeletePolicy::RejectDependents,
+        }],
+    );
+    let plan = session.plan_patch(delete, accepted).unwrap();
+    session.commit_plan(plan).unwrap();
+    assert!(session.graph().node(node).is_none());
+    assert!(node_reservations.keys().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Tombstoned
+    }));
+
+    session.undo().unwrap().unwrap();
+    assert!(node_reservations.keys().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Declared
+    }));
+    session.redo().unwrap().unwrap();
+    assert!(node_reservations.keys().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Tombstoned
+    }));
+
+    let canonical = session.to_canonical_json().unwrap();
+    let restored = IntentSession::from_json(&canonical).unwrap();
+    assert_eq!(restored.to_canonical_json().unwrap(), canonical);
+    assert_eq!(restored.reservations(), session.reservations());
+    assert_eq!(restored.semantic_identity(), session.semantic_identity());
+}
+
+#[test]
+fn retained_failure_and_divergent_history_preserve_tombstones_and_accepted_authority() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8331)).unwrap();
+    create_point(&mut session, "accepted.point");
+    let accepted_before = session.accepted().unwrap().clone();
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RetainFailedIntent,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("failed"),
+            draft: Box::new(IntentNodeDraft::new(
+                IntentNodeKind::Dimension {
+                    dimension: DimensionKind::CurveLength,
+                },
+                key("failed.dimension"),
+            )),
+            cell: None,
+        }],
+    );
+    let plan = session
+        .plan_patch(patch, |candidate| IntentEvaluation::Failed {
+            failure: IntentEvaluationFailure {
+                kind: IntentEvaluationFailureKind::SolverRejected,
+                failed_nodes: candidate.diff().created_nodes.clone(),
+                diagnostic: key("incompatible-explicit-intent"),
+            },
+        })
+        .unwrap();
+    let failed = plan.aliases().node(&key("failed")).unwrap();
+    session.commit_plan(plan).unwrap();
+    let failed_reservations = session
+        .graph()
+        .node(failed)
+        .unwrap()
+        .reservations
+        .keys()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    assert!(failed_reservations.iter().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Declared
+    }));
+    assert_eq!(session.accepted(), Some(&accepted_before));
+    assert!(failed_reservations.iter().all(|reservation| {
+        !accepted_before
+            .reservations
+            .entries()
+            .contains_key(reservation)
+    }));
+
+    session.undo().unwrap().unwrap();
+    assert!(failed_reservations.iter().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Tombstoned
+    }));
+    assert_eq!(
+        session.accepted().unwrap().target,
+        session.semantic_identity()
+    );
+    assert_eq!(
+        session.accepted().unwrap().reservations,
+        *session.reservations()
+    );
+
+    let allocator_before_divergence = session.allocator_high_water();
+    let (replacement, _) = create_point(&mut session, "replacement.point");
+    assert_eq!(session.redo_len(), 0);
+    assert!(replacement.raw() >= allocator_before_divergence.next_node.raw());
+    assert!(failed_reservations.iter().all(|reservation| {
+        session.reservations().entries()[reservation].state == IntentReservationState::Tombstoned
+            && reservation.raw() < session.allocator_high_water().next_reservation.raw()
+    }));
+}
+
+#[test]
+fn developer_symbols_are_unique_and_organization_edits_are_nonsemantic() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8332)).unwrap();
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("a"),
+                draft: Box::new(point_draft("point.alpha").with_display_name(key("Point"))),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("b"),
+                draft: Box::new(point_draft("point.beta").with_display_name(key("Point"))),
+                cell: None,
+            },
+        ],
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    let alpha = plan.aliases().node(&key("a")).unwrap();
+    session.commit_plan(plan).unwrap();
+    assert_eq!(
+        session
+            .graph()
+            .node_by_symbol(&key("point.alpha"))
+            .unwrap()
+            .id,
+        alpha
+    );
+    assert!(session.graph().node_by_symbol(&key("Point")).is_none());
+
+    let semantic = session.semantic_identity();
+    let accepted_authority = session.accepted().unwrap().clone();
+    let create_cell = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateCell {
+            alias: key("group"),
+            name: key("Group"),
+            before: None,
+        }],
+    );
+    let plan = session
+        .plan_patch(create_cell, |_| panic!("organization must not materialize"))
+        .unwrap();
+    let group = plan.aliases().cell(&key("group")).unwrap();
+    session.commit_plan(plan).unwrap();
+    let organize = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::RenameNode {
+                node: alpha,
+                name: key("Renamed display point"),
+            },
+            IntentPatchOperation::MoveDeclaration {
+                node: alpha,
+                cell: CellTarget::Stable { cell: group },
+                before: None,
+            },
+        ],
+    );
+    let plan = session
+        .plan_patch(organize, |_| panic!("organization must not materialize"))
+        .unwrap();
+    session.commit_plan(plan).unwrap();
+    assert_eq!(session.semantic_identity(), semantic);
+    assert_eq!(session.accepted(), Some(&accepted_authority));
+    assert_eq!(
+        session
+            .graph()
+            .node_by_symbol(&key("point.alpha"))
+            .unwrap()
+            .id,
+        alpha
+    );
+
+    let duplicate_session = IntentSession::with_id(IntentSessionId::from_raw(0x8333)).unwrap();
+    let before = duplicate_session.identity();
+    let allocator = duplicate_session.allocator_high_water();
+    let duplicate = IntentPatch::new(
+        before,
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("left"),
+                draft: Box::new(point_draft("duplicate.symbol").with_display_name(key("Left"))),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("right"),
+                draft: Box::new(point_draft("duplicate.symbol").with_display_name(key("Right"))),
+                cell: None,
+            },
+        ],
+    );
+    assert!(matches!(
+        duplicate_session.plan_patch(duplicate, |_| panic!("duplicate symbols are structural")),
+        Err(IntentPlanError::Graph(IntentGraphError::DuplicateSymbol(symbol)))
+            if symbol == key("duplicate.symbol")
+    ));
+    assert_eq!(duplicate_session.identity(), before);
+    assert_eq!(duplicate_session.allocator_high_water(), allocator);
+}
+
+#[test]
+fn logical_handles_reject_generic_instance_storage_before_materialization() {
+    let session = IntentSession::with_id(IntentSessionId::from_raw(0x8334)).unwrap();
+    let before = session.identity();
+    let allocator = session.allocator_high_water();
+    let handle = IntentPortSelector::Node {
+        role: IntentPortRole::Control,
+        index: 0,
+    };
+    let draft = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::ThreePointCircle,
+        },
+        key("circle.three-point"),
+    )
+    .with_instance_leaf(
+        handle,
+        LeafField::X,
+        IntentLiteral::Quantity {
+            value: 1.0,
+            unit: IntentUnit::Length,
+        },
+    );
+    let patch = IntentPatch::new(
+        before,
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("circle"),
+            draft: Box::new(draft),
+            cell: None,
+        }],
+    );
+    assert!(matches!(
+        session.plan_patch(patch, |_| panic!("handle state is structurally invalid")),
+        Err(IntentPlanError::Graph(
+            IntentGraphError::UnknownWritableLeaf { .. }
+        ))
+    ));
+    assert_eq!(session.identity(), before);
+    assert_eq!(session.allocator_high_water(), allocator);
+}
+
+#[test]
+fn deterministic_history_projection_moves_descriptors_through_undo_redo() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8335)).unwrap();
+    let (point, _) = create_point(&mut session, "history.point");
+    let rename = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::RenameNode {
+            node: point,
+            name: key("History point renamed"),
+        }],
+    );
+    let plan = session
+        .plan_patch(rename, |_| panic!("organization must not materialize"))
+        .unwrap();
+    assert_eq!(
+        plan.descriptor().disposition,
+        IntentPlanDisposition::OrganizationOnly
+    );
+    assert_eq!(
+        plan.descriptor().operation_kinds,
+        vec![IntentPatchOperationKind::RenameNode]
+    );
+    session.commit_plan(plan).unwrap();
+
+    let projection = session.history_projection();
+    assert_eq!(projection.applied.len(), 2);
+    assert!(projection.redoable.is_empty());
+    assert_eq!(
+        projection.applied[0].operation_kinds,
+        vec![IntentPatchOperationKind::CreateNode]
+    );
+    assert_eq!(
+        projection.applied[1].affected_nodes,
+        BTreeSet::from([point])
+    );
+    let canonical = session.to_canonical_json().unwrap();
+    assert!(!canonical.contains("timestamp"));
+    assert!(!canonical.contains("wall_clock"));
+    assert!(!canonical.contains("created_at"));
+    let restored = IntentSession::from_json(&canonical).unwrap();
+    assert_eq!(restored.history_projection(), projection);
+
+    session.undo().unwrap().unwrap();
+    let undone = session.history_projection();
+    assert_eq!(undone.applied.len(), 1);
+    assert_eq!(undone.redoable.len(), 1);
+    assert_eq!(
+        undone.redoable[0].operation_kinds,
+        vec![IntentPatchOperationKind::RenameNode]
+    );
+    session.redo().unwrap().unwrap();
+    assert_eq!(session.history_projection(), projection);
 }

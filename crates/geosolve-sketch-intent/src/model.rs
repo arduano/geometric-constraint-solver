@@ -12,8 +12,8 @@ use crate::ids::{
     PortId, ReservationId, Revision, digest_bytes,
 };
 
-/// Maximum exact byte length retained for one external input component or
-/// independently validated materialization component.
+/// Maximum exact byte length retained for one external-input or host-artifact
+/// component.
 pub const MAX_INTENT_OPAQUE_COMPONENT_BYTES: usize = 16 * 1024 * 1024;
 /// Maximum variable-cardinality children owned by one declaration.
 pub const MAX_INTENT_NODE_CHILDREN: usize = 4_096;
@@ -33,8 +33,6 @@ pub enum IntentModelError {
     },
     #[error("intent literal must be finite")]
     NonFiniteLiteral,
-    #[error("materialization evidence was not independently validated")]
-    UnvalidatedMaterialization,
 }
 
 /// Cartesian component used by typed writable leaves.
@@ -440,8 +438,8 @@ pub enum IntentNodeKind {
         external: ExternalIntentKind,
     },
     /// Honest per-native-object bootstrap/ejection declaration. A host lowers
-    /// its versioned payload through [`crate::IntentCandidate`]'s materializer
-    /// callback and must independently validate the resulting flat scene.
+    /// its versioned payload from [`crate::IntentCandidate`] and remains
+    /// responsible for validating the resulting flat scene.
     Bootstrap {
         object: IntentBootstrapObject,
     },
@@ -1074,6 +1072,10 @@ fn parse_leaf_field(value: &str) -> Option<LeafField> {
 #[serde(deny_unknown_fields)]
 pub struct IntentNodeDraft {
     pub kind: IntentNodeKind,
+    /// Stable unique developer-facing symbol used by source, AI, and host
+    /// projections. Display renames never mutate this key.
+    pub symbol: IntentKey,
+    /// Initial organization-only display name.
     pub name: IntentKey,
     pub inputs: BTreeMap<InputSlot, PatchPortRef>,
     pub fields: BTreeMap<IntentFieldKey, IntentLiteral>,
@@ -1084,16 +1086,25 @@ pub struct IntentNodeDraft {
 
 impl IntentNodeDraft {
     #[must_use]
-    pub fn new(kind: IntentNodeKind, name: IntentKey) -> Self {
+    pub fn new(kind: IntentNodeKind, symbol: IntentKey) -> Self {
         Self {
             kind,
-            name,
+            name: symbol.clone(),
+            symbol,
             inputs: BTreeMap::new(),
             fields: BTreeMap::new(),
             initial_instance: BTreeMap::new(),
             dynamic_children: 0,
             suppressed: false,
         }
+    }
+
+    /// Sets the initial organization-only display name without changing the
+    /// durable developer symbol.
+    #[must_use]
+    pub fn with_display_name(mut self, name: IntentKey) -> Self {
+        self.name = name;
+        self
     }
 
     #[must_use]
@@ -1138,6 +1149,11 @@ pub struct IntentGraphIdentity(pub ComponentIdentity);
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IntentInstanceIdentity(pub ComponentIdentity);
+
+/// Exact identity of the monotonic native-reservation/tombstone ledger.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentReservationLedgerIdentity(pub ComponentIdentity);
 
 /// Exact identity of non-semantic organization state.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -1340,53 +1356,59 @@ pub struct IntentExternalInputsIdentity {
 pub struct IntentSemanticIdentity {
     pub graph: IntentGraphIdentity,
     pub instance: IntentInstanceIdentity,
+    pub reservations: IntentReservationLedgerIdentity,
     pub external_inputs: IntentExternalInputsIdentity,
 }
 
-/// Exact independently validated materialization artifact and reverse-owner
-/// cache published for one semantic identity.
+/// Exact bounded materialization, reverse-owner, and validation artifacts
+/// supplied by the host for one semantic identity.
+///
+/// This equation-free crate authenticates these bytes but cannot independently
+/// validate native geometry or residuals. The host materializer remains
+/// responsible for doing so before returning [`crate::IntentEvaluation::Accepted`].
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MaterializationEvidence {
     pub external_inputs: IntentExternalInputsIdentity,
     pub materialization: Vec<u8>,
     pub ownership: Vec<u8>,
-    pub validation: Vec<u8>,
+    pub host_validation: Vec<u8>,
     pub digest: ContentDigest,
 }
 
 impl MaterializationEvidence {
-    /// Constructs bounded evidence after the host independently validates it.
+    /// Constructs bounded, content-authenticated host artifacts.
     ///
     /// # Errors
     ///
-    /// Returns an error for unvalidated evidence or an excessive component.
+    /// Returns an error for an excessive component.
     ///
     /// # Panics
     ///
     /// Panics only if serialization of this closed schema fails.
-    pub fn new_independently_validated(
+    pub fn new_host_artifacts(
         external_inputs: IntentExternalInputsIdentity,
         materialization: Vec<u8>,
         ownership: Vec<u8>,
-        validation: Vec<u8>,
-        independently_validated: bool,
+        host_validation: Vec<u8>,
     ) -> Result<Self, IntentModelError> {
-        if !independently_validated {
-            return Err(IntentModelError::UnvalidatedMaterialization);
-        }
         validate_component("materialization", &materialization)?;
         validate_component("ownership map", &ownership)?;
-        validate_component("validation evidence", &validation)?;
+        validate_component("host validation artifact", &host_validation)?;
         let digest = digest_bytes(
-            &serde_json::to_vec(&(external_inputs, &materialization, &ownership, &validation))
-                .expect("materialization evidence is infallibly serializable"),
+            &serde_json::to_vec(&(
+                external_inputs,
+                &materialization,
+                &ownership,
+                &host_validation,
+            ))
+            .expect("materialization evidence is infallibly serializable"),
         );
         Ok(Self {
             external_inputs,
             materialization,
             ownership,
-            validation,
+            host_validation,
             digest,
         })
     }
@@ -1736,7 +1758,7 @@ fn geometry_port_specs(recipe: GeometryRecipeKind) -> Vec<PortSpec> {
         specs.borrow_mut().push(PortSpec {
             selector: IntentPortSelector::Node { role, index },
             kind: IntentPortKind::HandlePoint,
-            writable: POINT_LEAVES,
+            writable: NO_LEAVES,
             native: None,
             alias_input: None,
         });

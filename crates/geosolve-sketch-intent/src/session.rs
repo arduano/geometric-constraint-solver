@@ -6,20 +6,21 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::graph::{
-    AllocatedDraft, IntentAllocatorHighWater, IntentGraph, IntentGraphError, allocate_draft,
-    allocated_alias_ports, assign_identity_generations, finish_allocated_draft,
+    AllocatedDraft, IntentAllocatorHighWater, IntentGraph, IntentGraphError,
+    IntentReservationLedger, allocate_draft, allocated_alias_ports, assign_identity_generations,
+    finish_allocated_draft,
 };
 use crate::ids::{
     CellId, ContentDigest, IntentKey, IntentSessionId, NodeId, PlanToken, Revision, digest_bytes,
 };
 use crate::model::{
     IntentExternalInputs, IntentExternalInputsIdentity, IntentInstanceState, IntentOrganization,
-    IntentSemanticIdentity, MaterializationEvidence, OrganizationCell, PatchPortRef,
-    literal_matches_leaf, next_revision,
+    IntentReservationLedgerIdentity, IntentSemanticIdentity, MaterializationEvidence,
+    OrganizationCell, PatchPortRef, literal_matches_leaf, next_revision,
 };
 use crate::patch::{
-    CellTarget, DeletePolicy, IntentAliasMap, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
-    IntentSemanticDiff,
+    CellTarget, DeletePolicy, IntentAliasMap, IntentPatch, IntentPatchOperation,
+    IntentPatchOperationKind, IntentPatchPolicy, IntentSemanticDiff,
 };
 
 /// Strict canonical intent-session wire version.
@@ -41,6 +42,7 @@ pub struct IntentSessionIdentity {
     pub digest: ContentDigest,
     pub graph: crate::IntentGraphIdentity,
     pub instance: crate::IntentInstanceIdentity,
+    pub reservations: IntentReservationLedgerIdentity,
     pub organization: crate::IntentOrganizationIdentity,
     pub external_inputs: IntentExternalInputsIdentity,
 }
@@ -102,23 +104,25 @@ pub struct IntentLatestAttempt {
     pub diagnostic: Option<IntentKey>,
 }
 
-/// Last independently validated accepted scene authority. Its exact host
-/// inputs remain available even while newer failed intent is retained.
+/// Last host-accepted scene authority. Its exact host inputs and authenticated
+/// artifacts remain available even while newer failed intent is retained.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IntentAcceptedAuthority {
     pub target: IntentSemanticIdentity,
     pub graph: IntentGraph,
     pub instance: IntentInstanceState,
+    pub reservations: IntentReservationLedger,
     pub external_inputs: IntentExternalInputs,
     pub evidence: MaterializationEvidence,
 }
 
-/// Immutable validated candidate given to the host materializer.
+/// Immutable structurally validated candidate given to the host materializer.
 #[derive(Clone, Debug)]
 pub struct IntentCandidate {
     graph: IntentGraph,
     instance: IntentInstanceState,
+    reservations: IntentReservationLedger,
     organization: IntentOrganization,
     external_inputs: IntentExternalInputs,
     semantic_identity: IntentSemanticIdentity,
@@ -134,6 +138,11 @@ impl IntentCandidate {
     #[must_use]
     pub const fn instance(&self) -> &IntentInstanceState {
         &self.instance
+    }
+
+    #[must_use]
+    pub const fn reservations(&self) -> &IntentReservationLedger {
+        &self.reservations
     }
 
     #[must_use]
@@ -166,6 +175,62 @@ pub enum IntentPlanDisposition {
     OrganizationOnly,
 }
 
+/// Deterministic, clock-free descriptor of one committed user transaction.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentTransactionDescriptor {
+    pub target_revision: Revision,
+    pub disposition: IntentPlanDisposition,
+    pub operation_kinds: Vec<IntentPatchOperationKind>,
+    pub affected_nodes: BTreeSet<NodeId>,
+    pub diff: IntentSemanticDiff,
+}
+
+impl IntentTransactionDescriptor {
+    fn new(
+        target_revision: Revision,
+        disposition: IntentPlanDisposition,
+        mut operation_kinds: Vec<IntentPatchOperationKind>,
+        diff: IntentSemanticDiff,
+    ) -> Self {
+        operation_kinds.sort_unstable();
+        let affected_nodes = diff.affected_nodes();
+        Self {
+            target_revision,
+            disposition,
+            operation_kinds,
+            affected_nodes,
+            diff,
+        }
+    }
+
+    fn validate(&self) -> Result<(), IntentSessionError> {
+        if self.operation_kinds.is_empty()
+            || !self
+                .operation_kinds
+                .windows(2)
+                .all(|pair| pair[0] <= pair[1])
+            || self.affected_nodes != self.diff.affected_nodes()
+            || (self.disposition == IntentPlanDisposition::OrganizationOnly
+                && self.diff.requires_materialization())
+            || (self.disposition != IntentPlanDisposition::OrganizationOnly
+                && !self.diff.requires_materialization())
+        {
+            return Err(IntentSessionError::InvalidHistoryDescriptor);
+        }
+        Ok(())
+    }
+}
+
+/// Read-only deterministic projection of applied and next-redoable
+/// transactions. `redoable` is ordered in the order Redo will apply it.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentHistoryProjection {
+    pub applied: Vec<IntentTransactionDescriptor>,
+    pub redoable: Vec<IntentTransactionDescriptor>,
+}
+
 /// Opaque staged transaction returned by [`IntentSession::plan_patch`].
 #[derive(Clone, Debug)]
 pub struct IntentPatchPlan {
@@ -175,7 +240,11 @@ pub struct IntentPatchPlan {
     disposition: IntentPlanDisposition,
     aliases: IntentAliasMap,
     diff: IntentSemanticDiff,
+    descriptor: IntentTransactionDescriptor,
     staged: SessionCheckpoint,
+    reservations: IntentReservationLedger,
+    undo: Vec<HistoryEntry>,
+    redo: Vec<HistoryEntry>,
     allocator: IntentAllocatorHighWater,
 }
 
@@ -209,6 +278,11 @@ impl IntentPatchPlan {
     pub const fn diff(&self) -> &IntentSemanticDiff {
         &self.diff
     }
+
+    #[must_use]
+    pub const fn descriptor(&self) -> &IntentTransactionDescriptor {
+        &self.descriptor
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -216,10 +290,18 @@ impl IntentPatchPlan {
 struct SessionCheckpoint {
     graph: IntentGraph,
     instance: IntentInstanceState,
+    reservation_identity: IntentReservationLedgerIdentity,
     organization: IntentOrganization,
     external_inputs: IntentExternalInputs,
     latest_attempt: Option<IntentLatestAttempt>,
     accepted: Option<IntentAcceptedAuthority>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct HistoryEntry {
+    checkpoint: SessionCheckpoint,
+    descriptor: IntentTransactionDescriptor,
 }
 
 /// Retained design-intent authority and bounded transaction history.
@@ -229,12 +311,13 @@ pub struct IntentSession {
     revision: Revision,
     graph: IntentGraph,
     instance: IntentInstanceState,
+    reservations: IntentReservationLedger,
     organization: IntentOrganization,
     external_inputs: IntentExternalInputs,
     latest_attempt: Option<IntentLatestAttempt>,
     accepted: Option<IntentAcceptedAuthority>,
-    undo: Vec<SessionCheckpoint>,
-    redo: Vec<SessionCheckpoint>,
+    undo: Vec<HistoryEntry>,
+    redo: Vec<HistoryEntry>,
     allocator: IntentAllocatorHighWater,
 }
 
@@ -252,6 +335,7 @@ impl IntentSession {
             revision: Revision::from_raw(0),
             graph: IntentGraph::empty(),
             instance: IntentInstanceState::empty(),
+            reservations: IntentReservationLedger::empty(),
             organization: IntentOrganization::new(CellId::from_raw(1), sketch),
             external_inputs: IntentExternalInputs::default(),
             latest_attempt: None,
@@ -275,6 +359,11 @@ impl IntentSession {
     #[must_use]
     pub const fn instance(&self) -> &IntentInstanceState {
         &self.instance
+    }
+
+    #[must_use]
+    pub const fn reservations(&self) -> &IntentReservationLedger {
+        &self.reservations
     }
 
     #[must_use]
@@ -304,7 +393,12 @@ impl IntentSession {
 
     #[must_use]
     pub fn semantic_identity(&self) -> IntentSemanticIdentity {
-        semantic_identity(&self.graph, &self.instance, &self.external_inputs)
+        semantic_identity(
+            &self.graph,
+            &self.instance,
+            self.reservations.identity(),
+            &self.external_inputs,
+        )
     }
 
     #[must_use]
@@ -314,10 +408,13 @@ impl IntentSession {
             self.revision,
             &self.graph,
             &self.instance,
+            &self.reservations,
             &self.organization,
             &self.external_inputs,
             self.latest_attempt.as_ref(),
             self.accepted.as_ref(),
+            &self.undo,
+            &self.redo,
             self.allocator,
         )
     }
@@ -352,7 +449,13 @@ impl IntentSession {
         }
         validate_patch_conflicts(patch.operations())?;
         let policy = patch.policy;
+        let operation_kinds = patch
+            .operations()
+            .iter()
+            .map(IntentPatchOperation::kind)
+            .collect::<Vec<_>>();
         let mut staged = self.checkpoint();
+        let mut reservations = self.reservations.clone();
         let mut allocator = self.allocator;
         let mut aliases = IntentAliasMap::default();
         let mut diff = IntentSemanticDiff::default();
@@ -385,11 +488,22 @@ impl IntentSession {
         }
         assign_identity_generations(&mut staged.graph)?;
         staged.graph.validate()?;
+        if reservations.reconcile(&staged.graph)? {
+            reservations.revision =
+                next_revision(reservations.revision).ok_or(IntentPlanError::RevisionExhausted)?;
+        }
+        staged.reservation_identity = reservations.identity();
         validate_organization(&staged.graph, &staged.organization)?;
-        let semantic = semantic_identity(&staged.graph, &staged.instance, &staged.external_inputs);
+        let semantic = semantic_identity(
+            &staged.graph,
+            &staged.instance,
+            staged.reservation_identity,
+            &staged.external_inputs,
+        );
         let candidate = IntentCandidate {
             graph: staged.graph.clone(),
             instance: staged.instance.clone(),
+            reservations: reservations.clone(),
             organization: staged.organization.clone(),
             external_inputs: staged.external_inputs.clone(),
             semantic_identity: semantic,
@@ -413,6 +527,7 @@ impl IntentSession {
                         target: semantic,
                         graph: staged.graph.clone(),
                         instance: staged.instance.clone(),
+                        reservations: reservations.clone(),
                         external_inputs: staged.external_inputs.clone(),
                         evidence,
                     });
@@ -445,15 +560,30 @@ impl IntentSession {
         };
 
         let revision = next_revision(self.revision).ok_or(IntentPlanError::RevisionExhausted)?;
+        let descriptor =
+            IntentTransactionDescriptor::new(revision, disposition, operation_kinds, diff.clone());
+        descriptor.validate()?;
+        let mut undo = self.undo.clone();
+        push_bounded(
+            &mut undo,
+            HistoryEntry {
+                checkpoint: self.checkpoint(),
+                descriptor: descriptor.clone(),
+            },
+        );
+        let redo = Vec::new();
         let target = session_identity(
             self.id,
             revision,
             &staged.graph,
             &staged.instance,
+            &reservations,
             &staged.organization,
             &staged.external_inputs,
             staged.latest_attempt.as_ref(),
             staged.accepted.as_ref(),
+            &undo,
+            &redo,
             allocator,
         );
         let base = self.identity();
@@ -463,7 +593,11 @@ impl IntentSession {
             disposition,
             &aliases,
             &diff,
+            &descriptor,
             &staged,
+            &reservations,
+            &undo,
+            &redo,
             allocator,
         );
         Ok(IntentPatchPlan {
@@ -473,7 +607,11 @@ impl IntentSession {
             disposition,
             aliases,
             diff,
+            descriptor,
             staged,
+            reservations,
+            undo,
+            redo,
             allocator,
         })
     }
@@ -496,22 +634,28 @@ impl IntentSession {
             plan.disposition,
             &plan.aliases,
             &plan.diff,
+            &plan.descriptor,
             &plan.staged,
+            &plan.reservations,
+            &plan.undo,
+            &plan.redo,
             plan.allocator,
         );
         if expected_token != plan.token {
             return Err(IntentSessionError::InvalidPlanToken);
         }
-        let checkpoint = self.checkpoint();
-        push_bounded(&mut self.undo, checkpoint);
-        self.redo.clear();
-        self.restore_checkpoint(plan.staged);
-        self.allocator = plan.allocator;
-        self.revision = plan.target.revision;
-        let actual = self.identity();
+        let mut staged = self.clone();
+        staged.restore_checkpoint(plan.staged);
+        staged.reservations = plan.reservations;
+        staged.undo = plan.undo;
+        staged.redo = plan.redo;
+        staged.allocator = plan.allocator;
+        staged.revision = plan.target.revision;
+        let actual = staged.identity();
         if actual != plan.target {
             return Err(IntentSessionError::InvalidPlanToken);
         }
+        *self = staged;
         Ok(actual)
     }
 
@@ -524,15 +668,26 @@ impl IntentSession {
     /// Returns an error if the revision exhausts or restored authority fails
     /// validation.
     pub fn undo(&mut self) -> Result<Option<IntentSessionIdentity>, IntentSessionError> {
-        let Some(checkpoint) = self.undo.pop() else {
+        if self.undo.is_empty() {
+            return Ok(None);
+        }
+        let mut staged = self.clone();
+        let Some(entry) = staged.undo.pop() else {
             return Ok(None);
         };
-        let current = self.checkpoint();
-        push_bounded(&mut self.redo, current);
-        self.restore_history_checkpoint(checkpoint)?;
-        self.revision =
-            next_revision(self.revision).ok_or(IntentSessionError::RevisionExhausted)?;
-        self.validate()?;
+        let current = staged.checkpoint();
+        push_bounded(
+            &mut staged.redo,
+            HistoryEntry {
+                checkpoint: current,
+                descriptor: entry.descriptor,
+            },
+        );
+        staged.restore_history_checkpoint(entry.checkpoint)?;
+        staged.revision =
+            next_revision(staged.revision).ok_or(IntentSessionError::RevisionExhausted)?;
+        staged.validate()?;
+        *self = staged;
         Ok(Some(self.identity()))
     }
 
@@ -544,15 +699,26 @@ impl IntentSession {
     /// Returns an error if the revision exhausts or restored authority fails
     /// validation.
     pub fn redo(&mut self) -> Result<Option<IntentSessionIdentity>, IntentSessionError> {
-        let Some(checkpoint) = self.redo.pop() else {
+        if self.redo.is_empty() {
+            return Ok(None);
+        }
+        let mut staged = self.clone();
+        let Some(entry) = staged.redo.pop() else {
             return Ok(None);
         };
-        let current = self.checkpoint();
-        push_bounded(&mut self.undo, current);
-        self.restore_history_checkpoint(checkpoint)?;
-        self.revision =
-            next_revision(self.revision).ok_or(IntentSessionError::RevisionExhausted)?;
-        self.validate()?;
+        let current = staged.checkpoint();
+        push_bounded(
+            &mut staged.undo,
+            HistoryEntry {
+                checkpoint: current,
+                descriptor: entry.descriptor,
+            },
+        );
+        staged.restore_history_checkpoint(entry.checkpoint)?;
+        staged.revision =
+            next_revision(staged.revision).ok_or(IntentSessionError::RevisionExhausted)?;
+        staged.validate()?;
+        *self = staged;
         Ok(Some(self.identity()))
     }
 
@@ -564,6 +730,24 @@ impl IntentSession {
     #[must_use]
     pub fn redo_len(&self) -> usize {
         self.redo.len()
+    }
+
+    /// Returns a deterministic, clock-free read-only transaction projection.
+    #[must_use]
+    pub fn history_projection(&self) -> IntentHistoryProjection {
+        IntentHistoryProjection {
+            applied: self
+                .undo
+                .iter()
+                .map(|entry| entry.descriptor.clone())
+                .collect(),
+            redoable: self
+                .redo
+                .iter()
+                .rev()
+                .map(|entry| entry.descriptor.clone())
+                .collect(),
+        }
     }
 
     /// Exports current intent, exact accepted/attempt authority, monotonic
@@ -582,6 +766,7 @@ impl IntentSession {
             current: self.checkpoint(),
             undo: self.undo.clone(),
             redo: self.redo.clone(),
+            reservations: self.reservations.clone(),
             allocator: self.allocator,
             digest: ContentDigest::zero(),
         };
@@ -621,11 +806,15 @@ impl IntentSession {
         if serde_json::to_string(&wire)? != json {
             return Err(IntentSessionError::NonCanonicalJson);
         }
+        if wire.current.reservation_identity != wire.reservations.identity() {
+            return Err(IntentSessionError::InvalidAuthority);
+        }
         let session = Self {
             id: wire.id,
             revision: wire.revision,
             graph: wire.current.graph,
             instance: wire.current.instance,
+            reservations: wire.reservations,
             organization: wire.current.organization,
             external_inputs: wire.current.external_inputs,
             latest_attempt: wire.current.latest_attempt,
@@ -642,6 +831,7 @@ impl IntentSession {
         SessionCheckpoint {
             graph: self.graph.clone(),
             instance: self.instance.clone(),
+            reservation_identity: self.reservations.identity(),
             organization: self.organization.clone(),
             external_inputs: self.external_inputs.clone(),
             latest_attempt: self.latest_attempt.clone(),
@@ -672,6 +862,7 @@ impl IntentSession {
         let checkpoint_semantic = semantic_identity(
             &checkpoint.graph,
             &checkpoint.instance,
+            checkpoint.reservation_identity,
             &checkpoint.external_inputs,
         );
         let accepted_was_current = checkpoint
@@ -695,9 +886,15 @@ impl IntentSession {
         } else {
             self.organization.revision
         };
+        if self.reservations.reconcile(&checkpoint.graph)? {
+            self.reservations.revision = next_revision(self.reservations.revision)
+                .ok_or(IntentSessionError::RevisionExhausted)?;
+        }
+        checkpoint.reservation_identity = self.reservations.identity();
         let restored_semantic = semantic_identity(
             &checkpoint.graph,
             &checkpoint.instance,
+            checkpoint.reservation_identity,
             &checkpoint.external_inputs,
         );
         if let Some(attempt) = &mut checkpoint.latest_attempt {
@@ -707,6 +904,7 @@ impl IntentSession {
             accepted.target = restored_semantic;
             accepted.graph.clone_from(&checkpoint.graph);
             accepted.instance.clone_from(&checkpoint.instance);
+            accepted.reservations.clone_from(&self.reservations);
         }
         self.restore_checkpoint(checkpoint);
         Ok(())
@@ -735,15 +933,32 @@ impl IntentSession {
         {
             return Err(IntentSessionError::HistoryLimit);
         }
-        validate_checkpoint(&self.checkpoint())?;
-        for checkpoint in self.undo.iter().chain(&self.redo) {
-            validate_checkpoint(checkpoint)?;
+        if self.undo.iter().chain(&self.redo).any(|entry| {
+            entry.descriptor.target_revision.raw() == 0
+                || entry.descriptor.target_revision > self.revision
+        }) || !self
+            .undo
+            .windows(2)
+            .all(|pair| pair[0].descriptor.target_revision < pair[1].descriptor.target_revision)
+            || !self
+                .redo
+                .windows(2)
+                .all(|pair| pair[0].descriptor.target_revision > pair[1].descriptor.target_revision)
+        {
+            return Err(IntentSessionError::InvalidHistoryDescriptor);
+        }
+        self.reservations.validate_against_graph(&self.graph)?;
+        validate_checkpoint(&self.checkpoint(), &self.reservations)?;
+        for entry in self.undo.iter().chain(&self.redo) {
+            entry.descriptor.validate()?;
+            validate_checkpoint(&entry.checkpoint, &self.reservations)?;
         }
         validate_allocator(
             self.allocator,
             std::iter::once(&self.checkpoint())
-                .chain(self.undo.iter())
-                .chain(self.redo.iter()),
+                .chain(self.undo.iter().map(|entry| &entry.checkpoint))
+                .chain(self.redo.iter().map(|entry| &entry.checkpoint)),
+            &self.reservations,
         )?;
         Ok(())
     }
@@ -756,8 +971,9 @@ struct IntentSessionWire {
     id: IntentSessionId,
     revision: Revision,
     current: SessionCheckpoint,
-    undo: Vec<SessionCheckpoint>,
-    redo: Vec<SessionCheckpoint>,
+    undo: Vec<HistoryEntry>,
+    redo: Vec<HistoryEntry>,
+    reservations: IntentReservationLedger,
     allocator: IntentAllocatorHighWater,
     digest: ContentDigest,
 }
@@ -771,6 +987,7 @@ fn session_wire_digest(wire: &IntentSessionWire) -> ContentDigest {
             &wire.current,
             &wire.undo,
             &wire.redo,
+            &wire.reservations,
             wire.allocator,
         ))
         .expect("session wire payload is infallibly serializable"),
@@ -780,11 +997,13 @@ fn session_wire_digest(wire: &IntentSessionWire) -> ContentDigest {
 fn semantic_identity(
     graph: &IntentGraph,
     instance: &IntentInstanceState,
+    reservations: IntentReservationLedgerIdentity,
     external_inputs: &IntentExternalInputs,
 ) -> IntentSemanticIdentity {
     IntentSemanticIdentity {
         graph: graph.identity(),
         instance: instance.identity(),
+        reservations,
         external_inputs: external_inputs.identity(),
     }
 }
@@ -795,14 +1014,18 @@ fn session_identity(
     revision: Revision,
     graph: &IntentGraph,
     instance: &IntentInstanceState,
+    reservations: &IntentReservationLedger,
     organization: &IntentOrganization,
     external_inputs: &IntentExternalInputs,
     latest_attempt: Option<&IntentLatestAttempt>,
     accepted: Option<&IntentAcceptedAuthority>,
+    undo: &[HistoryEntry],
+    redo: &[HistoryEntry],
     allocator: IntentAllocatorHighWater,
 ) -> IntentSessionIdentity {
     let graph_identity = graph.identity();
     let instance_identity = instance.identity();
+    let reservation_identity = reservations.identity();
     let organization_identity = organization.identity();
     let external_identity = external_inputs.identity();
     let digest = digest_bytes(
@@ -811,10 +1034,13 @@ fn session_identity(
             revision,
             graph_identity,
             instance_identity,
+            reservation_identity,
             organization_identity,
             external_identity,
             latest_attempt,
             accepted,
+            undo,
+            redo,
             allocator,
         ))
         .expect("session identity payload is infallibly serializable"),
@@ -825,6 +1051,7 @@ fn session_identity(
         digest,
         graph: graph_identity,
         instance: instance_identity,
+        reservations: reservation_identity,
         organization: organization_identity,
         external_inputs: external_identity,
     }
@@ -837,12 +1064,28 @@ fn plan_token(
     disposition: IntentPlanDisposition,
     aliases: &IntentAliasMap,
     diff: &IntentSemanticDiff,
+    descriptor: &IntentTransactionDescriptor,
     staged: &SessionCheckpoint,
+    reservations: &IntentReservationLedger,
+    undo: &[HistoryEntry],
+    redo: &[HistoryEntry],
     allocator: IntentAllocatorHighWater,
 ) -> PlanToken {
     PlanToken::new(digest_bytes(
-        &serde_json::to_vec(&(base, target, disposition, aliases, diff, staged, allocator))
-            .expect("plan token payload is infallibly serializable"),
+        &serde_json::to_vec(&(
+            base,
+            target,
+            disposition,
+            aliases,
+            diff,
+            descriptor,
+            staged,
+            reservations,
+            undo,
+            redo,
+            allocator,
+        ))
+        .expect("plan token payload is infallibly serializable"),
     ))
 }
 
@@ -939,6 +1182,13 @@ fn apply_patch_operations(
         diff.organization_changed = true;
     }
 
+    let mut create_nodes = create_nodes.into_iter().collect::<Vec<_>>();
+    create_nodes.sort_by(|(left_alias, (left, _)), (right_alias, (right, _))| {
+        left.0
+            .symbol
+            .cmp(&right.0.symbol)
+            .then_with(|| left_alias.cmp(right_alias))
+    });
     let mut allocated = Vec::<(AllocatedDraft, Option<CellTarget>)>::new();
     for (alias, (draft, cell)) in create_nodes {
         let value = allocate_draft(draft.0, allocator)?;
@@ -1272,8 +1522,15 @@ fn validate_organization(
     Ok(())
 }
 
-fn validate_checkpoint(checkpoint: &SessionCheckpoint) -> Result<(), IntentSessionError> {
+fn validate_checkpoint(
+    checkpoint: &SessionCheckpoint,
+    reservations: &IntentReservationLedger,
+) -> Result<(), IntentSessionError> {
     checkpoint.graph.validate()?;
+    reservations.validate_graph_metadata(&checkpoint.graph)?;
+    if checkpoint.reservation_identity.0.revision > reservations.revision() {
+        return Err(IntentSessionError::InvalidAuthority);
+    }
     validate_organization(&checkpoint.graph, &checkpoint.organization)?;
     for (leaf, value) in checkpoint.instance.values() {
         checkpoint.graph.writable_leaf(*leaf)?;
@@ -1285,6 +1542,7 @@ fn validate_checkpoint(checkpoint: &SessionCheckpoint) -> Result<(), IntentSessi
     let semantic = semantic_identity(
         &checkpoint.graph,
         &checkpoint.instance,
+        checkpoint.reservation_identity,
         &checkpoint.external_inputs,
     );
     if let Some(attempt) = &checkpoint.latest_attempt {
@@ -1325,6 +1583,7 @@ fn validate_checkpoint(checkpoint: &SessionCheckpoint) -> Result<(), IntentSessi
     if let Some(accepted) = &checkpoint.accepted
         && (accepted.graph.identity() != accepted.target.graph
             || accepted.instance.identity() != accepted.target.instance
+            || accepted.reservations.identity() != accepted.target.reservations
             || accepted.external_inputs.identity() != accepted.target.external_inputs
             || accepted.external_inputs.identity() != accepted.evidence.external_inputs
             || accepted.target.external_inputs != accepted.evidence.external_inputs
@@ -1334,12 +1593,18 @@ fn validate_checkpoint(checkpoint: &SessionCheckpoint) -> Result<(), IntentSessi
                         accepted.evidence.external_inputs,
                         &accepted.evidence.materialization,
                         &accepted.evidence.ownership,
-                        &accepted.evidence.validation,
+                        &accepted.evidence.host_validation,
                     ))
                     .expect("accepted evidence is infallibly serializable"),
                 ))
     {
         return Err(IntentSessionError::InvalidAuthority);
+    }
+    if let Some(accepted) = &checkpoint.accepted {
+        accepted
+            .reservations
+            .validate_against_graph(&accepted.graph)?;
+        reservations.validate_superset_of(&accepted.reservations)?;
     }
     Ok(())
 }
@@ -1347,7 +1612,15 @@ fn validate_checkpoint(checkpoint: &SessionCheckpoint) -> Result<(), IntentSessi
 fn validate_allocator<'a>(
     allocator: IntentAllocatorHighWater,
     checkpoints: impl Iterator<Item = &'a SessionCheckpoint>,
+    reservations: &IntentReservationLedger,
 ) -> Result<(), IntentSessionError> {
+    if reservations.entries().values().any(|record| {
+        record.id.raw() >= allocator.next_reservation.raw()
+            || record.owner_node.raw() >= allocator.next_node.raw()
+            || record.owner_port.raw() >= allocator.next_port.raw()
+    }) {
+        return Err(IntentSessionError::AllocatorRegression);
+    }
     for checkpoint in checkpoints {
         for node in checkpoint.graph.nodes().values() {
             if node.id.raw() >= allocator.next_node.raw()
@@ -1379,11 +1652,11 @@ fn validate_allocator<'a>(
     Ok(())
 }
 
-fn push_bounded(history: &mut Vec<SessionCheckpoint>, checkpoint: SessionCheckpoint) {
+fn push_bounded(history: &mut Vec<HistoryEntry>, entry: HistoryEntry) {
     if history.len() == MAX_INTENT_HISTORY_ENTRIES {
         history.remove(0);
     }
-    history.push(checkpoint);
+    history.push(entry);
 }
 
 /// Patch planning failure. Every variant leaves current intent, accepted scene,
@@ -1481,6 +1754,8 @@ pub enum IntentSessionError {
     AllocatorRegression,
     #[error("intent history exceeds the fixed bound")]
     HistoryLimit,
+    #[error("invalid deterministic intent-history descriptor")]
+    InvalidHistoryDescriptor,
     #[error("intent session JSON exceeds {limit} bytes")]
     JsonResourceLimit { limit: usize },
     #[error("unsupported intent session version {actual}; expected {expected}")]
@@ -1497,4 +1772,88 @@ pub enum IntentSessionError {
     Key(#[from] crate::IntentKeyError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        GeometryRecipeKind, IntentNodeDraft, IntentNodeKind, IntentPatchOperationKind,
+        IntentReservationState,
+    };
+
+    fn key(value: &str) -> IntentKey {
+        IntentKey::new(value).unwrap()
+    }
+
+    fn accepted(candidate: &IntentCandidate) -> IntentEvaluation {
+        IntentEvaluation::Accepted {
+            evidence: MaterializationEvidence::new_host_artifacts(
+                candidate.external_inputs().identity(),
+                b"materialization".to_vec(),
+                b"ownership".to_vec(),
+                b"host-validation".to_vec(),
+            )
+            .unwrap(),
+        }
+    }
+
+    #[test]
+    fn tombstone_ledger_is_independent_of_bounded_history_eviction() {
+        let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83ff)).unwrap();
+        let create = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("doomed"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::SketchPoint,
+                    },
+                    key("doomed.point"),
+                )),
+                cell: None,
+            }],
+        );
+        let plan = session.plan_patch(create, accepted).unwrap();
+        let doomed = plan.aliases().node(&key("doomed")).unwrap();
+        session.commit_plan(plan).unwrap();
+        let reservation = *session
+            .graph()
+            .node(doomed)
+            .unwrap()
+            .reservations
+            .keys()
+            .next()
+            .unwrap();
+        let delete = IntentPatch::new(
+            session.identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::DeleteNode {
+                node: doomed,
+                policy: DeletePolicy::RejectDependents,
+            }],
+        );
+        let plan = session.plan_patch(delete, accepted).unwrap();
+        session.commit_plan(plan).unwrap();
+        let template = session.undo.last().unwrap().clone();
+
+        for offset in 0..MAX_INTENT_HISTORY_ENTRIES {
+            let mut entry = template.clone();
+            entry.descriptor.target_revision = Revision::from_raw(3 + offset as u64);
+            push_bounded(&mut session.undo, entry);
+        }
+        session.revision = Revision::from_raw(2 + MAX_INTENT_HISTORY_ENTRIES as u64);
+
+        assert_eq!(session.undo.len(), MAX_INTENT_HISTORY_ENTRIES);
+        assert!(session.undo.iter().all(|entry| {
+            entry.descriptor.operation_kinds == vec![IntentPatchOperationKind::DeleteNode]
+        }));
+        assert_eq!(
+            session.reservations.entries()[&reservation].state,
+            IntentReservationState::Tombstoned
+        );
+        assert!(reservation.raw() < session.allocator.next_reservation.raw());
+        session.validate().unwrap();
+    }
 }
