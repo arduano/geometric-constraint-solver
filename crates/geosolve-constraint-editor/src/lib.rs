@@ -16,6 +16,7 @@ mod feature_authoring;
 mod geometry_tools;
 mod inference;
 mod intent;
+mod intent_bootstrap;
 mod intent_coordinator;
 mod intent_editor;
 mod intent_inputs;
@@ -90,6 +91,18 @@ pub use intent::{
     ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
     IntentMaterializationMap, IntentNativeBinding, IntentNativeWritableLeaf,
     IntentNodeMaterialization, IntentValidationEvidence,
+};
+pub use intent_bootstrap::{
+    BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1, BOOTSTRAP_CONSTRAINT_CODEC_V1, BOOTSTRAP_CONTACT_CODEC_V1,
+    BOOTSTRAP_CURVE_CODEC_V1, BOOTSTRAP_DIMENSION_CODEC_V1, BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1,
+    BOOTSTRAP_EXTERNAL_BINDING_CODEC_V1, BOOTSTRAP_GEOMETRY_ROLE_CODEC_V1,
+    BOOTSTRAP_HOST_ACTIVATION_HEADER_CODEC_V1, BOOTSTRAP_HOST_ACTIVATION_OVERRIDE_CODEC_V1,
+    BOOTSTRAP_PARAMETER_BINDING_CODEC_V1, BOOTSTRAP_PARAMETER_CODEC_V1,
+    BOOTSTRAP_PARAMETER_OUTPUT_CODEC_V1, BOOTSTRAP_POINT_CODEC_V1, BOOTSTRAP_SCALAR_CODEC_V1,
+    BOOTSTRAP_SEMANTIC_CATALOG_CODEC_V1, BOOTSTRAP_SEMANTIC_SOURCE_CODEC_V1,
+    BOOTSTRAP_SOURCE_ORDER_ENTRY_CODEC_V1, BOOTSTRAP_TRIM_VIEW_CODEC_V1,
+    BOOTSTRAP_USER_INACTIVE_ENTRY_CODEC_V1, DecodedFlatIntentBootstrap, IntentBootstrapError,
+    decode_flat_intent_bootstrap, normalize_flat_sketch_intent,
 };
 pub use intent_coordinator::{
     ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
