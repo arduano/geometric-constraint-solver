@@ -3,6 +3,8 @@
 #[cfg(any(target_arch = "wasm32", test))]
 mod action_surface;
 #[cfg(any(target_arch = "wasm32", test))]
+mod design_projection;
+#[cfg(any(target_arch = "wasm32", test))]
 mod effect_adapter;
 #[cfg(any(target_arch = "wasm32", test))]
 mod geometry_palette;
@@ -115,9 +117,8 @@ impl DesignProjectionTab {
     const fn adjacent(self, direction: i8) -> Self {
         match (self, direction.signum()) {
             (Self::Outline, -1) => Self::History,
-            (Self::History, 1) => Self::Outline,
+            (Self::History, 1) | (Self::StructuredSource, -1) => Self::Outline,
             (Self::Outline, 1) | (Self::History, -1) => Self::StructuredSource,
-            (Self::StructuredSource, -1) => Self::Outline,
             (Self::StructuredSource, 1) => Self::History,
             (_, _) => self,
         }

@@ -349,6 +349,76 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-design-source:empty::before { content: "Structured source will appear for the current design."; }
 .wb-design-history:empty::before { content: "Committed design transactions will appear here."; }
+.wb-intent-cell { margin-bottom: 0.45rem; }
+.wb-intent-cell h3,
+.wb-design-history h3 {
+  margin: 0.25rem 0.25rem 0.2rem;
+  color: #77827f;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.wb-intent-row {
+  display: grid;
+  width: 100%;
+  min-height: 2.3rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.12rem 0.45rem;
+  align-items: center;
+  padding: 0.34rem 0.42rem;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+}
+.wb-intent-row:hover { border-color: #3a4241; background: #272c2c; }
+.wb-intent-row.selected { border-color: #7a653f; color: #f2d39a; background: #3b3325; }
+.wb-intent-row[data-intent-state="invalid"] { border-color: #8a4d48; background: #382827; }
+.wb-intent-row[data-intent-state="suppressed"] { opacity: 0.58; }
+.wb-intent-kind {
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding: 0.16rem 0.26rem;
+  border-radius: 0.18rem;
+  color: #8db8b7;
+  background: #253334;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.wb-intent-name { min-width: 0; overflow: hidden; font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+.wb-intent-row small { min-width: 0; overflow: hidden; color: #75807e; font-size: 0.55rem; text-overflow: ellipsis; white-space: nowrap; }
+.wb-intent-source-line {
+  display: grid;
+  grid-template-columns: 2rem minmax(max-content, 1fr);
+  min-width: max-content;
+  border-left: 2px solid transparent;
+  font-size: 0.61rem;
+  line-height: 1.45;
+}
+.wb-intent-source-line:hover { background: #272c2c; }
+.wb-intent-source-line.selected { border-left-color: #d29a45; background: #332e25; }
+.wb-intent-source-line > span { padding-right: 0.45rem; color: #56605e; text-align: right; user-select: none; }
+.wb-intent-source-line code { padding-right: 0.6rem; color: #abb8b5; white-space: pre; }
+.wb-intent-history-list { display: grid; gap: 0.22rem; margin: 0; padding: 0; list-style: none; }
+.wb-intent-history-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.1rem 0.4rem;
+  padding: 0.36rem 0.42rem;
+  border: 1px solid #343a3a;
+  border-radius: 0.2rem;
+  background: #242929;
+}
+.wb-intent-history-list strong { color: #b7c2bf; font-size: 0.58rem; }
+.wb-intent-history-list span { overflow: hidden; color: #d2b47c; font-size: 0.64rem; text-overflow: ellipsis; white-space: nowrap; }
+.wb-intent-history-list small { grid-column: 2; color: #707a78; font-size: 0.54rem; }
+.wb-intent-history-list.redoable { opacity: 0.58; }
+.wb-intent-inspector { display: grid; gap: 0.55rem; }
+.wb-intent-inspector h3 { margin: 0; color: #e3c181; }
+.wb-intent-inspector p { margin: 0; color: #788481; font-size: 0.64rem; }
+.wb-intent-inspector fieldset { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; margin: 0; padding: 0.35rem; border: 1px solid #3a4141; }
+.wb-intent-inspector legend { padding: 0 0.25rem; color: #aeb7b5; font-size: 0.62rem; }
 .wb-tree-group-label {
   display: flex;
   align-items: center;
