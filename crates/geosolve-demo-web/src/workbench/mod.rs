@@ -142,22 +142,33 @@ impl WorkbenchRenderScope {
 
 /// Exactly one durable document/history authority installed in the workbench.
 ///
-/// Flat v1-v6 workspaces and samples retain the accepted M81 coordinator. A
-/// canonical v8 workspace installs only the projectional editor session whose
-/// native materialization was independently cold-authenticated.
+/// Strict v1-v6 workspaces normalize into a history-free projectional editor.
+/// A canonical v8 workspace installs only the projectional editor session
+/// whose native materialization was independently cold-authenticated. Fresh
+/// in-process sample coordinators remain flat until their authoring bridge is
+/// deliberately activated.
 #[cfg(any(target_arch = "wasm32", test))]
 enum WorkbenchDocumentAuthority {
     Flat(Box<geosolve_constraint_editor::RetainedEditorCoordinator>),
-    Projectional(Box<geosolve_constraint_editor::ProjectionalEditorSession>),
+    Projectional {
+        editor: Box<geosolve_constraint_editor::ProjectionalEditorSession>,
+        computed_evaluation_high_water:
+            geosolve_constraint_editor::ComputedEvaluationAllocatorHighWater,
+        revisions: persistence::WorkspaceRevisions,
+    },
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
 impl WorkbenchDocumentAuthority {
     fn from_snapshot(snapshot: &persistence::WorkspaceSnapshot) -> Result<Self, String> {
+        let computed_evaluation_high_water = snapshot.computed_evaluation_high_water();
+        let revisions = snapshot.revisions;
         if snapshot.intent_session()?.is_some() {
             persistence::projectional_editor_from_snapshot(snapshot)
-                .map(Box::new)
-                .map(Self::Projectional)
+                .map(|editor| Self::projectional(editor, computed_evaluation_high_water, revisions))
+        } else if snapshot.legacy_bootstrap().is_some() {
+            persistence::projectional_editor_from_legacy_snapshot(snapshot)
+                .map(|editor| Self::projectional(editor, computed_evaluation_high_water, revisions))
         } else {
             persistence::coordinator_from_snapshot(snapshot)
                 .map(Box::new)
@@ -170,14 +181,26 @@ impl WorkbenchDocumentAuthority {
         Self::Flat(Box::new(coordinator))
     }
 
+    fn projectional(
+        editor: geosolve_constraint_editor::ProjectionalEditorSession,
+        computed_evaluation_high_water: geosolve_constraint_editor::ComputedEvaluationAllocatorHighWater,
+        revisions: persistence::WorkspaceRevisions,
+    ) -> Self {
+        Self::Projectional {
+            editor: Box::new(editor),
+            computed_evaluation_high_water,
+            revisions,
+        }
+    }
+
     const fn is_projectional(&self) -> bool {
-        matches!(self, Self::Projectional(_))
+        matches!(self, Self::Projectional { .. })
     }
 
     const fn flat_ref(&self) -> Option<&geosolve_constraint_editor::RetainedEditorCoordinator> {
         match self {
             Self::Flat(coordinator) => Some(coordinator),
-            Self::Projectional(_) => None,
+            Self::Projectional { .. } => None,
         }
     }
 
@@ -186,7 +209,7 @@ impl WorkbenchDocumentAuthority {
     ) -> Option<&mut geosolve_constraint_editor::ProjectionalEditorSession> {
         match self {
             Self::Flat(_) => None,
-            Self::Projectional(projectional) => Some(projectional),
+            Self::Projectional { editor, .. } => Some(editor),
         }
     }
 
@@ -195,7 +218,7 @@ impl WorkbenchDocumentAuthority {
     ) -> Option<&geosolve_constraint_editor::ProjectionalEditorSession> {
         match self {
             Self::Flat(_) => None,
-            Self::Projectional(projectional) => Some(projectional),
+            Self::Projectional { editor, .. } => Some(editor),
         }
     }
 
@@ -204,8 +227,16 @@ impl WorkbenchDocumentAuthority {
             Self::Flat(coordinator) => {
                 persistence::WorkspaceSnapshot::from_coordinator(coordinator)
             }
-            Self::Projectional(projectional) => {
-                persistence::WorkspaceSnapshot::from_projectional_editor(projectional)
+            Self::Projectional {
+                editor,
+                computed_evaluation_high_water,
+                revisions,
+            } => {
+                persistence::WorkspaceSnapshot::from_projectional_editor_with_persistence_high_water(
+                    editor,
+                    *computed_evaluation_high_water,
+                    *revisions,
+                )
             }
         }
     }
@@ -219,8 +250,8 @@ impl WorkbenchDocumentAuthority {
             Self::Flat(coordinator) => {
                 compose_editor_scene(coordinator, viewport, chord_tolerance_pixels)
             }
-            Self::Projectional(projectional) => {
-                projectional.scene(viewport, chord_tolerance_pixels).ok()
+            Self::Projectional { editor, .. } => {
+                editor.scene(viewport, chord_tolerance_pixels).ok()
             }
         }
     }
@@ -234,13 +265,9 @@ impl WorkbenchDocumentAuthority {
             }
             .map(|()| true)
             .map_err(|error| error.to_string()),
-            Self::Projectional(projectional) => if undo {
-                projectional.undo()
-            } else {
-                projectional.redo()
-            }
-            .map(|moved| moved.is_some())
-            .map_err(|error| error.to_string()),
+            Self::Projectional { editor, .. } => if undo { editor.undo() } else { editor.redo() }
+                .map(|moved| moved.is_some())
+                .map_err(|error| error.to_string()),
         }
     }
 }
@@ -263,7 +290,7 @@ impl std::ops::DerefMut for WorkbenchDocumentAuthority {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             Self::Flat(coordinator) => coordinator,
-            Self::Projectional(_) => {
+            Self::Projectional { .. } => {
                 panic!("flat-only workbench adapter received projectional authority")
             }
         }
@@ -10458,7 +10485,7 @@ mod tests {
     }
 
     #[test]
-    fn flat_v6_routes_through_unchanged_retained_coordinator_authority() {
+    fn flat_v6_routes_through_history_free_projectional_bootstrap_authority() {
         let coordinator = RetainedEditorCoordinator::new(
             RetainedSketchDocumentSession::new(
                 SketchDocument::new(1.0).unwrap(),
@@ -10471,9 +10498,18 @@ mod tests {
         let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).unwrap();
         let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
         let authority = WorkbenchDocumentAuthority::from_snapshot(&decoded).unwrap();
-        assert!(!authority.is_projectional());
-        assert!(authority.flat_ref().is_some());
-        assert!(authority.projectional_ref().is_none());
+        assert!(authority.is_projectional());
+        assert!(authority.flat_ref().is_none());
+        let projectional = authority.projectional_ref().unwrap();
+        assert_eq!(
+            projectional
+                .coordinator()
+                .intent()
+                .history_projection()
+                .applied
+                .len(),
+            0
+        );
         assert!(authority.scene(test_viewport(), 0.5).is_some());
         assert!(
             authority
@@ -10481,7 +10517,7 @@ mod tests {
                 .unwrap()
                 .encode()
                 .unwrap()
-                .contains("\"version\":6")
+                .contains("\"version\":8")
         );
     }
 

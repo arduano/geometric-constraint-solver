@@ -115,6 +115,36 @@ impl ProjectionalIntentCoordinator {
         })
     }
 
+    /// Installs a strictly authenticated history-free native bootstrap.
+    ///
+    /// This is the narrow migration seam for an already restored flat
+    /// workspace. The caller must first decode every bootstrap declaration,
+    /// compare its native document with `accepted`, and independently validate
+    /// the accepted solve. Interactive patches still return through the cold
+    /// materializer; the supplied native session is never a second history
+    /// authority.
+    pub(crate) fn restore_authenticated_bootstrap(
+        intent: IntentSession,
+        materializer: ColdIntentMaterializer,
+        accepted: ColdIntentMaterialization,
+    ) -> Result<Self, ProjectionalCoordinatorError> {
+        let authority = intent
+            .accepted()
+            .ok_or(ProjectionalCoordinatorError::NoAcceptedAuthority)?;
+        if authority.target != accepted.validation.semantic
+            || authority.evidence != accepted.evidence
+            || accepted.ownership.semantic != authority.target
+        {
+            return Err(ProjectionalCoordinatorError::BootstrapAuthorityMismatch);
+        }
+        Ok(Self {
+            intent,
+            materializer,
+            accepted: Some(accepted),
+            point_drag: None,
+        })
+    }
+
     #[must_use]
     pub const fn intent(&self) -> &IntentSession {
         &self.intent
@@ -526,6 +556,8 @@ pub enum ProjectionalCoordinatorError {
     MissingAcceptedMaterialization,
     #[error("there is no independently accepted intent authority")]
     NoAcceptedAuthority,
+    #[error("the restored native bootstrap does not match its accepted intent authority")]
+    BootstrapAuthorityMismatch,
     #[error("a point drag is already active")]
     DragAlreadyActive,
     #[error("there is no active point drag")]

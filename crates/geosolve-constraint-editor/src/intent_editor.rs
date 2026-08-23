@@ -7,17 +7,23 @@
 //! [`ProjectionalIntentCoordinator`]; [`ConstraintEditor`] contributes only
 //! disposable selection, hover and pointer-gesture state.
 
-use geosolve_sketch::{DesignPointId, DocumentId, OperationControl};
+use geosolve_sketch::{
+    DesignPointId, DocumentId, OperationControl, RetainedSketchDocumentSession,
+    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchHardValidity,
+};
 use geosolve_sketch_intent::{
     IntentPatch, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
 };
 use thiserror::Error;
 
 use crate::{
-    ColdIntentMaterializer, ConstraintEditor, EditorEffect, EditorError, EditorScene,
-    IntentInspectorProjection, IntentSourceEditError, IntentSourceTokenId,
-    IntentWorkbenchProjection, Modifiers, PointerInput, ProjectionalCoordinatorError,
+    ColdIntentMaterialization, ColdIntentMaterializer, ConstraintEditor, EditorEffect, EditorError,
+    EditorScene, IntentBootstrapError, IntentInspectorProjection, IntentSourceEditError,
+    IntentSourceTokenId, IntentValidationEvidence, IntentWorkbenchProjection, Modifiers,
+    PointerInput, ProjectionalAuthoringError, ProjectionalCoordinatorError,
     ProjectionalIntentCoordinator, ProjectionalPatchOutcome, SelectionItem, Viewport,
+    decode_flat_intent_bootstrap, flat_intent_bootstrap_materialization_map,
+    projectional_construction_patch,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,6 +41,15 @@ pub struct ProjectionalEditorPointerOutcome {
     pub effects: Vec<EditorEffect>,
     /// The sole durable transaction, present only for an accepted moved drag.
     pub transaction: Option<ProjectionalPatchOutcome>,
+}
+
+/// Result of one authenticated terminal geometry-authoring publication.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProjectionalEditorConstructionOutcome {
+    /// Draft/inference presentation effects emitted by the accepted acknowledgement.
+    pub effects: Vec<EditorEffect>,
+    /// The one durable transaction appended to the sole intent history.
+    pub transaction: ProjectionalPatchOutcome,
 }
 
 /// Projectional intent plus disposable headless interaction state.
@@ -81,6 +96,88 @@ impl ProjectionalEditorSession {
             intent,
             materializer,
         )?))
+    }
+
+    /// Activates one strictly decoded, history-free flat bootstrap over its
+    /// already restored and independently accepted native scene.
+    ///
+    /// This migration seam intentionally accepts only a current native solve
+    /// and an empty computed-feature sidecar. Mixed bootstrap/new-declaration
+    /// lowering and computed-Fillet projection remain separate materializer
+    /// work; failing closed here prevents a legacy scene from being installed
+    /// with incomplete visual or ownership authority.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed bootstrap, native-authority, computed-feature, or
+    /// independent-validation mismatch without installing partial state.
+    pub fn restore_native_bootstrap(
+        intent: IntentSession,
+        native: RetainedSketchDocumentSession,
+    ) -> Result<Self, ProjectionalEditorError> {
+        let decoded = decode_flat_intent_bootstrap(&intent)?;
+        if !decoded.features.features().is_empty() {
+            return Err(ProjectionalEditorError::BootstrapComputedFeaturesUnsupported);
+        }
+        if native.design_document() != &decoded.document {
+            return Err(ProjectionalEditorError::BootstrapDocumentMismatch);
+        }
+        let accepted = native
+            .accepted_state_for_current_input()
+            .ok_or(ProjectionalEditorError::BootstrapCurrentAcceptanceRequired)?;
+        let solve = accepted
+            .diagnostics()
+            .solve
+            .ok_or(ProjectionalEditorError::BootstrapValidationMissing)?;
+        if !solve.accepted
+            || solve.hard_validity != SketchHardValidity::Valid
+            || !solve.hard_residuals_validated
+            || solve.maximum_normalized_hard_residual.is_some_and(|value| {
+                !value.is_finite() || value > SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE
+            })
+        {
+            return Err(ProjectionalEditorError::BootstrapValidationRejected);
+        }
+        let authority = intent
+            .accepted()
+            .ok_or(ProjectionalEditorError::BootstrapCurrentAcceptanceRequired)?;
+        if authority.evidence.materialization
+            != accepted
+                .document()
+                .to_draft_v5_json()
+                .map_err(ProjectionalCoordinatorError::from)?
+                .into_bytes()
+        {
+            return Err(ProjectionalEditorError::BootstrapDocumentMismatch);
+        }
+        let semantic = authority.target;
+        let ownership = flat_intent_bootstrap_materialization_map(&intent)?;
+        let materialization = ColdIntentMaterialization {
+            session: native,
+            ownership,
+            validation: IntentValidationEvidence {
+                semantic,
+                document: decoded.document.id(),
+                point_count: decoded.document.points().len(),
+                curve_count: decoded.document.curves().len(),
+                constraint_count: decoded.document.constraints().len(),
+                hard_residuals_validated: solve.hard_residuals_validated,
+                maximum_normalized_hard_residual: solve.maximum_normalized_hard_residual,
+            },
+            evidence: authority.evidence.clone(),
+        };
+        let materializer = ColdIntentMaterializer::with_default_policy(
+            decoded.document.id(),
+            decoded.document.model_scale(),
+        )
+        .map_err(ProjectionalCoordinatorError::from)?;
+        Ok(Self::new(
+            ProjectionalIntentCoordinator::restore_authenticated_bootstrap(
+                intent,
+                materializer,
+                materialization,
+            )?,
+        ))
     }
 
     /// Creates a session with explicit transient editor and solve-work policy.
@@ -206,6 +303,92 @@ impl ProjectionalEditorSession {
         }
         self.reconcile_declaration_selection();
         Ok(outcome)
+    }
+
+    /// Applies one exact tokenized construction terminal through intent.
+    ///
+    /// The pending editor-owned token authenticates its prepared native input,
+    /// complete plan, and exact geometry variant before translation. A valid
+    /// plan is lowered into one typed intent patch and therefore one history
+    /// entry. Translation, stale-authority, or materialization failure is
+    /// acknowledged as rejected so the editor restores its correction-ready
+    /// draft; a foreign or substituted envelope never consumes the genuine
+    /// pending token.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed envelope, authority, translation, planning, solve, or
+    /// publication failure. No accepted native scene or intent history changes
+    /// when an error is returned.
+    pub fn apply_construction_editor_effect(
+        &mut self,
+        effect: &EditorEffect,
+    ) -> Result<ProjectionalEditorConstructionOutcome, ProjectionalEditorError> {
+        let EditorEffect::CommitConstructionPlan {
+            expected,
+            token,
+            plan,
+        } = effect
+        else {
+            return Err(ProjectionalEditorError::UnexpectedConstructionEffect);
+        };
+        let Some(variant) =
+            self.editor
+                .authenticated_construction_commit_variant(*token, expected.as_ref(), plan)
+        else {
+            return Err(ProjectionalEditorError::ConstructionCommitMismatch);
+        };
+
+        let translated = {
+            let Some(accepted) = self.coordinator.accepted_materialization() else {
+                self.reject_construction_commit(*token);
+                return Err(ProjectionalEditorError::ConstructionInputMismatch);
+            };
+            if accepted.session.accepted_prepared_input().as_ref() != Some(expected.as_ref()) {
+                self.reject_construction_commit(*token);
+                return Err(ProjectionalEditorError::ConstructionInputMismatch);
+            }
+            match projectional_construction_patch(
+                self.coordinator.intent().identity(),
+                self.coordinator.intent(),
+                &accepted.ownership,
+                variant,
+                plan,
+            ) {
+                Ok(translated) => translated,
+                Err(error) => {
+                    self.reject_construction_commit(*token);
+                    return Err(error.into());
+                }
+            }
+        };
+
+        // Stage the success acknowledgement before the durable commit. This
+        // makes the remaining state swap infallible if native materialization
+        // succeeds, while a materialization error can still reject the live
+        // pending draft without having changed intent history.
+        let mut accepted_editor = self.editor.clone();
+        let effects = accepted_editor.acknowledge_construction_commit(*token, true);
+        if accepted_editor
+            .pending_construction_commit_token()
+            .is_some()
+        {
+            return Err(ProjectionalEditorError::ConstructionAcknowledgementMismatch);
+        }
+        let transaction = match self.coordinator.apply_patch(translated.patch) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                self.reject_construction_commit(*token);
+                return Err(error.into());
+            }
+        };
+        self.editor = accepted_editor;
+        self.point_drag = None;
+        self.reconcile_declaration_selection();
+        Ok(ProjectionalEditorConstructionOutcome {
+            effects,
+            transaction,
+        })
     }
 
     /// Deletes one declaration plus its exact dependent closure through one
@@ -476,6 +659,19 @@ impl ProjectionalEditorSession {
         self.coordinator.cancel_point_drag();
     }
 
+    fn reject_construction_commit(&mut self, token: crate::ConstructionCommitToken) {
+        let prepared_input = self
+            .coordinator
+            .accepted_materialization()
+            .and_then(|accepted| accepted.session.accepted_prepared_input());
+        let _ = self.editor.acknowledge_construction_commit_for_input(
+            token,
+            false,
+            prepared_input.as_ref(),
+            true,
+        );
+    }
+
     fn clear_transient_selection(&mut self) {
         let _ = self.editor.cancel();
         self.editor.set_selection([]);
@@ -501,10 +697,32 @@ pub enum ProjectionalEditorError {
     Scene(#[from] EditorError),
     #[error(transparent)]
     SourceEdit(#[from] IntentSourceEditError),
+    #[error(transparent)]
+    Bootstrap(#[from] IntentBootstrapError),
+    #[error(transparent)]
+    Authoring(#[from] ProjectionalAuthoringError),
+    #[error("the editor effect is not a terminal construction plan")]
+    UnexpectedConstructionEffect,
+    #[error("the construction token, plan, input, or active geometry variant is not current")]
+    ConstructionCommitMismatch,
+    #[error("the construction plan targets a stale accepted native input")]
+    ConstructionInputMismatch,
+    #[error("the authenticated construction acknowledgement did not consume its pending token")]
+    ConstructionAcknowledgementMismatch,
     #[error("there is no independently accepted projectional scene")]
     NoAcceptedAuthority,
     #[error("the accepted scene does not match its retained native authority")]
     SceneAuthorityMismatch,
+    #[error("flat bootstrap activation currently requires a current accepted native design")]
+    BootstrapCurrentAcceptanceRequired,
+    #[error("flat bootstrap declarations and the restored native document disagree")]
+    BootstrapDocumentMismatch,
+    #[error("flat bootstrap computed features require authenticated projectional feature lowering")]
+    BootstrapComputedFeaturesUnsupported,
+    #[error("flat bootstrap accepted state omitted independent solve validation evidence")]
+    BootstrapValidationMissing,
+    #[error("flat bootstrap accepted state failed independent solve validation")]
+    BootstrapValidationRejected,
     #[error("the terminal point sample has no prepared projectional drag route")]
     MissingPointDragRoute,
     #[error("the terminal point sample does not match its prepared drag route")]

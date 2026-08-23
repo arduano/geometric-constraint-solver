@@ -106,14 +106,16 @@ pub use intent_bootstrap::{
     BOOTSTRAP_SEMANTIC_CATALOG_CODEC_V1, BOOTSTRAP_SEMANTIC_SOURCE_CODEC_V1,
     BOOTSTRAP_SOURCE_ORDER_ENTRY_CODEC_V1, BOOTSTRAP_TRIM_VIEW_CODEC_V1,
     BOOTSTRAP_USER_INACTIVE_ENTRY_CODEC_V1, DecodedFlatIntentBootstrap, IntentBootstrapError,
-    decode_flat_intent_bootstrap, normalize_flat_sketch_intent,
+    decode_flat_intent_bootstrap, flat_intent_bootstrap_materialization_map,
+    normalize_flat_sketch_intent, normalize_flat_sketch_intent_with_accepted_materialization,
 };
 pub use intent_coordinator::{
     ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
     ProjectionalPointDragPreview,
 };
 pub use intent_editor::{
-    ProjectionalEditorError, ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
+    ProjectionalEditorConstructionOutcome, ProjectionalEditorError,
+    ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
 };
 pub use intent_projection::{
     IntentInspectorField, IntentInspectorProjection, IntentOutlineCell, IntentOutlineDeclaration,
@@ -4775,6 +4777,7 @@ struct ConfirmedDraftInference {
 #[derive(Clone, Debug)]
 struct PendingConstructionCommit {
     token: ConstructionCommitToken,
+    variant: GeometryToolVariant,
     expected: Box<PreparedSketchInput>,
     plan: ConstructionCommitPlan,
     /// Auto-direction relation indexes that belong to a candidate bundle with
@@ -8367,6 +8370,7 @@ impl ConstraintEditor {
         self.next_construction_commit_token = next_token;
         self.pending_construction_commit = Some(PendingConstructionCommit {
             token,
+            variant: draft.variant,
             expected: Box::new(prepared_input),
             plan: plan.clone(),
             droppable_redundant_direction_relations: assembly
@@ -8399,13 +8403,25 @@ impl ConstraintEditor {
         expected: &PreparedSketchInput,
         plan: &ConstructionCommitPlan,
     ) -> bool {
+        self.authenticated_construction_commit_variant(token, expected, plan)
+            .is_some()
+    }
+
+    pub(crate) fn authenticated_construction_commit_variant(
+        &self,
+        token: ConstructionCommitToken,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+    ) -> Option<GeometryToolVariant> {
         self.pending_construction_commit
             .as_ref()
-            .is_some_and(|pending| {
+            .filter(|pending| {
                 pending.token == token
                     && pending.expected.as_ref() == expected
                     && pending.plan == *plan
+                    && self.geometry_tool_variant == Some(pending.variant)
             })
+            .map(|pending| pending.variant)
     }
 
     pub(crate) fn authenticated_droppable_redundant_direction_relations(

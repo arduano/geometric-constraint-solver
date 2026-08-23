@@ -9,8 +9,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch::{
-    ActivationDigest, ContactSlot, DesignCurve, DesignPoint, DesignScalar, DocumentConstraint,
-    DocumentCurveTrimView, DocumentDimension, DocumentElementId, DocumentError,
+    ActivationDigest, ContactSlot, CurveDefinition, DesignCurve, DesignPoint, DesignScalar,
+    DocumentConstraint, DocumentCurveTrimView, DocumentDimension, DocumentElementId, DocumentError,
     DocumentExternalBinding, DocumentParameter, DocumentParameterBinding, DocumentParameterOutput,
     DocumentParameterTarget, DocumentSourceId, DocumentSourceOwner, DocumentTrimBoundary,
     GeometryRole, GeometryRoleEdit, HostActivationOverride, HostConfigurationActivation,
@@ -29,6 +29,8 @@ use geosolve_sketch_intent::{
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
+
+use crate::{IntentMaterializationMap, IntentNativeBinding, IntentNodeMaterialization};
 
 pub const BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1: &str = "geosolve-bootstrap-document-header-v1";
 pub const BOOTSTRAP_POINT_CODEC_V1: &str = "geosolve-bootstrap-point-v1";
@@ -117,6 +119,160 @@ pub struct DecodedFlatIntentBootstrap {
     pub feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
 }
 
+/// Builds exact logical/native bindings for a strictly decoded bootstrap.
+///
+/// Native reservations are not replayed through a fresh allocator: every
+/// created bootstrap port binds the persistent identity already carried by its
+/// canonical payload. Logical-only side-table records remain logical ports.
+/// Writable reverse leaves are deliberately absent until mixed bootstrap
+/// materialization can cold-rebuild a terminal edit.
+///
+/// # Errors
+///
+/// Returns a typed bootstrap error when the session has no accepted authority,
+/// contains a non-bootstrap declaration, or carries a malformed exact payload.
+pub fn flat_intent_bootstrap_materialization_map(
+    session: &IntentSession,
+) -> Result<IntentMaterializationMap, IntentBootstrapError> {
+    let authority = session
+        .accepted()
+        .ok_or(IntentBootstrapError::NonCanonicalBootstrap)?;
+    let mut nodes = Vec::new();
+    let mut ports = Vec::new();
+    let mut reservations = Vec::new();
+
+    for node in session.graph().nodes().values() {
+        let IntentNodeKind::Bootstrap { object } = &node.kind else {
+            return Err(IntentBootstrapError::MixedDeclarationGraph);
+        };
+        let exact = bootstrap_exact_bindings(node, object)?;
+        let mut owned = Vec::new();
+        for port in node.ports.values() {
+            let reference = port.as_ref(node.id);
+            let binding = exact
+                .iter()
+                .find(|(selector, _)| *selector == port.selector)
+                .map_or(IntentNativeBinding::Logical(reference), |(_, binding)| {
+                    *binding
+                });
+            ports.push((reference, binding));
+            if let geosolve_sketch_intent::IntentIdentityFlow::Created { reservation } = port.flow {
+                reservations.push((reservation, binding));
+                if !matches!(binding, IntentNativeBinding::Logical(_)) {
+                    owned.push(binding);
+                }
+            }
+        }
+        owned.sort_unstable();
+        owned.dedup();
+        nodes.push(IntentNodeMaterialization {
+            node: node.id,
+            owned,
+        });
+    }
+    ports.sort_unstable_by_key(|(port, _)| *port);
+    reservations.sort_unstable_by_key(|(reservation, _)| *reservation);
+    nodes.sort_unstable_by_key(|node| node.node);
+    Ok(IntentMaterializationMap {
+        semantic: authority.target,
+        nodes,
+        ports,
+        reservations,
+        writable_leaves: Vec::new(),
+        aggregates: Vec::new(),
+    })
+}
+
+fn bootstrap_exact_bindings(
+    _node: &geosolve_sketch_intent::IntentNode,
+    object: &IntentBootstrapObject,
+) -> Result<Vec<(IntentPortSelector, IntentNativeBinding)>, IntentBootstrapError> {
+    use IntentNativeBinding as B;
+    use IntentPortRole as R;
+
+    let port = |role, index| IntentPortSelector::Node { role, index };
+    Ok(match object.codec.as_str() {
+        BOOTSTRAP_POINT_CODEC_V1 => {
+            let value = strict_payload::<DesignPoint>(&object.payload)?;
+            vec![(port(R::Primary, 0), B::Point(value.id))]
+        }
+        BOOTSTRAP_SCALAR_CODEC_V1 => {
+            let value = strict_payload::<DesignScalar>(&object.payload)?;
+            vec![(port(R::Target, 0), B::Scalar(value.id))]
+        }
+        BOOTSTRAP_CURVE_CODEC_V1 => {
+            let value = strict_payload::<DesignCurve>(&object.payload)?;
+            let segment = match &value.definition {
+                CurveDefinition::BSpline { span_ids, .. }
+                | CurveDefinition::Nurbs { span_ids, .. } => span_ids
+                    .first()
+                    .copied()
+                    .ok_or(IntentBootstrapError::InvalidPayload)?,
+                _ => 0,
+            };
+            vec![
+                (port(R::Curve, 0), B::Curve(value.id)),
+                (
+                    port(R::Span, 0),
+                    B::CurveSpan(geosolve_sketch::CurveSpan {
+                        curve: value.id,
+                        segment,
+                    }),
+                ),
+            ]
+        }
+        BOOTSTRAP_CONTACT_CODEC_V1 => {
+            let value = strict_payload::<ContactSlot>(&object.payload)?;
+            vec![(port(R::Contact, 0), B::Contact(value.id))]
+        }
+        BOOTSTRAP_CONSTRAINT_CODEC_V1 => {
+            let value = strict_payload::<DocumentConstraint>(&object.payload)?;
+            vec![
+                (port(R::Constraint, 0), B::Constraint(value.id)),
+                (port(R::Source, 0), B::Source(value.source_id)),
+            ]
+        }
+        BOOTSTRAP_DIMENSION_CODEC_V1 => {
+            let value = strict_payload::<DocumentDimension>(&object.payload)?;
+            vec![
+                (port(R::Dimension, 0), B::Dimension(value.id)),
+                (port(R::Source, 0), B::Source(value.source_id)),
+            ]
+        }
+        BOOTSTRAP_PARAMETER_CODEC_V1 => {
+            let value = strict_payload::<DocumentParameter>(&object.payload)?;
+            vec![(port(R::Parameter, 0), B::Parameter(value.id))]
+        }
+        BOOTSTRAP_EXTERNAL_BINDING_CODEC_V1 => {
+            let value = strict_payload::<DocumentExternalBinding>(&object.payload)?;
+            vec![(port(R::External, 0), B::ExternalBinding(value.id))]
+        }
+        BOOTSTRAP_TRIM_VIEW_CODEC_V1 => {
+            let value = strict_payload::<DocumentCurveTrimView>(&object.payload)?;
+            vec![(port(R::Span, 0), B::CurveSpan(value.support))]
+        }
+        BOOTSTRAP_SEMANTIC_CATALOG_CODEC_V1 | BOOTSTRAP_SEMANTIC_SOURCE_CODEC_V1 => {
+            let value = strict_payload::<BootstrapSemanticReservationV1>(&object.payload)?;
+            let role = if object.codec.as_str() == BOOTSTRAP_SEMANTIC_CATALOG_CODEC_V1 {
+                R::Catalog
+            } else {
+                R::Source
+            };
+            vec![(port(role, 0), B::Source(value.source))]
+        }
+        BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1
+        | BOOTSTRAP_GEOMETRY_ROLE_CODEC_V1
+        | BOOTSTRAP_PARAMETER_BINDING_CODEC_V1
+        | BOOTSTRAP_PARAMETER_OUTPUT_CODEC_V1
+        | BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1
+        | BOOTSTRAP_SOURCE_ORDER_ENTRY_CODEC_V1
+        | BOOTSTRAP_USER_INACTIVE_ENTRY_CODEC_V1
+        | BOOTSTRAP_HOST_ACTIVATION_HEADER_CODEC_V1
+        | BOOTSTRAP_HOST_ACTIVATION_OVERRIDE_CODEC_V1 => Vec::new(),
+        _ => return Err(IntentBootstrapError::InvalidPayload),
+    })
+}
+
 /// Typed normalization or exact-codec failure.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -167,17 +323,52 @@ pub enum IntentBootstrapError {
 ///
 /// Returns a typed document, feature, payload, graph, resource, planning, or
 /// session error without publishing a partial intent session.
-#[allow(
-    clippy::too_many_lines,
-    reason = "the exhaustive native-object normalization inventory is clearest in one pass"
-)]
 pub fn normalize_flat_sketch_intent(
     session_id: IntentSessionId,
     document: &SketchDocument,
     features: &ComputedFeatureDocument,
     feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
 ) -> Result<IntentSession, IntentBootstrapError> {
+    normalize_flat_sketch_intent_with_accepted_materialization(
+        session_id,
+        document,
+        document,
+        features,
+        feature_lifecycle_high_water,
+    )
+}
+
+/// Normalizes one flat design while authenticating its independently solved
+/// accepted materialization separately.
+///
+/// A retained sketch session may preserve authored seed coordinates in the
+/// design while publishing solver-adjusted coordinates in its accepted scene.
+/// Both documents must share one namespace and model scale; no historical
+/// recipe or additional intent transaction is inferred.
+///
+/// # Errors
+///
+/// Returns the same typed normalization failures as
+/// [`normalize_flat_sketch_intent`], plus a document-header mismatch when the
+/// accepted materialization belongs to another sketch or scale.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the exhaustive native-object normalization inventory is clearest in one pass"
+)]
+pub fn normalize_flat_sketch_intent_with_accepted_materialization(
+    session_id: IntentSessionId,
+    document: &SketchDocument,
+    accepted: &SketchDocument,
+    features: &ComputedFeatureDocument,
+    feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
+) -> Result<IntentSession, IntentBootstrapError> {
     document.validate()?;
+    accepted.validate()?;
+    if accepted.id() != document.id()
+        || accepted.model_scale().to_bits() != document.model_scale().to_bits()
+    {
+        return Err(IntentBootstrapError::InvalidDocumentHeader);
+    }
     validate_feature_bundle(document, features, feature_lifecycle_high_water)?;
 
     let header = BootstrapDocumentHeaderV1 {
@@ -344,7 +535,7 @@ pub fn normalize_flat_sketch_intent(
     append_semantic_reservations(document, &mut operations)?;
     append_computed_features(document, features, &mut operations)?;
 
-    let materialization = document.to_draft_v5_json()?.into_bytes();
+    let materialization = accepted.to_draft_v5_json()?.into_bytes();
     let feature_artifact = features.to_json()?.into_bytes();
     let mut session = IntentSession::with_id(session_id)?;
     let evidence = MaterializationEvidence::new_host_artifacts(
@@ -574,9 +765,19 @@ pub fn decode_flat_intent_bootstrap(
     let features = features.finish()?;
     validate_feature_bundle(&document, &features, header.feature_lifecycle_high_water)?;
 
-    let canonical = normalize_flat_sketch_intent(
+    let evidence_document = session.accepted().and_then(|authority| {
+        std::str::from_utf8(&authority.evidence.materialization)
+            .ok()
+            .and_then(|json| {
+                SketchDocument::from_draft_v5_json(json)
+                    .or_else(|_| SketchDocument::from_json(json))
+                    .ok()
+            })
+    });
+    let canonical = normalize_flat_sketch_intent_with_accepted_materialization(
         session.id(),
         &document,
+        evidence_document.as_ref().unwrap_or(&document),
         &features,
         header.feature_lifecycle_high_water,
     )?;

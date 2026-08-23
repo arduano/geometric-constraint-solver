@@ -3,15 +3,17 @@
 use geosolve_constraint_editor::{
     BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1, BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1,
     BOOTSTRAP_POINT_CODEC_V1, BOOTSTRAP_SOURCE_ORDER_ENTRY_CODEC_V1, IntentBootstrapError,
-    decode_flat_intent_bootstrap, normalize_flat_sketch_intent,
+    IntentNativeBinding, decode_flat_intent_bootstrap, flat_intent_bootstrap_materialization_map,
+    normalize_flat_sketch_intent,
 };
 use geosolve_sketch::{
-    ContactDefinition, ContactDomain, ContactNeighborhood, CurveSpan, DocumentCurveNormalSide,
-    DocumentCurveTrimView, DocumentDimensionDefinition, DocumentDimensionMode, DocumentElementId,
-    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentParameterKind,
-    DocumentParameterTarget, DocumentTrimBoundary, DocumentTrimParameter, ExternalFeatureKindV1,
-    GeometryRole, HostActivationOverride, HostConfigurationActivation, ScalarDomain, ScalarUnit,
-    SketchDocument, SketchMaterializationBatch, SketchMaterializationReservationAllocator,
+    ContactDefinition, ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan,
+    DocumentCurveNormalSide, DocumentCurveTrimView, DocumentDimensionDefinition,
+    DocumentDimensionMode, DocumentElementId, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentParameterKind, DocumentParameterTarget,
+    DocumentTrimBoundary, DocumentTrimParameter, ExternalFeatureKindV1, GeometryRole,
+    HostActivationOverride, HostConfigurationActivation, ScalarDomain, ScalarUnit, SketchDocument,
+    SketchMaterializationBatch, SketchMaterializationReservationAllocator,
     SketchMaterializationSemanticCatalog,
 };
 use geosolve_sketch_features::{
@@ -195,6 +197,108 @@ fn fixture() -> (
         },
     };
     (document, features, lifecycle)
+}
+
+#[test]
+fn bootstrap_materialization_map_binds_exact_native_ports_and_reservations() {
+    let (mut document, features, lifecycle) = fixture();
+    let spline_points = [[6.0, 0.0], [7.0, 1.0], [8.0, 0.0]]
+        .into_iter()
+        .map(|position| document.add_point("spline control", position).unwrap())
+        .collect::<Vec<_>>();
+    let spline = document
+        .add_curve(
+            "bootstrap spline",
+            CurveDefinition::BSpline {
+                form: geosolve_sketch::DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: spline_points,
+                knots: vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                span_ids: vec![41],
+                next_span_id: 42,
+            },
+        )
+        .unwrap();
+    assert_eq!(document.curve_spans(spline).unwrap()[0].segment, 41);
+    let session = normalize_flat_sketch_intent(
+        IntentSessionId::from_raw(0x83_b103),
+        &document,
+        &features,
+        lifecycle,
+    )
+    .unwrap();
+    let ownership = flat_intent_bootstrap_materialization_map(&session).unwrap();
+
+    assert_eq!(ownership.semantic, session.semantic_identity());
+    assert_eq!(ownership.nodes.len(), session.graph().nodes().len());
+    assert_eq!(
+        ownership.ports.len(),
+        session
+            .graph()
+            .nodes()
+            .values()
+            .map(|node| node.ports.len())
+            .sum::<usize>()
+    );
+    assert_eq!(
+        ownership.reservations.len(),
+        session
+            .graph()
+            .nodes()
+            .values()
+            .map(|node| node.reservations.len())
+            .sum::<usize>()
+    );
+    for point in document.points() {
+        assert!(
+            ownership
+                .ports
+                .iter()
+                .any(|(_, binding)| { *binding == IntentNativeBinding::Point(point.id) })
+        );
+    }
+    for curve in document.curves() {
+        assert!(
+            ownership
+                .ports
+                .iter()
+                .any(|(_, binding)| { *binding == IntentNativeBinding::Curve(curve.id) })
+        );
+        let first = document.curve_spans(curve.id).unwrap()[0];
+        assert!(
+            ownership
+                .ports
+                .iter()
+                .any(|(_, binding)| { *binding == IntentNativeBinding::CurveSpan(first) })
+        );
+    }
+    for constraint in document.constraints() {
+        assert!(
+            ownership
+                .ports
+                .iter()
+                .any(|(_, binding)| { *binding == IntentNativeBinding::Constraint(constraint.id) })
+        );
+        assert!(
+            ownership.ports.iter().any(|(_, binding)| {
+                *binding == IntentNativeBinding::Source(constraint.source_id)
+            })
+        );
+    }
+    for dimension in document.dimensions() {
+        assert!(
+            ownership
+                .ports
+                .iter()
+                .any(|(_, binding)| { *binding == IntentNativeBinding::Dimension(dimension.id) })
+        );
+        assert!(
+            ownership.ports.iter().any(|(_, binding)| {
+                *binding == IntentNativeBinding::Source(dimension.source_id)
+            })
+        );
+    }
+    assert!(ownership.writable_leaves.is_empty());
 }
 
 fn normalized() -> IntentSession {

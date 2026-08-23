@@ -6,6 +6,7 @@ use geosolve_constraint_editor::{
     AnnotationLayoutEntry, AnnotationLayoutKey, AnnotationLayoutState, AnnotationPlacement,
     EditorScene, ProjectionalEditorSession, RestoreCheckpoint, RetainedEditorCoordinator,
     SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph, SelectionItem, Viewport,
+    decode_flat_intent_bootstrap, normalize_flat_sketch_intent_with_accepted_materialization,
 };
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
@@ -18,7 +19,8 @@ use geosolve_sketch_features::{
     ComputedFeatureLifecycleHighWater,
 };
 use geosolve_sketch_intent::{
-    ContentDigest, IntentSession, MAX_INTENT_SESSION_JSON_BYTES, intent_content_digest,
+    ContentDigest, IntentSession, IntentSessionId, MAX_INTENT_SESSION_JSON_BYTES,
+    intent_content_digest,
 };
 
 const PROJECTIONAL_WORKSPACE_VERSION: u32 = 8;
@@ -509,6 +511,42 @@ impl WorkspaceSnapshot {
     pub(crate) fn from_projectional_editor(
         projectional: &ProjectionalEditorSession,
     ) -> Result<Self, String> {
+        Self::from_projectional_editor_with_evaluation_high_water(
+            projectional,
+            default_evaluation_high_water(),
+        )
+    }
+
+    pub(crate) fn from_projectional_editor_with_evaluation_high_water(
+        projectional: &ProjectionalEditorSession,
+        computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
+    ) -> Result<Self, String> {
+        let native = &projectional
+            .coordinator()
+            .accepted_materialization()
+            .ok_or_else(|| {
+                "projectional workspace has no independently accepted materialization".to_owned()
+            })?
+            .session;
+        let revisions = native.revision_high_water();
+        Self::from_projectional_editor_with_persistence_high_water(
+            projectional,
+            computed_evaluation_high_water,
+            WorkspaceRevisions {
+                design: revisions.design().get(),
+                attempt: revisions.attempt().get(),
+                accepted: revisions
+                    .accepted()
+                    .map(geosolve_sketch::SketchAcceptedRevision::get),
+            },
+        )
+    }
+
+    pub(crate) fn from_projectional_editor_with_persistence_high_water(
+        projectional: &ProjectionalEditorSession,
+        computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
+        retained_revisions: WorkspaceRevisions,
+    ) -> Result<Self, String> {
         let coordinator = projectional.coordinator();
         let intent = coordinator.intent();
         let materialization = coordinator.accepted_materialization().ok_or_else(|| {
@@ -522,8 +560,16 @@ impl WorkspaceSnapshot {
             })?
             .document();
         let design = native.design_document();
-        let features = ComputedFeatureDocument::new(design.id());
-        let revisions = native.revision_high_water();
+        let bootstrap = decode_flat_intent_bootstrap(intent).ok();
+        let (features, feature_lifecycle_high_water) = bootstrap.map_or_else(
+            || {
+                let features = ComputedFeatureDocument::new(design.id());
+                let lifecycle = features.lifecycle_high_water();
+                (features, lifecycle)
+            },
+            |bootstrap| (bootstrap.features, bootstrap.feature_lifecycle_high_water),
+        );
+        let revisions = retained_revisions;
         let accepted_belongs_to_current_design = intent
             .accepted()
             .is_some_and(|authority| authority.target == intent.semantic_identity());
@@ -535,18 +581,12 @@ impl WorkspaceSnapshot {
             accepted_belongs_to_current_design,
             sketch_identity_high_water: native.persistent_identity_high_water().clone(),
             features_json: features.to_json().map_err(|error| error.to_string())?,
-            feature_lifecycle_high_water: features.lifecycle_high_water(),
-            computed_evaluation_high_water: default_evaluation_high_water(),
+            feature_lifecycle_high_water,
+            computed_evaluation_high_water,
             annotation_layout_json: encode_annotation_layout(
                 projectional.editor().annotation_layout(),
             ),
-            revisions: WorkspaceRevisions {
-                design: revisions.design().get(),
-                attempt: revisions.attempt().get(),
-                accepted: revisions
-                    .accepted()
-                    .map(geosolve_sketch::SketchAcceptedRevision::get),
-            },
+            revisions,
             intent_session_json: Some(
                 intent
                     .to_canonical_json()
@@ -1018,6 +1058,33 @@ pub(crate) fn projectional_editor_from_snapshot(
         .intent_session()?
         .ok_or_else(|| "workspace does not contain projectional intent authority".to_owned())?;
     let features = snapshot.feature_document()?;
+    let contains_bootstrap = intent.graph().nodes().values().any(|node| {
+        matches!(
+            node.kind,
+            geosolve_sketch_intent::IntentNodeKind::Bootstrap { .. }
+        )
+    });
+    if contains_bootstrap {
+        let decoded = decode_flat_intent_bootstrap(&intent).map_err(|error| error.to_string())?;
+        if decoded.document != snapshot.design_document()?
+            || decoded.features != features
+            || decoded.feature_lifecycle_high_water != snapshot.feature_lifecycle_high_water()
+        {
+            return Err(
+                "workspace v8 bootstrap declarations disagree with stored native evidence".into(),
+            );
+        }
+        let native =
+            snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
+        let mut projectional = ProjectionalEditorSession::restore_native_bootstrap(intent, native)
+            .map_err(|error| error.to_string())?;
+        let layout = compatible_annotation_layout_for_projectional(
+            &projectional,
+            &snapshot.annotation_layout(),
+        );
+        projectional.editor_mut().restore_annotation_layout(layout);
+        return Ok(projectional);
+    }
     if !features.features().is_empty() {
         return Err(
             "workspace v8 computed features are unsupported until projectional feature lowering is authenticated"
@@ -1055,6 +1122,53 @@ pub(crate) fn projectional_editor_from_snapshot(
         }
     }
 
+    let layout =
+        compatible_annotation_layout_for_projectional(&projectional, &snapshot.annotation_layout());
+    projectional.editor_mut().restore_annotation_layout(layout);
+    Ok(projectional)
+}
+
+/// Strictly restores and normalizes one historical flat workspace into a
+/// history-free projectional authority.
+///
+/// The ordinary workspace decoder and retained-session restore remain the
+/// authority for legacy bytes, IDs, lifecycle high-water and independent
+/// accepted-state validation. Normalization then records exactly one typed
+/// bootstrap declaration per persisted object without inventing recipes or a
+/// user-visible migration transaction.
+pub(crate) fn projectional_editor_from_legacy_snapshot(
+    snapshot: &WorkspaceSnapshot,
+) -> Result<ProjectionalEditorSession, String> {
+    let bootstrap = snapshot
+        .legacy_bootstrap()
+        .ok_or_else(|| "workspace is not a strict v1-v6 legacy bootstrap".to_owned())?;
+    let native =
+        snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
+    let accepted = native
+        .accepted_state_for_current_input()
+        .ok_or_else(|| {
+            format!(
+                "legacy workspace v{} has no current accepted scene for safe projectional bootstrap activation",
+                bootstrap.source_version()
+            )
+        })?
+        .document()
+        .clone();
+    let design = native.design_document().clone();
+    let features = bootstrap.feature_document()?;
+    let session_id = IntentSessionId::from_raw(
+        (design.id().0.as_u128() ^ 0x6765_6f73_6f6c_7665_2d6d_3833_2d76_3800_u128).max(1),
+    );
+    let intent = normalize_flat_sketch_intent_with_accepted_materialization(
+        session_id,
+        &design,
+        &accepted,
+        &features,
+        bootstrap.feature_lifecycle_high_water(),
+    )
+    .map_err(|error| error.to_string())?;
+    let mut projectional = ProjectionalEditorSession::restore_native_bootstrap(intent, native)
+        .map_err(|error| error.to_string())?;
     let layout =
         compatible_annotation_layout_for_projectional(&projectional, &snapshot.annotation_layout());
     projectional.editor_mut().restore_annotation_layout(layout);
@@ -1351,8 +1465,8 @@ mod tests {
         WorkspaceSnapshot, WorkspaceSnapshotV8, annotation_kind_key,
         coordinator_from_reproduction_payload, coordinator_from_snapshot,
         default_evaluation_high_water, derive_sketch_identity_high_water, parse_annotation_kind,
-        projectional_editor_from_snapshot, reproduction_payload_from_coordinator,
-        workspace_v8_digest,
+        projectional_editor_from_legacy_snapshot, projectional_editor_from_snapshot,
+        reproduction_payload_from_coordinator, workspace_v8_digest,
     };
 
     fn restored_annotation_layout(
@@ -3572,6 +3686,78 @@ mod tests {
                 format!(
                     "legacy workspace v{source_version} must be normalized into per-object bootstrap declarations before v8 encoding"
                 )
+            );
+
+            let expected_design = decoded.design_document().expect("expected design");
+            let expected_accepted = decoded.accepted_document().expect("expected accepted");
+            let expected_identity_high_water = decoded.sketch_identity_high_water.clone();
+            let expected_feature_lifecycle = decoded.feature_lifecycle_high_water();
+            let expected_evaluation_high_water = decoded.computed_evaluation_high_water();
+            let expected_revisions = decoded.revisions();
+            let projectional = projectional_editor_from_legacy_snapshot(&decoded)
+                .expect("activate strict legacy bootstrap");
+            assert_eq!(
+                projectional
+                    .coordinator()
+                    .intent()
+                    .history_projection()
+                    .applied
+                    .len(),
+                0,
+                "migration must invent no user history"
+            );
+            let native = projectional
+                .coordinator()
+                .presentation_session()
+                .expect("activated native authority");
+            assert_eq!(native.design_document(), &expected_design);
+            assert_eq!(
+                native
+                    .accepted_state_for_current_input()
+                    .map(geosolve_sketch::SketchAcceptedDocumentState::document),
+                expected_accepted.as_ref()
+            );
+            assert_eq!(
+                native.persistent_identity_high_water(),
+                &expected_identity_high_water
+            );
+
+            let v8 = WorkspaceSnapshot::from_projectional_editor_with_persistence_high_water(
+                &projectional,
+                expected_evaluation_high_water,
+                decoded.revisions,
+            )
+            .expect("capture canonical v8");
+            assert_eq!(v8.version, 8);
+            assert_eq!(v8.design_document().unwrap(), expected_design);
+            assert_eq!(v8.accepted_document().unwrap(), expected_accepted);
+            assert_eq!(v8.sketch_identity_high_water, expected_identity_high_water);
+            assert_eq!(
+                v8.feature_lifecycle_high_water(),
+                expected_feature_lifecycle
+            );
+            assert_eq!(v8.revisions(), expected_revisions);
+            assert_eq!(
+                v8.computed_evaluation_high_water(),
+                expected_evaluation_high_water
+            );
+            let canonical = v8.encode().expect("canonical v8 JSON");
+            assert!(canonical.contains("\"version\":8"));
+            let decoded_v8 = WorkspaceSnapshot::decode(&canonical).expect("decode canonical v8");
+            assert_eq!(
+                decoded_v8.encode().expect("re-encode canonical v8"),
+                canonical
+            );
+            let reactivated = projectional_editor_from_snapshot(&decoded_v8)
+                .expect("cold restore canonical bootstrap v8");
+            assert_eq!(
+                reactivated
+                    .coordinator()
+                    .presentation_session()
+                    .expect("reactivated native authority")
+                    .accepted_state_for_current_input()
+                    .map(geosolve_sketch::SketchAcceptedDocumentState::document),
+                expected_accepted.as_ref()
             );
         }
     }
