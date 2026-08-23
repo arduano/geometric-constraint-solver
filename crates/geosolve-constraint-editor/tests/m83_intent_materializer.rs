@@ -6,12 +6,14 @@ use geosolve_constraint_editor::{
     ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
     IntentNativeBinding, IntentNativeWritableLeaf,
 };
-use geosolve_sketch::{DocumentId, PersistentId};
+use geosolve_sketch::{DocumentId, ExternalSnapshotSet, ParameterBatch, PersistentId};
 use geosolve_sketch_intent::{
-    ConstraintKind, DimensionKind, GeometryRecipeKind, InputRole, InputSlot, IntentEvaluation,
-    IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector, IntentSession,
-    IntentSessionId, IntentUnit, LeafField, OperationKind, PatchPortRef,
+    AggregateKind, BootstrapNativeKind, ConstraintKind, DimensionKind, ExternalInputRevision,
+    GeometryRecipeKind, InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation,
+    IntentExternalInputs, IntentFieldKey, IntentKey, IntentLiteral, IntentNodeDraft,
+    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole,
+    IntentPortSelector, IntentSession, IntentSessionId, IntentUnit, LeafField, OperationKind,
+    PatchPortRef,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -330,12 +332,17 @@ fn cold_reconstruction_is_order_independent_and_rejected_intent_has_no_native_pu
         retained.identity(),
         IntentPatchPolicy::RequireAccepted,
         vec![IntentPatchOperation::CreateNode {
-            alias: key("circle"),
+            alias: key("bootstrap"),
             draft: Box::new(IntentNodeDraft::new(
-                IntentNodeKind::Geometry {
-                    recipe: GeometryRecipeKind::Polyline,
+                IntentNodeKind::Bootstrap {
+                    object: IntentBootstrapObject::new(
+                        BootstrapNativeKind::Document,
+                        key("test-codec"),
+                        Vec::new(),
+                    )
+                    .unwrap(),
                 },
-                key("polyline"),
+                key("bootstrap"),
             )),
             cell: None,
         }],
@@ -351,6 +358,12 @@ fn cold_geometry_inventory_materializes_every_exactly_reconstructible_recipe() {
     let cases = [
         (GeometryRecipeKind::SketchPoint, (1, 0, 0)),
         (GeometryRecipeKind::Segment, (2, 0, 1)),
+        (GeometryRecipeKind::Polyline, (4, 0, 1)),
+        (GeometryRecipeKind::MidpointLine, (3, 0, 1)),
+        (GeometryRecipeKind::TwoPointAlignedRectangle, (4, 0, 4)),
+        (GeometryRecipeKind::ThreePointCornerRectangle, (4, 0, 4)),
+        (GeometryRecipeKind::CenterRectangle, (5, 0, 5)),
+        (GeometryRecipeKind::ThreePointCenterRectangle, (5, 0, 5)),
         (GeometryRecipeKind::CenterRadiusCircle, (1, 1, 1)),
         (GeometryRecipeKind::TwoPointDiameterCircle, (1, 1, 1)),
         (GeometryRecipeKind::ThreePointCircle, (1, 1, 1)),
@@ -365,6 +378,8 @@ fn cold_geometry_inventory_materializes_every_exactly_reconstructible_recipe() {
         (GeometryRecipeKind::RationalQuadraticConic, (2, 1, 1)),
         (GeometryRecipeKind::Parabola, (2, 2, 1)),
         (GeometryRecipeKind::Hyperbola, (2, 3, 1)),
+        (GeometryRecipeKind::OpenControlNurbs, (4, 4, 1)),
+        (GeometryRecipeKind::PeriodicControlNurbs, (4, 4, 1)),
     ];
 
     for (index, (recipe, expected)) in cases.into_iter().enumerate() {
@@ -380,10 +395,21 @@ fn cold_geometry_inventory_materializes_every_exactly_reconstructible_recipe() {
             IntentPatchPolicy::RequireAccepted,
             vec![IntentPatchOperation::CreateNode {
                 alias: key("geometry"),
-                draft: Box::new(IntentNodeDraft::new(
-                    IntentNodeKind::Geometry { recipe },
-                    key("geometry"),
-                )),
+                draft: Box::new(
+                    IntentNodeDraft::new(IntentNodeKind::Geometry { recipe }, key("geometry"))
+                        .with_dynamic_children(
+                            if matches!(
+                                recipe,
+                                GeometryRecipeKind::Polyline
+                                    | GeometryRecipeKind::OpenControlNurbs
+                                    | GeometryRecipeKind::PeriodicControlNurbs
+                            ) {
+                                4
+                            } else {
+                                0
+                            },
+                        ),
+                ),
                 cell: None,
             }],
         );
@@ -416,58 +442,374 @@ fn cold_geometry_inventory_materializes_every_exactly_reconstructible_recipe() {
 }
 
 #[test]
-fn recipes_without_honest_exact_native_ownership_fail_before_publication() {
-    let unsupported = [
-        GeometryRecipeKind::Polyline,
-        GeometryRecipeKind::MidpointLine,
-        GeometryRecipeKind::TwoPointAlignedRectangle,
-        GeometryRecipeKind::ThreePointCornerRectangle,
-        GeometryRecipeKind::CenterRectangle,
-        GeometryRecipeKind::ThreePointCenterRectangle,
-        GeometryRecipeKind::TangentArc,
-        GeometryRecipeKind::OpenControlNurbs,
-        GeometryRecipeKind::PeriodicControlNurbs,
-    ];
-    for (index, recipe) in unsupported.into_iter().enumerate() {
-        let raw = 0x8300_2000 + u128::try_from(index).unwrap();
-        let session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
-        let materializer = ColdIntentMaterializer::with_default_policy(
-            DocumentId(PersistentId::from_u128(raw << 32)),
-            1.0,
+fn canonical_host_inputs_reach_the_native_session_and_noncanonical_bytes_fail_closed() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_1f00)).unwrap();
+    let materializer = ColdIntentMaterializer::with_default_policy(
+        DocumentId(PersistentId::from_u128(0x8300_1f00_0000)),
+        1.0,
+    )
+    .unwrap();
+    let parameters = ParameterBatch::default();
+    let external = ExternalSnapshotSet::default();
+    let inputs = IntentExternalInputs::new(
+        ExternalInputRevision::from_raw(1),
+        parameters.to_canonical_json().unwrap().into_bytes(),
+        external.to_canonical_json().unwrap().into_bytes(),
+    )
+    .unwrap();
+    let plan = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![
+                    IntentPatchOperation::ReplaceExternalInputs { inputs },
+                    IntentPatchOperation::CreateNode {
+                        alias: key("point"),
+                        draft: Box::new(point("point", [1.0, 2.0])),
+                        cell: None,
+                    },
+                ],
+            ),
+            |candidate| materializer.evaluate(candidate),
         )
         .unwrap();
-        let patch = IntentPatch::new(
-            session.identity(),
-            IntentPatchPolicy::RequireAccepted,
-            vec![IntentPatchOperation::CreateNode {
-                alias: key("geometry"),
-                draft: Box::new(
-                    IntentNodeDraft::new(IntentNodeKind::Geometry { recipe }, key("geometry"))
-                        .with_dynamic_children(
-                            if matches!(
-                                recipe,
-                                GeometryRecipeKind::Polyline
-                                    | GeometryRecipeKind::OpenControlNurbs
-                                    | GeometryRecipeKind::PeriodicControlNurbs
-                            ) {
-                                4
-                            } else {
-                                0
-                            },
-                        ),
+    session.commit_plan(plan).unwrap();
+    let accepted = materializer
+        .materialize_accepted_authority(session.accepted().unwrap())
+        .unwrap();
+    assert_eq!(accepted.session.parameter_batch(), &parameters);
+    assert_eq!(accepted.session.external_snapshot_set(), &external);
+
+    let mut noncanonical_parameters = parameters.to_canonical_json().unwrap().into_bytes();
+    noncanonical_parameters.push(b' ');
+    let invalid_inputs = IntentExternalInputs::new(
+        ExternalInputRevision::from_raw(2),
+        noncanonical_parameters,
+        Vec::new(),
+    )
+    .unwrap();
+    let exact_before = session.to_canonical_json().unwrap();
+    assert!(
+        session
+            .plan_patch(
+                IntentPatch::new(
+                    session.identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::ReplaceExternalInputs {
+                        inputs: invalid_inputs,
+                    }],
                 ),
+                |candidate| materializer.evaluate(candidate),
+            )
+            .is_err()
+    );
+    assert_eq!(session.to_canonical_json().unwrap(), exact_before);
+}
+
+#[test]
+fn tangent_arc_materializes_exact_contact_parameters_and_relation_pair() {
+    let source = segment("source", [0.0, 0.0], [1.0, 0.0]);
+    let tangent = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::TangentArc,
+        },
+        key("tangent"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias("source", IntentPortRole::Span),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Center),
+        LeafField::X,
+        coordinate(1.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Center),
+        LeafField::Y,
+        coordinate(1.0),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Target),
+        LeafField::Value,
+        coordinate(1.0),
+    )
+    .with_instance_leaf(
+        IntentPortSelector::Node {
+            role: IntentPortRole::Target,
+            index: 1,
+        },
+        LeafField::Angle,
+        IntentLiteral::Quantity {
+            value: -std::f64::consts::FRAC_PI_2,
+            unit: IntentUnit::Angle,
+        },
+    )
+    .with_instance_leaf(
+        IntentPortSelector::Node {
+            role: IntentPortRole::Target,
+            index: 2,
+        },
+        LeafField::Angle,
+        IntentLiteral::Quantity {
+            value: 0.0,
+            unit: IntentUnit::Angle,
+        },
+    );
+    let output = cold_materialize_ops(
+        0x8300_2000,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("source"),
+                draft: Box::new(source),
                 cell: None,
-            }],
-        );
-        assert!(
-            session
-                .plan_patch(patch, |candidate| materializer.evaluate(candidate))
-                .is_err(),
-            "{recipe:?}"
-        );
-        assert!(session.graph().nodes().is_empty(), "{recipe:?}");
-        assert!(session.accepted().is_none(), "{recipe:?}");
-    }
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("tangent"),
+                draft: Box::new(tangent),
+                cell: None,
+            },
+        ],
+    );
+    let accepted = output.session.accepted_state_for_current_input().unwrap();
+    assert_eq!(accepted.document().curves().len(), 2);
+    assert_eq!(accepted.document().contacts().len(), 2);
+    assert_eq!(accepted.document().constraints().len(), 1);
+    assert_eq!(accepted.document().scalars().len(), 5);
+}
+
+#[test]
+fn equation_free_aggregates_validate_exact_open_and_periodic_closed_topology() {
+    let second = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key("second"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Point, 0),
+        alias("first", IntentPortRole::End),
+    )
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, coordinate(2.0))
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, coordinate(0.0));
+    let chain = IntentNodeDraft::new(
+        IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::OpenChain,
+        },
+        key("chain"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias("first", IntentPortRole::Span),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 1),
+        alias("second", IntentPortRole::Span),
+    );
+    let profile = IntentNodeDraft::new(
+        IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::ClosedProfile,
+        },
+        key("profile"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias("circle", IntentPortRole::Span),
+    );
+    let output = cold_materialize_ops(
+        0x8300_2001,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("first"),
+                draft: Box::new(segment("first", [0.0, 0.0], [1.0, 0.0])),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("second"),
+                draft: Box::new(second),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("circle"),
+                draft: Box::new(circle("circle", [5.0, 0.0], 1.0)),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("chain"),
+                draft: Box::new(chain),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("profile"),
+                draft: Box::new(profile),
+                cell: None,
+            },
+        ],
+    );
+    assert_eq!(output.ownership.aggregates.len(), 2);
+    let open = output
+        .ownership
+        .aggregates
+        .iter()
+        .find(|aggregate| !aggregate.closed)
+        .unwrap();
+    let closed = output
+        .ownership
+        .aggregates
+        .iter()
+        .find(|aggregate| aggregate.closed)
+        .unwrap();
+    assert_eq!(open.spans.len(), 2);
+    assert_eq!(closed.spans.len(), 1);
+}
+
+#[test]
+fn disconnected_aggregate_rejects_without_any_native_publication() {
+    let session = IntentSession::with_id(IntentSessionId::from_raw(0x8300_2003)).unwrap();
+    let materializer = ColdIntentMaterializer::with_default_policy(
+        DocumentId(PersistentId::from_u128(0x8300_2003_0000)),
+        1.0,
+    )
+    .unwrap();
+    let chain = IntentNodeDraft::new(
+        IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::OpenChain,
+        },
+        key("chain"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias("first", IntentPortRole::Span),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 1),
+        alias("second", IntentPortRole::Span),
+    );
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("first"),
+                draft: Box::new(segment("first", [0.0, 0.0], [1.0, 0.0])),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("second"),
+                draft: Box::new(segment("second", [3.0, 0.0], [4.0, 0.0])),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("chain"),
+                draft: Box::new(chain),
+                cell: None,
+            },
+        ],
+    );
+    assert!(
+        session
+            .plan_patch(patch, |candidate| materializer.evaluate(candidate))
+            .is_err()
+    );
+    assert!(session.graph().nodes().is_empty());
+    assert!(session.accepted().is_none());
+}
+
+#[test]
+fn closed_polyline_and_non_default_nurbs_publish_every_logical_span() {
+    let closed = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Polyline,
+        },
+        key("closed"),
+    )
+    .with_dynamic_children(4)
+    .with_field(IntentFieldKey(key("closed")), IntentLiteral::Boolean(true));
+    let nurbs = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::OpenControlNurbs,
+        },
+        key("nurbs"),
+    )
+    .with_dynamic_children(5)
+    .with_field(IntentFieldKey(key("degree")), IntentLiteral::Natural(2))
+    .with_field(
+        IntentFieldKey(key("gauge_index")),
+        IntentLiteral::Natural(1),
+    );
+    let regularized = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::CenterRectangle,
+        },
+        key("regularized"),
+    )
+    .with_field(
+        IntentFieldKey(key("regularized")),
+        IntentLiteral::Boolean(true),
+    );
+    let output = cold_materialize_ops(
+        0x8300_2002,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("closed"),
+                draft: Box::new(closed),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("nurbs"),
+                draft: Box::new(nurbs),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("regularized"),
+                draft: Box::new(regularized),
+                cell: None,
+            },
+        ],
+    );
+    let polyline = output
+        .ownership
+        .aggregates
+        .iter()
+        .find(|aggregate| aggregate.closed)
+        .unwrap();
+    assert_eq!(polyline.spans.len(), 4);
+    let nurbs_curve = output
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document()
+        .curves()
+        .iter()
+        .find(|curve| {
+            matches!(
+                curve.definition,
+                geosolve_sketch::CurveDefinition::Nurbs { .. }
+            )
+        })
+        .unwrap()
+        .id;
+    let logical_nurbs_spans = output
+        .ownership
+        .ports
+        .iter()
+        .filter(|(_, binding)| {
+            matches!(binding, IntentNativeBinding::CurveSpan(span) if span.curve == nurbs_curve)
+        })
+        .count();
+    assert_eq!(logical_nurbs_spans, 3);
+    assert_eq!(
+        output
+            .session
+            .accepted_state_for_current_input()
+            .unwrap()
+            .document()
+            .constraints()
+            .len(),
+        6,
+        "center rectangle owns four axis, one midpoint, and one regularization relation"
+    );
 }
 
 #[test]

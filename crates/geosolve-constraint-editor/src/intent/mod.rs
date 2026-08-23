@@ -10,21 +10,23 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_sketch::{
-    ContactId, CurveDefinition, CurveId, CurveSpan, DesignCurve, DesignPoint, DesignPointId,
-    DesignScalar, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentCenterRef,
+    ContactDomain, ContactId, ContactNeighborhood, ContactSlot, CurveDefinition, CurveId,
+    CurveSpan, DesignCurve, DesignPoint, DesignPointId, DesignScalar, DesignScalarId,
+    DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentCenterRef,
     DocumentCircleContainment, DocumentCircleTangencyMode, DocumentConstraint,
     DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis, DocumentDimension,
     DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
     DocumentDirectionSense, DocumentError, DocumentExternalBindingId, DocumentHyperbolaBranch,
     DocumentId, DocumentLineOffsetOrientation, DocumentLineSide, DocumentLineSupportRef,
     DocumentParameterId, DocumentSessionError, DocumentSolveRequest, DocumentSourceId,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PersistentId, RetainedSketchDocumentSession,
+    GeometryRole, GeometryRoleEdit, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, OperationControl,
+    OperationOutcome, PersistentId, RetainedSketchDocumentSession,
     SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, ScalarDomain, ScalarUnit, SketchHardValidity,
     SketchMaterializationBatch, SketchMaterializationReservationAllocator,
-    SketchPersistentIdentityHighWater, SolverConfig,
+    SketchPersistentIdentityHighWater, SolverConfig, TangentOrientation,
 };
 use geosolve_sketch_intent::{
-    ConstraintKind, DimensionKind, GeometryRecipeKind, InputRole, InputSlot,
+    AggregateKind, ConstraintKind, DimensionKind, GeometryRecipeKind, InputRole, InputSlot,
     IntentAcceptedAuthority, IntentCandidate, IntentEvaluation, IntentEvaluationFailure,
     IntentEvaluationFailureKind, IntentExternalInputs, IntentGraph, IntentGraphError,
     IntentIdentityFlow, IntentInstanceState, IntentKey, IntentLiteral, IntentNativeReservationKind,
@@ -33,8 +35,14 @@ use geosolve_sketch_intent::{
     IntentSemanticIdentity, IntentUnit, LeafField, LeafRef, MaterializationEvidence, NodeId,
     ReservationId,
 };
+use geosolve_sketch_topology::{
+    OffsetEndpointRef, OffsetEndpointRole, OffsetOperandIndex, OffsetOperandRequest,
+    PreparedOffsetOperandQuery,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::intent_inputs::decode_intent_external_inputs;
 
 /// One native identity or semantic span bound to a stable intent output.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -76,6 +84,15 @@ pub struct IntentNodeMaterialization {
     pub owned: Vec<IntentNativeBinding>,
 }
 
+/// Equation-free ordered native spans retained by one logical aggregate output.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntentAggregateMaterialization {
+    pub port: IntentPortRef,
+    pub spans: Vec<CurveSpan>,
+    pub closed: bool,
+}
+
 /// Complete deterministic logical/native ownership and reverse writable-leaf map.
 ///
 /// Vectors are kept in stable-key order so the same value is canonical JSON on
@@ -88,6 +105,8 @@ pub struct IntentMaterializationMap {
     pub ports: Vec<(IntentPortRef, IntentNativeBinding)>,
     pub reservations: Vec<(ReservationId, IntentNativeBinding)>,
     pub writable_leaves: Vec<(IntentNativeWritableLeaf, LeafRef)>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aggregates: Vec<IntentAggregateMaterialization>,
 }
 
 impl IntentMaterializationMap {
@@ -116,6 +135,28 @@ impl IntentMaterializationMap {
             .binary_search_by_key(&native, |(candidate, _)| *candidate)
             .ok()
             .map(|index| self.writable_leaves[index].1)
+    }
+
+    /// Resolves one equation-free chain, profile, or geometry collection output.
+    #[must_use]
+    pub fn aggregate(&self, port: IntentPortRef) -> Option<&IntentAggregateMaterialization> {
+        self.aggregates
+            .binary_search_by_key(&port, |candidate| candidate.port)
+            .ok()
+            .map(|index| &self.aggregates[index])
+    }
+
+    /// Resolves the ordered native spans owned by one logical aggregate output.
+    #[must_use]
+    pub fn aggregate_spans(&self, port: IntentPortRef) -> Option<&[CurveSpan]> {
+        self.aggregate(port)
+            .map(|aggregate| aggregate.spans.as_slice())
+    }
+
+    /// Reports whether one resolved aggregate has closed-profile semantics.
+    #[must_use]
+    pub fn aggregate_is_closed(&self, port: IntentPortRef) -> Option<bool> {
+        self.aggregate(port).map(|aggregate| aggregate.closed)
     }
 }
 
@@ -305,11 +346,14 @@ impl ColdIntentMaterializer {
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
         candidate.graph().validate()?;
         preflight_supported(candidate)?;
+        let host_inputs = decode_intent_external_inputs(candidate.external_inputs())
+            .map_err(|error| IntentMaterializationError::HostInput(error.to_string()))?;
 
         let mut document = SketchDocumentBuilder::empty(self.document, self.model_scale)?;
         let (reservation_set, reservation_bindings) = allocate_reservations(
             document.persistent_identity_high_water().clone(),
             candidate.reservations().entries(),
+            candidate.graph(),
         )?;
         let retains_unused = candidate
             .reservations()
@@ -342,13 +386,22 @@ impl ColdIntentMaterializer {
                 IntentNodeKind::Dimension { dimension } => {
                     lower_dimension(candidate, node, *dimension, &mut batch, &mut state)?;
                 }
+                IntentNodeKind::Aggregate { aggregate } => {
+                    lower_aggregate(node, *aggregate, &mut state)?;
+                }
                 _ => unreachable!("preflight admits only implemented declaration families"),
             }
         }
         state.validate_declared_consumption(candidate)?;
         document.apply_materialization_batch(&batch)?;
 
-        let session = RetainedSketchDocumentSession::new(document, self.request, self.config)?;
+        let session = RetainedSketchDocumentSession::new_with_inputs(
+            document,
+            host_inputs.parameters,
+            host_inputs.external_snapshots,
+            self.request,
+            self.config,
+        )?;
         let accepted = session
             .accepted_state_for_current_input()
             .ok_or(IntentMaterializationError::SolverRejected)?;
@@ -366,6 +419,8 @@ impl ColdIntentMaterializer {
         {
             return Err(IntentMaterializationError::IndependentValidationFailed);
         }
+
+        state.validate_aggregates(&session)?;
 
         let ownership = state.finish(candidate.reservations().entries());
         let validation = IntentValidationEvidence {
@@ -453,10 +508,10 @@ pub enum IntentMaterializationError {
     Evidence(#[from] geosolve_sketch_intent::IntentModelError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    #[error("invalid intent host inputs: {0}")]
+    HostInput(String),
     #[error("intent node {node} is not materializable by this editor adapter")]
     UnsupportedNode { node: NodeId },
-    #[error("the focused cold materializer does not yet decode non-empty host inputs")]
-    UnsupportedHostInputs,
     #[error("unknown intent node {0}")]
     UnknownNode(NodeId),
     #[error("intent node {node} is missing port {selector:?}")]
@@ -484,6 +539,8 @@ pub enum IntentMaterializationError {
     InvalidBranchDirection { node: NodeId },
     #[error("geometry node {node} has invalid or incomplete recipe state: {reason}")]
     InvalidGeometry { node: NodeId, reason: &'static str },
+    #[error("aggregate node {node} has invalid topology: {reason}")]
+    InvalidAggregate { node: NodeId, reason: &'static str },
     #[error("native solver rejected the cold materialization")]
     SolverRejected,
     #[error("native solver omitted stable acceptance evidence")]
@@ -507,6 +564,7 @@ impl IntentMaterializationError {
             | Self::MissingPointPosition { node, .. }
             | Self::InvalidBranchDirection { node }
             | Self::InvalidGeometry { node, .. }
+            | Self::InvalidAggregate { node, .. }
             | Self::UnknownNode(node) => Some(*node),
             _ => None,
         }
@@ -524,7 +582,7 @@ impl IntentMaterializationError {
     const fn diagnostic_key(&self) -> &'static str {
         match self {
             Self::UnsupportedNode { .. } => "unsupported-intent-node",
-            Self::UnsupportedHostInputs => "unsupported-intent-host-inputs",
+            Self::HostInput(_) => "invalid-intent-host-inputs",
             Self::SolverRejected => "native-solver-rejected",
             Self::IndependentValidationFailed | Self::MissingValidationEvidence => {
                 "native-validation-rejected"
@@ -553,11 +611,6 @@ impl SketchDocumentBuilder {
 fn preflight_supported(
     candidate: &dyn IntentMaterializationSource,
 ) -> Result<(), IntentMaterializationError> {
-    if !candidate.external_inputs().parameter_batch.is_empty()
-        || !candidate.external_inputs().external_snapshots.is_empty()
-    {
-        return Err(IntentMaterializationError::UnsupportedHostInputs);
-    }
     for node in candidate.graph().nodes().values() {
         let supported = match node.kind {
             IntentNodeKind::Geometry { recipe } => matches!(
@@ -578,6 +631,15 @@ fn preflight_supported(
                     | GeometryRecipeKind::RationalQuadraticConic
                     | GeometryRecipeKind::Parabola
                     | GeometryRecipeKind::Hyperbola
+                    | GeometryRecipeKind::Polyline
+                    | GeometryRecipeKind::MidpointLine
+                    | GeometryRecipeKind::TwoPointAlignedRectangle
+                    | GeometryRecipeKind::ThreePointCornerRectangle
+                    | GeometryRecipeKind::CenterRectangle
+                    | GeometryRecipeKind::ThreePointCenterRectangle
+                    | GeometryRecipeKind::TangentArc
+                    | GeometryRecipeKind::OpenControlNurbs
+                    | GeometryRecipeKind::PeriodicControlNurbs
             ),
             IntentNodeKind::Constraint { constraint } => !matches!(
                 constraint,
@@ -596,6 +658,7 @@ fn preflight_supported(
                     | ConstraintKind::CurveCurveFillet
             ),
             IntentNodeKind::Dimension { dimension } => dimension != DimensionKind::ProfileOffset,
+            IntentNodeKind::Aggregate { .. } => true,
             _ => false,
         };
         if !supported {
@@ -608,6 +671,7 @@ fn preflight_supported(
 fn allocate_reservations(
     high_water: SketchPersistentIdentityHighWater,
     records: &BTreeMap<ReservationId, IntentReservationRecord>,
+    graph: &IntentGraph,
 ) -> Result<
     (
         geosolve_sketch::SketchMaterializationReservationSet,
@@ -682,7 +746,59 @@ fn allocate_reservations(
         };
         bindings.insert(*reservation, binding);
     }
+    reserve_spline_span_cursors(&mut allocator, &bindings, graph)?;
     Ok((allocator.finish()?, bindings))
+}
+
+fn reserve_spline_span_cursors(
+    allocator: &mut SketchMaterializationReservationAllocator,
+    bindings: &BTreeMap<ReservationId, IntentNativeBinding>,
+    graph: &IntentGraph,
+) -> Result<(), IntentMaterializationError> {
+    for node in graph.nodes().values() {
+        let IntentNodeKind::Geometry { recipe } = node.kind else {
+            continue;
+        };
+        if node.suppressed
+            || !matches!(
+                recipe,
+                GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+            )
+        {
+            continue;
+        }
+        let control_count = node.child_order.len();
+        let degree = field_natural(node, "degree", 3)?;
+        let degree =
+            usize::try_from(degree).map_err(|_| IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "NURBS degree exceeds platform limits",
+            })?;
+        if degree == 0 || control_count <= degree {
+            continue;
+        }
+        let curve_port = require_port(node, IntentPortRole::Curve, 0)?;
+        let IntentIdentityFlow::Created { reservation } = curve_port.flow else {
+            return Err(IntentMaterializationError::NativeKindMismatch { node: node.id });
+        };
+        let Some(IntentNativeBinding::Curve(curve)) = bindings.get(&reservation).copied() else {
+            return Err(IntentMaterializationError::MissingReservation { reservation });
+        };
+        let span_count = match recipe {
+            GeometryRecipeKind::OpenControlNurbs => control_count - degree,
+            GeometryRecipeKind::PeriodicControlNurbs => control_count,
+            _ => unreachable!("guarded NURBS recipe"),
+        };
+        let next_span_id = u32::try_from(span_count)
+            .ok()
+            .and_then(|count| count.checked_add(1))
+            .ok_or(IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "NURBS span identity high-water overflow",
+            })?;
+        allocator.reserve_spline_span_cursor(curve, next_span_id)?;
+    }
+    Ok(())
 }
 
 fn require_pair(
@@ -709,6 +825,8 @@ struct LoweringState {
     port_bindings: BTreeMap<IntentPortRef, IntentNativeBinding>,
     reverse_leaves: BTreeMap<IntentNativeWritableLeaf, LeafRef>,
     point_positions: BTreeMap<DesignPointId, [f64; 2]>,
+    aggregate_bindings: BTreeMap<IntentPortRef, IntentAggregateMaterialization>,
+    topology_aggregate_nodes: BTreeMap<IntentPortRef, NodeId>,
     consumed_reservations: BTreeSet<ReservationId>,
 }
 
@@ -723,6 +841,8 @@ impl LoweringState {
             port_bindings: BTreeMap::new(),
             reverse_leaves: BTreeMap::new(),
             point_positions: BTreeMap::new(),
+            aggregate_bindings: BTreeMap::new(),
+            topology_aggregate_nodes: BTreeMap::new(),
             consumed_reservations: BTreeSet::new(),
         }
     }
@@ -802,6 +922,97 @@ impl LoweringState {
         }
     }
 
+    fn bind_aggregate(
+        &mut self,
+        node: &IntentNode,
+        port: &IntentPort,
+        spans: Vec<CurveSpan>,
+        closed: bool,
+        validate_topology: bool,
+    ) {
+        let reference = port.as_ref(node.id);
+        self.aggregate_bindings.insert(
+            reference,
+            IntentAggregateMaterialization {
+                port: reference,
+                spans,
+                closed,
+            },
+        );
+        if validate_topology {
+            self.topology_aggregate_nodes.insert(reference, node.id);
+        }
+    }
+
+    fn validate_aggregates(
+        &self,
+        session: &RetainedSketchDocumentSession,
+    ) -> Result<(), IntentMaterializationError> {
+        if self.topology_aggregate_nodes.is_empty() {
+            return Ok(());
+        }
+        let query = PreparedOffsetOperandQuery::capture(session, OffsetOperandRequest::default())
+            .map_err(|_| IntentMaterializationError::InvalidAggregate {
+            node: *self
+                .topology_aggregate_nodes
+                .values()
+                .next()
+                .expect("nonempty topology aggregate map"),
+            reason: "accepted topology snapshot is unavailable",
+        })?;
+        let outcome = query.execute(OperationControl::unlimited()).map_err(|_| {
+            IntentMaterializationError::InvalidAggregate {
+                node: *self
+                    .topology_aggregate_nodes
+                    .values()
+                    .next()
+                    .expect("nonempty topology aggregate map"),
+                reason: "accepted topology analysis failed",
+            }
+        })?;
+        let result = match outcome {
+            OperationOutcome::Completed { value, .. } => value,
+            OperationOutcome::Cancelled { .. } | OperationOutcome::WorkExhausted { .. } => {
+                return Err(IntentMaterializationError::InvalidAggregate {
+                    node: *self
+                        .topology_aggregate_nodes
+                        .values()
+                        .next()
+                        .expect("nonempty topology aggregate map"),
+                    reason: "accepted topology analysis did not complete",
+                });
+            }
+            _ => {
+                return Err(IntentMaterializationError::InvalidAggregate {
+                    node: *self
+                        .topology_aggregate_nodes
+                        .values()
+                        .next()
+                        .expect("nonempty topology aggregate map"),
+                    reason: "accepted topology analysis returned an unknown outcome",
+                });
+            }
+        };
+        let index = result.operand_index.as_ref().ok_or_else(|| {
+            IntentMaterializationError::InvalidAggregate {
+                node: *self
+                    .topology_aggregate_nodes
+                    .values()
+                    .next()
+                    .expect("nonempty topology aggregate map"),
+                reason: "accepted topology analysis is incomplete",
+            }
+        })?;
+        for (port, node) in &self.topology_aggregate_nodes {
+            let aggregate = self
+                .aggregate_bindings
+                .get(port)
+                .expect("topology aggregate has an equation-free binding");
+            validate_aggregate_topology(*node, aggregate, index)?;
+        }
+        Ok(())
+    }
+
     fn validate_declared_consumption(
         &self,
         candidate: &dyn IntentMaterializationSource,
@@ -842,6 +1053,7 @@ impl LoweringState {
             ports: self.port_bindings.into_iter().collect(),
             reservations: self.reservation_bindings.into_iter().collect(),
             writable_leaves: self.reverse_leaves.into_iter().collect(),
+            aggregates: self.aggregate_bindings.into_values().collect(),
         }
     }
 }
@@ -884,16 +1096,15 @@ fn lower_geometry(
     match recipe {
         G::SketchPoint => lower_point(candidate, node, batch, state),
         G::Segment => lower_segment(candidate, node, batch, state),
-        G::Polyline
-        | G::MidpointLine
-        | G::TwoPointAlignedRectangle
+        G::Polyline => lower_polyline(candidate, node, batch, state),
+        G::MidpointLine => lower_midpoint_line(candidate, node, batch, state),
+        G::TwoPointAlignedRectangle
         | G::ThreePointCornerRectangle
         | G::CenterRectangle
-        | G::ThreePointCenterRectangle
-        | G::TangentArc
-        | G::OpenControlNurbs
-        | G::PeriodicControlNurbs => {
-            Err(IntentMaterializationError::UnsupportedNode { node: node.id })
+        | G::ThreePointCenterRectangle => lower_rectangle(candidate, node, recipe, batch, state),
+        G::TangentArc => lower_tangent_arc(candidate, node, batch, state),
+        G::OpenControlNurbs | G::PeriodicControlNurbs => {
+            lower_control_nurbs(candidate, node, recipe, batch, state)
         }
         G::CenterRadiusCircle | G::TwoPointDiameterCircle | G::ThreePointCircle => {
             let (center, _) = materialize_point(
@@ -1383,6 +1594,970 @@ fn lower_geometry(
     }
 }
 
+fn child_port(
+    node: &IntentNode,
+    order_index: usize,
+    role: IntentPortRole,
+) -> Result<&IntentPort, IntentMaterializationError> {
+    let child = node
+        .child_order
+        .get(order_index)
+        .and_then(|child| node.children.get(child))
+        .ok_or(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "dynamic child order is incomplete",
+        })?;
+    child
+        .ports
+        .iter()
+        .filter_map(|port| node.port(*port))
+        .find(|port| {
+            matches!(
+                port.selector,
+                IntentPortSelector::InitialChild {
+                    role: candidate,
+                    index: 0,
+                    ..
+                } if candidate == role
+            )
+        })
+        .ok_or(IntentMaterializationError::MissingPort {
+            node: node.id,
+            selector: IntentPortSelector::InitialChild {
+                ordinal: u16::try_from(order_index).unwrap_or(u16::MAX),
+                role,
+                index: 0,
+            },
+        })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_point_port(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    port: &IntentPort,
+    default: [f64; 2],
+    label: &str,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(DesignPointId, [f64; 2]), IntentMaterializationError> {
+    let point = require_point_binding(node.id, state.port_bindings.get(&port.as_ref(node.id)))?;
+    let position = resolve_point_position(candidate, node, port, point, default, state)?;
+    if matches!(port.flow, IntentIdentityFlow::Created { .. }) {
+        batch.push_point(DesignPoint {
+            id: point,
+            label: format!("{}.{}", node.symbol.as_str(), label),
+            position,
+        });
+        state.point_positions.insert(point, position);
+        state.consume_port(node, port);
+    }
+    Ok((point, position))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_scalar_port(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    port: &IntentPort,
+    field: LeafField,
+    default: f64,
+    intent_unit: IntentUnit,
+    unit: ScalarUnit,
+    domain: ScalarDomain,
+    label: &str,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(DesignScalarId, f64), IntentMaterializationError> {
+    let scalar = match state.port_bindings.get(&port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Scalar(scalar)) => *scalar,
+        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    };
+    let value = if matches!(port.flow, IntentIdentityFlow::Created { .. }) {
+        let value = leaf_quantity(candidate, node.id, port.id, field, default, intent_unit)?;
+        batch.push_scalar(DesignScalar {
+            id: scalar,
+            label: format!("{}.{}", node.symbol.as_str(), label),
+            value,
+            unit,
+            domain,
+        });
+        state.consume_port(node, port);
+        value
+    } else {
+        return Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "aliased recipe scalar values are not supported",
+        });
+    };
+    Ok((scalar, value))
+}
+
+fn finite_direction(
+    node: NodeId,
+    start: [f64; 2],
+    end: [f64; 2],
+) -> Result<[f64; 2], IntentMaterializationError> {
+    let direction = [end[0] - start[0], end[1] - start[1]];
+    let length = direction[0].hypot(direction[1]);
+    if !(length.is_finite() && length > 0.0) {
+        return Err(IntentMaterializationError::InvalidGeometry {
+            node,
+            reason: "curve endpoints must define a finite nonzero span",
+        });
+    }
+    Ok([direction[0] / length, direction[1] / length])
+}
+
+fn lower_polyline(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let count = node.child_order.len();
+    if count < 2 {
+        return Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "an open polyline requires at least two vertices",
+        });
+    }
+    let mut points = Vec::with_capacity(count);
+    let mut positions = Vec::with_capacity(count);
+    for index in 0..count {
+        let port = child_port(node, index, IntentPortRole::Corner)?;
+        let ordinal = u32::try_from(index).map_or(f64::MAX, f64::from);
+        let default = [ordinal, if index % 2 == 0 { 0.0 } else { 1.0 }];
+        let (point, position) = materialize_point_port(
+            candidate,
+            node,
+            port,
+            default,
+            &format!("vertex{}", index + 1),
+            batch,
+            state,
+        )?;
+        points.push(point);
+        positions.push(position);
+    }
+    let closed = field_boolean(node, "closed", false)?;
+    let span_count = count - 1 + usize::from(closed);
+    let branch_directions = (0..span_count)
+        .map(|index| finite_direction(node.id, positions[index], positions[(index + 1) % count]))
+        .collect::<Result<Vec<_>, _>>()?;
+    materialize_curve(
+        node,
+        0,
+        CurveDefinition::Polyline {
+            points,
+            closed,
+            branch_directions,
+        },
+        batch,
+        state,
+    )?;
+    let curve = curve_binding(node, 0, state)?;
+    let spans = (0..span_count)
+        .map(|segment| {
+            Ok(CurveSpan {
+                curve,
+                segment: u32::try_from(segment).map_err(|_| {
+                    IntentMaterializationError::InvalidGeometry {
+                        node: node.id,
+                        reason: "polyline span index exceeds persistent limits",
+                    }
+                })?,
+            })
+        })
+        .collect::<Result<Vec<_>, IntentMaterializationError>>()?;
+    for (index, span) in spans.iter().copied().enumerate() {
+        let port = child_port(node, index, IntentPortRole::Span)?;
+        state
+            .port_bindings
+            .insert(port.as_ref(node.id), IntentNativeBinding::CurveSpan(span));
+    }
+    if let Some(collection) = node.port_by_selector(IntentPortSelector::Node {
+        role: IntentPortRole::Collection,
+        index: 0,
+    }) {
+        state.bind_aggregate(node, collection, spans, closed, false);
+    }
+    Ok(())
+}
+
+fn reflected_point(
+    node: NodeId,
+    center: [f64; 2],
+    sample: [f64; 2],
+) -> Result<[f64; 2], IntentMaterializationError> {
+    let reflected = [
+        center[0] + (center[0] - sample[0]),
+        center[1] + (center[1] - sample[1]),
+    ];
+    reflected
+        .into_iter()
+        .all(f64::is_finite)
+        .then_some(reflected)
+        .ok_or(IntentMaterializationError::InvalidGeometry {
+            node,
+            reason: "reflected recipe point is non-finite",
+        })
+}
+
+fn lower_midpoint_line(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let (midpoint, midpoint_position) = materialize_point(
+        candidate,
+        node,
+        IntentPortRole::Midpoint,
+        0,
+        [0.0, 0.0],
+        "midpoint",
+        batch,
+        state,
+    )?;
+    let (end, end_position) = materialize_point(
+        candidate,
+        node,
+        IntentPortRole::End,
+        0,
+        [1.0, 0.0],
+        "end",
+        batch,
+        state,
+    )?;
+    let reflected = reflected_point(node.id, midpoint_position, end_position)?;
+    let (start, start_position) = materialize_point(
+        candidate,
+        node,
+        IntentPortRole::Start,
+        0,
+        reflected,
+        "start",
+        batch,
+        state,
+    )?;
+    let branch_direction = finite_direction(node.id, start_position, end_position)?;
+    materialize_curve(
+        node,
+        0,
+        CurveDefinition::Line {
+            start,
+            end,
+            branch_direction,
+        },
+        batch,
+        state,
+    )?;
+    materialize_indexed_constraint(
+        node,
+        0,
+        DocumentConstraintDefinition::Midpoint {
+            point: midpoint,
+            line: CurveSpan::line(curve_binding(node, 0, state)?),
+        },
+        batch,
+        state,
+    )
+}
+
+fn materialize_rectangle_point(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    index: u16,
+    default: [f64; 2],
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(DesignPointId, [f64; 2]), IntentMaterializationError> {
+    materialize_point(
+        candidate,
+        node,
+        IntentPortRole::Corner,
+        index,
+        default,
+        &format!("corner{}", index + 1),
+        batch,
+        state,
+    )
+}
+
+fn finite_parallelogram_corner(
+    node: NodeId,
+    first: [f64; 2],
+    adjacent: [f64; 2],
+    third: [f64; 2],
+) -> Result<[f64; 2], IntentMaterializationError> {
+    let fourth = [
+        first[0] + (third[0] - adjacent[0]),
+        first[1] + (third[1] - adjacent[1]),
+    ];
+    fourth
+        .into_iter()
+        .all(f64::is_finite)
+        .then_some(fourth)
+        .ok_or(IntentMaterializationError::InvalidGeometry {
+            node,
+            reason: "derived rectangle corner is non-finite",
+        })
+}
+
+type MaterializedPoint = (DesignPointId, [f64; 2]);
+
+fn materialize_aligned_rectangle_corners(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<[MaterializedPoint; 4], IntentMaterializationError> {
+    let first = materialize_rectangle_point(candidate, node, 0, [0.0, 0.0], batch, state)?;
+    let third = materialize_rectangle_point(candidate, node, 2, [2.0, 1.0], batch, state)?;
+    let second =
+        materialize_rectangle_point(candidate, node, 1, [third.1[0], first.1[1]], batch, state)?;
+    let fourth =
+        materialize_rectangle_point(candidate, node, 3, [first.1[0], third.1[1]], batch, state)?;
+    Ok([first, second, third, fourth])
+}
+
+fn materialize_corner_rectangle_corners(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<[MaterializedPoint; 4], IntentMaterializationError> {
+    let first = materialize_rectangle_point(candidate, node, 0, [0.0, 0.0], batch, state)?;
+    let second = materialize_rectangle_point(candidate, node, 1, [2.0, 0.0], batch, state)?;
+    let third = materialize_rectangle_point(candidate, node, 2, [2.0, 1.0], batch, state)?;
+    let fourth_position = finite_parallelogram_corner(node.id, first.1, second.1, third.1)?;
+    let fourth = materialize_rectangle_point(candidate, node, 3, fourth_position, batch, state)?;
+    Ok([first, second, third, fourth])
+}
+
+fn materialize_center_rectangle_corners(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<([MaterializedPoint; 4], MaterializedPoint), IntentMaterializationError> {
+    let center = materialize_point(
+        candidate,
+        node,
+        IntentPortRole::Center,
+        0,
+        [0.0, 0.0],
+        "center",
+        batch,
+        state,
+    )?;
+    let first = materialize_rectangle_point(candidate, node, 0, [1.0, 1.0], batch, state)?;
+    let third_position = reflected_point(node.id, center.1, first.1)?;
+    let third = materialize_rectangle_point(candidate, node, 2, third_position, batch, state)?;
+    let second =
+        materialize_rectangle_point(candidate, node, 1, [third.1[0], first.1[1]], batch, state)?;
+    let fourth =
+        materialize_rectangle_point(candidate, node, 3, [first.1[0], third.1[1]], batch, state)?;
+    Ok(([first, second, third, fourth], center))
+}
+
+fn materialize_three_point_center_rectangle_corners(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<([MaterializedPoint; 4], MaterializedPoint), IntentMaterializationError> {
+    let center = materialize_point(
+        candidate,
+        node,
+        IntentPortRole::Center,
+        0,
+        [0.0, 0.0],
+        "center",
+        batch,
+        state,
+    )?;
+    let first = materialize_rectangle_point(candidate, node, 0, [1.0, 1.0], batch, state)?;
+    let side_midpoint = point_field(node, "side_midpoint")?.unwrap_or([center.1[0], first.1[1]]);
+    validate_perpendicular_rectangle_axes(node.id, center.1, side_midpoint, first.1)?;
+    let second_position = reflected_point(node.id, side_midpoint, first.1)?;
+    let second = materialize_rectangle_point(candidate, node, 1, second_position, batch, state)?;
+    let third_position = reflected_point(node.id, center.1, first.1)?;
+    let third = materialize_rectangle_point(candidate, node, 2, third_position, batch, state)?;
+    let fourth_position = reflected_point(node.id, center.1, second.1)?;
+    let fourth = materialize_rectangle_point(candidate, node, 3, fourth_position, batch, state)?;
+    Ok(([first, second, third, fourth], center))
+}
+
+fn validate_perpendicular_rectangle_axes(
+    node: NodeId,
+    center: [f64; 2],
+    side_midpoint: [f64; 2],
+    corner: [f64; 2],
+) -> Result<(), IntentMaterializationError> {
+    let half_height = [side_midpoint[0] - center[0], side_midpoint[1] - center[1]];
+    let half_width = [corner[0] - side_midpoint[0], corner[1] - side_midpoint[1]];
+    let height = half_height[0].hypot(half_height[1]);
+    let width = half_width[0].hypot(half_width[1]);
+    let normalized_dot =
+        half_height[0].mul_add(half_width[0], half_height[1] * half_width[1]) / (height * width);
+    if height.is_finite()
+        && height > 0.0
+        && width.is_finite()
+        && width > 0.0
+        && normalized_dot.is_finite()
+        && normalized_dot.abs() <= 1.0e-9
+    {
+        Ok(())
+    } else {
+        Err(IntentMaterializationError::InvalidGeometry {
+            node,
+            reason: "three-point centre rectangle samples must define perpendicular axes",
+        })
+    }
+}
+
+fn materialize_rectangle_corners(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    recipe: GeometryRecipeKind,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<([MaterializedPoint; 4], Option<MaterializedPoint>), IntentMaterializationError> {
+    use GeometryRecipeKind as G;
+
+    match recipe {
+        G::TwoPointAlignedRectangle => Ok((
+            materialize_aligned_rectangle_corners(candidate, node, batch, state)?,
+            None,
+        )),
+        G::ThreePointCornerRectangle => Ok((
+            materialize_corner_rectangle_corners(candidate, node, batch, state)?,
+            None,
+        )),
+        G::CenterRectangle => {
+            let (corners, center) =
+                materialize_center_rectangle_corners(candidate, node, batch, state)?;
+            Ok((corners, Some(center)))
+        }
+        G::ThreePointCenterRectangle => {
+            let (corners, center) =
+                materialize_three_point_center_rectangle_corners(candidate, node, batch, state)?;
+            Ok((corners, Some(center)))
+        }
+        _ => unreachable!("rectangle lowering called with non-rectangle recipe"),
+    }
+}
+
+fn materialize_rectangle_curves(
+    node: &IntentNode,
+    corners: &[MaterializedPoint; 4],
+    has_center: bool,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    for index in 0..4 {
+        let next = (index + 1) % 4;
+        let branch_direction = finite_direction(node.id, corners[index].1, corners[next].1)?;
+        materialize_curve_with_role(
+            node,
+            u16::try_from(index).expect("four rectangle edges fit u16"),
+            CurveDefinition::Line {
+                start: corners[index].0,
+                end: corners[next].0,
+                branch_direction,
+            },
+            GeometryRole::Profile,
+            batch,
+            state,
+        )?;
+    }
+    if has_center {
+        let branch_direction = finite_direction(node.id, corners[0].1, corners[2].1)?;
+        materialize_curve_with_role(
+            node,
+            4,
+            CurveDefinition::Line {
+                start: corners[0].0,
+                end: corners[2].0,
+                branch_direction,
+            },
+            GeometryRole::Construction,
+            batch,
+            state,
+        )?;
+    }
+    Ok(())
+}
+
+fn lower_rectangle(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    recipe: GeometryRecipeKind,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    use GeometryRecipeKind as G;
+
+    let (corners, center) = materialize_rectangle_corners(candidate, node, recipe, batch, state)?;
+    materialize_rectangle_curves(node, &corners, center.is_some(), batch, state)?;
+    let spans = (0..4)
+        .map(|index| {
+            Ok(CurveSpan::line(curve_binding(
+                node,
+                u16::try_from(index).expect("rectangle edge index fits u16"),
+                state,
+            )?))
+        })
+        .collect::<Result<Vec<_>, IntentMaterializationError>>()?;
+    let mut definitions = match recipe {
+        G::TwoPointAlignedRectangle | G::CenterRectangle => vec![
+            DocumentConstraintDefinition::Horizontal { line: spans[0] },
+            DocumentConstraintDefinition::Vertical { line: spans[1] },
+            DocumentConstraintDefinition::Horizontal { line: spans[2] },
+            DocumentConstraintDefinition::Vertical { line: spans[3] },
+        ],
+        G::ThreePointCornerRectangle | G::ThreePointCenterRectangle => vec![
+            DocumentConstraintDefinition::Perpendicular {
+                first: spans[0],
+                second: spans[1],
+            },
+            DocumentConstraintDefinition::Parallel {
+                first: spans[0],
+                second: spans[2],
+            },
+            DocumentConstraintDefinition::Parallel {
+                first: spans[1],
+                second: spans[3],
+            },
+        ],
+        _ => unreachable!("guarded rectangle recipe"),
+    };
+    if let Some((center, _)) = center {
+        definitions.push(DocumentConstraintDefinition::Midpoint {
+            point: center,
+            line: CurveSpan::line(curve_binding(node, 4, state)?),
+        });
+    }
+    if field_boolean(node, "regularized", false)? {
+        definitions.push(DocumentConstraintDefinition::EqualLength {
+            first: spans[0],
+            second: spans[1],
+        });
+    }
+    for (index, definition) in definitions.into_iter().enumerate() {
+        materialize_indexed_constraint(
+            node,
+            u16::try_from(index).expect("bounded rectangle relation index fits u16"),
+            definition,
+            batch,
+            state,
+        )?;
+    }
+    Ok(())
+}
+
+fn lower_tangent_arc(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    materialize_tangent_arc_curve(candidate, node, batch, state)?;
+    materialize_tangent_arc_relation(candidate, node, batch, state)
+}
+
+fn materialize_tangent_arc_curve(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let center = materialize_point(
+        candidate,
+        node,
+        IntentPortRole::Center,
+        0,
+        [0.0, 0.0],
+        "center",
+        batch,
+        state,
+    )?
+    .0;
+    let radius = materialize_scalar(
+        candidate,
+        node,
+        0,
+        LeafField::Value,
+        1.0,
+        IntentUnit::Length,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+        "radius",
+        batch,
+        state,
+    )?;
+    let start_angle = materialize_scalar(
+        candidate,
+        node,
+        1,
+        LeafField::Angle,
+        0.0,
+        IntentUnit::Angle,
+        ScalarUnit::Angle,
+        ScalarDomain::Finite,
+        "start angle",
+        batch,
+        state,
+    )?;
+    let end_angle = materialize_scalar(
+        candidate,
+        node,
+        2,
+        LeafField::Angle,
+        std::f64::consts::FRAC_PI_2,
+        IntentUnit::Angle,
+        ScalarUnit::Angle,
+        ScalarDomain::Finite,
+        "end angle",
+        batch,
+        state,
+    )?;
+    materialize_curve(
+        node,
+        0,
+        CurveDefinition::CircularArc {
+            center,
+            radius,
+            start_angle,
+            end_angle,
+            sweep: arc_sweep(node)?,
+        },
+        batch,
+        state,
+    )
+}
+
+fn materialize_tangent_arc_relation(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let source = input_span(node, state, 0)?;
+    let orientation = match enum_field(node, "orientation")? {
+        None | Some("aligned") => TangentOrientation::Aligned,
+        Some("opposed") => TangentOrientation::Opposed,
+        Some(_) => {
+            return Err(IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "tangent orientation must be aligned or opposed",
+            });
+        }
+    };
+    let source_domain = tangent_source_domain(node)?;
+    let source_neighborhood = tangent_source_neighborhood(node)?;
+    let source_winding =
+        i32::try_from(field_integer(node, "source_winding", 0)?).map_err(|_| {
+            IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "tangent source winding exceeds persistent limits",
+            }
+        })?;
+    let source_parameter =
+        field_quantity(node, "source_parameter", IntentUnit::Dimensionless)?.unwrap_or(1.0);
+    let created_span = CurveSpan::line(curve_binding(node, 0, state)?);
+    let source_contact = materialize_recipe_contact(
+        candidate,
+        node,
+        0,
+        source,
+        source_parameter,
+        source_domain,
+        source_winding,
+        source_neighborhood,
+        orientation,
+        batch,
+        state,
+    )?;
+    let created_contact = materialize_recipe_contact(
+        candidate,
+        node,
+        1,
+        created_span,
+        0.0,
+        ContactDomain::Bounded {
+            lower: 0.0,
+            upper: 1.0,
+        },
+        0,
+        ContactNeighborhood::Start,
+        orientation,
+        batch,
+        state,
+    )?;
+    materialize_indexed_constraint(
+        node,
+        0,
+        DocumentConstraintDefinition::CurveCurveTangency {
+            first_contact: source_contact,
+            second_contact: created_contact,
+        },
+        batch,
+        state,
+    )
+}
+
+fn tangent_source_domain(node: &IntentNode) -> Result<ContactDomain, IntentMaterializationError> {
+    match enum_field(node, "source_domain")? {
+        None | Some("bounded") => {
+            let lower = field_quantity(node, "source_domain_lower", IntentUnit::Dimensionless)?
+                .unwrap_or(0.0);
+            let upper = field_quantity(node, "source_domain_upper", IntentUnit::Dimensionless)?
+                .unwrap_or(1.0);
+            Ok(ContactDomain::Bounded { lower, upper })
+        }
+        Some("supporting_line") => Ok(ContactDomain::SupportingLine),
+        Some("periodic") => Ok(ContactDomain::Periodic {
+            period: field_quantity(node, "source_domain_period", IntentUnit::Dimensionless)?
+                .unwrap_or(std::f64::consts::TAU),
+        }),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "tangent source domain is invalid",
+        }),
+    }
+}
+
+fn tangent_source_neighborhood(
+    node: &IntentNode,
+) -> Result<ContactNeighborhood, IntentMaterializationError> {
+    match enum_field(node, "source_neighborhood")? {
+        None | Some("end") => Ok(ContactNeighborhood::End),
+        Some("start") => Ok(ContactNeighborhood::Start),
+        Some("interior") => Ok(ContactNeighborhood::Interior),
+        Some("local") => Ok(ContactNeighborhood::Local {
+            lower: field_quantity(node, "source_neighborhood_lower", IntentUnit::Dimensionless)?
+                .unwrap_or(0.0),
+            upper: field_quantity(node, "source_neighborhood_upper", IntentUnit::Dimensionless)?
+                .unwrap_or(1.0),
+        }),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "tangent source neighborhood is invalid",
+        }),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_recipe_contact(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    index: u16,
+    curve: CurveSpan,
+    parameter_value: f64,
+    domain: ContactDomain,
+    winding: i32,
+    neighborhood: ContactNeighborhood,
+    orientation: TangentOrientation,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<ContactId, IntentMaterializationError> {
+    let parameter_port = require_port(node, IntentPortRole::Parameter, index)?;
+    let (unit, scalar_domain) = match domain {
+        ContactDomain::SupportingLine => (ScalarUnit::Parameter, ScalarDomain::Finite),
+        ContactDomain::Bounded { lower, upper } => (
+            ScalarUnit::Parameter,
+            ScalarDomain::Bounded { lower, upper },
+        ),
+        ContactDomain::Periodic { period } => {
+            (ScalarUnit::Angle, ScalarDomain::Periodic { period })
+        }
+    };
+    let (parameter, _) = materialize_scalar_port(
+        candidate,
+        node,
+        parameter_port,
+        LeafField::Parameter,
+        parameter_value,
+        IntentUnit::Dimensionless,
+        unit,
+        scalar_domain,
+        &format!("contact{} parameter", index + 1),
+        batch,
+        state,
+    )?;
+    let contact_port = require_port(node, IntentPortRole::Contact, index)?;
+    let contact = match state.port_bindings.get(&contact_port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Contact(contact)) => *contact,
+        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    };
+    batch.push_contact(ContactSlot {
+        id: contact,
+        label: format!("{}.contact{}", node.symbol.as_str(), index + 1),
+        curve,
+        parameter,
+        domain,
+        winding,
+        neighborhood,
+        tangent_orientation: Some(orientation),
+    });
+    state.consume_port(node, contact_port);
+    Ok(contact)
+}
+
+fn nurbs_topology(
+    node: NodeId,
+    form: DocumentBSplineForm,
+    degree: u32,
+    control_count: usize,
+) -> Result<(Vec<f64>, Vec<u32>, u32), IntentMaterializationError> {
+    let degree =
+        usize::try_from(degree).map_err(|_| IntentMaterializationError::InvalidGeometry {
+            node,
+            reason: "NURBS degree exceeds platform limits",
+        })?;
+    let span_count = match form {
+        DocumentBSplineForm::Clamped => control_count.checked_sub(degree),
+        DocumentBSplineForm::Periodic => Some(control_count),
+    }
+    .filter(|count| *count > 0)
+    .ok_or(IntentMaterializationError::InvalidGeometry {
+        node,
+        reason: "NURBS control count must exceed its positive degree",
+    })?;
+    let span_count_u32 =
+        u32::try_from(span_count).map_err(|_| IntentMaterializationError::InvalidGeometry {
+            node,
+            reason: "NURBS span count exceeds persistent limits",
+        })?;
+    let span_ids = (1..=span_count_u32).collect::<Vec<_>>();
+    let next_span_id =
+        span_count_u32
+            .checked_add(1)
+            .ok_or(IntentMaterializationError::InvalidGeometry {
+                node,
+                reason: "NURBS span identity high-water overflow",
+            })?;
+    let knots = match form {
+        DocumentBSplineForm::Clamped => {
+            let mut knots = vec![0.0; degree + 1];
+            knots.extend((1..span_count_u32).map(f64::from));
+            knots.extend(std::iter::repeat_n(f64::from(span_count_u32), degree + 1));
+            knots
+        }
+        DocumentBSplineForm::Periodic => (0..=span_count_u32).map(f64::from).collect(),
+    };
+    Ok((knots, span_ids, next_span_id))
+}
+
+fn lower_control_nurbs(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    recipe: GeometryRecipeKind,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let count = node.child_order.len();
+    let degree = u32::try_from(field_natural(node, "degree", 3)?).map_err(|_| {
+        IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "NURBS degree exceeds persistent limits",
+        }
+    })?;
+    let degree_usize =
+        usize::try_from(degree).map_err(|_| IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "NURBS degree exceeds platform limits",
+        })?;
+    if degree == 0 || count <= degree_usize {
+        return Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "NURBS control count must exceed its positive degree",
+        });
+    }
+    let gauge_index = usize::try_from(field_natural(node, "gauge_index", 0)?).map_err(|_| {
+        IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "NURBS gauge index exceeds platform limits",
+        }
+    })?;
+    if gauge_index >= count {
+        return Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "NURBS gauge index is outside the control list",
+        });
+    }
+    let mut controls = Vec::with_capacity(count);
+    let mut weights = Vec::with_capacity(count);
+    for index in 0..count {
+        let ordinal = u32::try_from(index).map_or(f64::MAX, f64::from);
+        let point_port = child_port(node, index, IntentPortRole::Control)?;
+        let (point, _) = materialize_point_port(
+            candidate,
+            node,
+            point_port,
+            [ordinal, if index % 2 == 0 { 0.0 } else { 1.0 }],
+            &format!("control{}", index + 1),
+            batch,
+            state,
+        )?;
+        controls.push(point);
+        let weight_port = child_port(node, index, IntentPortRole::Target)?;
+        let (weight, value) = materialize_scalar_port(
+            candidate,
+            node,
+            weight_port,
+            LeafField::Weight,
+            1.0,
+            IntentUnit::Dimensionless,
+            ScalarUnit::Parameter,
+            ScalarDomain::Positive,
+            &format!("weight{}", index + 1),
+            batch,
+            state,
+        )?;
+        if !(value.is_finite() && value > 0.0) {
+            return Err(IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "NURBS weights must be finite and positive",
+            });
+        }
+        if index == gauge_index && value.to_bits() != 1.0_f64.to_bits() {
+            return Err(IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "the selected NURBS gauge weight must be exactly one",
+            });
+        }
+        weights.push(weight);
+    }
+    let form = match recipe {
+        GeometryRecipeKind::OpenControlNurbs => DocumentBSplineForm::Clamped,
+        GeometryRecipeKind::PeriodicControlNurbs => DocumentBSplineForm::Periodic,
+        _ => unreachable!("NURBS lowering called with non-NURBS recipe"),
+    };
+    let (knots, span_ids, next_span_id) = nurbs_topology(node.id, form, degree, count)?;
+    let gauge_weight = weights[gauge_index];
+    let logical_span_ids = span_ids.clone();
+    materialize_spline_curve(
+        node,
+        CurveDefinition::Nurbs {
+            form,
+            degree,
+            controls,
+            weights,
+            gauge_weight,
+            knots,
+            span_ids,
+            next_span_id,
+        },
+        &logical_span_ids,
+        batch,
+        state,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn materialize_point(
     candidate: &dyn IntentMaterializationSource,
@@ -1449,10 +2624,42 @@ fn materialize_curve(
     batch: &mut SketchMaterializationBatch,
     state: &mut LoweringState,
 ) -> Result<(), IntentMaterializationError> {
+    materialize_curve_with_role(node, index, definition, GeometryRole::Profile, batch, state)
+}
+
+fn curve_binding(
+    node: &IntentNode,
+    index: u16,
+    state: &LoweringState,
+) -> Result<CurveId, IntentMaterializationError> {
     let curve_port = require_port(node, IntentPortRole::Curve, index)?;
-    let curve = match state.port_bindings.get(&curve_port.as_ref(node.id)) {
-        Some(IntentNativeBinding::Curve(curve)) => *curve,
-        _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    match state.port_bindings.get(&curve_port.as_ref(node.id)) {
+        Some(IntentNativeBinding::Curve(curve)) => Ok(*curve),
+        _ => Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
+    }
+}
+
+fn materialize_curve_with_role(
+    node: &IntentNode,
+    index: u16,
+    definition: CurveDefinition,
+    role: GeometryRole,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let curve_port = require_port(node, IntentPortRole::Curve, index)?;
+    let curve = curve_binding(node, index, state)?;
+    let primary_segment = match &definition {
+        CurveDefinition::BSpline { span_ids, .. } | CurveDefinition::Nurbs { span_ids, .. } => {
+            span_ids
+                .first()
+                .copied()
+                .ok_or(IntentMaterializationError::InvalidGeometry {
+                    node: node.id,
+                    reason: "spline topology has no semantic span",
+                })?
+        }
+        _ => 0,
     };
     batch.push_curve(DesignCurve {
         id: curve,
@@ -1463,6 +2670,9 @@ fn materialize_curve(
         },
         definition,
     });
+    if role == GeometryRole::Construction {
+        batch.push_geometry_role(GeometryRoleEdit::new(curve, role));
+    }
     state.consume_port(node, curve_port);
     if let Some(span_port) = node.port_by_selector(IntentPortSelector::Node {
         role: IntentPortRole::Span,
@@ -1470,7 +2680,34 @@ fn materialize_curve(
     }) {
         state.port_bindings.insert(
             span_port.as_ref(node.id),
-            IntentNativeBinding::CurveSpan(CurveSpan::line(curve)),
+            IntentNativeBinding::CurveSpan(CurveSpan {
+                curve,
+                segment: primary_segment,
+            }),
+        );
+    }
+    Ok(())
+}
+
+fn materialize_spline_curve(
+    node: &IntentNode,
+    definition: CurveDefinition,
+    span_ids: &[u32],
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    materialize_curve(node, 0, definition, batch, state)?;
+    let curve = curve_binding(node, 0, state)?;
+    for (index, segment) in span_ids.iter().copied().enumerate() {
+        let index =
+            u16::try_from(index).map_err(|_| IntentMaterializationError::InvalidGeometry {
+                node: node.id,
+                reason: "NURBS logical span index exceeds persistent limits",
+            })?;
+        let port = require_port(node, IntentPortRole::Span, index)?;
+        state.port_bindings.insert(
+            port.as_ref(node.id),
+            IntentNativeBinding::CurveSpan(CurveSpan { curve, segment }),
         );
     }
     Ok(())
@@ -1527,6 +2764,157 @@ fn lower_segment(
         span_port.as_ref(node.id),
         IntentNativeBinding::CurveSpan(CurveSpan::line(curve)),
     );
+    Ok(())
+}
+
+fn lower_aggregate(
+    node: &IntentNode,
+    kind: AggregateKind,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let spans = (0..node.inputs.len())
+        .map(|index| {
+            let index =
+                u16::try_from(index).map_err(|_| IntentMaterializationError::InvalidAggregate {
+                    node: node.id,
+                    reason: "aggregate input count exceeds persistent limits",
+                })?;
+            input_span(node, state, index)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let (role, closed) = match kind {
+        AggregateKind::OpenChain => (IntentPortRole::Chain, false),
+        AggregateKind::ClosedProfile => (IntentPortRole::Profile, true),
+    };
+    let port = require_port(node, role, 0)?;
+    state.bind_aggregate(node, port, spans, closed, true);
+    Ok(())
+}
+
+fn endpoint_pair(
+    node: NodeId,
+    span: CurveSpan,
+    index: &OffsetOperandIndex,
+) -> Result<[OffsetEndpointRef; 2], IntentMaterializationError> {
+    let candidate = index
+        .span(span)
+        .ok_or(IntentMaterializationError::InvalidAggregate {
+            node,
+            reason: "aggregate span is absent from accepted topology",
+        })?;
+    let start = OffsetEndpointRef {
+        span,
+        endpoint: OffsetEndpointRole::Start,
+    };
+    let end = OffsetEndpointRef {
+        span,
+        endpoint: OffsetEndpointRole::End,
+    };
+    if !candidate
+        .endpoints
+        .iter()
+        .any(|endpoint| endpoint.endpoint == start)
+        || !candidate
+            .endpoints
+            .iter()
+            .any(|endpoint| endpoint.endpoint == end)
+    {
+        return Err(IntentMaterializationError::InvalidAggregate {
+            node,
+            reason: "aggregate span lacks topology-owned bounded endpoints",
+        });
+    }
+    Ok([start, end])
+}
+
+fn endpoints_connected(
+    index: &OffsetOperandIndex,
+    first: OffsetEndpointRef,
+    second: OffsetEndpointRef,
+) -> bool {
+    first == second
+        || index
+            .adjacent_endpoints(first)
+            .any(|candidate| candidate == second)
+}
+
+fn validate_aggregate_topology(
+    node: NodeId,
+    aggregate: &IntentAggregateMaterialization,
+    index: &OffsetOperandIndex,
+) -> Result<(), IntentMaterializationError> {
+    if aggregate.spans.is_empty() {
+        return Err(IntentMaterializationError::InvalidAggregate {
+            node,
+            reason: "aggregate must contain at least one span",
+        });
+    }
+    let unique = aggregate.spans.iter().copied().collect::<BTreeSet<_>>();
+    if unique.len() != aggregate.spans.len() {
+        return Err(IntentMaterializationError::InvalidAggregate {
+            node,
+            reason: "aggregate must not repeat a native span",
+        });
+    }
+    let periodic = aggregate
+        .spans
+        .iter()
+        .filter(|span| {
+            index
+                .span(**span)
+                .is_some_and(|candidate| candidate.periodic)
+        })
+        .count();
+    if periodic > 0 {
+        if aggregate.closed && aggregate.spans.len() == 1 && periodic == 1 {
+            return Ok(());
+        }
+        return Err(IntentMaterializationError::InvalidAggregate {
+            node,
+            reason: "a periodic curve must be the sole span of a closed profile",
+        });
+    }
+
+    let pairs = aggregate
+        .spans
+        .iter()
+        .copied()
+        .map(|span| endpoint_pair(node, span, index))
+        .collect::<Result<Vec<_>, _>>()?;
+    let first = pairs[0];
+    let mut states = BTreeSet::from([(first[0], first[1]), (first[1], first[0])]);
+    for pair in pairs.iter().skip(1) {
+        let orientations = [(pair[0], pair[1]), (pair[1], pair[0])];
+        let mut next_states = BTreeSet::new();
+        for (path_start, path_end) in &states {
+            for (next_start, next_end) in orientations {
+                if endpoints_connected(index, *path_end, next_start) {
+                    next_states.insert((*path_start, next_end));
+                }
+            }
+        }
+        if next_states.is_empty() {
+            return Err(IntentMaterializationError::InvalidAggregate {
+                node,
+                reason: "ordered aggregate spans are not continuously connected",
+            });
+        }
+        states = next_states;
+    }
+    let valid = states.into_iter().any(|(start, end)| {
+        let closes = endpoints_connected(index, end, start);
+        if aggregate.closed { closes } else { !closes }
+    });
+    if !valid {
+        return Err(IntentMaterializationError::InvalidAggregate {
+            node,
+            reason: if aggregate.closed {
+                "closed profile spans do not form a topology-owned cycle"
+            } else {
+                "open chain terminals are not distinct"
+            },
+        });
+    }
     Ok(())
 }
 
@@ -1731,8 +3119,18 @@ fn materialize_constraint(
     batch: &mut SketchMaterializationBatch,
     state: &mut LoweringState,
 ) -> Result<(), IntentMaterializationError> {
-    let constraint_port = require_port(node, IntentPortRole::Constraint, 0)?;
-    let source_port = require_port(node, IntentPortRole::Source, 0)?;
+    materialize_indexed_constraint(node, 0, definition, batch, state)
+}
+
+fn materialize_indexed_constraint(
+    node: &IntentNode,
+    index: u16,
+    definition: DocumentConstraintDefinition,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<(), IntentMaterializationError> {
+    let constraint_port = require_port(node, IntentPortRole::Constraint, index)?;
+    let source_port = require_port(node, IntentPortRole::Source, index)?;
     let constraint = match state.port_bindings.get(&constraint_port.as_ref(node.id)) {
         Some(IntentNativeBinding::Constraint(id)) => *id,
         _ => return Err(IntentMaterializationError::NativeKindMismatch { node: node.id }),
@@ -2041,6 +3439,51 @@ fn field_quantity(
             reason: "quantity-valued definition field is invalid",
         }),
         None => Ok(None),
+    }
+}
+
+fn field_boolean(
+    node: &IntentNode,
+    name: &str,
+    default: bool,
+) -> Result<bool, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Boolean(value)) => Ok(*value),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "boolean-valued definition field is invalid",
+        }),
+        None => Ok(default),
+    }
+}
+
+fn field_integer(
+    node: &IntentNode,
+    name: &str,
+    default: i64,
+) -> Result<i64, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Integer(value)) => Ok(*value),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "integer-valued definition field is invalid",
+        }),
+        None => Ok(default),
+    }
+}
+
+fn field_natural(
+    node: &IntentNode,
+    name: &str,
+    default: u64,
+) -> Result<u64, IntentMaterializationError> {
+    match field_value(node, name) {
+        Some(IntentLiteral::Natural(value)) => Ok(*value),
+        Some(_) => Err(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "natural-valued definition field is invalid",
+        }),
+        None => Ok(default),
     }
 }
 
