@@ -30,6 +30,14 @@ catalog schemas, separate instance/organization/external identities, unordered p
 retained accepted/failure authority, canonical persistence and one bounded Undo/Redo history. It
 contains no solver equation and depends on neither the sketch domain nor the editor.
 
+The first review-hardening pass adds a durable reservation/tombstone ledger to semantic and
+session identity, stable developer symbols independent of mutable display names, non-writable
+logical handles, accurately named host materialization artifacts and deterministic clock-free
+transaction descriptors for the read-only History projection. Focused lifecycle coverage includes
+suppression, deletion, retained failure, Undo/Redo, divergent edits, bounded-history eviction and
+canonical reload. Final focused qualification and the family-exact lowering audit remain in
+progress.
+
 ### I3 — editor-owned materializer
 
 Pending. Add typed graph-to-document lowering, exact reservation translation, dependency schedule,
@@ -44,7 +52,9 @@ gesture state outside intent. Remove any second history authority.
 
 ### I5 — projections, RPC and workspace v8
 
-Pending. Add Design panel projections, typed Inspector edits, organization-only reorder,
+In progress. Commit `50d2ec6` installs the side-by-side Design-panel shell and accessible,
+keyboard-navigable `Outline | Structured source | History` tabs as presentation-only state. Add
+the Rust-backed projections, typed Inspector edits, organization-only reorder,
 TypeScript-shaped structured source, read-only History, DOM-free WASM/RPC, branded TypeScript
 bindings and strict workspace-v8 persistence with v1-v6 bootstrap migration.
 
