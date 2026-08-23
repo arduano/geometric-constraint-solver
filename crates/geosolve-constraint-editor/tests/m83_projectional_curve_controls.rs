@@ -484,6 +484,10 @@ fn stale_terminal_sample_rejects_and_restores_prior_authority_without_history() 
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one end-to-end gesture fixture keeps pointer-down, preview, cancellation, and sole-history evidence contiguous"
+)]
 fn projectional_editor_resolves_curve_effects_and_cancel_is_history_free() {
     let mut coordinator = coordinator(0x8300_7104);
     let (_, curve) = create_geometry(&mut coordinator, "circle", circle_draft());

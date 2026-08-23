@@ -330,6 +330,10 @@ fn face_offset_is_one_transaction_with_exact_properties_and_stable_native_identi
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one lifecycle fixture keeps Offset deletion, dependent closure, Undo, Redo, and exact output identity evidence contiguous"
+)]
 fn open_chain_delete_cascades_downstream_and_undo_redo_restore_exact_outputs() {
     let mut session = fixture(false, 0x8300_0ff5_0002);
     let mut state = offset_state(&session, false);
@@ -489,13 +493,13 @@ fn stale_candidates_and_invalid_properties_change_no_history_or_authority() {
         accepted_before
     );
 
-    let mut state = offset_state(&session, false);
+    let mut invalid = offset_state(&session, false);
     assert!(matches!(
-        state.set_distance(0.0),
+        invalid.set_distance(0.0),
         OffsetAuthoringOutcome::Warning(_)
     ));
     assert!(matches!(
-        session.apply_profile_offset(&mut state, key("offset.invalid")),
+        session.apply_profile_offset(&mut invalid, key("offset.invalid")),
         Err(ProjectionalEditorError::ProfileOffset(
             ProjectionalProfileOffsetError::IncompleteCandidate
         ))
