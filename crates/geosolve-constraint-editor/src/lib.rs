@@ -17,6 +17,7 @@ mod geometry_tools;
 mod inference;
 mod intent;
 mod intent_coordinator;
+mod intent_projection;
 mod offset_authoring;
 
 pub use annotations::{
@@ -90,6 +91,11 @@ pub use intent::{
 pub use intent_coordinator::{
     ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
     ProjectionalPointDragPreview,
+};
+pub use intent_projection::{
+    IntentInspectorField, IntentInspectorProjection, IntentOutlineCell, IntentOutlineDeclaration,
+    IntentSourceEditError, IntentSourceToken, IntentSourceTokenId, IntentSourceTokenTarget,
+    IntentStructuredSource, IntentWorkbenchProjection,
 };
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,
