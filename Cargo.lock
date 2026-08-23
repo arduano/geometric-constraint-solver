@@ -622,6 +622,7 @@ dependencies = [
  "geosolve-core",
  "geosolve-sketch",
  "geosolve-sketch-features",
+ "geosolve-sketch-lineage",
  "miniz_oxide",
  "serde",
  "serde_json",

@@ -18,8 +18,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   baselines and treats flat scene/feature/map data as authenticated disposable
   caches. A separate DOM-free `geosolve-sketch-lineage-wasm` crate exposes the
   stateful `geosolve.lineage.rpc.v0` protocol, with a private data-only TypeScript
-  client. M81 remains accepted product authority until clean qualification and
-  focused M83 human UAT approve an immutable candidate.
+  client. A secondary read-only workbench panel now renders the current retained
+  action program and its separate Undo/Redo cursor directly from coordinator
+  authority. M81 remains accepted product authority until replacement clean
+  qualification and focused M83 human UAT approve an immutable candidate.
 - M83 authority hardening recompiles complete editor-action manifests—inputs, outputs, identity
   flows, persistent reservations and writable leaves—for current, accepted and historical
   programs before load or evaluation. Imported deletion now appends explicit `Retired` lineage,

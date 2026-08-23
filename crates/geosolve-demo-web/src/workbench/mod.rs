@@ -6816,6 +6816,19 @@ pub(crate) mod wasm {
             selection,
             &pending,
         ));
+        let lineage_document = coordinator.lineage_document();
+        required(document, "wb-lineage-count")?
+            .set_text_content(Some(&super::panels::lineage_summary(lineage_document)));
+        required(document, "wb-lineage-history")?.set_inner_html(
+            &super::panels::lineage_history_markup(
+                coordinator.history_cursor(),
+                coordinator.history_len(),
+                coordinator.can_undo(),
+                coordinator.can_redo(),
+            ),
+        );
+        required(document, "wb-lineage")?
+            .set_inner_html(&super::panels::lineage_markup(lineage_document));
         let lifecycle = coordinator.lifecycle();
         let (key, label) = super::panels::lifecycle_presentation(lifecycle.status);
         let state = required(document, "wb-lifecycle")?;
@@ -8630,6 +8643,40 @@ mod tests {
             ("Undo", "undo"),
             ("Redo", "redo"),
         ];
+        let workbench_source = production_sources
+            .iter()
+            .find_map(|(name, source)| (*name == "workbench").then_some(*source))
+            .expect("workbench production source");
+        let panels_source = production_sources
+            .iter()
+            .find_map(|(name, source)| (*name == "panels").then_some(*source))
+            .expect("panels production source");
+        assert!(
+            workbench_source.contains(".lineage_document()"),
+            "the panel must render the current Rust lineage authority directly"
+        );
+        for method in [
+            ".history_len()",
+            ".history_cursor()",
+            ".can_undo()",
+            ".can_redo()",
+        ] {
+            assert!(
+                workbench_source.contains(method),
+                "the panel must render authoritative history metadata through {method}"
+            );
+        }
+        for forbidden in [
+            "lineage_json",
+            "lineage_session_json",
+            "serde_json::from_str",
+            "Vec<LineageStep>",
+        ] {
+            assert!(
+                !panels_source.contains(forbidden),
+                "the lineage panel must not mirror or parse authority: {forbidden}"
+            );
+        }
         assert_eq!(
             routes
                 .iter()
@@ -8678,6 +8725,40 @@ mod tests {
             publication < acknowledgement,
             "geometry construction must publish through the coordinator before acknowledgement"
         );
+    }
+
+    #[test]
+    fn lineage_panel_is_adjacent_read_only_and_responsive() {
+        let html = include_str!("../../index.html");
+        for id in ["wb-lineage", "wb-lineage-count", "wb-lineage-history"] {
+            assert_eq!(
+                html.matches(&format!("id=\"{id}\"")).count(),
+                1,
+                "#{id} must have one presentation owner"
+            );
+        }
+        let document_panels = html
+            .find("class=\"wb-document-panels\"")
+            .expect("document panel wrapper");
+        let tree = html.find("class=\"wb-tree-panel\"").expect("sketch tree");
+        let lineage = html
+            .find("class=\"wb-lineage-panel\"")
+            .expect("lineage panel");
+        let canvas = html.find("id=\"wb-canvas-panel\"").expect("canvas panel");
+        assert!(document_panels < tree && tree < lineage && lineage < canvas);
+        assert!(html.contains("id=\"wb-lineage\" class=\"wb-lineage\" role=\"list\""));
+        assert!(html.contains("aria-label=\"Retained sketch lineage\""));
+
+        let css = include_str!("../../styles.css");
+        assert!(css.contains(".wb-document-panels {"));
+        assert!(css.contains("grid-template-columns: repeat(2, minmax(0, 1fr));"));
+        assert!(css.contains("@media (max-width: 96rem)"));
+        assert!(css.contains("grid-template-rows: repeat(2, minmax(0, 1fr));"));
+        let narrow = css
+            .split("@media (max-width: 58rem)")
+            .nth(1)
+            .expect("narrow workbench rules");
+        assert!(narrow.contains(".wb-document-panels { display: none; }"));
     }
 
     fn rejected_constraint_fixture() -> (
@@ -9792,7 +9873,7 @@ mod tests {
         assert!(css.contains("overflow: auto;"));
         assert!(css.contains(".wb-problems-title > button"));
         assert!(css.contains(
-            "grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 15rem minmax(36rem, 1fr) 18rem;"
+            "grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 25rem minmax(36rem, 1fr) 18rem;"
         ));
     }
 

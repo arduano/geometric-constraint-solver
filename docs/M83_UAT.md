@@ -2,15 +2,17 @@
 
 # M83 focused UAT — Authoritative sketch lineage
 
-Status: **clean-qualified immutable candidate nominated; human UAT pending**. This scorecard is
-bound to the exact clean-gate source, immutable no-rebuild snapshot and byte-verified Tailscale
-endpoint below. M81 remains accepted public product authority meanwhile.
+Status: **Lineage-panel amendment implemented; replacement immutable candidate pending**. The
+previous clean-gate source, no-rebuild snapshot and byte-verified Tailscale endpoint below are
+superseded because they predate the requested panel. M81 remains accepted public product authority
+meanwhile.
 
 M83 deliberately preserves existing sketch mathematics and visible authoring behavior while
-replacing persistent workbench authority. Human review should therefore focus on end-to-end
-editing/history/reload behavior and failure recovery rather than inspecting internal lineage JSON.
+replacing persistent workbench authority. The amendment now exposes a read-only projection of that
+real retained program, so human review should cover both end-to-end editing/history/reload behavior
+and whether the panel makes program/history changes legible without implying row editability.
 
-## Candidate authority
+## Superseded pre-panel candidate
 
 - Product source: `d378f7b31f56b43af787202dc1ebb92b7d199f84`.
 - Product tree: `25a47e821cc80ff62d1891cfc7095d10fb2ec87f`.
@@ -28,10 +30,14 @@ editing/history/reload behavior and failure recovery rather than inspecting inte
   `/tmp/geosolve-m83-final-verify.yMsi3f/results.tsv`, each SHA-256
   `3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`.
 
-Both verification passes cover `/` plus all seven files with HTTP 200, direct Tailscale address,
+Both historical verification passes cover `/` plus all seven files with HTTP 200, direct Tailscale address,
 zero redirects, no `Location` or `Content-Encoding`, exact media type/length/SHA/body, and root
 equality with `index.html`. The temporary `:18080` listener is retired; the retained endpoint stays
-live through this UAT. GitHub Pages is intentionally unchanged until approval.
+live only for continuity until replacement. These bytes are withdrawn from current UAT because
+they do not contain the Lineage panel. GitHub Pages is intentionally unchanged until approval.
+
+Replacement product source, frozen snapshot and exact served-byte evidence will be recorded here
+after the amended committed source passes the complete clean release gate.
 
 ## Focused scorecard
 
@@ -45,6 +51,7 @@ live through this UAT. GitHub Pages is intentionally unchanged until approval.
 | M83-U6 | Deliberately create a structurally valid but unsolved/conflicting edit, then Undo, Redo, repair it and continue authoring. | The retained failure is visible while the prior complete accepted scene remains authoritative; history never becomes stuck or publishes a partial scene. | pending |
 | M83-U7 | Save/reload the workspace with moved annotations, branches, features and history; repeat once after a failed retained edit and continue Undo/Redo. | Workspace v7 restores retained-versus-accepted authority, exact history and annotation placement, then continues editing without ID reuse or stale Problems. | pending |
 | M83-U8 | Import one older reproduction/workspace payload from the existing v1-v6 corpus; edit and delete one imported entity, Undo/Redo that deletion, save as v7 and reload. | The imported scene remains one truthful baseline with no invented history; deletion behaves as a later retirement action, Undo restores the exact identity, Redo retires it again, and neither history nor reload reuses or silently removes that baseline identity. | pending |
+| M83-U9 | Watch **Lineage** while creating geometry and a constraint, directly moving an owner, suppressing/deleting an action, and using Undo/Redo. Repeat once with an imported sample and at both a wide and compact desktop width. | New authored intent adds ordered rows; direct movement rewrites the owning row without adding a Move event; revision advances; suppressed/deleted rows remain explicit and readable; stable step/developer IDs survive Undo/Redo; the separate history position and Undo/Redo availability track the command bar. Rows are visibly read-only. At wide size Lineage sits beside Sketch Tree; at compact size it stacks below without squeezing or covering the canvas. | pending |
 
 ## Acceptance rule
 
@@ -54,6 +61,6 @@ an exact owner regression under the GeoSolve defect-hardening workflow and withd
 candidate. Cosmetic requests unrelated to M83 authority are deferred rather than folded into the
 milestone.
 
-M83 closes only after the exact candidate above passes this scorecard or receives an explicit
+M83 closes only after the replacement exact candidate passes this scorecard or receives an explicit
 scoped disposition, the supervising caller approves it, and the accepted bytes are subsequently
 published and exactly verified on GitHub Pages.

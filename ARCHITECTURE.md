@@ -38,9 +38,11 @@ construction/NURBS UAT and certified all-family visual profiles.
   intent; direct editing atomically rewrites every owner. Strict chronological evaluation is the
   oracle for dependency-local evaluation, workspace v7 strictly migrates v1-v6 through honest
   imported baselines, and `geosolve.lineage.rpc.v0` exposes the stateful engine without a DOM.
-  `docs/M83_GOALS.md` owns the full scope. Exact source `d378f7b3`, tree `25a47e8`, passes clean
-  qualification, focused review and immutable byte-verified Tailscale nomination. M83 is not
-  accepted product behavior until human UAT and explicit approval; M81 remains the product
+  The ordinary workbench additionally presents the current program through a direct read-only
+  Lineage panel; it introduces no peer browser authority. `docs/M83_GOALS.md` owns the full scope.
+  Exact source `d378f7b3`, tree `25a47e8`, passed clean qualification, focused review and immutable
+  byte-verified Tailscale nomination but is superseded because it predates the panel. Replacement
+  clean nomination, human UAT and explicit approval remain required; M81 remains the product
   baseline.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and

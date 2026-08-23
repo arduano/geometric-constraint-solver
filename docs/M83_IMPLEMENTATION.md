@@ -2,10 +2,11 @@
 
 # M83 implementation — Authoritative sketch lineage and deterministic rematerialization
 
-Status: **implementation and clean qualification complete; immutable candidate nominated; human
-UAT pending; not accepted**. ADR 0039 and `docs/M83_GOALS.md` own the scope. M81 remains accepted
-product authority until the immutable M83 candidate passes focused human UAT and receives explicit
-supervising-human approval. GitHub Pages publication is deliberately deferred until that approval.
+Status: **architecture implementation and read-only Lineage-panel amendment complete; replacement
+clean qualification and human UAT pending; not accepted**. ADR 0039 and `docs/M83_GOALS.md` own the
+scope. M81 remains accepted product authority until a replacement immutable M83 candidate passes
+focused human UAT and receives explicit supervising-human approval. GitHub Pages publication is
+deliberately deferred until that approval.
 
 ## Product boundary
 
@@ -168,6 +169,34 @@ evaluation cross-field invariants before updating retained session state. Malfor
 replies throw a typed response violation and cannot become engine evidence. A UTF-8 byte preflight
 also keeps outgoing requests within the same 16 MiB bound as Rust, because a request rejected
 before Rust can decode its envelope cannot carry trustworthy correlation fields.
+
+### L7 — read-only retained-program presentation
+
+The ordinary workbench now places a secondary **Lineage** panel beside Sketch Tree on wide desktop
+layouts and stacks it beneath the tree on compact desktop layouts. The wrapper disappears with the
+tree at the existing narrow-workbench cutoff. The panel is deliberately inspect-only: its rows are
+list items rather than buttons and expose no selection, delete, reorder or rewrite route.
+
+Every render borrows `RetainedEditorCoordinator::lineage_document()` and derives chronological
+markup anew. Rows show a friendly action/schema name, the retained owner label, action category,
+input/output counts, exact schema/version, compact visible and full machine-readable stable step
+identity, and explicit Live/Suppressed/Deleted state. The header shows current action count and
+lineage revision. A distinct history strip consumes `history_cursor`, `history_len`, `can_undo` and
+`can_redo`, making clear that Undo/Redo traverses versions of the current program rather than being
+the program itself. Browser state stores no `LineageStep`, parses no lineage JSON and owns no
+lineage mutation semantics.
+
+Pure presentation tests cover chronological identity, imported/suppressed/tombstoned rows,
+input/output counts, hostile attribute/text escaping, empty programs and in-place rewrite without
+an appended event. A real coordinator regression creates one point, then Undo/Redo, and checks the
+panel source plus action count/cursor/availability against current Rust authority at each position.
+The M83-W11 source sentinel requires direct lineage/history accessors and rejects JSON parsing or a
+browser-side `Vec<LineageStep>`. Static HTML/CSS tests cover unique accessible ownership, wide
+adjacency, compact stacking and narrow hiding. Review moved the split/stack breakpoint to 96rem so
+the outer grid never clips the Inspector and the canvas HUD keeps its ordinary width, removed
+whole-row opacity from retained non-live steps, raised small-text contrast/size and made the durable
+developer key visible. The complete demo library passes 172/172 and focused warnings-denied demo
+Clippy passes on the amendment worktree.
 
 ## Finding ledger
 
@@ -829,9 +858,10 @@ timed out only while a duplicate concurrent oracle consumed the host each passed
 The fixture remains 271 catalog entries plus its header, with SHA-256
 `cb09894516c7482aab6d1a49b34c1c3c95494e7cd6eac06547ac87e0b08de797` at this checkpoint.
 
-### Clean candidate qualification and immutable nomination
+### Superseded pre-panel candidate qualification and immutable nomination
 
-Exact product source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
+The following remains historical evidence and is withdrawn from current M83-W12 because it does
+not include L7. Exact product source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
 `25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, ran the following from a clean worktree and exited
 zero on 2026-08-23 at 02:06:03 AEST:
 
@@ -885,8 +915,9 @@ Only after that pass, `geosolve-m83-uat.service`, PID `1273798`, began serving t
 directory at `http://100.94.63.83:8080/`. The independent eight-request final ledger at
 `/tmp/geosolve-m83-final-verify.yMsi3f/results.tsv` is byte-identical and has the same SHA-256; its
 fetched manifest matches the frozen aggregate above. The temporary listener was then retired.
-The retained service remains live for M83-W12 human UAT. These evidence-only documentation changes
-are descendants of the nominated source/tree and do not rebuild or replace its product bytes.
+The retained service remains live only for continuity while the L7 replacement is qualified. These
+evidence-only documentation changes are descendants of the nominated source/tree and do not
+rebuild or replace its product bytes.
 
 ## Known limitations and next gate
 
@@ -894,8 +925,9 @@ M83 intentionally does not add arbitrary-curve/computed Offset, topology-changin
 computed-on-computed features, B-rep/PDM naming, formulas/configurations/units, collaboration,
 TypeScript source rewriting, a browser script editor or npm publication.
 
-The remaining gate is the focused scorecard in `docs/M83_UAT.md` and explicit supervising-human
-acceptance. M83 must not close or deploy to GitHub Pages before that decision. If UAT opens a
-finding, the immutable candidate is withdrawn and the exact owning-layer defect workflow applies;
-otherwise these same nominated semantics proceed through the standard Pages build and exact
-hosted-byte verification.
+The immediate gate is clean committed-source qualification and immutable replacement nomination
+for L7. The remaining product gate is then the focused scorecard in `docs/M83_UAT.md` and explicit
+supervising-human acceptance. M83 must not close or deploy to GitHub Pages before that decision. If
+UAT opens a finding, the immutable candidate is withdrawn and the exact owning-layer defect
+workflow applies; otherwise those replacement nominated semantics proceed through the standard
+Pages build and exact hosted-byte verification.

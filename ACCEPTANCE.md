@@ -2928,10 +2928,11 @@ M82's mechanical qualification as product evidence.
 
 ## M83 acceptance: authoritative sketch lineage and deterministic rematerialization
 
-Status: **mechanical criteria, clean nomination and focused review pass; human UAT remains
-pending**. `docs/M83_GOALS.md` is the authoritative scope and ADR 0039 is accepted for
-implementation. This section supersedes commit `56d1eda`'s narrow proof criteria without claiming
-that the expanded product has received supervising-human acceptance.
+Status: **mechanical criteria and the read-only Lineage-panel amendment pass focused qualification;
+replacement clean nomination and human UAT remain pending**. `docs/M83_GOALS.md` is the
+authoritative scope and ADR 0039 is accepted for implementation. This section supersedes commit
+`56d1eda`'s narrow proof criteria without claiming that the expanded product has received
+supervising-human acceptance.
 
 - [x] `LineageDocument` is the sole writable persistent design authority for the demo workbench.
   Flat `SketchDocument`, `ComputedFeatureDocument` and evaluated feature geometry are derived,
@@ -3049,7 +3050,15 @@ that the expanded product has received supervising-human acceptance.
   prove every admitted persistent workbench route enters or restores lineage, no writable flat side
   path or nested user history remains, and a cache-free reload reconstructs the same accepted scene
   and feature state. This is not described as dynamic browser instrumentation of every catalog row.
-- [x] Focused M83-W1–W11 tests pass with unchanged sketch/operation/topology/feature/editor/
+- [x] The ordinary workbench has one read-only **Lineage** panel adjacent to Sketch Tree at wide
+  desktop sizes and stacked beneath it at compact desktop sizes. It renders ordered rows freshly
+  from the coordinator's current `LineageDocument`, retains imported, suppressed and tombstoned/
+  deleted steps, and shows stable step/schema identity, action category, input/output counts,
+  current revision, history position and Undo/Redo availability. Rows expose no selection,
+  deletion or browser-owned mutation path; markup escaping, direct rewrite-without-append, actual
+  coordinator Create/Undo/Redo, responsive layout and source-route sentinels pass.
+- [ ] Replacement focused M83-W1–W11 tests pass with unchanged
+  sketch/operation/topology/feature/editor/
   persistence suites and reviewed 271-row golden authority. Formatting/diff hygiene,
   warnings-denied workspace Clippy/Rustdoc, locked all-feature tests, native/WASM parity,
   performance, licence/package, Trunk and the complete release gate pass from committed source.
@@ -3062,7 +3071,8 @@ that the expanded product has received supervising-human acceptance.
   or explicitly dispositioned, and the accepted frozen bytes are deployed and exactly verified on
   GitHub Pages before milestone closure.
 
-Exact source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
+The following is superseded pre-panel evidence. Exact source
+`d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
 `25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, passes the complete clean release gate with log
 SHA-256 `b38c7c5a46408e5237109b3ac64d6c75f340479920baefaa933189c90ae7692e`. The gate includes the
 unchanged 271-row golden oracle, native/WASM M70/M71/M74/M75/M76/M77/M79/M83 parity, TypeScript
@@ -3077,8 +3087,10 @@ retained `http://100.94.63.83:8080/` verification each pass eight proxy-disabled
 identity-encoded HTTP checks with exact body/media/length and no redirect, `Location` or
 `Content-Encoding`; `/` equals `index.html`. Both result ledgers have SHA-256
 `3217083aa1a3f9e56d02dcdb30f8c518b35d27767676abc531aa2356f1632ba1`. Two independent focused
-reviews found no release blocker. The retained service remains live for M83-W12; no Pages or
-milestone-acceptance claim is made before explicit human approval.
+reviews found no release blocker. Its retained service remains live only for continuity while the
+replacement is qualified; those bytes are withdrawn from current M83-W12 because they do not
+contain the requested Lineage panel. No Pages or milestone-acceptance claim is made before a
+replacement nomination and explicit human approval.
 
 M83 explicitly excludes new geometry/constraint families, arbitrary-curve/computed Offset,
 topology-changing Offset construction, computed-on-computed feature chains, false persistent

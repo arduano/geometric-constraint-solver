@@ -114,10 +114,17 @@
         </section>
       </aside>
 
-      <aside class="wb-tree-panel" aria-label="Sketch tree">
-        <div class="wb-panel-title"><span>Sketch tree</span><span id="wb-status-count">0 points / 0 curves</span></div>
-        <div id="wb-tree" class="wb-tree" role="tree" aria-label="Sketch objects"></div>
-      </aside>
+      <section class="wb-document-panels" aria-label="Sketch document panels">
+        <aside class="wb-tree-panel" aria-label="Sketch tree">
+          <div class="wb-panel-title"><span>Sketch tree</span><span id="wb-status-count">0 points / 0 curves</span></div>
+          <div id="wb-tree" class="wb-tree" role="tree" aria-label="Sketch objects"></div>
+        </aside>
+        <aside class="wb-lineage-panel" aria-label="Retained sketch lineage">
+          <div class="wb-panel-title"><span>Lineage</span><span id="wb-lineage-count">0 actions · r0</span></div>
+          <div id="wb-lineage-history" class="wb-lineage-history"></div>
+          <div id="wb-lineage" class="wb-lineage" role="list" aria-label="Retained sketch actions"></div>
+        </aside>
+      </section>
 
       <section id="wb-canvas-panel" class="wb-canvas-panel" aria-label="Sketch canvas">
         <svg id="wb-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable sketch canvas" draggable="false"></svg>

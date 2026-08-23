@@ -11,6 +11,10 @@ use geosolve_sketch_features::{
     ComputedCornerRef, ComputedFeatureDefinition, ComputedFeatureDocument,
     ComputedFeatureEvaluationState, ComputedFeatureSnapshot,
 };
+use geosolve_sketch_lineage::{
+    ImportedBaselineEncoding, LineageActionDefinition, LineageActionKind, LineageDocument,
+    LineageStepState,
+};
 
 use super::icons::TreeIconKind;
 
@@ -31,6 +35,211 @@ pub(crate) fn problem_markup(problem: &str) -> String {
         "<span class=\"wb-problem\" aria-label=\"Current sketch or computed-feature problem\" role=\"status\">{}</span>",
         escape(problem)
     )
+}
+
+/// Compact current-program identity for the read-only Lineage panel header.
+pub(crate) fn lineage_summary(document: &LineageDocument) -> String {
+    format!(
+        "{} {} · r{}",
+        document.steps().len(),
+        if document.steps().len() == 1 {
+            "action"
+        } else {
+            "actions"
+        },
+        document.revision().raw(),
+    )
+}
+
+/// Read-only cursor presentation for the one authoritative Undo/Redo history.
+pub(crate) fn lineage_history_markup(
+    history_cursor: usize,
+    history_len: usize,
+    can_undo: bool,
+    can_redo: bool,
+) -> String {
+    let position = if history_len == 0 {
+        0
+    } else {
+        history_cursor.saturating_add(1).min(history_len)
+    };
+    format!(
+        concat!(
+            "<div class=\"wb-lineage-history-position\" ",
+            "aria-label=\"Undo history position {position} of {history_len}; ",
+            "Undo {undo_availability}; Redo {redo_availability}\">",
+            "History <strong>{position} / {history_len}</strong>",
+            "<span data-available=\"{can_undo}\">Undo {undo_mark}</span>",
+            "<span data-available=\"{can_redo}\">Redo {redo_mark}</span>",
+            "</div>"
+        ),
+        position = position,
+        history_len = history_len,
+        undo_availability = if can_undo { "available" } else { "unavailable" },
+        redo_availability = if can_redo { "available" } else { "unavailable" },
+        can_undo = can_undo,
+        can_redo = can_redo,
+        undo_mark = if can_undo { "✓" } else { "—" },
+        redo_mark = if can_redo { "✓" } else { "—" },
+    )
+}
+
+/// Chronological read-only rows derived freshly from the retained Rust action program.
+pub(crate) fn lineage_markup(document: &LineageDocument) -> String {
+    let mut output = String::new();
+    for (index, step) in document.steps().iter().enumerate() {
+        let (kind_key, kind_label) = lineage_kind_presentation(step.action.kind());
+        let (schema, version) = lineage_action_schema(&step.action);
+        let action_name = lineage_action_name(&step.action, schema);
+        let (state_key, state_label) = match step.state {
+            LineageStepState::Live => ("live", "Live"),
+            LineageStepState::Suppressed => ("suppressed", "Suppressed"),
+            LineageStepState::Tombstoned => ("tombstoned", "Deleted"),
+        };
+        let input_count = step.action.inputs().len();
+        let output_count = step.outputs.len();
+        let escaped_schema = escape(schema);
+        let escaped_developer_key = escape(step.key.as_str());
+        let escaped_label = escape(&step.label);
+        let escaped_action_name = escape(&action_name);
+        let display_step_id = format!("s{:x}", step.id.raw());
+        let title = escape(&format!(
+            "{} · Stable step {} · Developer key {} · {} v{}",
+            step.label, step.id, step.key, schema, version
+        ));
+        let _ = write!(
+            output,
+            concat!(
+                "<div class=\"wb-lineage-row\" role=\"listitem\" ",
+                "data-lineage-step-id=\"{step_id}\" data-lineage-action-kind=\"{kind_key}\" ",
+                "data-lineage-step-state=\"{state_key}\" data-lineage-schema=\"{escaped_schema}\" ",
+                "data-lineage-schema-version=\"{version}\" ",
+                "data-lineage-developer-key=\"{escaped_developer_key}\" ",
+                "title=\"{title}\">",
+                "<span class=\"wb-lineage-order\" aria-hidden=\"true\">{ordinal}</span>",
+                "<span class=\"wb-lineage-copy\">",
+                "<span class=\"wb-lineage-heading\"><strong>{escaped_action_name}</strong>",
+                "<code aria-label=\"Stable step {step_id}\">{display_step_id}</code></span>",
+                "<span class=\"wb-lineage-owner-label\">{escaped_label}</span>",
+                "<span class=\"wb-lineage-meta\">{kind_label} · {inputs} · {outputs}</span>",
+                "<span class=\"wb-lineage-key\">Key {escaped_developer_key}</span>",
+                "<span class=\"wb-lineage-schema\">{escaped_schema} · v{version}</span>",
+                "</span>",
+                "<span class=\"wb-lineage-state\">{state_label}</span>",
+                "</div>"
+            ),
+            step_id = step.id,
+            ordinal = index + 1,
+            kind_key = kind_key,
+            state_key = state_key,
+            escaped_schema = escaped_schema,
+            escaped_developer_key = escaped_developer_key,
+            title = title,
+            escaped_action_name = escaped_action_name,
+            display_step_id = display_step_id,
+            escaped_label = escaped_label,
+            kind_label = kind_label,
+            inputs = count_label(input_count, "input", "inputs"),
+            outputs = count_label(output_count, "output", "outputs"),
+            version = version,
+            state_label = state_label,
+        );
+    }
+    if output.is_empty() {
+        output.push_str(
+            "<p class=\"wb-empty wb-lineage-empty\" role=\"listitem\">No retained actions</p>",
+        );
+    }
+    output
+}
+
+const fn lineage_kind_presentation(kind: LineageActionKind) -> (&'static str, &'static str) {
+    match kind {
+        LineageActionKind::ImportedBaseline => ("imported-baseline", "Baseline"),
+        LineageActionKind::GeometryRecipe => ("geometry-recipe", "Geometry"),
+        LineageActionKind::Constraint => ("constraint", "Constraint"),
+        LineageActionKind::Dimension => ("dimension", "Dimension"),
+        LineageActionKind::Trim => ("trim", "Trim"),
+        LineageActionKind::Parameter => ("parameter", "Parameter"),
+        LineageActionKind::Binding => ("binding", "Binding"),
+        LineageActionKind::External => ("external", "External"),
+        LineageActionKind::Operation => ("operation", "Operation"),
+        LineageActionKind::ComputedFeature => ("computed-feature", "Computed feature"),
+        LineageActionKind::Annotation => ("annotation", "Annotation"),
+    }
+}
+
+fn lineage_action_schema(action: &LineageActionDefinition) -> (&str, u32) {
+    match action {
+        LineageActionDefinition::ImportedBaseline { baseline } => match &baseline.encoding {
+            ImportedBaselineEncoding::Canonical { schema, version } => (schema.as_str(), *version),
+            ImportedBaselineEncoding::Opaque {
+                media_type,
+                version,
+            } => (media_type.as_str(), *version),
+        },
+        LineageActionDefinition::GeometryRecipe { action }
+        | LineageActionDefinition::Constraint { action }
+        | LineageActionDefinition::Dimension { action }
+        | LineageActionDefinition::Trim { action }
+        | LineageActionDefinition::Parameter { action }
+        | LineageActionDefinition::Binding { action }
+        | LineageActionDefinition::External { action }
+        | LineageActionDefinition::Operation { action }
+        | LineageActionDefinition::ComputedFeature { action }
+        | LineageActionDefinition::Annotation { action } => {
+            (action.schema.as_str(), action.version)
+        }
+    }
+}
+
+fn lineage_action_name(action: &LineageActionDefinition, schema: &str) -> String {
+    if matches!(action, LineageActionDefinition::ImportedBaseline { .. }) {
+        return "Imported baseline".into();
+    }
+    if let Some(key) = schema.strip_prefix("geosolve.geometry.v1.")
+        && let Some(variant) = super::geometry_palette::variant_from_key(key)
+    {
+        return super::geometry_palette::variant_label(variant).into();
+    }
+    humanize_schema_suffix(schema)
+}
+
+fn humanize_schema_suffix(schema: &str) -> String {
+    let suffix = schema.rsplit('.').next().unwrap_or(schema);
+    let words = suffix
+        .split(['-', '_'])
+        .filter(|word| !word.is_empty())
+        .map(humanize_schema_word)
+        .collect::<Vec<_>>();
+    if words.is_empty() {
+        schema.to_owned()
+    } else {
+        words.join(" ")
+    }
+}
+
+fn humanize_schema_word(word: &str) -> String {
+    match word {
+        "nurbs" => "NURBS".into(),
+        "2d" => "2D".into(),
+        "id" => "ID".into(),
+        "g0" => "G0".into(),
+        "g1" => "G1".into(),
+        "g2" => "G2".into(),
+        "x" => "X".into(),
+        "y" => "Y".into(),
+        _ => {
+            let mut characters = word.chars();
+            characters.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(characters).collect()
+            })
+        }
+    }
+}
+
+fn count_label(count: usize, singular: &str, plural: &str) -> String {
+    format!("{count} {}", if count == 1 { singular } else { plural })
 }
 
 #[cfg(test)]
@@ -413,9 +622,127 @@ pub(crate) fn escape(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{lifecycle_presentation, problem_markup, tree_markup, tree_markup_with_pending};
-    use geosolve_constraint_editor::{LifecycleStatus, SelectionItem};
-    use geosolve_sketch::{SketchDatum, SketchDocument};
+    use super::{
+        lifecycle_presentation, lineage_history_markup, lineage_markup, lineage_summary,
+        problem_markup, tree_markup, tree_markup_with_pending,
+    };
+    use geosolve_constraint_editor::{LifecycleStatus, RetainedEditorCoordinator, SelectionItem};
+    use geosolve_core::SolverConfig;
+    use geosolve_sketch::{
+        DocumentEdit, DocumentSolveRequest, RetainedSketchDocumentSession, SketchDatum,
+        SketchDocument,
+    };
+    use geosolve_sketch_lineage::{
+        ImportedBaselineAction, ImportedBaselineEncoding, LineageActionDefinition,
+        LineageDeveloperKey, LineageDocument, LineageDocumentId, LineageInputBinding,
+        LineageMutation, LineageOutput, LineageOutputId, LineageOutputKind, LineagePatch,
+        LineageSemanticKey, LineageStep, LineageStepId, LineageStepRewrite, VersionedActionPayload,
+    };
+
+    fn semantic_key(value: &str) -> LineageSemanticKey {
+        LineageSemanticKey::new(value).expect("semantic key")
+    }
+
+    fn developer_key(value: &str) -> LineageDeveloperKey {
+        LineageDeveloperKey::new(value).expect("developer key")
+    }
+
+    fn insert(document: &mut LineageDocument, step: LineageStep) {
+        document
+            .apply_patch(LineagePatch::new(
+                document.identity(),
+                vec![LineageMutation::Insert {
+                    before: None,
+                    step: Box::new(step),
+                }],
+            ))
+            .expect("insert lineage step");
+    }
+
+    fn lineage_fixture() -> LineageDocument {
+        let document_id = LineageDocumentId::from_raw(0x83);
+        let mut document = LineageDocument::with_id(document_id);
+        insert(
+            &mut document,
+            LineageStep::new(
+                LineageStepId::from_raw(1),
+                developer_key("imported-baseline"),
+                "Imported baseline",
+                LineageActionDefinition::ImportedBaseline {
+                    baseline: ImportedBaselineAction {
+                        encoding: ImportedBaselineEncoding::Opaque {
+                            media_type: semantic_key("application/vnd.geosolve.test+json"),
+                            version: 1,
+                        },
+                        payload: "{}".into(),
+                    },
+                },
+                vec![LineageOutput {
+                    id: LineageOutputId::from_raw(1),
+                    key: semantic_key("scene"),
+                    kind: LineageOutputKind::Collection,
+                    reservation: None,
+                }],
+                Vec::new(),
+            ),
+        );
+        let baseline_scene = document
+            .output_ref(LineageStepId::from_raw(1), LineageOutputId::from_raw(1))
+            .expect("baseline scene output");
+        insert(
+            &mut document,
+            LineageStep::new(
+                LineageStepId::from_raw(2),
+                developer_key("geometry-\"recipe"),
+                "Point <script> & guide",
+                LineageActionDefinition::GeometryRecipe {
+                    action: VersionedActionPayload {
+                        schema: semantic_key("geosolve.geometry.v1.sketch-point\"<unsafe>"),
+                        version: 1,
+                        inputs: vec![LineageInputBinding {
+                            key: semantic_key("scene"),
+                            kind: LineageOutputKind::Collection,
+                            source: baseline_scene,
+                        }],
+                        parameters: std::collections::BTreeMap::new(),
+                    },
+                },
+                Vec::new(),
+                Vec::new(),
+            ),
+        );
+        insert(
+            &mut document,
+            LineageStep::new(
+                LineageStepId::from_raw(3),
+                developer_key("delete-operation"),
+                "Delete",
+                LineageActionDefinition::Operation {
+                    action: VersionedActionPayload::empty(
+                        semantic_key("geosolve.operation.v1.delete"),
+                        1,
+                    ),
+                },
+                Vec::new(),
+                Vec::new(),
+            ),
+        );
+        document
+            .apply_patch(LineagePatch::new(
+                document.identity(),
+                vec![
+                    LineageMutation::SetSuppressed {
+                        step: LineageStepId::from_raw(2),
+                        suppressed: true,
+                    },
+                    LineageMutation::Tombstone {
+                        step: LineageStepId::from_raw(3),
+                    },
+                ],
+            ))
+            .expect("set retained lifecycle states");
+        document
+    }
 
     #[test]
     fn tree_problem_and_lifecycle_markup_preserve_typed_semantics() {
@@ -489,5 +816,177 @@ mod tests {
             !without_entries.contains("Design-only horizontal"),
             "the workbench must not silently fall back to interpreting document constraints"
         );
+    }
+
+    #[test]
+    fn lineage_markup_preserves_authoritative_order_identity_and_lifecycle() {
+        let document = lineage_fixture();
+        let markup = lineage_markup(&document);
+        let history = lineage_history_markup(1, 4, true, true);
+
+        assert_eq!(lineage_summary(&document), "3 actions · r4");
+        assert_eq!(markup.matches("role=\"listitem\"").count(), 3);
+        let baseline = markup
+            .find("data-lineage-step-id=\"0000000000000001\"")
+            .expect("baseline row");
+        let geometry = markup
+            .find("data-lineage-step-id=\"0000000000000002\"")
+            .expect("geometry row");
+        let deleted = markup
+            .find("data-lineage-step-id=\"0000000000000003\"")
+            .expect("deleted row");
+        assert!(baseline < geometry && geometry < deleted);
+        assert!(markup.contains("data-lineage-action-kind=\"imported-baseline\""));
+        assert!(markup.contains("data-lineage-action-kind=\"geometry-recipe\""));
+        assert!(markup.contains("data-lineage-action-kind=\"operation\""));
+        assert!(markup.contains("data-lineage-step-state=\"live\""));
+        assert!(markup.contains("data-lineage-step-state=\"suppressed\""));
+        assert!(markup.contains("data-lineage-step-state=\"tombstoned\""));
+        assert!(markup.contains(">Live<"));
+        assert!(markup.contains(">Suppressed<"));
+        assert!(markup.contains(">Deleted<"));
+        assert!(markup.contains("0 inputs · 1 output"));
+        assert!(markup.contains("1 input · 0 outputs"));
+        assert!(history.contains("History <strong>2 / 4</strong>"));
+        assert!(history.contains("data-available=\"true\">Undo"));
+        assert!(history.contains("data-available=\"true\">Redo"));
+        assert!(markup.contains("Point &lt;script&gt; &amp; guide"));
+        assert!(markup.contains(
+            "data-lineage-schema=\"geosolve.geometry.v1.sketch-point&quot;&lt;unsafe&gt;\""
+        ));
+        assert!(markup.contains("data-lineage-developer-key=\"geometry-&quot;recipe\""));
+        assert!(markup.contains("Key geometry-&quot;recipe"));
+        assert!(markup.contains("data-lineage-schema-version=\"1\""));
+        for forbidden in ["<button", "data-editor-item", "tabindex=", "aria-selected="] {
+            assert!(
+                !markup.contains(forbidden),
+                "lineage rows must remain read-only: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn lineage_markup_reflects_rewrite_without_inventing_an_event_row() {
+        let mut document = LineageDocument::with_id(LineageDocumentId::from_raw(0x8302));
+        let step_id = LineageStepId::from_raw(1);
+        insert(
+            &mut document,
+            LineageStep::new(
+                step_id,
+                developer_key("editable-owner"),
+                "Original action",
+                LineageActionDefinition::GeometryRecipe {
+                    action: VersionedActionPayload::empty(
+                        semantic_key("geosolve.geometry.v1.segment"),
+                        1,
+                    ),
+                },
+                Vec::new(),
+                Vec::new(),
+            ),
+        );
+        let before = lineage_markup(&document);
+        let before_summary = lineage_summary(&document);
+
+        document
+            .apply_patch(LineagePatch::new(
+                document.identity(),
+                vec![LineageMutation::Rewrite {
+                    step: step_id,
+                    replacement: Box::new(LineageStepRewrite {
+                        label: "Rewritten action".into(),
+                        action: LineageActionDefinition::GeometryRecipe {
+                            action: VersionedActionPayload::empty(
+                                semantic_key("geosolve.geometry.v1.midpoint-line"),
+                                1,
+                            ),
+                        },
+                    }),
+                }],
+            ))
+            .expect("rewrite retained owner");
+        let after = lineage_markup(&document);
+        let history = lineage_history_markup(0, 1, false, false);
+
+        assert_eq!(before.matches("role=\"listitem\"").count(), 1);
+        assert_eq!(after.matches("role=\"listitem\"").count(), 1);
+        assert!(after.contains("data-lineage-step-id=\"0000000000000001\""));
+        assert!(before.contains("Original action"));
+        assert!(after.contains("Rewritten action"));
+        assert!(!after.contains("Original action"));
+        assert_ne!(before_summary, lineage_summary(&document));
+        assert_eq!(lineage_summary(&document), "1 action · r2");
+        assert!(history.contains("data-available=\"false\">Undo"));
+        assert!(history.contains("data-available=\"false\">Redo"));
+    }
+
+    #[test]
+    fn lineage_panel_tracks_the_real_coordinator_program_and_history_cursor() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(1.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        assert_eq!(coordinator.lineage_document().steps().len(), 1);
+        assert_eq!(
+            (coordinator.history_cursor(), coordinator.history_len()),
+            (0, 1)
+        );
+        assert!(!coordinator.can_undo());
+        assert!(!coordinator.can_redo());
+        let initial = lineage_markup(coordinator.lineage_document());
+        assert!(initial.contains("Imported baseline"));
+
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreatePoint {
+                    label: "Lineage panel point".into(),
+                    position: [2.0, 3.0],
+                },
+            )
+            .expect("create retained point");
+        assert_eq!(coordinator.lineage_document().steps().len(), 2);
+        assert_eq!(
+            (coordinator.history_cursor(), coordinator.history_len()),
+            (1, 2)
+        );
+        assert!(coordinator.can_undo());
+        assert!(!coordinator.can_redo());
+        let created = lineage_markup(coordinator.lineage_document());
+        assert_eq!(created.matches("role=\"listitem\"").count(), 2);
+        assert!(created.contains("geosolve.document-edit.v1.create-point"));
+
+        coordinator.undo().expect("undo point action");
+        assert_eq!(coordinator.lineage_document().steps().len(), 1);
+        assert_eq!(
+            (coordinator.history_cursor(), coordinator.history_len()),
+            (0, 2)
+        );
+        assert!(!coordinator.can_undo());
+        assert!(coordinator.can_redo());
+        assert_eq!(lineage_markup(coordinator.lineage_document()), initial);
+
+        coordinator.redo().expect("redo point action");
+        assert_eq!(coordinator.lineage_document().steps().len(), 2);
+        assert_eq!(
+            (coordinator.history_cursor(), coordinator.history_len()),
+            (1, 2)
+        );
+        assert!(coordinator.can_undo());
+        assert!(!coordinator.can_redo());
+        assert_eq!(lineage_markup(coordinator.lineage_document()), created);
+    }
+
+    #[test]
+    fn lineage_panel_has_truthful_empty_program_presentation() {
+        let document = LineageDocument::with_id(LineageDocumentId::from_raw(0x8303));
+        assert_eq!(lineage_summary(&document), "0 actions · r0");
+        let markup = lineage_markup(&document);
+        assert!(markup.contains("No retained actions"));
+        assert!(!markup.contains("data-lineage-step-id"));
     }
 }

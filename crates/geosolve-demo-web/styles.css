@@ -11,7 +11,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 
 .workbench {
   display: grid;
-  grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 15rem minmax(36rem, 1fr) 18rem;
+  grid-template: 3.4rem minmax(0, 1fr) 1.8rem / 10.5rem 25rem minmax(36rem, 1fr) 18rem;
   width: 100vw;
   height: 100vh;
   margin: 0;
@@ -276,8 +276,16 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-palette-option-tool > button:first-child { width: 100%; }
 .wb-palette-terminal { padding-top: 0.2rem; border-top: 1px solid #3b4142; }
 
+.wb-document-panels {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .wb-tree-panel,
+.wb-lineage-panel,
 .wb-inspector { min-height: 0; border-right: 1px solid #353b3c; background: #202425; }
+.wb-lineage-panel { min-width: 0; }
 .wb-inspector { overflow-y: auto; border-right: 0; border-left: 1px solid #353b3c; }
 .wb-panel-title {
   display: flex;
@@ -294,6 +302,92 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-panel-title span:last-child { color: #747e7c; font-size: 0.58rem; }
 .wb-tree { height: calc(100% - 2.4rem); overflow: auto; padding: 0.35rem; }
+.wb-lineage-history {
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+  border-bottom: 1px solid #343b3c;
+  color: #9aa6a4;
+  font: 0.62rem ui-monospace, monospace;
+}
+.wb-lineage-history-position {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+.wb-lineage-history-position strong { color: #c3cecc; font-weight: 650; }
+.wb-lineage-history-position span { margin-left: auto; color: #96a19f; }
+.wb-lineage-history-position span + span { margin-left: 0; }
+.wb-lineage-history-position span[data-available="true"] { color: #9fd2b7; }
+.wb-lineage {
+  height: calc(100% - 4.4rem);
+  overflow: auto;
+  padding: 0.35rem;
+}
+.wb-lineage-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1.35rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.4rem;
+  padding: 0.45rem 0.35rem;
+  border-bottom: 1px solid #303637;
+  color: #bdc7c5;
+}
+.wb-lineage-row:last-child { border-bottom: 0; }
+.wb-lineage-order {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border: 1px solid #3f4949;
+  border-radius: 50%;
+  color: #9aa6a4;
+  font: 0.62rem ui-monospace, monospace;
+}
+.wb-lineage-copy { display: grid; min-width: 0; gap: 0.14rem; }
+.wb-lineage-heading { display: flex; min-width: 0; align-items: baseline; gap: 0.35rem; }
+.wb-lineage-heading strong {
+  overflow: hidden;
+  color: #dbe2df;
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-lineage-heading code { color: #9aa6a4; font-size: 0.62rem; }
+.wb-lineage-owner-label,
+.wb-lineage-meta,
+.wb-lineage-key,
+.wb-lineage-schema {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-lineage-owner-label { color: #b0bbb9; font-size: 0.66rem; }
+.wb-lineage-meta { color: #9aa6a4; font-size: 0.62rem; }
+.wb-lineage-key,
+.wb-lineage-schema { color: #8f9b99; font: 0.62rem ui-monospace, monospace; }
+.wb-lineage-state {
+  padding: 0.12rem 0.3rem;
+  border: 1px solid #456252;
+  border-radius: 999px;
+  color: #9fd2b7;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.wb-lineage-row[data-lineage-step-state="suppressed"] { background: rgb(93 78 34 / 12%); }
+.wb-lineage-row[data-lineage-step-state="suppressed"] .wb-lineage-state {
+  border-color: #6c6545;
+  color: #dacb81;
+}
+.wb-lineage-row[data-lineage-step-state="tombstoned"] { background: rgb(105 55 49 / 12%); }
+.wb-lineage-row[data-lineage-step-state="tombstoned"] .wb-lineage-state {
+  border-color: #72504c;
+  color: #e2a098;
+}
+.wb-lineage-empty { margin: 0; }
 .wb-tree-group-label {
   display: flex;
   align-items: center;
@@ -1335,6 +1429,17 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-project-links { display: flex; gap: 0.35rem; margin-left: auto; }
 .wb-project-links a { color: #9ebfc1; }
 
+@media (max-width: 96rem) {
+  .workbench {
+    grid-template-columns: 10.5rem 15rem minmax(36rem, 1fr) 18rem;
+  }
+  .wb-document-panels {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+  .wb-tree-panel { border-bottom: 1px solid #353b3c; }
+}
+
 @media (max-width: 68rem) {
   .workbench {
     grid-template-columns: 9.5rem 12rem minmax(20rem, 1fr) 18rem;
@@ -1352,7 +1457,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   .workbench {
     grid-template-columns: 9.5rem minmax(20rem, 1fr) 18rem;
   }
-  .wb-tree-panel { display: none; }
+  .wb-document-panels { display: none; }
 }
 
 @media (max-width: 52rem) {

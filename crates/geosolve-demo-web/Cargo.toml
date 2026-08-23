@@ -19,6 +19,7 @@ geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint
 geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
+geosolve-sketch-lineage = { version = "0.2.0", path = "../geosolve-sketch-lineage" }
 miniz_oxide.workspace = true
 serde.workspace = true
 serde_json.workspace = true

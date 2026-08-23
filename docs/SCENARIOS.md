@@ -4304,11 +4304,12 @@ is claimed; existing accepted M81 Pages bytes remain public authority. See
 M83 adds no solver equation or geometry family. Its scenarios exercise declarative authority,
 identity, rematerialization and adapter parity above the unchanged owning-domain oracles.
 
-Qualification status: exact source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
+Pre-panel qualification status: exact source `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
 `25a47e821cc80ff62d1891cfc7095d10fb2ec87f`, passes the complete clean release gate and focused
 architecture/publication review. Its exact no-rebuild seven-file snapshot is byte-verified at
-`http://100.94.63.83:8080/`. The scenarios remain candidate evidence rather than accepted product
-behavior until M83-W12 human UAT and explicit approval pass.
+`http://100.94.63.83:8080/`. That candidate is superseded by the requested read-only Lineage panel
+and remains live only for continuity. The amendment passes focused tests; replacement clean
+qualification/nomination, M83-W12 human UAT and explicit approval remain pending.
 
 ### M83-L1 — complete typed action catalog
 
@@ -4419,6 +4420,25 @@ the Rust UTF-8 byte bound before invoking transport. The exact native/actual-WAS
 28 responses, 117,156 bytes and FNV-1a `7063e9c6b5b5248c`. The source-route evidence is a closed
 inventory sentinel rather than runtime instrumentation of every route. Complete release
 qualification and immutable nomination pass; human UAT remains pending.
+
+### M83-L7 — retained lineage is directly inspectable without a second authority
+
+At wide desktop size, inspect the secondary **Lineage** panel beside Sketch Tree; at compact
+desktop size it stacks below the tree and both disappear at the existing narrow-workbench cutoff.
+Create one persistent point, directly rewrite an owner, suppress and tombstone actions, then
+Undo/Redo. Chronological rows must come directly from the coordinator's current borrowed
+`LineageDocument`, retain stable step/schema identity and explicit Live/Suppressed/Deleted state,
+and show input/output counts plus the current program revision. A separate history strip must show
+the exact cursor/length and Undo/Redo availability. Direct rewrite changes the existing stable row
+and revision without appending a Move event. Imported roots remain one honest baseline row.
+
+Rows are noninteractive list items: no browser-side lineage collection, JSON reconstruction,
+selection, delete, reorder or rewrite path exists. Focused pure-markup and real-coordinator
+Create/Undo/Redo regressions, escaping/empty-state checks, the M83-W11 source sentinel, responsive
+HTML/CSS contract, breakpoint/contrast review, complete 172-test demo library and warnings-denied
+demo Clippy pass. Replacement
+clean qualification and immutable nomination remain pending; no golden row is added because this
+is a presentation of already-qualified authority, not a new geometry/authoring family.
 
 ### M83-F026 — projected editing preserves host-owned scalar fallbacks
 
