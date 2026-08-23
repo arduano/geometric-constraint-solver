@@ -386,53 +386,31 @@ impl ColdIntentMaterializer {
             self.config,
         )?;
         require_current_acceptance(&session)?;
-        let schedule = candidate.graph().canonical_schedule()?;
-        validate_live_reservation_owner_order(
-            &schedule,
+        let allocated = allocate_reservation_ledger(
+            session
+                .design_document()
+                .persistent_identity_high_water()
+                .clone(),
             candidate.reservations().entries(),
             candidate.graph(),
         )?;
-        let ordered_records = candidate
-            .reservations()
-            .entries()
-            .iter()
-            .map(|(id, record)| (*id, *record))
-            .collect::<Vec<_>>();
-        let mut record_cursor = 0_usize;
-        let mut state = LoweringState::new(candidate.semantic_identity(), BTreeMap::new());
-
-        for node_id in schedule {
-            retire_tombstone_prefix(
+        for reservations in &allocated.stages {
+            apply_materialization_stage(
                 &mut session,
-                &ordered_records,
-                &mut record_cursor,
-                &mut state,
+                SketchMaterializationBatch::retaining_unused_reservations(reservations.clone()),
             )?;
+        }
+        let mut state = LoweringState::new(candidate.semantic_identity(), allocated.bindings);
+        let mut owner_reservations = allocated.live;
+
+        for node_id in candidate.graph().canonical_schedule()? {
             let node = candidate
                 .graph()
                 .node(node_id)
                 .ok_or(IntentMaterializationError::UnknownNode(node_id))?;
-            let reservation_stage = allocate_live_node_stage(
-                session
-                    .design_document()
-                    .persistent_identity_high_water()
-                    .clone(),
-                &ordered_records,
-                &mut record_cursor,
-                node,
-                &state.reservation_bindings,
-            )?;
-            state
-                .reservation_bindings
-                .extend(reservation_stage.bindings);
             state.bind_schema_ports(node)?;
+            let owner_reservation = owner_reservations.remove(&node.id);
             if node.suppressed {
-                apply_materialization_stage(
-                    &mut session,
-                    SketchMaterializationBatch::retaining_unused_reservations(
-                        reservation_stage.reservations,
-                    ),
-                )?;
                 try_publish_host_inputs(
                     &mut session,
                     &desired_parameters,
@@ -442,7 +420,6 @@ impl ColdIntentMaterializer {
                 continue;
             }
             if let IntentNodeKind::Operation { operation } = node.kind {
-                retire_operation_stage(&mut session, reservation_stage.reservations)?;
                 try_publish_host_inputs(
                     &mut session,
                     &desired_parameters,
@@ -452,7 +429,16 @@ impl ColdIntentMaterializer {
                 lower_operation(candidate, node, operation, &mut session, &mut state)?;
                 continue;
             }
-            let mut batch = SketchMaterializationBatch::new(reservation_stage.reservations);
+            let reservations = owner_reservation.unwrap_or(
+                SketchMaterializationReservationAllocator::new(
+                    session
+                        .design_document()
+                        .persistent_identity_high_water()
+                        .clone(),
+                )?
+                .finish()?,
+            );
+            let mut batch = SketchMaterializationBatch::new(reservations);
             let mut apply_batch = true;
             match &node.kind {
                 IntentNodeKind::Geometry { recipe } => {
@@ -485,7 +471,7 @@ impl ColdIntentMaterializer {
                 _ => unreachable!("preflight admits only implemented declaration families"),
             }
             if apply_batch {
-                apply_materialization_stage(&mut session, batch)?;
+                apply_reserved_node_materialization(&mut session, batch)?;
             }
             try_publish_host_inputs(
                 &mut session,
@@ -494,13 +480,7 @@ impl ColdIntentMaterializer {
                 self.request,
             )?;
         }
-        retire_tombstone_prefix(
-            &mut session,
-            &ordered_records,
-            &mut record_cursor,
-            &mut state,
-        )?;
-        if record_cursor != ordered_records.len() {
+        if !owner_reservations.is_empty() {
             return Err(IntentMaterializationError::InvalidReservationOrder);
         }
         require_exact_host_inputs(&session, &desired_parameters, &desired_snapshots)?;
@@ -786,170 +766,178 @@ fn preflight_supported(
 }
 
 struct AllocatedReservationStage {
-    reservations: geosolve_sketch::SketchMaterializationReservationSet,
+    stages: Vec<geosolve_sketch::SketchMaterializationReservationSet>,
+    live: BTreeMap<NodeId, geosolve_sketch::SketchMaterializationReservationSet>,
     bindings: BTreeMap<ReservationId, IntentNativeBinding>,
 }
 
-fn validate_live_reservation_owner_order(
-    schedule: &[NodeId],
+#[allow(
+    clippy::too_many_lines,
+    reason = "one closed typed allocator table keeps durable ledger order and native binding parity auditable"
+)]
+fn allocate_reservation_ledger(
+    mut high_water: SketchPersistentIdentityHighWater,
     records: &BTreeMap<ReservationId, IntentReservationRecord>,
     graph: &IntentGraph,
-) -> Result<(), IntentMaterializationError> {
-    let expected = schedule
-        .iter()
-        .copied()
-        .filter(|node| {
-            graph
-                .node(*node)
-                .is_some_and(|node| !node.reservations.is_empty())
-        })
-        .collect::<Vec<_>>();
-    let mut actual = Vec::new();
-    for record in records.values() {
-        if record.state == IntentReservationState::Tombstoned {
-            continue;
-        }
-        if actual.last().copied() != Some(record.owner_node) {
-            actual.push(record.owner_node);
-        }
-    }
-    if actual != expected {
-        return Err(IntentMaterializationError::InvalidReservationOrder);
-    }
-    Ok(())
-}
-
-fn allocate_reservations(
-    high_water: SketchPersistentIdentityHighWater,
-    records: &BTreeMap<ReservationId, IntentReservationRecord>,
-    spline_node: Option<&IntentNode>,
 ) -> Result<AllocatedReservationStage, IntentMaterializationError> {
-    let mut allocator = SketchMaterializationReservationAllocator::new(high_water)?;
+    let mut stages = Vec::new();
+    let mut live = BTreeMap::new();
     let mut bindings = BTreeMap::new();
-    let mut paired = BTreeSet::new();
-    for (reservation, record) in records {
-        if paired.contains(reservation) {
-            continue;
+    let mut semantic_catalogs = BTreeMap::new();
+    let mut cursor = records.iter().peekable();
+    while let Some((_, first)) = cursor.peek().copied() {
+        let owner = first.owner_node;
+        let mut owner_records = BTreeMap::new();
+        while cursor
+            .peek()
+            .is_some_and(|(_, record)| record.owner_node == owner)
+        {
+            let (id, record) = cursor.next().expect("peeked owner record");
+            owner_records.insert(*id, *record);
         }
-        let binding = match record.kind {
-            IntentNativeReservationKind::Point => {
-                IntentNativeBinding::Point(allocator.reserve_point()?)
+        let mut allocator = SketchMaterializationReservationAllocator::new(high_water)?;
+        let mut paired = BTreeSet::new();
+        for (reservation, record) in &owner_records {
+            if paired.contains(reservation) {
+                continue;
             }
-            IntentNativeReservationKind::Scalar => {
-                IntentNativeBinding::Scalar(allocator.reserve_scalar()?)
+            let binding = match record.kind {
+                IntentNativeReservationKind::Point => {
+                    IntentNativeBinding::Point(allocator.reserve_point()?)
+                }
+                IntentNativeReservationKind::Scalar => {
+                    IntentNativeBinding::Scalar(allocator.reserve_scalar()?)
+                }
+                IntentNativeReservationKind::Curve => {
+                    IntentNativeBinding::Curve(allocator.reserve_curve()?)
+                }
+                IntentNativeReservationKind::Contact => {
+                    IntentNativeBinding::Contact(allocator.reserve_contact()?)
+                }
+                IntentNativeReservationKind::Constraint => {
+                    let companion = require_pair(
+                        *reservation,
+                        record,
+                        &owner_records,
+                        IntentNativeReservationKind::ConstraintSource,
+                    )?;
+                    let native = allocator.reserve_constraint()?;
+                    bindings.insert(companion, IntentNativeBinding::Source(native.source));
+                    paired.insert(companion);
+                    IntentNativeBinding::Constraint(native.constraint)
+                }
+                IntentNativeReservationKind::ConstraintSource => {
+                    return Err(IntentMaterializationError::InvalidReservationPair {
+                        reservation: *reservation,
+                    });
+                }
+                IntentNativeReservationKind::Dimension => {
+                    let companion = require_pair(
+                        *reservation,
+                        record,
+                        &owner_records,
+                        IntentNativeReservationKind::DimensionSource,
+                    )?;
+                    let native = allocator.reserve_dimension()?;
+                    bindings.insert(companion, IntentNativeBinding::Source(native.source));
+                    paired.insert(companion);
+                    IntentNativeBinding::Dimension(native.dimension)
+                }
+                IntentNativeReservationKind::Parameter => {
+                    IntentNativeBinding::Parameter(allocator.reserve_parameter()?)
+                }
+                IntentNativeReservationKind::ExternalBinding => {
+                    IntentNativeBinding::ExternalBinding(allocator.reserve_external_binding()?)
+                }
+                IntentNativeReservationKind::SemanticCatalog => {
+                    let catalog = allocator.reserve_semantic_catalog()?;
+                    semantic_catalogs.insert(record.owner_node, catalog);
+                    IntentNativeBinding::Source(catalog)
+                }
+                IntentNativeReservationKind::SemanticSource => {
+                    let catalog = semantic_catalogs
+                        .get(&record.owner_node)
+                        .copied()
+                        .ok_or(IntentMaterializationError::InvalidReservationOrder)?;
+                    IntentNativeBinding::Source(allocator.reserve_semantic_source(catalog)?)
+                }
+                IntentNativeReservationKind::DimensionSource => {
+                    return Err(IntentMaterializationError::UnsupportedNode {
+                        node: record.owner_node,
+                    });
+                }
+            };
+            bindings.insert(*reservation, binding);
+        }
+        if let Some(node) = graph.node(owner) {
+            reserve_spline_span_cursor(&mut allocator, &bindings, node)?;
+        }
+        let stage = allocator.finish()?;
+        high_water = stage.resulting_high_water().clone();
+        stages.push(stage.clone());
+        if first.state != IntentReservationState::Tombstoned {
+            if owner_records
+                .values()
+                .any(|record| record.state == IntentReservationState::Tombstoned)
+            {
+                return Err(IntentMaterializationError::InvalidReservationOrder);
             }
-            IntentNativeReservationKind::Curve => {
-                IntentNativeBinding::Curve(allocator.reserve_curve()?)
-            }
-            IntentNativeReservationKind::Contact => {
-                IntentNativeBinding::Contact(allocator.reserve_contact()?)
-            }
-            IntentNativeReservationKind::Constraint => {
-                let companion = require_pair(
-                    *reservation,
-                    record,
-                    records,
-                    IntentNativeReservationKind::ConstraintSource,
-                )?;
-                let native = allocator.reserve_constraint()?;
-                bindings.insert(companion, IntentNativeBinding::Source(native.source));
-                paired.insert(companion);
-                IntentNativeBinding::Constraint(native.constraint)
-            }
-            IntentNativeReservationKind::ConstraintSource => {
-                return Err(IntentMaterializationError::InvalidReservationPair {
-                    reservation: *reservation,
-                });
-            }
-            IntentNativeReservationKind::Dimension => {
-                let companion = require_pair(
-                    *reservation,
-                    record,
-                    records,
-                    IntentNativeReservationKind::DimensionSource,
-                )?;
-                let native = allocator.reserve_dimension()?;
-                bindings.insert(companion, IntentNativeBinding::Source(native.source));
-                paired.insert(companion);
-                IntentNativeBinding::Dimension(native.dimension)
-            }
-            IntentNativeReservationKind::Parameter => {
-                IntentNativeBinding::Parameter(allocator.reserve_parameter()?)
-            }
-            IntentNativeReservationKind::ExternalBinding => {
-                IntentNativeBinding::ExternalBinding(allocator.reserve_external_binding()?)
-            }
-            IntentNativeReservationKind::SemanticCatalog => {
-                IntentNativeBinding::Source(allocator.reserve_semantic_catalog()?)
-            }
-            IntentNativeReservationKind::SemanticSource
-            | IntentNativeReservationKind::DimensionSource => {
-                return Err(IntentMaterializationError::UnsupportedNode {
-                    node: record.owner_node,
-                });
-            }
-        };
-        bindings.insert(*reservation, binding);
+            live.insert(owner, stage);
+        }
     }
-    reserve_spline_span_cursors(&mut allocator, &bindings, records, spline_node)?;
     Ok(AllocatedReservationStage {
-        reservations: allocator.finish()?,
+        stages,
+        live,
         bindings,
     })
 }
 
-fn reserve_spline_span_cursors(
+fn reserve_spline_span_cursor(
     allocator: &mut SketchMaterializationReservationAllocator,
     bindings: &BTreeMap<ReservationId, IntentNativeBinding>,
-    stage_records: &BTreeMap<ReservationId, IntentReservationRecord>,
-    node: Option<&IntentNode>,
+    node: &IntentNode,
 ) -> Result<(), IntentMaterializationError> {
-    if let Some(node) = node {
-        let IntentNodeKind::Geometry { recipe } = node.kind else {
-            return Ok(());
-        };
-        if node.suppressed
-            || !matches!(
-                recipe,
-                GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
-            )
-        {
-            return Ok(());
-        }
-        let control_count = node.child_order.len();
-        let degree = field_natural(node, "degree", 3)?;
-        let degree =
-            usize::try_from(degree).map_err(|_| IntentMaterializationError::InvalidGeometry {
-                node: node.id,
-                reason: "NURBS degree exceeds platform limits",
-            })?;
-        if degree == 0 || control_count <= degree {
-            return Ok(());
-        }
-        let curve_port = require_port(node, IntentPortRole::Curve, 0)?;
-        let IntentIdentityFlow::Created { reservation } = curve_port.flow else {
-            return Err(IntentMaterializationError::NativeKindMismatch { node: node.id });
-        };
-        if !stage_records.contains_key(&reservation) {
-            return Ok(());
-        }
-        let Some(IntentNativeBinding::Curve(curve)) = bindings.get(&reservation).copied() else {
-            return Err(IntentMaterializationError::MissingReservation { reservation });
-        };
-        let span_count = match recipe {
-            GeometryRecipeKind::OpenControlNurbs => control_count - degree,
-            GeometryRecipeKind::PeriodicControlNurbs => control_count,
-            _ => unreachable!("guarded NURBS recipe"),
-        };
-        let next_span_id = u32::try_from(span_count)
-            .ok()
-            .and_then(|count| count.checked_add(1))
-            .ok_or(IntentMaterializationError::InvalidGeometry {
-                node: node.id,
-                reason: "NURBS span identity high-water overflow",
-            })?;
-        allocator.reserve_spline_span_cursor(curve, next_span_id)?;
+    let IntentNodeKind::Geometry { recipe } = node.kind else {
+        return Ok(());
+    };
+    if node.suppressed
+        || !matches!(
+            recipe,
+            GeometryRecipeKind::OpenControlNurbs | GeometryRecipeKind::PeriodicControlNurbs
+        )
+    {
+        return Ok(());
     }
+    let control_count = node.child_order.len();
+    let degree = field_natural(node, "degree", 3)?;
+    let degree =
+        usize::try_from(degree).map_err(|_| IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "NURBS degree exceeds platform limits",
+        })?;
+    if degree == 0 || control_count <= degree {
+        return Ok(());
+    }
+    let curve_port = require_port(node, IntentPortRole::Curve, 0)?;
+    let IntentIdentityFlow::Created { reservation } = curve_port.flow else {
+        return Err(IntentMaterializationError::NativeKindMismatch { node: node.id });
+    };
+    let Some(IntentNativeBinding::Curve(curve)) = bindings.get(&reservation).copied() else {
+        return Err(IntentMaterializationError::MissingReservation { reservation });
+    };
+    let span_count = match recipe {
+        GeometryRecipeKind::OpenControlNurbs => control_count - degree,
+        GeometryRecipeKind::PeriodicControlNurbs => control_count,
+        _ => unreachable!("guarded NURBS recipe"),
+    };
+    let next_span_id = u32::try_from(span_count)
+        .ok()
+        .and_then(|count| count.checked_add(1))
+        .ok_or(IntentMaterializationError::InvalidGeometry {
+            node: node.id,
+            reason: "NURBS span identity high-water overflow",
+        })?;
+    allocator.reserve_spline_span_cursor(curve, next_span_id)?;
     Ok(())
 }
 
@@ -971,89 +959,22 @@ fn require_pair(
     Ok(companion)
 }
 
-fn allocate_live_node_stage(
-    high_water: SketchPersistentIdentityHighWater,
-    ordered: &[(ReservationId, IntentReservationRecord)],
-    cursor: &mut usize,
-    node: &IntentNode,
-    _prior_bindings: &BTreeMap<ReservationId, IntentNativeBinding>,
-) -> Result<AllocatedReservationStage, IntentMaterializationError> {
-    let start = *cursor;
-    while ordered
-        .get(*cursor)
-        .is_some_and(|(_, record)| record.owner_node == node.id)
-    {
-        if ordered[*cursor].1.state == IntentReservationState::Tombstoned {
-            return Err(IntentMaterializationError::InvalidReservationOrder);
-        }
-        *cursor += 1;
-    }
-    let records = ordered[start..*cursor]
-        .iter()
-        .copied()
-        .collect::<BTreeMap<_, _>>();
-    if records.keys().copied().collect::<BTreeSet<_>>()
-        != node.reservations.keys().copied().collect::<BTreeSet<_>>()
-    {
-        return Err(IntentMaterializationError::InvalidReservationOrder);
-    }
-    allocate_reservations(high_water, &records, Some(node))
-}
-
-fn retire_tombstone_prefix(
-    session: &mut RetainedSketchDocumentSession,
-    ordered: &[(ReservationId, IntentReservationRecord)],
-    cursor: &mut usize,
-    state: &mut LoweringState,
-) -> Result<(), IntentMaterializationError> {
-    let start = *cursor;
-    while ordered
-        .get(*cursor)
-        .is_some_and(|(_, record)| record.state == IntentReservationState::Tombstoned)
-    {
-        *cursor += 1;
-    }
-    if start == *cursor {
-        return Ok(());
-    }
-    let records = ordered[start..*cursor]
-        .iter()
-        .copied()
-        .collect::<BTreeMap<_, _>>();
-    let allocated = allocate_reservations(
-        session
-            .design_document()
-            .persistent_identity_high_water()
-            .clone(),
-        &records,
-        None,
-    )?;
-    state.reservation_bindings.extend(allocated.bindings);
-    apply_materialization_stage(
-        session,
-        SketchMaterializationBatch::retaining_unused_reservations(allocated.reservations),
-    )
-}
-
-fn retire_operation_stage(
-    session: &mut RetainedSketchDocumentSession,
-    reservations: geosolve_sketch::SketchMaterializationReservationSet,
-) -> Result<(), IntentMaterializationError> {
-    if reservations.reservations().is_empty() {
-        return Ok(());
-    }
-    apply_materialization_stage(
-        session,
-        SketchMaterializationBatch::retaining_unused_reservations(reservations),
-    )
-}
-
 fn apply_materialization_stage(
     session: &mut RetainedSketchDocumentSession,
     batch: SketchMaterializationBatch,
 ) -> Result<(), IntentMaterializationError> {
     session.transact(session.design_identity(), move |document| {
         document.apply_materialization_batch(&batch)
+    })?;
+    Ok(())
+}
+
+fn apply_reserved_node_materialization(
+    session: &mut RetainedSketchDocumentSession,
+    staged: SketchMaterializationBatch,
+) -> Result<(), IntentMaterializationError> {
+    session.transact(session.design_identity(), move |document| {
+        document.apply_retired_materialization_batch(&staged)
     })?;
     Ok(())
 }

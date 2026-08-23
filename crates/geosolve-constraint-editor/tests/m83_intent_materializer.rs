@@ -17,13 +17,13 @@ use geosolve_sketch::{
     ParameterValue, PersistentId, TangentOrientation,
 };
 use geosolve_sketch_intent::{
-    AggregateKind, BootstrapNativeKind, ConstraintKind, DimensionKind, ExternalInputRevision,
-    ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind, InputRole, InputSlot,
-    IntentBootstrapObject, IntentEvaluation, IntentExternalInputs, IntentFieldKey, IntentKey,
-    IntentLiteral, IntentNativeReservationKind, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPortKind, IntentPortRole, IntentPortSelector,
-    IntentSession, IntentSessionId, IntentUnit, LeafField, OperationKind, ParameterIntentKind,
-    PatchPortRef,
+    AggregateKind, BootstrapNativeKind, ConstraintKind, DeletePolicy, DimensionKind,
+    ExternalInputRevision, ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind,
+    InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation, IntentExternalInputs,
+    IntentFieldKey, IntentKey, IntentLiteral, IntentNativeReservationKind, IntentNodeDraft,
+    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortKind,
+    IntentPortRole, IntentPortSelector, IntentReservationState, IntentSession, IntentSessionId,
+    IntentUnit, LeafField, OperationKind, ParameterIntentKind, PatchPortRef,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -453,6 +453,195 @@ fn cold_point_segment_horizontal_materialization_is_accepted_and_exactly_owned()
     assert_eq!(x_leaf.field, LeafField::X);
     assert_eq!(y_leaf.port, end_port.port);
     assert_eq!(y_leaf.field, LeafField::Y);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one lifecycle regression keeps create, rebind, cold replay, tombstone, and non-reuse evidence contiguous"
+)]
+fn rebinding_older_geometry_to_newer_input_preserves_native_reservation_identity() {
+    let raw = 0x8300_0102_u128;
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(raw)).unwrap();
+    let cold = ColdIntentMaterializer::with_default_policy(
+        DocumentId(PersistentId::from_u128(raw << 32)),
+        1.0,
+    )
+    .unwrap();
+
+    let base_plan = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![create("base", point("base", [0.0, 0.0]))],
+            ),
+            |candidate| cold.evaluate(candidate),
+        )
+        .unwrap();
+    let base = base_plan
+        .aliases()
+        .port(&key("base"), selector(IntentPortRole::Primary))
+        .unwrap();
+    let base_node = base.node;
+    session.commit_plan(base_plan).unwrap();
+
+    let older = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key("older"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Point, 0),
+        PatchPortRef::Stable { port: base },
+    )
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, coordinate(4.0))
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, coordinate(0.0));
+    let older_plan = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![create("older", older)],
+            ),
+            |candidate| cold.evaluate(candidate),
+        )
+        .unwrap();
+    let older_node = older_plan.aliases().node(&key("older")).unwrap();
+    session.commit_plan(older_plan).unwrap();
+
+    let newer_plan = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![create("newer", point("newer", [2.0, 0.0]))],
+            ),
+            |candidate| cold.evaluate(candidate),
+        )
+        .unwrap();
+    let newer = newer_plan
+        .aliases()
+        .port(&key("newer"), selector(IntentPortRole::Primary))
+        .unwrap();
+    session.commit_plan(newer_plan).unwrap();
+
+    let before = cold
+        .materialize_accepted_authority(session.accepted().unwrap())
+        .unwrap();
+    let reservation_bindings = session
+        .graph()
+        .node(older_node)
+        .unwrap()
+        .reservations
+        .keys()
+        .map(|reservation| {
+            (
+                *reservation,
+                before.ownership.reservation(*reservation).unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let rebound = RefCell::new(None);
+    let rebind_plan = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::RebindInput {
+                    node: older_node,
+                    slot: InputSlot::new(InputRole::Point, 0),
+                    source: PatchPortRef::Stable { port: newer },
+                }],
+            ),
+            |candidate| {
+                let output = cold.materialize(candidate).unwrap();
+                let repeated = cold.materialize(candidate).unwrap();
+                assert_eq!(output.evidence, repeated.evidence);
+                assert_eq!(output.ownership, repeated.ownership);
+                let evidence = output.evidence.clone();
+                rebound.replace(Some(output));
+                IntentEvaluation::Accepted { evidence }
+            },
+        )
+        .unwrap();
+    session.commit_plan(rebind_plan).unwrap();
+
+    let output = rebound.into_inner().unwrap();
+    for (reservation, binding) in reservation_bindings {
+        assert_eq!(output.ownership.reservation(reservation), Some(binding));
+    }
+    let document = output
+        .session
+        .accepted_state_for_current_input()
+        .unwrap()
+        .document();
+    let line = document.curves().first().unwrap();
+    let CurveDefinition::Line { start, end, .. } = line.definition else {
+        panic!("rebound geometry must remain a line");
+    };
+    let start_position = document.point(start).unwrap().position;
+    let end_position = document.point(end).unwrap().position;
+    assert!((start_position[0] - 2.0).abs() <= f64::EPSILON);
+    assert!(start_position[1].abs() <= f64::EPSILON);
+    assert!((end_position[0] - 4.0).abs() <= f64::EPSILON);
+    assert!(end_position[1].abs() <= f64::EPSILON);
+    assert_independently_validated(&output);
+
+    let base_reservation = *session
+        .graph()
+        .node(base_node)
+        .unwrap()
+        .reservations
+        .keys()
+        .next()
+        .unwrap();
+    let retired_binding = output.ownership.reservation(base_reservation).unwrap();
+    let delete = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::DeleteNode {
+                    node: base_node,
+                    policy: DeletePolicy::RejectDependents,
+                }],
+            ),
+            |candidate| cold.evaluate(candidate),
+        )
+        .unwrap();
+    session.commit_plan(delete).unwrap();
+    assert_eq!(
+        session.reservations().entries()[&base_reservation].state,
+        IntentReservationState::Tombstoned
+    );
+
+    let later = RefCell::new(None);
+    let later_plan = session
+        .plan_patch(
+            IntentPatch::new(
+                session.identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![create("later", point("later", [8.0, 1.0]))],
+            ),
+            |candidate| {
+                let output = cold.materialize(candidate).unwrap();
+                let evidence = output.evidence.clone();
+                later.replace(Some(output));
+                IntentEvaluation::Accepted { evidence }
+            },
+        )
+        .unwrap();
+    let later_port = later_plan
+        .aliases()
+        .port(&key("later"), selector(IntentPortRole::Primary))
+        .unwrap();
+    session.commit_plan(later_plan).unwrap();
+    let later = later.into_inner().unwrap();
+    assert_ne!(later.ownership.port(later_port), Some(retired_binding));
+    assert_independently_validated(&later);
 }
 
 #[test]

@@ -884,6 +884,98 @@ impl SketchDocument {
         *self = candidate;
         Ok(())
     }
+
+    /// Atomically fills an exact typed reservation interval whose identities
+    /// have already been retired into this document's never-reuse high-water.
+    ///
+    /// Projectional materializers use this after reserving their complete
+    /// durable ledger in allocation order, then replaying declaration owners in
+    /// dependency order. The batch cannot allocate or reuse an identity: its
+    /// complete resulting high-water must already be contained by the live
+    /// document, every materialized object must consume a typed unused
+    /// reservation, and ordinary complete document validation remains the final
+    /// publication authority.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a foreign/unretired interval, mismatched reservation kinds,
+    /// duplicates, invalid references/domains/branches, or an invalid complete
+    /// document without changing the receiver.
+    #[doc(hidden)]
+    pub fn apply_retired_materialization_batch(
+        &mut self,
+        batch: &SketchMaterializationBatch,
+    ) -> Result<(), DocumentError> {
+        self.validate()?;
+        let validated_roles = batch.reservations.validate_structure()?;
+        if validated_roles != batch.reservations.role_by_id {
+            return materialization_invalid("materialization reservation index is inconsistent");
+        }
+        let current = self.persistent_identity_high_water();
+        if current.document != batch.reservations.resulting.document
+            || current.next_id < batch.reservations.resulting.next_id
+        {
+            return materialization_invalid(
+                "retired materialization interval exceeds live allocator high-water",
+            );
+        }
+        let retained = current.merged(&batch.reservations.resulting)?;
+        validate_batch_identity_consumption(self, batch)?;
+
+        let mut candidate = self.clone();
+        candidate.points.extend(batch.points.iter().cloned());
+        candidate.scalars.extend(batch.scalars.iter().cloned());
+        candidate.curves.extend(batch.curves.iter().cloned());
+        candidate.contacts.extend(batch.contacts.iter().cloned());
+        candidate
+            .trim_views
+            .extend(batch.trim_views.iter().copied());
+        candidate
+            .constraints
+            .extend(batch.constraints.iter().cloned());
+        candidate
+            .dimensions
+            .extend(batch.dimensions.iter().cloned());
+        candidate
+            .parameters
+            .extend(batch.parameters.iter().cloned());
+        candidate
+            .parameter_bindings
+            .extend(batch.parameter_bindings.iter().copied());
+        candidate
+            .parameter_outputs
+            .extend(batch.parameter_outputs.iter().copied());
+        candidate
+            .external_bindings
+            .extend(batch.external_bindings.iter().cloned());
+        candidate
+            .source_order
+            .extend(batch.source_order.iter().copied());
+
+        for edit in &batch.geometry_roles {
+            match edit.role {
+                GeometryRole::Profile => {
+                    candidate.geometry_roles.remove(&edit.curve);
+                }
+                GeometryRole::Construction => {
+                    candidate.geometry_roles.insert(edit.curve, edit.role);
+                }
+            }
+        }
+        candidate
+            .user_inactive_elements
+            .extend(batch.user_inactive_elements.iter().copied());
+        if let Some(activation) = &batch.host_activation {
+            candidate.host_activation = Some(activation.clone());
+        }
+        apply_semantic_catalogs(&mut candidate, &batch.semantic_catalogs);
+        validate_resulting_spline_cursors(&candidate, &retained)?;
+        candidate.advance_spline_span_allocators(&retained.spline_span_cursors);
+        candidate.canonicalize();
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
 }
 
 fn validate_reserved_action_roles(
