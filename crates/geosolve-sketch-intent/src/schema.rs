@@ -7,7 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{MAX_INTENT_NODE_CHILDREN, MAX_INTENT_NODE_INPUTS};
+use crate::model::{
+    MAX_INTENT_NODE_CHILDREN, MAX_INTENT_NODE_FIELDS, MAX_INTENT_NODE_INPUTS,
+};
 use crate::{
     AggregateKind, ComputedFeatureKind, ConstraintKind, DimensionKind, ExternalIntentKind,
     GeometryRecipeKind, InputRole, InputSlot, IntentChildSchema, IntentFieldKey, IntentKey,
@@ -24,7 +26,13 @@ const MAX_SCHEMA_CHILDREN: u16 = MAX_INTENT_NODE_CHILDREN as u16;
     reason = "the source-controlled resource bound is 4,096 and compile-time schema indices are u16"
 )]
 const MAX_SCHEMA_INPUTS: u16 = MAX_INTENT_NODE_INPUTS as u16;
-const MAX_FILLET_CORNERS: u16 = MAX_SCHEMA_INPUTS / 2;
+const COMPUTED_FILLET_FIELDS_PER_CORNER: usize = 22;
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the source-controlled field bound is 4,096 and the derived value fits u16"
+)]
+const MAX_COMPUTED_FILLET_CORNERS: u16 =
+    ((MAX_INTENT_NODE_FIELDS - 1) / COMPUTED_FILLET_FIELDS_PER_CORNER) as u16;
 
 /// Closed literal shape accepted by one definition field.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -826,20 +834,92 @@ fn operation_schema(kind: OperationKind, dynamic_children: u16) -> IntentNodeSch
 
 fn computed_feature_schema(kind: ComputedFeatureKind, dynamic_children: u16) -> IntentNodeSchema {
     match kind {
-        ComputedFeatureKind::FilletSet => schema(
-            vec![input(
-                InputRole::Span,
-                dynamic_children.saturating_mul(2),
-                dynamic_children.saturating_mul(2),
-            )],
-            Vec::new(),
-            vec![field(
+        ComputedFeatureKind::FilletSet => {
+            let mut fields = vec![field(
                 "radius",
                 IntentLiteralSchema::Quantity(IntentUnit::Length),
                 true,
-            )],
-            (1, MAX_FILLET_CORNERS),
-        ),
+            )];
+            for corner in 0..dynamic_children {
+                for parent in ["first", "second"] {
+                    let prefix = format!("corner_{corner:04}_{parent}");
+                    fields.extend([
+                        field(
+                            &format!("{prefix}_parameter"),
+                            IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                            true,
+                        ),
+                        field(
+                            &format!("{prefix}_winding"),
+                            IntentLiteralSchema::Integer,
+                            true,
+                        ),
+                        field(
+                            &format!("{prefix}_neighborhood"),
+                            IntentLiteralSchema::Enum,
+                            true,
+                        ),
+                        field(
+                            &format!("{prefix}_local_lower"),
+                            IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                            false,
+                        ),
+                        field(
+                            &format!("{prefix}_local_upper"),
+                            IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                            false,
+                        ),
+                        field(
+                            &format!("{prefix}_normal_side"),
+                            IntentLiteralSchema::Enum,
+                            true,
+                        ),
+                        field(
+                            &format!("{prefix}_trim_endpoint"),
+                            IntentLiteralSchema::Enum,
+                            true,
+                        ),
+                        field(
+                            &format!("{prefix}_periodic_anchor"),
+                            IntentLiteralSchema::Boolean,
+                            true,
+                        ),
+                        field(
+                            &format!("{prefix}_anchor_parameter"),
+                            IntentLiteralSchema::Quantity(IntentUnit::Dimensionless),
+                            false,
+                        ),
+                        field(
+                            &format!("{prefix}_anchor_winding"),
+                            IntentLiteralSchema::Integer,
+                            false,
+                        ),
+                    ]);
+                }
+                fields.extend([
+                    field(
+                        &format!("corner_{corner:04}_endpoint_order"),
+                        IntentLiteralSchema::Enum,
+                        true,
+                    ),
+                    field(
+                        &format!("corner_{corner:04}_sweep"),
+                        IntentLiteralSchema::Enum,
+                        true,
+                    ),
+                ]);
+            }
+            schema(
+                vec![input(
+                    InputRole::Span,
+                    dynamic_children.saturating_mul(2),
+                    dynamic_children.saturating_mul(2),
+                )],
+                Vec::new(),
+                fields,
+                (1, MAX_COMPUTED_FILLET_CORNERS),
+            )
+        }
     }
 }
 
