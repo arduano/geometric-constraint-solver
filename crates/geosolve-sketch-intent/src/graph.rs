@@ -1752,7 +1752,8 @@ pub(crate) fn assign_identity_generations(graph: &mut IntentGraph) -> Result<(),
 
 #[allow(
     clippy::single_match_else,
-    reason = "the identity-node schema is one explicit exception to ordinary generated output flow"
+    clippy::too_many_lines,
+    reason = "one closed audit keeps generated ports, aliases, reservations, and the identity-node exception aligned"
 )]
 fn validate_schema_ports(node: &IntentNode) -> Result<(), IntentGraphError> {
     let dynamic_children = u16::try_from(node.children.len())

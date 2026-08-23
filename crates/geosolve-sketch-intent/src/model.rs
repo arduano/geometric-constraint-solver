@@ -2144,10 +2144,9 @@ fn geometry_port_specs(
     let regularized = definition_boolean(fields, "regularized").unwrap_or(false);
     let relation_count = match recipe {
         G::MidpointLine | G::TangentArc => 1,
-        G::TwoPointAlignedRectangle => 4 + u16::from(regularized),
+        G::TwoPointAlignedRectangle | G::ThreePointCenterRectangle => 4 + u16::from(regularized),
         G::ThreePointCornerRectangle => 3 + u16::from(regularized),
         G::CenterRectangle => 5 + u16::from(regularized),
-        G::ThreePointCenterRectangle => 4 + u16::from(regularized),
         _ => 0,
     };
     for index in 0..relation_count {
@@ -2180,7 +2179,7 @@ fn definition_boolean(
     name: &str,
 ) -> Option<bool> {
     fields.iter().find_map(|(field, value)| {
-        (field.0.as_str() == name).then(|| match value {
+        (field.0.as_str() == name).then_some(match value {
             IntentLiteral::Boolean(value) => Some(*value),
             _ => None,
         })?
@@ -2189,7 +2188,7 @@ fn definition_boolean(
 
 fn definition_natural(fields: &BTreeMap<IntentFieldKey, IntentLiteral>, name: &str) -> Option<u64> {
     fields.iter().find_map(|(field, value)| {
-        (field.0.as_str() == name).then(|| match value {
+        (field.0.as_str() == name).then_some(match value {
             IntentLiteral::Natural(value) => Some(*value),
             _ => None,
         })?

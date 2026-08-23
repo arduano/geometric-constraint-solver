@@ -216,6 +216,10 @@ fn aggregate_schema(kind: AggregateKind) -> IntentNodeSchema {
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive table keeps every geometry recipe's structural fields and cardinality reviewable"
+)]
 fn geometry_schema(recipe: GeometryRecipeKind, dynamic_children: u16) -> IntentNodeSchema {
     use GeometryRecipeKind as G;
     let point_maximum = match recipe {

@@ -2047,10 +2047,10 @@ fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory()
         );
         let intrinsic_relations = match recipe {
             GeometryRecipeKind::MidpointLine | GeometryRecipeKind::TangentArc => 1,
-            GeometryRecipeKind::TwoPointAlignedRectangle => 4,
+            GeometryRecipeKind::TwoPointAlignedRectangle
+            | GeometryRecipeKind::ThreePointCenterRectangle => 4,
             GeometryRecipeKind::ThreePointCornerRectangle => 3,
             GeometryRecipeKind::CenterRectangle => 5,
-            GeometryRecipeKind::ThreePointCenterRectangle => 4,
             _ => 0,
         };
         assert_eq!(
@@ -2091,6 +2091,10 @@ fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory()
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one lifecycle test keeps every compound recipe's field-dependent topology together"
+)]
 fn compound_recipe_fields_generate_exact_topology_without_hidden_native_points() {
     let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8325_0001)).unwrap();
     let rectangle = IntentNodeDraft::new(
