@@ -1,0 +1,22 @@
+{
+  "name": "@geosolve/intent",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Equation-free branded TypeScript builders for GeoSolve projectional sketch intent",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/test/runtime.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "typescript": "5.9.2"
+  },
+  "license": "GPL-3.0-or-later"
+}
