@@ -515,9 +515,14 @@ fn parameter_digest(revision: u64, entries: &[ParameterBatchEntry]) -> Parameter
 
 /// Defensive bound for one immutable host parameter batch.
 pub const MAX_PARAMETER_BATCH_ENTRIES: usize = crate::MAX_DOCUMENT_PARAMETERS;
+/// Current canonical immutable host-parameter batch wire version.
+pub const PARAMETER_BATCH_VERSION_V1: u32 = 1;
+/// Defensive byte limit applied before host-parameter JSON deserialization.
+pub const MAX_PARAMETER_BATCH_JSON_BYTES: usize = 16 * 1024 * 1024;
 
 /// One closed typed canonical host parameter value.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum ParameterValue {
     Length(f64),
     Angle(f64),
@@ -546,14 +551,16 @@ impl ParameterValue {
 }
 
 /// One canonical immutable host parameter entry.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParameterBatchEntry {
     pub parameter: DocumentParameterId,
     pub value: ParameterValue,
 }
 
 /// Canonical deterministic identity of one immutable parameter batch.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(transparent)]
 pub struct ParameterDigest([u8; 32]);
 
 impl ParameterDigest {
@@ -566,6 +573,15 @@ impl ParameterDigest {
 /// Immutable ordered, revisioned host parameter input captured by one attempt.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParameterBatch {
+    revision: u64,
+    digest: ParameterDigest,
+    entries: Vec<ParameterBatchEntry>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ParameterBatchWireV1 {
+    version: u32,
     revision: u64,
     digest: ParameterDigest,
     entries: Vec<ParameterBatchEntry>,
@@ -630,6 +646,94 @@ impl ParameterBatch {
             digest: parameter_digest(revision, &entries),
             entries,
         })
+    }
+
+    /// Reconstructs a batch only when its version, contents, and canonical
+    /// digest agree exactly. Revision zero is reserved for the empty default
+    /// input and cannot certify non-empty values.
+    ///
+    /// # Errors
+    ///
+    /// Rejects unsupported versions, invalid entries, or a digest mismatch.
+    pub fn from_digest(
+        version: u32,
+        revision: u64,
+        digest: ParameterDigest,
+        entries: Vec<ParameterBatchEntry>,
+    ) -> Result<Self, DocumentError> {
+        if version != PARAMETER_BATCH_VERSION_V1 {
+            return Err(DocumentError::InvalidField {
+                field: "parameter batch version",
+                message: format!(
+                    "unsupported version {version}; expected {PARAMETER_BATCH_VERSION_V1}"
+                ),
+            });
+        }
+        let candidate = if revision == 0 && entries.is_empty() {
+            Self::default()
+        } else {
+            Self::new(revision, entries)?
+        };
+        if candidate.digest != digest {
+            return Err(DocumentError::InvalidField {
+                field: "parameter batch digest",
+                message: "claimed digest does not match canonical parameter bytes".into(),
+            });
+        }
+        Ok(candidate)
+    }
+
+    /// Encodes this independently revalidated input as strict canonical JSON.
+    ///
+    /// # Errors
+    ///
+    /// Rejects internally inconsistent evidence, resource overflow, or JSON
+    /// serialization failure.
+    pub fn to_canonical_json(&self) -> Result<String, DocumentError> {
+        let validated = Self::from_digest(
+            PARAMETER_BATCH_VERSION_V1,
+            self.revision,
+            self.digest,
+            self.entries.clone(),
+        )?;
+        let json = serde_json::to_string(&ParameterBatchWireV1 {
+            version: PARAMETER_BATCH_VERSION_V1,
+            revision: validated.revision,
+            digest: validated.digest,
+            entries: validated.entries,
+        })?;
+        if json.len() > MAX_PARAMETER_BATCH_JSON_BYTES {
+            return Err(DocumentError::ResourceLimit {
+                resource: "parameter batch JSON bytes",
+                actual: json.len(),
+                limit: MAX_PARAMETER_BATCH_JSON_BYTES,
+            });
+        }
+        Ok(json)
+    }
+
+    /// Decodes strict bounded JSON and independently validates its canonical
+    /// digest and typed entries.
+    ///
+    /// # Errors
+    ///
+    /// Rejects oversized or malformed JSON, unknown fields, unsupported
+    /// versions, invalid values, or inconsistent digest evidence.
+    pub fn from_json(json: &str) -> Result<Self, DocumentError> {
+        if json.len() > MAX_PARAMETER_BATCH_JSON_BYTES {
+            return Err(DocumentError::ResourceLimit {
+                resource: "parameter batch JSON bytes",
+                actual: json.len(),
+                limit: MAX_PARAMETER_BATCH_JSON_BYTES,
+            });
+        }
+        let decoded: ParameterBatchWireV1 = serde_json::from_str(json)?;
+        Self::from_digest(
+            decoded.version,
+            decoded.revision,
+            decoded.digest,
+            decoded.entries,
+        )
     }
 
     #[must_use]

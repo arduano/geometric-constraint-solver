@@ -99,6 +99,23 @@ fn batches_are_canonical_and_reject_invalid_entries() {
         ParameterBatch::new(4, ordered.entries().iter().rev().copied().collect()).unwrap();
     assert_eq!(ordered, reversed);
     assert_eq!(ordered.digest(), reversed.digest());
+    let canonical = ordered.to_canonical_json().expect("canonical batch JSON");
+    assert_eq!(
+        ParameterBatch::from_json(&canonical).expect("strict batch restore"),
+        ordered
+    );
+    assert_eq!(
+        ParameterBatch::default()
+            .to_canonical_json()
+            .and_then(|json| ParameterBatch::from_json(&json))
+            .expect("default batch round trip"),
+        ParameterBatch::default()
+    );
+    let mut tampered: serde_json::Value = serde_json::from_str(&canonical).unwrap();
+    tampered["revision"] = serde_json::json!(5);
+    assert!(ParameterBatch::from_json(&serde_json::to_string(&tampered).unwrap()).is_err());
+    let with_unknown = canonical.replacen('{', "{\"unknown\":0,", 1);
+    assert!(ParameterBatch::from_json(&with_unknown).is_err());
     assert!(
         ParameterBatch::new(
             5,
