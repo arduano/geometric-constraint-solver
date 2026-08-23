@@ -18,10 +18,10 @@ pub use document::{
     ComputedFeatureCornerId, ComputedFeatureDefinition, ComputedFeatureDocument,
     ComputedFeatureDocumentDigest, ComputedFeatureDocumentError, ComputedFeatureDocumentId,
     ComputedFeatureDocumentIdentity, ComputedFeatureId, ComputedFeatureLifecycleHighWater,
-    ComputedFeatureRevision, ComputedFilletCorner, ComputedFilletParent, ComputedFilletSet,
-    MAX_COMPUTED_FEATURE_CORNERS, MAX_COMPUTED_FEATURE_JSON_BYTES,
-    MAX_COMPUTED_FEATURE_LABEL_BYTES, MAX_COMPUTED_FEATURES, NativeCurveSpanSource,
-    NewComputedFilletCorner,
+    ComputedFeatureObjectBootstrap, ComputedFeatureRevision, ComputedFilletCorner,
+    ComputedFilletParent, ComputedFilletSet, MAX_COMPUTED_FEATURE_CORNERS,
+    MAX_COMPUTED_FEATURE_JSON_BYTES, MAX_COMPUTED_FEATURE_LABEL_BYTES, MAX_COMPUTED_FEATURES,
+    NativeCurveSpanSource, NewComputedFilletCorner,
 };
 pub use evaluation::{
     ComputedCircularArc, ComputedClaimEndpoint, ComputedConstructionFragment,

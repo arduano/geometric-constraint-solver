@@ -11,6 +11,9 @@ use geosolve_sketch::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
+mod bootstrap;
+pub use bootstrap::ComputedFeatureObjectBootstrap;
+
 /// Current independent computed-feature intent schema.
 pub const COMPUTED_FEATURE_DOCUMENT_VERSION: u32 = 1;
 /// Defensive byte limit applied before feature-document JSON deserialization.
