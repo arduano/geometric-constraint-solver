@@ -458,22 +458,6 @@ impl ColdIntentMaterializer {
         }
         let desired_parameters = host_inputs.parameters;
         let desired_snapshots = host_inputs.external_snapshots;
-        let initial_parameters = self
-            .bootstrap
-            .as_ref()
-            .map_or_else(ParameterBatch::default, |_| desired_parameters.clone());
-        let initial_snapshots = self
-            .bootstrap
-            .as_ref()
-            .map_or_else(ExternalSnapshotSet::default, |_| desired_snapshots.clone());
-        let mut session = RetainedSketchDocumentSession::new_with_inputs(
-            document,
-            initial_parameters,
-            initial_snapshots,
-            self.request,
-            self.config,
-        )?;
-        require_current_acceptance(&session)?;
         let materialized_reservations = candidate
             .reservations()
             .entries()
@@ -482,113 +466,41 @@ impl ColdIntentMaterializer {
             .map(|(id, record)| (*id, *record))
             .collect::<BTreeMap<_, _>>();
         let allocated = allocate_reservation_ledger(
-            session
-                .design_document()
-                .persistent_identity_high_water()
-                .clone(),
+            document.persistent_identity_high_water().clone(),
             &materialized_reservations,
             candidate.graph(),
         )?;
-        for reservations in &allocated.stages {
-            apply_materialization_stage(
-                &mut session,
-                SketchMaterializationBatch::retaining_unused_reservations(reservations.clone()),
-            )?;
-        }
-        let mut state = LoweringState::new(
-            candidate.semantic_identity(),
-            allocated.bindings,
-            bootstrap_ownership,
-            session.design_document(),
-        );
-        let mut owner_reservations = allocated.live;
-
-        for node_id in candidate.graph().canonical_schedule()? {
-            let node = candidate
-                .graph()
-                .node(node_id)
-                .ok_or(IntentMaterializationError::UnknownNode(node_id))?;
-            state.bind_schema_ports(node)?;
-            let owner_reservation = owner_reservations.remove(&node.id);
-            if bootstrap_nodes.contains(&node.id) {
-                continue;
-            }
-            if node.suppressed {
-                try_publish_host_inputs(
-                    &mut session,
-                    &desired_parameters,
-                    &desired_snapshots,
-                    self.request,
-                )?;
-                continue;
-            }
-            if let IntentNodeKind::Operation { operation } = node.kind {
-                try_publish_host_inputs(
-                    &mut session,
-                    &desired_parameters,
-                    &desired_snapshots,
-                    self.request,
-                )?;
-                lower_operation(candidate, node, operation, &mut session, &mut state)?;
-                continue;
-            }
-            let reservations = owner_reservation.unwrap_or(
-                SketchMaterializationReservationAllocator::new(
-                    session
-                        .design_document()
-                        .persistent_identity_high_water()
-                        .clone(),
-                )?
-                .finish()?,
-            );
-            let mut batch = SketchMaterializationBatch::new(reservations);
-            let mut apply_batch = true;
-            match &node.kind {
-                IntentNodeKind::Geometry { recipe } => {
-                    lower_geometry(candidate, node, *recipe, &mut batch, &mut state)?;
-                }
-                IntentNodeKind::Constraint { constraint } => {
-                    lower_constraint(candidate, node, *constraint, &mut batch, &mut state)?;
-                }
-                IntentNodeKind::Dimension { dimension } => {
-                    lower_dimension(candidate, node, *dimension, &mut batch, &mut state)?;
-                }
-                IntentNodeKind::Aggregate { aggregate } => {
-                    lower_aggregate(node, *aggregate, &mut state)?;
-                    apply_batch = false;
-                }
-                IntentNodeKind::Parameter { parameter } => {
-                    lower_parameter(node, *parameter, &mut batch, &mut state)?;
-                }
-                IntentNodeKind::External { external } => lower_external(
-                    node,
-                    *external,
-                    session.external_snapshot_set(),
-                    &mut batch,
-                    &mut state,
-                )?,
-                IntentNodeKind::ComputedFeature { .. }
-                | IntentNodeKind::Annotation
-                | IntentNodeKind::Identity { .. } => {
-                    lower_logical_declaration(node, &mut state)?;
-                    apply_batch = false;
-                }
-                _ => unreachable!("preflight admits only implemented declaration families"),
-            }
-            if apply_batch {
-                apply_reserved_node_materialization(&mut session, batch)?;
-            }
-            try_publish_host_inputs(
-                &mut session,
+        let schedule = candidate.graph().canonical_schedule()?;
+        let contains_operation = schedule.iter().any(|node| {
+            candidate.graph().node(*node).is_some_and(|node| {
+                !node.suppressed
+                    && !bootstrap_nodes.contains(&node.id)
+                    && matches!(node.kind, IntentNodeKind::Operation { .. })
+            })
+        });
+        let (session, state) = if contains_operation {
+            self.lower_operation_graph(
+                candidate,
+                document,
+                bootstrap_ownership,
+                &bootstrap_nodes,
+                &schedule,
+                allocated,
                 &desired_parameters,
                 &desired_snapshots,
-                self.request,
-            )?;
-        }
-        if !owner_reservations.is_empty() {
-            return Err(IntentMaterializationError::InvalidReservationOrder);
-        }
-        require_exact_host_inputs(&session, &desired_parameters, &desired_snapshots)?;
+            )?
+        } else {
+            self.lower_declarative_graph(
+                candidate,
+                document,
+                bootstrap_ownership,
+                &bootstrap_nodes,
+                &schedule,
+                allocated,
+                &desired_parameters,
+                &desired_snapshots,
+            )?
+        };
         state.validate_declared_consumption(candidate)?;
         let accepted = session
             .accepted_state_for_current_input()
@@ -662,6 +574,181 @@ impl ColdIntentMaterializer {
             validation,
             evidence,
         })
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "the operation path keeps every accepted native prefix and host-input transition explicit"
+    )]
+    fn lower_operation_graph(
+        &self,
+        candidate: &dyn IntentMaterializationSource,
+        document: geosolve_sketch::SketchDocument,
+        bootstrap_ownership: Option<IntentMaterializationMap>,
+        bootstrap_nodes: &BTreeSet<NodeId>,
+        schedule: &[NodeId],
+        allocated: AllocatedReservationStage,
+        desired_parameters: &ParameterBatch,
+        desired_snapshots: &ExternalSnapshotSet,
+    ) -> Result<(RetainedSketchDocumentSession, LoweringState), IntentMaterializationError> {
+        let initial_parameters = self
+            .bootstrap
+            .as_ref()
+            .map_or_else(ParameterBatch::default, |_| desired_parameters.clone());
+        let initial_snapshots = self
+            .bootstrap
+            .as_ref()
+            .map_or_else(ExternalSnapshotSet::default, |_| desired_snapshots.clone());
+        let mut session = RetainedSketchDocumentSession::new_with_inputs(
+            document,
+            initial_parameters,
+            initial_snapshots,
+            self.request,
+            self.config,
+        )?;
+        require_current_acceptance(&session)?;
+        for reservations in &allocated.stages {
+            apply_materialization_stage(
+                &mut session,
+                SketchMaterializationBatch::retaining_unused_reservations(reservations.clone()),
+            )?;
+        }
+        let mut state = LoweringState::new(
+            candidate.semantic_identity(),
+            allocated.bindings,
+            bootstrap_ownership,
+            session.design_document(),
+        );
+        let mut owner_reservations = allocated.live;
+
+        for node_id in schedule {
+            let node = candidate
+                .graph()
+                .node(*node_id)
+                .ok_or(IntentMaterializationError::UnknownNode(*node_id))?;
+            state.bind_schema_ports(node)?;
+            let owner_reservation = owner_reservations.remove(&node.id);
+            if bootstrap_nodes.contains(&node.id) {
+                continue;
+            }
+            if node.suppressed {
+                try_publish_host_inputs(
+                    &mut session,
+                    desired_parameters,
+                    desired_snapshots,
+                    self.request,
+                )?;
+                continue;
+            }
+            if let IntentNodeKind::Operation { operation } = node.kind {
+                try_publish_host_inputs(
+                    &mut session,
+                    desired_parameters,
+                    desired_snapshots,
+                    self.request,
+                )?;
+                lower_operation(candidate, node, operation, &mut session, &mut state)?;
+                continue;
+            }
+            let reservations = owner_reservation.unwrap_or(
+                SketchMaterializationReservationAllocator::new(
+                    session
+                        .design_document()
+                        .persistent_identity_high_water()
+                        .clone(),
+                )?
+                .finish()?,
+            );
+            let mut batch = SketchMaterializationBatch::new(reservations);
+            let apply_batch = lower_declarative_node(
+                candidate,
+                node,
+                session.external_snapshot_set(),
+                &mut batch,
+                &mut state,
+            )?;
+            if apply_batch {
+                apply_reserved_node_materialization(&mut session, batch)?;
+            }
+            try_publish_host_inputs(
+                &mut session,
+                desired_parameters,
+                desired_snapshots,
+                self.request,
+            )?;
+        }
+        if !owner_reservations.is_empty() {
+            return Err(IntentMaterializationError::InvalidReservationOrder);
+        }
+        require_exact_host_inputs(&session, desired_parameters, desired_snapshots)?;
+        Ok((session, state))
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "cold structural lowering carries the complete authenticated inputs into one native solve"
+    )]
+    fn lower_declarative_graph(
+        &self,
+        candidate: &dyn IntentMaterializationSource,
+        mut document: geosolve_sketch::SketchDocument,
+        bootstrap_ownership: Option<IntentMaterializationMap>,
+        bootstrap_nodes: &BTreeSet<NodeId>,
+        schedule: &[NodeId],
+        allocated: AllocatedReservationStage,
+        desired_parameters: &ParameterBatch,
+        desired_snapshots: &ExternalSnapshotSet,
+    ) -> Result<(RetainedSketchDocumentSession, LoweringState), IntentMaterializationError> {
+        for reservations in &allocated.stages {
+            document.apply_materialization_batch(
+                &SketchMaterializationBatch::retaining_unused_reservations(reservations.clone()),
+            )?;
+        }
+        let mut state = LoweringState::new(
+            candidate.semantic_identity(),
+            allocated.bindings,
+            bootstrap_ownership,
+            &document,
+        );
+        let mut owner_reservations = allocated.live;
+
+        for node_id in schedule {
+            let node = candidate
+                .graph()
+                .node(*node_id)
+                .ok_or(IntentMaterializationError::UnknownNode(*node_id))?;
+            state.bind_schema_ports(node)?;
+            let owner_reservation = owner_reservations.remove(&node.id);
+            if bootstrap_nodes.contains(&node.id) || node.suppressed {
+                continue;
+            }
+            if matches!(node.kind, IntentNodeKind::Operation { .. }) {
+                return Err(IntentMaterializationError::InvalidReservationOrder);
+            }
+            let reservations = owner_reservation.unwrap_or(
+                SketchMaterializationReservationAllocator::new(
+                    document.persistent_identity_high_water().clone(),
+                )?
+                .finish()?,
+            );
+            let mut batch = SketchMaterializationBatch::new(reservations);
+            if lower_declarative_node(candidate, node, desired_snapshots, &mut batch, &mut state)? {
+                document.apply_retired_materialization_batch(&batch)?;
+            }
+        }
+        if !owner_reservations.is_empty() {
+            return Err(IntentMaterializationError::InvalidReservationOrder);
+        }
+        let session = RetainedSketchDocumentSession::new_with_inputs(
+            document,
+            desired_parameters.clone(),
+            desired_snapshots.clone(),
+            self.request,
+            self.config,
+        )?;
+        require_exact_host_inputs(&session, desired_parameters, desired_snapshots)?;
+        Ok((session, state))
     }
 
     /// Adapter for [`geosolve_sketch_intent::IntentSession::plan_patch`].
@@ -1214,6 +1301,46 @@ fn apply_reserved_node_materialization(
         document.apply_retired_materialization_batch(&staged)
     })?;
     Ok(())
+}
+
+fn lower_declarative_node(
+    candidate: &dyn IntentMaterializationSource,
+    node: &IntentNode,
+    snapshots: &ExternalSnapshotSet,
+    batch: &mut SketchMaterializationBatch,
+    state: &mut LoweringState,
+) -> Result<bool, IntentMaterializationError> {
+    match &node.kind {
+        IntentNodeKind::Geometry { recipe } => {
+            lower_geometry(candidate, node, *recipe, batch, state)?;
+        }
+        IntentNodeKind::Constraint { constraint } => {
+            lower_constraint(candidate, node, *constraint, batch, state)?;
+        }
+        IntentNodeKind::Dimension { dimension } => {
+            lower_dimension(candidate, node, *dimension, batch, state)?;
+        }
+        IntentNodeKind::Aggregate { aggregate } => {
+            lower_aggregate(node, *aggregate, state)?;
+            return Ok(false);
+        }
+        IntentNodeKind::Parameter { parameter } => {
+            lower_parameter(node, *parameter, batch, state)?;
+        }
+        IntentNodeKind::External { external } => {
+            lower_external(node, *external, snapshots, batch, state)?;
+        }
+        IntentNodeKind::ComputedFeature { .. }
+        | IntentNodeKind::Annotation
+        | IntentNodeKind::Identity { .. } => {
+            lower_logical_declaration(node, state)?;
+            return Ok(false);
+        }
+        IntentNodeKind::Operation { .. } | IntentNodeKind::Bootstrap { .. } => {
+            unreachable!("operation and bootstrap declarations are handled by their owning path")
+        }
+    }
+    Ok(true)
 }
 
 fn require_current_acceptance(

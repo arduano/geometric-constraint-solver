@@ -53,6 +53,7 @@ cargo bench --locked --workspace --all-features --no-run
 
 cargo run --locked --release -p geosolve-sketch --example m14_performance
 cargo run --locked --release -p geosolve-sketch --example m32_performance
+cargo run --locked --release -p geosolve-constraint-editor --example m83_performance
 cargo test --locked --release -p geosolve-linkage --test m23_performance \
   exact_auto_sparse_crossover_solves_and_validates_256_moving_body_chain \
   -- --exact --ignored --nocapture
