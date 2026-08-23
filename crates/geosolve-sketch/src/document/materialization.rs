@@ -551,7 +551,7 @@ pub enum SketchMaterializationReservationConsumption {
 ///
 /// Reserved identities may deliberately remain unused by this batch. Applying such a batch still
 /// advances the document high-water, which retires identities owned by suppressed, deleted, or
-/// failed lineage steps without making them available for reuse.
+/// failed retained owners without making their reserved identities available for reuse.
 #[derive(Clone, Debug)]
 pub struct SketchMaterializationBatch {
     reservations: SketchMaterializationReservationSet,
@@ -602,7 +602,7 @@ impl SketchMaterializationBatch {
 
     /// Creates an identity-retirement batch that may leave typed reservations unmaterialized.
     ///
-    /// This explicit mode is intended for suppressed, deleted, or failed lineage steps. The
+    /// This explicit mode is intended for suppressed, deleted, or failed retained owners. The
     /// resulting high-water still advances, so later materialization cannot reuse those IDs.
     #[must_use]
     pub fn retaining_unused_reservations(
