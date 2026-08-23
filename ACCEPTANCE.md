@@ -3073,9 +3073,9 @@ supervising-human acceptance.
 
 Replacement exact source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
 `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, passes the complete clean release gate with
-304,480-byte log SHA-256 `945e205b0c507acd4b423ccf5489e5fde7ddb3bc0255576b69ffe6c2dd1a4f64`.
+332,496-byte log SHA-256 `d1529363d8fc382c0767adbcfca24e4827f5a280d17090fd83c31b6910e791c1`.
 The unchanged 271-row golden, full native/WASM/TypeScript/workspace qualification, warnings-denied
-Clippy/Rustdoc, 125.35-second sparse crossover, licence/package checks and Trunk 0.21.14 assembly
+Clippy/Rustdoc, 129.17-second sparse crossover, licence/package checks and Trunk 0.21.14 assembly
 pass. The no-rebuild seven-file output is frozen at `/tmp/geosolve-m83-lineage-uat.1KL8gG` with
 directory mode `0555`, file modes `0444` and ordered-manifest aggregate
 `d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`. Temporary and retained

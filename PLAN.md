@@ -5691,9 +5691,9 @@ workbench honestly to workspace v7 and expose the same stateful engine through
 Replacement nomination evidence: exact product source
 `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
 `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, passes the complete clean release gate. Its
-304,480-byte log `/tmp/geosolve-m83-lineage-release-gate.log` has SHA-256
-`945e205b0c507acd4b423ccf5489e5fde7ddb3bc0255576b69ffe6c2dd1a4f64`. Without rebuilding, the
-gate-produced seven-file distribution is frozen read-only at
+332,496-byte log `/tmp/geosolve-m83-lineage-stable-release-gate.log` has SHA-256
+`d1529363d8fc382c0767adbcfca24e4827f5a280d17090fd83c31b6910e791c1`. The stable gate-produced
+seven-file distribution byte-matches the already-frozen read-only snapshot at
 `/tmp/geosolve-m83-lineage-uat.1KL8gG`; its C-locale ordered-manifest aggregate is
 `d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`. Eight proxy-disabled,
 identity-encoded requests for `/` plus all seven files pass exact status/media/length/body checks

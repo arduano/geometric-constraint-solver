@@ -16,8 +16,9 @@ and whether the panel makes program/history changes legible without implying row
 - Product source: `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`.
 - Product tree: `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`.
 - Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 on
-  2026-08-23; 304,480-byte log `/tmp/geosolve-m83-lineage-release-gate.log`, SHA-256
-  `945e205b0c507acd4b423ccf5489e5fde7ddb3bc0255576b69ffe6c2dd1a4f64`.
+  2026-08-23 from an isolated clean worktree pinned to the exact product commit; 332,496-byte log
+  `/tmp/geosolve-m83-lineage-stable-release-gate.log`, SHA-256
+  `d1529363d8fc382c0767adbcfca24e4827f5a280d17090fd83c31b6910e791c1`.
 - Immutable no-rebuild snapshot: `/tmp/geosolve-m83-lineage-uat.1KL8gG` (directory `0555`; seven
   regular non-symlink files `0444`).
 - Ordered file-manifest aggregate:

@@ -922,20 +922,20 @@ historical source/tree and did not rebuild or replace its product bytes.
 ### Replacement Lineage-panel qualification and immutable nomination
 
 Exact product source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
-`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, ran the complete release gate from a clean worktree
-on 2026-08-23 and exited zero:
+`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, ran the complete release gate from an isolated clean
+worktree pinned to that commit on 2026-08-23 and exited zero:
 
 ```bash
 env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'
 ```
 
-The 304,480-byte log `/tmp/geosolve-m83-lineage-release-gate.log` has SHA-256
-`945e205b0c507acd4b423ccf5489e5fde7ddb3bc0255576b69ffe6c2dd1a4f64`. The gate passed Cargo
+The 332,496-byte log `/tmp/geosolve-m83-lineage-stable-release-gate.log` has SHA-256
+`d1529363d8fc382c0767adbcfca24e4827f5a280d17090fd83c31b6910e791c1`. The gate passed Cargo
 metadata/offline resolution, formatting and diff hygiene, warnings-denied all-target/all-feature
 workspace Clippy, locked all-feature workspace tests, the unchanged clean 271-row golden oracle,
 native/WASM M70/M71/M74/M75/M76/M77/M79/M83 parity, demo WASM and TypeScript checks,
 warnings-denied Rustdoc, benchmark compilation, M14/M32 budgets, the ignored 256-moving-body
-sparse crossover in 125.35 seconds, licence/package checks and Trunk 0.21.14 release assembly. The
+sparse crossover in 129.17 seconds, licence/package checks and Trunk 0.21.14 release assembly. The
 only diagnostics were the existing non-failing Cargo notices for packages declaring both
 `license` and `license-file`.
 
@@ -947,10 +947,19 @@ Lineage count has measured 6.24:1 contrast. Headless Chrome reports zero root/In
 review blocker. Direct authority, cursor semantics, hostile-string escaping, lifecycle/order,
 rewrite and Create/Undo/Redo tests also pass.
 
-Without rebuilding, the gate-produced `crates/geosolve-demo-web/dist` was copied to
-`/tmp/geosolve-m83-lineage-uat.1KL8gG`, byte-compared before and after freezing and made read-only:
-directory `0555`, seven regular non-symlink files `0444`. The C-locale ordered manifest has
-aggregate SHA-256 `d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`:
+The stable gate-produced `crates/geosolve-demo-web/dist` byte-matches the already-frozen snapshot
+`/tmp/geosolve-m83-lineage-uat.1KL8gG`, so no rebuild or service swap was required. The snapshot is
+read-only: directory `0555`, seven regular non-symlink files `0444`. Its C-locale normalized
+`filename<TAB>bytes<TAB>sha256` manifest has aggregate SHA-256
+`d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`. Reproduce it from inside
+the snapshot with:
+
+```bash
+LC_ALL=C find . -maxdepth 1 -type f -printf '%f\t%s\t' -exec sha256sum {} \; \
+  | sed 's#  \./[^[:space:]]*$##' | LC_ALL=C sort | sha256sum
+```
+
+The normalized entries are:
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
