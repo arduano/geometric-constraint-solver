@@ -16,6 +16,7 @@ mod feature_authoring;
 mod geometry_tools;
 mod inference;
 mod intent;
+mod intent_coordinator;
 mod offset_authoring;
 
 pub use annotations::{
@@ -85,6 +86,10 @@ pub use intent::{
     ColdIntentMaterialization, ColdIntentMaterializer, IntentMaterializationError,
     IntentMaterializationMap, IntentNativeBinding, IntentNativeWritableLeaf,
     IntentNodeMaterialization, IntentValidationEvidence,
+};
+pub use intent_coordinator::{
+    ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
+    ProjectionalPointDragPreview,
 };
 pub use offset_authoring::{
     OffsetAuthoringCandidate, OffsetAuthoringChainPresentation, OffsetAuthoringChainTerminal,
