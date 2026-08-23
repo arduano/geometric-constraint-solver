@@ -38,6 +38,10 @@ env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
 env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
   cargo test --locked -p geosolve-constraint-editor --test m79_inference_lifecycle \
   --target wasm32-unknown-unknown
+env CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner \
+  cargo test --locked -p geosolve-demo-web --lib \
+  actual_wasm_handle_matches_dom_free_rust_session_for_transition_matrix \
+  --target wasm32-unknown-unknown
 cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
 (
   cd packages/geosolve-intent

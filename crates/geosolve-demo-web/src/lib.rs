@@ -98,12 +98,38 @@ mod wasm {
         }
     }
 
-    #[wasm_bindgen(start)]
+    #[cfg_attr(not(test), wasm_bindgen(start))]
     pub fn start() -> Result<(), JsValue> {
         console_error_panic_hook::set_once();
         let document = web_sys::window()
             .and_then(|window| window.document())
             .ok_or_else(|| JsValue::from_str("browser document is unavailable"))?;
         crate::workbench::wasm::install(&document)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use wasm_bindgen_test::wasm_bindgen_test;
+
+        use super::IntentRpcHandle;
+
+        #[wasm_bindgen_test]
+        fn actual_wasm_handle_matches_dom_free_rust_session_for_transition_matrix() {
+            let session = "00000000000000000000000083005001";
+            let document = "00000000000000000000830050010000";
+            let mut handle = IntentRpcHandle::new(session, document, 1.0).unwrap();
+            let mut rust =
+                crate::intent_rpc::empty_session_from_raw(0x8300_5001, 0x8300_5001_0000, 1.0)
+                    .unwrap();
+            for request in [
+                r#"{"method":"snapshot"}"#,
+                r#"{"method":"undo"}"#,
+                r#"{"method":"redo"}"#,
+                r#"{"method":"inspector","node":"0000000000000063"}"#,
+                r#"{"method":"execute_typescript","source":"solve()"}"#,
+            ] {
+                assert_eq!(handle.apply(request), rust.apply_json(request), "{request}");
+            }
+        }
     }
 }
