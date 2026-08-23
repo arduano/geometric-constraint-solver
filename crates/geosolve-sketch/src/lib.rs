@@ -138,7 +138,7 @@ pub use document::{
     SketchMaterializationDimensionReservation, SketchMaterializationIdentityReservation,
     SketchMaterializationReservationAllocator, SketchMaterializationReservationConsumption,
     SketchMaterializationReservationSet, SketchMaterializationSemanticCatalog,
-    SketchPersistentIdentityHighWater, TangentOrientation,
+    SketchObjectBootstrap, SketchPersistentIdentityHighWater, TangentOrientation,
 };
 pub use document_lowering::{
     ContactRuntimeMapping, CurveRuntimeMapping, DocumentContactRole,

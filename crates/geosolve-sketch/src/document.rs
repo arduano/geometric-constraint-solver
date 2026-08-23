@@ -9,10 +9,12 @@ use geosolve_core::{OperationCheckpoint, OperationController, OperationWorkCount
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
+mod bootstrap;
 mod materialization;
 mod profile_offset;
 mod query;
 
+pub use bootstrap::SketchObjectBootstrap;
 pub use materialization::{
     SketchMaterializationBatch, SketchMaterializationConstraintReservation,
     SketchMaterializationDimensionReservation, SketchMaterializationIdentityReservation,
