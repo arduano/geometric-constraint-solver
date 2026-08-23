@@ -109,9 +109,55 @@ mod wasm {
 
     #[cfg(test)]
     mod tests {
+        use geosolve_constraint_editor::{IntentRpcRequest, IntentRpcSession};
+        use geosolve_sketch_intent::{
+            GeometryRecipeKind, IntentKey, IntentLiteral, IntentNodeDraft, IntentNodeKind,
+            IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole,
+            IntentPortSelector, IntentUnit, LeafField,
+        };
         use wasm_bindgen_test::wasm_bindgen_test;
 
         use super::IntentRpcHandle;
+
+        fn point_patch(session: &IntentRpcSession) -> IntentRpcRequest {
+            let selector = IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            };
+            let draft = IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::SketchPoint,
+                },
+                IntentKey::new("wasm.rpc.point").unwrap(),
+            )
+            .with_instance_leaf(
+                selector,
+                LeafField::X,
+                IntentLiteral::Quantity {
+                    value: 1.0,
+                    unit: IntentUnit::Length,
+                },
+            )
+            .with_instance_leaf(
+                selector,
+                LeafField::Y,
+                IntentLiteral::Quantity {
+                    value: 2.0,
+                    unit: IntentUnit::Length,
+                },
+            );
+            IntentRpcRequest::ApplyPatch {
+                patch: Box::new(IntentPatch::new(
+                    session.coordinator().intent().identity(),
+                    IntentPatchPolicy::RequireAccepted,
+                    vec![IntentPatchOperation::CreateNode {
+                        alias: IntentKey::new("point").unwrap(),
+                        draft: Box::new(draft),
+                        cell: None,
+                    }],
+                )),
+            }
+        }
 
         #[wasm_bindgen_test]
         fn actual_wasm_handle_matches_dom_free_rust_session_for_transition_matrix() {
@@ -121,14 +167,20 @@ mod wasm {
             let mut rust =
                 crate::intent_rpc::empty_session_from_raw(0x8300_5001, 0x8300_5001_0000, 1.0)
                     .unwrap();
+            let patch = serde_json::to_string(&point_patch(&rust)).unwrap();
             for request in [
-                r#"{"method":"snapshot"}"#,
-                r#"{"method":"undo"}"#,
-                r#"{"method":"redo"}"#,
-                r#"{"method":"inspector","node":"0000000000000063"}"#,
-                r#"{"method":"execute_typescript","source":"solve()"}"#,
+                r#"{"method":"snapshot"}"#.to_owned(),
+                patch,
+                r#"{"method":"undo"}"#.to_owned(),
+                r#"{"method":"redo"}"#.to_owned(),
+                r#"{"method":"inspector","node":"0000000000000063"}"#.to_owned(),
+                r#"{"method":"execute_typescript","source":"solve()"}"#.to_owned(),
             ] {
-                assert_eq!(handle.apply(request), rust.apply_json(request), "{request}");
+                assert_eq!(
+                    handle.apply(&request),
+                    rust.apply_json(&request),
+                    "{request}"
+                );
             }
         }
     }
