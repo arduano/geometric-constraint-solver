@@ -560,15 +560,8 @@ impl WorkspaceSnapshot {
             })?
             .document();
         let design = native.design_document();
-        let bootstrap = decode_flat_intent_bootstrap(intent).ok();
-        let (features, feature_lifecycle_high_water) = bootstrap.map_or_else(
-            || {
-                let features = ComputedFeatureDocument::new(design.id());
-                let lifecycle = features.lifecycle_high_water();
-                (features, lifecycle)
-            },
-            |bootstrap| (bootstrap.features, bootstrap.feature_lifecycle_high_water),
-        );
+        let features = materialization.features.clone();
+        let feature_lifecycle_high_water = materialization.feature_lifecycle_high_water;
         let revisions = retained_revisions;
         let accepted_belongs_to_current_design = intent
             .accepted()
@@ -1065,31 +1058,55 @@ pub(crate) fn projectional_editor_from_snapshot(
         )
     });
     if contains_bootstrap {
-        let decoded = decode_flat_intent_bootstrap(&intent).map_err(|error| error.to_string())?;
-        if decoded.document != snapshot.design_document()?
-            || decoded.features != features
-            || decoded.feature_lifecycle_high_water != snapshot.feature_lifecycle_high_water()
-        {
-            return Err(
-                "workspace v8 bootstrap declarations disagree with stored native evidence".into(),
-            );
-        }
-        let native =
-            snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
-        let mut projectional = ProjectionalEditorSession::restore_native_bootstrap(intent, native)
-            .map_err(|error| error.to_string())?;
+        let canonical_bootstrap = decode_flat_intent_bootstrap(&intent).ok();
+        let mut projectional = if let Some(decoded) = canonical_bootstrap {
+            if decoded.document != snapshot.design_document()?
+                || decoded.features != features
+                || decoded.feature_lifecycle_high_water != snapshot.feature_lifecycle_high_water()
+            {
+                return Err(
+                    "workspace v8 bootstrap declarations disagree with stored native evidence"
+                        .into(),
+                );
+            }
+            let native = snapshot
+                .restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
+            ProjectionalEditorSession::restore_native_bootstrap(intent, native)
+                .map_err(|error| error.to_string())?
+        } else {
+            let stored_design = snapshot.design_document()?;
+            let stored_accepted = snapshot.accepted_document()?;
+            let projectional = ProjectionalEditorSession::restore_with_bootstrap_prefix(intent)
+                .map_err(|error| error.to_string())?;
+            let rebuilt = projectional
+                .coordinator()
+                .accepted_materialization()
+                .ok_or_else(|| {
+                    "mixed bootstrap reconstruction omitted accepted native evidence".to_owned()
+                })?;
+            let rebuilt_accepted = rebuilt
+                .session
+                .accepted_state_for_current_input()
+                .ok_or_else(|| {
+                    "mixed bootstrap reconstruction omitted current accepted evidence".to_owned()
+                })?;
+            if rebuilt.session.design_document() != &stored_design
+                || Some(rebuilt_accepted.document()) != stored_accepted.as_ref()
+                || rebuilt.features != features
+                || rebuilt.feature_lifecycle_high_water != snapshot.feature_lifecycle_high_water()
+            {
+                return Err(
+                    "mixed bootstrap reconstruction disagrees with stored flat evidence".into(),
+                );
+            }
+            projectional
+        };
         let layout = compatible_annotation_layout_for_projectional(
             &projectional,
             &snapshot.annotation_layout(),
         );
         projectional.editor_mut().restore_annotation_layout(layout);
         return Ok(projectional);
-    }
-    if !features.features().is_empty() {
-        return Err(
-            "workspace v8 computed features are unsupported until projectional feature lowering is authenticated"
-                .into(),
-        );
     }
     let stored_design = snapshot.design_document()?;
     let stored_accepted = snapshot.accepted_document()?;
@@ -1108,6 +1125,7 @@ pub(crate) fn projectional_editor_from_snapshot(
                 })?;
             if rebuilt_session.design_document() != &stored_design
                 || rebuilt_accepted.document() != stored_accepted
+                || rebuilt.features != features
             {
                 return Err(
                     "cold projectional reconstruction disagrees with stored flat evidence".into(),
@@ -3542,6 +3560,203 @@ mod tests {
                 .expect("accepted state")
                 .document(),
             &accepted,
+        );
+    }
+
+    #[test]
+    fn m83_migrated_v6_continues_through_edit_undo_redo_and_cold_v8_reload() {
+        run_m83_persistence_test("m83-mixed-bootstrap-v8", || {
+            m83_migrated_v6_continues_through_edit_undo_redo_and_cold_v8_reload_body();
+        });
+    }
+
+    fn m83_migrated_v6_continues_through_edit_undo_redo_and_cold_v8_reload_body() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let historical = document
+            .add_point("historical point", [0.0, 0.0])
+            .expect("historical point");
+        let historical_high_water = document.persistent_identity_high_water();
+        let native = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted native session");
+        let flat = WorkspaceSnapshot::from_coordinator(
+            &RetainedEditorCoordinator::new(native).expect("flat coordinator"),
+        )
+        .expect("flat v6 workspace");
+        let migrated = WorkspaceSnapshot::decode(&flat.encode().expect("encode v6"))
+            .expect("strict v6 decode");
+        let mut projectional =
+            projectional_editor_from_legacy_snapshot(&migrated).expect("activate v6 bootstrap");
+
+        let bootstrap_x_leaf = projectional
+            .coordinator()
+            .accepted_materialization()
+            .expect("bootstrap accepted materialization")
+            .ownership
+            .writable_leaf(
+                geosolve_constraint_editor::IntentNativeWritableLeaf::PointX { point: historical },
+            )
+            .expect("historical bootstrap x leaf");
+        projectional
+            .apply_patch(IntentPatch::new(
+                projectional.coordinator().intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::SetInstanceLeaf {
+                    leaf: bootstrap_x_leaf,
+                    value: IntentLiteral::Quantity {
+                        value: 1.0,
+                        unit: IntentUnit::Length,
+                    },
+                }],
+            ))
+            .expect("edit pure bootstrap point");
+        let edited_bootstrap = WorkspaceSnapshot::from_projectional_editor(&projectional)
+            .expect("capture edited pure bootstrap v8");
+        let edited_bootstrap = WorkspaceSnapshot::decode(
+            &edited_bootstrap
+                .encode()
+                .expect("encode edited pure bootstrap v8"),
+        )
+        .expect("decode edited pure bootstrap v8");
+        projectional = projectional_editor_from_snapshot(&edited_bootstrap)
+            .expect("cold reload edited pure bootstrap v8");
+        assert_eq!(
+            projectional
+                .coordinator()
+                .accepted_materialization()
+                .expect("reloaded bootstrap authority")
+                .session
+                .design_document()
+                .point(historical)
+                .expect("historical point")
+                .position[0],
+            1.0
+        );
+
+        let primary = IntentPortSelector::Node {
+            role: IntentPortRole::Primary,
+            index: 0,
+        };
+        let created = IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::SketchPoint,
+            },
+            IntentKey::new("post migration point").expect("symbol"),
+        )
+        .with_instance_leaf(
+            primary,
+            LeafField::X,
+            IntentLiteral::Quantity {
+                value: 4.0,
+                unit: IntentUnit::Length,
+            },
+        )
+        .with_instance_leaf(
+            primary,
+            LeafField::Y,
+            IntentLiteral::Quantity {
+                value: 3.0,
+                unit: IntentUnit::Length,
+            },
+        );
+        projectional
+            .apply_patch(IntentPatch::new(
+                projectional.coordinator().intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::CreateNode {
+                    alias: IntentKey::new("post-migration-point").expect("alias"),
+                    draft: Box::new(created),
+                    cell: None,
+                }],
+            ))
+            .expect("create declaration after migration");
+        let x_leaf = projectional
+            .coordinator()
+            .accepted_materialization()
+            .expect("mixed accepted materialization")
+            .ownership
+            .writable_leaf(
+                geosolve_constraint_editor::IntentNativeWritableLeaf::PointX { point: historical },
+            )
+            .expect("historical writable x leaf");
+        projectional
+            .apply_patch(IntentPatch::new(
+                projectional.coordinator().intent().identity(),
+                IntentPatchPolicy::RequireAccepted,
+                vec![IntentPatchOperation::SetInstanceLeaf {
+                    leaf: x_leaf,
+                    value: IntentLiteral::Quantity {
+                        value: 2.0,
+                        unit: IntentUnit::Length,
+                    },
+                }],
+            ))
+            .expect("edit migrated free point");
+        assert!(projectional.undo().expect("undo edit").is_some());
+        assert_eq!(
+            projectional
+                .coordinator()
+                .accepted_materialization()
+                .expect("undo authority")
+                .session
+                .design_document()
+                .point(historical)
+                .expect("historical point")
+                .position[0],
+            1.0
+        );
+        assert!(projectional.redo().expect("redo edit").is_some());
+
+        let before = projectional
+            .coordinator()
+            .accepted_materialization()
+            .expect("mixed accepted materialization");
+        assert_eq!(before.session.design_document().points().len(), 2);
+        assert_ne!(
+            before.session.persistent_identity_high_water(),
+            &historical_high_water
+        );
+        let expected_design = before.session.design_document().clone();
+        let expected_accepted = before
+            .session
+            .accepted_state_for_current_input()
+            .expect("mixed accepted state")
+            .document()
+            .clone();
+        let expected_intent = projectional
+            .coordinator()
+            .intent()
+            .to_canonical_json()
+            .expect("mixed canonical intent");
+        let v8 =
+            WorkspaceSnapshot::from_projectional_editor(&projectional).expect("capture mixed v8");
+        let encoded = v8.encode().expect("encode mixed v8");
+        let decoded = WorkspaceSnapshot::decode(&encoded).expect("decode mixed v8");
+        assert_eq!(decoded.encode().expect("re-encode mixed v8"), encoded);
+        let restored = projectional_editor_from_snapshot(&decoded).expect("cold mixed reload");
+        let after = restored
+            .coordinator()
+            .accepted_materialization()
+            .expect("cold mixed authority");
+        assert_eq!(after.session.design_document(), &expected_design);
+        assert_eq!(
+            after
+                .session
+                .accepted_state_for_current_input()
+                .expect("cold mixed accepted state")
+                .document(),
+            &expected_accepted
+        );
+        assert_eq!(
+            restored
+                .coordinator()
+                .intent()
+                .to_canonical_json()
+                .expect("restored canonical intent"),
+            expected_intent
         );
     }
 

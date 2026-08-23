@@ -62,16 +62,8 @@ fn invalid_segment() -> IntentNodeDraft {
         LeafField::Y,
         coordinate(0.0),
     )
-    .with_instance_leaf(
-        selector(IntentPortRole::End),
-        LeafField::X,
-        coordinate(1.0),
-    )
-    .with_instance_leaf(
-        selector(IntentPortRole::End),
-        LeafField::Y,
-        coordinate(0.0),
-    )
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::X, coordinate(1.0))
+    .with_instance_leaf(selector(IntentPortRole::End), LeafField::Y, coordinate(0.0))
     .with_field(
         IntentFieldKey(key("branch_direction")),
         IntentLiteral::Point([f64::MAX, f64::MAX]),

@@ -38,6 +38,7 @@ const FEATURE_DOCUMENT_NAMESPACE: u128 = 0x6d38_335f_696e_7465_6e74_5f66_6561_74
 #[derive(Clone, Debug)]
 pub(crate) struct ComputedIntentMaterialization {
     pub features: ComputedFeatureDocument,
+    pub feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
     pub snapshot: ComputedFeatureSnapshot,
     pub evaluation_high_water: ComputedEvaluationAllocatorHighWater,
 }
@@ -80,11 +81,40 @@ pub(crate) fn materialize_computed_features(
     document: DocumentId,
     session: &RetainedSketchDocumentSession,
     ownership: &mut IntentMaterializationMap,
+    base: Option<(&ComputedFeatureDocument, ComputedFeatureLifecycleHighWater)>,
 ) -> Result<ComputedIntentMaterialization, ComputedIntentMaterializationError> {
-    let mut features = Vec::new();
+    let mut features = base
+        .map(|(features, _)| features.features().to_vec())
+        .unwrap_or_default();
     let mut feature_nodes = BTreeMap::new();
-    let mut maximum_feature = 0_u64;
-    let mut maximum_corner = 0_u64;
+    let mut feature_suppression = BTreeMap::new();
+    let feature_base = base.map_or(0, |(_, lifecycle)| {
+        lifecycle.allocator.next_feature_id.raw().saturating_sub(1)
+    });
+    let corner_base = base.map_or(0, |(_, lifecycle)| {
+        lifecycle.allocator.next_corner_id.raw().saturating_sub(1)
+    });
+    let mut maximum_feature = feature_base;
+    let mut maximum_corner = corner_base;
+    if let Some((base_features, _)) = base {
+        for feature in base_features.features() {
+            let node = ownership
+                .nodes
+                .iter()
+                .find(|owner| {
+                    owner
+                        .owned
+                        .contains(&IntentNativeBinding::ComputedFeature(feature.id))
+                })
+                .map(|owner| owner.node)
+                .ok_or(ComputedIntentMaterializationError::InvalidNode {
+                    node: NodeId::from_raw(0),
+                    reason: "bootstrap computed feature has no exact logical owner",
+                })?;
+            feature_nodes.insert(feature.id, node);
+            feature_suppression.insert(feature.id, feature.suppressed);
+        }
+    }
 
     for node_id in
         graph
@@ -103,7 +133,11 @@ pub(crate) fn materialize_computed_features(
         let IntentNodeKind::ComputedFeature { feature } = node.kind else {
             continue;
         };
-        let feature_id = ComputedFeatureId::from_raw(node.id.raw());
+        let feature_id = ComputedFeatureId::from_raw(
+            feature_base
+                .checked_add(node.id.raw())
+                .ok_or(ComputedIntentMaterializationError::IdentityExhausted)?,
+        );
         if feature_id.raw() == 0 {
             return Err(ComputedIntentMaterializationError::InvalidNode {
                 node: node.id,
@@ -122,7 +156,11 @@ pub(crate) fn materialize_computed_features(
                             reason: "ordered Fillet child is missing",
                         },
                     )?;
-                    let corner_id = ComputedFeatureCornerId::from_raw(child.id.raw());
+                    let corner_id = ComputedFeatureCornerId::from_raw(
+                        corner_base
+                            .checked_add(child.id.raw())
+                            .ok_or(ComputedIntentMaterializationError::IdentityExhausted)?,
+                    );
                     if corner_id.raw() == 0 {
                         return Err(ComputedIntentMaterializationError::InvalidNode {
                             node: node.id,
@@ -140,6 +178,7 @@ pub(crate) fn materialize_computed_features(
             }
         };
         feature_nodes.insert(feature_id, node.id);
+        feature_suppression.insert(feature_id, node.suppressed);
         features.push(ComputedFeature {
             id: feature_id,
             label: node.symbol.as_str().to_owned(),
@@ -158,7 +197,30 @@ pub(crate) fn materialize_computed_features(
         .filter(|value| *value != 0)
         .map(ComputedFeatureCornerId::from_raw)
         .ok_or(ComputedIntentMaterializationError::IdentityExhausted)?;
-    let revision = ComputedFeatureRevision::from_raw(graph.identity().0.revision.raw());
+    if !graph
+        .nodes()
+        .values()
+        .any(|node| matches!(node.kind, IntentNodeKind::ComputedFeature { .. }))
+        && let Some((features, lifecycle)) = base
+    {
+        return evaluate_computed_features(
+            session,
+            features.clone(),
+            lifecycle,
+            &feature_nodes,
+            &feature_suppression,
+        );
+    }
+    let revision_raw = base.map_or(graph.identity().0.revision.raw(), |(_, lifecycle)| {
+        lifecycle
+            .revision
+            .raw()
+            .saturating_add(graph.identity().0.revision.raw())
+    });
+    if revision_raw == u64::MAX {
+        return Err(ComputedIntentMaterializationError::IdentityExhausted);
+    }
+    let revision = ComputedFeatureRevision::from_raw(revision_raw);
     let allocator = ComputedFeatureAllocatorHighWater {
         next_feature_id,
         next_corner_id,
@@ -167,9 +229,13 @@ pub(crate) fn materialize_computed_features(
         revision,
         allocator,
     };
-    let raw_document = document.0.as_u128() ^ FEATURE_DOCUMENT_NAMESPACE;
-    let document_id =
-        ComputedFeatureDocumentId::from_raw(if raw_document == 0 { 1 } else { raw_document });
+    let document_id = base.map_or_else(
+        || {
+            let raw_document = document.0.as_u128() ^ FEATURE_DOCUMENT_NAMESPACE;
+            ComputedFeatureDocumentId::from_raw(if raw_document == 0 { 1 } else { raw_document })
+        },
+        |(features, _)| features.id(),
+    );
     let mut bootstrap =
         ComputedFeatureObjectBootstrap::new(document, document_id, revision, allocator, lifecycle)?;
     for feature in features {
@@ -177,6 +243,22 @@ pub(crate) fn materialize_computed_features(
     }
     let features = bootstrap.finish()?;
 
+    evaluate_computed_features(
+        session,
+        features,
+        lifecycle,
+        &feature_nodes,
+        &feature_suppression,
+    )
+}
+
+fn evaluate_computed_features(
+    session: &RetainedSketchDocumentSession,
+    features: ComputedFeatureDocument,
+    feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
+    feature_nodes: &BTreeMap<ComputedFeatureId, NodeId>,
+    feature_suppression: &BTreeMap<ComputedFeatureId, bool>,
+) -> Result<ComputedIntentMaterialization, ComputedIntentMaterializationError> {
     let mut evaluation_allocator = ComputedEvaluationAllocator::default();
     let outcome = ComputedFeatureEvaluationSnapshot::capture(
         session,
@@ -215,10 +297,14 @@ pub(crate) fn materialize_computed_features(
                 reason: "evaluation returned an unowned feature".to_owned(),
             },
         )?;
-        let declaration = graph
-            .node(node)
-            .expect("feature-node ownership was built from this graph");
-        match (&evaluation.state, declaration.suppressed) {
+        let suppressed = feature_suppression
+            .get(&evaluation.feature)
+            .copied()
+            .ok_or(ComputedIntentMaterializationError::EvaluationRejected {
+                node,
+                reason: "evaluation suppression has no exact owner".to_owned(),
+            })?;
+        match (&evaluation.state, suppressed) {
             (ComputedFeatureEvaluationState::Current { .. }, false)
             | (ComputedFeatureEvaluationState::Suppressed, true) => {}
             (ComputedFeatureEvaluationState::Failed { failure }, false) => {
@@ -248,6 +334,7 @@ pub(crate) fn materialize_computed_features(
 
     Ok(ComputedIntentMaterialization {
         features,
+        feature_lifecycle_high_water,
         snapshot,
         evaluation_high_water: evaluation_allocator.high_water(),
     })

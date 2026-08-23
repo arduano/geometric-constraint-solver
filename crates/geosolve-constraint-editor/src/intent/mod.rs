@@ -211,6 +211,7 @@ pub struct IntentValidationEvidence {
 pub struct ColdIntentMaterialization {
     pub session: RetainedSketchDocumentSession,
     pub features: geosolve_sketch_features::ComputedFeatureDocument,
+    pub feature_lifecycle_high_water: geosolve_sketch_features::ComputedFeatureLifecycleHighWater,
     pub computed: geosolve_sketch_features::ComputedFeatureSnapshot,
     pub computed_evaluation_high_water:
         geosolve_sketch_features::ComputedEvaluationAllocatorHighWater,
@@ -287,6 +288,17 @@ pub struct ColdIntentMaterializer {
     model_scale: f64,
     request: DocumentSolveRequest,
     config: SolverConfig,
+    bootstrap: Option<ColdIntentBootstrapSeed>,
+}
+
+#[derive(Clone, Debug)]
+struct ColdIntentBootstrapSeed {
+    document: geosolve_sketch::SketchDocument,
+    features: geosolve_sketch_features::ComputedFeatureDocument,
+    feature_lifecycle_high_water: geosolve_sketch_features::ComputedFeatureLifecycleHighWater,
+    declarations: BTreeMap<NodeId, IntentNode>,
+    reservations: BTreeMap<ReservationId, IntentReservationRecord>,
+    ownership: IntentMaterializationMap,
 }
 
 impl ColdIntentMaterializer {
@@ -308,7 +320,35 @@ impl ColdIntentMaterializer {
             model_scale,
             request,
             config,
+            bootstrap: None,
         })
+    }
+
+    /// Installs one strictly decoded historical native seed beneath later
+    /// projectional declarations.
+    ///
+    /// The seed remains an implementation input, not a second scene authority:
+    /// every later accepted publication is independently rebuilt and validated
+    /// from the immutable per-object declarations plus current typed intent.
+    pub(crate) fn with_authenticated_bootstrap(
+        mut self,
+        decoded: &crate::DecodedFlatIntentBootstrap,
+        ownership: IntentMaterializationMap,
+    ) -> Result<Self, IntentMaterializationError> {
+        if decoded.document.id() != self.document
+            || decoded.document.model_scale().to_bits() != self.model_scale.to_bits()
+        {
+            return Err(IntentMaterializationError::BootstrapSeedMismatch);
+        }
+        self.bootstrap = Some(ColdIntentBootstrapSeed {
+            document: decoded.document.clone(),
+            features: decoded.features.clone(),
+            feature_lifecycle_high_water: decoded.feature_lifecycle_high_water,
+            declarations: decoded.declarations.clone(),
+            reservations: decoded.reservations.clone(),
+            ownership,
+        });
+        Ok(self)
     }
 
     /// Creates a materializer with the native sketch defaults.
@@ -386,26 +426,67 @@ impl ColdIntentMaterializer {
     ) -> Result<ColdIntentMaterialization, IntentMaterializationError> {
         candidate.graph().validate()?;
         preflight_supported(candidate)?;
+        if self.bootstrap.is_none()
+            && candidate
+                .graph()
+                .nodes()
+                .values()
+                .any(|node| matches!(node.kind, IntentNodeKind::Bootstrap { .. }))
+        {
+            return Err(IntentMaterializationError::BootstrapSeedMismatch);
+        }
         let host_inputs = decode_intent_external_inputs(candidate.external_inputs())
             .map_err(|error| IntentMaterializationError::HostInput(error.to_string()))?;
 
-        let document = SketchDocumentBuilder::empty(self.document, self.model_scale)?;
+        let (mut document, bootstrap_ownership, bootstrap_nodes) =
+            if let Some(seed) = &self.bootstrap {
+                validate_bootstrap_seed(candidate, seed)?;
+                (
+                    seed.document.clone(),
+                    Some(seed.ownership.clone()),
+                    seed.declarations.keys().copied().collect::<BTreeSet<_>>(),
+                )
+            } else {
+                (
+                    SketchDocumentBuilder::empty(self.document, self.model_scale)?,
+                    None,
+                    BTreeSet::new(),
+                )
+            };
+        if let Some(seed) = &self.bootstrap {
+            apply_bootstrap_instance(candidate, seed, &mut document)?;
+        }
         let desired_parameters = host_inputs.parameters;
         let desired_snapshots = host_inputs.external_snapshots;
+        let initial_parameters = self
+            .bootstrap
+            .as_ref()
+            .map_or_else(ParameterBatch::default, |_| desired_parameters.clone());
+        let initial_snapshots = self
+            .bootstrap
+            .as_ref()
+            .map_or_else(ExternalSnapshotSet::default, |_| desired_snapshots.clone());
         let mut session = RetainedSketchDocumentSession::new_with_inputs(
             document,
-            ParameterBatch::default(),
-            ExternalSnapshotSet::default(),
+            initial_parameters,
+            initial_snapshots,
             self.request,
             self.config,
         )?;
         require_current_acceptance(&session)?;
+        let materialized_reservations = candidate
+            .reservations()
+            .entries()
+            .iter()
+            .filter(|(_, record)| !bootstrap_nodes.contains(&record.owner_node))
+            .map(|(id, record)| (*id, *record))
+            .collect::<BTreeMap<_, _>>();
         let allocated = allocate_reservation_ledger(
             session
                 .design_document()
                 .persistent_identity_high_water()
                 .clone(),
-            candidate.reservations().entries(),
+            &materialized_reservations,
             candidate.graph(),
         )?;
         for reservations in &allocated.stages {
@@ -414,7 +495,12 @@ impl ColdIntentMaterializer {
                 SketchMaterializationBatch::retaining_unused_reservations(reservations.clone()),
             )?;
         }
-        let mut state = LoweringState::new(candidate.semantic_identity(), allocated.bindings);
+        let mut state = LoweringState::new(
+            candidate.semantic_identity(),
+            allocated.bindings,
+            bootstrap_ownership,
+            session.design_document(),
+        );
         let mut owner_reservations = allocated.live;
 
         for node_id in candidate.graph().canonical_schedule()? {
@@ -424,6 +510,9 @@ impl ColdIntentMaterializer {
                 .ok_or(IntentMaterializationError::UnknownNode(node_id))?;
             state.bind_schema_ports(node)?;
             let owner_reservation = owner_reservations.remove(&node.id);
+            if bootstrap_nodes.contains(&node.id) {
+                continue;
+            }
             if node.suppressed {
                 try_publish_host_inputs(
                     &mut session,
@@ -527,6 +616,9 @@ impl ColdIntentMaterializer {
             accepted.document().id(),
             &session,
             &mut ownership,
+            self.bootstrap
+                .as_ref()
+                .map(|seed| (&seed.features, seed.feature_lifecycle_high_water)),
         )?;
         let validation = IntentValidationEvidence {
             semantic: candidate.semantic_identity(),
@@ -563,6 +655,7 @@ impl ColdIntentMaterializer {
         Ok(ColdIntentMaterialization {
             session,
             features: computed.features,
+            feature_lifecycle_high_water: computed.feature_lifecycle_high_water,
             computed: computed.snapshot,
             computed_evaluation_high_water: computed.evaluation_high_water,
             ownership,
@@ -701,6 +794,8 @@ pub enum IntentMaterializationError {
     AcceptedAuthorityIdentityMismatch,
     #[error("persisted accepted intent authority does not match cold reconstructed evidence")]
     AcceptedAuthorityEvidenceMismatch,
+    #[error("the immutable historical bootstrap seed does not match its typed declarations")]
+    BootstrapSeedMismatch,
 }
 
 impl From<crate::intent_computed::ComputedIntentMaterializationError>
@@ -752,6 +847,7 @@ impl IntentMaterializationError {
             }
             Self::AcceptedAuthorityIdentityMismatch => "accepted-authority-identity-mismatch",
             Self::AcceptedAuthorityEvidenceMismatch => "accepted-authority-evidence-mismatch",
+            Self::BootstrapSeedMismatch => "bootstrap-seed-mismatch",
             Self::Graph(_) => "invalid-intent-graph",
             Self::Document(_) | Self::Session(_) => "native-materialization-rejected",
             Self::Evidence(_) | Self::Json(_) => "materialization-evidence-rejected",
@@ -759,6 +855,89 @@ impl IntentMaterializationError {
             _ => "invalid-intent-lowering",
         }
     }
+}
+
+fn validate_bootstrap_seed(
+    candidate: &dyn IntentMaterializationSource,
+    seed: &ColdIntentBootstrapSeed,
+) -> Result<(), IntentMaterializationError> {
+    let declarations = candidate
+        .graph()
+        .nodes()
+        .iter()
+        .filter_map(|(id, node)| {
+            matches!(node.kind, IntentNodeKind::Bootstrap { .. }).then_some((*id, node.clone()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let reservation_owners = seed.declarations.keys().copied().collect::<BTreeSet<_>>();
+    let reservations = candidate
+        .reservations()
+        .entries()
+        .iter()
+        .filter(|(_, record)| reservation_owners.contains(&record.owner_node))
+        .map(|(id, record)| (*id, *record))
+        .collect::<BTreeMap<_, _>>();
+    if declarations != seed.declarations || reservations != seed.reservations {
+        return Err(IntentMaterializationError::BootstrapSeedMismatch);
+    }
+    Ok(())
+}
+
+fn apply_bootstrap_instance(
+    candidate: &dyn IntentMaterializationSource,
+    seed: &ColdIntentBootstrapSeed,
+    document: &mut geosolve_sketch::SketchDocument,
+) -> Result<(), IntentMaterializationError> {
+    for (native, leaf) in &seed.ownership.writable_leaves {
+        let Some(value) = candidate.instance().values().get(leaf) else {
+            return Err(IntentMaterializationError::BootstrapSeedMismatch);
+        };
+        let IntentLiteral::Quantity { value, unit } = value else {
+            return Err(IntentMaterializationError::InvalidWritableLeaf { leaf: *leaf });
+        };
+        if !value.is_finite() {
+            return Err(IntentMaterializationError::InvalidWritableLeaf { leaf: *leaf });
+        }
+        match native {
+            IntentNativeWritableLeaf::PointX { point } => {
+                if *unit != IntentUnit::Length {
+                    return Err(IntentMaterializationError::InvalidWritableLeaf { leaf: *leaf });
+                }
+                let mut position = document
+                    .point(*point)
+                    .ok_or(IntentMaterializationError::BootstrapSeedMismatch)?
+                    .position;
+                position[0] = *value;
+                document.set_point_position(*point, position)?;
+            }
+            IntentNativeWritableLeaf::PointY { point } => {
+                if *unit != IntentUnit::Length {
+                    return Err(IntentMaterializationError::InvalidWritableLeaf { leaf: *leaf });
+                }
+                let mut position = document
+                    .point(*point)
+                    .ok_or(IntentMaterializationError::BootstrapSeedMismatch)?
+                    .position;
+                position[1] = *value;
+                document.set_point_position(*point, position)?;
+            }
+            IntentNativeWritableLeaf::ScalarValue { scalar } => {
+                let native = document
+                    .scalar(*scalar)
+                    .ok_or(IntentMaterializationError::BootstrapSeedMismatch)?;
+                let expected = match native.unit {
+                    ScalarUnit::Length => IntentUnit::Length,
+                    ScalarUnit::Angle => IntentUnit::Angle,
+                    ScalarUnit::Parameter => IntentUnit::Dimensionless,
+                };
+                if *unit != expected {
+                    return Err(IntentMaterializationError::InvalidWritableLeaf { leaf: *leaf });
+                }
+                document.set_scalar_value(*scalar, *value)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 struct SketchDocumentBuilder;
@@ -811,10 +990,10 @@ fn preflight_supported(
             | IntentNodeKind::Operation { .. }
             | IntentNodeKind::Parameter { .. }
             | IntentNodeKind::External { .. }
+            | IntentNodeKind::Bootstrap { .. }
             | IntentNodeKind::Annotation
             | IntentNodeKind::Identity { .. }
             | IntentNodeKind::Dimension { .. } => true,
-            IntentNodeKind::Bootstrap { .. } => false,
         };
         if !supported {
             return Err(IntentMaterializationError::UnsupportedNode { node: node.id });
@@ -1105,31 +1284,75 @@ struct LoweringState {
     contact_states: BTreeMap<ContactId, (CurveSpan, i32, ContactDomain)>,
     topology_aggregate_nodes: BTreeMap<IntentPortRef, NodeId>,
     consumed_reservations: BTreeSet<ReservationId>,
+    seed_node_ownership: BTreeMap<NodeId, Vec<IntentNativeBinding>>,
 }
 
 impl LoweringState {
     fn new(
         semantic: IntentSemanticIdentity,
-        reservation_bindings: BTreeMap<ReservationId, IntentNativeBinding>,
+        mut reservation_bindings: BTreeMap<ReservationId, IntentNativeBinding>,
+        bootstrap: Option<IntentMaterializationMap>,
+        document: &geosolve_sketch::SketchDocument,
     ) -> Self {
+        let mut port_bindings = BTreeMap::new();
+        let mut reverse_leaves = BTreeMap::new();
+        let mut consumed_reservations = BTreeSet::new();
+        let mut seed_node_ownership = BTreeMap::new();
+        if let Some(bootstrap) = bootstrap {
+            for (reservation, binding) in bootstrap.reservations {
+                reservation_bindings.insert(reservation, binding);
+                consumed_reservations.insert(reservation);
+            }
+            port_bindings.extend(bootstrap.ports);
+            reverse_leaves.extend(bootstrap.writable_leaves);
+            seed_node_ownership.extend(
+                bootstrap
+                    .nodes
+                    .into_iter()
+                    .map(|owner| (owner.node, owner.owned)),
+            );
+        }
         Self {
             semantic,
             reservation_bindings,
-            port_bindings: BTreeMap::new(),
-            reverse_leaves: BTreeMap::new(),
-            point_positions: BTreeMap::new(),
-            scalar_domains: BTreeMap::new(),
-            parameter_kinds: BTreeMap::new(),
+            port_bindings,
+            reverse_leaves,
+            point_positions: document
+                .points()
+                .iter()
+                .map(|point| (point.id, point.position))
+                .collect(),
+            scalar_domains: document
+                .scalars()
+                .iter()
+                .map(|scalar| (scalar.id, scalar.domain))
+                .collect(),
+            parameter_kinds: document
+                .parameters()
+                .iter()
+                .map(|parameter| (parameter.id, parameter.kind))
+                .collect(),
             aggregate_bindings: BTreeMap::new(),
-            contact_states: BTreeMap::new(),
+            contact_states: document
+                .contacts()
+                .iter()
+                .map(|contact| (contact.id, (contact.curve, contact.winding, contact.domain)))
+                .collect(),
             topology_aggregate_nodes: BTreeMap::new(),
-            consumed_reservations: BTreeSet::new(),
+            consumed_reservations,
+            seed_node_ownership,
         }
     }
 
     fn bind_schema_ports(&mut self, node: &IntentNode) -> Result<(), IntentMaterializationError> {
         for port in node.ports.values() {
             let reference = port.as_ref(node.id);
+            if let Some(binding) = self.port_bindings.get(&reference).copied() {
+                if matches!(port.flow, IntentIdentityFlow::Created { .. }) {
+                    self.bind_reverse_leaves(node.id, port, binding)?;
+                }
+                continue;
+            }
             let binding = match port.flow {
                 IntentIdentityFlow::Created { reservation } => Some(
                     *self
@@ -1314,7 +1537,7 @@ impl LoweringState {
         self,
         records: &BTreeMap<ReservationId, IntentReservationRecord>,
     ) -> IntentMaterializationMap {
-        let mut owned = BTreeMap::<NodeId, Vec<IntentNativeBinding>>::new();
+        let mut owned = self.seed_node_ownership;
         for (reservation, binding) in &self.reservation_bindings {
             if let Some(record) = records.get(reservation) {
                 owned.entry(record.owner_node).or_default().push(*binding);

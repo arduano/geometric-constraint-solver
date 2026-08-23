@@ -20,6 +20,9 @@ use geosolve_sketch_intent::{
 };
 use thiserror::Error;
 
+use crate::intent_bootstrap::{
+    decode_flat_intent_bootstrap_prefix, flat_intent_bootstrap_prefix_materialization_map,
+};
 use crate::{
     AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
     ConstraintEditor, EditorEffect, EditorError, EditorScene, FeatureAuthoringCandidate,
@@ -122,10 +125,11 @@ impl ProjectionalEditorSession {
     /// already restored and independently accepted native scene.
     ///
     /// This migration seam intentionally accepts only a current native solve
-    /// and an empty computed-feature sidecar. Mixed bootstrap/new-declaration
-    /// lowering and computed-Fillet projection remain separate materializer
-    /// work; failing closed here prevents a legacy scene from being installed
-    /// with incomplete visual or ownership authority.
+    /// whose per-object sketch and computed-feature declarations authenticate
+    /// the complete restored sidecar. Later ordinary declarations use the
+    /// separate cold bootstrap-prefix path; failing closed here prevents a
+    /// legacy scene from being installed with incomplete visual or ownership
+    /// authority.
     ///
     /// # Errors
     ///
@@ -136,9 +140,6 @@ impl ProjectionalEditorSession {
         native: RetainedSketchDocumentSession,
     ) -> Result<Self, ProjectionalEditorError> {
         let decoded = decode_flat_intent_bootstrap(&intent)?;
-        if !decoded.features.features().is_empty() {
-            return Err(ProjectionalEditorError::BootstrapComputedFeaturesUnsupported);
-        }
         if native.design_document() != &decoded.document {
             return Err(ProjectionalEditorError::BootstrapDocumentMismatch);
         }
@@ -177,12 +178,14 @@ impl ProjectionalEditorSession {
             decoded.document.id(),
             &native,
             &mut ownership,
+            Some((&decoded.features, decoded.feature_lifecycle_high_water)),
         )
         .map_err(crate::IntentMaterializationError::from)
         .map_err(ProjectionalCoordinatorError::from)?;
         let materialization = ColdIntentMaterialization {
             session: native,
             features: computed.features.clone(),
+            feature_lifecycle_high_water: computed.feature_lifecycle_high_water,
             computed: computed.snapshot.clone(),
             computed_evaluation_high_water: computed.evaluation_high_water,
             ownership,
@@ -207,6 +210,9 @@ impl ProjectionalEditorSession {
             decoded.document.id(),
             decoded.document.model_scale(),
         )
+        .and_then(|materializer| {
+            materializer.with_authenticated_bootstrap(&decoded, materialization.ownership.clone())
+        })
         .map_err(ProjectionalCoordinatorError::from)?;
         Ok(Self::new(
             ProjectionalIntentCoordinator::restore_authenticated_bootstrap(
@@ -215,6 +221,34 @@ impl ProjectionalEditorSession {
                 materialization,
             )?,
         ))
+    }
+
+    /// Cold-restores a canonical workspace whose immutable historical
+    /// bootstrap prefix is followed by ordinary projectional declarations.
+    ///
+    /// Stored flat scene bytes are not installed. They remain host comparison
+    /// evidence while the returned coordinator independently reconstructs its
+    /// accepted authority from the typed prefix and declaration DAG.
+    ///
+    /// # Errors
+    ///
+    /// Returns a strict prefix, seed-authentication, cold-materialization, or
+    /// accepted-evidence mismatch without installing partial state.
+    pub fn restore_with_bootstrap_prefix(
+        intent: IntentSession,
+    ) -> Result<Self, ProjectionalEditorError> {
+        let decoded = decode_flat_intent_bootstrap_prefix(&intent)?;
+        let ownership = flat_intent_bootstrap_prefix_materialization_map(&intent)?;
+        let materializer = ColdIntentMaterializer::with_default_policy(
+            decoded.document.id(),
+            decoded.document.model_scale(),
+        )
+        .and_then(|materializer| materializer.with_authenticated_bootstrap(&decoded, ownership))
+        .map_err(ProjectionalCoordinatorError::from)?;
+        Ok(Self::new(ProjectionalIntentCoordinator::restore(
+            intent,
+            materializer,
+        )?))
     }
 
     /// Creates a session with explicit transient editor and solve-work policy.
@@ -1223,8 +1257,6 @@ pub enum ProjectionalEditorError {
     BootstrapCurrentAcceptanceRequired,
     #[error("flat bootstrap declarations and the restored native document disagree")]
     BootstrapDocumentMismatch,
-    #[error("flat bootstrap computed features require authenticated projectional feature lowering")]
-    BootstrapComputedFeaturesUnsupported,
     #[error("flat bootstrap accepted state omitted independent solve validation evidence")]
     BootstrapValidationMissing,
     #[error("flat bootstrap accepted state failed independent solve validation")]

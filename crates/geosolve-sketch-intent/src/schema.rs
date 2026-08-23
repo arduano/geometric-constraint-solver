@@ -7,9 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{
-    MAX_INTENT_NODE_CHILDREN, MAX_INTENT_NODE_FIELDS, MAX_INTENT_NODE_INPUTS,
-};
+use crate::model::{MAX_INTENT_NODE_CHILDREN, MAX_INTENT_NODE_FIELDS, MAX_INTENT_NODE_INPUTS};
 use crate::{
     AggregateKind, ComputedFeatureKind, ConstraintKind, DimensionKind, ExternalIntentKind,
     GeometryRecipeKind, InputRole, InputSlot, IntentChildSchema, IntentFieldKey, IntentKey,

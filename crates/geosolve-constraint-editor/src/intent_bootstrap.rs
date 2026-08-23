@@ -23,9 +23,10 @@ use geosolve_sketch_features::{
 };
 use geosolve_sketch_intent::{
     BootstrapNativeKind, InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation, IntentKey,
-    IntentKeyError, IntentModelError, IntentNodeDraft, IntentNodeKind, IntentPatch,
+    IntentKeyError, IntentLiteral, IntentModelError, IntentNodeDraft, IntentNodeKind, IntentPatch,
     IntentPatchOperation, IntentPatchPolicy, IntentPlanError, IntentPortRole, IntentPortSelector,
-    IntentSession, IntentSessionError, IntentSessionId, MaterializationEvidence, PatchPortRef,
+    IntentSession, IntentSessionError, IntentSessionId, IntentUnit, LeafField,
+    MaterializationEvidence, PatchPortRef,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
@@ -117,6 +118,12 @@ pub struct DecodedFlatIntentBootstrap {
     pub document: SketchDocument,
     pub features: ComputedFeatureDocument,
     pub feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
+    pub(crate) declarations:
+        BTreeMap<geosolve_sketch_intent::NodeId, geosolve_sketch_intent::IntentNode>,
+    pub(crate) reservations: BTreeMap<
+        geosolve_sketch_intent::ReservationId,
+        geosolve_sketch_intent::IntentReservationRecord,
+    >,
 }
 
 /// Builds exact logical/native bindings for a strictly decoded bootstrap.
@@ -134,19 +141,41 @@ pub struct DecodedFlatIntentBootstrap {
 pub fn flat_intent_bootstrap_materialization_map(
     session: &IntentSession,
 ) -> Result<IntentMaterializationMap, IntentBootstrapError> {
-    let authority = session
-        .accepted()
-        .ok_or(IntentBootstrapError::NonCanonicalBootstrap)?;
+    bootstrap_materialization_map(session, false)
+}
+
+/// Builds the exact native bindings owned by a previously authenticated
+/// bootstrap prefix while ignoring later ordinary declarations.
+///
+/// # Errors
+///
+/// Returns a typed payload error when any admitted bootstrap object cannot be
+/// bound to its exact persistent native identity.
+pub(crate) fn flat_intent_bootstrap_prefix_materialization_map(
+    session: &IntentSession,
+) -> Result<IntentMaterializationMap, IntentBootstrapError> {
+    bootstrap_materialization_map(session, true)
+}
+
+fn bootstrap_materialization_map(
+    session: &IntentSession,
+    allow_later_declarations: bool,
+) -> Result<IntentMaterializationMap, IntentBootstrapError> {
+    let semantic = session.semantic_identity();
     let mut nodes = Vec::new();
     let mut ports = Vec::new();
     let mut reservations = Vec::new();
+    let mut writable_leaves = Vec::new();
 
     for node in session.graph().nodes().values() {
         let IntentNodeKind::Bootstrap { object } = &node.kind else {
+            if allow_later_declarations {
+                continue;
+            }
             return Err(IntentBootstrapError::MixedDeclarationGraph);
         };
         let exact = bootstrap_exact_bindings(node, object)?;
-        let mut owned = Vec::new();
+        let mut owned = bootstrap_exact_owned_bindings(object)?;
         for port in node.ports.values() {
             let reference = port.as_ref(node.id);
             let binding = exact
@@ -156,6 +185,29 @@ pub fn flat_intent_bootstrap_materialization_map(
                     *binding
                 });
             ports.push((reference, binding));
+            for field in &port.writable {
+                let native = match (binding, field) {
+                    (IntentNativeBinding::Point(point), geosolve_sketch_intent::LeafField::X) => {
+                        crate::IntentNativeWritableLeaf::PointX { point }
+                    }
+                    (IntentNativeBinding::Point(point), geosolve_sketch_intent::LeafField::Y) => {
+                        crate::IntentNativeWritableLeaf::PointY { point }
+                    }
+                    (
+                        IntentNativeBinding::Scalar(scalar),
+                        geosolve_sketch_intent::LeafField::Value,
+                    ) => crate::IntentNativeWritableLeaf::ScalarValue { scalar },
+                    _ => return Err(IntentBootstrapError::InvalidPayload),
+                };
+                writable_leaves.push((
+                    native,
+                    geosolve_sketch_intent::LeafRef {
+                        node: node.id,
+                        port: port.id,
+                        field: *field,
+                    },
+                ));
+            }
             if let geosolve_sketch_intent::IntentIdentityFlow::Created { reservation } = port.flow {
                 reservations.push((reservation, binding));
                 if !matches!(binding, IntentNativeBinding::Logical(_)) {
@@ -172,15 +224,35 @@ pub fn flat_intent_bootstrap_materialization_map(
     }
     ports.sort_unstable_by_key(|(port, _)| *port);
     reservations.sort_unstable_by_key(|(reservation, _)| *reservation);
+    writable_leaves.sort_unstable_by_key(|(native, _)| *native);
     nodes.sort_unstable_by_key(|node| node.node);
     Ok(IntentMaterializationMap {
-        semantic: authority.target,
+        semantic,
         nodes,
         ports,
         reservations,
-        writable_leaves: Vec::new(),
+        writable_leaves,
         aggregates: Vec::new(),
     })
+}
+
+fn bootstrap_exact_owned_bindings(
+    object: &IntentBootstrapObject,
+) -> Result<Vec<IntentNativeBinding>, IntentBootstrapError> {
+    if object.codec.as_str() != BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1 {
+        return Ok(Vec::new());
+    }
+    let feature = strict_payload::<ComputedFeature>(&object.payload)?;
+    let mut owned = vec![IntentNativeBinding::ComputedFeature(feature.id)];
+    let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+        &feature.definition;
+    owned.extend(
+        fillet
+            .corners
+            .iter()
+            .map(|corner| IntentNativeBinding::ComputedFeatureCorner(corner.id)),
+    );
+    Ok(owned)
 }
 
 fn bootstrap_exact_bindings(
@@ -260,11 +332,14 @@ fn bootstrap_exact_bindings(
             };
             vec![(port(role, 0), B::Source(value.source))]
         }
+        BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1 => {
+            let value = strict_payload::<ComputedFeature>(&object.payload)?;
+            vec![(port(R::Feature, 0), B::ComputedFeature(value.id))]
+        }
         BOOTSTRAP_DOCUMENT_HEADER_CODEC_V1
         | BOOTSTRAP_GEOMETRY_ROLE_CODEC_V1
         | BOOTSTRAP_PARAMETER_BINDING_CODEC_V1
         | BOOTSTRAP_PARAMETER_OUTPUT_CODEC_V1
-        | BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1
         | BOOTSTRAP_SOURCE_ORDER_ENTRY_CODEC_V1
         | BOOTSTRAP_USER_INACTIVE_ENTRY_CODEC_V1
         | BOOTSTRAP_HOST_ACTIVATION_HEADER_CODEC_V1
@@ -390,22 +465,64 @@ pub fn normalize_flat_sketch_intent_with_accepted_materialization(
     )?);
 
     for point in document.points() {
-        operations.push(native_element_operation(
+        let operation = native_element_operation(
             document,
             DocumentElementId::Point(point.id),
             BootstrapNativeKind::Point,
             BOOTSTRAP_POINT_CODEC_V1,
             point,
-        )?);
+        )?;
+        operations.push(with_bootstrap_instance(
+            operation,
+            IntentPortSelector::Node {
+                role: IntentPortRole::Primary,
+                index: 0,
+            },
+            [
+                (
+                    LeafField::X,
+                    IntentLiteral::Quantity {
+                        value: point.position[0],
+                        unit: IntentUnit::Length,
+                    },
+                ),
+                (
+                    LeafField::Y,
+                    IntentLiteral::Quantity {
+                        value: point.position[1],
+                        unit: IntentUnit::Length,
+                    },
+                ),
+            ],
+        ));
     }
     for scalar in document.scalars() {
-        operations.push(native_element_operation(
+        let operation = native_element_operation(
             document,
             DocumentElementId::Scalar(scalar.id),
             BootstrapNativeKind::Scalar,
             BOOTSTRAP_SCALAR_CODEC_V1,
             scalar,
-        )?);
+        )?;
+        let unit = match scalar.unit {
+            geosolve_sketch::ScalarUnit::Length => IntentUnit::Length,
+            geosolve_sketch::ScalarUnit::Angle => IntentUnit::Angle,
+            geosolve_sketch::ScalarUnit::Parameter => IntentUnit::Dimensionless,
+        };
+        operations.push(with_bootstrap_instance(
+            operation,
+            IntentPortSelector::Node {
+                role: IntentPortRole::Target,
+                index: 0,
+            },
+            [(
+                LeafField::Value,
+                IntentLiteral::Quantity {
+                    value: scalar.value,
+                    unit,
+                },
+            )],
+        ));
     }
     for curve in document.curves() {
         operations.push(native_element_operation(
@@ -574,6 +691,36 @@ pub fn normalize_flat_sketch_intent_with_accepted_materialization(
 pub fn decode_flat_intent_bootstrap(
     session: &IntentSession,
 ) -> Result<DecodedFlatIntentBootstrap, IntentBootstrapError> {
+    decode_flat_intent_bootstrap_impl(session, false)
+}
+
+/// Strictly reconstructs the immutable per-object bootstrap prefix of a mixed
+/// projectional graph.
+///
+/// Unlike [`decode_flat_intent_bootstrap`], this seam admits later ordinary
+/// declarations. It still requires the complete bootstrap node/reservation set
+/// to be byte-for-byte equal to the canonical history-free normalization, so a
+/// later declaration cannot mutate, add, remove, or impersonate a historical
+/// native object.
+///
+/// # Errors
+///
+/// Returns the ordinary bootstrap decoding failures, including a noncanonical
+/// prefix. The supplied session is never mutated.
+pub fn decode_flat_intent_bootstrap_prefix(
+    session: &IntentSession,
+) -> Result<DecodedFlatIntentBootstrap, IntentBootstrapError> {
+    decode_flat_intent_bootstrap_impl(session, true)
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive strict-codec dispatch keeps the migration boundary auditable"
+)]
+fn decode_flat_intent_bootstrap_impl(
+    session: &IntentSession,
+    allow_later_declarations: bool,
+) -> Result<DecodedFlatIntentBootstrap, IntentBootstrapError> {
     let mut header = None;
     let mut points = Vec::<DesignPoint>::new();
     let mut scalars = Vec::<DesignScalar>::new();
@@ -596,6 +743,9 @@ pub fn decode_flat_intent_bootstrap(
 
     for node in session.graph().nodes().values() {
         let IntentNodeKind::Bootstrap { object } = &node.kind else {
+            if allow_later_declarations {
+                continue;
+            }
             return Err(IntentBootstrapError::MixedDeclarationGraph);
         };
         let codec = object.codec.as_str();
@@ -765,15 +915,18 @@ pub fn decode_flat_intent_bootstrap(
     let features = features.finish()?;
     validate_feature_bundle(&document, &features, header.feature_lifecycle_high_water)?;
 
-    let evidence_document = session.accepted().and_then(|authority| {
-        std::str::from_utf8(&authority.evidence.materialization)
-            .ok()
-            .and_then(|json| {
-                SketchDocument::from_draft_v5_json(json)
-                    .or_else(|_| SketchDocument::from_json(json))
-                    .ok()
-            })
-    });
+    let evidence_document = (!allow_later_declarations)
+        .then(|| session.accepted())
+        .flatten()
+        .and_then(|authority| {
+            std::str::from_utf8(&authority.evidence.materialization)
+                .ok()
+                .and_then(|json| {
+                    SketchDocument::from_draft_v5_json(json)
+                        .or_else(|_| SketchDocument::from_json(json))
+                        .ok()
+                })
+        });
     let canonical = normalize_flat_sketch_intent_with_accepted_materialization(
         session.id(),
         &document,
@@ -781,7 +934,35 @@ pub fn decode_flat_intent_bootstrap(
         &features,
         header.feature_lifecycle_high_water,
     )?;
-    if canonical.graph() != session.graph()
+    let declarations = canonical.graph().nodes().clone();
+    let nodes = declarations.keys().copied().collect::<BTreeSet<_>>();
+    let reservations = canonical.reservations().entries().clone();
+    if allow_later_declarations {
+        let actual_nodes = session
+            .graph()
+            .nodes()
+            .iter()
+            .filter_map(|(id, node)| {
+                matches!(node.kind, IntentNodeKind::Bootstrap { .. }).then_some((*id, node))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let expected_nodes = canonical
+            .graph()
+            .nodes()
+            .iter()
+            .map(|(id, node)| (*id, node))
+            .collect::<BTreeMap<_, _>>();
+        let actual_reservations = session
+            .reservations()
+            .entries()
+            .iter()
+            .filter(|(_, record)| nodes.contains(&record.owner_node))
+            .map(|(id, record)| (*id, *record))
+            .collect::<BTreeMap<_, _>>();
+        if actual_nodes != expected_nodes || actual_reservations != reservations {
+            return Err(IntentBootstrapError::NonCanonicalBootstrap);
+        }
+    } else if canonical.graph() != session.graph()
         || canonical.instance() != session.instance()
         || canonical.reservations() != session.reservations()
         || canonical.external_inputs() != session.external_inputs()
@@ -795,6 +976,8 @@ pub fn decode_flat_intent_bootstrap(
         document,
         features,
         feature_lifecycle_high_water: header.feature_lifecycle_high_water,
+        declarations,
+        reservations,
     })
 }
 
@@ -913,6 +1096,25 @@ fn create_operation<T: Serialize>(
         draft: Box::new(draft),
         cell: None,
     })
+}
+
+fn with_bootstrap_instance<const N: usize>(
+    operation: IntentPatchOperation,
+    port: IntentPortSelector,
+    values: [(LeafField, IntentLiteral); N],
+) -> IntentPatchOperation {
+    let IntentPatchOperation::CreateNode { alias, draft, cell } = operation else {
+        unreachable!("bootstrap object helpers create exactly one declaration")
+    };
+    let mut draft = *draft;
+    for (field, value) in values {
+        draft = draft.with_instance_leaf(port, field, value);
+    }
+    IntentPatchOperation::CreateNode {
+        alias,
+        draft: Box::new(draft),
+        cell,
+    }
 }
 
 fn canonical_payload<T: Serialize>(value: &T) -> Result<Vec<u8>, IntentBootstrapError> {
