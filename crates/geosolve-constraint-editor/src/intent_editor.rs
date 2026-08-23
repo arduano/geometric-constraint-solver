@@ -18,12 +18,13 @@ use geosolve_sketch_intent::{
 use thiserror::Error;
 
 use crate::{
-    ColdIntentMaterialization, ColdIntentMaterializer, ConstraintEditor, EditorEffect, EditorError,
-    EditorScene, IntentBootstrapError, IntentInspectorProjection, IntentSourceEditError,
-    IntentSourceTokenId, IntentValidationEvidence, IntentWorkbenchProjection, Modifiers,
-    PointerInput, ProjectionalAuthoringError, ProjectionalCoordinatorError,
-    ProjectionalIntentCoordinator, ProjectionalPatchOutcome, SelectionItem, Viewport,
-    decode_flat_intent_bootstrap, flat_intent_bootstrap_materialization_map,
+    AuthoringApplication, ColdIntentMaterialization, ColdIntentMaterializer, ConstraintEditor,
+    EditorEffect, EditorError, EditorScene, IntentBootstrapError, IntentInspectorProjection,
+    IntentSourceEditError, IntentSourceTokenId, IntentValidationEvidence,
+    IntentWorkbenchProjection, Modifiers, PointerInput, ProjectionalAuthoringError,
+    ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
+    SelectionItem, Viewport, decode_flat_intent_bootstrap,
+    flat_intent_bootstrap_materialization_map, projectional_application_patch,
     projectional_construction_patch,
 };
 
@@ -320,6 +321,49 @@ impl ProjectionalEditorSession {
     ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
         self.cancel_interaction();
         let outcome = self.coordinator.apply_patch(patch)?;
+        if outcome.disposition == IntentPlanDisposition::Accepted {
+            self.clear_transient_selection();
+        }
+        self.reconcile_declaration_selection();
+        Ok(outcome)
+    }
+
+    /// Applies one complete contextual relation or dimension application
+    /// through the sole typed intent history.
+    ///
+    /// Applicability and explicit branch defaults are resolved by the same
+    /// native authoring owner as the flat coordinator. Operands are rebound
+    /// only through the exact accepted reverse-ownership map, and a valid but
+    /// unsolved declaration remains retained above the prior accepted scene.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stale application/ownership, native authoring, planning,
+    /// materialization or publication error without a partial transaction.
+    pub fn apply_authoring_application(
+        &mut self,
+        application: &AuthoringApplication,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        self.cancel_interaction();
+        let translated = {
+            let accepted = self
+                .coordinator
+                .accepted_materialization()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            let accepted_state = accepted
+                .session
+                .accepted_state_for_current_input()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            projectional_application_patch(
+                self.coordinator.intent().identity(),
+                self.coordinator.intent(),
+                &accepted.ownership,
+                accepted.session.design_document(),
+                accepted_state.document(),
+                application,
+            )?
+        };
+        let outcome = self.coordinator.apply_patch(translated.patch)?;
         if outcome.disposition == IntentPlanDisposition::Accepted {
             self.clear_transient_selection();
         }

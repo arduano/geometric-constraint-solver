@@ -9,22 +9,29 @@
 use std::collections::BTreeMap;
 
 use geosolve_sketch::{
-    ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId, DocumentArcSweep,
-    DocumentBSplineForm, DocumentCoordinateAxis, DocumentDirectionSense, TangentOrientation,
+    ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
+    DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentCenterRef,
+    DocumentCoordinateAxis, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
+    DocumentDimensionMode, DocumentDirectionSense, SketchDatum, SketchDocument, TangentOrientation,
 };
 use geosolve_sketch_intent::{
-    ConstraintKind, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey, IntentIdentityFlow,
-    IntentKey, IntentKeyError, IntentLiteral, IntentNodeDraft, IntentNodeKind, IntentPatch,
-    IntentPatchOperation, IntentPatchPolicy, IntentPortRole, IntentPortSelector, IntentSession,
-    IntentSessionIdentity, IntentUnit, LeafField, PatchPortRef,
+    ConstraintKind, DimensionKind as IntentDimensionKind, GeometryRecipeKind, InputRole, InputSlot,
+    IntentFieldKey, IntentIdentityFlow, IntentKey, IntentKeyError, IntentLiteral, IntentNodeDraft,
+    IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy, IntentPortRole,
+    IntentPortSelector, IntentSession, IntentSessionIdentity, IntentUnit, LeafField, PatchPortRef,
 };
 use thiserror::Error;
 
 use crate::{
-    ConstructionCommitPlan, ConstructionPoint, ConstructionRelationDefinition,
-    ConstructionRelationProvenance, DraftContactDescriptor, DraftCurveSlot, DraftPointSlot,
-    DraftSpanSlot, GeometryToolVariant, InferredRelation, IntentMaterializationMap,
-    IntentNativeBinding, MAX_CONSTRUCTION_PLAN_RELATIONS,
+    AuthoringApplication, AuthoringTool, ConstraintRelationChoice, ConstructionCommitPlan,
+    ConstructionPoint, ConstructionRelationDefinition, ConstructionRelationProvenance,
+    DimensionKind as AuthoringDimensionKind, DraftContactDescriptor, DraftCurveSlot,
+    DraftPointSlot, DraftSpanSlot, GeometryToolVariant, InferredRelation, IntentMaterializationMap,
+    IntentNativeBinding, MAX_CONSTRUCTION_PLAN_RELATIONS, ResolvedConstraintKind, SelectionItem,
+};
+
+use crate::coordinator::{
+    dimension_target, resolve_constraint, resolved_authoring_constraint_request,
 };
 
 /// A complete typed transaction derived from one authenticated M78 construction plan.
@@ -36,6 +43,14 @@ use crate::{
 pub struct ProjectionalConstructionPatch {
     pub patch: IntentPatch,
     pub geometry_alias: IntentKey,
+}
+
+/// One complete typed relation or dimension transaction produced from the
+/// ordinary headless authoring state.
+#[derive(Clone, Debug)]
+pub struct ProjectionalApplicationPatch {
+    pub patch: IntentPatch,
+    pub declaration_alias: IntentKey,
 }
 
 /// Fail-closed construction-to-intent translation error.
@@ -58,6 +73,10 @@ pub enum ProjectionalAuthoringError {
     InvalidCreatedSlot,
     #[error("the construction plan contains an unsupported inferred relation")]
     UnsupportedRelation,
+    #[error("the contextual relation or dimension resolution no longer matches its operands")]
+    StaleAuthoringResolution,
+    #[error("the native contextual authoring request could not be represented: {0}")]
+    InvalidAuthoringRequest(String),
     #[error("the construction plan's intrinsic relation inventory does not match the recipe")]
     IntrinsicRelationMismatch,
     #[error("the construction plan's curve-role inventory cannot be represented by the recipe")]
@@ -174,6 +193,523 @@ pub fn projectional_construction_patch(
     })
 }
 
+/// Converts one complete contextual relation or dimension application into
+/// the canonical intent patch vocabulary.
+///
+/// The existing authoring resolver remains the sole owner of applicability,
+/// contact-domain defaults and explicit branch metadata. Native operands are
+/// resolved only through the accepted logical/native ownership map, and the
+/// returned declaration uses retain-failure policy just like an ordinary
+/// explicit relation or dimension edit.
+///
+/// # Errors
+///
+/// Returns a typed stale identity/ownership, contextual-resolution, native-
+/// request or operand-ownership error without changing intent or native state.
+pub fn projectional_application_patch(
+    expected: IntentSessionIdentity,
+    intent: &IntentSession,
+    ownership: &IntentMaterializationMap,
+    document: &SketchDocument,
+    accepted_document: &SketchDocument,
+    application: &AuthoringApplication,
+) -> Result<ProjectionalApplicationPatch, ProjectionalAuthoringError> {
+    if expected != intent.identity() {
+        return Err(ProjectionalAuthoringError::StaleIntentIdentity);
+    }
+    if ownership.semantic != intent.semantic_identity() {
+        return Err(ProjectionalAuthoringError::StaleOwnership);
+    }
+    let selection = application
+        .operands
+        .iter()
+        .map(|operand| operand.item)
+        .collect::<Vec<_>>();
+    let next_revision = expected.revision.raw().saturating_add(1);
+    let (prefix, mut draft, display_name) = match application.tool {
+        AuthoringTool::Constraint(authoring_intent) => {
+            let resolved = resolve_constraint(document, &selection, authoring_intent)
+                .map_err(|_| ProjectionalAuthoringError::StaleAuthoringResolution)?;
+            if application.resolved_constraint != Some(resolved) {
+                return Err(ProjectionalAuthoringError::StaleAuthoringResolution);
+            }
+            let request = resolved_authoring_constraint_request(
+                document,
+                accepted_document,
+                authoring_intent,
+                resolved,
+                &selection,
+                &application.operands,
+                application.options,
+            )
+            .map_err(|error| {
+                ProjectionalAuthoringError::InvalidAuthoringRequest(error.to_string())
+            })?;
+            let draft = application_relation_draft(
+                intent,
+                ownership,
+                document,
+                &selection,
+                resolved,
+                &request,
+                IntentKey::new(format!("relation-{next_revision:016x}"))?,
+            )?;
+            ("relation", draft, request.label)
+        }
+        AuthoringTool::Dimension(kind) => {
+            if application.resolved_constraint.is_some() {
+                return Err(ProjectionalAuthoringError::StaleAuthoringResolution);
+            }
+            let target = dimension_target(
+                accepted_document,
+                &selection,
+                kind,
+                application.options.angle_orientation,
+            )
+            .map_err(|_| ProjectionalAuthoringError::StaleAuthoringResolution)?;
+            let label = authoring_dimension_label(kind).to_owned();
+            let draft = application_dimension_draft(
+                intent,
+                ownership,
+                &selection,
+                kind,
+                application.options.dimension_mode,
+                application.options.angle_orientation,
+                target,
+                IntentKey::new(format!("dimension-{next_revision:016x}"))?,
+            )?;
+            ("dimension", draft, label)
+        }
+    };
+    let declaration_alias = IntentKey::new(format!("{prefix}-{next_revision:016x}"))?;
+    draft = draft.with_display_name(IntentKey::new(display_name)?);
+    Ok(ProjectionalApplicationPatch {
+        patch: IntentPatch::new(
+            expected,
+            IntentPatchPolicy::RetainFailedIntent,
+            vec![IntentPatchOperation::CreateNode {
+                alias: declaration_alias.clone(),
+                draft: Box::new(draft),
+                cell: None,
+            }],
+        ),
+        declaration_alias,
+    })
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive native contextual relation table keeps every branch and operand auditable"
+)]
+fn application_relation_draft(
+    intent: &IntentSession,
+    ownership: &IntentMaterializationMap,
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    resolved: ResolvedConstraintKind,
+    request: &crate::ConstraintActionRequest,
+    symbol: IntentKey,
+) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
+    use ConstraintKind as C;
+    use ResolvedConstraintKind as R;
+
+    let context = AcceptedOperandContext { intent, ownership };
+    let points = selection
+        .iter()
+        .filter_map(|item| match item {
+            SelectionItem::Point(point) => Some(*point),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let spans = selection
+        .iter()
+        .filter_map(|item| match item {
+            SelectionItem::Curve(span) => Some(*span),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let datum = selection.iter().find_map(|item| match item {
+        SelectionItem::Datum(datum) => Some(*datum),
+        _ => None,
+    });
+    let mut draft = IntentNodeDraft::new(
+        IntentNodeKind::Constraint {
+            constraint: match resolved {
+                R::FixedPoint => C::FixedPoint,
+                R::CoincidentWithOrigin => C::CoincidentWithOrigin,
+                R::PointOnDatumAxis => C::PointOnDatumAxis,
+                R::CoincidentPoints => C::Coincident,
+                R::PointOnCurve | R::RadialLine => C::PointOnCurve,
+                R::CurveContact => C::CurveCurveContact,
+                R::HorizontalLine => C::Horizontal,
+                R::VerticalLine => C::Vertical,
+                R::HorizontalPoints => C::HorizontalPoints,
+                R::VerticalPoints => C::VerticalPoints,
+                R::ConcentricCurves => C::Concentric,
+                R::CollinearSupports => C::Collinear,
+                R::CollinearWithDatumAxis => C::CollinearWithDatumAxis,
+                R::ParallelLines => C::Parallel,
+                R::PerpendicularLines => C::Perpendicular,
+                R::EqualLength => C::EqualLength,
+                R::EqualRadius => C::EqualRadius,
+                R::EqualCurvature => C::EqualCurvature,
+                R::Midpoint => C::Midpoint,
+                R::SymmetricAboutLine => C::SymmetricAboutLine,
+                R::SymmetricAboutDatumAxis => C::SymmetricAboutDatumAxis,
+                R::CurveTangency => C::CurveCurveTangency,
+                R::EndpointContinuity => C::EndpointContinuity,
+            },
+        },
+        symbol,
+    );
+
+    match resolved {
+        R::FixedPoint => {
+            let [point] = points.as_slice() else {
+                return Err(ProjectionalAuthoringError::StaleAuthoringResolution);
+            };
+            draft = draft
+                .with_input(InputSlot::new(InputRole::Point, 0), context.point(*point)?)
+                .with_field(
+                    IntentFieldKey(IntentKey::new("target")?),
+                    IntentLiteral::Point(
+                        document
+                            .point(*point)
+                            .ok_or(ProjectionalAuthoringError::StaleAuthoringResolution)?
+                            .position,
+                    ),
+                );
+        }
+        R::CoincidentWithOrigin => {
+            draft = with_points(draft, &context, &points, 1)?;
+        }
+        R::PointOnDatumAxis => {
+            draft = with_points(draft, &context, &points, 1)?;
+            draft = enum_field(draft, "axis", datum_axis_key(datum)?)?;
+        }
+        R::CoincidentPoints | R::HorizontalPoints | R::VerticalPoints => {
+            draft = with_points(draft, &context, &points, 2)?;
+        }
+        R::HorizontalLine | R::VerticalLine => {
+            draft = with_spans(draft, &context, &spans, 1)?;
+        }
+        R::ConcentricCurves | R::EqualRadius => {
+            draft = with_curves(draft, &context, &spans, 2)?;
+        }
+        R::CollinearSupports => {
+            draft = with_spans(draft, &context, &spans, 2)?;
+            draft = enum_field(draft, "first_direction", "forward")?;
+            draft = enum_field(draft, "second_direction", "forward")?;
+        }
+        R::CollinearWithDatumAxis => {
+            draft = with_spans(draft, &context, &spans, 1)?;
+            draft = enum_field(draft, "direction", "forward")?;
+            draft = enum_field(draft, "axis", datum_axis_key(datum)?)?;
+        }
+        R::ParallelLines | R::PerpendicularLines | R::EqualLength => {
+            draft = with_spans(draft, &context, &spans, 2)?;
+        }
+        R::Midpoint => {
+            draft = with_points(draft, &context, &points, 1)?;
+            draft = with_spans(draft, &context, &spans, 1)?;
+        }
+        R::SymmetricAboutLine => {
+            draft = with_points(draft, &context, &points, 2)?;
+            draft = with_spans(draft, &context, &spans, 1)?;
+        }
+        R::SymmetricAboutDatumAxis => {
+            draft = with_points(draft, &context, &points, 2)?;
+            draft = enum_field(draft, "axis", datum_axis_key(datum)?)?;
+        }
+        R::PointOnCurve => {
+            draft = with_points(draft, &context, &points, 1)?;
+            draft = with_spans(draft, &context, &spans, 1)?;
+            draft = with_action_contact(draft, "contact", request.contacts.as_slice(), 0)?;
+        }
+        R::RadialLine => {
+            let [contact] = request.contacts.as_slice() else {
+                return Err(ProjectionalAuthoringError::StaleAuthoringResolution);
+            };
+            let center_curve = spans
+                .iter()
+                .find(|span| **span != contact.support.span)
+                .ok_or(ProjectionalAuthoringError::StaleAuthoringResolution)?
+                .curve;
+            let center = document
+                .resolve_center_ref(DocumentCenterRef {
+                    curve: center_curve,
+                })
+                .map_err(|_| ProjectionalAuthoringError::StaleAuthoringResolution)?;
+            draft = draft.with_input(InputSlot::new(InputRole::Point, 0), context.point(center)?);
+            draft = draft.with_input(
+                InputSlot::new(InputRole::Span, 0),
+                context.span(contact.support.span)?,
+            );
+            draft = with_action_contact(draft, "contact", request.contacts.as_slice(), 0)?;
+        }
+        R::CurveContact | R::CurveTangency | R::EqualCurvature | R::EndpointContinuity => {
+            draft = with_spans(draft, &context, &spans, 2)?;
+            draft = with_action_contact(draft, "first_contact", &request.contacts, 0)?;
+            draft = with_action_contact(draft, "second_contact", &request.contacts, 1)?;
+            match request.relation {
+                Some(ConstraintRelationChoice::EqualCurvature(relation)) => {
+                    draft = enum_field(draft, "relation", curvature_relation_key(relation))?;
+                }
+                Some(ConstraintRelationChoice::Continuity(continuity)) => {
+                    draft = enum_field(draft, "continuity", continuity_key(continuity))?;
+                    if let DocumentCurveContinuity::ParametricC2 {
+                        first_rate,
+                        second_rate,
+                    } = continuity
+                    {
+                        let ratio = first_rate / second_rate;
+                        if !ratio.is_finite() || ratio <= 0.0 {
+                            return Err(ProjectionalAuthoringError::InvalidGeometry);
+                        }
+                        draft = draft.with_field(
+                            IntentFieldKey(IntentKey::new("parameter_ratio")?),
+                            dimensionless(ratio),
+                        );
+                    }
+                }
+                None if matches!(resolved, R::CurveContact | R::CurveTangency) => {}
+                _ => return Err(ProjectionalAuthoringError::StaleAuthoringResolution),
+            }
+        }
+    }
+    Ok(draft)
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the complete native dimension application is one atomic typed declaration"
+)]
+fn application_dimension_draft(
+    intent: &IntentSession,
+    ownership: &IntentMaterializationMap,
+    selection: &[SelectionItem],
+    kind: AuthoringDimensionKind,
+    mode: DocumentDimensionMode,
+    orientation: DocumentAngleOrientation,
+    target: f64,
+    symbol: IntentKey,
+) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
+    let context = AcceptedOperandContext { intent, ownership };
+    let points = selection
+        .iter()
+        .filter_map(|item| match item {
+            SelectionItem::Point(point) => Some(*point),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let spans = selection
+        .iter()
+        .filter_map(|item| match item {
+            SelectionItem::Curve(span) => Some(*span),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let intent_kind = match kind {
+        AuthoringDimensionKind::PointDistance => IntentDimensionKind::PointDistance,
+        AuthoringDimensionKind::SegmentLength => IntentDimensionKind::CurveLength,
+        AuthoringDimensionKind::Radius => IntentDimensionKind::Radius,
+        AuthoringDimensionKind::Diameter => IntentDimensionKind::Diameter,
+        AuthoringDimensionKind::OrientedAngle => IntentDimensionKind::OrientedAngle,
+    };
+    let mut draft = IntentNodeDraft::new(
+        IntentNodeKind::Dimension {
+            dimension: intent_kind,
+        },
+        symbol,
+    );
+    draft = enum_field(
+        draft,
+        "mode",
+        match mode {
+            DocumentDimensionMode::Driving => "driving",
+            DocumentDimensionMode::Reference => "reference",
+        },
+    )?;
+    draft = quantity_leaf(
+        draft,
+        selector(IntentPortRole::Target, 0),
+        LeafField::Value,
+        target,
+        if kind == AuthoringDimensionKind::OrientedAngle {
+            IntentUnit::Angle
+        } else {
+            IntentUnit::Length
+        },
+    );
+    match kind {
+        AuthoringDimensionKind::PointDistance => {
+            draft = with_points(draft, &context, &points, 2)?;
+        }
+        AuthoringDimensionKind::SegmentLength => {
+            draft = with_spans(draft, &context, &spans, 1)?;
+        }
+        AuthoringDimensionKind::Radius | AuthoringDimensionKind::Diameter => {
+            draft = with_curves(draft, &context, &spans, 1)?;
+        }
+        AuthoringDimensionKind::OrientedAngle => {
+            draft = with_spans(draft, &context, &spans, 2)?;
+            draft = enum_field(
+                draft,
+                "orientation",
+                match orientation {
+                    DocumentAngleOrientation::CounterClockwise => "counter_clockwise",
+                    DocumentAngleOrientation::Clockwise => "clockwise",
+                },
+            )?;
+        }
+    }
+    Ok(draft)
+}
+
+struct AcceptedOperandContext<'a> {
+    intent: &'a IntentSession,
+    ownership: &'a IntentMaterializationMap,
+}
+
+impl AcceptedOperandContext<'_> {
+    fn point(&self, point: DesignPointId) -> Result<PatchPortRef, ProjectionalAuthoringError> {
+        accepted_native_port(
+            self.intent,
+            self.ownership,
+            IntentNativeBinding::Point(point),
+        )
+    }
+
+    fn curve(&self, curve: CurveId) -> Result<PatchPortRef, ProjectionalAuthoringError> {
+        accepted_native_port(
+            self.intent,
+            self.ownership,
+            IntentNativeBinding::Curve(curve),
+        )
+    }
+
+    fn span(&self, span: CurveSpan) -> Result<PatchPortRef, ProjectionalAuthoringError> {
+        accepted_native_port(
+            self.intent,
+            self.ownership,
+            IntentNativeBinding::CurveSpan(span),
+        )
+    }
+}
+
+fn with_points(
+    mut draft: IntentNodeDraft,
+    context: &AcceptedOperandContext<'_>,
+    points: &[DesignPointId],
+    expected: usize,
+) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
+    if points.len() != expected {
+        return Err(ProjectionalAuthoringError::StaleAuthoringResolution);
+    }
+    for (index, point) in points.iter().enumerate() {
+        draft = draft.with_input(
+            InputSlot::new(InputRole::Point, u16_index(index)?),
+            context.point(*point)?,
+        );
+    }
+    Ok(draft)
+}
+
+fn with_spans(
+    mut draft: IntentNodeDraft,
+    context: &AcceptedOperandContext<'_>,
+    spans: &[CurveSpan],
+    expected: usize,
+) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
+    if spans.len() != expected {
+        return Err(ProjectionalAuthoringError::StaleAuthoringResolution);
+    }
+    for (index, span) in spans.iter().enumerate() {
+        draft = draft.with_input(
+            InputSlot::new(InputRole::Span, u16_index(index)?),
+            context.span(*span)?,
+        );
+    }
+    Ok(draft)
+}
+
+fn with_curves(
+    mut draft: IntentNodeDraft,
+    context: &AcceptedOperandContext<'_>,
+    spans: &[CurveSpan],
+    expected: usize,
+) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
+    if spans.len() != expected {
+        return Err(ProjectionalAuthoringError::StaleAuthoringResolution);
+    }
+    for (index, span) in spans.iter().enumerate() {
+        draft = draft.with_input(
+            InputSlot::new(InputRole::Curve, u16_index(index)?),
+            context.curve(span.curve)?,
+        );
+    }
+    Ok(draft)
+}
+
+fn with_action_contact(
+    mut draft: IntentNodeDraft,
+    prefix: &str,
+    contacts: &[crate::ContactActionChoice],
+    index: usize,
+) -> Result<IntentNodeDraft, ProjectionalAuthoringError> {
+    let contact = contacts
+        .get(index)
+        .ok_or(ProjectionalAuthoringError::StaleAuthoringResolution)?;
+    let descriptor = DraftContactDescriptor {
+        span: DraftSpanSlot::Existing(contact.support.span),
+        domain: contact.domain,
+        parameter: contact.parameter,
+        winding: contact.support.winding,
+        neighborhood: contact.neighborhood,
+    };
+    for (name, value) in contact_field_values(prefix, descriptor, contact.tangent_orientation)? {
+        draft = draft.with_field(IntentFieldKey(IntentKey::new(name)?), value);
+    }
+    Ok(draft)
+}
+
+fn datum_axis_key(datum: Option<SketchDatum>) -> Result<&'static str, ProjectionalAuthoringError> {
+    match datum {
+        Some(SketchDatum::XAxis) => Ok("x"),
+        Some(SketchDatum::YAxis) => Ok("y"),
+        Some(SketchDatum::Origin) | None => {
+            Err(ProjectionalAuthoringError::StaleAuthoringResolution)
+        }
+    }
+}
+
+const fn curvature_relation_key(value: DocumentCurveCurvatureRelation) -> &'static str {
+    match value {
+        DocumentCurveCurvatureRelation::Signed => "signed",
+        DocumentCurveCurvatureRelation::MagnitudeSameSign => "magnitude_same_sign",
+        DocumentCurveCurvatureRelation::MagnitudeOppositeSign => "magnitude_opposite_sign",
+    }
+}
+
+const fn continuity_key(value: DocumentCurveContinuity) -> &'static str {
+    match value {
+        DocumentCurveContinuity::G0 => "g0",
+        DocumentCurveContinuity::G1 => "g1",
+        DocumentCurveContinuity::G2 => "g2",
+        DocumentCurveContinuity::ParametricC2 { .. } => "parametric_c2",
+    }
+}
+
+const fn authoring_dimension_label(kind: AuthoringDimensionKind) -> &'static str {
+    match kind {
+        AuthoringDimensionKind::PointDistance => "Point distance",
+        AuthoringDimensionKind::SegmentLength => "Segment length",
+        AuthoringDimensionKind::Radius => "Radius",
+        AuthoringDimensionKind::Diameter => "Diameter",
+        AuthoringDimensionKind::OrientedAngle => "Oriented angle",
+    }
+}
+
 struct DraftContext<'a> {
     intent: &'a IntentSession,
     ownership: &'a IntentMaterializationMap,
@@ -193,32 +729,7 @@ impl DraftContext<'_> {
         &self,
         binding: IntentNativeBinding,
     ) -> Result<PatchPortRef, ProjectionalAuthoringError> {
-        let mut candidates = self
-            .ownership
-            .ports
-            .iter()
-            .filter_map(|(port, candidate)| (*candidate == binding).then_some(*port))
-            .collect::<Vec<_>>();
-        candidates.sort_by_key(|port| {
-            let flow_rank = self
-                .intent
-                .graph()
-                .node(port.node)
-                .and_then(|node| node.port(port.port))
-                .map_or(4, |port| match port.flow {
-                    IntentIdentityFlow::Created { .. } => 0,
-                    IntentIdentityFlow::Continued { .. } => 1,
-                    IntentIdentityFlow::Aliased { .. } => 2,
-                    IntentIdentityFlow::OwnedLogical => 3,
-                    IntentIdentityFlow::Retired { .. } => 4,
-                });
-            (flow_rank, *port)
-        });
-        candidates
-            .into_iter()
-            .next()
-            .map(|port| PatchPortRef::Stable { port })
-            .ok_or(ProjectionalAuthoringError::UnownedNativeOperand)
+        accepted_native_port(self.intent, self.ownership, binding)
     }
 
     fn point_slot(&self, slot: DraftPointSlot) -> Result<PatchPortRef, ProjectionalAuthoringError> {
@@ -244,6 +755,37 @@ impl DraftContext<'_> {
             DraftCurveSlot::Created { curve_index } => self.created.curve(curve_index),
         }
     }
+}
+
+fn accepted_native_port(
+    intent: &IntentSession,
+    ownership: &IntentMaterializationMap,
+    binding: IntentNativeBinding,
+) -> Result<PatchPortRef, ProjectionalAuthoringError> {
+    let mut candidates = ownership
+        .ports
+        .iter()
+        .filter_map(|(port, candidate)| (*candidate == binding).then_some(*port))
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|port| {
+        let flow_rank = intent
+            .graph()
+            .node(port.node)
+            .and_then(|node| node.port(port.port))
+            .map_or(4, |port| match port.flow {
+                IntentIdentityFlow::Created { .. } => 0,
+                IntentIdentityFlow::Continued { .. } => 1,
+                IntentIdentityFlow::Aliased { .. } => 2,
+                IntentIdentityFlow::OwnedLogical => 3,
+                IntentIdentityFlow::Retired { .. } => 4,
+            });
+        (flow_rank, *port)
+    });
+    candidates
+        .into_iter()
+        .next()
+        .map(|port| PatchPortRef::Stable { port })
+        .ok_or(ProjectionalAuthoringError::UnownedNativeOperand)
 }
 
 #[allow(

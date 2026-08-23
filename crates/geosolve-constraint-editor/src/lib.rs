@@ -94,7 +94,8 @@ pub use intent::{
     IntentNodeMaterialization, IntentValidationEvidence,
 };
 pub use intent_authoring::{
-    ProjectionalAuthoringError, ProjectionalConstructionPatch, projectional_construction_patch,
+    ProjectionalApplicationPatch, ProjectionalAuthoringError, ProjectionalConstructionPatch,
+    projectional_application_patch, projectional_construction_patch,
 };
 pub use intent_bootstrap::{
     BOOTSTRAP_COMPUTED_FEATURE_CODEC_V1, BOOTSTRAP_CONSTRAINT_CODEC_V1, BOOTSTRAP_CONTACT_CODEC_V1,

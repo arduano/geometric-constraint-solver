@@ -8783,110 +8783,15 @@ impl RetainedEditorCoordinator {
             document,
             geosolve_sketch::SketchAcceptedDocumentState::document,
         );
-        if resolved == ResolvedConstraintKind::RadialLine {
-            return radial_line_authoring_request(document, accepted_document, intent, selection);
-        }
-        let contact_operands = match resolved {
-            ResolvedConstraintKind::PointOnCurve
-            | ResolvedConstraintKind::CurveContact
-            | ResolvedConstraintKind::CurveTangency
-            | ResolvedConstraintKind::EqualCurvature
-            | ResolvedConstraintKind::EndpointContinuity => operands
-                .iter()
-                .filter_map(|operand| match operand.item {
-                    SelectionItem::Curve(span) => Some((span, operand.curve_parameter)),
-                    SelectionItem::Point(_)
-                    | SelectionItem::Constraint(_)
-                    | SelectionItem::Dimension(_)
-                    | SelectionItem::Datum(_)
-                    | SelectionItem::Feature(_)
-                    | SelectionItem::FeatureCorner(_) => None,
-                })
-                .collect(),
-            ResolvedConstraintKind::FixedPoint
-            | ResolvedConstraintKind::CoincidentWithOrigin
-            | ResolvedConstraintKind::PointOnDatumAxis
-            | ResolvedConstraintKind::CoincidentPoints
-            | ResolvedConstraintKind::HorizontalLine
-            | ResolvedConstraintKind::VerticalLine
-            | ResolvedConstraintKind::HorizontalPoints
-            | ResolvedConstraintKind::VerticalPoints
-            | ResolvedConstraintKind::ConcentricCurves
-            | ResolvedConstraintKind::CollinearSupports
-            | ResolvedConstraintKind::CollinearWithDatumAxis
-            | ResolvedConstraintKind::ParallelLines
-            | ResolvedConstraintKind::PerpendicularLines
-            | ResolvedConstraintKind::EqualLength
-            | ResolvedConstraintKind::EqualRadius
-            | ResolvedConstraintKind::Midpoint
-            | ResolvedConstraintKind::SymmetricAboutLine
-            | ResolvedConstraintKind::SymmetricAboutDatumAxis
-            | ResolvedConstraintKind::RadialLine => Vec::new(),
-        };
-        let tangency = resolved == ResolvedConstraintKind::CurveTangency;
-        let endpoint_only = resolved == ResolvedConstraintKind::EndpointContinuity;
-        let contacts = contact_operands
-            .into_iter()
-            .enumerate()
-            .map(|(index, (span, picked_parameter))| {
-                let ActionChoice::Contact {
-                    domains,
-                    default_parameter,
-                    neighborhoods,
-                    default_winding,
-                    ..
-                } = contact_action_choice(
-                    document,
-                    u8::try_from(index).map_err(|_| {
-                        CoordinatorError::InvalidActionInput("too many authoring contacts")
-                    })?,
-                    span,
-                    tangency,
-                    endpoint_only,
-                    picked_parameter,
-                )
-                .ok_or(CoordinatorError::InvalidActionInput(
-                    "selected curve has no valid contact domain",
-                ))?
-                else {
-                    unreachable!("contact choice constructor emits contact metadata");
-                };
-                let domain = *domains.first().ok_or(CoordinatorError::InvalidActionInput(
-                    "selected curve has no valid contact domain",
-                ))?;
-                let neighborhood =
-                    *neighborhoods
-                        .first()
-                        .ok_or(CoordinatorError::InvalidActionInput(
-                            "selected curve has no valid contact neighborhood",
-                        ))?;
-                Ok(crate::ContactActionChoice {
-                    support: geosolve_sketch::DocumentCurveSpanRef {
-                        span,
-                        winding: default_winding,
-                    },
-                    domain,
-                    parameter: default_parameter,
-                    neighborhood,
-                    tangent_orientation: tangency.then_some(options.tangent_orientation),
-                })
-            })
-            .collect::<Result<Vec<_>, CoordinatorError>>()?;
-        let relation = match resolved {
-            ResolvedConstraintKind::EqualCurvature => Some(
-                ConstraintRelationChoice::EqualCurvature(options.curvature_relation),
-            ),
-            ResolvedConstraintKind::EndpointContinuity => {
-                Some(ConstraintRelationChoice::Continuity(options.continuity))
-            }
-            _ => None,
-        };
-        Ok(ConstraintActionRequest {
+        resolved_authoring_constraint_request(
+            document,
+            accepted_document,
             intent,
-            label: resolved.label().to_owned(),
-            contacts,
-            relation,
-        })
+            resolved,
+            selection,
+            operands,
+            options,
+        )
     }
 
     /// Returns editable target metadata for exactly one explicitly selected dimension.
@@ -12566,6 +12471,131 @@ fn radial_line_contact_action_choice(
         neighborhoods: vec![ContactNeighborhood::Interior],
         tangent_orientations: Vec::new(),
         default_winding: 0,
+    })
+}
+
+/// Builds the complete explicit native authoring request used by both the
+/// flat coordinator and the projectional intent adapter.
+///
+/// Applicability has already been resolved by [`resolve_constraint`]. This
+/// helper owns contact domains, neighborhoods, winding and relation branch
+/// defaults so projectional callers cannot drift from ordinary authoring.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one native request builder keeps contextual contact and branch defaults authoritative"
+)]
+pub(crate) fn resolved_authoring_constraint_request(
+    document: &SketchDocument,
+    accepted_document: &SketchDocument,
+    intent: ConstraintIntent,
+    resolved: ResolvedConstraintKind,
+    selection: &[SelectionItem],
+    operands: &[AuthoringOperand],
+    options: AuthoringOptions,
+) -> Result<ConstraintActionRequest, CoordinatorError> {
+    if resolved == ResolvedConstraintKind::RadialLine {
+        return radial_line_authoring_request(document, accepted_document, intent, selection);
+    }
+    let contact_operands = match resolved {
+        ResolvedConstraintKind::PointOnCurve
+        | ResolvedConstraintKind::CurveContact
+        | ResolvedConstraintKind::CurveTangency
+        | ResolvedConstraintKind::EqualCurvature
+        | ResolvedConstraintKind::EndpointContinuity => operands
+            .iter()
+            .filter_map(|operand| match operand.item {
+                SelectionItem::Curve(span) => Some((span, operand.curve_parameter)),
+                SelectionItem::Point(_)
+                | SelectionItem::Constraint(_)
+                | SelectionItem::Dimension(_)
+                | SelectionItem::Datum(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_) => None,
+            })
+            .collect(),
+        ResolvedConstraintKind::FixedPoint
+        | ResolvedConstraintKind::CoincidentWithOrigin
+        | ResolvedConstraintKind::PointOnDatumAxis
+        | ResolvedConstraintKind::CoincidentPoints
+        | ResolvedConstraintKind::HorizontalLine
+        | ResolvedConstraintKind::VerticalLine
+        | ResolvedConstraintKind::HorizontalPoints
+        | ResolvedConstraintKind::VerticalPoints
+        | ResolvedConstraintKind::ConcentricCurves
+        | ResolvedConstraintKind::CollinearSupports
+        | ResolvedConstraintKind::CollinearWithDatumAxis
+        | ResolvedConstraintKind::ParallelLines
+        | ResolvedConstraintKind::PerpendicularLines
+        | ResolvedConstraintKind::EqualLength
+        | ResolvedConstraintKind::EqualRadius
+        | ResolvedConstraintKind::Midpoint
+        | ResolvedConstraintKind::SymmetricAboutLine
+        | ResolvedConstraintKind::SymmetricAboutDatumAxis
+        | ResolvedConstraintKind::RadialLine => Vec::new(),
+    };
+    let tangency = resolved == ResolvedConstraintKind::CurveTangency;
+    let endpoint_only = resolved == ResolvedConstraintKind::EndpointContinuity;
+    let contacts = contact_operands
+        .into_iter()
+        .enumerate()
+        .map(|(index, (span, picked_parameter))| {
+            let ActionChoice::Contact {
+                domains,
+                default_parameter,
+                neighborhoods,
+                default_winding,
+                ..
+            } = contact_action_choice(
+                document,
+                u8::try_from(index).map_err(|_| {
+                    CoordinatorError::InvalidActionInput("too many authoring contacts")
+                })?,
+                span,
+                tangency,
+                endpoint_only,
+                picked_parameter,
+            )
+            .ok_or(CoordinatorError::InvalidActionInput(
+                "selected curve has no valid contact domain",
+            ))?
+            else {
+                unreachable!("contact choice constructor emits contact metadata");
+            };
+            let domain = *domains.first().ok_or(CoordinatorError::InvalidActionInput(
+                "selected curve has no valid contact domain",
+            ))?;
+            let neighborhood =
+                *neighborhoods
+                    .first()
+                    .ok_or(CoordinatorError::InvalidActionInput(
+                        "selected curve has no valid contact neighborhood",
+                    ))?;
+            Ok(crate::ContactActionChoice {
+                support: geosolve_sketch::DocumentCurveSpanRef {
+                    span,
+                    winding: default_winding,
+                },
+                domain,
+                parameter: default_parameter,
+                neighborhood,
+                tangent_orientation: tangency.then_some(options.tangent_orientation),
+            })
+        })
+        .collect::<Result<Vec<_>, CoordinatorError>>()?;
+    let relation = match resolved {
+        ResolvedConstraintKind::EqualCurvature => Some(ConstraintRelationChoice::EqualCurvature(
+            options.curvature_relation,
+        )),
+        ResolvedConstraintKind::EndpointContinuity => {
+            Some(ConstraintRelationChoice::Continuity(options.continuity))
+        }
+        _ => None,
+    };
+    Ok(ConstraintActionRequest {
+        intent,
+        label: resolved.label().to_owned(),
+        contacts,
+        relation,
     })
 }
 
