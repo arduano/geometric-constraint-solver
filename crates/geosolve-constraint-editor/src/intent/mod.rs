@@ -82,6 +82,10 @@ pub enum IntentNativeBinding {
     Source(DocumentSourceId),
     Parameter(DocumentParameterId),
     ExternalBinding(DocumentExternalBindingId),
+    /// Stable persistent computed-feature identity owned by one declaration.
+    ComputedFeature(geosolve_sketch_features::ComputedFeatureId),
+    /// Stable persistent corner identity owned by one variable child.
+    ComputedFeatureCorner(geosolve_sketch_features::ComputedFeatureCornerId),
     /// Stable equation-free output identity retained entirely by the intent
     /// graph (annotations, aggregates, declarations and identity transitions).
     Logical(IntentPortRef),
@@ -194,12 +198,22 @@ pub struct IntentValidationEvidence {
     pub constraint_count: usize,
     pub hard_residuals_validated: bool,
     pub maximum_normalized_hard_residual: Option<f64>,
+    pub feature_document: geosolve_sketch_features::ComputedFeatureDocumentId,
+    pub feature_revision: geosolve_sketch_features::ComputedFeatureRevision,
+    pub feature_digest: geosolve_sketch_features::ComputedFeatureDocumentDigest,
+    pub feature_count: usize,
+    pub computed_edge_count: usize,
+    pub all_active_features_current: bool,
 }
 
 /// One complete cold reconstruction suitable for atomic coordinator staging.
 #[derive(Clone, Debug)]
 pub struct ColdIntentMaterialization {
     pub session: RetainedSketchDocumentSession,
+    pub features: geosolve_sketch_features::ComputedFeatureDocument,
+    pub computed: geosolve_sketch_features::ComputedFeatureSnapshot,
+    pub computed_evaluation_high_water:
+        geosolve_sketch_features::ComputedEvaluationAllocatorHighWater,
     pub ownership: IntentMaterializationMap,
     pub validation: IntentValidationEvidence,
     pub evidence: MaterializationEvidence,
@@ -464,7 +478,9 @@ impl ColdIntentMaterializer {
                     &mut batch,
                     &mut state,
                 )?,
-                IntentNodeKind::Annotation | IntentNodeKind::Identity { .. } => {
+                IntentNodeKind::ComputedFeature { .. }
+                | IntentNodeKind::Annotation
+                | IntentNodeKind::Identity { .. } => {
                     lower_logical_declaration(node, &mut state)?;
                     apply_batch = false;
                 }
@@ -505,7 +521,13 @@ impl ColdIntentMaterializer {
 
         state.validate_aggregates(&session)?;
 
-        let ownership = state.finish(candidate.reservations().entries());
+        let mut ownership = state.finish(candidate.reservations().entries());
+        let computed = crate::intent_computed::materialize_computed_features(
+            candidate.graph(),
+            accepted.document().id(),
+            &session,
+            &mut ownership,
+        )?;
         let validation = IntentValidationEvidence {
             semantic: candidate.semantic_identity(),
             document: accepted.document().id(),
@@ -514,6 +536,20 @@ impl ColdIntentMaterializer {
             constraint_count: accepted.document().constraints().len(),
             hard_residuals_validated: solve.hard_residuals_validated,
             maximum_normalized_hard_residual: maximum,
+            feature_document: computed.features.id(),
+            feature_revision: computed.features.revision(),
+            feature_digest: computed.features.digest(),
+            feature_count: computed.features.features().len(),
+            computed_edge_count: computed.snapshot.edges().len(),
+            all_active_features_current: computed.snapshot.feature_evaluations().iter().all(
+                |feature| {
+                    matches!(
+                        feature.state,
+                        geosolve_sketch_features::ComputedFeatureEvaluationState::Current { .. }
+                            | geosolve_sketch_features::ComputedFeatureEvaluationState::Suppressed
+                    )
+                },
+            ),
         };
         let materialization = accepted.document().to_draft_v5_json()?.into_bytes();
         let ownership_bytes = serde_json::to_vec(&ownership)?;
@@ -526,6 +562,9 @@ impl ColdIntentMaterializer {
         )?;
         Ok(ColdIntentMaterialization {
             session,
+            features: computed.features,
+            computed: computed.snapshot,
+            computed_evaluation_high_water: computed.evaluation_high_water,
             ownership,
             validation,
             evidence,
@@ -610,6 +649,11 @@ pub enum IntentMaterializationError {
     Evidence(#[from] geosolve_sketch_intent::IntentModelError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    #[error("computed-feature materialization rejected: {message}")]
+    Computed {
+        node: Option<NodeId>,
+        message: String,
+    },
     #[error("invalid intent host inputs: {0}")]
     HostInput(String),
     #[error("intent node {node} is not materializable by this editor adapter")]
@@ -659,6 +703,17 @@ pub enum IntentMaterializationError {
     AcceptedAuthorityEvidenceMismatch,
 }
 
+impl From<crate::intent_computed::ComputedIntentMaterializationError>
+    for IntentMaterializationError
+{
+    fn from(error: crate::intent_computed::ComputedIntentMaterializationError) -> Self {
+        Self::Computed {
+            node: error.failed_node(),
+            message: error.to_string(),
+        }
+    }
+}
+
 impl IntentMaterializationError {
     const fn failed_node(&self) -> Option<NodeId> {
         match self {
@@ -673,6 +728,7 @@ impl IntentMaterializationError {
             | Self::InvalidOperation { node, .. }
             | Self::InvalidAggregate { node, .. }
             | Self::UnknownNode(node) => Some(*node),
+            Self::Computed { node, .. } => *node,
             _ => None,
         }
     }
@@ -699,6 +755,7 @@ impl IntentMaterializationError {
             Self::Graph(_) => "invalid-intent-graph",
             Self::Document(_) | Self::Session(_) => "native-materialization-rejected",
             Self::Evidence(_) | Self::Json(_) => "materialization-evidence-rejected",
+            Self::Computed { .. } => "computed-feature-materialization-rejected",
             _ => "invalid-intent-lowering",
         }
     }
@@ -749,6 +806,7 @@ fn preflight_supported(
                     | GeometryRecipeKind::PeriodicControlNurbs
             ),
             IntentNodeKind::Constraint { .. }
+            | IntentNodeKind::ComputedFeature { .. }
             | IntentNodeKind::Aggregate { .. }
             | IntentNodeKind::Operation { .. }
             | IntentNodeKind::Parameter { .. }
@@ -756,7 +814,7 @@ fn preflight_supported(
             | IntentNodeKind::Annotation
             | IntentNodeKind::Identity { .. }
             | IntentNodeKind::Dimension { .. } => true,
-            _ => false,
+            IntentNodeKind::Bootstrap { .. } => false,
         };
         if !supported {
             return Err(IntentMaterializationError::UnsupportedNode { node: node.id });

@@ -10,9 +10,9 @@
 use std::collections::BTreeMap;
 
 use geosolve_sketch::{
-    ContactNeighborhood, DocumentArcSweep, DocumentCurveNormalSide,
-    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentId, DocumentTrimParameter,
-    OperationControl, OperationOutcome, RetainedSketchDocumentSession,
+    ContactNeighborhood, DocumentArcSweep, DocumentCurveNormalSide, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentId, DocumentTrimParameter, OperationControl,
+    OperationOutcome, RetainedSketchDocumentSession,
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedEvaluationAllocatorHighWater, ComputedFeature,
@@ -30,9 +30,7 @@ use geosolve_sketch_intent::{
 };
 use thiserror::Error;
 
-use crate::{
-    IntentMaterializationMap, IntentNativeBinding, IntentNodeMaterialization,
-};
+use crate::{IntentMaterializationMap, IntentNativeBinding, IntentNodeMaterialization};
 
 const FEATURE_DOCUMENT_NAMESPACE: u128 = 0x6d38_335f_696e_7465_6e74_5f66_6561_7475;
 
@@ -48,15 +46,7 @@ pub(crate) struct ComputedIntentMaterialization {
 #[derive(Debug, Error)]
 pub(crate) enum ComputedIntentMaterializationError {
     #[error("computed-feature node {node} has invalid explicit state: {reason}")]
-    InvalidNode {
-        node: NodeId,
-        reason: &'static str,
-    },
-    #[error("computed-feature node {node} has no unique logical owner for native span {span_source:?}")]
-    InvalidSpanOwner {
-        node: NodeId,
-        span_source: NativeCurveSpanSource,
-    },
+    InvalidNode { node: NodeId, reason: &'static str },
     #[error("computed-feature identity allocation is exhausted")]
     IdentityExhausted,
     #[error("computed-feature node {node} failed deterministic evaluation: {reason}")]
@@ -73,9 +63,7 @@ impl ComputedIntentMaterializationError {
     #[must_use]
     pub(crate) const fn failed_node(&self) -> Option<NodeId> {
         match self {
-            Self::InvalidNode { node, .. }
-            | Self::InvalidSpanOwner { node, .. }
-            | Self::EvaluationRejected { node, .. } => Some(*node),
+            Self::InvalidNode { node, .. } | Self::EvaluationRejected { node, .. } => Some(*node),
             Self::IdentityExhausted
             | Self::Document(_)
             | Self::Snapshot(_)
@@ -86,6 +74,7 @@ impl ComputedIntentMaterializationError {
 
 /// Reconstructs and evaluates the computed-feature sidecar, replacing logical
 /// placeholder ownership with exact stable feature/corner identities.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn materialize_computed_features(
     graph: &IntentGraph,
     document: DocumentId,
@@ -97,12 +86,14 @@ pub(crate) fn materialize_computed_features(
     let mut maximum_feature = 0_u64;
     let mut maximum_corner = 0_u64;
 
-    for node_id in graph.canonical_schedule().map_err(|_| {
-        ComputedIntentMaterializationError::InvalidNode {
-            node: NodeId::from_raw(0),
-            reason: "canonical dependency schedule is invalid",
-        }
-    })? {
+    for node_id in
+        graph
+            .canonical_schedule()
+            .map_err(|_| ComputedIntentMaterializationError::InvalidNode {
+                node: NodeId::from_raw(0),
+                reason: "canonical dependency schedule is invalid",
+            })?
+    {
         let node = graph
             .node(node_id)
             .ok_or(ComputedIntentMaterializationError::InvalidNode {
@@ -177,18 +168,10 @@ pub(crate) fn materialize_computed_features(
         allocator,
     };
     let raw_document = document.0.as_u128() ^ FEATURE_DOCUMENT_NAMESPACE;
-    let document_id = ComputedFeatureDocumentId::from_raw(if raw_document == 0 {
-        1
-    } else {
-        raw_document
-    });
-    let mut bootstrap = ComputedFeatureObjectBootstrap::new(
-        document,
-        document_id,
-        revision,
-        allocator,
-        lifecycle,
-    )?;
+    let document_id =
+        ComputedFeatureDocumentId::from_raw(if raw_document == 0 { 1 } else { raw_document });
+    let mut bootstrap =
+        ComputedFeatureObjectBootstrap::new(document, document_id, revision, allocator, lifecycle)?;
     for feature in features {
         bootstrap.push_feature(feature);
     }
@@ -206,13 +189,21 @@ pub(crate) fn materialize_computed_features(
         OperationOutcome::Completed { value, .. } => value,
         OperationOutcome::Cancelled { .. } | OperationOutcome::WorkExhausted { .. } => {
             return Err(ComputedIntentMaterializationError::EvaluationRejected {
-                node: feature_nodes.values().next().copied().unwrap_or(NodeId::from_raw(0)),
+                node: feature_nodes
+                    .values()
+                    .next()
+                    .copied()
+                    .unwrap_or(NodeId::from_raw(0)),
                 reason: "unlimited cold evaluation did not complete".to_owned(),
             });
         }
         _ => {
             return Err(ComputedIntentMaterializationError::EvaluationRejected {
-                node: feature_nodes.values().next().copied().unwrap_or(NodeId::from_raw(0)),
+                node: feature_nodes
+                    .values()
+                    .next()
+                    .copied()
+                    .unwrap_or(NodeId::from_raw(0)),
                 reason: "computed evaluator returned an unknown outcome".to_owned(),
             });
         }
@@ -246,7 +237,11 @@ pub(crate) fn materialize_computed_features(
     }
     if snapshot.feature_evaluations().len() != feature_nodes.len() {
         return Err(ComputedIntentMaterializationError::EvaluationRejected {
-            node: feature_nodes.values().next().copied().unwrap_or(NodeId::from_raw(0)),
+            node: feature_nodes
+                .values()
+                .next()
+                .copied()
+                .unwrap_or(NodeId::from_raw(0)),
             reason: "evaluation omitted a declared feature".to_owned(),
         });
     }
@@ -358,12 +353,13 @@ fn fillet_corner(
             reason: "Fillet input index exceeds intent limits",
         }
     })?;
-    let second_index = first_index
-        .checked_add(1)
-        .ok_or(ComputedIntentMaterializationError::InvalidNode {
-            node: node.id,
-            reason: "Fillet input index exceeds intent limits",
-        })?;
+    let second_index =
+        first_index
+            .checked_add(1)
+            .ok_or(ComputedIntentMaterializationError::InvalidNode {
+                node: node.id,
+                reason: "Fillet input index exceeds intent limits",
+            })?;
     Ok(ComputedFilletCorner {
         id,
         first: fillet_parent(node, ownership, ordinal, "first", first_index)?,
@@ -493,22 +489,32 @@ fn quantity(
             value,
             unit: actual,
         }) if *actual == unit => Ok(*value),
-        _ => Err(invalid(node, "required Fillet quantity is missing or invalid")),
+        _ => Err(invalid(
+            node,
+            "required Fillet quantity is missing or invalid",
+        )),
     }
 }
 
 fn integer(node: &IntentNode, name: &str) -> Result<i32, ComputedIntentMaterializationError> {
     match field(node, name) {
-        Some(IntentLiteral::Integer(value)) => i32::try_from(*value)
-            .map_err(|_| invalid(node, "Fillet winding exceeds i32 limits")),
-        _ => Err(invalid(node, "required Fillet integer is missing or invalid")),
+        Some(IntentLiteral::Integer(value)) => {
+            i32::try_from(*value).map_err(|_| invalid(node, "Fillet winding exceeds i32 limits"))
+        }
+        _ => Err(invalid(
+            node,
+            "required Fillet integer is missing or invalid",
+        )),
     }
 }
 
 fn boolean(node: &IntentNode, name: &str) -> Result<bool, ComputedIntentMaterializationError> {
     match field(node, name) {
         Some(IntentLiteral::Boolean(value)) => Ok(*value),
-        _ => Err(invalid(node, "required Fillet boolean is missing or invalid")),
+        _ => Err(invalid(
+            node,
+            "required Fillet boolean is missing or invalid",
+        )),
     }
 }
 
@@ -522,10 +528,7 @@ fn enum_value<'a>(
     }
 }
 
-fn require_absent(
-    node: &IntentNode,
-    name: &str,
-) -> Result<(), ComputedIntentMaterializationError> {
+fn require_absent(node: &IntentNode, name: &str) -> Result<(), ComputedIntentMaterializationError> {
     if field(node, name).is_some() {
         return Err(invalid(
             node,
@@ -535,10 +538,7 @@ fn require_absent(
     Ok(())
 }
 
-const fn invalid(
-    node: &IntentNode,
-    reason: &'static str,
-) -> ComputedIntentMaterializationError {
+const fn invalid(node: &IntentNode, reason: &'static str) -> ComputedIntentMaterializationError {
     ComputedIntentMaterializationError::InvalidNode {
         node: node.id,
         reason,

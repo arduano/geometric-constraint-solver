@@ -1,0 +1,413 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use geosolve_constraint_editor::{
+    ColdIntentMaterializer, FeatureAuthoringCandidate, FeatureAuthoringOutcome,
+    FeatureAuthoringState, FeatureAuthoringTool, IntentNativeBinding, PickTolerance,
+    ProjectionalEditorSession, ProjectionalIntentCoordinator, Viewport,
+};
+use geosolve_sketch::{DocumentId, PersistentId};
+use geosolve_sketch_features::{
+    ComputedFeatureAuthoringSnapshot, ComputedFeatureDefinition, ComputedFeatureEvaluationState,
+};
+use geosolve_sketch_intent::{
+    CellTarget, GeometryRecipeKind, InputRole, InputSlot, IntentFieldKey, IntentKey, IntentLiteral,
+    IntentNodeDraft, IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchPolicy,
+    IntentPlanDisposition, IntentPortRole, IntentPortSelector, IntentSessionId, IntentUnit,
+    LeafField, PatchPortRef,
+};
+
+const DOCUMENT_RAW: u128 = 0x8300_f111_0000_0001;
+
+fn key(value: &str) -> IntentKey {
+    IntentKey::new(value).unwrap()
+}
+
+const fn selector(role: IntentPortRole, index: u16) -> IntentPortSelector {
+    IntentPortSelector::Node { role, index }
+}
+
+fn coordinate(value: f64) -> IntentLiteral {
+    IntentLiteral::Quantity {
+        value,
+        unit: IntentUnit::Length,
+    }
+}
+
+fn point(name: &str, position: [f64; 2]) -> IntentNodeDraft {
+    IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::SketchPoint,
+        },
+        key(name),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Primary, 0),
+        LeafField::X,
+        coordinate(position[0]),
+    )
+    .with_instance_leaf(
+        selector(IntentPortRole::Primary, 0),
+        LeafField::Y,
+        coordinate(position[1]),
+    )
+}
+
+fn point_alias(alias: &str) -> PatchPortRef {
+    PatchPortRef::Alias {
+        node: key(alias),
+        selector: selector(IntentPortRole::Primary, 0),
+    }
+}
+
+fn line(name: &str, start: &str, end: &str, direction: [f64; 2]) -> IntentNodeDraft {
+    IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::Segment,
+        },
+        key(name),
+    )
+    .with_input(InputSlot::new(InputRole::Point, 0), point_alias(start))
+    .with_input(InputSlot::new(InputRole::Point, 1), point_alias(end))
+    .with_field(
+        IntentFieldKey(key("branch_direction")),
+        IntentLiteral::Point(direction),
+    )
+}
+
+fn fixture() -> (ProjectionalEditorSession, Viewport) {
+    let document = DocumentId(PersistentId::from_u128(DOCUMENT_RAW));
+    let mut coordinator = ProjectionalIntentCoordinator::empty(
+        IntentSessionId::from_raw(0x8300_f111),
+        ColdIntentMaterializer::with_default_policy(document, 10.0).unwrap(),
+    )
+    .unwrap();
+    coordinator
+        .apply_patch(IntentPatch::new(
+            coordinator.intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![
+                IntentPatchOperation::CreateNode {
+                    alias: key("start"),
+                    draft: Box::new(point("point.start", [0.0, 0.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("corner"),
+                    draft: Box::new(point("point.corner", [4.0, 0.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("end"),
+                    draft: Box::new(point("point.end", [4.0, 4.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("first"),
+                    draft: Box::new(line("line.first", "start", "corner", [1.0, 0.0])),
+                    cell: None,
+                },
+                IntentPatchOperation::CreateNode {
+                    alias: key("second"),
+                    draft: Box::new(line("line.second", "corner", "end", [0.0, 1.0])),
+                    cell: None,
+                },
+            ],
+        ))
+        .unwrap();
+    (
+        ProjectionalEditorSession::new(coordinator),
+        Viewport::new([800.0, 600.0], [2.0, 2.0], 50.0).unwrap(),
+    )
+}
+
+fn fillet_candidate(
+    session: &ProjectionalEditorSession,
+    viewport: Viewport,
+) -> FeatureAuthoringCandidate {
+    let native = session.coordinator().presentation_session().unwrap();
+    let snapshot = ComputedFeatureAuthoringSnapshot::capture(native).unwrap();
+    let scene = session.scene(viewport, 0.5).unwrap();
+    let mut state = FeatureAuthoringState::default();
+    assert!(matches!(
+        state.activate(
+            &snapshot,
+            snapshot.sketch_document(),
+            FeatureAuthoringTool::Fillet,
+            &[],
+        ),
+        FeatureAuthoringOutcome::ModeEntered(_)
+    ));
+    assert!(matches!(
+        state.pick_at(
+            &snapshot,
+            snapshot.sketch_document(),
+            &scene,
+            viewport.model_to_screen([3.0, 0.0]),
+            PickTolerance::default(),
+        ),
+        FeatureAuthoringOutcome::Collecting { .. }
+    ));
+    match state.pick_at(
+        &snapshot,
+        snapshot.sketch_document(),
+        &scene,
+        viewport.model_to_screen([4.0, 1.0]),
+        PickTolerance::default(),
+    ) {
+        FeatureAuthoringOutcome::PreviewRequested { candidate, .. }
+        | FeatureAuthoringOutcome::Apply(candidate) => candidate,
+        other => panic!("expected a complete Fillet candidate, got {other:?}"),
+    }
+}
+
+fn create_fillet(
+    session: &mut ProjectionalEditorSession,
+    viewport: Viewport,
+) -> geosolve_sketch_intent::NodeId {
+    let candidate = fillet_candidate(session, viewport);
+    let expected_corner = candidate.persistent_corners()[0];
+    let outcome = session
+        .apply_computed_fillet(key("Fillet 1"), &candidate)
+        .unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::Accepted);
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    let [feature] = accepted.features.features() else {
+        panic!("one computed feature must be materialized")
+    };
+    let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+    assert_eq!(fillet.corners.len(), 1);
+    assert_eq!(fillet.corners[0].without_id(), expected_corner);
+    let [evaluation] = accepted.computed.feature_evaluations() else {
+        panic!("one computed feature evaluation must be published")
+    };
+    assert!(matches!(
+        evaluation.state,
+        ComputedFeatureEvaluationState::Current { .. }
+    ));
+    assert_eq!(accepted.computed.edges().len(), 3);
+    assert!(accepted.validation.all_active_features_current);
+    assert_eq!(accepted.validation.feature_count, 1);
+    assert_eq!(accepted.validation.computed_edge_count, 3);
+    let node = session
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .find(|node| matches!(node.kind, IntentNodeKind::ComputedFeature { .. }))
+        .unwrap();
+    let feature_port = node
+        .port_by_selector(selector(IntentPortRole::Feature, 0))
+        .unwrap()
+        .as_ref(node.id);
+    assert_eq!(
+        accepted.ownership.port(feature_port),
+        Some(IntentNativeBinding::ComputedFeature(feature.id))
+    );
+    let corner_port = node
+        .ports
+        .values()
+        .find(|port| port.kind == geosolve_sketch_intent::IntentPortKind::FeatureCorner)
+        .unwrap()
+        .as_ref(node.id);
+    assert_eq!(
+        accepted.ownership.port(corner_port),
+        Some(IntentNativeBinding::ComputedFeatureCorner(
+            fillet.corners[0].id
+        ))
+    );
+    assert_eq!(
+        session.scene(viewport, 0.5).unwrap().computed_curves.len(),
+        1
+    );
+    node.id
+}
+
+#[test]
+fn computed_fillet_is_exactly_cold_reconstructed_and_composed() {
+    let (mut session, viewport) = fixture();
+    create_fillet(&mut session, viewport);
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    let feature_json = accepted.features.to_json().unwrap();
+    let ownership = accepted.ownership.clone();
+    let validation = accepted.validation.clone();
+    let intent = session.coordinator().intent().clone();
+
+    let restored = ProjectionalEditorSession::restore(
+        intent,
+        DocumentId(PersistentId::from_u128(DOCUMENT_RAW)),
+        10.0,
+    )
+    .unwrap();
+    let cold = restored.coordinator().accepted_materialization().unwrap();
+    assert_eq!(cold.features.to_json().unwrap(), feature_json);
+    assert_eq!(cold.ownership, ownership);
+    assert_eq!(cold.validation, validation);
+    assert_eq!(cold.computed.edges().len(), 3);
+    assert_eq!(
+        restored.scene(viewport, 0.5).unwrap().computed_curves.len(),
+        1
+    );
+}
+
+#[test]
+fn organization_reorder_does_not_reconstruct_or_renumber_computed_fillet() {
+    let (mut session, viewport) = fixture();
+    let node = create_fillet(&mut session, viewport);
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    let feature_json = accepted.features.to_json().unwrap();
+    let computed_input = accepted.computed.input();
+    let evidence = accepted.evidence.clone();
+    let feature_id = accepted.features.features()[0].id;
+    let ComputedFeatureDefinition::FilletSet(fillet) = &accepted.features.features()[0].definition;
+    let corner_id = fillet.corners[0].id;
+
+    let first = session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateCell {
+                alias: key("first-cell"),
+                name: key("First cell"),
+                before: None,
+            }],
+        ))
+        .unwrap();
+    assert_eq!(first.disposition, IntentPlanDisposition::OrganizationOnly);
+    let first_cell = first.aliases.cell(&key("first-cell")).unwrap();
+    let second = session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateCell {
+                alias: key("second-cell"),
+                name: key("Second cell"),
+                before: None,
+            }],
+        ))
+        .unwrap();
+    assert_eq!(second.disposition, IntentPlanDisposition::OrganizationOnly);
+    let second_cell = second.aliases.cell(&key("second-cell")).unwrap();
+
+    let moved = session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::MoveDeclaration {
+                node,
+                cell: CellTarget::Stable { cell: second_cell },
+                before: None,
+            }],
+        ))
+        .unwrap();
+    assert_eq!(moved.disposition, IntentPlanDisposition::OrganizationOnly);
+    let default_cell = session.coordinator().intent().organization().cell_order()[0];
+    let reordered = session
+        .apply_patch(IntentPatch::new(
+            session.coordinator().intent().identity(),
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::ReorderCells {
+                exact_order: vec![second_cell, default_cell, first_cell],
+            }],
+        ))
+        .unwrap();
+    assert_eq!(
+        reordered.disposition,
+        IntentPlanDisposition::OrganizationOnly
+    );
+
+    let after = session.coordinator().accepted_materialization().unwrap();
+    assert_eq!(after.features.to_json().unwrap(), feature_json);
+    assert_eq!(after.computed.input(), computed_input);
+    assert_eq!(after.evidence, evidence);
+    let ComputedFeatureDefinition::FilletSet(fillet) = &after.features.features()[0].definition;
+    assert_eq!(after.features.features()[0].id, feature_id);
+    assert_eq!(fillet.corners[0].id, corner_id);
+}
+
+#[test]
+fn delete_undo_redo_restore_the_same_feature_and_corner_ids() {
+    let (mut session, viewport) = fixture();
+    let node = create_fillet(&mut session, viewport);
+    let accepted = session.coordinator().accepted_materialization().unwrap();
+    let feature_id = accepted.features.features()[0].id;
+    let ComputedFeatureDefinition::FilletSet(fillet) = &accepted.features.features()[0].definition;
+    let corner_id = fillet.corners[0].id;
+
+    session.delete_declaration(node).unwrap();
+    assert!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .features
+            .features()
+            .is_empty()
+    );
+    session.undo().unwrap().unwrap();
+    let restored = session.coordinator().accepted_materialization().unwrap();
+    assert_eq!(restored.features.features()[0].id, feature_id);
+    let ComputedFeatureDefinition::FilletSet(fillet) = &restored.features.features()[0].definition;
+    assert_eq!(fillet.corners[0].id, corner_id);
+    session.redo().unwrap().unwrap();
+    assert!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .features
+            .features()
+            .is_empty()
+    );
+}
+
+#[test]
+fn rejected_radius_is_retained_over_the_exact_prior_computed_scene() {
+    let (mut session, viewport) = fixture();
+    create_fillet(&mut session, viewport);
+    let prior = session.coordinator().accepted_materialization().unwrap();
+    let feature = prior.features.features()[0].id;
+    let prior_json = prior.features.to_json().unwrap();
+    let prior_evidence = prior.evidence.clone();
+
+    let outcome = session.edit_computed_fillet_radius(feature, 1.0e6).unwrap();
+    assert_eq!(outcome.disposition, IntentPlanDisposition::RetainedFailed);
+    let retained = session.coordinator().accepted_materialization().unwrap();
+    assert_eq!(retained.features.to_json().unwrap(), prior_json);
+    assert_eq!(retained.evidence, prior_evidence);
+    assert_eq!(
+        session.scene(viewport, 0.5).unwrap().computed_curves.len(),
+        1
+    );
+    let node = session
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .find(|node| matches!(node.kind, IntentNodeKind::ComputedFeature { .. }))
+        .unwrap();
+    let radius = node
+        .fields
+        .iter()
+        .find(|(field, _)| field.0.as_str() == "radius")
+        .map(|(_, value)| value)
+        .unwrap();
+    assert_eq!(
+        radius,
+        &IntentLiteral::Quantity {
+            value: 1.0e6,
+            unit: IntentUnit::Length,
+        }
+    );
+    session.undo().unwrap().unwrap();
+    let undone = session.coordinator().accepted_materialization().unwrap();
+    assert_eq!(undone.features.features()[0].id, feature);
+    let ComputedFeatureDefinition::FilletSet(undone_fillet) =
+        &undone.features.features()[0].definition;
+    assert_eq!(undone_fillet.radius.to_bits(), 1.0_f64.to_bits());
+    assert_eq!(
+        session.scene(viewport, 0.5).unwrap().computed_curves.len(),
+        1
+    );
+}

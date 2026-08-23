@@ -12,21 +12,25 @@ use geosolve_sketch::{
     RetainedSketchDocumentSession, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchDesignIdentity,
     SketchHardValidity,
 };
+use geosolve_sketch_features::{
+    ComputedEvaluationAllocator, ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
+};
 use geosolve_sketch_intent::{
-    IntentPatch, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
+    IntentKey, IntentPatch, IntentPlanDisposition, IntentSession, IntentSessionIdentity, NodeId,
 };
 use thiserror::Error;
 
 use crate::{
     AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
-    ConstraintEditor, EditorEffect, EditorError, EditorScene, IntentBootstrapError,
-    IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,
-    IntentInspectorProjection, IntentSourceEditError, IntentSourceTokenId,
-    IntentValidationEvidence, IntentWorkbenchProjection, Modifiers, PickTolerance, PointerInput,
-    ProjectionalAuthoringError, ProjectionalCoordinatorError, ProjectionalIntentCoordinator,
-    ProjectionalPatchOutcome, SelectionItem, Viewport, decode_flat_intent_bootstrap,
+    ConstraintEditor, EditorEffect, EditorError, EditorScene, FeatureAuthoringCandidate,
+    IntentBootstrapError, IntentInspectorEditError, IntentInspectorEditTarget,
+    IntentInspectorEditValue, IntentInspectorProjection, IntentSourceEditError,
+    IntentSourceTokenId, IntentValidationEvidence, IntentWorkbenchProjection, Modifiers,
+    PickTolerance, PointerInput, ProjectionalAuthoringError, ProjectionalCoordinatorError,
+    ProjectionalFilletAuthoringError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
+    SelectionItem, Viewport, decode_flat_intent_bootstrap,
     flat_intent_bootstrap_materialization_map, projectional_application_patch,
-    projectional_construction_patch,
+    projectional_construction_patch, projectional_fillet_patch, projectional_fillet_radius_patch,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -164,9 +168,20 @@ impl ProjectionalEditorSession {
             return Err(ProjectionalEditorError::BootstrapDocumentMismatch);
         }
         let semantic = authority.target;
-        let ownership = flat_intent_bootstrap_materialization_map(&intent)?;
+        let mut ownership = flat_intent_bootstrap_materialization_map(&intent)?;
+        let computed = crate::intent_computed::materialize_computed_features(
+            intent.graph(),
+            decoded.document.id(),
+            &native,
+            &mut ownership,
+        )
+        .map_err(crate::IntentMaterializationError::from)
+        .map_err(ProjectionalCoordinatorError::from)?;
         let materialization = ColdIntentMaterialization {
             session: native,
+            features: computed.features.clone(),
+            computed: computed.snapshot.clone(),
+            computed_evaluation_high_water: computed.evaluation_high_water,
             ownership,
             validation: IntentValidationEvidence {
                 semantic,
@@ -176,6 +191,12 @@ impl ProjectionalEditorSession {
                 constraint_count: decoded.document.constraints().len(),
                 hard_residuals_validated: solve.hard_residuals_validated,
                 maximum_normalized_hard_residual: solve.maximum_normalized_hard_residual,
+                feature_document: computed.features.id(),
+                feature_revision: computed.features.revision(),
+                feature_digest: computed.features.digest(),
+                feature_count: computed.features.features().len(),
+                computed_edge_count: computed.snapshot.edges().len(),
+                all_active_features_current: true,
             },
             evidence: authority.evidence.clone(),
         };
@@ -277,6 +298,10 @@ impl ProjectionalEditorSession {
         viewport: Viewport,
         chord_tolerance_pixels: f64,
     ) -> Result<EditorScene, ProjectionalEditorError> {
+        let materialization = self
+            .coordinator
+            .accepted_materialization()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
         let session = self
             .coordinator
             .presentation_session()
@@ -284,11 +309,42 @@ impl ProjectionalEditorSession {
         let accepted = session
             .accepted_state_for_current_input()
             .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
-        let mut scene = EditorScene::from_accepted_for_design(
+        let accepted_input = session
+            .accepted_prepared_input()
+            .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+        let mut transient_computed = None;
+        let computed = if materialization.computed.input().sketch == accepted_input {
+            &materialization.computed
+        } else {
+            let mut allocator = ComputedEvaluationAllocator::from_high_water(
+                materialization.computed_evaluation_high_water,
+            );
+            let outcome = ComputedFeatureEvaluationSnapshot::capture(
+                session,
+                &materialization.features,
+                ComputedFeatureEvaluationPolicy::default(),
+            )
+            .map_err(|error| ProjectionalEditorError::ComputedScene(error.to_string()))?
+            .prepare(&mut allocator)
+            .map_err(|error| ProjectionalEditorError::ComputedScene(error.to_string()))?
+            .execute(OperationControl::unlimited())
+            .map_err(|error| ProjectionalEditorError::ComputedScene(error.to_string()))?;
+            let geosolve_sketch::OperationOutcome::Completed {
+                value: computed, ..
+            } = outcome
+            else {
+                return Err(ProjectionalEditorError::ComputedSceneStopped);
+            };
+            transient_computed.insert(computed)
+        };
+        let mut scene = EditorScene::from_accepted_with_computed(
             accepted.identity().revision().get(),
             session.design_identity(),
             accepted.document(),
             session.design_document(),
+            &accepted_input,
+            &computed.input(),
+            computed,
             viewport,
             chord_tolerance_pixels,
         )?;
@@ -327,6 +383,73 @@ impl ProjectionalEditorSession {
         }
         self.reconcile_declaration_selection();
         Ok(outcome)
+    }
+
+    /// Publishes one grouped computed-Fillet candidate as a single typed
+    /// declaration through the sole intent history.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale preview stamps, incomplete logical ownership, invalid
+    /// branch metadata, or ordinary planning/materialization failures.
+    pub fn apply_computed_fillet(
+        &mut self,
+        symbol: IntentKey,
+        candidate: &FeatureAuthoringCandidate,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let patch = {
+            let accepted = self
+                .coordinator
+                .accepted_materialization()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            let accepted_state = accepted
+                .session
+                .accepted_state_for_current_input()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            let accepted_input = accepted
+                .session
+                .accepted_prepared_input()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            projectional_fillet_patch(
+                self.coordinator.intent().identity(),
+                self.coordinator.intent(),
+                &accepted.ownership,
+                accepted_input,
+                accepted_state.identity(),
+                symbol,
+                candidate,
+            )?
+            .patch
+        };
+        self.apply_patch(patch)
+    }
+
+    /// Edits one stable computed-Fillet radius. A geometrically invalid value
+    /// remains as retained intent over the prior accepted scene, matching the
+    /// projectional Inspector contract.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale ownership, nonpositive/nonfinite input, a non-Fillet
+    /// feature, or ordinary projectional patch failures.
+    pub fn edit_computed_fillet_radius(
+        &mut self,
+        feature: geosolve_sketch_features::ComputedFeatureId,
+        radius: f64,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let patch = {
+            let accepted = self
+                .coordinator
+                .accepted_materialization()
+                .ok_or(ProjectionalEditorError::NoAcceptedAuthority)?;
+            projectional_fillet_radius_patch(
+                self.coordinator.intent(),
+                &accepted.ownership,
+                feature,
+                radius,
+            )?
+        };
+        self.apply_patch(patch)
     }
 
     /// Applies one complete contextual relation or dimension application
@@ -951,6 +1074,8 @@ pub enum ProjectionalEditorError {
     Bootstrap(#[from] IntentBootstrapError),
     #[error(transparent)]
     Authoring(#[from] ProjectionalAuthoringError),
+    #[error(transparent)]
+    FilletAuthoring(#[from] ProjectionalFilletAuthoringError),
     #[error("the editor effect is not a terminal construction plan")]
     UnexpectedConstructionEffect,
     #[error("the construction token, plan, input, or active geometry variant is not current")]
@@ -963,6 +1088,10 @@ pub enum ProjectionalEditorError {
     NoAcceptedAuthority,
     #[error("the accepted scene does not match its retained native authority")]
     SceneAuthorityMismatch,
+    #[error("computed scene evaluation rejected: {0}")]
+    ComputedScene(String),
+    #[error("computed scene evaluation stopped before publication")]
+    ComputedSceneStopped,
     #[error("flat bootstrap activation currently requires a current accepted native design")]
     BootstrapCurrentAcceptanceRequired,
     #[error("flat bootstrap declarations and the restored native document disagree")]

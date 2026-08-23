@@ -18,8 +18,10 @@ mod inference;
 mod intent;
 mod intent_authoring;
 mod intent_bootstrap;
+mod intent_computed;
 mod intent_coordinator;
 mod intent_editor;
+mod intent_feature_authoring;
 mod intent_inputs;
 mod intent_projection;
 mod intent_rpc;
@@ -117,6 +119,10 @@ pub use intent_coordinator::{
 pub use intent_editor::{
     ProjectionalEditorConstructionOutcome, ProjectionalEditorError,
     ProjectionalEditorPointerOutcome, ProjectionalEditorSession,
+};
+pub use intent_feature_authoring::{
+    ProjectionalFilletAuthoringError, ProjectionalFilletPatch, projectional_fillet_patch,
+    projectional_fillet_radius_patch,
 };
 pub use intent_projection::{
     IntentInspectorEditError, IntentInspectorEditTarget, IntentInspectorEditValue,

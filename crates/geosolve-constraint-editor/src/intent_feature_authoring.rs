@@ -3,9 +3,8 @@
 //! Browser-ready typed patches for computed Fillet intent.
 
 use geosolve_sketch::{
-    ContactNeighborhood, DocumentArcSweep, DocumentCurveNormalSide,
-    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, PreparedSketchInput,
-    SketchAcceptedStateIdentity,
+    ContactNeighborhood, DocumentArcSweep, DocumentCurveNormalSide, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, PreparedSketchInput, SketchAcceptedStateIdentity,
 };
 use geosolve_sketch_features::{
     ComputedFeatureId, ComputedFilletParent, NativeCurveSpanSource, NewComputedFilletCorner,
@@ -56,6 +55,11 @@ pub enum ProjectionalFilletAuthoringError {
 /// Translates one authenticated grouped Fillet preview into a single typed
 /// declaration. Every branch field is copied; no branch or contact default is
 /// inferred by this adapter.
+///
+/// # Errors
+///
+/// Rejects stale intent/native evidence, invalid or empty candidates, excessive
+/// cardinality and native spans without one exact logical owner.
 pub fn projectional_fillet_patch(
     expected: IntentSessionIdentity,
     intent: &IntentSession,
@@ -133,6 +137,11 @@ pub fn projectional_fillet_patch(
 
 /// Builds a retained-invalid-capable radius edit for one stably owned
 /// projectional Fillet declaration.
+///
+/// # Errors
+///
+/// Rejects stale ownership, invalid radius values, ambiguous feature ownership
+/// and declarations which are not computed `FilletSet` features.
 pub fn projectional_fillet_radius_patch(
     intent: &IntentSession,
     ownership: &IntentMaterializationMap,
@@ -187,7 +196,7 @@ fn exact_span_owner(
         .iter()
         .filter(|(port, binding)| {
             port.kind == IntentPortKind::CurveSpan
-                && **binding == IntentNativeBinding::CurveSpan(source.span)
+                && *binding == IntentNativeBinding::CurveSpan(source.span)
         })
         .map(|(port, _)| *port)
         .collect::<Vec<_>>();
@@ -313,4 +322,3 @@ fn enum_literal(value: &str) -> Result<IntentLiteral, IntentKeyError> {
 const fn quantity(value: f64, unit: IntentUnit) -> IntentLiteral {
     IntentLiteral::Quantity { value, unit }
 }
-
