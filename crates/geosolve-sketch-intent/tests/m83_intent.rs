@@ -4,9 +4,9 @@ use std::cell::Cell;
 use std::collections::BTreeSet;
 
 use geosolve_sketch_intent::{
-    BootstrapNativeKind, CellTarget, ComputedFeatureKind, ConstraintKind, DeletePolicy,
-    DimensionKind, ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind, InputRole,
-    InputSlot, IntentBootstrapObject, IntentEvaluation, IntentEvaluationFailure,
+    AggregateKind, BootstrapNativeKind, CellTarget, ComputedFeatureKind, ConstraintKind,
+    DeletePolicy, DimensionKind, ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind,
+    InputRole, InputSlot, IntentBootstrapObject, IntentEvaluation, IntentEvaluationFailure,
     IntentEvaluationFailureKind, IntentFieldKey, IntentGraphError, IntentIdentityFlow, IntentKey,
     IntentLiteral, IntentLiteralSchema, IntentNativeReservationKind, IntentNodeDraft,
     IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchOperationKind, IntentPatchPolicy,
@@ -129,6 +129,12 @@ fn declaration_schema_cases() -> Vec<DeclarationSchemaCase> {
         push(
             format!("computed_feature.{feature:?}"),
             IntentNodeKind::ComputedFeature { feature },
+        );
+    }
+    for aggregate in AggregateKind::ALL {
+        push(
+            format!("aggregate.{aggregate:?}"),
+            IntentNodeKind::Aggregate { aggregate },
         );
     }
     for parameter in ParameterIntentKind::ALL {
@@ -325,6 +331,230 @@ fn closed_geometry_catalog_has_all_twenty_five_recipes() {
 #[test]
 #[allow(
     clippy::too_many_lines,
+    reason = "one fixture proves both typed aggregate producers and their Profile Offset consumers"
+)]
+fn ordered_span_aggregates_supply_typed_chain_and_profile_offset_operands() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8334)).unwrap();
+    let segment = |symbol: &str| {
+        IntentNodeDraft::new(
+            IntentNodeKind::Geometry {
+                recipe: GeometryRecipeKind::Segment,
+            },
+            key(symbol),
+        )
+    };
+    let circle = IntentNodeDraft::new(
+        IntentNodeKind::Geometry {
+            recipe: GeometryRecipeKind::CenterRadiusCircle,
+        },
+        key("profile.circle"),
+    );
+    let chain = IntentNodeDraft::new(
+        IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::OpenChain,
+        },
+        key("offset.chain"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias_port("first", IntentPortRole::Span, 0),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 1),
+        alias_port("second", IntentPortRole::Span, 0),
+    );
+    let profile = IntentNodeDraft::new(
+        IntentNodeKind::Aggregate {
+            aggregate: AggregateKind::ClosedProfile,
+        },
+        key("offset.profile"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Span, 0),
+        alias_port("circle", IntentPortRole::Span, 0),
+    );
+    let chain_offset = IntentNodeDraft::new(
+        IntentNodeKind::Operation {
+            operation: OperationKind::ProfileOffset,
+        },
+        key("offset.open-chain"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Chain, 0),
+        alias_port("chain", IntentPortRole::Chain, 0),
+    )
+    .with_field(
+        IntentFieldKey(key("distance")),
+        IntentLiteral::Quantity {
+            value: 0.5,
+            unit: IntentUnit::Length,
+        },
+    );
+    let profile_dimension = IntentNodeDraft::new(
+        IntentNodeKind::Dimension {
+            dimension: DimensionKind::ProfileOffset,
+        },
+        key("offset.closed-profile.distance"),
+    )
+    .with_input(
+        InputSlot::new(InputRole::Profile, 0),
+        alias_port("profile", IntentPortRole::Profile, 0),
+    );
+    let patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("first"),
+                draft: Box::new(segment("span.first")),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("second"),
+                draft: Box::new(segment("span.second")),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("circle"),
+                draft: Box::new(circle),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("chain"),
+                draft: Box::new(chain),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("profile"),
+                draft: Box::new(profile),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("chain-offset"),
+                draft: Box::new(chain_offset),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("profile-dimension"),
+                draft: Box::new(profile_dimension),
+                cell: None,
+            },
+        ],
+    );
+    let plan = session.plan_patch(patch, accepted).unwrap();
+    let aliases = plan.aliases().clone();
+    let first_span = aliases
+        .port(
+            &key("first"),
+            IntentPortSelector::Node {
+                role: IntentPortRole::Span,
+                index: 0,
+            },
+        )
+        .unwrap();
+    let second_span = aliases
+        .port(
+            &key("second"),
+            IntentPortSelector::Node {
+                role: IntentPortRole::Span,
+                index: 0,
+            },
+        )
+        .unwrap();
+    let chain_port = aliases
+        .port(
+            &key("chain"),
+            IntentPortSelector::Node {
+                role: IntentPortRole::Chain,
+                index: 0,
+            },
+        )
+        .unwrap();
+    let profile_port = aliases
+        .port(
+            &key("profile"),
+            IntentPortSelector::Node {
+                role: IntentPortRole::Profile,
+                index: 0,
+            },
+        )
+        .unwrap();
+    let chain_id = aliases.node(&key("chain")).unwrap();
+    let profile_id = aliases.node(&key("profile")).unwrap();
+    let chain_offset_id = aliases.node(&key("chain-offset")).unwrap();
+    let profile_dimension_id = aliases.node(&key("profile-dimension")).unwrap();
+    session.commit_plan(plan).unwrap();
+
+    assert_eq!(chain_port.kind, IntentPortKind::Chain);
+    assert_eq!(profile_port.kind, IntentPortKind::Profile);
+    let chain_node = session.graph().node(chain_id).unwrap();
+    assert!(chain_node.reservations.is_empty());
+    assert_eq!(
+        chain_node.inputs[&InputSlot::new(InputRole::Span, 0)],
+        first_span
+    );
+    assert_eq!(
+        chain_node.inputs[&InputSlot::new(InputRole::Span, 1)],
+        second_span
+    );
+    let profile_node = session.graph().node(profile_id).unwrap();
+    assert!(profile_node.reservations.is_empty());
+    assert_eq!(
+        session.graph().node(chain_offset_id).unwrap().inputs[&InputSlot::new(InputRole::Chain, 0)],
+        chain_port
+    );
+    assert_eq!(
+        session.graph().node(profile_dimension_id).unwrap().inputs
+            [&InputSlot::new(InputRole::Profile, 0)],
+        profile_port
+    );
+
+    // Unlike declaration presentation order, indexed span order is part of
+    // the aggregate definition and therefore changes semantic identity.
+    let before_reorder = session.semantic_identity();
+    let reorder = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![
+            IntentPatchOperation::RebindInput {
+                node: chain_id,
+                slot: InputSlot::new(InputRole::Span, 0),
+                source: PatchPortRef::Stable { port: second_span },
+            },
+            IntentPatchOperation::RebindInput {
+                node: chain_id,
+                slot: InputSlot::new(InputRole::Span, 1),
+                source: PatchPortRef::Stable { port: first_span },
+            },
+        ],
+    );
+    let plan = session.plan_patch(reorder, accepted).unwrap();
+    session.commit_plan(plan).unwrap();
+    assert_ne!(session.semantic_identity(), before_reorder);
+    assert_eq!(
+        session.graph().node(chain_id).unwrap().inputs[&InputSlot::new(InputRole::Span, 0)],
+        second_span
+    );
+
+    let semantic = session.semantic_identity();
+    let rename = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::RenameNode {
+            node: chain_id,
+            name: key("Renamed open chain"),
+        }],
+    );
+    let plan = session
+        .plan_patch(rename, |_| panic!("display names must not materialize"))
+        .unwrap();
+    session.commit_plan(plan).unwrap();
+    assert_eq!(session.semantic_identity(), semantic);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
     reason = "one table-driven oracle reviews every closed declaration schema"
 )]
 fn every_closed_declaration_schema_is_unique_coherent_and_minimally_admitted() {
@@ -333,12 +563,13 @@ fn every_closed_declaration_schema_is_unique_coherent_and_minimally_admitted() {
     assert_eq!(DimensionKind::ALL.len(), 8);
     assert_eq!(OperationKind::ALL.len(), 12);
     assert_eq!(ComputedFeatureKind::ALL.len(), 1);
+    assert_eq!(AggregateKind::ALL.len(), 2);
     assert_eq!(ParameterIntentKind::ALL.len(), 3);
     assert_eq!(ExternalIntentKind::ALL.len(), 2);
     assert_eq!(BootstrapNativeKind::ALL.len(), 17);
 
     let cases = declaration_schema_cases();
-    assert_eq!(cases.len(), 107);
+    assert_eq!(cases.len(), 109);
     assert_eq!(
         cases
             .iter()
@@ -591,6 +822,7 @@ fn every_closed_declaration_rejects_malformed_operands_and_children_atomically()
                     | IntentNodeKind::Dimension { .. }
                     | IntentNodeKind::Operation { .. }
                     | IntentNodeKind::ComputedFeature { .. }
+                    | IntentNodeKind::Aggregate { .. }
                     | IntentNodeKind::Annotation => InputRole::Point,
                     IntentNodeKind::Parameter { .. } => InputRole::Scalar,
                     IntentNodeKind::External { .. } => InputRole::External,

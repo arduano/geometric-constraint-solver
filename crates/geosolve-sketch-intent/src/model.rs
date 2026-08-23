@@ -318,6 +318,21 @@ impl ComputedFeatureKind {
     pub const ALL: [Self; 1] = [Self::FilletSet];
 }
 
+/// Equation-free ordered span aggregates used as typed operands by native
+/// operations. The variant is the explicit closure intent; a host
+/// materializer remains responsible for proving continuity and that a
+/// `ClosedProfile` is closed while an `OpenChain` has distinct ends.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AggregateKind {
+    OpenChain,
+    ClosedProfile,
+}
+
+impl AggregateKind {
+    pub const ALL: [Self; 2] = [Self::OpenChain, Self::ClosedProfile];
+}
+
 /// Existing host parameter/binding/output declaration categories.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -516,6 +531,12 @@ pub enum IntentNodeKind {
     ComputedFeature {
         feature: ComputedFeatureKind,
     },
+    /// Ordered logical grouping of explicit span inputs. This owns no native
+    /// geometry or equation and exists only to give aggregate consumers an
+    /// honest typed dependency.
+    Aggregate {
+        aggregate: AggregateKind,
+    },
     Parameter {
         parameter: ParameterIntentKind,
     },
@@ -587,6 +608,7 @@ impl IntentNodeKind {
                 role,
                 InputRole::Point | InputRole::Curve | InputRole::Span | InputRole::Feature
             ),
+            Self::Aggregate { .. } => role == InputRole::Span,
             Self::Parameter { .. } => matches!(
                 role,
                 InputRole::Scalar | InputRole::Dimension | InputRole::Parameter | InputRole::Source
@@ -1621,6 +1643,13 @@ pub(crate) fn node_port_specs(kind: &IntentNodeKind) -> Vec<PortSpec> {
             NO_LEAVES,
             None,
         ),
+        IntentNodeKind::Aggregate { aggregate } => {
+            let (role, kind) = match aggregate {
+                AggregateKind::OpenChain => (IntentPortRole::Chain, IntentPortKind::Chain),
+                AggregateKind::ClosedProfile => (IntentPortRole::Profile, IntentPortKind::Profile),
+            };
+            push(role, 0, kind, NO_LEAVES, None);
+        }
         IntentNodeKind::Parameter { parameter } => {
             let (port_kind, native) = match parameter {
                 ParameterIntentKind::Parameter => (

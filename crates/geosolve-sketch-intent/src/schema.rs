@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::{MAX_INTENT_NODE_CHILDREN, MAX_INTENT_NODE_INPUTS};
 use crate::{
-    ComputedFeatureKind, ConstraintKind, DimensionKind, ExternalIntentKind, GeometryRecipeKind,
-    InputRole, InputSlot, IntentChildSchema, IntentFieldKey, IntentKey, IntentLiteral,
-    IntentNodeKind, IntentUnit, OperationKind, ParameterIntentKind,
+    AggregateKind, ComputedFeatureKind, ConstraintKind, DimensionKind, ExternalIntentKind,
+    GeometryRecipeKind, InputRole, InputSlot, IntentChildSchema, IntentFieldKey, IntentKey,
+    IntentLiteral, IntentNodeKind, IntentUnit, OperationKind, ParameterIntentKind,
 };
 
 #[allow(
@@ -174,6 +174,7 @@ fn node_schema(kind: &IntentNodeKind, dynamic_children: u16) -> IntentNodeSchema
         IntentNodeKind::ComputedFeature { feature } => {
             computed_feature_schema(*feature, dynamic_children)
         }
+        IntentNodeKind::Aggregate { aggregate } => aggregate_schema(*aggregate),
         IntentNodeKind::Parameter { parameter } => parameter_schema(*parameter),
         IntentNodeKind::External { external } => external_schema(*external),
         // A bootstrap payload's public-domain codec owns its object-specific
@@ -197,6 +198,17 @@ fn node_schema(kind: &IntentNodeKind, dynamic_children: u16) -> IntentNodeSchema
         ),
         IntentNodeKind::Identity { .. } => schema(
             vec![input(InputRole::Identity, 1, 1)],
+            Vec::new(),
+            Vec::new(),
+            (0, 0),
+        ),
+    }
+}
+
+fn aggregate_schema(kind: AggregateKind) -> IntentNodeSchema {
+    match kind {
+        AggregateKind::OpenChain | AggregateKind::ClosedProfile => schema(
+            vec![input(InputRole::Span, 1, MAX_SCHEMA_INPUTS)],
             Vec::new(),
             Vec::new(),
             (0, 0),

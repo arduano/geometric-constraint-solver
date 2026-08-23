@@ -30,7 +30,7 @@ pub use ids::{
     IntentKey, IntentKeyError, IntentSessionId, NodeId, PlanToken, PortId, ReservationId, Revision,
 };
 pub use model::{
-    Axis, BootstrapNativeKind, ComputedFeatureKind, ConstraintKind, DimensionKind,
+    AggregateKind, Axis, BootstrapNativeKind, ComputedFeatureKind, ConstraintKind, DimensionKind,
     ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind, InputRole, InputSlot,
     IntentBootstrapObject, IntentChildSchema, IntentExternalInputs, IntentExternalInputsIdentity,
     IntentFieldKey, IntentGraphIdentity, IntentIdentityFlow, IntentInstanceIdentity,
