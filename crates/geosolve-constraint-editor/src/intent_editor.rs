@@ -8,11 +8,12 @@
 //! disposable selection, hover and pointer-gesture state.
 
 use geosolve_sketch::{DesignPointId, OperationControl};
-use geosolve_sketch_intent::{IntentPatch, IntentPlanDisposition, IntentSessionIdentity};
+use geosolve_sketch_intent::{IntentPatch, IntentPlanDisposition, IntentSessionIdentity, NodeId};
 use thiserror::Error;
 
 use crate::{
-    ConstraintEditor, EditorEffect, EditorError, EditorScene, Modifiers, PointerInput,
+    ConstraintEditor, EditorEffect, EditorError, EditorScene, IntentInspectorProjection,
+    IntentSourceEditError, IntentSourceTokenId, IntentWorkbenchProjection, Modifiers, PointerInput,
     ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
     SelectionItem, Viewport,
 };
@@ -44,6 +45,7 @@ pub struct ProjectionalEditorPointerOutcome {
 pub struct ProjectionalEditorSession {
     coordinator: ProjectionalIntentCoordinator,
     editor: ConstraintEditor,
+    selected_declaration: Option<NodeId>,
     point_drag: Option<ActivePointDrag>,
     preview_control: OperationControl,
 }
@@ -69,6 +71,7 @@ impl ProjectionalEditorSession {
         Self {
             coordinator,
             editor,
+            selected_declaration: None,
             point_drag: None,
             preview_control,
         }
@@ -84,6 +87,40 @@ impl ProjectionalEditorSession {
     #[must_use]
     pub const fn editor(&self) -> &ConstraintEditor {
         &self.editor
+    }
+
+    /// Builds the durable editor-owned Outline/source/History projection.
+    ///
+    /// Pointer-frame methods never call this function; presentation adapters
+    /// rebuild these DTOs only at a durable render boundary.
+    #[must_use]
+    pub fn workbench_projection(&self) -> IntentWorkbenchProjection {
+        IntentWorkbenchProjection::from_session(self.coordinator.intent())
+    }
+
+    /// Currently selected logical declaration, independent of canvas picks.
+    #[must_use]
+    pub const fn selected_declaration(&self) -> Option<NodeId> {
+        self.selected_declaration
+    }
+
+    /// Selects one stable declaration for Outline/source/Inspector projection.
+    ///
+    /// Missing or deleted identities clear the logical selection. This is
+    /// presentation state and never appends intent history.
+    pub fn set_selected_declaration(&mut self, node: Option<NodeId>) -> bool {
+        self.selected_declaration =
+            node.filter(|node| self.coordinator.intent().graph().node(*node).is_some());
+        self.selected_declaration.is_some() == node.is_some()
+    }
+
+    /// Builds the schema-derived Inspector for the selected declaration.
+    #[must_use]
+    pub fn selected_inspector(
+        &self,
+        projection: &IntentWorkbenchProjection,
+    ) -> Option<IntentInspectorProjection> {
+        projection.inspector(self.coordinator.intent(), self.selected_declaration?)
     }
 
     /// Builds the currently presentable native scene.
@@ -137,7 +174,45 @@ impl ProjectionalEditorSession {
         if outcome.disposition == IntentPlanDisposition::Accepted {
             self.clear_transient_selection();
         }
+        self.reconcile_declaration_selection();
         Ok(outcome)
+    }
+
+    /// Deletes one declaration plus its exact dependent closure through one
+    /// intent transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary dependency/materialization/publication error.
+    pub fn delete_declaration(
+        &mut self,
+        node: NodeId,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        self.cancel_interaction();
+        let outcome = self.coordinator.delete_declaration(node)?;
+        self.clear_transient_selection();
+        self.reconcile_declaration_selection();
+        Ok(outcome)
+    }
+
+    /// Applies one recognized structured-source token as an ordinary typed
+    /// exact-CAS patch. Source text is never executed.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stale/invalid token or the ordinary projectional patch error.
+    pub fn edit_source_token(
+        &mut self,
+        projection: &IntentWorkbenchProjection,
+        token: IntentSourceTokenId,
+        replacement: &str,
+    ) -> Result<ProjectionalPatchOutcome, ProjectionalEditorError> {
+        let patch = projection.structured_source.patch_for_edit(
+            self.coordinator.intent(),
+            token,
+            replacement,
+        )?;
+        self.apply_patch(patch)
     }
 
     /// Steps the sole intent history backward.
@@ -150,6 +225,7 @@ impl ProjectionalEditorSession {
         let moved = self.coordinator.undo()?;
         if moved.is_some() {
             self.clear_transient_selection();
+            self.reconcile_declaration_selection();
         }
         Ok(moved)
     }
@@ -164,6 +240,7 @@ impl ProjectionalEditorSession {
         let moved = self.coordinator.redo()?;
         if moved.is_some() {
             self.clear_transient_selection();
+            self.reconcile_declaration_selection();
         }
         Ok(moved)
     }
@@ -373,6 +450,15 @@ impl ProjectionalEditorSession {
         let _ = self.editor.cancel();
         self.editor.set_selection([]);
     }
+
+    fn reconcile_declaration_selection(&mut self) {
+        if self
+            .selected_declaration
+            .is_some_and(|node| self.coordinator.intent().graph().node(node).is_none())
+        {
+            self.selected_declaration = None;
+        }
+    }
 }
 
 /// Projectional headless interaction failure.
@@ -383,6 +469,8 @@ pub enum ProjectionalEditorError {
     Coordinator(#[from] ProjectionalCoordinatorError),
     #[error(transparent)]
     Scene(#[from] EditorError),
+    #[error(transparent)]
+    SourceEdit(#[from] IntentSourceEditError),
     #[error("there is no independently accepted projectional scene")]
     NoAcceptedAuthority,
     #[error("the accepted scene does not match its retained native authority")]

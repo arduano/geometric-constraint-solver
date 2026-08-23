@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ColdIntentMaterializer, EditorEffect, IntentNativeBinding, Modifiers, PointerInput,
-    ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint, SelectionItem, Viewport,
+    ColdIntentMaterializer, EditorEffect, IntentNativeBinding, IntentSourceTokenTarget, Modifiers,
+    PointerInput, ProjectionalEditorSession, ProjectionalIntentCoordinator, ScreenPoint,
+    SelectionItem, Viewport,
 };
 use geosolve_sketch::{DesignPointId, DocumentId, PersistentId};
 use geosolve_sketch_intent::{
@@ -286,5 +287,84 @@ fn click_only_point_route_is_cancelled_before_the_next_press() {
             .applied
             .len(),
         1
+    );
+}
+
+#[test]
+fn logical_selection_source_edit_and_closure_delete_share_the_intent_history() {
+    let (mut session, point, viewport) = fixture();
+    let node = *session
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .keys()
+        .next()
+        .unwrap();
+    assert!(session.set_selected_declaration(Some(node)));
+    let projection = session.workbench_projection();
+    assert_eq!(
+        session
+            .selected_inspector(&projection)
+            .expect("selected Inspector")
+            .node,
+        node
+    );
+    let name_token = projection
+        .structured_source
+        .tokens
+        .iter()
+        .find(|token| token.target == IntentSourceTokenTarget::NodeName { node })
+        .unwrap()
+        .id;
+    let accepted_before = session
+        .coordinator()
+        .accepted_materialization()
+        .unwrap()
+        .evidence
+        .clone();
+    let renamed = session
+        .edit_source_token(&projection, name_token, r#""Renamed point""#)
+        .unwrap();
+    assert_eq!(renamed.disposition, IntentPlanDisposition::OrganizationOnly);
+    assert_eq!(session.selected_declaration(), Some(node));
+    assert_eq!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .evidence,
+        accepted_before
+    );
+    assert_eq!(
+        session
+            .selected_inspector(&session.workbench_projection())
+            .unwrap()
+            .name
+            .as_str(),
+        "Renamed point"
+    );
+
+    let deleted = session.delete_declaration(node).unwrap();
+    assert_eq!(deleted.disposition, IntentPlanDisposition::Accepted);
+    assert_eq!(session.selected_declaration(), None);
+    assert!(
+        session.workbench_projection().outline[0]
+            .declarations
+            .is_empty()
+    );
+    assert!(session.scene(viewport, 0.5).unwrap().points.is_empty());
+
+    session.undo().unwrap().unwrap();
+    assert_pair(point_position(&session, point), [1.0, 2.0]);
+    assert_eq!(
+        session
+            .coordinator()
+            .intent()
+            .history_projection()
+            .applied
+            .len(),
+        2,
+        "create plus organization rename remain after undoing deletion",
     );
 }
