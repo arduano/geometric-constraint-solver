@@ -11567,8 +11567,15 @@ impl SketchDocument {
         })
     }
 
+    /// Returns the exact direct persistent dependencies of one native element.
+    ///
+    /// The document root is included for every non-root element. Results are
+    /// canonical, deduplicated, and deliberately not transitive. This is the
+    /// audit seam used by projectional persistence hosts to create honest
+    /// per-object dependency edges without reimplementing definition matching.
+    #[must_use]
     #[allow(clippy::too_many_lines)]
-    fn direct_dependencies(&self, element: DocumentElementId) -> Vec<DocumentElementId> {
+    pub fn direct_dependencies(&self, element: DocumentElementId) -> Vec<DocumentElementId> {
         if element == DocumentElementId::Document(self.id) {
             return Vec::new();
         }

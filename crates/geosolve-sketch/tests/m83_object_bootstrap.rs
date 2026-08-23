@@ -2,8 +2,8 @@
 
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentDimensionDefinition, DocumentDimensionMode,
-    DocumentParameterKind, DocumentParameterTarget, GeometryRole, ScalarDomain, ScalarUnit,
-    SketchDocument, SketchObjectBootstrap,
+    DocumentElementId, DocumentParameterKind, DocumentParameterTarget, GeometryRole, ScalarDomain,
+    ScalarUnit, SketchDocument, SketchObjectBootstrap,
 };
 
 #[test]
@@ -132,4 +132,59 @@ fn per_object_bootstrap_rejects_missing_dependency_without_partial_document() {
     .unwrap();
     bootstrap.push_curve(original.curve(segment).unwrap().clone());
     assert!(bootstrap.finish().is_err());
+}
+
+#[test]
+fn direct_dependency_audit_is_exact_and_non_transitive() {
+    let mut document = SketchDocument::new(1.0).unwrap();
+    let start = document.add_point("start", [0.0, 0.0]).unwrap();
+    let end = document.add_point("end", [2.0, 0.0]).unwrap();
+    let line = document
+        .add_curve(
+            "line",
+            CurveDefinition::Line {
+                start,
+                end,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .unwrap();
+    let target = document
+        .add_scalar("length", 2.0, ScalarUnit::Length, ScalarDomain::Positive)
+        .unwrap();
+    let dimension = document
+        .add_dimension(
+            "length",
+            DocumentDimensionDefinition::CurveLength {
+                curve: CurveSpan::line(line),
+                target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .unwrap();
+
+    assert_eq!(
+        document.direct_dependencies(DocumentElementId::Curve(line)),
+        vec![
+            DocumentElementId::Document(document.id()),
+            DocumentElementId::Point(start),
+            DocumentElementId::Point(end),
+        ]
+    );
+    assert_eq!(
+        document.direct_dependencies(DocumentElementId::Dimension(dimension)),
+        vec![
+            DocumentElementId::Document(document.id()),
+            DocumentElementId::Curve(line),
+            DocumentElementId::Scalar(target),
+        ]
+    );
+    let source = document.dimension(dimension).unwrap().source_id;
+    assert_eq!(
+        document.direct_dependencies(DocumentElementId::Source(source)),
+        vec![
+            DocumentElementId::Document(document.id()),
+            DocumentElementId::Dimension(dimension),
+        ]
+    );
 }
