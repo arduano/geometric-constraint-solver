@@ -2576,6 +2576,59 @@ mod tests {
     )]
     fn workspace_v7_cache_free_reload_consumes_exact_current_accepted_native_fillet() {
         let (mut coordinator, ids) = current_native_fillet_corner();
+        let baseline = coordinator.lineage_document().steps()[0].id;
+        let fillet_owner = coordinator.lineage_document().steps()[1].id;
+        let fillet_step = coordinator
+            .lineage_document()
+            .step(fillet_owner)
+            .expect("native Fillet recipe owner")
+            .clone();
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreatePoint {
+                    label: "independent reorder witness".into(),
+                    position: [8.0, -2.0],
+                },
+            )
+            .expect("independent point recipe");
+        let point_owner = coordinator
+            .lineage_document()
+            .steps()
+            .last()
+            .expect("independent point owner")
+            .id;
+        let point_step = coordinator
+            .lineage_document()
+            .step(point_owner)
+            .expect("independent point step")
+            .clone();
+        let reordered = coordinator
+            .reorder_lineage_step(
+                coordinator.lineage_identity(),
+                point_owner,
+                Some(fillet_owner),
+            )
+            .expect("move independent point across native Fillet");
+        assert!(reordered.changed, "{reordered:#?}");
+        assert!(!reordered.clamped, "{reordered:#?}");
+        assert_eq!(
+            coordinator
+                .lineage_document()
+                .steps()
+                .iter()
+                .map(|step| step.id)
+                .collect::<Vec<_>>(),
+            vec![baseline, point_owner, fillet_owner]
+        );
+        assert_eq!(
+            coordinator.lineage_document().step(fillet_owner),
+            Some(&fillet_step)
+        );
+        assert_eq!(
+            coordinator.lineage_document().step(point_owner),
+            Some(&point_step)
+        );
         let center = coordinator
             .session()
             .accepted_state_for_current_input()
@@ -2596,6 +2649,13 @@ mod tests {
                 },
             )
             .expect("accepted current center anchor");
+        let expected_steps = coordinator.lineage_document().steps().to_vec();
+        let expected_history = (
+            coordinator.history_len(),
+            coordinator.history_cursor(),
+            coordinator.can_undo(),
+            coordinator.can_redo(),
+        );
         let accepted_before = coordinator
             .session()
             .export_accepted_json()
@@ -2666,7 +2726,27 @@ mod tests {
             accepted_before,
             "workspace decode must consume authenticated current accepted evidence rather than re-solve flattened intent"
         );
-        let restored = coordinator_from_snapshot(&decoded).expect("restored coordinator");
+        let mut restored = coordinator_from_snapshot(&decoded).expect("restored coordinator");
+        assert_eq!(restored.lineage_document().steps(), expected_steps);
+        assert_eq!(
+            (
+                restored.history_len(),
+                restored.history_cursor(),
+                restored.can_undo(),
+                restored.can_redo(),
+            ),
+            expected_history
+        );
+        assert_eq!(
+            restored.lineage_document().step(fillet_owner),
+            coordinator.lineage_document().step(fillet_owner),
+            "cache-free reload must retain the stable native Fillet owner manifest"
+        );
+        assert_eq!(
+            restored.lineage_document().step(point_owner),
+            coordinator.lineage_document().step(point_owner),
+            "cache-free reload must retain the reordered point owner manifest"
+        );
         assert_eq!(
             restored
                 .session()
@@ -2691,6 +2771,18 @@ mod tests {
         let report = accepted.solve_result().unstable_core_report();
         assert!(report.hard_residuals_validated, "{report:#?}");
         assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+
+        restored.undo().expect("cache-free Undo center anchor");
+        restored.redo().expect("cache-free Redo center anchor");
+        assert_eq!(restored.lineage_document().steps(), expected_steps);
+        assert_eq!(
+            restored
+                .session()
+                .export_accepted_json()
+                .expect("redone accepted export")
+                .expect("redone accepted native-Fillet bytes"),
+            accepted_before
+        );
     }
 
     #[test]
@@ -3387,6 +3479,13 @@ mod tests {
         .expect("session");
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         let feature = apply_computed_fillet(&mut coordinator, points[1], "lineage-only Fillet");
+        let baseline = coordinator.lineage_document().steps()[0].id;
+        let feature_owner = coordinator.lineage_document().steps()[1].id;
+        let feature_step = coordinator
+            .lineage_document()
+            .step(feature_owner)
+            .expect("computed Fillet recipe owner")
+            .clone();
         coordinator
             .apply_edit(
                 coordinator.session().design_identity(),
@@ -3396,8 +3495,65 @@ mod tests {
                 },
             )
             .expect("native geometry mutation");
+        let point_owner = coordinator
+            .lineage_document()
+            .steps()
+            .last()
+            .expect("native point recipe owner")
+            .id;
+        let point_step = coordinator
+            .lineage_document()
+            .step(point_owner)
+            .expect("native point recipe")
+            .clone();
+        let reordered = coordinator
+            .reorder_lineage_step(
+                coordinator.lineage_identity(),
+                point_owner,
+                Some(feature_owner),
+            )
+            .expect("move independent point across computed Fillet");
+        assert!(reordered.changed, "{reordered:#?}");
+        assert!(!reordered.clamped, "{reordered:#?}");
+        assert_eq!(
+            coordinator
+                .lineage_document()
+                .steps()
+                .iter()
+                .map(|step| step.id)
+                .collect::<Vec<_>>(),
+            vec![baseline, point_owner, feature_owner]
+        );
+        assert_eq!(
+            coordinator.lineage_document().step(feature_owner),
+            Some(&feature_step)
+        );
+        assert_eq!(
+            coordinator.lineage_document().step(point_owner),
+            Some(&point_step)
+        );
+        coordinator
+            .set_computed_fillet_radius(coordinator.feature_document().identity(), feature, 0.75)
+            .expect("computed Fillet parameter rewrite after reorder");
+        let rewritten_feature_step = coordinator
+            .lineage_document()
+            .step(feature_owner)
+            .expect("rewritten computed Fillet owner")
+            .clone();
+        assert_eq!(rewritten_feature_step.id, feature_step.id);
+        assert_eq!(rewritten_feature_step.outputs, feature_step.outputs);
+        assert_eq!(
+            rewritten_feature_step.output_identities,
+            feature_step.output_identities
+        );
+        assert_eq!(
+            rewritten_feature_step.reservations,
+            feature_step.reservations
+        );
+        assert_ne!(rewritten_feature_step.action, feature_step.action);
 
         let expected_lineage = coordinator.lineage_json().expect("lineage document");
+        let expected_steps = coordinator.lineage_document().steps().to_vec();
         let expected_design = coordinator
             .session()
             .design_document()
@@ -3452,7 +3608,16 @@ mod tests {
             &serde_json::to_string(&lineage_only).expect("lineage-only workspace JSON"),
         )
         .expect("cold lineage-only workspace recovery");
-        let restored = coordinator_from_snapshot(&recovered).expect("restored coordinator");
+        let mut restored = coordinator_from_snapshot(&recovered).expect("restored coordinator");
+        assert_eq!(restored.lineage_document().steps(), expected_steps);
+        assert_eq!(
+            restored.lineage_document().step(feature_owner),
+            Some(&rewritten_feature_step)
+        );
+        assert_eq!(
+            restored.lineage_document().step(point_owner),
+            Some(&point_step)
+        );
         assert_eq!(
             restored
                 .session()
@@ -3499,6 +3664,28 @@ mod tests {
                 restored.can_redo(),
             ),
             expected_history
+        );
+
+        restored.undo().expect("cache-free Undo Fillet rewrite");
+        assert_eq!(
+            restored
+                .lineage_document()
+                .step(feature_owner)
+                .expect("undone computed Fillet owner")
+                .action,
+            feature_step.action
+        );
+        restored.redo().expect("cache-free Redo Fillet rewrite");
+        assert_eq!(restored.lineage_document().steps(), expected_steps);
+        assert_eq!(
+            restored
+                .session()
+                .accepted_state_for_current_input()
+                .expect("redone accepted scene")
+                .document()
+                .to_canonical_json()
+                .expect("redone accepted scene JSON"),
+            expected_accepted
         );
     }
 

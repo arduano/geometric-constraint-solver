@@ -2928,8 +2928,8 @@ M82's mechanical qualification as product evidence.
 
 ## M83 acceptance: authoritative sketch lineage and deterministic rematerialization
 
-Status: **replacement mechanical qualification, focused review and immutable Tailscale nomination
-pass; human UAT remains pending**. `docs/M83_GOALS.md` is the
+Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
+withdrawn; human UAT remains pending**. `docs/M83_GOALS.md` is the
 authoritative scope and ADR 0039 is accepted for implementation. This section supersedes commit
 `56d1eda`'s narrow proof criteria without claiming that the expanded product has received
 supervising-human acceptance.
@@ -3050,28 +3050,58 @@ supervising-human acceptance.
   prove every admitted persistent workbench route enters or restores lineage, no writable flat side
   path or nested user history remains, and a cache-free reload reconstructs the same accepted scene
   and feature state. This is not described as dynamic browser instrumentation of every catalog row.
-- [x] The ordinary workbench has one read-only **Lineage** panel adjacent to Sketch Tree at wide
+- [x] The ordinary workbench has one selectable **Lineage** panel adjacent to Sketch Tree at wide
   desktop sizes and stacked beneath it at compact desktop sizes. It renders ordered rows freshly
   from the coordinator's current `LineageDocument`, retains imported, suppressed and tombstoned/
   deleted steps, and shows stable step/schema identity, action category, input/output counts,
-  current revision, history position and Undo/Redo availability. Rows expose no selection,
-  deletion or browser-owned mutation path; markup escaping, direct rewrite-without-append, actual
-  coordinator Create/Undo/Redo, responsive layout and source-route sentinels pass.
-- [x] Replacement focused M83-W1–W11 tests pass with unchanged
+  current revision, history position and Undo/Redo availability. Selecting a row clears geometry
+  selection and opens a freshly inspected authority snapshot; selecting canvas/tree geometry
+  clears lineage selection. Listbox keyboard navigation, focus, hostile-string escaping and
+  narrow/overflow behavior remain accessible.
+- [x] Buttons, a legal-position selector, `Alt+Up/Down` and authenticated desktop drag/drop submit
+  the same exact-CAS coordinator reorder. Imported roots and tombstones are pinned; suppressed rows
+  remain movable. Dependency/chronology boundaries clamp in the requested direction, and reorder
+  preserves stable step/output/reservation/materialized identities, rewrites the same owner on
+  later direct manipulation, advances one history position, survives Undo/Redo and workspace-v7
+  cold reload, and cannot be forged from an external/stale drag payload. A complete global
+  `source_order` snapshot is not a semantic operand edge: independent constraint/dimension steps
+  reorder successfully while strict replay compositionally retains current surviving source IDs,
+  prunes removed IDs and appends newly materialized sources without reallocating native IDs or
+  manifests.
+- [x] A collapsed raw `LineageStepRewrite` editor preserves dirty transient text across ordinary
+  renders and permits only compatible label/action edits. Stable identity/ownership and
+  kind/schema/version remain immutable; stale, malformed, oversized, schema-changing or
+  semantically invalid drafts retain the complete prior program/accepted scene/history. Imported
+  and tombstoned actions remain inspectable but read-only.
+- [x] Slow captured Point and CurveControl gestures may enter predictive presentation after a
+  measured expensive exact preview. Continuous frames coalesce pointer intent and perform no
+  workspace save, durable Tree/Lineage/Inspector rebuild or lineage publication. Ordinary
+  authoring/Fillet/Offset UI stays fully synchronized, all context changes revoke queued samples,
+  and release requires the newest terminal request to be the exact retained preview in an exact
+  terminal scene before one ordinary atomic owner rewrite. A rejected terminal request cannot
+  borrow an older valid preview, publish lineage or trigger an unchanged workspace save. The visible
+  intent marker is explicitly not solver-projected geometry.
+- [ ] Replacement focused M83-W1–W11 tests pass with unchanged
   sketch/operation/topology/feature/editor/
   persistence suites and reviewed 271-row golden authority. Formatting/diff hygiene,
   warnings-denied workspace Clippy/Rustdoc, locked all-feature tests, native/WASM parity,
   performance, licence/package, Trunk and the complete release gate pass from committed source.
-- [x] Focused architecture/API review accepts authority, dependency direction, typed identity flow,
+- [ ] Focused architecture/API review accepts authority, dependency direction, typed identity flow,
   strict/local equivalence, multi-owner rewrite, migration/cache truthfulness and RPC state. No
   criterion is waived because the earlier narrow proof compiled.
+- [ ] The replacement gate-produced seven-file distribution is frozen without rebuilding, first
+  served and byte-verified on a temporary Tailscale listener, then installed at the retained UAT
+  endpoint and independently verified byte-for-byte. The withdrawn read-only service is replaced
+  only after the temporary verification passes; GitHub Pages remains unchanged before approval.
 - [ ] M83-W12 passes on an immutable Tailscale candidate across complete workbench authoring,
   constraints/dimensions, curve properties/branches, native/computed Fillet, Profile Offset,
   direct editing, failure recovery, Undo/Redo and workspace reload/migration. Findings are closed
   or explicitly dispositioned, and the accepted frozen bytes are deployed and exactly verified on
   GitHub Pages before milestone closure.
 
-Replacement exact source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
+The following read-only panel nomination is superseded by the approved editable-lineage amendment
+and withdrawn from current UAT. Historical exact source
+`bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
 `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, passes the complete clean release gate with
 332,496-byte log SHA-256 `d1529363d8fc382c0767adbcfca24e4827f5a280d17090fd83c31b6910e791c1`.
 The unchanged 271-row golden, full native/WASM/TypeScript/workspace qualification, warnings-denied
@@ -3084,7 +3114,9 @@ Tailscale verification each pass eight exact HTTP checks; both result ledgers ha
 retired; `geosolve-m83-lineage-uat.service`, nomination PID `4152505`, serves the frozen snapshot
 at `http://100.94.63.83:8080/`. Independent responsive review additionally proves zero root,
 Inspector and bounded-history overflow across the breakpoint boundaries and 6.24:1 header
-contrast. No Pages or milestone-acceptance claim is made before explicit human approval.
+contrast. Its service may remain reachable only until the replacement candidate is qualified; its
+bytes no longer satisfy M83-W12. No Pages or milestone-acceptance claim is made before explicit
+human approval.
 
 The following is superseded pre-panel evidence. Exact source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree

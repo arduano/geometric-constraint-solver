@@ -172,6 +172,12 @@ Two policies implement one semantic evaluator contract:
 - `DependencyLocal` evaluates the exact dirty dependency closure and may reuse authenticated
   unaffected materialization/checkpoint state.
 
+A flat action's serialized complete `source_order` snapshot remains compatibility and ordering
+state, not a set of semantic lineage input references. Strict replay composes the current prefix by
+retaining ordered source IDs that still exist, pruning removed IDs and appending sources newly
+materialized by that action. Typed action operands alone establish dependency edges, allowing
+independent constraint and dimension steps to reorder without retargeting stable source identity.
+
 For identical lineage and immutable external inputs, the policies must return identical retained
 failure/accepted authority, canonical sketch and feature digests, logical/materialized identities,
 ownership, explicit branches and independent validity. Only work counts and policy telemetry may
@@ -201,6 +207,24 @@ previous retained/accepted authority.
 
 Deleting a step retires its complete owned output set. Live dependents return a typed dependency
 result unless the caller submits an explicit atomic cascade/rebind transaction.
+
+### Editable projection and predictive presentation remain clients
+
+The workbench may select a stable lineage step and request fresh inspection, compatible raw
+rewrite or dependency-valid reorder, but it does not calculate or mirror program authority.
+Buttons, keyboard movement, a position selector and authenticated desktop drag/drop all submit the
+same exact-CAS coordinator reorder. The coordinator owns typed dependency/chronology/pinning
+reasons, directional clamping, strict-cold reconstruction and atomic history publication. Browser
+selection, drafts, notices and drag authentication remain transient and absent from workspace v7.
+
+Predictive point/control dragging is separately a presentation adapter, not lineage evaluation or
+editing. It may coalesce cursor intent only after an exact captured preview proves expensive, and
+those intent frames perform no persistence, durable panel reconstruction or lineage publication.
+Context changes revoke pending intent. Release still requires the exact terminal headless preview,
+finite scene reconstruction and the ordinary atomic owner rewrite before any accepted publication.
+The strict Point/CurveControl release may consume only the newest retained valid request; it cannot
+fall back to an older preview. Rejection clears transient intent and changes neither lineage nor
+workspace persistence.
 
 ### Honest `ImportedBaseline` migration and workspace v7
 
@@ -266,12 +290,15 @@ M83 implements and qualifies this decision only after proving:
 - `DependencyLocal` equivalence to the `StrictChronological` oracle for every supported edit class;
 - workspace-v7 authority, strict v1-v6 `ImportedBaseline` migration and disposable-cache recovery;
 - complete workbench mutation routing through lineage with no writable flat side path; and
-- native/DOM-free-WASM `geosolve.lineage.rpc.v0` transcript parity.
+- native/DOM-free-WASM `geosolve.lineage.rpc.v0` transcript parity;
+- exact-CAS editable-Lineage inspection/reorder/rewrite without browser program authority; and
+- predictive point/control intent that cannot bypass exact terminal owner publication.
 
 M83 remains in progress until immutable-candidate human UAT and standard exact GitHub Pages
-publication pass. Automated qualification and focused architecture/API review pass for the
-nominated candidate; acceptance of this ADR authorizes implementation and is still not
-milestone/product acceptance.
+publication pass. The prior read-only Lineage candidate passed automated qualification and focused
+architecture/API review, but the approved editable-Lineage/predictive-drag amendment withdraws it
+from current UAT. Replacement qualification and focused review remain pending; acceptance of this
+ADR authorizes implementation and is still not milestone/product acceptance.
 
 ## Consequences
 

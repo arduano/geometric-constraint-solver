@@ -89,9 +89,10 @@ changing architecture consolidation. M83 implements accepted ADR 0039: authorita
 full-workbench sketch lineage, stable typed identity flow, deterministic strict/local
 rematerialization, atomic owner-step reconciliation, workspace v7 and a DOM-free stateful
 TypeScript/WASM boundary. `docs/M83_GOALS.md` owns the scope and `docs/M83_IMPLEMENTATION.md` owns
-the current evidence. The requested read-only Lineage-panel amendment, replacement clean
-qualification and immutable byte-verified Tailscale nomination pass. M83 is still not accepted,
-and M81 remains product authority until focused human UAT and explicit approval pass.
+the current evidence. The prior read-only Lineage-panel candidate passed clean qualification and
+immutable byte-verified Tailscale nomination, but is withdrawn by the approved editable-Lineage/
+predictive-drag amendment. Replacement qualification, immutable nomination and human UAT remain
+pending; M83 is not accepted and M81 remains product authority.
 M76's
 implementation,
 feature refinements,
@@ -5603,8 +5604,8 @@ M82's mechanical prototype evidence cannot substitute for that acceptance.
 
 ### M83: authoritative sketch lineage and deterministic rematerialization
 
-Status: **replacement clean-qualified immutable candidate nominated; human UAT pending; not
-accepted**.
+Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
+withdrawn; human UAT pending; not accepted**.
 `docs/M83_GOALS.md` owns the complete scope and ADR 0039 is accepted for M83 implementation. This
 plan supersedes commit `56d1eda`'s narrow architecture slice; that commit remains historical
 evidence, not an active acceptance contract. ADR number 0038 stays with the inactive archived M82
@@ -5676,19 +5677,43 @@ workbench honestly to workspace v7 and expose the same stateful engine through
   Exhaustiveness evidence is described precisely: closed catalog/source-route inventories and
   generic lifecycle mechanics cover the whole admitted surface, while genuine coordinator/browser
   execution is representative except where a named matrix explicitly drives every row.
-- [x] Present the current retained action program in a secondary read-only **Lineage** panel beside
-  Sketch Tree. Derive chronological rows directly from
+- [x] Present the current retained action program in a secondary **Lineage** panel beside Sketch
+  Tree. Derive chronological rows directly from
   `RetainedEditorCoordinator::lineage_document` on every render; expose stable step/schema
   identity, Live/Suppressed/Deleted state, inputs/outputs, current program revision and the
-  authoritative Undo/Redo cursor/availability without a browser mirror or row mutation controls.
-  Keep the panels adjacent on wide desktop, stacked on compact desktop and hidden together at the
-  existing narrow-workbench cutoff.
-- [x] Pass the replacement complete clean release gate from committed source, receive focused
-  architecture/API review and nominate an immutable byte-verified Tailscale candidate.
-- [ ] Pass and record M83-W12 human UAT, freeze the accepted artifact, publish it to GitHub Pages
-  and verify the exact public bytes before closing M83.
+  authoritative Undo/Redo cursor/availability without a browser-side program mirror. Keep the
+  panels adjacent on wide desktop, stacked on compact desktop and hidden together at the existing
+  narrow-workbench cutoff.
+- [x] Make Lineage rows selectable and expose one authoritative Inspector. Route earlier/later
+  buttons, a legal-position selector, `Alt+Up/Down` and session-authenticated desktop drag/drop
+  through exact-CAS coordinator reorder availability/publication. Pin imported baselines and
+  tombstones, keep suppressed steps movable where dependencies permit, clamp blocked movement in
+  the requested direction, preserve all stable ownership identities, and retain one Undo/Redo
+  history position.
+- [x] Add a collapsed debug `LineageStepRewrite` JSON editor. Preserve a dirty transient draft
+  across renders, reject stale/malformed/schema-changing/semantically invalid input atomically,
+  and never persist selection, draft or drag authentication in workspace v7.
+- [x] Add predictive point/curve-control dragging for expensive scenes: paint coalesced pointer
+  intent without durable panel rebuild, lineage reconciliation or save; revoke queued work on any
+  gesture/context change; and require the newest terminal request to be the exact finite retained
+  preview before the existing atomic owner rewrite publishes. Rejected terminal work cannot fall
+  back to an older preview, publish lineage or save an unchanged workspace. Ordinary authoring,
+  Fillet and Offset frames retain their complete durable UI synchronization.
+- [x] Stress reordered programs across all admitted catalogs plus constraints, dimensions,
+  branches, native Fillet/Profile Offset, computed Fillet, suppression/deletion, direct
+  manipulation, Undo/Redo and workspace-v7 cold reload. Prove stable step/output/reservation and
+  materialized identities, dependency-direction clamping, retained downstream failure/recovery,
+  authenticated drag rejection and raw-editor fail-closed behavior. In particular, captured global
+  `source_order` snapshots are not semantic operand dependencies: independently authored
+  constraints/dimensions can reorder while strict replay retains surviving current source IDs,
+  prunes removed IDs and appends the current action's newly materialized sources.
+- [ ] Pass the replacement complete clean release gate from committed source, receive focused
+  architecture/API/interaction review and nominate a replacement immutable byte-verified
+  Tailscale candidate. The earlier read-only candidate remains historical evidence only.
+- [ ] Pass and record M83-W12 human UAT, accept and publish the already-frozen candidate artifact
+  to GitHub Pages, and verify the exact public bytes before closing M83.
 
-Replacement nomination evidence: exact product source
+Withdrawn read-only-panel nomination evidence: exact product source
 `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
 `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, passes the complete clean release gate. Its
 332,496-byte log `/tmp/geosolve-m83-lineage-stable-release-gate.log` has SHA-256
@@ -5699,9 +5724,11 @@ seven-file distribution byte-matches the already-frozen read-only snapshot at
 identity-encoded requests for `/` plus all seven files pass exact status/media/length/body checks
 first on temporary `:18080` and then at `http://100.94.63.83:8080/`; both result ledgers have
 SHA-256 `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`. The temporary listener
-is retired and `geosolve-m83-lineage-uat.service`, nomination PID `4152505`, serves only the frozen
-replacement bytes for M83-W12. GitHub Pages and milestone closure remain blocked on explicit
-human approval.
+is retired and `geosolve-m83-lineage-uat.service`, nomination PID `4152505`, temporarily serves
+only this frozen withdrawn snapshot until a clean, frozen and byte-verified amendment candidate is
+ready to replace it. These bytes do not contain editable Lineage or predictive drag and do not
+satisfy M83-W12. Replacement qualification, human approval, GitHub Pages publication and milestone
+closure remain pending.
 
 Superseded pre-panel nomination evidence: exact product source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree

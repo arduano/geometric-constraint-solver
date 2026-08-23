@@ -1703,6 +1703,99 @@ pub struct ProfileOffsetDirectionMetadata {
     pub direction: ProfileOffsetDirectionState,
 }
 
+/// Complete inspectable authority for one stable lineage step.
+///
+/// This is a snapshot DTO, not a second editable lineage document.  Callers
+/// must submit edits against `lineage` and `step`; exact CAS and a fresh
+/// inspection after publication keep presentation state honest.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LineageStepInspection {
+    pub lineage: geosolve_sketch_lineage::LineageDocumentIdentity,
+    pub ordinal: usize,
+    pub step: geosolve_sketch_lineage::LineageStepId,
+    pub developer_key: geosolve_sketch_lineage::LineageDeveloperKey,
+    pub label: String,
+    pub state: geosolve_sketch_lineage::LineageStepState,
+    pub action_kind: geosolve_sketch_lineage::LineageActionKind,
+    pub action_schema: geosolve_sketch_lineage::LineageSemanticKey,
+    pub action_version: u32,
+    /// Pretty, strict JSON accepted by
+    /// [`RetainedEditorCoordinator::rewrite_lineage_step_json`].
+    pub replacement_json: String,
+    pub inputs: Vec<geosolve_sketch_lineage::LineageInputBinding>,
+    pub outputs: Vec<geosolve_sketch_lineage::LineageOutput>,
+    pub output_identities: Vec<geosolve_sketch_lineage::LineageOutputIdentity>,
+    pub reservations: Vec<geosolve_sketch_lineage::LineageReservation>,
+    pub writable_leaves: Vec<geosolve_sketch_lineage::LineageWritableLeaf>,
+}
+
+/// Authoritative reason one requested reorder lane is unavailable.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LineageReorderBlockReason {
+    ImportedBaselinePinned,
+    TombstonedPinned,
+    RequiresProvider {
+        provider: geosolve_sketch_lineage::LineageStepId,
+    },
+    RequiredByDependent {
+        dependent: geosolve_sketch_lineage::LineageStepId,
+    },
+    WorkbenchChronology {
+        step: Option<geosolve_sketch_lineage::LineageStepId>,
+    },
+}
+
+/// One possible insertion lane for a selected lineage step.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LineageReorderLane {
+    /// Final zero-based ordinal after removing the selected step.
+    pub ordinal: usize,
+    /// Stable anchor passed to the exact lineage reorder mutation.
+    pub before: Option<geosolve_sketch_lineage::LineageStepId>,
+    pub blocked_by: Option<LineageReorderBlockReason>,
+}
+
+impl LineageReorderLane {
+    #[must_use]
+    pub const fn is_legal(self) -> bool {
+        self.blocked_by.is_none()
+    }
+}
+
+/// Complete coordinator-approved reorder surface for one stable step.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LineageReorderAvailability {
+    pub lineage: geosolve_sketch_lineage::LineageDocumentIdentity,
+    pub step: geosolve_sketch_lineage::LineageStepId,
+    pub current_ordinal: usize,
+    pub current_before: Option<geosolve_sketch_lineage::LineageStepId>,
+    pub lanes: Vec<LineageReorderLane>,
+}
+
+/// Atomic result of one coordinator-owned reorder transaction.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LineageReorderOutcome {
+    pub lineage: geosolve_sketch_lineage::LineageDocumentIdentity,
+    pub step: geosolve_sketch_lineage::LineageStepId,
+    pub requested_before: Option<geosolve_sketch_lineage::LineageStepId>,
+    pub applied_before: Option<geosolve_sketch_lineage::LineageStepId>,
+    pub requested_ordinal: usize,
+    pub applied_ordinal: usize,
+    pub changed: bool,
+    pub clamped: bool,
+    pub boundary: Option<LineageReorderBlockReason>,
+    pub accepted: bool,
+}
+
+/// Atomic result of one debug-only label/action replacement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LineageStepRewriteOutcome {
+    pub lineage: geosolve_sketch_lineage::LineageDocumentIdentity,
+    pub step: geosolve_sketch_lineage::LineageStepId,
+    pub changed: bool,
+    pub accepted: bool,
+}
+
 /// Stable selected-curve family used by presentation-neutral inspectors.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CurvePropertyFamily {
@@ -2500,6 +2593,395 @@ impl RetainedEditorCoordinator {
     #[must_use]
     pub fn lineage_identity(&self) -> geosolve_sketch_lineage::LineageDocumentIdentity {
         self.lineage.identity()
+    }
+
+    /// Returns the complete inspectable authority for one stable lineage
+    /// step.  The returned JSON is only an editing draft; callers must still
+    /// use exact-CAS [`Self::rewrite_lineage_step_json`] to publish it.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed lineage error for an unknown step or serialization
+    /// failure.
+    pub fn lineage_step_inspection(
+        &self,
+        step: geosolve_sketch_lineage::LineageStepId,
+    ) -> Result<LineageStepInspection, CoordinatorError> {
+        let document = self.lineage_document();
+        let ordinal = document
+            .steps()
+            .iter()
+            .position(|candidate| candidate.id == step)
+            .ok_or_else(|| CoordinatorError::Lineage(format!("unknown lineage step {step}")))?;
+        let value = &document.steps()[ordinal];
+        let replacement = geosolve_sketch_lineage::LineageStepRewrite {
+            label: value.label.clone(),
+            action: value.action.clone(),
+        };
+        Ok(LineageStepInspection {
+            lineage: document.identity(),
+            ordinal,
+            step,
+            developer_key: value.key.clone(),
+            label: value.label.clone(),
+            state: value.state,
+            action_kind: value.action.kind(),
+            action_schema: value.action.schema().clone(),
+            action_version: value.action.schema_version(),
+            replacement_json: serde_json::to_string_pretty(&replacement)
+                .map_err(|error| CoordinatorError::Lineage(error.to_string()))?,
+            inputs: value.action.inputs().to_vec(),
+            outputs: value.outputs.clone(),
+            output_identities: value.output_identities.clone(),
+            reservations: value.reservations.clone(),
+            writable_leaves: value.writable_leaves.clone(),
+        })
+    }
+
+    /// Enumerates every stable insertion lane for one step and validates each
+    /// candidate through both generic lineage structure and the editor's
+    /// private chronological materialization contract.  Presentation code
+    /// never needs to infer dependencies or baseline ordering.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed lineage error for an unknown step.
+    pub fn lineage_reorder_availability(
+        &self,
+        step: geosolve_sketch_lineage::LineageStepId,
+    ) -> Result<LineageReorderAvailability, CoordinatorError> {
+        let document = self.lineage_document();
+        let current_ordinal = document
+            .steps()
+            .iter()
+            .position(|candidate| candidate.id == step)
+            .ok_or_else(|| CoordinatorError::Lineage(format!("unknown lineage step {step}")))?;
+        let current_before = document
+            .steps()
+            .get(current_ordinal + 1)
+            .map(|value| value.id);
+        let selected = &document.steps()[current_ordinal];
+        let pinned = match (selected.action.kind(), selected.state) {
+            (geosolve_sketch_lineage::LineageActionKind::ImportedBaseline, _) => {
+                Some(LineageReorderBlockReason::ImportedBaselinePinned)
+            }
+            (_, geosolve_sketch_lineage::LineageStepState::Tombstoned) => {
+                Some(LineageReorderBlockReason::TombstonedPinned)
+            }
+            _ => None,
+        };
+        let anchors = document
+            .steps()
+            .iter()
+            .filter_map(|candidate| (candidate.id != step).then_some(Some(candidate.id)))
+            .chain(std::iter::once(None));
+        let mut lanes = Vec::with_capacity(document.steps().len());
+        for (ordinal, before) in anchors.enumerate() {
+            let blocked_by = if before == current_before {
+                None
+            } else if let Some(reason) = pinned {
+                Some(reason)
+            } else {
+                let mut candidate = document.clone();
+                match candidate.apply_patch(geosolve_sketch_lineage::LineagePatch::new(
+                    candidate.identity(),
+                    vec![geosolve_sketch_lineage::LineageMutation::Reorder { step, before }],
+                )) {
+                    Ok(_) => lineage::validate_lineage_document_semantics(&candidate)
+                        .err()
+                        .map(|error| LineageReorderBlockReason::WorkbenchChronology {
+                            step: error.materialization_step(),
+                        }),
+                    Err(geosolve_sketch_lineage::LineageDocumentError::ForwardReference {
+                        step: consumer,
+                        dependency,
+                    }) if consumer == step => Some(LineageReorderBlockReason::RequiresProvider {
+                        provider: dependency,
+                    }),
+                    Err(geosolve_sketch_lineage::LineageDocumentError::ForwardReference {
+                        step: consumer,
+                        dependency,
+                    }) if dependency == step => {
+                        Some(LineageReorderBlockReason::RequiredByDependent {
+                            dependent: consumer,
+                        })
+                    }
+                    Err(
+                        geosolve_sketch_lineage::LineageDocumentError::InvalidBaselinePosition {
+                            ..
+                        },
+                    ) => Some(LineageReorderBlockReason::ImportedBaselinePinned),
+                    Err(_) => Some(LineageReorderBlockReason::WorkbenchChronology { step: None }),
+                }
+            };
+            lanes.push(LineageReorderLane {
+                ordinal,
+                before,
+                blocked_by,
+            });
+        }
+        Ok(LineageReorderAvailability {
+            lineage: document.identity(),
+            step,
+            current_ordinal,
+            current_before,
+            lanes,
+        })
+    }
+
+    /// Reorders one lineage step through an exact-CAS strict-cold coordinator
+    /// transaction. An unavailable requested lane clamps in the requested
+    /// movement direction to the furthest coordinator-approved lane before
+    /// the boundary, and reports that boundary.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale identities, unknown anchors, malformed authority, or any
+    /// failure before a complete retained/accepted publication is prepared.
+    pub fn reorder_lineage_step(
+        &mut self,
+        expected: geosolve_sketch_lineage::LineageDocumentIdentity,
+        step: geosolve_sketch_lineage::LineageStepId,
+        requested_before: Option<geosolve_sketch_lineage::LineageStepId>,
+    ) -> Result<LineageReorderOutcome, CoordinatorError> {
+        if expected != self.lineage_identity() {
+            return Err(CoordinatorError::Lineage(format!(
+                "stale lineage transaction: expected {expected:?}, current is {:?}",
+                self.lineage_identity()
+            )));
+        }
+        let availability = self.lineage_reorder_availability(step)?;
+        if requested_before == Some(step) {
+            return Err(CoordinatorError::Lineage(
+                "a lineage step cannot be ordered before itself".into(),
+            ));
+        }
+        let requested = availability
+            .lanes
+            .iter()
+            .find(|lane| lane.before == requested_before)
+            .copied()
+            .ok_or_else(|| CoordinatorError::Lineage("unknown lineage reorder anchor".into()))?;
+        let applied = if requested.is_legal() {
+            requested
+        } else if requested.ordinal < availability.current_ordinal {
+            availability
+                .lanes
+                .iter()
+                .copied()
+                .filter(|lane| {
+                    lane.is_legal()
+                        && lane.ordinal >= requested.ordinal
+                        && lane.ordinal <= availability.current_ordinal
+                })
+                .min_by_key(|lane| lane.ordinal)
+                .ok_or_else(|| CoordinatorError::Lineage("lineage step has no legal lane".into()))?
+        } else {
+            availability
+                .lanes
+                .iter()
+                .copied()
+                .filter(|lane| {
+                    lane.is_legal()
+                        && lane.ordinal <= requested.ordinal
+                        && lane.ordinal >= availability.current_ordinal
+                })
+                .max_by_key(|lane| lane.ordinal)
+                .ok_or_else(|| CoordinatorError::Lineage("lineage step has no legal lane".into()))?
+        };
+        let patch = geosolve_sketch_lineage::LineagePatch::new(
+            expected,
+            vec![geosolve_sketch_lineage::LineageMutation::Reorder {
+                step,
+                before: applied.before,
+            }],
+        );
+        let (changed, accepted) = self.apply_lineage_editor_patch(patch)?;
+        Ok(LineageReorderOutcome {
+            lineage: self.lineage_identity(),
+            step,
+            requested_before,
+            applied_before: applied.before,
+            requested_ordinal: requested.ordinal,
+            applied_ordinal: applied.ordinal,
+            changed,
+            clamped: requested.before != applied.before,
+            boundary: requested.blocked_by,
+            accepted,
+        })
+    }
+
+    /// Applies the debug Inspector's raw label/action replacement.  Stable
+    /// step/output/reservation ownership and the action kind/schema/version
+    /// remain immutable and are checked before strict-cold publication.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale, pinned, malformed, oversized or semantically hostile
+    /// replacements without changing retained authority or history.
+    pub fn rewrite_lineage_step_json(
+        &mut self,
+        expected: geosolve_sketch_lineage::LineageDocumentIdentity,
+        step: geosolve_sketch_lineage::LineageStepId,
+        replacement_json: &str,
+    ) -> Result<LineageStepRewriteOutcome, CoordinatorError> {
+        if expected != self.lineage_identity() {
+            return Err(CoordinatorError::Lineage(format!(
+                "stale lineage transaction: expected {expected:?}, current is {:?}",
+                self.lineage_identity()
+            )));
+        }
+        let limit = geosolve_sketch_lineage::MAX_LINEAGE_ACTION_PAYLOAD_BYTES
+            + geosolve_sketch_lineage::MAX_LINEAGE_LABEL_BYTES
+            + 4_096;
+        if replacement_json.len() > limit {
+            return Err(CoordinatorError::Lineage(format!(
+                "lineage step replacement exceeds {limit} bytes"
+            )));
+        }
+        let current = self
+            .lineage_document()
+            .step(step)
+            .ok_or_else(|| CoordinatorError::Lineage(format!("unknown lineage step {step}")))?;
+        if current.action.kind() == geosolve_sketch_lineage::LineageActionKind::ImportedBaseline
+            || current.state == geosolve_sketch_lineage::LineageStepState::Tombstoned
+        {
+            return Err(CoordinatorError::Lineage(
+                "imported-baseline and tombstoned lineage steps are read-only".into(),
+            ));
+        }
+        let replacement =
+            serde_json::from_str::<geosolve_sketch_lineage::LineageStepRewrite>(replacement_json)
+                .map_err(|error| CoordinatorError::Lineage(error.to_string()))?;
+        if replacement.action.kind() != current.action.kind()
+            || replacement.action.schema() != current.action.schema()
+            || replacement.action.schema_version() != current.action.schema_version()
+        {
+            return Err(CoordinatorError::Lineage(
+                "lineage step kind, schema and version are immutable".into(),
+            ));
+        }
+        let patch = geosolve_sketch_lineage::LineagePatch::new(
+            expected,
+            vec![geosolve_sketch_lineage::LineageMutation::Rewrite {
+                step,
+                replacement: Box::new(replacement),
+            }],
+        );
+        let (changed, accepted) = self.apply_lineage_editor_patch(patch)?;
+        Ok(LineageStepRewriteOutcome {
+            lineage: self.lineage_identity(),
+            step,
+            changed,
+            accepted,
+        })
+    }
+
+    fn apply_lineage_editor_patch(
+        &mut self,
+        patch: geosolve_sketch_lineage::LineagePatch,
+    ) -> Result<(bool, bool), CoordinatorError> {
+        let mut lineage = self.lineage.clone();
+        let outcome = lineage.apply_editor_patch(
+            patch,
+            self.session.parameter_batch(),
+            self.session.latest_attempt_external_snapshot_set(),
+        )?;
+        if !outcome.changed {
+            return Ok((false, lineage.current_evaluation_is_accepted()));
+        }
+        let accepted = lineage.current_evaluation_is_accepted();
+        let staged = self.stage_lineage_editor_publication(lineage)?;
+        self.publish_staged_history(staged);
+        Ok((true, accepted))
+    }
+
+    fn stage_lineage_editor_publication(
+        &self,
+        mut lineage: CoordinatorLineage,
+    ) -> Result<StagedHistoryPublication, CoordinatorError> {
+        let target = lineage.undo_len();
+        let target_checkpoint = lineage
+            .retained_history_lifecycle_checkpoint()?
+            .into_restore_checkpoint();
+        let mut history_checkpoint = target_checkpoint.clone();
+        let current_revisions = self.session.revision_high_water();
+        let target_revisions = target_checkpoint.revisions();
+        let accepted = match (current_revisions.accepted(), target_revisions.accepted()) {
+            (Some(first), Some(second)) => Some(first.get().max(second.get())),
+            (Some(value), None) | (None, Some(value)) => Some(value.get()),
+            (None, None) => None,
+        };
+        let revisions = SketchLifecycleRevisionHighWater::from_raw(
+            current_revisions
+                .design()
+                .get()
+                .max(target_revisions.design().get()),
+            current_revisions
+                .attempt()
+                .get()
+                .max(target_revisions.attempt().get()),
+            accepted,
+        );
+        let session = restore_sketch_checkpoint_from_lineage(
+            &self.session,
+            &lineage,
+            &target_checkpoint,
+            revisions,
+            self.session.parameter_batch(),
+            self.session.latest_attempt_external_snapshot_set(),
+        )?;
+        let retained_features = merge_feature_lifecycle_high_water(
+            self.features.lifecycle_high_water(),
+            target_checkpoint.feature_lifecycle,
+        );
+        let mut features = ComputedFeatureDocument::from_json(&target_checkpoint.feature_json)?;
+        if features.sketch_document() != session.design_document().id() {
+            return Err(ComputedFeatureSnapshotError::FeatureDocumentForDifferentSketch.into());
+        }
+        features.rebase_after_restore(retained_features)?;
+        let mut computed_evaluation_allocator = self.computed_evaluation_allocator.clone();
+        computed_evaluation_allocator.retain_high_water(target_checkpoint.evaluation_allocator);
+        let (computed_input, computed_snapshot, computed_evaluation_problem) =
+            match evaluate_computed_features(
+                &session,
+                &features,
+                &mut computed_evaluation_allocator,
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => {
+                    (Some(value.input()), Some(value), None)
+                }
+                Ok(stopped) => (
+                    None,
+                    None,
+                    Some(format!(
+                        "computed-feature evaluation stopped: {:?}",
+                        stopped.report().stopping_reason
+                    )),
+                ),
+                Err(error) => (None, None, Some(error.to_string())),
+            };
+        let checkpoint = checkpoint(&session, &features, &computed_evaluation_allocator)?;
+        lineage
+            .retain_computed_evaluation_high_water(checkpoint.computed_evaluation_high_water())?;
+        history_checkpoint
+            .accepted_json
+            .clone_from(&checkpoint.accepted_json);
+        history_checkpoint.accepted_is_draft_v5 = checkpoint.accepted_is_draft_v5;
+        history_checkpoint.accepted_belongs_to_current_design =
+            checkpoint.accepted_belongs_to_current_design;
+        Ok(StagedHistoryPublication {
+            lineage,
+            session,
+            features,
+            computed_evaluation_allocator,
+            computed_input,
+            computed_snapshot,
+            computed_evaluation_problem,
+            history_checkpoint,
+            target,
+        })
     }
 
     /// Canonical persisted lineage v1.

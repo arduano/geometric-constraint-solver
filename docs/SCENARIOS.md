@@ -4304,11 +4304,12 @@ is claimed; existing accepted M81 Pages bytes remain public authority. See
 M83 adds no solver equation or geometry family. Its scenarios exercise declarative authority,
 identity, rematerialization and adapter parity above the unchanged owning-domain oracles.
 
-Replacement qualification status: exact source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
-`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, passes the complete clean release gate and focused
-authority/UX review. Its exact no-rebuild seven-file snapshot is byte-verified at
-`http://100.94.63.83:8080/`. Earlier source `d378f7b3` is superseded because it predates the
-read-only Lineage panel. M83-W12 human UAT and explicit approval remain pending.
+Amendment status: prior read-only source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9` and tree
+`dff5ebebbfe024c00f88ba231362a3ea29d6e0bc` passed the complete clean release gate and focused
+authority/UX review, but the approved editable-Lineage and predictive-drag amendment withdraws
+those bytes from current UAT. Replacement qualification and immutable Tailscale nomination are in
+progress. Earlier source `d378f7b3` remains superseded because it predates any Lineage panel.
+M83-W12 human UAT and explicit approval remain pending.
 
 ### M83-L1 — complete typed action catalog
 
@@ -4321,7 +4322,8 @@ catalog test instead of falling back to an opaque flat edit.
 
 Status: the closed enum/catalog mapping, generic full-family lifecycle matrix and representative
 owning-domain coordinator routes pass. This is not described as literal runtime replay of every
-catalog row; complete clean release qualification passes and human UAT remains pending.
+catalog row. Those lower-scope checks passed in the withdrawn read-only candidate; replacement
+aggregate qualification and human UAT remain pending.
 
 ### M83-L2 — exact owner leaves and atomic multi-owner rewrite
 
@@ -4336,7 +4338,8 @@ Status: focused multi-owner, exact-leaf and tampered-map regressions pass. Compl
 authentication now also rejects forged continuation leaves, same-kind inputs, outputs, identity
 flows and reservations in current/accepted/Undo/Redo authority. Tagged `domain` and
 `neighborhood` branch values remain stable atomic owner leaves when their serialized variant shape
-changes. Architecture review and the clean candidate gate pass.
+changes. Architecture review and the clean candidate gate passed for the withdrawn read-only
+candidate; the amended L7/L8 aggregate remains subject to replacement qualification.
 
 ### M83-L3 — strict/local equivalence with historical host inputs
 
@@ -4347,12 +4350,12 @@ reorder, branch/property edit, Undo and Redo, dependency-local evaluation must a
 strict oracle on accepted/failure authority, canonical sketch/feature evidence, typed identities,
 ownership and branches. Only reported work may differ.
 
-Status: focused historical-input and strict/local regressions plus complete collateral clean
-qualification pass. Native Fillet adds the topology-sensitive witness: strict and local
-evaluation must continue from the independently accepted upstream prefix, reauthenticate the
-prepared geometric plan and exact materialized identity delta, then independently validate the
-result. Consecutive Fillets and an opposed retained seed cover both terminal and reusable-prefix
-positions.
+Status: focused historical-input and strict/local regressions plus the withdrawn read-only
+candidate's collateral clean qualification pass. Native Fillet adds the topology-sensitive
+witness: strict and local evaluation must continue from the independently accepted upstream
+prefix, reauthenticate the prepared geometric plan and exact materialized identity delta, then
+independently validate the result. Consecutive Fillets and an opposed retained seed cover both
+terminal and reusable-prefix positions.
 
 ### M83-L4 — retained failure and one history
 
@@ -4391,7 +4394,8 @@ historical outer schemas, 20,950 bytes total, SHA-256
 failed current design over older accepted geometry, becomes exactly one imported root, re-encodes
 to v7 and cache-free cold reloads. Embedded legacy acceptance is selected by its independently
 reproduced authority digest, not merely by the presence of older input payloads. Complete release
-qualification passes; migration/reload interaction feel remains in human UAT.
+qualification passed for the withdrawn read-only candidate; replacement aggregate qualification
+and migration/reload interaction UAT remain pending.
 
 ### M83-L6 — stateful native/WASM RPC and sole-workbench routing
 
@@ -4418,9 +4422,10 @@ uncorrelated envelopes/results without replacing its retained session, and rejec
 the Rust UTF-8 byte bound before invoking transport. The exact native/actual-WASM transcript has
 28 responses, 117,156 bytes and FNV-1a `7063e9c6b5b5248c`. The source-route evidence is a closed
 inventory sentinel rather than runtime instrumentation of every route. Complete release
-qualification and immutable nomination pass; human UAT remains pending.
+qualification and immutable nomination passed for the withdrawn read-only candidate; amended L7/L8
+replacement qualification and human UAT remain pending.
 
-### M83-L7 — retained lineage is directly inspectable without a second authority
+### M83-L7 — retained lineage is selectable and editable without a second authority
 
 At wide desktop size, inspect the secondary **Lineage** panel beside Sketch Tree; at compact
 desktop size it stacks below the tree and both disappear at the existing narrow-workbench cutoff.
@@ -4431,13 +4436,55 @@ and show input/output counts plus the current program revision. A separate histo
 the exact cursor/length and Undo/Redo availability. Direct rewrite changes the existing stable row
 and revision without appending a Move event. Imported roots remain one honest baseline row.
 
-Rows are noninteractive list items: no browser-side lineage collection, JSON reconstruction,
-selection, delete, reorder or rewrite path exists. Focused pure-markup and real-coordinator
-Create/Undo/Redo regressions, escaping/empty-state checks, the M83-W11 source sentinel, responsive
-HTML/CSS contract, breakpoint/contrast review, complete 172-test demo library and warnings-denied
-demo Clippy pass. Replacement clean qualification and immutable nomination pass; no golden row is
-added because this is a presentation of already-qualified authority, not a new
-geometry/authoring family.
+Select each row from pointer and listbox keyboard input. Selection clears geometry selection and
+opens an Inspector derived from a fresh coordinator snapshot; a later geometry selection clears it.
+The Inspector shows stable graph/ownership metadata and offers earlier/later buttons, a legal
+position selector and `Alt+Up/Down`. Desktop drag/drop carries a session-random, exact
+document/revision/digest/step-bound payload plus a live in-memory drag record. Reorder requests are
+revalidated by the coordinator, clamp in the requested direction at dependency or chronology
+boundaries, and create exactly one ordinary history position. Imported baselines and tombstones
+are pinned; suppressed rows remain movable when legal.
+
+After moving independent and dependency-constrained actions, directly manipulate their output,
+Undo, Redo, save workspace v7 and cold reload. Stable step/output/reservation/materialized
+identities and owner rewrite must remain exact. External, forged and stale drag payloads do
+nothing. Open the collapsed raw editor, preserve an unapplied dirty draft through rerenders, apply
+a compatible label/action rewrite, and verify malformed, schema-changing, stale and semantic-
+invalid drafts retain the prior program, accepted scene and history. Selection, draft and drag
+state never enter the saved workspace.
+
+Automated status: implemented and passing. `m83_lineage_editing` owns exact-CAS inspection,
+directional clamping, independent constraint/dimension ordering, stable identity, atomic rewrite,
+pinned rows and Undo/Redo/cold reload. `m83_lineage_reorder_stress` and the reordered recipe,
+branch, Fillet/Offset and computed-feature cases in the M83 behavior/operations suites own
+multi-owner reconciliation and workspace-v7 stress. Demo-web panel tests own fresh authority
+projection, keyboard/selection behavior, hostile escaping, dirty-draft retention and authenticated
+drag payloads. Visual intelligibility and desktop drag feel remain M83-U9 through M83-U11 human
+UAT on the replacement immutable candidate.
+
+### M83-L8 — predictive drag paints intent but exact release owns geometry
+
+On both a 25-action scene and a representative constrained scene, capture one native point and one
+advanced curve control. Fast exact previews remain unchanged. When exact preview time exceeds the
+bounded entry threshold, continued motion paints the latest pointer intent at display cadence and
+coalesces exact work rather than rebuilding Tree, Lineage and Inspector or saving on every frame.
+The marker is visually distinct from a verified handle. Ordinary authoring, Fillet and Offset
+frames continue updating their full controls.
+
+Pause to permit an exact verification, then release at a newer position. Tool, focus/overlay,
+camera, pointer and gesture changes must revoke stale scheduled samples. Release must process the
+newest terminal coordinate through the headless point/control path, reconstruct a finite exact
+scene and pass the strict current-sample boundary before publishing one owner rewrite/history
+position. That boundary cannot borrow an older last-valid preview. Undo/Redo and workspace-v7
+reload reproduce the accepted result. A rejected terminal sample or failed terminal recomposition
+retains prior accepted geometry, cancels the gesture and performs no save or lineage publication.
+
+Automated status: implemented and passing. The editor's exact point terminal regression and
+`m77_curve_control_coordinator` current-sample cases prove that an unsampled or rejected terminal
+coordinate cannot borrow an older accepted preview. Demo-web prediction tests prove coalescing,
+context reauthentication/revocation, transient no-save/no-durable-panel rendering, exact terminal
+lineage publication and unchanged-save suppression. Perceived responsiveness, intent-marker
+clarity and interaction around ordinary authoring/Fillet/Offset remain M83-U12 human UAT.
 
 ### M83-F026 — projected editing preserves host-owned scalar fallbacks
 
@@ -4635,6 +4682,35 @@ session, not the provisional trial result; history advances once. The inherited 
 strict-cold rejection regression and M83-F039 pending-token transaction regression jointly prove
 that a live-success construction cannot publish or acknowledge a pending token after cold
 rejection; F040 adds exact final-identity coverage for accepted ordinary and controlled paths.
+
+### M83-F041 — editable lineage exposes stable ownership and dependency boundaries
+
+Create at least two independent recipe owners and a later relation/dimension/operation consumer.
+Move an independent owner across its sibling, then request moves on each side of provider and
+dependent boundaries. Legal movement changes only chronology; blocked movement clamps in the
+requested direction at the furthest legal lane and reports the exact typed reason. Stable step,
+developer key, outputs, identity flow, reservations and current materialized IDs remain exact.
+Directly manipulate a reordered output and prove the same owner is rewritten, then Undo/Redo and
+cold workspace-v7 reload the combined reorder/edit sequence. Reorder an independent constraint and
+dimension in both directions even when each captured action carries a historical global
+`source_order` snapshot: those entries are presentation/evaluation ordering, not semantic operand
+references. Replay prunes absent source IDs, retains the currently ordered surviving IDs and
+appends sources materialized by the current action, so the reordered source chronology changes
+without reallocating either native source identity or manifest. Imported baselines and tombstones
+remain pinned; suppressed steps remain movable where the same graph permits it.
+
+### M83-F042 — predictive frames cannot become lineage or accepted-scene authority
+
+Measure an exact captured point or curve-control preview above the predictive threshold. Enqueue
+several newer browser samples, proving each supersedes the prior idle generation and only the
+latest can be verified. Intent paint performs no persistence, history publication, lineage
+inspection/reorder, or durable Tree/Lineage/Inspector rebuild. Non-point/control gestures and
+ordinary authoring, Fillet and Offset frames never enter the shortcut. Any pointer/tool/focus/
+overlay/camera/scene transition revokes the generation. Terminal point and curve-control releases
+must accept only the newest retained valid request and produce finite exact geometry, one owner-
+rewrite history step, stable Undo/Redo and cold reload. Invalid/rejected terminal input or terminal
+scene recomposition failure cannot fall back to an older preview; it cancels and retains the
+complete previous accepted authority without a save.
 
 ## Frozen near-singular fixtures
 

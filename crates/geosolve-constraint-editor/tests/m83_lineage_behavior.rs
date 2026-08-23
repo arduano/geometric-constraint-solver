@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ConstraintActionRequest, ConstraintIntent, CurveNumericPropertyKind, DraftAuthoringInput,
-    DraftInferenceInput, EditorEffect, EditorScene, GeometryToolVariant, Modifiers, PointerInput,
-    RetainedEditorCoordinator, SelectionItem, Viewport, evaluate_lineage_session_cold,
+    ConstraintActionRequest, ConstraintIntent, ConstructionPoint, ConstructionProposal,
+    CurveNumericPropertyKind, DraftAuthoringInput, DraftInferenceInput, EditorEffect, EditorScene,
+    GeometryToolVariant, Modifiers, PointerInput, RetainedEditorCoordinator, SelectionItem,
+    Viewport, evaluate_lineage_session_cold,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentArcSweep, DocumentDimensionDefinition,
@@ -688,6 +689,63 @@ fn m83_w1_all_geometry_recipes_materialize_and_keep_identity_through_delete_hist
             allocator
         );
         assert_cold_matches(&coordinator, false);
+    }
+}
+
+#[test]
+fn m83_w1_all_geometry_recipe_owners_reorder_without_identity_reallocation() {
+    for case in RECIPE_CASES {
+        let (mut coordinator, _) = author_recipe(case);
+        let recipe_owner = coordinator.lineage_document().steps()[1].id;
+        let recipe_manifest = manifest(&coordinator, recipe_owner);
+        coordinator
+            .apply_construction(
+                coordinator.session().design_identity(),
+                &ConstructionProposal::Point {
+                    point: ConstructionPoint::New([8.0, -7.0]),
+                },
+            )
+            .unwrap_or_else(|error| panic!("{:?}: independent point: {error}", case.variant));
+        let point_owner = coordinator
+            .lineage_document()
+            .steps()
+            .last()
+            .expect("independent point owner")
+            .id;
+        let point_manifest = manifest(&coordinator, point_owner);
+        let history = (coordinator.history_len(), coordinator.history_cursor());
+
+        let outcome = coordinator
+            .reorder_lineage_step(
+                coordinator.lineage_identity(),
+                point_owner,
+                Some(recipe_owner),
+            )
+            .unwrap_or_else(|error| panic!("{:?}: reorder: {error}", case.variant));
+        assert!(outcome.changed, "{:?}: {outcome:#?}", case.variant);
+        assert!(outcome.accepted, "{:?}: {outcome:#?}", case.variant);
+        assert!(!outcome.clamped, "{:?}: {outcome:#?}", case.variant);
+        assert_eq!(manifest(&coordinator, recipe_owner), recipe_manifest);
+        assert_eq!(manifest(&coordinator, point_owner), point_manifest);
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            (history.0 + 1, history.1 + 1),
+            "{:?}: one reorder history position",
+            case.variant
+        );
+        assert_cold_matches(&coordinator, true);
+
+        coordinator
+            .undo()
+            .unwrap_or_else(|error| panic!("{:?}: Undo reorder: {error}", case.variant));
+        assert_eq!(manifest(&coordinator, recipe_owner), recipe_manifest);
+        assert_eq!(manifest(&coordinator, point_owner), point_manifest);
+        coordinator
+            .redo()
+            .unwrap_or_else(|error| panic!("{:?}: Redo reorder: {error}", case.variant));
+        assert_eq!(manifest(&coordinator, recipe_owner), recipe_manifest);
+        assert_eq!(manifest(&coordinator, point_owner), point_manifest);
+        assert_cold_matches(&coordinator, true);
     }
 }
 

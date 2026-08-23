@@ -122,7 +122,7 @@
         <aside class="wb-lineage-panel" aria-label="Retained sketch lineage">
           <div class="wb-panel-title"><span>Lineage</span><span id="wb-lineage-count">0 actions · r0</span></div>
           <div id="wb-lineage-history" class="wb-lineage-history"></div>
-          <div id="wb-lineage" class="wb-lineage" role="list" aria-label="Retained sketch actions"></div>
+          <div id="wb-lineage" class="wb-lineage" role="listbox" aria-label="Retained sketch actions" aria-multiselectable="false" tabindex="0"></div>
         </aside>
       </section>
 
@@ -238,6 +238,37 @@
           <span class="wb-field-label">Selection</span>
           <strong id="wb-selection">0 selected</strong>
           <button type="button" class="wb-danger" data-wb-action="delete">Delete selected</button>
+        </section>
+        <section id="wb-lineage-inspector" class="wb-inspector-section wb-lineage-inspector" aria-label="Selected lineage action" hidden>
+          <span class="wb-field-label">Lineage action</span>
+          <div class="wb-lineage-inspector-header">
+            <strong id="wb-lineage-inspector-label">Selected action</strong>
+            <span id="wb-lineage-inspector-state" class="wb-lineage-state">Live</span>
+          </div>
+          <div id="wb-lineage-inspector-meta" class="wb-lineage-inspector-meta"></div>
+          <div id="wb-lineage-inspector-graph" class="wb-lineage-inspector-graph"></div>
+          <fieldset id="wb-lineage-reorder" class="wb-lineage-reorder">
+            <legend>Program order</legend>
+            <div class="wb-lineage-reorder-buttons">
+              <button id="wb-lineage-move-earlier" type="button" data-wb-action="lineage-move-earlier">Move earlier</button>
+              <button id="wb-lineage-move-later" type="button" data-wb-action="lineage-move-later">Move later</button>
+            </div>
+            <label for="wb-lineage-position">Legal position
+              <select id="wb-lineage-position" data-wb-action="lineage-position"></select>
+            </label>
+            <p id="wb-lineage-reorder-note" class="wb-lineage-reorder-note" role="status" aria-live="polite"></p>
+          </fieldset>
+          <details id="wb-lineage-debug-editor" class="wb-lineage-debug-editor">
+            <summary>Debug action editor</summary>
+            <p id="wb-lineage-debug-help">Advanced: edit the mutable label and compatible action payload as JSON. Stable identities and ownership manifests cannot be changed.</p>
+            <label for="wb-lineage-debug-json">Step rewrite JSON</label>
+            <textarea id="wb-lineage-debug-json" rows="12" spellcheck="false" autocomplete="off" autocapitalize="off" aria-describedby="wb-lineage-debug-help wb-lineage-debug-status"></textarea>
+            <div class="wb-lineage-debug-actions">
+              <button id="wb-lineage-debug-apply" type="button" data-wb-action="lineage-debug-apply">Apply</button>
+              <button id="wb-lineage-debug-reset" type="button" data-wb-action="lineage-debug-reset">Reset</button>
+            </div>
+            <p id="wb-lineage-debug-status" class="wb-lineage-debug-status" role="status" aria-live="polite"></p>
+          </details>
         </section>
         <section id="wb-annotation-inspector" class="wb-inspector-section" hidden>
           <span class="wb-field-label">Semantic annotation</span>

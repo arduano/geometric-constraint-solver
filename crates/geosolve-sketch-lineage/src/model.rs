@@ -164,6 +164,53 @@ impl LineageActionDefinition {
         }
     }
 
+    /// Returns the stable schema key carried by this action.
+    ///
+    /// Imported baselines expose their canonical schema or opaque media type;
+    /// ordinary actions expose the schema of their versioned payload.  The
+    /// pair returned by this method and [`Self::schema_version`] is immutable
+    /// for one stable step identity across retained session history.
+    #[must_use]
+    pub const fn schema(&self) -> &LineageSemanticKey {
+        match self {
+            Self::ImportedBaseline { baseline } => match &baseline.encoding {
+                ImportedBaselineEncoding::Canonical { schema, .. } => schema,
+                ImportedBaselineEncoding::Opaque { media_type, .. } => media_type,
+            },
+            Self::GeometryRecipe { action }
+            | Self::Constraint { action }
+            | Self::Dimension { action }
+            | Self::Trim { action }
+            | Self::Parameter { action }
+            | Self::Binding { action }
+            | Self::External { action }
+            | Self::Operation { action }
+            | Self::ComputedFeature { action }
+            | Self::Annotation { action } => &action.schema,
+        }
+    }
+
+    /// Returns the stable schema version carried by this action.
+    #[must_use]
+    pub const fn schema_version(&self) -> u32 {
+        match self {
+            Self::ImportedBaseline { baseline } => match &baseline.encoding {
+                ImportedBaselineEncoding::Canonical { version, .. }
+                | ImportedBaselineEncoding::Opaque { version, .. } => *version,
+            },
+            Self::GeometryRecipe { action }
+            | Self::Constraint { action }
+            | Self::Dimension { action }
+            | Self::Trim { action }
+            | Self::Parameter { action }
+            | Self::Binding { action }
+            | Self::External { action }
+            | Self::Operation { action }
+            | Self::ComputedFeature { action }
+            | Self::Annotation { action } => action.version,
+        }
+    }
+
     /// Returns all structurally visible logical dependencies.
     #[must_use]
     pub fn inputs(&self) -> &[LineageInputBinding] {

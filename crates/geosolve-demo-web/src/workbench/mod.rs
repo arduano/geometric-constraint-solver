@@ -23,6 +23,12 @@ mod scene;
 const WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
 
 #[cfg(any(target_arch = "wasm32", test))]
+const PREDICTIVE_DRAG_ENTRY_MILLISECONDS: f64 = 12.0;
+
+#[cfg(any(target_arch = "wasm32", test))]
+const PREDICTIVE_DRAG_IDLE_VERIFY_MILLISECONDS: f64 = 50.0;
+
+#[cfg(any(target_arch = "wasm32", test))]
 const CANVAS_BROWSER_DEFAULT_GUARD_EVENTS: [&str; 2] = ["selectstart", "dragstart"];
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -145,6 +151,31 @@ impl CanvasPointerCaptures {
 
     fn is_empty(&self) -> bool {
         self.active.is_none()
+    }
+
+    fn authenticated_predictive_gesture(
+        &self,
+        gesture: Option<geosolve_constraint_editor::ActivePointerGesture>,
+        sample_pointer_id: u64,
+        platform_has_capture: bool,
+    ) -> Option<geosolve_constraint_editor::ActivePointerGesture> {
+        let gesture = gesture?;
+        let pointer_id = i32::try_from(gesture.pointer_id).ok()?;
+        let captured = self.active?;
+        (platform_has_capture
+            && gesture.pointer_id == sample_pointer_id
+            && captured.pointer_id == pointer_id
+            && matches!(
+                (captured.kind, gesture.kind),
+                (
+                    CanvasPointerCaptureKind::Point,
+                    geosolve_constraint_editor::ActivePointerGestureKind::Point
+                ) | (
+                    CanvasPointerCaptureKind::CurveControl,
+                    geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
+                )
+            ))
+        .then_some(gesture)
     }
 
     fn route_terminal(
@@ -301,6 +332,241 @@ struct PointerMoveQueue {
     stationary_choice: Option<StationaryDraftInferenceChoice>,
     next_generation: u64,
     scheduled_generation: Option<u64>,
+}
+
+/// Browser scheduling state for a slow exact point/control drag.
+///
+/// The headless editor and retained coordinator continue to own every exact
+/// preview and release. This adapter paints the newest pointer intent at frame
+/// rate, verifies one exact sample after a short pointer pause, and always
+/// verifies the terminal sample. Pointer intent is never persisted or
+/// submitted as accepted geometry.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Default)]
+struct PredictiveDragState {
+    gesture: Option<geosolve_constraint_editor::ActivePointerGesture>,
+    enabled: bool,
+    pending: Option<DraftingPointerSample>,
+    scheduled_generation: Option<u64>,
+    next_generation: u64,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl PredictiveDragState {
+    fn observe_gesture(
+        &mut self,
+        gesture: Option<geosolve_constraint_editor::ActivePointerGesture>,
+    ) {
+        let gesture = gesture.filter(|gesture| {
+            matches!(
+                gesture.kind,
+                geosolve_constraint_editor::ActivePointerGestureKind::Point
+                    | geosolve_constraint_editor::ActivePointerGestureKind::CurveControl
+            )
+        });
+        if self.gesture != gesture {
+            self.cancel();
+            self.gesture = gesture;
+        }
+    }
+
+    fn should_predict_gesture(
+        &self,
+        gesture: geosolve_constraint_editor::ActivePointerGesture,
+    ) -> bool {
+        self.enabled && self.gesture == Some(gesture)
+    }
+
+    fn record_exact_verification(&mut self, elapsed_milliseconds: f64) {
+        if self.gesture.is_some()
+            && elapsed_milliseconds.is_finite()
+            && elapsed_milliseconds > PREDICTIVE_DRAG_ENTRY_MILLISECONDS
+        {
+            self.enabled = true;
+        }
+    }
+
+    fn enqueue(&mut self, sample: DraftingPointerSample) -> (u64, i32) {
+        self.pending = Some(sample);
+        // Every pointer frame supersedes the preceding idle-verification
+        // callback. Continuous motion therefore remains presentation-only and
+        // fluid; one exact preview runs after a short pause, and pointer-up
+        // independently runs the exact terminal sample.
+        self.next_generation = self.next_generation.wrapping_add(1);
+        let generation = self.next_generation;
+        self.scheduled_generation = Some(generation);
+        #[allow(clippy::cast_possible_truncation)]
+        (
+            generation,
+            PREDICTIVE_DRAG_IDLE_VERIFY_MILLISECONDS.ceil() as i32,
+        )
+    }
+
+    fn take_for_verification(&mut self, generation: u64) -> Option<DraftingPointerSample> {
+        if self.scheduled_generation != Some(generation) {
+            return None;
+        }
+        self.scheduled_generation = None;
+        self.pending.take()
+    }
+
+    fn pending_for_verification(&self, generation: u64) -> Option<DraftingPointerSample> {
+        (self.scheduled_generation == Some(generation))
+            .then_some(self.pending)
+            .flatten()
+    }
+
+    fn has_prediction(&self) -> bool {
+        self.enabled
+            || self.gesture.is_some()
+            || self.pending.is_some()
+            || self.scheduled_generation.is_some()
+    }
+
+    fn cancel(&mut self) {
+        self.pending = None;
+        self.scheduled_generation = None;
+        self.enabled = false;
+        self.gesture = None;
+        self.next_generation = self.next_generation.wrapping_add(1);
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn terminal_pointer_release_should_persist(
+    predictive_terminal: bool,
+    lineage_before: Option<geosolve_sketch_lineage::LineageDocumentIdentity>,
+    lineage_after: geosolve_sketch_lineage::LineageDocumentIdentity,
+) -> bool {
+    !predictive_terminal || lineage_before.is_some_and(|before| before != lineage_after)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkbenchRenderScope {
+    Transient,
+    Durable,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl WorkbenchRenderScope {
+    const fn rebuilds_durable_panels(self) -> bool {
+        matches!(self, Self::Durable)
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug)]
+struct LineageEditorDraft {
+    step: geosolve_sketch_lineage::LineageStepId,
+    expected: geosolve_sketch_lineage::LineageDocumentIdentity,
+    original_json: String,
+    json: String,
+    dirty: bool,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug)]
+struct LineageDragSession {
+    step: geosolve_sketch_lineage::LineageStepId,
+    lineage: geosolve_sketch_lineage::LineageDocumentIdentity,
+    payload: String,
+}
+
+/// Browser-only state for inspecting one coordinator-owned action program.
+///
+/// Selection, drafts and drag authentication never enter workspace v7. Every
+/// persistent edit still goes back through the retained coordinator using the
+/// exact lineage identity captured here.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Debug)]
+struct LineagePanelState {
+    selected: Option<geosolve_sketch_lineage::LineageStepId>,
+    draft: Option<LineageEditorDraft>,
+    reorder_notice: String,
+    debug_notice: String,
+    drag_nonce: String,
+    drag: Option<LineageDragSession>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl LineagePanelState {
+    fn new(drag_nonce: String) -> Self {
+        Self {
+            selected: None,
+            draft: None,
+            reorder_notice: String::new(),
+            debug_notice: String::new(),
+            drag_nonce,
+            drag: None,
+        }
+    }
+
+    fn clear_selection(&mut self) {
+        self.selected = None;
+        self.draft = None;
+        self.reorder_notice.clear();
+        self.debug_notice.clear();
+        self.drag = None;
+    }
+
+    fn select(&mut self, inspection: &geosolve_constraint_editor::LineageStepInspection) {
+        self.selected = Some(inspection.step);
+        self.draft = Some(LineageEditorDraft {
+            step: inspection.step,
+            expected: inspection.lineage,
+            original_json: inspection.replacement_json.clone(),
+            json: inspection.replacement_json.clone(),
+            dirty: false,
+        });
+        self.reorder_notice.clear();
+        self.debug_notice.clear();
+        self.drag = None;
+    }
+
+    fn update_draft(&mut self, json: String) {
+        let Some(draft) = self.draft.as_mut() else {
+            return;
+        };
+        draft.dirty = json != draft.original_json;
+        draft.json = json;
+        self.debug_notice = if draft.dirty {
+            "Unapplied debug changes".into()
+        } else {
+            String::new()
+        };
+    }
+
+    fn begin_drag(
+        &mut self,
+        lineage: geosolve_sketch_lineage::LineageDocumentIdentity,
+        step: geosolve_sketch_lineage::LineageStepId,
+    ) -> String {
+        let payload = format!(
+            "geosolve-lineage-dnd-v1:{}:{}:{}:{}:{}",
+            self.drag_nonce, lineage.document, lineage.revision, lineage.digest, step,
+        );
+        self.drag = Some(LineageDragSession {
+            step,
+            lineage,
+            payload: payload.clone(),
+        });
+        payload
+    }
+
+    fn authenticated_drag(
+        &self,
+        current: geosolve_sketch_lineage::LineageDocumentIdentity,
+        payload: &str,
+    ) -> Option<geosolve_sketch_lineage::LineageStepId> {
+        self.drag.as_ref().and_then(|drag| {
+            (drag.lineage == current && drag.payload == payload).then_some(drag.step)
+        })
+    }
+
+    fn clear_drag(&mut self) {
+        self.drag = None;
+    }
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -2176,11 +2442,11 @@ pub(crate) mod wasm {
         FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringPointerDownOutcome,
         FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
         FeatureAuthoringTransaction, GeometryInteractionPolicy, GeometryPickScope,
-        GeometryRoleSelectionState, GeometryToolVariant, GeometryVisibility, Modifiers,
-        NurbsConstructionOptions, OffsetAuthoringOutcome, OffsetAuthoringStage,
-        OffsetAuthoringState, PickTolerance, PointerInput, ProfileOffsetDirectionState,
-        RetainedEditorCoordinator, SceneCurveOrigin, SceneFilletActionInput,
-        SceneFilletActionTarget, ScreenPoint, SelectionItem,
+        GeometryRoleSelectionState, GeometryToolVariant, GeometryVisibility,
+        LineageReorderBlockReason, Modifiers, NurbsConstructionOptions, OffsetAuthoringOutcome,
+        OffsetAuthoringStage, OffsetAuthoringState, PickTolerance, PointerInput,
+        ProfileOffsetDirectionState, RetainedEditorCoordinator, SceneCurveOrigin,
+        SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -2197,8 +2463,9 @@ pub(crate) mod wasm {
     use wasm_bindgen::prelude::JsValue;
     use wasm_bindgen_futures::{JsFuture, spawn_local};
     use web_sys::{
-        Document, Element, Event, FocusEvent, HtmlElement, HtmlInputElement, HtmlSelectElement,
-        HtmlTextAreaElement, KeyboardEvent, MouseEvent, PointerEvent, WheelEvent,
+        Document, DragEvent, Element, Event, FocusEvent, HtmlElement, HtmlInputElement,
+        HtmlSelectElement, HtmlTextAreaElement, KeyboardEvent, MouseEvent, PointerEvent,
+        WheelEvent,
     };
 
     use super::persistence::{
@@ -2222,6 +2489,8 @@ pub(crate) mod wasm {
         pan_gesture: Option<PanGesture>,
         pointer_captures: super::CanvasPointerCaptures,
         pointer_moves: Rc<RefCell<super::PointerMoveQueue>>,
+        predictive_drag: super::PredictiveDragState,
+        lineage_panel: super::LineagePanelState,
         fillet_action_render: super::FilletActionRenderAuthority,
         geometry_palette: super::geometry_palette::GeometryPaletteState,
         option_overlay: super::OptionOverlayState,
@@ -2255,6 +2524,20 @@ pub(crate) mod wasm {
         pointer_id: i32,
         origin: geosolve_constraint_editor::ScreenPoint,
         origin_center: [f64; 2],
+    }
+
+    fn lineage_drag_nonce() -> Result<String, JsValue> {
+        use std::fmt::Write as _;
+
+        let mut bytes = [0_u8; 16];
+        super::platform::window()?
+            .crypto()?
+            .get_random_values_with_u8_array(&mut bytes)?;
+        let mut nonce = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            let _ = write!(nonce, "{byte:02x}");
+        }
+        Ok(nonce)
     }
 
     pub(crate) fn install(document: &Document) -> Result<(), JsValue> {
@@ -2297,6 +2580,8 @@ pub(crate) mod wasm {
             pan_gesture: None,
             pointer_captures: super::CanvasPointerCaptures::default(),
             pointer_moves: Rc::new(RefCell::new(super::PointerMoveQueue::default())),
+            predictive_drag: super::PredictiveDragState::default(),
+            lineage_panel: super::LineagePanelState::new(lineage_drag_nonce()?),
             fillet_action_render: super::FilletActionRenderAuthority::default(),
             geometry_palette: super::geometry_palette::GeometryPaletteState::default(),
             option_overlay: super::OptionOverlayState::default(),
@@ -2310,6 +2595,7 @@ pub(crate) mod wasm {
         install_palette_icons(document)?;
         render(document, &workbench)?;
         install_clicks(document, &workbench)?;
+        install_lineage_drag_and_drop(document, &workbench)?;
         install_sample_flyout_state(document)?;
         install_canvas(document, &workbench)?;
         install_draft_inference_modifier_listeners(document, &workbench)?;
@@ -2426,6 +2712,211 @@ pub(crate) mod wasm {
         coordinator_from_document(SketchDocument::new(10.0).map_err(|error| error.to_string())?)
     }
 
+    fn lineage_step_from_element(
+        element: &Element,
+    ) -> Option<geosolve_sketch_lineage::LineageStepId> {
+        element
+            .closest("[data-lineage-step-id]")
+            .ok()
+            .flatten()?
+            .get_attribute("data-lineage-step-id")?
+            .parse()
+            .ok()
+    }
+
+    fn select_lineage_step(wb: &mut Workbench, step: geosolve_sketch_lineage::LineageStepId) {
+        match wb.coordinator.lineage_step_inspection(step) {
+            Ok(inspection) => {
+                wb.coordinator.set_selection([]);
+                wb.lineage_panel.select(&inspection);
+                wb.notice = format!("Inspecting {}", inspection.label);
+            }
+            Err(error) => {
+                wb.lineage_panel.clear_selection();
+                wb.notice = format!("Lineage action is no longer available: {error}");
+            }
+        }
+    }
+
+    fn lineage_reorder_notice(
+        outcome: geosolve_constraint_editor::LineageReorderOutcome,
+    ) -> String {
+        let position = outcome.applied_ordinal + 1;
+        if !outcome.changed {
+            return outcome.boundary.map_or_else(
+                || format!("Action already occupies position {position}"),
+                |boundary| {
+                    format!(
+                        "Action is pinned at position {position}: {}",
+                        lineage_reorder_block_text(boundary)
+                    )
+                },
+            );
+        }
+        if outcome.clamped {
+            format!(
+                "Moved to furthest legal position {position}; stopped at {}",
+                outcome.boundary.map_or(
+                    "the program dependency boundary".into(),
+                    lineage_reorder_block_text
+                ),
+            )
+        } else if outcome.accepted {
+            format!("Moved to position {position}; accepted geometry rebuilt")
+        } else {
+            format!(
+                "Moved to position {position}; later evaluation is invalid, so the last accepted geometry remains visible"
+            )
+        }
+    }
+
+    fn lineage_reorder_block_text(reason: LineageReorderBlockReason) -> String {
+        match reason {
+            LineageReorderBlockReason::ImportedBaselinePinned => {
+                "the imported baseline is pinned".into()
+            }
+            LineageReorderBlockReason::TombstonedPinned => {
+                "deleted lineage actions are pinned".into()
+            }
+            LineageReorderBlockReason::RequiresProvider { provider } => {
+                format!("required provider s{:x}", provider.raw())
+            }
+            LineageReorderBlockReason::RequiredByDependent { dependent } => {
+                format!("dependent action s{:x}", dependent.raw())
+            }
+            LineageReorderBlockReason::WorkbenchChronology { step: Some(step) } => {
+                format!("workbench chronology at s{:x}", step.raw())
+            }
+            LineageReorderBlockReason::WorkbenchChronology { step: None } => {
+                "workbench chronology".into()
+            }
+        }
+    }
+
+    fn apply_lineage_reorder_ordinal(wb: &mut Workbench, ordinal: usize) {
+        let Some(step) = wb.lineage_panel.selected else {
+            return;
+        };
+        let result = wb
+            .coordinator
+            .lineage_reorder_availability(step)
+            .and_then(|availability| {
+                let lane = availability
+                    .lanes
+                    .iter()
+                    .find(|lane| lane.ordinal == ordinal)
+                    .ok_or_else(|| {
+                        geosolve_constraint_editor::CoordinatorError::Lineage(
+                            "unknown lineage reorder position".into(),
+                        )
+                    })?;
+                wb.coordinator
+                    .reorder_lineage_step(availability.lineage, step, lane.before)
+            });
+        match result {
+            Ok(outcome) => {
+                wb.lineage_panel.reorder_notice = lineage_reorder_notice(outcome);
+                if let Ok(inspection) = wb.coordinator.lineage_step_inspection(step) {
+                    let draft_was_dirty = wb
+                        .lineage_panel
+                        .draft
+                        .as_ref()
+                        .is_some_and(|draft| draft.dirty);
+                    if !draft_was_dirty {
+                        wb.lineage_panel.select(&inspection);
+                        wb.lineage_panel.reorder_notice = lineage_reorder_notice(outcome);
+                    } else if let Some(draft) = wb.lineage_panel.draft.as_mut() {
+                        draft.expected = inspection.lineage;
+                    }
+                }
+            }
+            Err(error) => {
+                wb.lineage_panel.reorder_notice = format!("Program order was not changed: {error}");
+            }
+        }
+        wb.notice.clone_from(&wb.lineage_panel.reorder_notice);
+    }
+
+    fn move_selected_lineage(wb: &mut Workbench, earlier: bool) {
+        let Some(step) = wb.lineage_panel.selected else {
+            return;
+        };
+        let Ok(availability) = wb.coordinator.lineage_reorder_availability(step) else {
+            wb.lineage_panel.clear_selection();
+            wb.notice = "Selected lineage action is no longer available".into();
+            return;
+        };
+        let requested = availability
+            .lanes
+            .iter()
+            .filter(|lane| lane.is_legal())
+            .filter(|lane| {
+                if earlier {
+                    lane.ordinal < availability.current_ordinal
+                } else {
+                    lane.ordinal > availability.current_ordinal
+                }
+            })
+            .min_by_key(|lane| lane.ordinal.abs_diff(availability.current_ordinal))
+            .map(|lane| lane.ordinal);
+        if let Some(requested) = requested {
+            apply_lineage_reorder_ordinal(wb, requested);
+        }
+    }
+
+    fn reset_lineage_debug_draft(wb: &mut Workbench) {
+        let Some(step) = wb.lineage_panel.selected else {
+            return;
+        };
+        match wb.coordinator.lineage_step_inspection(step) {
+            Ok(inspection) => {
+                wb.lineage_panel.select(&inspection);
+                wb.lineage_panel.debug_notice = "Debug draft reset to retained action".into();
+                wb.notice.clone_from(&wb.lineage_panel.debug_notice);
+            }
+            Err(error) => {
+                wb.lineage_panel.clear_selection();
+                wb.notice = format!("Selected lineage action is no longer available: {error}");
+            }
+        }
+    }
+
+    fn apply_lineage_debug_draft(wb: &mut Workbench) -> Result<(), String> {
+        let draft = wb
+            .lineage_panel
+            .draft
+            .clone()
+            .ok_or_else(|| "select one lineage action".to_owned())?;
+        let outcome = wb
+            .coordinator
+            .rewrite_lineage_step_json(draft.expected, draft.step, &draft.json)
+            .map_err(|error| error.to_string());
+        match outcome {
+            Ok(outcome) => {
+                let inspection = wb
+                    .coordinator
+                    .lineage_step_inspection(draft.step)
+                    .map_err(|error| error.to_string())?;
+                wb.lineage_panel.select(&inspection);
+                wb.lineage_panel.debug_notice = if outcome.changed {
+                    if outcome.accepted {
+                        "Action rewrite accepted and cold-rebuilt".into()
+                    } else {
+                        "Rewrite retained; a later action is invalid, so prior accepted geometry remains visible".into()
+                    }
+                } else {
+                    "Action already matches the retained program".into()
+                };
+                wb.notice.clone_from(&wb.lineage_panel.debug_notice);
+                Ok(())
+            }
+            Err(error) => {
+                wb.lineage_panel.debug_notice = format!("Debug rewrite was not applied: {error}");
+                Err(wb.lineage_panel.debug_notice.clone())
+            }
+        }
+    }
+
     fn coordinator_from_document(
         document: SketchDocument,
     ) -> Result<RetainedEditorCoordinator, String> {
@@ -2484,7 +2975,7 @@ pub(crate) mod wasm {
                     "[data-wb-tool], [data-wb-geometry-family], [data-wb-geometry-variant], ",
                     "[data-wb-authoring], [data-wb-feature], [data-wb-offset], [data-wb-option], ",
                     "[data-fillet-action], [data-editor-item], [data-wb-action], [data-sample-id], ",
-                    "[data-sample-group-trigger]"
+                    "[data-sample-group-trigger], [data-lineage-step-id]"
                 ))
                 .ok()
                 .flatten()
@@ -2705,6 +3196,17 @@ pub(crate) mod wasm {
                 } else {
                     dispatch_effects(&mut wb, effects);
                 }
+            } else if let Some(step) = lineage_step_from_element(&target) {
+                let mut wb = callback_workbench.borrow_mut();
+                clear_canvas_pointer_ownership(&mut wb);
+                select_lineage_step(&mut wb, step);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                focus_by_id(
+                    &callback_document,
+                    &format!("wb-lineage-step-{:016x}", step.raw()),
+                );
+                return;
             } else if target.has_attribute("data-editor-item") {
                 if let Some(item) = selection_item(&target) {
                     let is_canvas_item = target
@@ -2722,6 +3224,7 @@ pub(crate) mod wasm {
                         })
                         .unwrap_or_default();
                     let mut wb = callback_workbench.borrow_mut();
+                    wb.lineage_panel.clear_selection();
                     if wb.offset_authoring.is_active() {
                         if super::offset_click_owns_semantic_pick(is_canvas_item, is_pointer_click)
                         {
@@ -2750,6 +3253,7 @@ pub(crate) mod wasm {
                             handle_authoring_outcome(&mut wb, outcome);
                         }
                     } else if !is_canvas_item || !is_pointer_click {
+                        wb.lineage_panel.clear_selection();
                         wb.coordinator.select_item(item, modifiers);
                     }
                 }
@@ -2757,6 +3261,12 @@ pub(crate) mod wasm {
                 let mut wb = callback_workbench.borrow_mut();
                 selected_sample = open_sample(&callback_document, &mut wb, &key);
             } else if let Some(action) = target.get_attribute("data-wb-action") {
+                if action == "lineage-position" {
+                    // The browser-updated select value belongs to the later
+                    // change event. Re-rendering on click would restore the
+                    // prior authoritative position before it can be read.
+                    return;
+                }
                 if action == "reproduction-copy" {
                     copy_reproduction_payload(&callback_document, &callback_workbench);
                     return;
@@ -2804,6 +3314,21 @@ pub(crate) mod wasm {
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
             {
+                if target.id() == "wb-lineage-position" {
+                    let Ok(select) = target.dyn_into::<HtmlSelectElement>() else {
+                        return;
+                    };
+                    let Ok(ordinal) = select.value().parse::<usize>() else {
+                        return;
+                    };
+                    let mut wb = change_workbench.borrow_mut();
+                    apply_lineage_reorder_ordinal(&mut wb, ordinal);
+                    save(&wb);
+                    drop(wb);
+                    let _ = render(&change_document, &change_workbench);
+                    focus_by_id(&change_document, "wb-lineage-position");
+                    return;
+                }
                 if target.closest(".wb-branch-editor").ok().flatten().is_some() {
                     return;
                 }
@@ -2891,6 +3416,23 @@ pub(crate) mod wasm {
         required(document, "workbench-root")?
             .add_event_listener_with_callback("change", change.as_ref().unchecked_ref())?;
         change.forget();
+        let input_workbench = Rc::clone(workbench);
+        let input = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            let Some(textarea) = event
+                .target()
+                .and_then(|target| target.dyn_into::<HtmlTextAreaElement>().ok())
+                .filter(|target| target.id() == "wb-lineage-debug-json")
+            else {
+                return;
+            };
+            input_workbench
+                .borrow_mut()
+                .lineage_panel
+                .update_draft(textarea.value());
+        });
+        required(document, "wb-lineage-debug-json")?
+            .add_event_listener_with_callback("input", input.as_ref().unchecked_ref())?;
+        input.forget();
         install_focus_ownership(document, workbench)
     }
 
@@ -2996,6 +3538,198 @@ pub(crate) mod wasm {
         });
         root.add_event_listener_with_callback("focusout", focus_out.as_ref().unchecked_ref())?;
         focus_out.forget();
+        Ok(())
+    }
+
+    const LINEAGE_DRAG_MIME: &str = "application/x-geosolve-lineage-step";
+
+    fn clear_lineage_drop_markers(document: &Document) {
+        while let Ok(Some(row)) = document.query_selector("[data-lineage-drop]") {
+            let _ = row.remove_attribute("data-lineage-drop");
+        }
+    }
+
+    fn lineage_drop_ordinal(
+        wb: &Workbench,
+        source: geosolve_sketch_lineage::LineageStepId,
+        target: geosolve_sketch_lineage::LineageStepId,
+        after: bool,
+    ) -> Option<usize> {
+        let position = wb
+            .coordinator
+            .lineage_document()
+            .steps()
+            .iter()
+            .filter(|candidate| candidate.id != source)
+            .position(|candidate| candidate.id == target)?;
+        Some(position + usize::from(after))
+    }
+
+    fn install_lineage_drag_and_drop(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+    ) -> Result<(), JsValue> {
+        let surface = required(document, "wb-lineage")?;
+
+        let start_workbench = Rc::clone(workbench);
+        let start = Closure::<dyn FnMut(DragEvent)>::new(move |event: DragEvent| {
+            let Some(row) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-lineage-step-id]").ok().flatten())
+            else {
+                return;
+            };
+            if row.get_attribute("data-lineage-draggable").as_deref() != Some("true") {
+                event.prevent_default();
+                return;
+            }
+            let Some(step) = lineage_step_from_element(&row) else {
+                event.prevent_default();
+                return;
+            };
+            let Some(transfer) = event.data_transfer() else {
+                event.prevent_default();
+                return;
+            };
+            let mut wb = start_workbench.borrow_mut();
+            if wb.lineage_panel.selected != Some(step) {
+                select_lineage_step(&mut wb, step);
+            }
+            let identity = wb.coordinator.lineage_identity();
+            let payload = wb.lineage_panel.begin_drag(identity, step);
+            if transfer.set_data(LINEAGE_DRAG_MIME, &payload).is_err() {
+                wb.lineage_panel.clear_drag();
+                event.prevent_default();
+                return;
+            }
+            transfer.set_effect_allowed("move");
+            let _ = row.set_attribute("data-lineage-dragging", "true");
+        });
+        surface.add_event_listener_with_callback("dragstart", start.as_ref().unchecked_ref())?;
+        start.forget();
+
+        let over_document = document.clone();
+        let over_workbench = Rc::clone(workbench);
+        let over = Closure::<dyn FnMut(DragEvent)>::new(move |event: DragEvent| {
+            let Some(row) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-lineage-step-id]").ok().flatten())
+            else {
+                return;
+            };
+            let Some(target) = lineage_step_from_element(&row) else {
+                return;
+            };
+            let wb = over_workbench.borrow();
+            let Some(source) = wb.lineage_panel.drag.as_ref().map(|drag| drag.step) else {
+                return;
+            };
+            if wb.lineage_panel.drag.as_ref().map(|drag| drag.lineage)
+                != Some(wb.coordinator.lineage_identity())
+                || source == target
+            {
+                return;
+            }
+            let bounds = row.get_bounding_client_rect();
+            let after = f64::from(event.client_y()) >= bounds.top() + bounds.height() / 2.0;
+            let Some(ordinal) = lineage_drop_ordinal(&wb, source, target, after) else {
+                return;
+            };
+            let Ok(availability) = wb.coordinator.lineage_reorder_availability(source) else {
+                return;
+            };
+            let Some(lane) = availability
+                .lanes
+                .iter()
+                .find(|lane| lane.ordinal == ordinal)
+            else {
+                return;
+            };
+            event.prevent_default();
+            if let Some(transfer) = event.data_transfer() {
+                transfer.set_drop_effect("move");
+            }
+            clear_lineage_drop_markers(&over_document);
+            let marker = if after { "after" } else { "before" };
+            let _ = row.set_attribute("data-lineage-drop", marker);
+            let note = lane.blocked_by.map_or_else(
+                || format!("Drop at legal position {}", ordinal + 1),
+                |reason| {
+                    format!(
+                        "Drop requests position {}; authority will stop at {}",
+                        ordinal + 1,
+                        lineage_reorder_block_text(reason),
+                    )
+                },
+            );
+            drop(wb);
+            over_workbench.borrow_mut().lineage_panel.reorder_notice = note;
+        });
+        surface.add_event_listener_with_callback("dragover", over.as_ref().unchecked_ref())?;
+        over.forget();
+
+        let drop_document = document.clone();
+        let drop_workbench = Rc::clone(workbench);
+        let drop = Closure::<dyn FnMut(DragEvent)>::new(move |event: DragEvent| {
+            let Some(row) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-lineage-step-id]").ok().flatten())
+            else {
+                return;
+            };
+            let Some(target) = lineage_step_from_element(&row) else {
+                return;
+            };
+            let Some(transfer) = event.data_transfer() else {
+                return;
+            };
+            let payload = transfer.get_data(LINEAGE_DRAG_MIME).unwrap_or_default();
+            let mut wb = drop_workbench.borrow_mut();
+            let current = wb.coordinator.lineage_identity();
+            let Some(source) = wb.lineage_panel.authenticated_drag(current, &payload) else {
+                wb.lineage_panel.clear_drag();
+                wb.lineage_panel.reorder_notice =
+                    "Ignored unauthenticated or stale lineage drag".into();
+                wb.notice = wb.lineage_panel.reorder_notice.clone();
+                drop(wb);
+                clear_lineage_drop_markers(&drop_document);
+                let _ = render(&drop_document, &drop_workbench);
+                return;
+            };
+            let bounds = row.get_bounding_client_rect();
+            let after = f64::from(event.client_y()) >= bounds.top() + bounds.height() / 2.0;
+            let Some(ordinal) = lineage_drop_ordinal(&wb, source, target, after) else {
+                wb.lineage_panel.clear_drag();
+                return;
+            };
+            event.prevent_default();
+            wb.lineage_panel.clear_drag();
+            wb.lineage_panel.selected = Some(source);
+            apply_lineage_reorder_ordinal(&mut wb, ordinal);
+            save(&wb);
+            drop(wb);
+            clear_lineage_drop_markers(&drop_document);
+            let _ = render(&drop_document, &drop_workbench);
+            focus_by_id(
+                &drop_document,
+                &format!("wb-lineage-step-{:016x}", source.raw()),
+            );
+        });
+        surface.add_event_listener_with_callback("drop", drop.as_ref().unchecked_ref())?;
+        drop.forget();
+
+        let end_document = document.clone();
+        let end_workbench = Rc::clone(workbench);
+        let end = Closure::<dyn FnMut(DragEvent)>::new(move |_event: DragEvent| {
+            end_workbench.borrow_mut().lineage_panel.clear_drag();
+            clear_lineage_drop_markers(&end_document);
+            let _ = render(&end_document, &end_workbench);
+        });
+        surface.add_event_listener_with_callback("dragend", end.as_ref().unchecked_ref())?;
+        end.forget();
         Ok(())
     }
 
@@ -3267,6 +4001,7 @@ pub(crate) mod wasm {
         pointer_moves.drain_before_terminal();
         pointer_moves.clear_candidate_preference();
         drop(pointer_moves);
+        wb.predictive_drag.cancel();
         wb.pan_gesture = None;
         let effects = wb.coordinator.editor_mut().cancel();
         dispatch_effects(wb, effects);
@@ -3295,6 +4030,233 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn browser_now_milliseconds() -> f64 {
+        super::platform::window()
+            .ok()
+            .and_then(|window| window.performance())
+            .map_or(0.0, |performance| performance.now())
+    }
+
+    fn authenticated_predictive_gesture(
+        document: &Document,
+        wb: &Workbench,
+        sample_pointer_id: u64,
+    ) -> Option<geosolve_constraint_editor::ActivePointerGesture> {
+        let pointer_id = i32::try_from(sample_pointer_id).ok()?;
+        let platform_has_capture = required(document, "wb-viewport")
+            .is_ok_and(|viewport| viewport.has_pointer_capture(pointer_id));
+        wb.pointer_captures.authenticated_predictive_gesture(
+            wb.coordinator.editor().active_pointer_gesture(),
+            sample_pointer_id,
+            platform_has_capture,
+        )
+    }
+
+    fn process_pointer_move_sample(
+        wb: &mut Workbench,
+        scene: &EditorScene,
+        sample: super::DraftingPointerSample,
+    ) {
+        let pointer_is_captured = wb
+            .coordinator
+            .editor()
+            .active_pointer_gesture()
+            .is_some_and(|gesture| gesture.pointer_id == sample.input.pointer_id);
+        let owner = super::canvas_pointer_move_owner(
+            wb.authoring.active_tool().is_some(),
+            wb.feature_authoring.active_tool().is_some(),
+            wb.offset_authoring.is_active(),
+            pointer_is_captured,
+        );
+        let effects = match owner {
+            super::CanvasPointerMoveOwner::Editor => {
+                editor_pointer_move_with_stale_preference_recovery(wb, scene, sample)
+            }
+            super::CanvasPointerMoveOwner::OrdinaryAuthoring => {
+                let authoring = wb.authoring.clone();
+                wb.coordinator.pointer_move_authoring(
+                    &authoring,
+                    scene,
+                    sample.input,
+                    PickTolerance::default(),
+                )
+            }
+            super::CanvasPointerMoveOwner::FeatureAuthoring => {
+                let authoring = wb.feature_authoring.clone();
+                wb.coordinator
+                    .pointer_move_feature_authoring(
+                        &authoring,
+                        scene,
+                        sample.input,
+                        sample.painted_item,
+                        PickTolerance::default(),
+                    )
+                    .unwrap_or_else(|_| wb.coordinator.editor_mut().pointer_leave())
+            }
+            super::CanvasPointerMoveOwner::OffsetAuthoring => {
+                let policy = wb.coordinator.editor().geometry_interaction_policy();
+                let provisional = {
+                    let Workbench {
+                        coordinator,
+                        offset_authoring,
+                        ..
+                    } = wb;
+                    coordinator.hover_offset_authoring_distance(
+                        offset_authoring,
+                        scene,
+                        sample.input.position,
+                        PickTolerance::default(),
+                        policy,
+                    )
+                };
+                match provisional {
+                    Ok(Some(effects)) => effects,
+                    Ok(None) => {
+                        let outcome = wb.offset_authoring.hover_at(
+                            scene,
+                            sample.input.position,
+                            PickTolerance::default(),
+                            policy,
+                        );
+                        handle_offset_outcome(wb, outcome);
+                        wb.coordinator.editor_mut().pointer_leave()
+                    }
+                    Err(error) => {
+                        wb.notice = format!(
+                            "Offset distance hover is unavailable; the last valid preview is retained: {error}"
+                        );
+                        wb.coordinator.editor_mut().pointer_leave()
+                    }
+                }
+            }
+        };
+        dispatch_effects(wb, effects);
+    }
+
+    fn render_predictive_intent(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        sample: super::DraftingPointerSample,
+    ) -> Result<(), JsValue> {
+        let viewport = required(document, "wb-viewport")?;
+        let intent = if let Some(intent) = document.get_element_by_id("wb-predictive-intent") {
+            intent
+        } else {
+            viewport.insert_adjacent_html(
+                "beforeend",
+                concat!(
+                    "<circle id=\"wb-predictive-intent\" class=\"wb-predictive-intent\" ",
+                    "data-predictive-intent=\"pointer\" cx=\"0\" cy=\"0\" r=\"6\" ",
+                    "aria-hidden=\"true\" pointer-events=\"none\"/>"
+                ),
+            )?;
+            required(document, "wb-predictive-intent")?
+        };
+        intent.set_attribute("cx", &format!("{:.3}", sample.input.position.x))?;
+        intent.set_attribute("cy", &format!("{:.3}", sample.input.position.y))?;
+        required(document, "workbench-root")?
+            .set_attribute("data-drag-presentation", "pointer-intent")?;
+        let wb = workbench.borrow();
+        let coordinate = super::coordinate_hud(
+            wb.camera.viewport(),
+            Some(sample.input),
+            wb.coordinator.editor().draft_inference_resolution(),
+        );
+        let coordinate_element = required(document, "wb-pointer-coordinate")?;
+        coordinate_element.set_text_content(Some(&coordinate.text));
+        coordinate_element.set_attribute("title", &coordinate.title)?;
+        coordinate_element.set_attribute(
+            "data-inference-adjusted",
+            if coordinate.adjusted { "true" } else { "false" },
+        )?;
+        Ok(())
+    }
+
+    fn apply_exact_pointer_move_frame(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        sample: super::DraftingPointerSample,
+    ) {
+        let started = browser_now_milliseconds();
+        let transient = {
+            let mut wb = workbench.borrow_mut();
+            if wb.pan_gesture.is_some() {
+                return;
+            }
+            let Some(scene) = editor_scene(&wb) else {
+                return;
+            };
+            let gesture = authenticated_predictive_gesture(document, &wb, sample.input.pointer_id);
+            wb.predictive_drag.observe_gesture(gesture);
+            process_pointer_move_sample(&mut wb, &scene, sample);
+            gesture.is_some()
+        };
+        if transient {
+            let _ = render_transient(document, workbench);
+        } else {
+            // Ordinary authoring, Fillet, Offset, annotation and hover frames
+            // retain the complete pre-M83 panel/status synchronization.
+            let _ = render(document, workbench);
+        }
+        let finished = browser_now_milliseconds();
+        let mut wb = workbench.borrow_mut();
+        let gesture = authenticated_predictive_gesture(document, &wb, sample.input.pointer_id);
+        wb.predictive_drag.observe_gesture(gesture);
+        wb.predictive_drag
+            .record_exact_verification((finished - started).max(0.0));
+    }
+
+    fn verify_predictive_drag_generation(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        generation: u64,
+    ) {
+        let sample = {
+            let mut wb = workbench.borrow_mut();
+            let Some(sample) = wb.predictive_drag.pending_for_verification(generation) else {
+                return;
+            };
+            let gesture = authenticated_predictive_gesture(document, &wb, sample.input.pointer_id);
+            let Some(gesture) =
+                gesture.filter(|gesture| wb.predictive_drag.should_predict_gesture(*gesture))
+            else {
+                // A retired timer may clear its adapter state, but it must not
+                // reroute the old sample or repaint a newer interaction.
+                wb.predictive_drag.cancel();
+                return;
+            };
+            debug_assert_eq!(wb.predictive_drag.gesture, Some(gesture));
+            wb.predictive_drag.take_for_verification(generation)
+        };
+        if let Some(sample) = sample {
+            apply_exact_pointer_move_frame(document, workbench, sample);
+        }
+    }
+
+    fn schedule_predictive_drag_verification(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        generation: u64,
+        delay_milliseconds: i32,
+    ) {
+        let callback_document = document.clone();
+        let callback_workbench = Rc::clone(workbench);
+        let callback = Closure::once_into_js(move || {
+            verify_predictive_drag_generation(&callback_document, &callback_workbench, generation);
+        });
+        let scheduled = super::platform::window().and_then(|window| {
+            window
+                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                    callback.unchecked_ref(),
+                    delay_milliseconds,
+                )
+                .map(|_| ())
+        });
+        if scheduled.is_err() {
+            verify_predictive_drag_generation(document, workbench, generation);
+        }
+    }
+
     fn schedule_pointer_move_frame(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
@@ -3308,90 +4270,29 @@ pub(crate) mod wasm {
             let Some(sample) = frame_pointer_moves.borrow_mut().take_for_frame(generation) else {
                 return;
             };
-            let mut wb = frame_workbench.borrow_mut();
-            if wb.pan_gesture.is_some() {
+            let prediction = {
+                let mut wb = frame_workbench.borrow_mut();
+                if wb.pan_gesture.is_some() {
+                    return;
+                }
+                let gesture =
+                    authenticated_predictive_gesture(&frame_document, &wb, sample.input.pointer_id);
+                wb.predictive_drag.observe_gesture(gesture);
+                gesture
+                    .filter(|gesture| wb.predictive_drag.should_predict_gesture(*gesture))
+                    .map(|_| wb.predictive_drag.enqueue(sample))
+            };
+            if let Some((verification_generation, delay_milliseconds)) = prediction {
+                let _ = render_predictive_intent(&frame_document, &frame_workbench, sample);
+                schedule_predictive_drag_verification(
+                    &frame_document,
+                    &frame_workbench,
+                    verification_generation,
+                    delay_milliseconds,
+                );
                 return;
             }
-            let Some(scene) = editor_scene(&wb) else {
-                return;
-            };
-            let pointer_is_captured = wb
-                .coordinator
-                .editor()
-                .active_pointer_gesture()
-                .is_some_and(|gesture| gesture.pointer_id == sample.input.pointer_id);
-            let owner = super::canvas_pointer_move_owner(
-                wb.authoring.active_tool().is_some(),
-                wb.feature_authoring.active_tool().is_some(),
-                wb.offset_authoring.is_active(),
-                pointer_is_captured,
-            );
-            let effects = match owner {
-                super::CanvasPointerMoveOwner::Editor => {
-                    editor_pointer_move_with_stale_preference_recovery(&mut wb, &scene, sample)
-                }
-                super::CanvasPointerMoveOwner::OrdinaryAuthoring => {
-                    let authoring = wb.authoring.clone();
-                    wb.coordinator.pointer_move_authoring(
-                        &authoring,
-                        &scene,
-                        sample.input,
-                        PickTolerance::default(),
-                    )
-                }
-                super::CanvasPointerMoveOwner::FeatureAuthoring => {
-                    let authoring = wb.feature_authoring.clone();
-                    wb.coordinator
-                        .pointer_move_feature_authoring(
-                            &authoring,
-                            &scene,
-                            sample.input,
-                            sample.painted_item,
-                            PickTolerance::default(),
-                        )
-                        .unwrap_or_else(|_| wb.coordinator.editor_mut().pointer_leave())
-                }
-                super::CanvasPointerMoveOwner::OffsetAuthoring => {
-                    let policy = wb.coordinator.editor().geometry_interaction_policy();
-                    let provisional = {
-                        let Workbench {
-                            coordinator,
-                            offset_authoring,
-                            ..
-                        } = &mut *wb;
-                        coordinator.hover_offset_authoring_distance(
-                            offset_authoring,
-                            &scene,
-                            sample.input.position,
-                            PickTolerance::default(),
-                            policy,
-                        )
-                    };
-                    match provisional {
-                        Ok(Some(effects)) => effects,
-                        Ok(None) => {
-                            let outcome = wb.offset_authoring.hover_at(
-                                &scene,
-                                sample.input.position,
-                                PickTolerance::default(),
-                                policy,
-                            );
-                            handle_offset_outcome(&mut wb, outcome);
-                            wb.coordinator.editor_mut().pointer_leave()
-                        }
-                        Err(error) => {
-                            wb.notice = format!(
-                                "Offset distance hover is unavailable; the last valid preview is retained: {error}"
-                            );
-                            wb.coordinator.editor_mut().pointer_leave()
-                        }
-                    }
-                }
-            };
-            dispatch_effects(&mut wb, effects);
-            save(&wb);
-            drop(wb);
-            let _ = render(&frame_document, &frame_workbench);
+            apply_exact_pointer_move_frame(&frame_document, &frame_workbench, sample);
         });
         let scheduled = super::platform::window()
             .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
@@ -3610,7 +4511,17 @@ pub(crate) mod wasm {
                 }
                 return;
             }
-            if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
+            let predictive_terminal = owns_pointer
+                && authenticated_predictive_gesture(&callback_document, &wb, input.pointer_id)
+                    .is_some_and(|gesture| wb.predictive_drag.should_predict_gesture(gesture));
+            wb.predictive_drag.cancel();
+            if predictive_terminal {
+                callback_pointer_moves.borrow_mut().drain_before_terminal();
+                let sample = callback_pointer_moves.borrow_mut().observe(input);
+                process_pointer_move_sample(&mut wb, &scene, sample);
+            } else if let Some(pending) =
+                callback_pointer_moves.borrow_mut().drain_before_terminal()
+            {
                 let problem_items = current_problem_items(&wb.coordinator, &scene);
                 let effects = wb
                     .coordinator
@@ -3623,13 +4534,44 @@ pub(crate) mod wasm {
                     );
                 dispatch_effects(&mut wb, effects);
             }
-            callback_pointer_moves.borrow_mut().observe(input);
+            if !predictive_terminal {
+                callback_pointer_moves.borrow_mut().observe(input);
+            }
+            let Some(terminal_scene) = editor_scene(&wb) else {
+                cancel_captured_canvas_interactions(
+                    &callback_viewport,
+                    &mut wb,
+                    super::CanvasPointerTerminal::PointerCancel {
+                        pointer_id: event.pointer_id(),
+                    },
+                    "Interaction canceled because the exact terminal scene could not be rebuilt",
+                );
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                return;
+            };
+            let lineage_before = predictive_terminal.then(|| wb.coordinator.lineage_identity());
             let coordinator = &mut wb.coordinator;
             let expected = coordinator.session().design_identity();
-            let effects = coordinator.editor_mut().pointer_up(&scene, expected, input);
+            let effects = if predictive_terminal {
+                coordinator
+                    .editor_mut()
+                    .pointer_up_current_sample(&terminal_scene, expected, input)
+            } else {
+                coordinator
+                    .editor_mut()
+                    .pointer_up(&terminal_scene, expected, input)
+            };
             dispatch_effects(&mut wb, effects);
+            wb.predictive_drag.cancel();
             release_canvas_pointer_capture(&callback_viewport, &mut wb, event.pointer_id());
-            save(&wb);
+            if super::terminal_pointer_release_should_persist(
+                predictive_terminal,
+                lineage_before,
+                wb.coordinator.lineage_identity(),
+            ) {
+                save(&wb);
+            }
             drop(wb);
             let _ = render(&callback_document, &callback_workbench);
         });
@@ -3895,6 +4837,14 @@ pub(crate) mod wasm {
             match super::route_canvas_primary_pointer_down(&wb.pointer_captures) {
                 super::CanvasPrimaryPointerDownRoute::Dispatch => {}
                 super::CanvasPrimaryPointerDownRoute::PreserveCapturedInteraction => return,
+            }
+            if wb.pointer_captures.is_empty()
+                && wb.coordinator.editor().tool() == EditorTool::Select
+                && wb.authoring.active_tool().is_none()
+                && wb.feature_authoring.active_tool().is_none()
+                && !wb.offset_authoring.is_active()
+            {
+                wb.lineage_panel.clear_selection();
             }
             if event_targets_problem_marker(&event) {
                 wb.pointer_moves
@@ -4314,6 +5264,81 @@ pub(crate) mod wasm {
                 // must never fall through to any sketch keyboard behavior.
                 return;
             }
+            let lineage_keyboard_owner = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("#wb-lineage").ok().flatten())
+                .is_some();
+            if lineage_keyboard_owner
+                && matches!(
+                    event.key().as_str(),
+                    "ArrowUp" | "ArrowDown" | "Home" | "End" | "Escape"
+                )
+                && !event.ctrl_key()
+                && !event.meta_key()
+                && (!event.alt_key() || matches!(event.key().as_str(), "ArrowUp" | "ArrowDown"))
+            {
+                event.prevent_default();
+                let mut wb = callback_workbench.borrow_mut();
+                let mut focus = None;
+                match event.key().as_str() {
+                    "Escape" => {
+                        wb.lineage_panel.clear_selection();
+                        wb.notice = "Lineage selection cleared".into();
+                    }
+                    "ArrowUp" | "ArrowDown" if event.alt_key() => {
+                        let earlier = event.key() == "ArrowUp";
+                        move_selected_lineage(&mut wb, earlier);
+                        focus = wb.lineage_panel.selected;
+                        save(&wb);
+                    }
+                    key => {
+                        let steps = wb
+                            .coordinator
+                            .lineage_document()
+                            .steps()
+                            .iter()
+                            .map(|step| step.id)
+                            .collect::<Vec<_>>();
+                        let current = wb
+                            .lineage_panel
+                            .selected
+                            .and_then(|selected| steps.iter().position(|step| *step == selected));
+                        let target = match key {
+                            "Home" => steps.first().copied(),
+                            "End" => steps.last().copied(),
+                            "ArrowUp" => current.map_or_else(
+                                || steps.last().copied(),
+                                |index| steps.get(index.saturating_sub(1)).copied(),
+                            ),
+                            "ArrowDown" => current.map_or_else(
+                                || steps.first().copied(),
+                                |index| {
+                                    steps
+                                        .get((index + 1).min(steps.len().saturating_sub(1)))
+                                        .copied()
+                                },
+                            ),
+                            _ => None,
+                        };
+                        if let Some(target) = target {
+                            select_lineage_step(&mut wb, target);
+                            focus = Some(target);
+                        }
+                    }
+                }
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                if let Some(step) = focus {
+                    focus_by_id(
+                        &callback_document,
+                        &format!("wb-lineage-step-{:016x}", step.raw()),
+                    );
+                } else {
+                    focus_by_id(&callback_document, "wb-lineage");
+                }
+                return;
+            }
             if !event.ctrl_key()
                 && !event.meta_key()
                 && !event.alt_key()
@@ -4593,6 +5618,7 @@ pub(crate) mod wasm {
                     command: event.meta_key(),
                 };
                 let mut wb = callback_workbench.borrow_mut();
+                wb.lineage_panel.clear_selection();
                 if wb.offset_authoring.is_active() {
                     handle_offset_item_pick(&mut wb, item);
                 } else if wb.feature_authoring.active_tool().is_some() {
@@ -5032,6 +6058,7 @@ pub(crate) mod wasm {
             "new" => cancel_before_camera_change(document, wb).and_then(|()| {
                 let coordinator = empty_coordinator()?;
                 wb.coordinator = coordinator;
+                wb.lineage_panel.clear_selection();
                 wb.authoring.deactivate();
                 clear_feature_authoring(wb);
                 clear_offset_authoring(wb);
@@ -5139,8 +6166,22 @@ pub(crate) mod wasm {
             }
             "clear-selection" => {
                 wb.coordinator.set_selection([]);
+                wb.lineage_panel.clear_selection();
                 Ok(())
             }
+            "lineage-move-earlier" => {
+                move_selected_lineage(wb, true);
+                Ok(())
+            }
+            "lineage-move-later" => {
+                move_selected_lineage(wb, false);
+                Ok(())
+            }
+            "lineage-debug-reset" => {
+                reset_lineage_debug_draft(wb);
+                Ok(())
+            }
+            "lineage-debug-apply" => apply_lineage_debug_draft(wb),
             "annotation-reset-selected" => {
                 let changed = wb
                     .coordinator
@@ -5286,6 +6327,10 @@ pub(crate) mod wasm {
                 | "offset-cancel"
                 | "options-close"
                 | "geometry-role"
+                | "lineage-move-earlier"
+                | "lineage-move-later"
+                | "lineage-debug-reset"
+                | "lineage-debug-apply"
                 | "annotation-reset-selected"
                 | "annotation-reset-all"
                 | "curve-rational-middle"
@@ -5542,6 +6587,7 @@ pub(crate) mod wasm {
     ) -> Result<(), String> {
         cancel_before_camera_change(document, wb)?;
         wb.coordinator = coordinator;
+        wb.lineage_panel.clear_selection();
         wb.authoring = AuthoringState::default();
         wb.feature_authoring = FeatureAuthoringState::default();
         clear_offset_authoring(wb);
@@ -5552,6 +6598,7 @@ pub(crate) mod wasm {
         wb.pan_gesture = None;
         wb.pointer_captures = super::CanvasPointerCaptures::default();
         *wb.pointer_moves.borrow_mut() = super::PointerMoveQueue::default();
+        wb.predictive_drag.cancel();
         wb.fillet_action_render = super::FilletActionRenderAuthority::default();
         wb.option_overlay = super::OptionOverlayState::default();
         wb.reproduction_overlay_open = false;
@@ -5677,6 +6724,7 @@ pub(crate) mod wasm {
     }
 
     fn invalidate_draft_inference_for_camera_change(wb: &mut Workbench) {
+        wb.predictive_drag.cancel();
         wb.pointer_moves.borrow_mut().clear_stationary_sample();
         let effects = wb.coordinator.editor_mut().invalidate_draft_inference();
         dispatch_effects(wb, effects);
@@ -5818,6 +6866,7 @@ pub(crate) mod wasm {
         match wb.samples.open_key(key) {
             Ok(coordinator) => {
                 wb.coordinator = coordinator;
+                wb.lineage_panel.clear_selection();
                 wb.authoring.deactivate();
                 clear_feature_authoring(wb);
                 clear_offset_authoring(wb);
@@ -6615,6 +7664,8 @@ pub(crate) mod wasm {
         wb: &mut Workbench,
         route: super::CanvasPointerContextRoute,
     ) -> bool {
+        let cleared_prediction = wb.predictive_drag.has_prediction();
+        wb.predictive_drag.cancel();
         let cleared_offset_hover = if wb.offset_authoring.hover_target().is_some() {
             let scene = editor_scene(wb);
             let policy = wb.coordinator.editor().geometry_interaction_policy();
@@ -6640,7 +7691,8 @@ pub(crate) mod wasm {
             wb.coordinator.editor_mut(),
             route,
         );
-        let changed = cleared_offset_hover
+        let changed = cleared_prediction
+            || cleared_offset_hover
             || revocation.cleared_stationary_sample
             || !revocation.effects.is_empty();
         if !revocation.effects.is_empty() {
@@ -6663,11 +7715,26 @@ pub(crate) mod wasm {
         wb.camera.fit_scene_or_reset(scene.as_ref())
     }
 
+    fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
+        render_with_scope(document, workbench, super::WorkbenchRenderScope::Durable)
+    }
+
+    fn render_transient(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+    ) -> Result<(), JsValue> {
+        render_with_scope(document, workbench, super::WorkbenchRenderScope::Transient)
+    }
+
     #[allow(
         clippy::too_many_lines,
-        reason = "one render pass synchronizes the complete retained workbench snapshot"
+        reason = "one scoped render pass synchronizes either transient paint or the complete retained workbench snapshot"
     )]
-    fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
+    fn render_with_scope(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        scope: super::WorkbenchRenderScope,
+    ) -> Result<(), JsValue> {
         let scene = editor_scene(&workbench.borrow());
         if let Some(scene) = scene.as_ref() {
             let mut wb = workbench.borrow_mut();
@@ -6687,6 +7754,28 @@ pub(crate) mod wasm {
             .borrow_mut()
             .problems
             .reconcile(problem_identity.as_ref());
+        if scope.rebuilds_durable_panels() {
+            let mut wb = workbench.borrow_mut();
+            if let Some(step) = wb.lineage_panel.selected {
+                match wb.coordinator.lineage_step_inspection(step) {
+                    Ok(inspection) => {
+                        let refresh = wb.lineage_panel.draft.as_ref().is_none_or(|draft| {
+                            !draft.dirty && draft.expected != inspection.lineage
+                        });
+                        if refresh {
+                            wb.lineage_panel.draft = Some(super::LineageEditorDraft {
+                                step,
+                                expected: inspection.lineage,
+                                original_json: inspection.replacement_json.clone(),
+                                json: inspection.replacement_json,
+                                dirty: false,
+                            });
+                        }
+                    }
+                    Err(_) => wb.lineage_panel.clear_selection(),
+                }
+            }
+        }
         let wb = workbench.borrow();
         let coordinator = &wb.coordinator;
         required(document, "workbench-root")?.set_attribute(
@@ -6805,6 +7894,47 @@ pub(crate) mod wasm {
                 wb.camera.viewport(),
             ),
         );
+        required(document, "workbench-root")?
+            .set_attribute("data-drag-presentation", "verified")?;
+        if !scope.rebuilds_durable_panels() {
+            required(document, "workbench-root")?
+                .set_attribute("data-render-scope", "transient")?;
+            required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
+            let coordinate = super::coordinate_hud(
+                wb.camera.viewport(),
+                wb.pointer_moves.borrow().last_input,
+                coordinator.editor().draft_inference_resolution(),
+            );
+            let coordinate_element = required(document, "wb-pointer-coordinate")?;
+            coordinate_element.set_text_content(Some(&coordinate.text));
+            coordinate_element.set_attribute("title", &coordinate.title)?;
+            coordinate_element.set_attribute(
+                "data-inference-adjusted",
+                if coordinate.adjusted { "true" } else { "false" },
+            )?;
+            required(document, "wb-selection")?
+                .set_text_content(Some(&format!("{} selected", selection.len())));
+            render_fillet_action_panel(
+                document,
+                scene.as_ref(),
+                fillet_action_stamp,
+                coordinator.editor().geometry_interaction_policy(),
+            )?;
+            required(document, "workbench-root")?.set_attribute(
+                "data-canvas-cursor",
+                super::canvas_cursor_key_with_curve_control(
+                    coordinator.editor().tool(),
+                    wb.authoring.active_tool().is_some(),
+                    wb.feature_authoring.active_tool().is_some(),
+                    wb.offset_authoring.is_active(),
+                    wb.pan_gesture.is_some(),
+                    coordinator.editor().hover_state(),
+                    coordinator.editor().active_pointer_gesture(),
+                ),
+            )?;
+            return Ok(());
+        }
+        required(document, "workbench-root")?.set_attribute("data-render-scope", "durable")?;
         let design = coordinator.session().design_document();
         let constraint_entries = geosolve_constraint_editor::constraint_entries(design);
         required(document, "wb-tree")?.set_inner_html(&super::panels::tree_markup_with_features(
@@ -6827,8 +7957,10 @@ pub(crate) mod wasm {
                 coordinator.can_redo(),
             ),
         );
-        required(document, "wb-lineage")?
-            .set_inner_html(&super::panels::lineage_markup(lineage_document));
+        required(document, "wb-lineage")?.set_inner_html(&super::panels::lineage_markup(
+            lineage_document,
+            wb.lineage_panel.selected,
+        ));
         let lifecycle = coordinator.lifecycle();
         let (key, label) = super::panels::lifecycle_presentation(lifecycle.status);
         let state = required(document, "wb-lifecycle")?;
@@ -6858,6 +7990,7 @@ pub(crate) mod wasm {
         )));
         required(document, "wb-selection")?
             .set_text_content(Some(&format!("{} selected", selection.len())));
+        render_lineage_inspector(document, coordinator, &wb.lineage_panel)?;
         render_annotation_inspector(document, scene.as_ref(), selection)?;
         let problem = problem_text(coordinator, &computed_problems);
         required(document, "wb-problem-text")?
@@ -7241,6 +8374,193 @@ pub(crate) mod wasm {
             required(document, "wb-curve-control-values")?
                 .set_inner_html(&super::curve_control_inspector_markup(&metadata));
         }
+        inspector.remove_attribute("hidden")?;
+        Ok(())
+    }
+
+    fn lineage_debug_list<T: std::fmt::Debug>(label: &str, values: &[T]) -> String {
+        use std::fmt::Write as _;
+
+        let mut markup = format!(
+            "<section><h4>{} <span>{}</span></h4>",
+            super::panels::escape(label),
+            values.len(),
+        );
+        if values.is_empty() {
+            markup.push_str("<p class=\"wb-empty\">None</p>");
+        } else {
+            markup.push_str("<ol>");
+            for value in values {
+                let _ = write!(
+                    markup,
+                    "<li><code>{}</code></li>",
+                    super::panels::escape(&format!("{value:?}")),
+                );
+            }
+            markup.push_str("</ol>");
+        }
+        markup.push_str("</section>");
+        markup
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the lineage Inspector deliberately presents one complete authority snapshot"
+    )]
+    fn render_lineage_inspector(
+        document: &Document,
+        coordinator: &RetainedEditorCoordinator,
+        panel: &super::LineagePanelState,
+    ) -> Result<(), JsValue> {
+        use std::fmt::Write as _;
+
+        let inspector = required(document, "wb-lineage-inspector")?;
+        let Some(step) = panel.selected else {
+            inspector.set_attribute("hidden", "")?;
+            required(document, "wb-lineage")?.remove_attribute("aria-activedescendant")?;
+            return Ok(());
+        };
+        let Ok(inspection) = coordinator.lineage_step_inspection(step) else {
+            inspector.set_attribute("hidden", "")?;
+            return Ok(());
+        };
+        let Ok(availability) = coordinator.lineage_reorder_availability(step) else {
+            inspector.set_attribute("hidden", "")?;
+            return Ok(());
+        };
+        let pinned = matches!(
+            inspection.action_kind,
+            geosolve_sketch_lineage::LineageActionKind::ImportedBaseline
+        ) || inspection.state == geosolve_sketch_lineage::LineageStepState::Tombstoned;
+        required(document, "wb-lineage-inspector-label")?.set_text_content(Some(&inspection.label));
+        let (state_key, state_label) = match inspection.state {
+            geosolve_sketch_lineage::LineageStepState::Live => ("live", "Live"),
+            geosolve_sketch_lineage::LineageStepState::Suppressed => ("suppressed", "Suppressed"),
+            geosolve_sketch_lineage::LineageStepState::Tombstoned => ("tombstoned", "Deleted"),
+        };
+        inspector.set_attribute("data-lineage-step-state", state_key)?;
+        let state = required(document, "wb-lineage-inspector-state")?;
+        state.set_attribute("data-lineage-step-state", state_key)?;
+        state.set_text_content(Some(state_label));
+
+        let identity = inspection.lineage;
+        required(document, "wb-lineage-inspector-meta")?.set_inner_html(&format!(
+            concat!(
+                "<dl>",
+                "<div><dt>Stable step</dt><dd><code>s{step:x}</code></dd></div>",
+                "<div><dt>Position</dt><dd>{position} of {total}</dd></div>",
+                "<div><dt>Developer key</dt><dd><code>{developer}</code></dd></div>",
+                "<div><dt>Action kind</dt><dd>{kind:?}</dd></div>",
+                "<div><dt>Schema</dt><dd><code>{schema}</code> · v{version}</dd></div>",
+                "<div><dt>Program</dt><dd><code>{document}</code> · r{revision}</dd></div>",
+                "<div><dt>Digest</dt><dd><code>{digest}</code></dd></div>",
+                "</dl>"
+            ),
+            step = inspection.step.raw(),
+            position = inspection.ordinal + 1,
+            total = coordinator.lineage_document().steps().len(),
+            developer = super::panels::escape(inspection.developer_key.as_str()),
+            kind = inspection.action_kind,
+            schema = super::panels::escape(inspection.action_schema.as_str()),
+            version = inspection.action_version,
+            document = identity.document,
+            revision = identity.revision.raw(),
+            digest = identity.digest,
+        ));
+        let mut graph = String::new();
+        graph.push_str(&lineage_debug_list("Inputs", &inspection.inputs));
+        graph.push_str(&lineage_debug_list("Outputs", &inspection.outputs));
+        graph.push_str(&lineage_debug_list(
+            "Identity flow",
+            &inspection.output_identities,
+        ));
+        graph.push_str(&lineage_debug_list(
+            "Writable leaves",
+            &inspection.writable_leaves,
+        ));
+        graph.push_str(&lineage_debug_list(
+            "Reservations",
+            &inspection.reservations,
+        ));
+        required(document, "wb-lineage-inspector-graph")?.set_inner_html(&graph);
+
+        let can_move_earlier = !pinned
+            && availability
+                .lanes
+                .iter()
+                .any(|lane| lane.is_legal() && lane.ordinal < availability.current_ordinal);
+        let can_move_later = !pinned
+            && availability
+                .lanes
+                .iter()
+                .any(|lane| lane.is_legal() && lane.ordinal > availability.current_ordinal);
+        set_disabled(
+            &required(document, "wb-lineage-move-earlier")?,
+            !can_move_earlier,
+        )?;
+        set_disabled(
+            &required(document, "wb-lineage-move-later")?,
+            !can_move_later,
+        )?;
+        let mut positions = String::new();
+        for lane in availability.lanes.iter().filter(|lane| lane.is_legal()) {
+            let _ = write!(
+                positions,
+                "<option value=\"{}\"{}>Position {}</option>",
+                lane.ordinal,
+                if lane.ordinal == availability.current_ordinal {
+                    " selected"
+                } else {
+                    ""
+                },
+                lane.ordinal + 1,
+            );
+        }
+        let position = required(document, "wb-lineage-position")?;
+        position.set_inner_html(&positions);
+        set_disabled(&position, pinned || availability.lanes.len() <= 1)?;
+        let default_note = if pinned {
+            availability
+                .lanes
+                .iter()
+                .find_map(|lane| lane.blocked_by)
+                .map_or_else(
+                    || "This action is pinned".into(),
+                    lineage_reorder_block_text,
+                )
+        } else {
+            "Use buttons, Alt+Up/Down, the position menu, or drag this row. Dependency boundaries are enforced by Rust authority."
+                .into()
+        };
+        required(document, "wb-lineage-reorder-note")?.set_text_content(Some(
+            if panel.reorder_notice.is_empty() {
+                &default_note
+            } else {
+                &panel.reorder_notice
+            },
+        ));
+
+        let textarea =
+            required(document, "wb-lineage-debug-json")?.dyn_into::<HtmlTextAreaElement>()?;
+        if let Some(draft) = panel.draft.as_ref().filter(|draft| draft.step == step)
+            && textarea.value() != draft.json
+        {
+            textarea.set_value(&draft.json);
+        }
+        textarea.set_disabled(pinned);
+        set_disabled(&required(document, "wb-lineage-debug-apply")?, pinned)?;
+        set_disabled(&required(document, "wb-lineage-debug-reset")?, pinned)?;
+        required(document, "wb-lineage-debug-status")?.set_text_content(Some(
+            if pinned && panel.debug_notice.is_empty() {
+                "Pinned actions are inspectable but cannot be rewritten"
+            } else {
+                &panel.debug_notice
+            },
+        ));
+        required(document, "wb-lineage")?.set_attribute(
+            "aria-activedescendant",
+            &format!("wb-lineage-step-{:016x}", step.raw()),
+        )?;
         inspector.remove_attribute("hidden")?;
         Ok(())
     }
@@ -8550,8 +9870,9 @@ mod tests {
         CanvasPointerOwnership, CanvasPointerTerminal, CanvasPointerTerminalDisposition,
         CanvasPrimaryPointerDownRoute, CapturedCanvasPointer, DismissibleDisclosure,
         DraftingPointerSample, FilletActionRenderAuthority, FinishDoubleClickTracker,
-        ForegroundOverlayEscapeOwner, HistoryShortcut, OptionOverlayKind, OptionOverlayState,
-        PointerMoveQueue, ReproductionFocusReturn, annotation_family_name,
+        ForegroundOverlayEscapeOwner, HistoryShortcut, LineagePanelState, OptionOverlayKind,
+        OptionOverlayState, PREDICTIVE_DRAG_ENTRY_MILLISECONDS, PointerMoveQueue,
+        PredictiveDragState, ReproductionFocusReturn, WorkbenchRenderScope, annotation_family_name,
         annotation_inspector_presentation, apply_native_fillet_profile,
         apply_validated_reproduction, canvas_cursor_key, canvas_cursor_key_with_curve_control,
         canvas_pointer_capture_kind, canvas_pointer_move_owner, change_owns_option_control_click,
@@ -8569,6 +9890,15 @@ mod tests {
         revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
         route_canvas_primary_pointer_down, should_route_stationary_draft_inference,
     };
+
+    fn function_source<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+        let start = source.find(start).expect("function source start");
+        let end = source[start..]
+            .find(end)
+            .map(|offset| start + offset)
+            .expect("function source end");
+        &source[start..end]
+    }
 
     #[test]
     #[allow(
@@ -8728,7 +10058,7 @@ mod tests {
     }
 
     #[test]
-    fn lineage_panel_is_adjacent_read_only_and_responsive() {
+    fn lineage_panel_is_adjacent_editable_and_responsive() {
         let html = include_str!("../../index.html");
         for id in ["wb-lineage", "wb-lineage-count", "wb-lineage-history"] {
             assert_eq!(
@@ -8746,8 +10076,21 @@ mod tests {
             .expect("lineage panel");
         let canvas = html.find("id=\"wb-canvas-panel\"").expect("canvas panel");
         assert!(document_panels < tree && tree < lineage && lineage < canvas);
-        assert!(html.contains("id=\"wb-lineage\" class=\"wb-lineage\" role=\"list\""));
+        assert!(html.contains("id=\"wb-lineage\" class=\"wb-lineage\" role=\"listbox\""));
         assert!(html.contains("aria-label=\"Retained sketch lineage\""));
+        for id in [
+            "wb-lineage-inspector",
+            "wb-lineage-move-earlier",
+            "wb-lineage-move-later",
+            "wb-lineage-position",
+            "wb-lineage-debug-json",
+        ] {
+            assert_eq!(
+                html.matches(&format!("id=\"{id}\"")).count(),
+                1,
+                "#{id} must have one editable-lineage presentation owner",
+            );
+        }
 
         let css = include_str!("../../styles.css");
         assert!(css.contains(".wb-document-panels {"));
@@ -8767,6 +10110,77 @@ mod tests {
             .nth(1)
             .expect("narrow workbench rules");
         assert!(narrow.contains(".wb-document-panels { display: none; }"));
+    }
+
+    #[test]
+    fn lineage_panel_state_preserves_dirty_text_and_authenticates_drag_exactly() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(10.0).expect("empty lineage document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted empty lineage session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("lineage coordinator");
+        let step = coordinator.lineage_document().steps()[0].id;
+        let inspection = coordinator
+            .lineage_step_inspection(step)
+            .expect("baseline inspection");
+        let identity = inspection.lineage;
+        let mut panel = LineagePanelState::new("session-nonce-8300".into());
+
+        panel.select(&inspection);
+        assert_eq!(panel.selected, Some(step));
+        let selected_draft = panel.draft.as_ref().expect("selected draft");
+        assert_eq!(selected_draft.step, step);
+        assert_eq!(selected_draft.expected, identity);
+        let original = selected_draft.json.clone();
+        let dirty = format!("{original}\n");
+        panel.update_draft(dirty.clone());
+        assert_eq!(
+            panel.draft.as_ref().expect("dirty draft").json,
+            dirty,
+            "presentation rerenders read this browser-only buffer instead of replacing it",
+        );
+        assert!(panel.draft.as_ref().expect("dirty draft").dirty);
+        assert_eq!(panel.debug_notice, "Unapplied debug changes");
+
+        let payload = panel.begin_drag(identity, step);
+        assert_eq!(
+            panel.draft.as_ref().expect("dirty draft after drag").json,
+            dirty,
+            "starting an authenticated drag on the selected row preserves its transient draft",
+        );
+        assert!(panel.draft.as_ref().expect("dirty draft after drag").dirty);
+        assert_eq!(panel.authenticated_drag(identity, &payload), Some(step));
+        assert_eq!(
+            panel.authenticated_drag(identity, &payload.replace("session-nonce-8300", "foreign")),
+            None,
+            "a foreign nonce cannot authenticate against the live in-memory drag record",
+        );
+        assert_eq!(panel.authenticated_drag(identity, ""), None);
+        let stale_identity = geosolve_sketch_lineage::LineageDocumentIdentity {
+            revision: geosolve_sketch_lineage::LineageRevision::from_raw(
+                identity.revision.raw() + 1,
+            ),
+            ..identity
+        };
+        assert_eq!(
+            panel.authenticated_drag(stale_identity, &payload),
+            None,
+            "document, revision and digest are all exact drag authority",
+        );
+        panel.clear_drag();
+        assert_eq!(panel.authenticated_drag(identity, &payload), None);
+
+        panel.update_draft(original.clone());
+        assert!(!panel.draft.as_ref().expect("reset draft").dirty);
+        assert!(panel.debug_notice.is_empty());
+        panel.clear_selection();
+        assert!(panel.selected.is_none());
+        assert!(panel.draft.is_none());
+        assert!(panel.drag.is_none());
+        assert!(panel.reorder_notice.is_empty());
+        assert!(panel.debug_notice.is_empty());
     }
 
     fn rejected_constraint_fixture() -> (
@@ -11815,6 +13229,211 @@ mod tests {
             Some(sample(12.0)),
             "Tab outside geometry drafting must not consume another owner's movement",
         );
+    }
+
+    #[test]
+    fn transient_pointer_frames_never_persist_or_rebuild_durable_panels() {
+        assert!(!WorkbenchRenderScope::Transient.rebuilds_durable_panels());
+        assert!(WorkbenchRenderScope::Durable.rebuilds_durable_panels());
+
+        let source = include_str!("mod.rs");
+        let exact_start = source
+            .find("fn apply_exact_pointer_move_frame(")
+            .expect("exact pointer-frame owner");
+        let exact_end = source[exact_start..]
+            .find("fn verify_predictive_drag_generation(")
+            .map(|offset| exact_start + offset)
+            .expect("exact pointer-frame boundary");
+        let exact_source = &source[exact_start..exact_end];
+        let frame_start = source
+            .find("fn schedule_pointer_move_frame(")
+            .expect("pointer-frame scheduler");
+        let frame_end = source[frame_start..]
+            .find("fn install_pointer_move_listener(")
+            .map(|offset| frame_start + offset)
+            .expect("pointer-frame scheduler boundary");
+        let frame_source = &source[frame_start..frame_end];
+        let authentication_start = source
+            .find("fn authenticated_predictive_gesture(")
+            .expect("predictive gesture authenticator");
+        let authentication_end = source[authentication_start..]
+            .find("fn route_terminal(")
+            .map(|offset| authentication_start + offset)
+            .expect("predictive gesture authenticator boundary");
+        let authentication_source = &source[authentication_start..authentication_end];
+        for frame_source in [exact_source, frame_source] {
+            assert!(!frame_source.contains("save("));
+            assert!(!frame_source.contains("WorkspaceSnapshot"));
+        }
+        assert!(!frame_source.contains("render(&frame_document"));
+        assert!(frame_source.contains("apply_exact_pointer_move_frame"));
+        assert!(exact_source.contains("render_transient(document, workbench)"));
+        assert!(exact_source.contains("authenticated_predictive_gesture("));
+        assert!(authentication_source.contains("ActivePointerGestureKind::Point"));
+        assert!(authentication_source.contains("ActivePointerGestureKind::CurveControl"));
+        assert!(exact_source.contains("render(document, workbench)"));
+    }
+
+    #[test]
+    fn slow_drag_prediction_coalesces_the_latest_sample_and_terminal_cancel_is_exact() {
+        let input = |x| PointerInput {
+            pointer_id: 41,
+            position: ScreenPoint { x, y: 7.0 },
+            modifiers: Modifiers::default(),
+        };
+        let gesture = geosolve_constraint_editor::ActivePointerGesture {
+            pointer_id: 41,
+            kind: geosolve_constraint_editor::ActivePointerGestureKind::CurveControl,
+        };
+        let mut captures = CanvasPointerCaptures::default();
+        assert!(captures.begin(CapturedCanvasPointer {
+            pointer_id: 41,
+            kind: CanvasPointerCaptureKind::CurveControl,
+        }));
+        assert_eq!(
+            captures.authenticated_predictive_gesture(Some(gesture), 41, true),
+            Some(gesture),
+        );
+        assert_eq!(
+            captures.authenticated_predictive_gesture(Some(gesture), 41, false),
+            None,
+            "browser capture remains part of predictive authority",
+        );
+        assert_eq!(
+            captures.authenticated_predictive_gesture(Some(gesture), 42, true),
+            None,
+            "a queued sample cannot borrow another pointer's gesture",
+        );
+        assert_eq!(
+            captures.authenticated_predictive_gesture(
+                Some(geosolve_constraint_editor::ActivePointerGesture {
+                    pointer_id: 41,
+                    kind: geosolve_constraint_editor::ActivePointerGestureKind::Point,
+                }),
+                41,
+                true,
+            ),
+            None,
+            "the platform capture kind must match the editor gesture",
+        );
+        let mut prediction = PredictiveDragState::default();
+        prediction.observe_gesture(Some(gesture));
+        prediction.record_exact_verification(PREDICTIVE_DRAG_ENTRY_MILLISECONDS);
+        assert!(
+            !prediction.should_predict_gesture(gesture),
+            "the exact 12 ms boundary remains in verified mode",
+        );
+        prediction.record_exact_verification(PREDICTIVE_DRAG_ENTRY_MILLISECONDS + 0.01);
+        assert!(prediction.should_predict_gesture(gesture));
+        assert!(prediction.has_prediction());
+
+        let first = DraftingPointerSample::from_input(input(1.0));
+        let latest = DraftingPointerSample::from_input(input(3.0));
+        let (generation, delay) = prediction.enqueue(first);
+        assert_eq!(delay, 50);
+        assert_eq!(prediction.pending_for_verification(generation), Some(first));
+        let (latest_generation, latest_delay) = prediction.enqueue(latest);
+        assert_eq!(latest_delay, 50);
+        assert_ne!(latest_generation, generation);
+        assert_eq!(prediction.take_for_verification(generation), None);
+        assert_eq!(
+            prediction.take_for_verification(latest_generation),
+            Some(latest)
+        );
+        assert_eq!(prediction.take_for_verification(latest_generation), None);
+
+        let (stale_generation, _) = prediction.enqueue(first);
+        prediction.cancel();
+        assert_eq!(prediction.take_for_verification(stale_generation), None);
+        assert!(!prediction.should_predict_gesture(gesture));
+        assert!(!prediction.has_prediction());
+
+        prediction.observe_gesture(Some(geosolve_constraint_editor::ActivePointerGesture {
+            pointer_id: 41,
+            kind: geosolve_constraint_editor::ActivePointerGestureKind::Annotation,
+        }));
+        prediction.record_exact_verification(PREDICTIVE_DRAG_ENTRY_MILLISECONDS + 1.0);
+        assert!(
+            !prediction.has_prediction(),
+            "annotation and other non-point/control gestures never enter prediction",
+        );
+    }
+
+    #[test]
+    fn predictive_terminal_persists_only_an_exact_lineage_publication() {
+        let before = geosolve_sketch_lineage::LineageDocument::new().identity();
+        let after = geosolve_sketch_lineage::LineageDocumentIdentity {
+            revision: geosolve_sketch_lineage::LineageRevision::from_raw(before.revision.raw() + 1),
+            ..before
+        };
+        assert!(super::terminal_pointer_release_should_persist(
+            false, None, before,
+        ));
+        assert!(super::terminal_pointer_release_should_persist(
+            true,
+            Some(before),
+            after,
+        ));
+        assert!(
+            !super::terminal_pointer_release_should_persist(true, Some(before), before),
+            "a rejected exact terminal sample must not write an unchanged workspace",
+        );
+    }
+
+    #[test]
+    fn predictive_deferred_and_terminal_routes_reauthenticate_and_fail_closed() {
+        let source = include_str!("mod.rs");
+        let verification = function_source(
+            source,
+            "fn verify_predictive_drag_generation(",
+            "fn schedule_predictive_drag_verification(",
+        );
+        assert!(verification.contains("authenticated_predictive_gesture("));
+        assert!(verification.contains("pending_for_verification(generation)"));
+        assert!(verification.contains("predictive_drag.cancel()"));
+        assert!(
+            verification.find("authenticated_predictive_gesture(")
+                < verification.find("take_for_verification(generation)"),
+            "deferred work must reauthenticate before consuming its sample",
+        );
+
+        let revocation = function_source(
+            source,
+            "fn apply_canvas_pointer_context_route(",
+            "fn clear_unmapped_canvas_pointer(",
+        );
+        assert!(revocation.contains("predictive_drag.cancel()"));
+        assert!(revocation.contains("cleared_prediction"));
+
+        let terminal = function_source(
+            source,
+            "fn install_pointer_up_listener(",
+            "fn event_targets_problem_marker(",
+        );
+        assert!(terminal.contains("authenticated_predictive_gesture("));
+        assert!(terminal.contains("let Some(terminal_scene) = editor_scene(&wb) else"));
+        assert!(terminal.contains("cancel_captured_canvas_interactions("));
+        assert!(!terminal.contains("unwrap_or(scene)"));
+        assert!(terminal.contains("if predictive_terminal"));
+        assert!(terminal.contains("pointer_up_current_sample("));
+        assert!(terminal.contains("terminal_pointer_release_should_persist("));
+        assert!(terminal.contains(".pointer_up(&terminal_scene"));
+        let failure = terminal
+            .find("let Some(terminal_scene) = editor_scene(&wb) else")
+            .expect("terminal recomposition branch");
+        let strict_publication = terminal
+            .find("pointer_up_current_sample(")
+            .expect("strict predictive terminal publication");
+        let ordinary_publication = terminal
+            .find(".pointer_up(&terminal_scene")
+            .expect("ordinary terminal publication");
+        assert!(failure < strict_publication);
+        assert!(failure < ordinary_publication);
+        let persistence_guard = terminal
+            .rfind("terminal_pointer_release_should_persist(")
+            .expect("terminal persistence guard");
+        let save = terminal.rfind("save(&wb)").expect("guarded workspace save");
+        assert!(persistence_guard < save);
     }
 
     #[test]

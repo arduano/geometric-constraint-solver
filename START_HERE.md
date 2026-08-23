@@ -239,8 +239,9 @@ the computed all-family Offset prototype unfit for the intended CAD workflow. Ro
 `archive/m82-certified-computed-offset-2026-08-21` (`d1e2613`). The rejected Tailscale listener is
 retired and it was never published to Pages. `docs/M82_DEFERRED.md` owns this closeout.
 
-M83's authoritative-lineage architecture and requested read-only Lineage-panel amendment are
-implemented, but the milestone is not accepted. Under accepted ADR 0039,
+M83's authoritative-lineage architecture is implemented, but its approved editable-Lineage and
+predictive-drag amendment is still being replacement-qualified and the milestone is not accepted.
+Under accepted ADR 0039,
 `LineageDocument` becomes the authoritative source for the complete demo workbench; flat sketch
 and feature state are derived.
 The milestone covers all 25 geometry variants, the complete current relation/dimension/property/
@@ -263,12 +264,16 @@ computed output and publishes both owners atomically. M83-F037 through F040 fini
 identity and inferred-construction publication hardening: canonical byte changes always allocate a
 fresh accepted revision, same-byte reload cannot skip a higher saved lifecycle, construction
 acknowledgement follows every fallible lineage operation, and public construction results report
-the final strict-cold accepted identity. The workbench now presents that retained program directly
+the final strict-cold accepted identity. The workbench presents that retained program directly
 beside Sketch Tree, with distinct program-revision and Undo/Redo-history state and no browser-owned
-lineage mirror or mutation path. Replacement exact source `bb888cc`, tree `dff5ebe`, passes the
-complete clean gate, focused review and immutable byte-verified Tailscale nomination at
-`http://100.94.63.83:8080/`. The earlier `d378f7b3` candidate is superseded because it predates the
-panel. Human UAT remains pending.
+lineage mirror. The amendment makes rows selectable, exposes coordinator-owned inspection,
+reorder and compatible raw rewrite, authenticates desktop drag/drop, and coalesces only
+presentation for expensive Point/CurveControl drags while requiring an exact terminal owner
+rewrite. Prior exact source `bb888cc`, tree `dff5ebe`, remains historical clean-gate evidence but
+is withdrawn from current UAT because it predates these editable and predictive surfaces; its old
+Tailscale bytes are not the replacement candidate. The earlier `d378f7b3` candidate predates the
+Lineage panel entirely. Replacement clean qualification, immutable Tailscale nomination and human
+UAT remain pending.
 M81 remains accepted product authority until M83 closes.
 
 ## Read first
@@ -788,8 +793,8 @@ Durable milestone and cleanup records:
   acceptance and publication ledger)
 - `docs/M81_UAT.md` (accepted focused behavior-preservation scorecard and exact public closeout)
 - `docs/M82_DEFERRED.md` (closed design exploration, exact rollback and archive record)
-- `docs/M83_GOALS.md` (authoritative full-workbench lineage, migration and read-only panel contract)
-- `docs/M83_IMPLEMENTATION.md` (implementation, authority-finding, qualification and nomination ledger)
+- `docs/M83_GOALS.md` (authoritative full-workbench lineage, migration and editable panel contract)
+- `docs/M83_IMPLEMENTATION.md` (implementation, findings and replacement-qualification ledger)
 - `docs/M83_UAT.md` (replacement-candidate scorecard pending clean nomination and human UAT)
 - `docs/adr/0039-sketch-lineage-and-deterministic-rematerialization.md` (accepted M83 authority,
   typed identity, strict/local rebuild, workspace-v7 and stateful RPC decision)

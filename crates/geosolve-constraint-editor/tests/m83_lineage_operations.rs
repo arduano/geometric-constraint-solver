@@ -3,8 +3,8 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use geosolve_constraint_editor::{
-    FeatureAuthoringOutcome, FeatureAuthoringState, FeatureAuthoringTool,
-    RetainedEditorCoordinator, SelectionItem,
+    ConstructionPoint, ConstructionProposal, FeatureAuthoringOutcome, FeatureAuthoringState,
+    FeatureAuthoringTool, RetainedEditorCoordinator, SceneFilletActionId, SelectionItem,
 };
 use geosolve_sketch::{
     ContactNeighborhood, CurveCurveFilletRequest, CurveDefinition, CurveFilletParentRequest,
@@ -393,6 +393,20 @@ fn operation_target_scalar(
         .expect("native operation target scalar")
 }
 
+fn profile_offset_dimension(document: &SketchDocument) -> geosolve_sketch::DocumentDimensionId {
+    document
+        .dimensions()
+        .iter()
+        .find_map(|dimension| {
+            matches!(
+                dimension.definition,
+                DocumentDimensionDefinition::ProfileOffset { .. }
+            )
+            .then_some(dimension.id)
+        })
+        .expect("native Profile Offset dimension")
+}
+
 fn computed_fillet_fixture() -> (
     RetainedEditorCoordinator,
     [DesignPointId; 4],
@@ -450,6 +464,39 @@ fn apply_computed_fillet(
         .apply_feature_authoring_preview(metadata.token, &candidate)
         .expect("computed Fillet publication")
         .value
+}
+
+fn add_independent_point_owner(
+    coordinator: &mut RetainedEditorCoordinator,
+    position: [f64; 2],
+) -> (DesignPointId, geosolve_sketch_lineage::LineageStepId) {
+    let point = coordinator
+        .apply_construction(
+            coordinator.session().design_identity(),
+            &ConstructionProposal::Point {
+                point: ConstructionPoint::New(position),
+            },
+        )
+        .expect("independent authored point")
+        .value
+        .points[0];
+    let owner = coordinator
+        .lineage_document()
+        .steps()
+        .last()
+        .expect("independent point owner")
+        .id;
+    (point, owner)
+}
+
+fn assert_stable_owner_manifest(before: &LineageStep, after: &LineageStep) {
+    assert_eq!(after.id, before.id);
+    assert_eq!(after.key, before.key);
+    assert_eq!(after.label, before.label);
+    assert_eq!(after.outputs, before.outputs);
+    assert_eq!(after.output_identities, before.output_identities);
+    assert_eq!(after.reservations, before.reservations);
+    assert_eq!(after.state, before.state);
 }
 
 fn raw_for_ref(
@@ -1371,6 +1418,272 @@ fn m83_w5_native_fillet_and_profile_offset_keep_intent_identity_across_edits() {
 #[test]
 #[allow(
     clippy::too_many_lines,
+    reason = "one closed native-feature matrix keeps reorder, direct edit, explicit branch, history and cold identity evidence row-local"
+)]
+fn reordered_native_fillet_and_profile_offset_rewrite_the_same_stable_owner() {
+    for kind in [
+        SketchOperationKind::AssociativeFillet,
+        SketchOperationKind::ProfileOffset,
+    ] {
+        let (mut coordinator, proposal) = fixture(kind);
+        coordinator
+            .apply_sketch_operation(&proposal)
+            .expect("native feature publication");
+        let baseline = coordinator.lineage_document().steps()[0].id;
+        let owner = coordinator.lineage_document().steps()[1].id;
+        let initial_owner = coordinator
+            .lineage_document()
+            .step(owner)
+            .expect("native feature owner")
+            .clone();
+        let source = operation_source_point(&proposal, coordinator.session().design_document());
+        let source_position = coordinator
+            .session()
+            .design_document()
+            .point(source)
+            .expect("native source point")
+            .position;
+        let target = operation_target_scalar(kind, coordinator.session().design_document());
+        let stable_native_outputs = initial_owner
+            .outputs
+            .iter()
+            .filter_map(|output| {
+                raw_for_ref(
+                    coordinator.lineage_document().steps(),
+                    LineageOutputRef {
+                        document: coordinator.lineage_document().id(),
+                        step: owner,
+                        output: output.id,
+                        kind: output.kind,
+                    },
+                )
+            })
+            .collect::<BTreeSet<_>>();
+
+        let (point, point_owner) = add_independent_point_owner(&mut coordinator, [9.0, -3.0]);
+        let point_step = coordinator
+            .lineage_document()
+            .step(point_owner)
+            .expect("independent point step")
+            .clone();
+        assert_eq!(
+            coordinator
+                .lineage_document()
+                .steps()
+                .iter()
+                .map(|step| step.id)
+                .collect::<Vec<_>>(),
+            vec![baseline, owner, point_owner]
+        );
+
+        let reordered = coordinator
+            .reorder_lineage_step(coordinator.lineage_identity(), point_owner, Some(owner))
+            .expect("move independent point across native feature");
+        assert!(reordered.changed, "{kind:?}: {reordered:#?}");
+        assert!(!reordered.clamped, "{kind:?}: {reordered:#?}");
+        assert_eq!(
+            coordinator
+                .lineage_document()
+                .steps()
+                .iter()
+                .map(|step| step.id)
+                .collect::<Vec<_>>(),
+            vec![baseline, point_owner, owner]
+        );
+        assert_eq!(
+            coordinator.lineage_document().step(point_owner),
+            Some(&point_step)
+        );
+        assert_eq!(
+            coordinator.lineage_document().step(owner),
+            Some(&initial_owner)
+        );
+
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: source,
+                    position: [source_position[0] - 0.25, source_position[1]],
+                },
+            )
+            .expect("source direct edit after reorder");
+        let after_source = coordinator
+            .lineage_document()
+            .step(owner)
+            .expect("native owner after source direct edit")
+            .clone();
+        assert_stable_owner_manifest(&initial_owner, &after_source);
+        assert_eq!(
+            after_source.action, initial_owner.action,
+            "source rewrites must leave dependent {kind:?} intent unchanged"
+        );
+
+        let replacement = coordinator
+            .session()
+            .design_document()
+            .scalar(target)
+            .expect("native target scalar")
+            .value
+            * 0.75;
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetScalarValue {
+                    scalar: target,
+                    value: replacement,
+                },
+            )
+            .expect("native parameter direct edit after reorder");
+        let after_parameter = coordinator
+            .lineage_document()
+            .step(owner)
+            .expect("native owner after parameter edit")
+            .clone();
+        assert_stable_owner_manifest(&initial_owner, &after_parameter);
+        assert_ne!(after_parameter.action, after_source.action);
+
+        let after_branch = if kind == SketchOperationKind::ProfileOffset {
+            let dimension = profile_offset_dimension(coordinator.session().design_document());
+            coordinator.set_selection([SelectionItem::Dimension(dimension)]);
+            coordinator
+                .flip_selected_profile_offset_direction(coordinator.session().design_identity())
+                .expect("explicit Profile Offset branch flip after reorder");
+            let after = coordinator
+                .lineage_document()
+                .step(owner)
+                .expect("Profile Offset owner after direction flip")
+                .clone();
+            assert_stable_owner_manifest(&initial_owner, &after);
+            assert_ne!(after.action, after_parameter.action);
+            Some(after)
+        } else {
+            None
+        };
+        let final_owner = after_branch.as_ref().unwrap_or(&after_parameter).clone();
+        let final_order = coordinator.lineage_document().steps().to_vec();
+        let final_accepted = coordinator.checkpoint().accepted_json().map(str::to_owned);
+        let final_native_outputs = final_owner
+            .outputs
+            .iter()
+            .filter_map(|output| {
+                raw_for_ref(
+                    coordinator.lineage_document().steps(),
+                    LineageOutputRef {
+                        document: coordinator.lineage_document().id(),
+                        step: owner,
+                        output: output.id,
+                        kind: output.kind,
+                    },
+                )
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(final_native_outputs, stable_native_outputs);
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .point(point)
+                .is_some(),
+            "independent native point ID must remain materialized"
+        );
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .point(source)
+                .is_some(),
+            "source point ID must remain materialized"
+        );
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .scalar(target)
+                .is_some(),
+            "feature parameter ID must remain materialized"
+        );
+        assert_cold_matches(&coordinator);
+
+        if after_branch.is_some() {
+            coordinator.undo().expect("Undo explicit offset branch");
+            assert_eq!(
+                coordinator
+                    .lineage_document()
+                    .step(owner)
+                    .expect("owner before branch")
+                    .action,
+                after_parameter.action
+            );
+        }
+        coordinator.undo().expect("Undo native parameter rewrite");
+        assert_eq!(
+            coordinator
+                .lineage_document()
+                .step(owner)
+                .expect("owner before parameter rewrite")
+                .action,
+            after_source.action
+        );
+        coordinator.undo().expect("Undo source direct edit");
+        assert_eq!(
+            coordinator
+                .lineage_document()
+                .step(owner)
+                .expect("owner before source edit")
+                .action,
+            initial_owner.action
+        );
+        coordinator.undo().expect("Undo independent reorder");
+        assert_eq!(
+            coordinator
+                .lineage_document()
+                .steps()
+                .iter()
+                .map(|step| step.id)
+                .collect::<Vec<_>>(),
+            vec![baseline, owner, point_owner]
+        );
+
+        coordinator.redo().expect("Redo independent reorder");
+        coordinator.redo().expect("Redo source direct edit");
+        coordinator.redo().expect("Redo native parameter rewrite");
+        if after_branch.is_some() {
+            coordinator.redo().expect("Redo explicit offset branch");
+        }
+        assert_eq!(coordinator.lineage_document().steps(), final_order);
+        assert_eq!(
+            coordinator.lineage_document().step(owner),
+            Some(&final_owner)
+        );
+        assert_eq!(
+            coordinator.checkpoint().accepted_json(),
+            final_accepted.as_deref()
+        );
+
+        let lineage_json = coordinator
+            .lineage_session_json()
+            .expect("reordered native feature session");
+        let ledger_json = coordinator
+            .lineage_host_input_ledger_json()
+            .expect("reordered native feature host-input ledger");
+        let mut restored = RetainedEditorCoordinator::new(coordinator.session().clone())
+            .expect("native feature restore target");
+        restored
+            .restore_lineage_session_and_host_input_ledger_json(&lineage_json, &ledger_json)
+            .expect("cold restore reordered native feature");
+        assert_eq!(restored.lineage_document().steps(), final_order);
+        assert_eq!(restored.lineage_document().step(owner), Some(&final_owner));
+        restored.undo().expect("restored Undo last native edit");
+        restored.redo().expect("restored Redo last native edit");
+        assert_eq!(restored.lineage_document().step(owner), Some(&final_owner));
+        assert_cold_matches(&restored);
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
     reason = "one computed-Fillet lifecycle keeps stable feature/corner ownership distinct from revision-local evaluated fragments"
 )]
 fn m83_w5_computed_fillet_keeps_feature_corner_and_radius_lineage_only() {
@@ -1657,4 +1970,316 @@ fn m83_w5_computed_fillet_keeps_feature_corner_and_radius_lineage_only() {
             .state,
         LineageStepState::Tombstoned
     );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one computed-feature stress keeps reorder, parameter and explicit-branch rewrites, stable identities, history and strict-cold restore adjacent"
+)]
+fn reordered_computed_fillet_parameter_and_branch_rewrite_the_same_stable_owner() {
+    let (mut coordinator, points, _) = computed_fillet_fixture();
+    let feature = apply_computed_fillet(&mut coordinator, points[1]);
+    let baseline = coordinator.lineage_document().steps()[0].id;
+    let owner = coordinator.lineage_document().steps()[1].id;
+    let initial_owner = coordinator
+        .lineage_document()
+        .step(owner)
+        .expect("computed Fillet owner")
+        .clone();
+    let ComputedFeatureDefinition::FilletSet(initial_fillet) = &coordinator
+        .feature_document()
+        .feature(feature)
+        .expect("computed Fillet")
+        .definition;
+    let corner = initial_fillet.corners[0].id;
+    let stable_feature_outputs = initial_owner
+        .outputs
+        .iter()
+        .filter_map(|output| {
+            raw_for_ref(
+                coordinator.lineage_document().steps(),
+                LineageOutputRef {
+                    document: coordinator.lineage_document().id(),
+                    step: owner,
+                    output: output.id,
+                    kind: output.kind,
+                },
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    assert!(stable_feature_outputs.contains(&(LineageOutputKind::Feature, feature.to_string())));
+    assert!(
+        stable_feature_outputs.contains(&(LineageOutputKind::FeatureCorner, corner.to_string()))
+    );
+
+    let (point, point_owner) = add_independent_point_owner(&mut coordinator, [9.0, -3.0]);
+    let point_step = coordinator
+        .lineage_document()
+        .step(point_owner)
+        .expect("independent point owner")
+        .clone();
+    let reordered = coordinator
+        .reorder_lineage_step(coordinator.lineage_identity(), point_owner, Some(owner))
+        .expect("move independent point across computed Fillet");
+    assert!(reordered.changed, "{reordered:#?}");
+    assert!(!reordered.clamped, "{reordered:#?}");
+    assert_eq!(
+        coordinator
+            .lineage_document()
+            .steps()
+            .iter()
+            .map(|step| step.id)
+            .collect::<Vec<_>>(),
+        vec![baseline, point_owner, owner]
+    );
+    assert_eq!(
+        coordinator.lineage_document().step(point_owner),
+        Some(&point_step)
+    );
+    assert_eq!(
+        coordinator.lineage_document().step(owner),
+        Some(&initial_owner)
+    );
+
+    coordinator
+        .set_computed_fillet_radius(coordinator.feature_document().identity(), feature, 0.75)
+        .expect("computed Fillet parameter edit after reorder");
+    let after_radius = coordinator
+        .lineage_document()
+        .step(owner)
+        .expect("computed owner after radius edit")
+        .clone();
+    assert_stable_owner_manifest(&initial_owner, &after_radius);
+    assert_ne!(after_radius.action, initial_owner.action);
+
+    let owner_ref = ComputedCornerRef { feature, corner };
+    coordinator.set_selection([SelectionItem::FeatureCorner(owner_ref)]);
+    let branch_actions = [
+        SceneFilletActionId::ReverseFirstRetainedDirection,
+        SceneFilletActionId::ReverseSecondRetainedDirection,
+        SceneFilletActionId::ComplementaryArc,
+        SceneFilletActionId::LocalAlternative {
+            first: DocumentCurveNormalSide::Left,
+            second: DocumentCurveNormalSide::Left,
+        },
+        SceneFilletActionId::LocalAlternative {
+            first: DocumentCurveNormalSide::Left,
+            second: DocumentCurveNormalSide::Right,
+        },
+        SceneFilletActionId::LocalAlternative {
+            first: DocumentCurveNormalSide::Right,
+            second: DocumentCurveNormalSide::Left,
+        },
+        SceneFilletActionId::LocalAlternative {
+            first: DocumentCurveNormalSide::Right,
+            second: DocumentCurveNormalSide::Right,
+        },
+    ];
+    let mut applied_branch = None;
+    for action in branch_actions {
+        let before_attempt = coordinator
+            .lineage_session_json()
+            .expect("branch-attempt lineage");
+        let expected = coordinator
+            .computed_evaluation_input()
+            .expect("current computed input");
+        match coordinator.apply_computed_fillet_action(expected, owner_ref, action) {
+            Ok(_) => {
+                applied_branch = Some(action);
+                break;
+            }
+            Err(_) => assert_eq!(
+                coordinator
+                    .lineage_session_json()
+                    .expect("rejected branch lineage"),
+                before_attempt,
+                "an unavailable explicit branch must be coordinator-neutral"
+            ),
+        }
+    }
+    let applied_branch = applied_branch.expect("at least one validated explicit Fillet branch");
+    let after_branch = coordinator
+        .lineage_document()
+        .step(owner)
+        .expect("computed owner after explicit branch")
+        .clone();
+    assert_stable_owner_manifest(&initial_owner, &after_branch);
+    assert_ne!(after_branch.action, after_radius.action);
+    let ComputedFeatureDefinition::FilletSet(after_fillet) = &coordinator
+        .feature_document()
+        .feature(feature)
+        .expect("stable feature ID after explicit branch")
+        .definition;
+    assert_eq!(after_fillet.corners[0].id, corner);
+    assert_eq!(after_fillet.radius.to_bits(), 0.75_f64.to_bits());
+    assert!(
+        coordinator
+            .session()
+            .design_document()
+            .point(point)
+            .is_some()
+    );
+    assert_cold_matches(&coordinator);
+
+    let final_steps = coordinator.lineage_document().steps().to_vec();
+    let final_features = coordinator.feature_document().features().to_vec();
+    let final_accepted = coordinator.checkpoint().accepted_json().map(str::to_owned);
+    coordinator.undo().expect("Undo computed branch rewrite");
+    assert_eq!(
+        coordinator
+            .lineage_document()
+            .step(owner)
+            .expect("owner before branch")
+            .action,
+        after_radius.action
+    );
+    coordinator.undo().expect("Undo computed radius rewrite");
+    assert_eq!(
+        coordinator
+            .lineage_document()
+            .step(owner)
+            .expect("owner before radius")
+            .action,
+        initial_owner.action
+    );
+    coordinator.undo().expect("Undo independent reorder");
+    assert_eq!(
+        coordinator
+            .lineage_document()
+            .steps()
+            .iter()
+            .map(|step| step.id)
+            .collect::<Vec<_>>(),
+        vec![baseline, owner, point_owner]
+    );
+    coordinator.redo().expect("Redo independent reorder");
+    coordinator.redo().expect("Redo computed radius rewrite");
+    coordinator
+        .redo()
+        .unwrap_or_else(|error| panic!("Redo computed branch {applied_branch:?}: {error}"));
+    assert_eq!(coordinator.lineage_document().steps(), final_steps);
+    assert_eq!(coordinator.feature_document().features(), final_features);
+    assert_eq!(
+        coordinator.checkpoint().accepted_json(),
+        final_accepted.as_deref()
+    );
+
+    let session_json = coordinator
+        .lineage_session_json()
+        .expect("reordered computed feature session");
+    let ledger_json = coordinator
+        .lineage_host_input_ledger_json()
+        .expect("reordered computed feature host-input ledger");
+    let mut restored = RetainedEditorCoordinator::new(coordinator.session().clone())
+        .expect("computed feature restore target");
+    restored
+        .restore_lineage_session_and_host_input_ledger_json(&session_json, &ledger_json)
+        .expect("cold restore reordered computed feature");
+    assert_eq!(restored.lineage_document().steps(), final_steps);
+    assert_eq!(restored.feature_document().features(), final_features);
+    restored.undo().expect("restored Undo computed branch");
+    restored.redo().expect("restored Redo computed branch");
+    assert_eq!(restored.lineage_document().step(owner), Some(&after_branch));
+    assert_cold_matches(&restored);
+}
+
+#[test]
+fn suppressed_computed_feature_row_reorders_with_reservations_and_history_intact() {
+    let (mut coordinator, points, _) = computed_fillet_fixture();
+    let feature = apply_computed_fillet(&mut coordinator, points[1]);
+    let baseline = coordinator.lineage_document().steps()[0].id;
+    let owner = coordinator.lineage_document().steps()[1].id;
+    coordinator
+        .set_computed_feature_suppressed(coordinator.feature_document().identity(), feature, true)
+        .expect("suppress computed Fillet");
+    let suppressed_owner = coordinator
+        .lineage_document()
+        .step(owner)
+        .expect("suppressed feature owner")
+        .clone();
+    assert_eq!(
+        suppressed_owner.state,
+        LineageStepState::Live,
+        "feature suppression is editable recipe intent, not a lineage tombstone"
+    );
+    assert!(
+        coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("suppressed feature")
+            .suppressed
+    );
+
+    let (_, point_owner) = add_independent_point_owner(&mut coordinator, [9.0, -3.0]);
+    let point_step = coordinator
+        .lineage_document()
+        .step(point_owner)
+        .expect("independent point")
+        .clone();
+    let reordered = coordinator
+        .reorder_lineage_step(coordinator.lineage_identity(), owner, None)
+        .expect("move suppressed feature across independent point");
+    assert!(reordered.changed, "{reordered:#?}");
+    assert!(!reordered.clamped, "{reordered:#?}");
+    assert_eq!(
+        coordinator
+            .lineage_document()
+            .steps()
+            .iter()
+            .map(|step| step.id)
+            .collect::<Vec<_>>(),
+        vec![baseline, point_owner, owner]
+    );
+    assert_eq!(
+        coordinator.lineage_document().step(owner),
+        Some(&suppressed_owner)
+    );
+    assert_eq!(
+        coordinator.lineage_document().step(point_owner),
+        Some(&point_step)
+    );
+    assert_cold_matches(&coordinator);
+
+    coordinator.undo().expect("Undo suppressed feature reorder");
+    assert_eq!(
+        coordinator
+            .lineage_document()
+            .steps()
+            .iter()
+            .map(|step| step.id)
+            .collect::<Vec<_>>(),
+        vec![baseline, owner, point_owner]
+    );
+    coordinator.redo().expect("Redo suppressed feature reorder");
+    assert_eq!(
+        coordinator.lineage_document().step(owner),
+        Some(&suppressed_owner)
+    );
+
+    let session_json = coordinator
+        .lineage_session_json()
+        .expect("suppressed reordered session");
+    let ledger_json = coordinator
+        .lineage_host_input_ledger_json()
+        .expect("suppressed reordered ledger");
+    let mut restored = RetainedEditorCoordinator::new(coordinator.session().clone())
+        .expect("suppressed feature restore target");
+    restored
+        .restore_lineage_session_and_host_input_ledger_json(&session_json, &ledger_json)
+        .expect("cold restore suppressed reordered feature");
+    assert_eq!(
+        restored.lineage_document().step(owner),
+        Some(&suppressed_owner)
+    );
+    assert!(
+        restored
+            .feature_document()
+            .feature(feature)
+            .expect("restored suppressed feature")
+            .suppressed
+    );
+    restored.undo().expect("restored Undo suppressed reorder");
+    restored.redo().expect("restored Redo suppressed reorder");
+    assert_cold_matches(&restored);
 }

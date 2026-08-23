@@ -38,12 +38,14 @@ construction/NURBS UAT and certified all-family visual profiles.
   intent; direct editing atomically rewrites every owner. Strict chronological evaluation is the
   oracle for dependency-local evaluation, workspace v7 strictly migrates v1-v6 through honest
   imported baselines, and `geosolve.lineage.rpc.v0` exposes the stateful engine without a DOM.
-  The ordinary workbench additionally presents the current program through a direct read-only
-  Lineage panel; it introduces no peer browser authority. `docs/M83_GOALS.md` owns the full scope.
-  Replacement exact source `bb888cc`, tree `dff5ebe`, passes clean qualification, focused review
-  and immutable byte-verified Tailscale nomination. Earlier source `d378f7b3` is superseded because
-  it predates the panel. Human UAT and explicit approval remain required; M81 remains the product
-  baseline.
+  The ordinary workbench additionally presents the current program through a directly derived,
+  selectable Lineage panel and authority-validated Inspector. Reorder and compatible debug
+  rewrite requests carry the exact document/revision/digest and return through strict-cold
+  coordinator publication; transient browser selection, drafts and authenticated desktop drag
+  state never become a peer authority or workspace state. The prior read-only candidate
+  `bb888cc` is superseded by this approved amendment and is withdrawn from UAT. Replacement clean
+  qualification, immutable Tailscale nomination, human UAT and explicit approval remain required;
+  M81 remains the product baseline. `docs/M83_GOALS.md` owns the full scope.
 - **Completed target:** M77 implements selected-curve trim, size and ordinary/projective control
   affordances plus exact curve properties through public accepted-domain projections and
   prepared-patch previews. Clean release qualification, immutable served nomination, scoped human
@@ -367,8 +369,13 @@ Cold checkpoint evaluation is chronological, not a bag of independent fresh solv
 prefix can seed the next topology-sensitive action; native Fillet reauthenticates its prepared plan,
 reserved identities and complete materialized topology against that accepted upstream prefix before
 ordinary solve and independent validation. Projected owner reconciliation consumes genuine cold
-accepted evidence rather than treating a staged flat accepted cache as its own witness. For
-ordinary mutations, the provisional live solve is never a competing authority: exact strict-cold
+accepted evidence rather than treating a staged flat accepted cache as its own witness. For flat
+sketch replay, a serialized action's complete global `source_order` snapshot is compatibility
+and ordering state, not a collection of lineage operand edges. Each prefix retains currently
+ordered source IDs that still exist, prunes removed IDs and appends sources newly materialized by
+the current action. Only typed action operands create reorder dependencies, so independent
+constraints and dimensions may exchange chronology without retargeting stable native identities.
+For ordinary mutations, the provisional live solve is never a competing authority: exact strict-cold
 acceptance replaces an already accepted live graph or promotes the same live-rejected attempt, and
 strict-cold rejection either retains the failed lineage position or rolls a provisional live
 success back atomically. Projected manipulation keeps its narrower exact caller/cold equality gate.
@@ -388,6 +395,29 @@ Every fallible post-refresh checkpoint restores the prior lineage auxiliary high
 flat and feature owners. The public legacy flat-reload compatibility seam likewise prepares its
 session, feature sidecar, allocator, computed evidence, final checkpoint and imported lineage
 entirely off to the side before one publication.
+
+The workbench's editable Lineage projection remains a thin client of that authority. A selected
+row is identified only by stable `LineageStepId`; its Inspector snapshot is freshly obtained from
+`RetainedEditorCoordinator::lineage_step_inspection`. Reorder availability is a complete set of
+coordinator-approved insertion lanes, including typed dependency, chronology and pinning reasons.
+Buttons, the position selector, `Alt+Arrow` keys and desktop drag-and-drop all submit the same
+exact-CAS reorder request. A blocked request clamps only in the requested direction to the furthest
+legal boundary. Imported baselines and tombstones are pinned; suppressed steps remain ordinary
+retained intent and may move when their dependency interval permits it. The collapsed raw editor
+accepts only a `LineageStepRewrite`; stable step/output/reservation identity plus action
+kind/schema/version are immutable, and malformed, stale or semantically invalid replacements fail
+atomically. Browser selection, JSON drafts, notices and a session-random drag nonce are transient
+and are deliberately omitted from workspace v7.
+
+Slow point and curve-control manipulation uses a presentation-only predictive adapter. Exact
+headless preview timing enables it only for an already captured Point/CurveControl gesture. During
+continuous slow motion the browser paints the latest pointer intent and coalesces an idle exact
+verification; no lineage reconciliation, history publication, workspace save or durable panel
+rebuild occurs on those intent frames. Gesture/context changes revoke queued work, and pointer-up
+must reconstruct the exact terminal scene and pass the newest retained valid Point/CurveControl
+request through the strict current-sample boundary before the existing coordinator may publish one
+owner rewrite. Rejection cannot borrow an older preview and causes no unchanged workspace save.
+The intent marker is explicitly not solver-projected geometry.
 
 ### `geosolve-sketch-lineage-wasm`
 

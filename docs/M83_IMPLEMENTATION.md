@@ -2,10 +2,11 @@
 
 # M83 implementation — Authoritative sketch lineage and deterministic rematerialization
 
-Status: **replacement clean-qualified immutable candidate nominated; human UAT pending; not
-accepted**. ADR 0039 and `docs/M83_GOALS.md` own the scope. M81 remains accepted product authority
-until the replacement immutable M83 candidate passes focused human UAT and receives explicit
-supervising-human approval. GitHub Pages publication is deliberately deferred until that approval.
+Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
+withdrawn; human UAT pending; not accepted**. ADR 0039 and `docs/M83_GOALS.md` own the scope. M81
+remains accepted product authority until the replacement immutable M83 candidate passes focused
+human UAT and receives explicit supervising-human approval. GitHub Pages publication is
+deliberately deferred until that approval.
 
 ## Product boundary
 
@@ -169,35 +170,58 @@ replies throw a typed response violation and cannot become engine evidence. A UT
 also keeps outgoing requests within the same 16 MiB bound as Rust, because a request rejected
 before Rust can decode its envelope cannot carry trustworthy correlation fields.
 
-### L7 — read-only retained-program presentation
+### L7 — selectable retained-program presentation and authority-owned editing
 
-The ordinary workbench now places a secondary **Lineage** panel beside Sketch Tree on wide desktop
+The ordinary workbench places a secondary **Lineage** panel beside Sketch Tree on wide desktop
 layouts and stacks it beneath the tree on compact desktop layouts. The wrapper disappears with the
-tree at the existing narrow-workbench cutoff. The panel is deliberately inspect-only: its rows are
-list items rather than buttons and expose no selection, delete, reorder or rewrite route.
+tree at the existing narrow-workbench cutoff. Every durable render borrows
+`RetainedEditorCoordinator::lineage_document()` and derives an accessible listbox anew. Rows show a
+friendly action/schema name, retained owner label, category, input/output counts, exact schema and
+version, compact/full stable step identity and explicit Live/Suppressed/Deleted state. The separate
+history strip still owns program-version cursor and Undo/Redo availability.
 
-Every render borrows `RetainedEditorCoordinator::lineage_document()` and derives chronological
-markup anew. Rows show a friendly action/schema name, the retained owner label, action category,
-input/output counts, exact schema/version, compact visible and full machine-readable stable step
-identity, and explicit Live/Suppressed/Deleted state. The header shows current action count and
-lineage revision. A distinct history strip consumes `history_cursor`, `history_len`, `can_undo` and
-`can_redo`, making clear that Undo/Redo traverses versions of the current program rather than being
-the program itself. Browser state stores no `LineageStep`, parses no lineage JSON and owns no
-lineage mutation semantics.
+Selecting one row clears geometry selection and opens an Inspector from
+`lineage_step_inspection`; selecting canvas/tree geometry clears lineage selection. The Inspector
+shows the exact program identity, stable developer key, input/output graph, identity flow, writable
+leaves and reservations. Its earlier/later buttons, legal-position selector, `Alt+Up/Down` and
+desktop drag/drop all route to `lineage_reorder_availability` and `reorder_lineage_step`. The
+coordinator validates generic dependency order and private workbench chronology, then strict-cold
+rebuilds and publishes retained/accepted state and one history position atomically. If a requested
+lane is blocked, movement clamps only in that direction to the furthest legal lane and reports its
+typed boundary. Imported baselines and tombstones are pinned; suppressed rows remain editable and
+draggable when their dependency interval admits movement.
 
-Pure presentation tests cover chronological identity, imported/suppressed/tombstoned rows,
-input/output counts, hostile attribute/text escaping, empty programs and in-place rewrite without
-an appended event. A real coordinator regression creates one point, then Undo/Redo, and checks the
-panel source plus action count/cursor/availability against current Rust authority at each position.
-The M83-W11 source sentinel requires direct lineage/history accessors and rejects JSON parsing or a
-browser-side `Vec<LineageStep>`. Static HTML/CSS tests cover unique accessible ownership, wide
-adjacency, compact stacking and narrow hiding. Review moved the split/stack breakpoint to 96rem so
-the canvas HUD keeps its ordinary width, advances a 58rem-minimum compact outer grid at 80rem so
-the Inspector cannot clip before the unchanged 58rem narrow cutoff, and gives the bounded
-four-digit history cursor a two-row layout. It also removes whole-row opacity from retained
-non-live steps, raises small-text contrast/size and makes the durable developer key visible. The
-complete demo library passes 172/172 and focused warnings-denied demo Clippy passes on the
-amendment worktree.
+Desktop drag/drop is deliberately authenticated, not inferred from DOM text. A cryptographically
+random session nonce and an in-memory live drag record bind the custom payload to the exact lineage
+document/revision/digest and stable step. Drop rechecks current Rust authority before deriving its
+ordinal. External, forged or stale payloads cannot mutate the program. Selection, notices, drafts,
+nonce and drag state are browser-transient and absent from workspace v7.
+
+The collapsed raw editor displays a pretty strict `LineageStepRewrite`. A dirty draft survives
+ordinary durable renders, while Apply submits the captured exact identity and Reset discards it.
+Stable step/output/reservation identity and action kind/schema/version are immutable. Structural,
+private-chronology and strict-cold validation rejects malformed, oversized, stale or semantically
+hostile edits without changing lineage, accepted geometry or history. Imported and tombstoned rows
+remain inspectable but read-only.
+
+### L8 — predictive presentation without predictive authority
+
+Exact point and curve-control previews continue to run through the existing headless editor and
+retained coordinator. Browser timing only detects when one captured Point/CurveControl exact frame
+exceeds the entry threshold. Subsequent continuous frames may paint the newest pointer intent and
+coalesce a delayed exact verification; the marker is explicitly cursor intent, not a
+solver-projected handle. These frames never save, rebuild Tree/Lineage/Inspector or publish a
+lineage mutation. Ordinary authoring, Fillet, Offset, annotation and hover frames retain the full
+durable render path.
+
+Any gesture, pointer, tool, overlay/focus, camera or scene-context transition invalidates the
+scheduled generation. Pointer-up drains pending samples, computes one exact terminal preview,
+recomposes the exact terminal scene and only then invokes `pointer_up_current_sample`. That strict
+boundary accepts Point and CurveControl only when the newest request is the retained valid preview;
+it never borrows the ordinary release path's older last-valid fallback. Failed terminal projection
+or scene recomposition consumes/cancels the gesture, clears transient intent and publishes neither
+lineage nor workspace persistence. The accepted result therefore remains one finite coordinator-
+validated owner rewrite and one history entry with ordinary Undo/Redo and workspace-v7 behavior.
 
 ## Finding ledger
 
@@ -744,6 +768,36 @@ design, attempt and accepted identities from the final prepared session. The foc
 polyline regression forces different provisional/cold bytes and proves both APIs return the final
 canonical identity and scene.
 
+### M83-F041 — read-only lineage obscured dependency and owner behavior
+
+The first Lineage panel proved that retained steps existed but could not demonstrate whether a
+stable action could move, whether later direct manipulation still rewrote that same owner, or where
+topological/dependency naming stopped an edit. The approved amendment makes rows selectable and
+adds a coordinator-owned inspection/reorder seam. Presentation never computes a legal order:
+generic lineage validation and the private materialization chronology enumerate every lane and a
+typed blocking reason. Reorder, compatible raw rewrite, strict-cold reconstruction and ordinary
+history publication are staged in clones and swapped atomically. Stable step, output, reservation
+and materialized identities remain unchanged. Regression work also exposed an accidental false
+dependency: generic JSON reference discovery interpreted every ID in a captured global
+`source_order` snapshot as a semantic operand. Source-order entries are now excluded from operand
+discovery. Strict replay composes source order by pruning absent IDs, retaining currently ordered
+surviving IDs and appending sources materialized by the current action. Independent constraints
+and dimensions may therefore reorder without retargeting or reallocating native source identity;
+real typed operand dependencies remain enforced.
+
+### M83-F042 — lineage reconciliation made exact drag previews visibly slow
+
+After lineage became sole authority, constrained point/control previews could spend more than one
+display frame in projection and cold owner reconciliation, producing roughly two visible frames
+per second in larger scenes. The browser now measures exact captured Point/CurveControl frames and
+enters a presentation-only mode above 12 ms. Continuous movement paints the latest cursor intent
+and supersedes older idle verifications; the newest sample is verified after a 50 ms pause. No
+preview intent is a scene, save, history item or lineage mutation. All noneligible pointer owners
+retain durable rendering. Context revocation invalidates scheduled generations, and release fails
+closed unless the exact terminal scene can be rebuilt and the newest Point/CurveControl request is
+the retained valid preview before the strict terminal commit path runs. A rejected strict release
+leaves lineage identity unchanged, so the adapter performs no unchanged workspace save.
+
 ## Qualification record
 
 Earlier development-stage focused and collateral evidence, before the clean nomination recorded
@@ -844,6 +898,19 @@ controlled pre-commit cancellation collateral. The complete editor library passe
 warnings-denied editor all-feature Clippy, formatting and diff hygiene pass. These remain
 development-worktree evidence until committed-source qualification below completes.
 
+The editable-Lineage/predictive amendment owner pass adds five `m83_lineage_editing` cases, two
+`m83_lineage_reorder_stress` cases and the CurveControl/Point exact-terminal regressions. The
+complete editor target passes 474 library tests plus every integration target, including all 25
+geometry owners, all 12 native operations, constraint/dimension source-order composition,
+native/computed Fillet, Profile Offset, direct multi-owner rewrite, Undo/Redo and cold reload. The
+complete demo library passes 178/178; `geosolve-sketch-lineage` passes 29/29; targeted
+all-feature warnings-denied Clippy for the lineage/editor/demo owners, formatting and diff hygiene
+pass. Point strict release now retains the effective model position that produced its newest
+request, so an otherwise current accepted preview cannot be committed from an unsampled release
+coordinate. Ordinary `pointer_up` deliberately retains its established last-valid fallback.
+These are development-worktree results; committed-source release qualification and immutable
+nomination remain separate below.
+
 Workspace-v7 cold/cache authority tests pass 10/10 and historical-host-input tests pass 2/2;
 cache-free workbench routing/reload tests pass 2/2; the frozen strict v1-v6 migration matrix
 passes. The imported-deletion M78 collateral regression and the revision-local
@@ -919,7 +986,7 @@ fetched manifest matches the frozen aggregate above. The temporary listener was 
 That service is now retired. These evidence-only documentation changes are descendants of the
 historical source/tree and did not rebuild or replace its product bytes.
 
-### Replacement Lineage-panel qualification and immutable nomination
+### Withdrawn read-only Lineage-panel qualification and immutable nomination
 
 Exact product source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
 `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`, ran the complete release gate from an isolated clean
@@ -987,14 +1054,21 @@ The temporary listener was then retired and a final root request still byte-matc
 These evidence-only documentation changes are descendants of the nominated source/tree and do not
 rebuild or replace its product bytes.
 
+The approved editable-Lineage and predictive-drag amendment supersedes this nomination and
+withdraws these bytes from current M83-W12. The retained service may continue serving the frozen
+snapshot only until a clean, frozen and byte-verified amendment candidate is ready to replace it;
+the historical artifact is not qualification evidence for the amended interaction scope.
+
 ## Known limitations and next gate
 
 M83 intentionally does not add arbitrary-curve/computed Offset, topology-changing Offset,
 computed-on-computed features, B-rep/PDM naming, formulas/configurations/units, collaboration,
 TypeScript source rewriting, a browser script editor or npm publication.
 
-The remaining product gate is the focused scorecard in `docs/M83_UAT.md` and explicit
-supervising-human acceptance. M83 must not close or deploy to GitHub Pages before that decision. If
-UAT opens a finding, the immutable candidate is withdrawn and the exact owning-layer defect
-workflow applies; otherwise these nominated semantics proceed through the standard Pages build and
-exact hosted-byte verification.
+The remaining engineering gate is committed-source qualification, focused review and immutable
+byte-verified Tailscale nomination for the editable-Lineage/predictive-drag amendment. The product
+gate after that is the focused scorecard in `docs/M83_UAT.md` and explicit supervising-human
+acceptance. M83 must not close or deploy to GitHub Pages before that decision. If UAT opens a
+finding, the immutable candidate is withdrawn and the exact owning-layer defect workflow applies;
+otherwise the accepted semantics proceed through the standard Pages build and exact hosted-byte
+verification.

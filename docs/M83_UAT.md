@@ -2,18 +2,28 @@
 
 # M83 focused UAT — Authoritative sketch lineage
 
-Status: **replacement clean-qualified immutable candidate nominated; human UAT pending**. The
-scorecard is bound to the exact replacement source, no-rebuild snapshot and byte-verified Tailscale
-endpoint below. M81 remains accepted public product authority meanwhile.
+Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
+withdrawn; human UAT pending**. A replacement exact source, no-rebuild snapshot and byte-verified
+Tailscale endpoint will be recorded below after qualification. M81 remains accepted public product
+authority meanwhile.
 
 M83 deliberately preserves existing sketch mathematics and visible authoring behavior while
-replacing persistent workbench authority. The amendment now exposes a read-only projection of that
-real retained program, so human review should cover both end-to-end editing/history/reload behavior
-and whether the panel makes program/history changes legible without implying row editability.
+replacing persistent workbench authority. The amendment exposes a selectable projection and routes
+program edits back through that real retained authority. Human review should cover end-to-end
+editing/history/reload behavior, whether legal and blocked reordering feels intelligible, and
+whether predictive dragging improves expensive scenes without making intent look accepted.
 
-## Replacement candidate authority
+## Replacement amendment candidate authority
 
-- Product source: `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`.
+Qualification is in progress. The exact committed source/tree, complete clean-gate log, immutable
+seven-file manifest, temporary `:18080` verification, retained `:8080` service identity and final
+served-byte ledger will be recorded here before this scorecard begins. Until every field is frozen
+and independently verified, the withdrawn service below is historical access only and is not the
+M83-U1–U12 candidate. GitHub Pages remains unchanged until explicit approval.
+
+## Withdrawn read-only candidate authority
+
+- Product source: `bb888cc68c00ad3a3823a9f2215528dfb357f9f9` (withdrawn from current UAT).
 - Product tree: `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`.
 - Clean gate: `env NO_COLOR=true nix-shell shell.nix --run './scripts/release-gate.sh'`, exit 0 on
   2026-08-23 from an isolated clean worktree pinned to the exact product commit; 332,496-byte log
@@ -23,17 +33,19 @@ and whether the panel makes program/history changes legible without implying row
   regular non-symlink files `0444`).
 - Ordered file-manifest aggregate:
   `d5d51fcb07352f96e39518941d59e41491a25106563c34700fdff6536060bd27`.
-- Tailscale endpoint: `http://100.94.63.83:8080/`, served only from that snapshot by
-  `geosolve-m83-lineage-uat.service` (nomination PID `4152505`).
+- Withdrawn Tailscale endpoint: `http://100.94.63.83:8080/`, currently served only from that
+  snapshot by `geosolve-m83-lineage-uat.service` (nomination PID `4152505`) until replacement.
 - Exact served-byte verification: temporary
   `/tmp/geosolve-m83-lineage-temp-verify.jbCyQE/results.tsv` and retained
   `/tmp/geosolve-m83-lineage-final-verify.2LxtXE/results.tsv`, each SHA-256
   `5cbce667ead67c909d54a97f4db5b39866bb560c2c98876f3a34390a737be186`.
 
-Both verification passes cover `/` plus all seven files with HTTP 200, direct Tailscale address,
-zero redirects, no `Location` or `Content-Encoding`, exact media type/length/SHA/body and root
-equality with `index.html`. The temporary `:18080` listener is retired; the retained endpoint stays
-live through this UAT. GitHub Pages is intentionally unchanged until approval.
+Both historical verification passes cover `/` plus all seven files with HTTP 200, direct
+Tailscale address, zero redirects, no `Location` or `Content-Encoding`, exact media
+type/length/SHA/body and root equality with `index.html`. The temporary `:18080` listener is
+retired; the retained endpoint stays available only until the replacement service swap. These
+bytes do not contain editable Lineage or predictive drag and no longer satisfy this UAT. GitHub
+Pages is intentionally unchanged until approval.
 
 Independent browser review reports zero root/Inspector overflow at the 1600, 1100, 952, 940, 929
 and 928px boundary cases, zero bounded-history overflow for `1025 / 2049`, and 6.24:1 Lineage-count
@@ -50,8 +62,8 @@ contrast. This is qualification evidence, not a substitute for the scorecard bel
   non-symlink files `0444`).
 - Ordered file-manifest aggregate:
   `ee2695ca55e803cbdeb8f6cd5a1ff632e59fe583428807f36e29ad5f2fbebd51`.
-- Tailscale endpoint: `http://100.94.63.83:8080/`, served only from that snapshot by
-  `geosolve-m83-uat.service` (nomination PID `1273798`).
+- Historical Tailscale endpoint: `http://100.94.63.83:8080/`, formerly served only from that
+  snapshot by `geosolve-m83-uat.service` (nomination PID `1273798`, retired).
 - Exact served-byte verification: temporary
   `/tmp/geosolve-m83-temp-verify.GLWzwt/results.tsv` and retained
   `/tmp/geosolve-m83-final-verify.yMsi3f/results.tsv`, each SHA-256
@@ -73,7 +85,10 @@ retired.
 | M83-U6 | Deliberately create a structurally valid but unsolved/conflicting edit, then Undo, Redo, repair it and continue authoring. | The retained failure is visible while the prior complete accepted scene remains authoritative; history never becomes stuck or publishes a partial scene. | pending |
 | M83-U7 | Save/reload the workspace with moved annotations, branches, features and history; repeat once after a failed retained edit and continue Undo/Redo. | Workspace v7 restores retained-versus-accepted authority, exact history and annotation placement, then continues editing without ID reuse or stale Problems. | pending |
 | M83-U8 | Import one older reproduction/workspace payload from the existing v1-v6 corpus; edit and delete one imported entity, Undo/Redo that deletion, save as v7 and reload. | The imported scene remains one truthful baseline with no invented history; deletion behaves as a later retirement action, Undo restores the exact identity, Redo retires it again, and neither history nor reload reuses or silently removes that baseline identity. | pending |
-| M83-U9 | Watch **Lineage** while creating geometry and a constraint, directly moving an owner, suppressing/deleting an action, and using Undo/Redo. Repeat once with an imported sample and at both a wide and compact desktop width. | New authored intent adds ordered rows; direct movement rewrites the owning row without adding a Move event; revision advances; suppressed/deleted rows remain explicit and readable; stable step/developer IDs survive Undo/Redo; the separate history position and Undo/Redo availability track the command bar. Rows are visibly read-only. At wide size Lineage sits beside Sketch Tree; at compact size it stacks below without squeezing or covering the canvas. | pending |
+| M83-U9 | Watch **Lineage** while creating independent and dependent geometry/constraints. Select rows from pointer and keyboard, inspect graph/ownership/identity details, then select canvas and tree geometry. Repeat at wide and compact desktop widths. | Selection always opens a fresh authority-derived Inspector; geometry and Lineage selections clear each other; stable developer/output/reservation identity is legible; listbox focus and wide/compact layout remain bounded. No selection state survives reload. | pending |
+| M83-U10 | Reorder independent and dependent rows with buttons, position menu, `Alt+Up/Down` and desktop drag/drop; then directly move an output, suppress/delete, Undo/Redo and reload. Try an independent constraint/dimension pair plus a suppressed row, imported root and deleted row. | Independent actions—including the constraint/dimension pair—move; dependency-blocked moves stop at an explained legal boundary; imported/deleted rows are pinned; suppressed rows remain movable. Stable step/developer/output/materialized identities survive, direct movement rewrites the same owner without a Move event, and one ordinary history controls reorder/Undo/Redo/reload. | pending |
+| M83-U11 | Open the selected row's collapsed debug editor. Preserve an unapplied change while selecting controls/rerendering, Reset it, apply a harmless label change, and try malformed or schema-changing JSON. | Compatible raw edits publish atomically; hostile/stale edits leave program, accepted scene and history unchanged; draft and selection are not restored after reload. | pending |
+| M83-U12 | Drag a point and an advanced curve control in a complex scene continuously, pause, release, Undo/Redo and reload; switch tool or focus while one drag is pending. Finish once with a newer deliberately invalid terminal sample. Repeat around ordinary Fillet/Offset/authoring controls. | Slow dragging shows a distinct responsive cursor-intent marker while verified geometry catches up and never blanks. Exact release lands at the newest terminal position as one owner rewrite; invalid release cancels instead of committing an older preview or saving; context changes revoke stale prediction; Fillet/Offset/authoring controls remain live. | pending |
 
 ## Acceptance rule
 

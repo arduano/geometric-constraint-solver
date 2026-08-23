@@ -45,12 +45,13 @@ pub use coordinator::{
     FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
     FeatureAuthoringTransaction, GeometryRoleSelectionState, LINEAGE_DOMAIN_EVALUATOR,
     LifecycleDto, LifecycleStatus, LineageDomainEvaluationEvidence, LineageDomainEvaluationFailure,
-    LineageEvaluationWorkEvidence, MeasurementPublication, MutationOutcome, ProblemsDto,
-    ProfileOffsetDirectionMetadata, ProfileOffsetDirectionState, ProjectedDragRejectionStage,
-    ProjectedDragWorkEvidence, RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator, SelectedCurvePropertyMetadata, display_dimension_target,
-    evaluate_lineage_session_cold, evaluate_lineage_session_cold_with_inputs,
-    lineage_external_input_stamp,
+    LineageEvaluationWorkEvidence, LineageReorderAvailability, LineageReorderBlockReason,
+    LineageReorderLane, LineageReorderOutcome, LineageStepInspection, LineageStepRewriteOutcome,
+    MeasurementPublication, MutationOutcome, ProblemsDto, ProfileOffsetDirectionMetadata,
+    ProfileOffsetDirectionState, ProjectedDragRejectionStage, ProjectedDragWorkEvidence,
+    RecordedComputedFeatureTransition, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    SelectedCurvePropertyMetadata, display_dimension_target, evaluate_lineage_session_cold,
+    evaluate_lineage_session_cold_with_inputs, lineage_external_input_stamp,
 };
 pub use curve_controls::{
     SceneCurveControl, SceneCurveControlGripGeometry, SceneCurveControlGuide,
@@ -4350,6 +4351,7 @@ struct PointGesture {
     origin: ScreenPoint,
     model_offset: [f64; 2],
     moved: bool,
+    last_sampled_position: Option<[f64; 2]>,
     latest_request: Option<u64>,
 }
 
@@ -5914,6 +5916,7 @@ impl ConstraintEditor {
                             point_position[1] - pointer_position[1],
                         ],
                         moved: false,
+                        last_sampled_position: None,
                         latest_request: None,
                     });
                     self.last_valid_drag_preview = None;
@@ -6219,6 +6222,7 @@ impl ConstraintEditor {
                             point_position[1] - pointer_position[1],
                         ],
                         moved: false,
+                        last_sampled_position: None,
                         latest_request: None,
                     });
                     self.last_valid_drag_preview = None;
@@ -6832,17 +6836,19 @@ impl ConstraintEditor {
             return Vec::new();
         };
         self.next_projection_request = next_request;
+        let pointer_position = scene.viewport.screen_to_model(input.position);
+        let model_position = [
+            pointer_position[0] + gesture.model_offset[0],
+            pointer_position[1] + gesture.model_offset[1],
+        ];
+        gesture.last_sampled_position = Some(model_position);
         gesture.latest_request = Some(request_id);
         self.point_gesture = Some(gesture);
-        let pointer_position = scene.viewport.screen_to_model(input.position);
         vec![EditorEffect::RequestProjectedPointMove {
             pointer_id: input.pointer_id,
             request_id,
             point: gesture.point,
-            model_position: [
-                pointer_position[0] + gesture.model_offset[0],
-                pointer_position[1] + gesture.model_offset[1],
-            ],
+            model_position,
         }]
     }
 
@@ -7099,6 +7105,115 @@ impl ConstraintEditor {
             limit,
         });
         true
+    }
+
+    /// Completes a point or direct curve-control gesture only when the exact
+    /// terminal sample is the preview that the host most recently accepted.
+    ///
+    /// This is the strict release boundary for adapters that deliberately
+    /// coalesce intermediate pointer movement and synchronously resolve one
+    /// final sample before pointer-up. Unlike [`Self::pointer_up`], it never
+    /// falls back to an older valid preview after the latest request was
+    /// rejected. Other gesture families are outside this boundary and emit no
+    /// effects.
+    pub fn pointer_up_current_sample(
+        &mut self,
+        scene: &EditorScene,
+        expected: SketchDesignIdentity,
+        input: PointerInput,
+    ) -> Vec<EditorEffect> {
+        if self.tool != EditorTool::Select {
+            return Vec::new();
+        }
+        if let Some(gesture) = self.curve_control_gesture {
+            if gesture.pointer_id != input.pointer_id {
+                return Vec::new();
+            }
+            self.curve_control_gesture = None;
+            if !gesture.moved {
+                return Vec::new();
+            }
+            let current_request = (input.position.is_finite()
+                && expected == gesture.expected
+                && scene.accepts_curve_control_gesture(
+                    gesture.accepted_revision,
+                    gesture.expected,
+                    gesture.viewport,
+                    gesture.control,
+                    gesture.owner,
+                    gesture.last_valid_request,
+                ))
+            .then(|| {
+                match (
+                    gesture.latest_request,
+                    gesture.last_valid_request,
+                    gesture.last_sampled_position,
+                    Self::curve_control_sample(scene, &gesture, input.position),
+                ) {
+                    (
+                        Some(latest),
+                        Some((accepted, _)),
+                        Some(requested_position),
+                        Some(terminal_position),
+                    ) if latest == accepted
+                        && model_positions_bit_equal(requested_position, terminal_position) =>
+                    {
+                        Some(accepted)
+                    }
+                    _ => None,
+                }
+            })
+            .flatten();
+            return current_request.map_or_else(
+                || vec![EditorEffect::ClearCurveControlPreview],
+                |request_id| {
+                    vec![EditorEffect::CommitCurveControl {
+                        expected: gesture.expected,
+                        pointer_id: gesture.pointer_id,
+                        request_id,
+                        control: gesture.control,
+                    }]
+                },
+            );
+        }
+        let Some(gesture) = self.point_gesture else {
+            return Vec::new();
+        };
+        if gesture.pointer_id != input.pointer_id {
+            return Vec::new();
+        }
+        self.point_gesture = None;
+        if !gesture.moved {
+            return Vec::new();
+        }
+        let terminal_pointer = scene.viewport.screen_to_model(input.position);
+        let terminal_position = [
+            terminal_pointer[0] + gesture.model_offset[0],
+            terminal_pointer[1] + gesture.model_offset[1],
+        ];
+        let preview =
+            self.last_valid_drag_preview
+                .take()
+                .filter(|(request, epoch, pointer, point, _)| {
+                    Some(*request) == gesture.latest_request
+                        && *epoch == gesture.epoch
+                        && *pointer == input.pointer_id
+                        && *point == gesture.point
+                        && input.position.is_finite()
+                        && gesture.last_sampled_position.is_some_and(|sampled| {
+                            model_positions_bit_equal(sampled, terminal_position)
+                        })
+                });
+        preview.map_or_else(
+            || vec![EditorEffect::ClearPointPreview],
+            |(_, _, _, _, position)| {
+                vec![EditorEffect::CommitPointMove {
+                    expected,
+                    point: gesture.point,
+                    model_position: position,
+                }]
+            },
+        )
     }
 
     /// Completes an active point gesture. A click emits no geometry edit.
@@ -21689,6 +21804,95 @@ mod tests {
             matches!(editor.pointer_up(&scene, scene.design_identity, pointer(8, endpoint.x + 5.0, endpoint.y, Modifiers::default())).as_slice(),
             [EditorEffect::CommitPointMove { model_position, .. }] if (model_position[0] - 7.0).abs() < 1.0e-12 && (model_position[1] - 8.0).abs() < 1.0e-12)
         );
+    }
+
+    #[test]
+    fn current_sample_point_release_never_commits_an_older_valid_preview() {
+        let (document, _, points) = line_document();
+        let scene = scene(&document);
+        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
+        let moved = pointer(81, endpoint.x + 3.0, endpoint.y, Modifiers::default());
+
+        let mut current = ConstraintEditor::default();
+        current.pointer_down(
+            &scene,
+            pointer(81, endpoint.x, endpoint.y, Modifiers::default()),
+        );
+        assert!(matches!(
+            current.pointer_move(&scene, moved).as_slice(),
+            [EditorEffect::RequestProjectedPointMove { request_id: 0, .. }]
+        ));
+        assert!(matches!(
+            current
+                .projected_drag_result(81, 0, points[0], Some([2.0, 3.0]))
+                .as_slice(),
+            [EditorEffect::PreviewPointMove { .. }]
+        ));
+        let mut unsampled = current.clone();
+        assert!(matches!(
+            current
+                .pointer_up_current_sample(&scene, scene.design_identity, moved)
+                .as_slice(),
+            [EditorEffect::CommitPointMove {
+                expected,
+                point,
+                model_position,
+            }] if *expected == scene.design_identity
+                && *point == points[0]
+                && model_position.map(f64::to_bits) == [2.0, 3.0].map(f64::to_bits)
+        ));
+        assert_eq!(current.active_pointer_gesture(), None);
+        assert_eq!(
+            unsampled.pointer_up_current_sample(
+                &scene,
+                scene.design_identity,
+                pointer(
+                    81,
+                    moved.position.x + 1.0,
+                    moved.position.y,
+                    Modifiers::default()
+                ),
+            ),
+            vec![EditorEffect::ClearPointPreview],
+            "release may not borrow an accepted preview from another pointer position",
+        );
+        assert_eq!(unsampled.active_pointer_gesture(), None);
+
+        let mut rejected = ConstraintEditor::default();
+        rejected.pointer_down(
+            &scene,
+            pointer(82, endpoint.x, endpoint.y, Modifiers::default()),
+        );
+        assert!(matches!(
+            rejected
+                .pointer_move(
+                    &scene,
+                    pointer(82, endpoint.x + 3.0, endpoint.y, Modifiers::default()),
+                )
+                .as_slice(),
+            [EditorEffect::RequestProjectedPointMove { request_id: 0, .. }]
+        ));
+        assert!(matches!(
+            rejected
+                .projected_drag_result(82, 0, points[0], Some([2.0, 3.0]))
+                .as_slice(),
+            [EditorEffect::PreviewPointMove { .. }]
+        ));
+        let rejected_terminal = pointer(82, endpoint.x + 5.0, endpoint.y, Modifiers::default());
+        assert!(matches!(
+            rejected.pointer_move(&scene, rejected_terminal).as_slice(),
+            [EditorEffect::RequestProjectedPointMove { request_id: 1, .. }]
+        ));
+        assert!(
+            rejected
+                .projected_drag_result(82, 1, points[0], None)
+                .is_empty()
+        );
+        assert_eq!(
+            rejected.pointer_up_current_sample(&scene, scene.design_identity, rejected_terminal),
+            vec![EditorEffect::ClearPointPreview],
+        );
+        assert_eq!(rejected.active_pointer_gesture(), None);
     }
 
     #[test]

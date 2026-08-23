@@ -85,8 +85,11 @@ pub(crate) fn lineage_history_markup(
     )
 }
 
-/// Chronological read-only rows derived freshly from the retained Rust action program.
-pub(crate) fn lineage_markup(document: &LineageDocument) -> String {
+/// Chronological selectable rows derived freshly from the retained Rust action program.
+pub(crate) fn lineage_markup(
+    document: &LineageDocument,
+    selected: Option<geosolve_sketch_lineage::LineageStepId>,
+) -> String {
     let mut output = String::new();
     for (index, step) in document.steps().iter().enumerate() {
         let (kind_key, kind_label) = lineage_kind_presentation(step.action.kind());
@@ -97,6 +100,11 @@ pub(crate) fn lineage_markup(document: &LineageDocument) -> String {
             LineageStepState::Suppressed => ("suppressed", "Suppressed"),
             LineageStepState::Tombstoned => ("tombstoned", "Deleted"),
         };
+        let is_selected = selected == Some(step.id);
+        let is_pinned = matches!(
+            &step.action,
+            LineageActionDefinition::ImportedBaseline { .. }
+        ) || step.state == LineageStepState::Tombstoned;
         let input_count = step.action.inputs().len();
         let output_count = step.outputs.len();
         let escaped_schema = escape(schema);
@@ -104,6 +112,7 @@ pub(crate) fn lineage_markup(document: &LineageDocument) -> String {
         let escaped_label = escape(&step.label);
         let escaped_action_name = escape(&action_name);
         let display_step_id = format!("s{:x}", step.id.raw());
+        let option_id = format!("wb-lineage-step-{:016x}", step.id.raw());
         let title = escape(&format!(
             "{} · Stable step {} · Developer key {} · {} v{}",
             step.label, step.id, step.key, schema, version
@@ -111,12 +120,17 @@ pub(crate) fn lineage_markup(document: &LineageDocument) -> String {
         let _ = write!(
             output,
             concat!(
-                "<div class=\"wb-lineage-row\" role=\"listitem\" ",
+                "<div id=\"{option_id}\" class=\"wb-lineage-row{selected_class}\" ",
+                "role=\"option\" aria-selected=\"{is_selected}\" tabindex=\"-1\" ",
+                "aria-posinset=\"{ordinal}\" aria-setsize=\"{step_count}\" ",
                 "data-lineage-step-id=\"{step_id}\" data-lineage-action-kind=\"{kind_key}\" ",
+                "data-lineage-ordinal=\"{ordinal}\" ",
                 "data-lineage-step-state=\"{state_key}\" data-lineage-schema=\"{escaped_schema}\" ",
                 "data-lineage-schema-version=\"{version}\" ",
                 "data-lineage-developer-key=\"{escaped_developer_key}\" ",
+                "data-lineage-draggable=\"{draggable}\" draggable=\"{draggable}\" ",
                 "title=\"{title}\">",
+                "<span class=\"wb-lineage-drag-grip\" aria-hidden=\"true\"></span>",
                 "<span class=\"wb-lineage-order\" aria-hidden=\"true\">{ordinal}</span>",
                 "<span class=\"wb-lineage-copy\">",
                 "<span class=\"wb-lineage-heading\"><strong>{escaped_action_name}</strong>",
@@ -126,11 +140,18 @@ pub(crate) fn lineage_markup(document: &LineageDocument) -> String {
                 "<span class=\"wb-lineage-key\">Key {escaped_developer_key}</span>",
                 "<span class=\"wb-lineage-schema\">{escaped_schema} · v{version}</span>",
                 "</span>",
+                "<span class=\"wb-lineage-badges\">",
                 "<span class=\"wb-lineage-state\">{state_label}</span>",
+                "{movement_badge}",
+                "</span>",
                 "</div>"
             ),
+            option_id = option_id,
+            selected_class = if is_selected { " selected" } else { "" },
+            is_selected = is_selected,
             step_id = step.id,
             ordinal = index + 1,
+            step_count = document.steps().len(),
             kind_key = kind_key,
             state_key = state_key,
             escaped_schema = escaped_schema,
@@ -144,11 +165,17 @@ pub(crate) fn lineage_markup(document: &LineageDocument) -> String {
             outputs = count_label(output_count, "output", "outputs"),
             version = version,
             state_label = state_label,
+            draggable = !is_pinned,
+            movement_badge = if is_pinned {
+                "<span class=\"wb-lineage-movement\">Pinned</span>"
+            } else {
+                ""
+            },
         );
     }
     if output.is_empty() {
         output.push_str(
-            "<p class=\"wb-empty wb-lineage-empty\" role=\"listitem\">No retained actions</p>",
+            "<p class=\"wb-empty wb-lineage-empty\" role=\"status\">No retained actions</p>",
         );
     }
     output
@@ -822,11 +849,11 @@ mod tests {
     #[test]
     fn lineage_markup_preserves_authoritative_order_identity_and_lifecycle() {
         let document = lineage_fixture();
-        let markup = lineage_markup(&document);
+        let markup = lineage_markup(&document, Some(LineageStepId::from_raw(2)));
         let history = lineage_history_markup(1, 4, true, true);
 
         assert_eq!(lineage_summary(&document), "3 actions · r4");
-        assert_eq!(markup.matches("role=\"listitem\"").count(), 3);
+        assert_eq!(markup.matches("role=\"option\"").count(), 3);
         let baseline = markup
             .find("data-lineage-step-id=\"0000000000000001\"")
             .expect("baseline row");
@@ -861,10 +888,25 @@ mod tests {
         assert!(markup.contains("data-lineage-developer-key=\"geometry-&quot;recipe\""));
         assert!(markup.contains("Key geometry-&quot;recipe"));
         assert!(markup.contains("data-lineage-schema-version=\"1\""));
-        for forbidden in ["<button", "data-editor-item", "tabindex=", "aria-selected="] {
+        assert!(markup.contains(concat!(
+            "id=\"wb-lineage-step-0000000000000002\" ",
+            "class=\"wb-lineage-row selected\" role=\"option\" ",
+            "aria-selected=\"true\" tabindex=\"-1\""
+        )));
+        assert_eq!(markup.matches("aria-selected=\"true\"").count(), 1);
+        assert_eq!(markup.matches("aria-setsize=\"3\"").count(), 3);
+        assert!(markup.contains("aria-posinset=\"2\""));
+        assert!(markup.contains("data-lineage-ordinal=\"2\""));
+        assert_eq!(markup.matches("data-lineage-draggable=\"true\"").count(), 1);
+        assert_eq!(
+            markup.matches("data-lineage-draggable=\"false\"").count(),
+            2
+        );
+        assert_eq!(markup.matches(">Pinned<").count(), 2);
+        for forbidden in ["<button", "data-editor-item"] {
             assert!(
                 !markup.contains(forbidden),
-                "lineage rows must remain read-only: {forbidden}"
+                "lineage rows must not impersonate sketch-tree controls: {forbidden}"
             );
         }
     }
@@ -889,7 +931,7 @@ mod tests {
                 Vec::new(),
             ),
         );
-        let before = lineage_markup(&document);
+        let before = lineage_markup(&document, Some(step_id));
         let before_summary = lineage_summary(&document);
 
         document
@@ -909,11 +951,11 @@ mod tests {
                 }],
             ))
             .expect("rewrite retained owner");
-        let after = lineage_markup(&document);
+        let after = lineage_markup(&document, Some(step_id));
         let history = lineage_history_markup(0, 1, false, false);
 
-        assert_eq!(before.matches("role=\"listitem\"").count(), 1);
-        assert_eq!(after.matches("role=\"listitem\"").count(), 1);
+        assert_eq!(before.matches("role=\"option\"").count(), 1);
+        assert_eq!(after.matches("role=\"option\"").count(), 1);
         assert!(after.contains("data-lineage-step-id=\"0000000000000001\""));
         assert!(before.contains("Original action"));
         assert!(after.contains("Rewritten action"));
@@ -941,7 +983,7 @@ mod tests {
         );
         assert!(!coordinator.can_undo());
         assert!(!coordinator.can_redo());
-        let initial = lineage_markup(coordinator.lineage_document());
+        let initial = lineage_markup(coordinator.lineage_document(), None);
         assert!(initial.contains("Imported baseline"));
 
         coordinator
@@ -960,8 +1002,8 @@ mod tests {
         );
         assert!(coordinator.can_undo());
         assert!(!coordinator.can_redo());
-        let created = lineage_markup(coordinator.lineage_document());
-        assert_eq!(created.matches("role=\"listitem\"").count(), 2);
+        let created = lineage_markup(coordinator.lineage_document(), None);
+        assert_eq!(created.matches("role=\"option\"").count(), 2);
         assert!(created.contains("geosolve.document-edit.v1.create-point"));
 
         coordinator.undo().expect("undo point action");
@@ -972,7 +1014,10 @@ mod tests {
         );
         assert!(!coordinator.can_undo());
         assert!(coordinator.can_redo());
-        assert_eq!(lineage_markup(coordinator.lineage_document()), initial);
+        assert_eq!(
+            lineage_markup(coordinator.lineage_document(), None),
+            initial
+        );
 
         coordinator.redo().expect("redo point action");
         assert_eq!(coordinator.lineage_document().steps().len(), 2);
@@ -982,15 +1027,71 @@ mod tests {
         );
         assert!(coordinator.can_undo());
         assert!(!coordinator.can_redo());
-        assert_eq!(lineage_markup(coordinator.lineage_document()), created);
+        assert_eq!(
+            lineage_markup(coordinator.lineage_document(), None),
+            created
+        );
     }
 
     #[test]
     fn lineage_panel_has_truthful_empty_program_presentation() {
         let document = LineageDocument::with_id(LineageDocumentId::from_raw(0x8303));
         assert_eq!(lineage_summary(&document), "0 actions · r0");
-        let markup = lineage_markup(&document);
+        let markup = lineage_markup(&document, None);
         assert!(markup.contains("No retained actions"));
         assert!(!markup.contains("data-lineage-step-id"));
+    }
+
+    #[test]
+    fn lineage_selection_and_inspector_markup_are_accessible_and_bounded() {
+        let html = include_str!("../../index.html");
+        assert!(html.contains(concat!(
+            "id=\"wb-lineage\" class=\"wb-lineage\" role=\"listbox\" ",
+            "aria-label=\"Retained sketch actions\" aria-multiselectable=\"false\" ",
+            "tabindex=\"0\""
+        )));
+        for id in [
+            "wb-lineage-inspector",
+            "wb-lineage-inspector-label",
+            "wb-lineage-inspector-state",
+            "wb-lineage-inspector-meta",
+            "wb-lineage-inspector-graph",
+            "wb-lineage-reorder",
+            "wb-lineage-move-earlier",
+            "wb-lineage-move-later",
+            "wb-lineage-position",
+            "wb-lineage-reorder-note",
+            "wb-lineage-debug-editor",
+            "wb-lineage-debug-json",
+            "wb-lineage-debug-apply",
+            "wb-lineage-debug-reset",
+            "wb-lineage-debug-status",
+        ] {
+            assert_eq!(
+                html.matches(&format!("id=\"{id}\"")).count(),
+                1,
+                "#{id} must have one presentation owner"
+            );
+        }
+        assert!(html.contains("<details id=\"wb-lineage-debug-editor\""));
+        assert!(!html.contains("<details id=\"wb-lineage-debug-editor\" open"));
+        assert!(html.contains("aria-live=\"polite\""));
+
+        let css = include_str!("../../styles.css");
+        for contract in [
+            ".wb-lineage-row[aria-selected=\"true\"]",
+            ".wb-lineage-row[data-lineage-draggable=\"true\"]",
+            ".wb-lineage-row[data-lineage-drop=\"before\"]",
+            ".wb-lineage-row[data-lineage-drop=\"after\"]",
+            ".wb-lineage-inspector-meta dd",
+            "overflow-wrap: anywhere;",
+            ".wb-lineage-debug-editor textarea",
+            "resize: vertical;",
+        ] {
+            assert!(
+                css.contains(contract),
+                "missing lineage CSS contract: {contract}"
+            );
+        }
     }
 }

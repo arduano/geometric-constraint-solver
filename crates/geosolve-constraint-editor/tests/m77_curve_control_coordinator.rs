@@ -602,6 +602,181 @@ fn foreign_out_of_order_and_current_invalid_samples_preserve_the_prior_valid_can
 }
 
 #[test]
+fn current_sample_curve_control_release_requires_latest_position_and_authenticated_scene() {
+    let (mut coordinator, scene, control, _radius, viewport) = circle_fixture();
+    let pointer_id = 7_042;
+    let origin_revision = scene.accepted_revision;
+    let origin_design = scene.design_identity;
+    let durable_lineage = coordinator
+        .lineage_session_json()
+        .expect("durable lineage before rejected terminal sample");
+    let durable_history = (coordinator.history_len(), coordinator.history_cursor());
+    let durable_checkpoint = coordinator.persistence_checkpoint().unwrap();
+    assert!(
+        coordinator
+            .pointer_down(&scene, pointer(pointer_id, control.screen_position))
+            .is_empty()
+    );
+
+    let first_position = ScreenPoint {
+        x: control.screen_position.x + 50.0,
+        y: control.screen_position.y,
+    };
+    let first_request = coordinator
+        .editor_mut()
+        .pointer_move(&scene, pointer(pointer_id, first_position));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control: requested_control,
+            model_position,
+            ..
+        },
+    ] = first_request.as_slice()
+    else {
+        panic!("expected first curve-control request: {first_request:?}")
+    };
+    let first_request_id = *request_id;
+    let requested_control = *requested_control;
+    assert!(matches!(
+        coordinator
+            .resolve_curve_control_preview(
+                pointer_id,
+                first_request_id,
+                *expected,
+                requested_control,
+                *model_position,
+            )
+            .as_slice(),
+        [EditorEffect::PreviewCurveControl { .. }]
+    ));
+    let first_scene =
+        prepared_preview_scene(&coordinator, viewport, origin_revision, origin_design);
+
+    let mut current = coordinator.editor().clone();
+    assert_eq!(
+        current.pointer_up_current_sample(
+            &first_scene,
+            origin_design,
+            pointer(pointer_id, first_position),
+        ),
+        vec![EditorEffect::CommitCurveControl {
+            expected: origin_design,
+            pointer_id,
+            request_id: first_request_id,
+            control: requested_control,
+        }],
+    );
+
+    let mut unsampled = coordinator.editor().clone();
+    assert_eq!(
+        unsampled.pointer_up_current_sample(
+            &first_scene,
+            origin_design,
+            pointer(
+                pointer_id,
+                ScreenPoint {
+                    x: first_position.x + 1.0,
+                    y: first_position.y,
+                },
+            ),
+        ),
+        vec![EditorEffect::ClearCurveControlPreview],
+        "release may not borrow an accepted preview from another pointer position",
+    );
+
+    let mut altered_scene = first_scene.clone();
+    altered_scene.curve_controls[0]
+        .accessible_name
+        .push_str(" forged");
+    let mut altered = coordinator.editor().clone();
+    assert_eq!(
+        altered.pointer_up_current_sample(
+            &altered_scene,
+            origin_design,
+            pointer(pointer_id, first_position),
+        ),
+        vec![EditorEffect::ClearCurveControlPreview],
+        "release must authenticate the exact candidate control scene",
+    );
+
+    let second_position = ScreenPoint {
+        x: first_position.x + 25.0,
+        y: first_position.y,
+    };
+    let second_request = coordinator
+        .editor_mut()
+        .pointer_move(&first_scene, pointer(pointer_id, second_position));
+    let [
+        EditorEffect::RequestCurveControlPreview {
+            request_id,
+            expected,
+            control: second_control,
+            ..
+        },
+    ] = second_request.as_slice()
+    else {
+        panic!("expected second curve-control request: {second_request:?}")
+    };
+    let second_request_id = *request_id;
+    assert!(
+        coordinator
+            .resolve_curve_control_preview(
+                pointer_id,
+                second_request_id,
+                *expected,
+                *second_control,
+                [0.0, 0.0],
+            )
+            .is_empty()
+    );
+    let retained_scene =
+        prepared_preview_scene(&coordinator, viewport, origin_revision, origin_design);
+    let rejected_release = coordinator.editor_mut().pointer_up_current_sample(
+        &retained_scene,
+        origin_design,
+        pointer(pointer_id, second_position),
+    );
+    assert_eq!(
+        rejected_release,
+        vec![EditorEffect::ClearCurveControlPreview],
+        "a rejected latest request must not commit the older valid candidate",
+    );
+    assert!(coordinator.editor().active_pointer_gesture().is_none());
+    coordinator
+        .apply_editor_effect(&rejected_release[0])
+        .expect("consume rejected terminal clear effect");
+    assert_eq!(
+        coordinator
+            .lineage_session_json()
+            .expect("lineage after rejected terminal sample"),
+        durable_lineage,
+        "rejected terminal control input cannot publish lineage"
+    );
+    assert_eq!(
+        (coordinator.history_len(), coordinator.history_cursor()),
+        durable_history,
+        "rejected terminal control input cannot create history"
+    );
+    let after_rejection = coordinator.persistence_checkpoint().unwrap();
+    assert_eq!(
+        after_rejection.design_json(),
+        durable_checkpoint.design_json()
+    );
+    assert_eq!(
+        after_rejection.accepted_json(),
+        durable_checkpoint.accepted_json()
+    );
+    assert_eq!(
+        after_rejection.feature_json(),
+        durable_checkpoint.feature_json()
+    );
+    assert!(!coordinator.curve_control_preview_active());
+    assert!(coordinator.visible_preview_session().is_none());
+}
+
+#[test]
 fn prepared_curve_control_preview_commits_exact_patch_as_one_history_step() {
     let (mut coordinator, scene, control, radius, viewport) = circle_fixture();
     let owner = control.owner;
@@ -669,7 +844,7 @@ fn prepared_curve_control_preview_commits_exact_patch_as_one_history_step() {
 
     let preview_scene =
         prepared_preview_scene(&coordinator, viewport, origin_revision, origin_design);
-    let release = coordinator.editor_mut().pointer_up(
+    let release = coordinator.editor_mut().pointer_up_current_sample(
         &preview_scene,
         origin_design,
         pointer(pointer_id, moved),

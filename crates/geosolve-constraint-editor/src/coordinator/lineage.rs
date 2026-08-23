@@ -1613,6 +1613,35 @@ impl CoordinatorLineage {
         self.materialize_with_failed_steps(&[])
     }
 
+    /// Applies one exact retained-program edit, validates the editor's private
+    /// semantic manifests, and replaces pending evidence with a strict-cold
+    /// owning-domain result before the caller can publish any coordinator
+    /// field.  A structurally valid edit whose cold evaluation fails remains
+    /// one retained history position; malformed, stale and semantically
+    /// hostile edits roll back the cloned transaction completely.
+    pub(super) fn apply_editor_patch(
+        &mut self,
+        patch: LineagePatch,
+        parameters: &ParameterBatch,
+        snapshots: &ExternalSnapshotSet,
+    ) -> Result<geosolve_sketch_lineage::LineagePatchOutcome, LineageBridgeError> {
+        let previous_session = self.session.clone();
+        let previous_ledger = self.host_input_ledger.clone();
+        let result = (|| {
+            let outcome = self.session.apply_patch(patch)?;
+            if outcome.changed {
+                validate_lineage_document_semantics(self.session.document())?;
+                self.reconstruct_current_evaluation_authority(parameters, snapshots)?;
+            }
+            Ok(outcome)
+        })();
+        if result.is_err() {
+            self.session = previous_session;
+            self.host_input_ledger = previous_ledger;
+        }
+        result
+    }
+
     pub(super) fn materialize(&self) -> Result<LineageCheckpoint, LineageBridgeError> {
         // A failed owning-domain solve still has a complete retained program.
         // Failure evidence controls accepted publication, not whether the
@@ -6162,9 +6191,9 @@ fn collect_operation_strings<'a>(
     strings: &mut Vec<&'a str>,
 ) {
     match operation {
-        StructuralDeltaOperation::SetField { value, .. }
-        | StructuralDeltaOperation::UpsertEntity { value, .. } => {
-            collect_value_reference_strings(value, None, strings);
+        StructuralDeltaOperation::SetField { path, value }
+        | StructuralDeltaOperation::UpsertEntity { path, value, .. } => {
+            collect_value_reference_strings(value, path.last().map(String::as_str), strings);
         }
         StructuralDeltaOperation::RemoveField { .. } => {}
         StructuralDeltaOperation::RemoveEntity { id, .. } => strings.push(id),
@@ -6212,6 +6241,7 @@ fn is_reference_field(field: &str) -> bool {
             | "next_id"
             | "next_feature_id"
             | "next_corner_id"
+            | "source_order"
     )
 }
 
@@ -8093,8 +8123,22 @@ fn apply_authored_operations(
         .ok_or(LineageBridgeError::InvalidMaterialization(
             "materialization sketch identity high-water is missing",
         ))?;
+    let mut source_orders = Vec::new();
     for operation in operations {
-        apply_operation(root, operation)?;
+        if let StructuralDeltaOperation::SetField { path, value } = operation
+            && is_source_order_path(path)
+        {
+            source_orders.push((path, value));
+        } else {
+            apply_operation(root, operation)?;
+        }
+    }
+    // A source-order delta is a snapshot of global sketch state, not an
+    // operand list owned by this action. Apply the action's entity changes
+    // first so composition can retain live predecessors, prune removals and
+    // append only sources actually materialized by this action.
+    for (path, value) in source_orders {
+        compose_source_order(root, path, value)?;
     }
     restore_sketch_next_id(root, next_id)?;
     restore_spline_next_span_ids(root, &sketch_identity_high_water)?;
@@ -8274,6 +8318,9 @@ fn apply_operation(
     operation: &StructuralDeltaOperation,
 ) -> Result<(), LineageBridgeError> {
     match operation {
+        StructuralDeltaOperation::SetField { path, value } if is_source_order_path(path) => {
+            compose_source_order(root, path, value)
+        }
         StructuralDeltaOperation::SetField { path, value } => set_field(root, path, value.clone()),
         StructuralDeltaOperation::RemoveField { path } => remove_field(root, path),
         StructuralDeltaOperation::UpsertEntity {
@@ -8284,6 +8331,61 @@ fn apply_operation(
         } => upsert_entity(root, path, id, before.as_deref(), value.clone()),
         StructuralDeltaOperation::RemoveEntity { path, id } => remove_entity(root, path, id),
     }
+}
+
+fn is_source_order_path(path: &[String]) -> bool {
+    matches!(
+        path,
+        [design, outer_document, inner_document, source_order]
+            if design == "design"
+                && outer_document == "document"
+                && inner_document == "document"
+                && source_order == "source_order"
+    )
+}
+
+/// Replays the sketch document's global source chronology as a composition,
+/// not as an action-local snapshot of every source that happened to exist
+/// when the action was first authored. Reordering independent source owners
+/// therefore changes their chronology without inventing operand dependencies
+/// or letting an earlier snapshot erase a source materialized by another
+/// reordered step.
+fn compose_source_order(
+    root: &mut Value,
+    path: &[String],
+    authored_order: &Value,
+) -> Result<(), LineageBridgeError> {
+    let authored_order =
+        authored_order
+            .as_array()
+            .ok_or(LineageBridgeError::InvalidMaterialization(
+                "materialization source order is not an array",
+            ))?;
+    let existing_sources = materialized_source_ids(root);
+    let current_order = value_at_path(root, path).and_then(Value::as_array).ok_or(
+        LineageBridgeError::InvalidMaterialization("materialization source order is not an array"),
+    )?;
+    let mut seen = BTreeSet::new();
+    let mut composed = Vec::new();
+    for value in current_order.iter().chain(authored_order) {
+        let source = value
+            .as_str()
+            .ok_or(LineageBridgeError::InvalidMaterialization(
+                "materialization source identity is not a string",
+            ))?;
+        if existing_sources.contains(source) && seen.insert(source.to_owned()) {
+            composed.push(Value::String(source.to_owned()));
+        }
+    }
+    set_field(root, path, Value::Array(composed))
+}
+
+fn materialized_source_ids(root: &Value) -> BTreeSet<String> {
+    collect_materialized_entities(root)
+        .into_iter()
+        .filter(|entity| entity.output_kind == LineageOutputKind::Source)
+        .map(|entity| entity.persistent_id)
+        .collect()
 }
 
 fn parent_object_mut<'a>(

@@ -2,8 +2,9 @@
 
 # M83 — authoritative sketch lineage and deterministic rematerialization
 
-Status: **replacement clean-qualified immutable candidate nominated; human UAT pending; not
-accepted**. M83 is a full-workbench architecture and migration milestone. `LineageDocument`
+Status: **editable-lineage/predictive-drag amendment in progress; prior read-only candidate
+withdrawn; human UAT pending; not accepted**. M83 is a full-workbench architecture and migration
+milestone. `LineageDocument`
 becomes the authoritative editable source for the GeoSolve demo workbench; flat `SketchDocument`,
 `ComputedFeatureDocument` and evaluated feature geometry are derived materializations. ADR 0039
 is accepted for M83 implementation.
@@ -12,10 +13,9 @@ This document supersedes the narrower M83 proof planned in commit `56d1eda`. Tha
 in Git history as the original design record, but its line/Horizontal/rectangle/Profile Offset
 slice, host-side sidecar posture, opaque flat-document root, and exclusion of the ordinary
 workbench and computed features are not the active M83 contract. The expanded architecture
-implementation and requested Lineage-panel amendment pass clean qualification, focused review and
-immutable Tailscale nomination. The earlier candidate is superseded because it predates the panel;
-no criterion below is accepted product behavior until the replacement frozen candidate passes
-explicit human UAT.
+implementation passed its prior read-only Lineage-panel qualification, but the approved editable
+history and predictive-drag amendment supersedes and withdraws that candidate. No criterion below
+is accepted product behavior until the replacement frozen candidate passes explicit human UAT.
 
 M81 remains the accepted product baseline while M83 is in progress. M82 remains a closed,
 archived exploration; M83 does not restore its computed arbitrary-curve Offset prototype.
@@ -362,17 +362,25 @@ Arbitrary TypeScript source rewriting and a workbench script editor remain outsi
 7. Add workspace v7, strict v1-v6 `ImportedBaseline` migration and authenticated disposable-cache
    cold recovery.
 8. Add `geosolve.lineage.rpc.v0`, native/WASM transcript parity and the data-only TypeScript client.
-9. Render the current retained program in a read-only Lineage panel beside Sketch Tree, then run
-   focused catalog, identity, migration, policy, RPC and workbench tests; run the unchanged baseline
-   and complete release gate; nominate one immutable Tailscale build for human UAT.
+9. Render the current retained program in a selectable Lineage panel beside Sketch Tree. Add an
+   authority-derived Inspector, exact-CAS reorder controls and a collapsed compatible raw-action
+   editor without adding browser persistence or a second program authority. Add predictive
+   presentation for expensive captured point/control drags while preserving an exact terminal
+   publication. Then run focused catalog, identity, migration, policy, RPC and workbench tests;
+   run the unchanged baseline and complete release gate; nominate one immutable Tailscale build
+   for human UAT.
 10. Close only after the approved UAT scorecard, frozen-artifact evidence and standard exact
     GitHub Pages publication are recorded.
 
-Steps 1–9 pass for replacement source `bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
+Steps 1–8 and the amended step 9 implementation/focused tests pass; committed-source aggregate
+qualification and immutable replacement nomination remain pending. The prior read-only form of
+step 9 passed for source
+`bb888cc68c00ad3a3823a9f2215528dfb357f9f9`, tree
 `dff5ebebbfe024c00f88ba231362a3ea29d6e0bc`. Its exact no-rebuild seven-file snapshot
 `/tmp/geosolve-m83-lineage-uat.1KL8gG` is byte-verified and served at
-`http://100.94.63.83:8080/`; step 10 remains blocked on human UAT. The pre-panel form previously
-passed for source
+`http://100.94.63.83:8080/`, but is withdrawn from current UAT. Step 10 remains blocked on human
+UAT. The pre-panel form
+previously passed for source
 `d378f7b31f56b43af787202dc1ebb92b7d199f84`, tree
 `25a47e821cc80ff62d1891cfc7095d10fb2ec87f`; that snapshot is withdrawn and no longer served.
 
@@ -455,12 +463,31 @@ property, role, branch, operation, Fillet, Offset, delete, direct-edit and histo
 through lineage. Reloading without the flat cache reproduces the scene. No writable flat side path
 or second user-visible history remains.
 
-The same workbench presents that authority through a secondary read-only **Lineage** panel beside
+The same workbench presents that authority through a secondary selectable **Lineage** panel beside
 Sketch Tree. Each render consumes the coordinator's borrowed current `LineageDocument` plus its
 history cursor/availability directly. Chronological rows preserve stable step/schema identity and
 Live/Suppressed/Deleted state, while the header distinguishes current program revision from the
-Undo/Redo cursor over prior program versions. No browser-side lineage mirror, JSON parsing, row
-selection or mutation action is admitted.
+Undo/Redo cursor over prior program versions. Selection opens a fresh coordinator-owned Inspector.
+Buttons, position selection, keyboard movement and authenticated desktop drag/drop use one
+exact-CAS reorder transaction; dependency boundaries clamp directionally, imported/tombstoned
+steps are pinned and suppressed steps remain movable. A collapsed debug editor submits only a
+compatible `LineageStepRewrite`, never identity or ownership manifests.
+
+Captured flat-action `source_order` snapshots remain compatible serialized ordering state, not
+semantic lineage inputs. Reordering independent constraint/dimension owners must replay source
+order compositionally: retain currently ordered IDs that still exist, prune removed IDs and append
+the sources newly materialized by the current action. The reordered chronology may change, while
+stable native source identities and manifests do not.
+
+Browser selection, dirty JSON draft, notices and drag nonce are transient and absent from
+workspace v7. Predictive drag likewise owns presentation only: after an expensive exact captured
+Point/CurveControl preview, moving frames may show coalesced cursor intent without rebuilding
+durable panels, saving or publishing lineage. Context changes revoke it and release still requires
+the newest terminal request to be the exact retained preview before one ordinary atomic owner
+rewrite. Rejected terminal projection/recomposition consumes the gesture, retains accepted
+authority and performs no workspace save. Tests must exercise reorder,
+direct manipulation, Undo/Redo and cold reload together so this is a genuine topological-identity
+stress rather than cosmetic list sorting.
 
 ### M83-W12 — human UAT and publication
 
@@ -488,9 +515,10 @@ verified on GitHub Pages.
 - Formatting/diff hygiene, warnings-denied workspace Clippy/Rustdoc, locked all-feature tests,
   native/WASM parity, performance, licence/package checks, Trunk and the complete release gate pass
   from committed source.
-- Focused architecture/API review, Lineage-panel authority/presentation tests, replacement clean
-  qualification and immutable byte-verified Tailscale nomination pass. Human UAT, explicit
-  acceptance and exact GitHub Pages publication are still required before M83 can be closed.
+- Focused architecture/API/interaction review, editable-Lineage authority/presentation tests,
+  predictive terminal-publication tests, replacement clean qualification and immutable
+  byte-verified Tailscale nomination must pass. Human UAT, explicit acceptance and exact GitHub
+  Pages publication are still required before M83 can be closed.
 
 ## Explicit non-goals
 
