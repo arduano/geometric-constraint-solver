@@ -684,7 +684,15 @@ impl IntentGraph {
             if let IntentNodeKind::Bootstrap { object } = &node.kind {
                 object.validate()?;
             }
-            validate_required_inputs(*id, &node.kind, &node.inputs)?;
+            let dynamic_children = u16::try_from(node.children.len())
+                .map_err(|_| IntentGraphError::InvalidChildSchema { node: *id })?;
+            validate_declaration_schema(
+                *id,
+                &node.kind,
+                dynamic_children,
+                &node.inputs,
+                &node.fields,
+            )?;
             for (slot, source) in &node.inputs {
                 if !node.kind.accepts_input(slot.role) {
                     return Err(IntentGraphError::InputRoleNotAccepted {
@@ -1065,6 +1073,15 @@ pub enum IntentGraphError {
     },
     #[error("node {node} is missing required input slot {slot:?}")]
     MissingRequiredInput { node: NodeId, slot: InputSlot },
+    #[error("node {node} has unexpected input slot {slot:?}")]
+    UnexpectedInputSlot { node: NodeId, slot: InputSlot },
+    #[error("node {node} input choice requires {minimum}..={maximum} operands, got {actual}")]
+    InputChoiceCardinality {
+        node: NodeId,
+        minimum: u16,
+        maximum: u16,
+        actual: usize,
+    },
     #[error("unknown existing input slot {slot:?} on node {node}")]
     UnknownInputSlot {
         node: NodeId,
@@ -1075,6 +1092,23 @@ pub enum IntentGraphError {
         node: NodeId,
         expected: IntentPortKind,
         actual: IntentPortKind,
+    },
+    #[error("node {node} has unknown definition field `{field:?}`")]
+    UnknownDefinitionField { node: NodeId, field: IntentFieldKey },
+    #[error("node {node} is missing required definition field `{field:?}`")]
+    MissingRequiredDefinitionField { node: NodeId, field: IntentFieldKey },
+    #[error("node {node} definition field `{field:?}` does not match {expected:?}")]
+    DefinitionFieldLiteralMismatch {
+        node: NodeId,
+        field: IntentFieldKey,
+        expected: crate::IntentLiteralSchema,
+    },
+    #[error("node {node} child cardinality requires {minimum}..={maximum}, got {actual}")]
+    ChildCardinality {
+        node: NodeId,
+        minimum: u16,
+        maximum: u16,
+        actual: u16,
     },
     #[error("identity kind mismatch on node {node}: expected {expected:?}, got {actual:?}")]
     IdentityKindMismatch {
@@ -1170,6 +1204,10 @@ pub(crate) struct AllocatedPort {
     pub reservation: Option<ReservationId>,
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one staging boundary validates and allocates the complete generated declaration"
+)]
 pub(crate) fn allocate_draft(
     draft: IntentNodeDraft,
     allocator: &mut IntentAllocatorHighWater,
@@ -1224,7 +1262,13 @@ pub(crate) fn allocate_draft(
     if let IntentNodeKind::Bootstrap { object } = &draft.kind {
         object.validate()?;
     }
-    validate_required_inputs(allocator.next_node, &draft.kind, &draft.inputs)?;
+    validate_declaration_schema(
+        allocator.next_node,
+        &draft.kind,
+        draft.dynamic_children,
+        &draft.inputs,
+        &draft.fields,
+    )?;
     for values in draft.initial_instance.values() {
         for value in values.values() {
             value.validate()?;
@@ -1276,11 +1320,16 @@ pub(crate) fn allocate_draft(
     })
 }
 
-fn validate_required_inputs<T>(
+fn validate_declaration_schema<T>(
     node: NodeId,
     kind: &IntentNodeKind,
+    dynamic_children: u16,
     inputs: &BTreeMap<InputSlot, T>,
+    fields: &BTreeMap<IntentFieldKey, IntentLiteral>,
 ) -> Result<(), IntentGraphError> {
+    // Normalized bootstrap object payloads are decoded by their exact host
+    // codec. The intent graph still owns their closed roles, catalog
+    // dependency, field-free envelope, and bounded object payload.
     if matches!(
         kind,
         IntentNodeKind::Bootstrap {
@@ -1293,6 +1342,103 @@ fn validate_required_inputs<T>(
         let slot = InputSlot::new(InputRole::Catalog, 0);
         if !inputs.contains_key(&slot) {
             return Err(IntentGraphError::MissingRequiredInput { node, slot });
+        }
+    }
+
+    let schema = kind.schema(dynamic_children);
+    if dynamic_children < schema.minimum_children || dynamic_children > schema.maximum_children {
+        return Err(IntentGraphError::ChildCardinality {
+            node,
+            minimum: schema.minimum_children,
+            maximum: schema.maximum_children,
+            actual: dynamic_children,
+        });
+    }
+    if !matches!(kind, IntentNodeKind::Bootstrap { .. }) {
+        validate_declaration_inputs(node, &schema, inputs)?;
+    }
+
+    for (key, value) in fields {
+        let Some(field) = schema.field(key) else {
+            return Err(IntentGraphError::UnknownDefinitionField {
+                node,
+                field: key.clone(),
+            });
+        };
+        if !field.literal.accepts(value) {
+            return Err(IntentGraphError::DefinitionFieldLiteralMismatch {
+                node,
+                field: key.clone(),
+                expected: field.literal,
+            });
+        }
+    }
+    for field in schema.fields.iter().filter(|field| field.required) {
+        if !fields.contains_key(&field.field) {
+            return Err(IntentGraphError::MissingRequiredDefinitionField {
+                node,
+                field: field.field.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_declaration_inputs<T>(
+    node: NodeId,
+    schema: &crate::IntentNodeSchema,
+    inputs: &BTreeMap<InputSlot, T>,
+) -> Result<(), IntentGraphError> {
+    for slot in inputs.keys() {
+        let Some(cardinality) = schema.input(slot.role) else {
+            return Err(IntentGraphError::UnexpectedInputSlot { node, slot: *slot });
+        };
+        if slot.index >= cardinality.maximum {
+            return Err(IntentGraphError::UnexpectedInputSlot { node, slot: *slot });
+        }
+    }
+    for cardinality in &schema.inputs {
+        let actual = inputs
+            .keys()
+            .filter(|slot| slot.role == cardinality.role)
+            .count();
+        let actual = u16::try_from(actual).map_err(|_| IntentGraphError::ResourceLimit {
+            resource: "node input role cardinality",
+            actual,
+            limit: usize::from(u16::MAX),
+        })?;
+        if actual < cardinality.minimum {
+            return Err(IntentGraphError::MissingRequiredInput {
+                node,
+                slot: InputSlot::new(cardinality.role, actual),
+            });
+        }
+        if actual > cardinality.maximum {
+            return Err(IntentGraphError::UnexpectedInputSlot {
+                node,
+                slot: InputSlot::new(cardinality.role, cardinality.maximum),
+            });
+        }
+        for index in 0..actual {
+            let slot = InputSlot::new(cardinality.role, index);
+            if !inputs.contains_key(&slot) {
+                return Err(IntentGraphError::MissingRequiredInput { node, slot });
+            }
+        }
+    }
+    for choice in &schema.input_choices {
+        let actual = choice
+            .alternatives
+            .iter()
+            .filter(|slot| inputs.contains_key(slot))
+            .count();
+        if actual < usize::from(choice.minimum) || actual > usize::from(choice.maximum) {
+            return Err(IntentGraphError::InputChoiceCardinality {
+                node,
+                minimum: choice.minimum,
+                maximum: choice.maximum,
+                actual,
+            });
         }
     }
     Ok(())

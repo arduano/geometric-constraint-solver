@@ -17,6 +17,7 @@ mod graph;
 mod ids;
 mod model;
 mod patch;
+mod schema;
 mod session;
 
 pub use graph::{
@@ -42,6 +43,10 @@ pub use model::{
 pub use patch::{
     CellTarget, DeletePolicy, IntentAliasMap, IntentPatch, IntentPatchOperation,
     IntentPatchOperationKind, IntentPatchPolicy, IntentSemanticDiff,
+};
+pub use schema::{
+    IntentDefinitionFieldSchema, IntentInputCardinality, IntentInputChoiceSchema,
+    IntentLiteralSchema, IntentNodeSchema,
 };
 pub use session::{
     INTENT_SESSION_VERSION, IntentAcceptedAuthority, IntentAttemptDisposition, IntentCandidate,

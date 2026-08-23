@@ -201,6 +201,49 @@ pub enum ConstraintKind {
     CurveCurveFillet,
 }
 
+impl ConstraintKind {
+    /// Complete persistent relation inventory owned by the closed intent
+    /// schema. Keeping this beside the enum makes omissions compile-visible to
+    /// the inventory tests and projection generators.
+    pub const ALL: [Self; 35] = [
+        Self::FixedPoint,
+        Self::FixedCoordinate,
+        Self::CoincidentWithOrigin,
+        Self::PointOnDatumAxis,
+        Self::Coincident,
+        Self::ExternalPointCoincident,
+        Self::Horizontal,
+        Self::Vertical,
+        Self::HorizontalPoints,
+        Self::VerticalPoints,
+        Self::HorizontalPointToMidpoint,
+        Self::VerticalPointToMidpoint,
+        Self::PointOnCurve,
+        Self::Parallel,
+        Self::Perpendicular,
+        Self::ExternalLineCollinear,
+        Self::CollinearWithDatumAxis,
+        Self::Concentric,
+        Self::Collinear,
+        Self::EqualLength,
+        Self::EqualRadius,
+        Self::Midpoint,
+        Self::SymmetricAboutLine,
+        Self::SymmetricAboutDatumAxis,
+        Self::LineCircleTangency,
+        Self::CircleCircleTangency,
+        Self::CircleArcTangency,
+        Self::LineCurveTangency,
+        Self::CurveCurveContact,
+        Self::CurveCurveTangency,
+        Self::CurveDirection,
+        Self::EqualCurvature,
+        Self::EndpointContinuity,
+        Self::LineLineFillet,
+        Self::CurveCurveFillet,
+    ];
+}
+
 /// Complete current persistent dimension catalog. These are existing native
 /// dimensions, not expression or formula constraints.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -214,6 +257,19 @@ pub enum DimensionKind {
     SupportingLineOffset,
     ExactTranslatedSegmentOffset,
     ProfileOffset,
+}
+
+impl DimensionKind {
+    pub const ALL: [Self; 8] = [
+        Self::PointDistance,
+        Self::CurveLength,
+        Self::Radius,
+        Self::Diameter,
+        Self::OrientedAngle,
+        Self::SupportingLineOffset,
+        Self::ExactTranslatedSegmentOffset,
+        Self::ProfileOffset,
+    ];
 }
 
 /// Complete existing equation-free sketch-operation catalog.
@@ -234,11 +290,32 @@ pub enum OperationKind {
     ProfileOffset,
 }
 
+impl OperationKind {
+    pub const ALL: [Self; 12] = [
+        Self::Split,
+        Self::Break,
+        Self::Trim,
+        Self::Extend,
+        Self::Mirror,
+        Self::Chamfer,
+        Self::AssociativeFillet,
+        Self::Rectangle,
+        Self::RegularPolygon,
+        Self::Slot,
+        Self::LinearPattern,
+        Self::ProfileOffset,
+    ];
+}
+
 /// Existing computed feature catalog.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ComputedFeatureKind {
     FilletSet,
+}
+
+impl ComputedFeatureKind {
+    pub const ALL: [Self; 1] = [Self::FilletSet];
 }
 
 /// Existing host parameter/binding/output declaration categories.
@@ -250,12 +327,20 @@ pub enum ParameterIntentKind {
     Output,
 }
 
+impl ParameterIntentKind {
+    pub const ALL: [Self; 3] = [Self::Parameter, Self::Binding, Self::Output];
+}
+
 /// Existing external-reference declaration categories.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExternalIntentKind {
     Binding,
     SnapshotReference,
+}
+
+impl ExternalIntentKind {
+    pub const ALL: [Self; 2] = [Self::Binding, Self::SnapshotReference];
 }
 
 /// Closed per-object inventory used to normalize an already-materialized flat

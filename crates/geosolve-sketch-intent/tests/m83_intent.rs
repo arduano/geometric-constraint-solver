@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::cell::Cell;
 use std::collections::BTreeSet;
 
 use geosolve_sketch_intent::{
-    BootstrapNativeKind, CellTarget, ConstraintKind, DeletePolicy, DimensionKind,
-    GeometryRecipeKind, IdentityTransitionKind, InputRole, InputSlot, IntentBootstrapObject,
-    IntentEvaluation, IntentEvaluationFailure, IntentEvaluationFailureKind, IntentGraphError,
-    IntentIdentityFlow, IntentKey, IntentLiteral, IntentNativeReservationKind, IntentNodeDraft,
+    BootstrapNativeKind, CellTarget, ComputedFeatureKind, ConstraintKind, DeletePolicy,
+    DimensionKind, ExternalIntentKind, GeometryRecipeKind, IdentityTransitionKind, InputRole,
+    InputSlot, IntentBootstrapObject, IntentEvaluation, IntentEvaluationFailure,
+    IntentEvaluationFailureKind, IntentFieldKey, IntentGraphError, IntentIdentityFlow, IntentKey,
+    IntentLiteral, IntentLiteralSchema, IntentNativeReservationKind, IntentNodeDraft,
     IntentNodeKind, IntentPatch, IntentPatchOperation, IntentPatchOperationKind, IntentPatchPolicy,
-    IntentPlanDisposition, IntentPlanError, IntentPortKind, IntentPortRole, IntentPortSelector,
-    IntentReservationState, IntentSession, IntentSessionId, IntentUnit, LeafField, LeafRef,
-    MaterializationEvidence, NodeId, OperationKind, PatchPortRef,
+    IntentPlanDisposition, IntentPlanError, IntentPortKind, IntentPortRef, IntentPortRole,
+    IntentPortSelector, IntentReservationState, IntentSession, IntentSessionId, IntentUnit,
+    LeafField, LeafRef, MaterializationEvidence, NodeId, OperationKind, ParameterIntentKind,
+    PatchPortRef, PortId,
 };
 
 fn key(value: &str) -> IntentKey {
@@ -80,6 +83,213 @@ fn accepted(candidate: &geosolve_sketch_intent::IntentCandidate) -> IntentEvalua
     }
 }
 
+#[derive(Clone, Debug)]
+struct DeclarationSchemaCase {
+    label: String,
+    kind: IntentNodeKind,
+    dynamic_children: u16,
+}
+
+fn declaration_schema_cases() -> Vec<DeclarationSchemaCase> {
+    let mut cases = Vec::new();
+    let mut push = |label: String, kind: IntentNodeKind| {
+        let dynamic_children = kind.schema(0).minimum_children;
+        cases.push(DeclarationSchemaCase {
+            label,
+            kind,
+            dynamic_children,
+        });
+    };
+
+    for recipe in GeometryRecipeKind::ALL {
+        push(
+            format!("geometry.{recipe:?}"),
+            IntentNodeKind::Geometry { recipe },
+        );
+    }
+    for constraint in ConstraintKind::ALL {
+        push(
+            format!("constraint.{constraint:?}"),
+            IntentNodeKind::Constraint { constraint },
+        );
+    }
+    for dimension in DimensionKind::ALL {
+        push(
+            format!("dimension.{dimension:?}"),
+            IntentNodeKind::Dimension { dimension },
+        );
+    }
+    for operation in OperationKind::ALL {
+        push(
+            format!("operation.{operation:?}"),
+            IntentNodeKind::Operation { operation },
+        );
+    }
+    for feature in ComputedFeatureKind::ALL {
+        push(
+            format!("computed_feature.{feature:?}"),
+            IntentNodeKind::ComputedFeature { feature },
+        );
+    }
+    for parameter in ParameterIntentKind::ALL {
+        push(
+            format!("parameter.{parameter:?}"),
+            IntentNodeKind::Parameter { parameter },
+        );
+    }
+    for external in ExternalIntentKind::ALL {
+        push(
+            format!("external.{external:?}"),
+            IntentNodeKind::External { external },
+        );
+    }
+    for object in BootstrapNativeKind::ALL {
+        push(
+            format!("bootstrap.{object:?}"),
+            IntentNodeKind::Bootstrap {
+                object: IntentBootstrapObject::new(
+                    object,
+                    key("geosolve-flat-object-v1"),
+                    format!("schema:{object:?}").into_bytes(),
+                )
+                .unwrap(),
+            },
+        );
+    }
+    push("annotation".to_owned(), IntentNodeKind::Annotation);
+    for transition in [
+        IdentityTransitionKind::Alias,
+        IdentityTransitionKind::Continue,
+        IdentityTransitionKind::Retire,
+    ] {
+        push(
+            format!("identity.{transition:?}"),
+            IntentNodeKind::Identity {
+                transition,
+                port_kind: IntentPortKind::Point,
+            },
+        );
+    }
+    cases
+}
+
+fn literal_for_schema(schema: IntentLiteralSchema) -> IntentLiteral {
+    match schema {
+        IntentLiteralSchema::Boolean => IntentLiteral::Boolean(false),
+        IntentLiteralSchema::Integer => IntentLiteral::Integer(0),
+        IntentLiteralSchema::Natural => IntentLiteral::Natural(1),
+        IntentLiteralSchema::Text => IntentLiteral::Text(key("schema-text")),
+        IntentLiteralSchema::Enum => IntentLiteral::Enum(key("schema-enum")),
+        IntentLiteralSchema::Point => IntentLiteral::Point([1.0, 2.0]),
+        IntentLiteralSchema::Quantity(unit) => IntentLiteral::Quantity { value: 1.0, unit },
+    }
+}
+
+fn wrong_literal_for_schema(schema: IntentLiteralSchema) -> IntentLiteral {
+    if schema == IntentLiteralSchema::Boolean {
+        IntentLiteral::Text(key("wrong-literal"))
+    } else {
+        IntentLiteral::Boolean(false)
+    }
+}
+
+fn different_unit(unit: IntentUnit) -> IntentUnit {
+    match unit {
+        IntentUnit::Length => IntentUnit::Angle,
+        IntentUnit::Angle => IntentUnit::Dimensionless,
+        IntentUnit::Dimensionless => IntentUnit::Length,
+    }
+}
+
+fn dummy_input(kind: &IntentNodeKind, slot: InputSlot) -> PatchPortRef {
+    let port_kind = slot.role.expected_kind().unwrap_or(match kind {
+        IntentNodeKind::Identity { port_kind, .. } => *port_kind,
+        _ => IntentPortKind::Point,
+    });
+    PatchPortRef::Stable {
+        port: IntentPortRef {
+            node: NodeId::from_raw(0xfeed_0000 + slot.role as u64),
+            port: PortId::from_raw(1 + u64::from(slot.index) + (slot.role as u64) * 0x1_0000),
+            kind: port_kind,
+        },
+    }
+}
+
+fn minimal_schema_draft(case: &DeclarationSchemaCase, symbol: &str) -> IntentNodeDraft {
+    let schema = case.kind.schema(case.dynamic_children);
+    let mut draft = IntentNodeDraft::new(case.kind.clone(), key(symbol))
+        .with_dynamic_children(case.dynamic_children);
+    for cardinality in &schema.inputs {
+        for index in 0..cardinality.minimum {
+            let slot = InputSlot::new(cardinality.role, index);
+            draft = draft.with_input(slot, dummy_input(&case.kind, slot));
+        }
+    }
+    for choice in &schema.input_choices {
+        let mut actual = choice
+            .alternatives
+            .iter()
+            .filter(|slot| draft.inputs.contains_key(slot))
+            .count();
+        for slot in &choice.alternatives {
+            if actual >= usize::from(choice.minimum) {
+                break;
+            }
+            if !draft.inputs.contains_key(slot) {
+                draft = draft.with_input(*slot, dummy_input(&case.kind, *slot));
+                actual += 1;
+            }
+        }
+    }
+    if matches!(
+        case.kind,
+        IntentNodeKind::Bootstrap {
+            object: IntentBootstrapObject {
+                kind: BootstrapNativeKind::SemanticSource,
+                ..
+            }
+        }
+    ) {
+        let slot = InputSlot::new(InputRole::Catalog, 0);
+        draft = draft.with_input(slot, dummy_input(&case.kind, slot));
+    }
+    for field in schema.fields.iter().filter(|field| field.required) {
+        draft = draft.with_field(field.field.clone(), literal_for_schema(field.literal));
+    }
+    draft
+}
+
+fn atomic_schema_rejection(label: &str, draft: IntentNodeDraft) -> IntentPlanError {
+    let session = IntentSession::with_id(IntentSessionId::from_raw(0x83f0)).unwrap();
+    let identity = session.identity();
+    let allocator = session.allocator_high_water();
+    let evaluated = Cell::new(false);
+    let patch = IntentPatch::new(
+        identity,
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("declaration"),
+            draft: Box::new(draft),
+            cell: None,
+        }],
+    );
+    let result = session.plan_patch(patch, |candidate| {
+        evaluated.set(true);
+        accepted(candidate)
+    });
+    assert!(!evaluated.get(), "{label} reached the materializer");
+    assert_eq!(session.identity(), identity, "{label} changed identity");
+    assert_eq!(
+        session.allocator_high_water(),
+        allocator,
+        "{label} changed allocator high-water"
+    );
+    match result {
+        Ok(_) => panic!("{label} unexpectedly planned"),
+        Err(error) => error,
+    }
+}
+
 fn create_point(
     session: &mut IntentSession,
     alias: &str,
@@ -110,6 +320,414 @@ fn closed_geometry_catalog_has_all_twenty_five_recipes() {
             .len(),
         25
     );
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one table-driven oracle reviews every closed declaration schema"
+)]
+fn every_closed_declaration_schema_is_unique_coherent_and_minimally_admitted() {
+    assert_eq!(GeometryRecipeKind::ALL.len(), 25);
+    assert_eq!(ConstraintKind::ALL.len(), 35);
+    assert_eq!(DimensionKind::ALL.len(), 8);
+    assert_eq!(OperationKind::ALL.len(), 12);
+    assert_eq!(ComputedFeatureKind::ALL.len(), 1);
+    assert_eq!(ParameterIntentKind::ALL.len(), 3);
+    assert_eq!(ExternalIntentKind::ALL.len(), 2);
+    assert_eq!(BootstrapNativeKind::ALL.len(), 17);
+
+    let cases = declaration_schema_cases();
+    assert_eq!(cases.len(), 107);
+    assert_eq!(
+        cases
+            .iter()
+            .map(|case| case.label.as_str())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        cases.len()
+    );
+
+    for (index, case) in cases.iter().enumerate() {
+        let schema = case.kind.schema(case.dynamic_children);
+        assert!(
+            schema.minimum_children <= schema.maximum_children,
+            "{} has reversed child bounds",
+            case.label
+        );
+        assert!(
+            (schema.minimum_children..=schema.maximum_children).contains(&case.dynamic_children),
+            "{} fixture children are outside its schema",
+            case.label
+        );
+
+        let roles = schema
+            .inputs
+            .iter()
+            .map(|cardinality| cardinality.role)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            roles.len(),
+            schema.inputs.len(),
+            "{} repeats an input role",
+            case.label
+        );
+        for cardinality in &schema.inputs {
+            assert!(
+                cardinality.minimum <= cardinality.maximum,
+                "{} has reversed {:?} input bounds",
+                case.label,
+                cardinality.role
+            );
+        }
+
+        for choice in &schema.input_choices {
+            assert!(
+                choice.minimum <= choice.maximum
+                    && usize::from(choice.maximum) <= choice.alternatives.len(),
+                "{} has invalid choice bounds",
+                case.label
+            );
+            assert_eq!(
+                choice
+                    .alternatives
+                    .iter()
+                    .copied()
+                    .collect::<BTreeSet<_>>()
+                    .len(),
+                choice.alternatives.len(),
+                "{} repeats a choice alternative",
+                case.label
+            );
+            for alternative in &choice.alternatives {
+                let cardinality = schema
+                    .inputs
+                    .iter()
+                    .find(|cardinality| cardinality.role == alternative.role)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{} choice refers to undeclared role {:?}",
+                            case.label, alternative.role
+                        )
+                    });
+                assert!(
+                    alternative.index < cardinality.maximum,
+                    "{} choice refers outside {:?} bounds",
+                    case.label,
+                    alternative.role
+                );
+            }
+        }
+
+        assert_eq!(
+            schema
+                .fields
+                .iter()
+                .map(|field| field.field.clone())
+                .collect::<BTreeSet<_>>()
+                .len(),
+            schema.fields.len(),
+            "{} repeats a definition field",
+            case.label
+        );
+
+        // Real stable sources are deliberately not fabricated by this schema
+        // oracle. Reaching dependency resolution proves the complete minimal
+        // declaration passed structural validation; input-free declarations
+        // proceed all the way to the materializer closure.
+        let session = IntentSession::with_id(IntentSessionId::from_raw(
+            0x8400 + u128::try_from(index).unwrap(),
+        ))
+        .unwrap();
+        let identity = session.identity();
+        let allocator = session.allocator_high_water();
+        let draft = minimal_schema_draft(case, &format!("schema-minimal-{index:03}"));
+        let has_inputs = !draft.inputs.is_empty();
+        let evaluated = Cell::new(false);
+        let patch = IntentPatch::new(
+            identity,
+            IntentPatchPolicy::RequireAccepted,
+            vec![IntentPatchOperation::CreateNode {
+                alias: key("declaration"),
+                draft: Box::new(draft),
+                cell: None,
+            }],
+        );
+        let result = session.plan_patch(patch, |candidate| {
+            evaluated.set(true);
+            accepted(candidate)
+        });
+        if has_inputs {
+            assert!(
+                matches!(
+                    result,
+                    Err(IntentPlanError::Graph(IntentGraphError::UnknownNode(_)))
+                ),
+                "{} did not reach dependency resolution: {result:?}",
+                case.label
+            );
+            assert!(
+                !evaluated.get(),
+                "{} evaluated with dummy inputs",
+                case.label
+            );
+        } else {
+            assert!(
+                result.is_ok(),
+                "{} rejected its minimal declaration: {result:?}",
+                case.label
+            );
+            assert!(evaluated.get(), "{} did not reach evaluation", case.label);
+        }
+        assert_eq!(session.identity(), identity);
+        assert_eq!(session.allocator_high_water(), allocator);
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the exhaustive malformed-operand matrix is intentionally table driven"
+)]
+fn every_closed_declaration_rejects_malformed_operands_and_children_atomically() {
+    let cases = declaration_schema_cases();
+    let mut missing_operands = 0_usize;
+    let mut choice_underflows = 0_usize;
+    let mut choice_overflows = 0_usize;
+    let mut contiguous_holes = 0_usize;
+    let mut child_underflows = 0_usize;
+
+    for (index, case) in cases.iter().enumerate() {
+        let schema = case.kind.schema(case.dynamic_children);
+        for cardinality in schema
+            .inputs
+            .iter()
+            .filter(|cardinality| cardinality.minimum > 0)
+        {
+            let mut draft = minimal_schema_draft(case, &format!("missing-input-{index:03}"));
+            let slot = InputSlot::new(cardinality.role, cardinality.minimum - 1);
+            draft.inputs.remove(&slot);
+            let error = atomic_schema_rejection(&case.label, draft);
+            assert!(
+                matches!(
+                    error,
+                    IntentPlanError::Graph(IntentGraphError::MissingRequiredInput { .. })
+                ),
+                "{} missing {:?} returned {error:?}",
+                case.label,
+                cardinality.role
+            );
+            missing_operands += 1;
+        }
+
+        for choice in &schema.input_choices {
+            if choice.minimum > 0 {
+                let mut draft = minimal_schema_draft(case, &format!("choice-under-{index:03}"));
+                for slot in &choice.alternatives {
+                    draft.inputs.remove(slot);
+                }
+                let error = atomic_schema_rejection(&case.label, draft);
+                assert!(
+                    matches!(
+                        error,
+                        IntentPlanError::Graph(IntentGraphError::InputChoiceCardinality { .. })
+                    ),
+                    "{} choice underflow returned {error:?}",
+                    case.label
+                );
+                choice_underflows += 1;
+            }
+            if usize::from(choice.maximum) < choice.alternatives.len() {
+                let mut draft = minimal_schema_draft(case, &format!("choice-over-{index:03}"));
+                for slot in choice
+                    .alternatives
+                    .iter()
+                    .take(usize::from(choice.maximum) + 1)
+                {
+                    draft.inputs.insert(*slot, dummy_input(&case.kind, *slot));
+                }
+                let error = atomic_schema_rejection(&case.label, draft);
+                assert!(
+                    matches!(
+                        error,
+                        IntentPlanError::Graph(IntentGraphError::InputChoiceCardinality { .. })
+                    ),
+                    "{} choice overflow returned {error:?}",
+                    case.label
+                );
+                choice_overflows += 1;
+            }
+        }
+
+        for cardinality in schema
+            .inputs
+            .iter()
+            .filter(|cardinality| cardinality.minimum == 0 && cardinality.maximum >= 2)
+        {
+            let mut draft = minimal_schema_draft(case, &format!("input-hole-{index:03}"));
+            let slot = InputSlot::new(cardinality.role, 1);
+            draft.inputs.insert(slot, dummy_input(&case.kind, slot));
+            let error = atomic_schema_rejection(&case.label, draft);
+            assert!(
+                matches!(
+                    error,
+                    IntentPlanError::Graph(IntentGraphError::MissingRequiredInput { .. })
+                ),
+                "{} non-contiguous {:?} input returned {error:?}",
+                case.label,
+                cardinality.role
+            );
+            contiguous_holes += 1;
+        }
+
+        if !matches!(case.kind, IntentNodeKind::Bootstrap { .. }) {
+            let mut draft = minimal_schema_draft(case, &format!("extra-input-{index:03}"));
+            let slot = if let Some(cardinality) = schema.inputs.first() {
+                InputSlot::new(cardinality.role, cardinality.maximum)
+            } else {
+                let role = match case.kind {
+                    IntentNodeKind::Geometry { .. }
+                    | IntentNodeKind::Constraint { .. }
+                    | IntentNodeKind::Dimension { .. }
+                    | IntentNodeKind::Operation { .. }
+                    | IntentNodeKind::ComputedFeature { .. }
+                    | IntentNodeKind::Annotation => InputRole::Point,
+                    IntentNodeKind::Parameter { .. } => InputRole::Scalar,
+                    IntentNodeKind::External { .. } => InputRole::External,
+                    IntentNodeKind::Identity { .. } => InputRole::Identity,
+                    IntentNodeKind::Bootstrap { .. } => unreachable!(),
+                };
+                InputSlot::new(role, 0)
+            };
+            draft.inputs.insert(slot, dummy_input(&case.kind, slot));
+            let error = atomic_schema_rejection(&case.label, draft);
+            assert!(
+                matches!(
+                    error,
+                    IntentPlanError::Graph(IntentGraphError::UnexpectedInputSlot { .. })
+                ),
+                "{} extra input returned {error:?}",
+                case.label
+            );
+        }
+
+        if schema.minimum_children > 0 {
+            let invalid_case = DeclarationSchemaCase {
+                label: case.label.clone(),
+                kind: case.kind.clone(),
+                dynamic_children: schema.minimum_children - 1,
+            };
+            let draft = minimal_schema_draft(&invalid_case, &format!("child-under-{index:03}"));
+            let error = atomic_schema_rejection(&case.label, draft);
+            assert!(
+                matches!(
+                    error,
+                    IntentPlanError::Graph(IntentGraphError::ChildCardinality { .. })
+                ),
+                "{} child underflow returned {error:?}",
+                case.label
+            );
+            child_underflows += 1;
+        }
+    }
+
+    assert!(missing_operands > 0);
+    assert!(choice_underflows > 0);
+    assert!(choice_overflows > 0);
+    assert!(contiguous_holes > 0);
+    assert_eq!(child_underflows, 5);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the exhaustive definition-field matrix is intentionally table driven"
+)]
+fn every_closed_declaration_rejects_malformed_definition_fields_atomically() {
+    let cases = declaration_schema_cases();
+    let mut required_fields = 0_usize;
+    let mut typed_fields = 0_usize;
+    let mut quantity_fields = 0_usize;
+
+    for (index, case) in cases.iter().enumerate() {
+        let schema = case.kind.schema(case.dynamic_children);
+        for field in schema.fields.iter().filter(|field| field.required) {
+            let mut draft = minimal_schema_draft(case, &format!("missing-field-{index:03}"));
+            draft.fields.remove(&field.field);
+            let error = atomic_schema_rejection(&case.label, draft);
+            assert!(
+                matches!(
+                    error,
+                    IntentPlanError::Graph(IntentGraphError::MissingRequiredDefinitionField { .. })
+                ),
+                "{} missing {:?} returned {error:?}",
+                case.label,
+                field.field
+            );
+            required_fields += 1;
+        }
+
+        let mut unknown = minimal_schema_draft(case, &format!("unknown-field-{index:03}"));
+        unknown.fields.insert(
+            IntentFieldKey(key("schema.unknown")),
+            IntentLiteral::Boolean(false),
+        );
+        let error = atomic_schema_rejection(&case.label, unknown);
+        assert!(
+            matches!(
+                error,
+                IntentPlanError::Graph(IntentGraphError::UnknownDefinitionField { .. })
+            ),
+            "{} unknown field returned {error:?}",
+            case.label
+        );
+
+        for field in &schema.fields {
+            let mut draft = minimal_schema_draft(case, &format!("wrong-field-{index:03}"));
+            draft
+                .fields
+                .insert(field.field.clone(), wrong_literal_for_schema(field.literal));
+            let error = atomic_schema_rejection(&case.label, draft);
+            assert!(
+                matches!(
+                    error,
+                    IntentPlanError::Graph(IntentGraphError::DefinitionFieldLiteralMismatch { .. })
+                ),
+                "{} wrong {:?} literal returned {error:?}",
+                case.label,
+                field.field
+            );
+            typed_fields += 1;
+
+            if let IntentLiteralSchema::Quantity(unit) = field.literal {
+                let mut draft = minimal_schema_draft(case, &format!("wrong-unit-{index:03}"));
+                draft.fields.insert(
+                    field.field.clone(),
+                    IntentLiteral::Quantity {
+                        value: 1.0,
+                        unit: different_unit(unit),
+                    },
+                );
+                let error = atomic_schema_rejection(&case.label, draft);
+                assert!(
+                    matches!(
+                        error,
+                        IntentPlanError::Graph(
+                            IntentGraphError::DefinitionFieldLiteralMismatch { .. }
+                        )
+                    ),
+                    "{} wrong {:?} unit returned {error:?}",
+                    case.label,
+                    field.field
+                );
+                quantity_fields += 1;
+            }
+        }
+    }
+
+    assert!(required_fields > 0);
+    assert!(typed_fields > 0);
+    assert!(quantity_fields > 0);
 }
 
 #[test]
@@ -597,12 +1215,32 @@ fn authored_curve_handles_and_logical_ports_never_masquerade_as_native_sketch_id
             },
             IntentPatchOperation::CreateNode {
                 alias: key("operation"),
-                draft: Box::new(IntentNodeDraft::new(
-                    IntentNodeKind::Operation {
-                        operation: OperationKind::ProfileOffset,
-                    },
-                    key("Profile offset"),
-                )),
+                draft: Box::new(
+                    IntentNodeDraft::new(
+                        IntentNodeKind::Operation {
+                            operation: OperationKind::Rectangle,
+                        },
+                        key("Rectangle operation"),
+                    )
+                    .with_field(
+                        IntentFieldKey(key("origin")),
+                        IntentLiteral::Point([0.0, 0.0]),
+                    )
+                    .with_field(
+                        IntentFieldKey(key("width")),
+                        IntentLiteral::Quantity {
+                            value: 2.0,
+                            unit: IntentUnit::Length,
+                        },
+                    )
+                    .with_field(
+                        IntentFieldKey(key("height")),
+                        IntentLiteral::Quantity {
+                            value: 1.0,
+                            unit: IntentUnit::Length,
+                        },
+                    ),
+                ),
                 cell: None,
             },
             IntentPatchOperation::CreateNode {
@@ -672,23 +1310,51 @@ fn contact_constraints_and_dimensions_generate_complete_native_reservation_pairs
         IntentPatchPolicy::RequireAccepted,
         vec![
             IntentPatchOperation::CreateNode {
-                alias: key("constraint"),
+                alias: key("point"),
+                draft: Box::new(point_draft("Point")),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("curve"),
                 draft: Box::new(IntentNodeDraft::new(
-                    IntentNodeKind::Constraint {
-                        constraint: ConstraintKind::PointOnCurve,
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
                     },
-                    key("Point on curve"),
+                    key("Curve"),
                 )),
                 cell: None,
             },
             IntentPatchOperation::CreateNode {
+                alias: key("constraint"),
+                draft: Box::new(
+                    IntentNodeDraft::new(
+                        IntentNodeKind::Constraint {
+                            constraint: ConstraintKind::PointOnCurve,
+                        },
+                        key("Point on curve"),
+                    )
+                    .with_input(InputSlot::new(InputRole::Point, 0), alias_point("point"))
+                    .with_input(
+                        InputSlot::new(InputRole::Span, 0),
+                        alias_port("curve", IntentPortRole::Span, 0),
+                    ),
+                ),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
                 alias: key("dimension"),
-                draft: Box::new(IntentNodeDraft::new(
-                    IntentNodeKind::Dimension {
-                        dimension: DimensionKind::CurveLength,
-                    },
-                    key("Curve length"),
-                )),
+                draft: Box::new(
+                    IntentNodeDraft::new(
+                        IntentNodeKind::Dimension {
+                            dimension: DimensionKind::CurveLength,
+                        },
+                        key("Curve length"),
+                    )
+                    .with_input(
+                        InputSlot::new(InputRole::Span, 0),
+                        alias_port("curve", IntentPortRole::Span, 0),
+                    ),
+                ),
                 cell: None,
             },
         ],
@@ -1071,19 +1737,34 @@ fn every_geometry_recipe_has_the_reviewed_native_and_logical_storage_inventory()
     let operations = expected
         .iter()
         .enumerate()
-        .map(
-            |(index, (recipe, children, ..))| IntentPatchOperation::CreateNode {
+        .map(|(index, (recipe, children, ..))| {
+            let mut draft = IntentNodeDraft::new(
+                IntentNodeKind::Geometry { recipe: *recipe },
+                key(&format!("Recipe {index:02}")),
+            )
+            .with_dynamic_children(*children);
+            if *recipe == GeometryRecipeKind::TangentArc {
+                draft = draft.with_input(
+                    InputSlot::new(InputRole::Span, 0),
+                    alias_port("tangent-source", IntentPortRole::Span, 0),
+                );
+            }
+            IntentPatchOperation::CreateNode {
                 alias: key(&format!("recipe-{index:02}")),
-                draft: Box::new(
-                    IntentNodeDraft::new(
-                        IntentNodeKind::Geometry { recipe: *recipe },
-                        key(&format!("Recipe {index:02}")),
-                    )
-                    .with_dynamic_children(*children),
-                ),
+                draft: Box::new(draft),
                 cell: None,
-            },
-        )
+            }
+        })
+        .chain(std::iter::once(IntentPatchOperation::CreateNode {
+            alias: key("tangent-source"),
+            draft: Box::new(IntentNodeDraft::new(
+                IntentNodeKind::Geometry {
+                    recipe: GeometryRecipeKind::Segment,
+                },
+                key("Tangent source"),
+            )),
+            cell: None,
+        }))
         .collect();
     let patch = IntentPatch::new(
         session.identity(),
@@ -1318,16 +1999,34 @@ fn durable_reservation_ledger_tracks_pairs_suppression_delete_undo_redo_and_relo
     let patch = IntentPatch::new(
         session.identity(),
         IntentPatchPolicy::RequireAccepted,
-        vec![IntentPatchOperation::CreateNode {
-            alias: key("constraint"),
-            draft: Box::new(IntentNodeDraft::new(
-                IntentNodeKind::Constraint {
-                    constraint: ConstraintKind::PointOnCurve,
-                },
-                key("constraint.point-on-curve"),
-            )),
-            cell: None,
-        }],
+        vec![
+            IntentPatchOperation::CreateNode {
+                alias: key("curve"),
+                draft: Box::new(IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
+                    },
+                    key("ledger.curve"),
+                )),
+                cell: None,
+            },
+            IntentPatchOperation::CreateNode {
+                alias: key("constraint"),
+                draft: Box::new(
+                    IntentNodeDraft::new(
+                        IntentNodeKind::Constraint {
+                            constraint: ConstraintKind::Horizontal,
+                        },
+                        key("constraint.horizontal"),
+                    )
+                    .with_input(
+                        InputSlot::new(InputRole::Span, 0),
+                        alias_port("curve", IntentPortRole::Span, 0),
+                    ),
+                ),
+                cell: None,
+            },
+        ],
     );
     let plan = session
         .plan_patch(patch, |candidate| {
@@ -1446,19 +2145,33 @@ fn durable_reservation_ledger_tracks_pairs_suppression_delete_undo_redo_and_relo
 #[test]
 fn retained_failure_and_divergent_history_preserve_tombstones_and_accepted_authority() {
     let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x8331)).unwrap();
-    create_point(&mut session, "accepted.point");
+    let (_, accepted_point) = create_point(&mut session, "accepted.point");
     let accepted_before = session.accepted().unwrap().clone();
     let patch = IntentPatch::new(
         session.identity(),
         IntentPatchPolicy::RetainFailedIntent,
         vec![IntentPatchOperation::CreateNode {
             alias: key("failed"),
-            draft: Box::new(IntentNodeDraft::new(
-                IntentNodeKind::Dimension {
-                    dimension: DimensionKind::CurveLength,
-                },
-                key("failed.dimension"),
-            )),
+            draft: Box::new(
+                IntentNodeDraft::new(
+                    IntentNodeKind::Dimension {
+                        dimension: DimensionKind::PointDistance,
+                    },
+                    key("failed.dimension"),
+                )
+                .with_input(
+                    InputSlot::new(InputRole::Point, 0),
+                    PatchPortRef::Stable {
+                        port: accepted_point,
+                    },
+                )
+                .with_input(
+                    InputSlot::new(InputRole::Point, 1),
+                    PatchPortRef::Stable {
+                        port: accepted_point,
+                    },
+                ),
+            ),
             cell: None,
         }],
     );
