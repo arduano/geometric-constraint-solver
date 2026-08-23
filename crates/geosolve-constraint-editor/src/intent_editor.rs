@@ -18,12 +18,12 @@ use geosolve_sketch_intent::{
 use thiserror::Error;
 
 use crate::{
-    AuthoringApplication, ColdIntentMaterialization, ColdIntentMaterializer, ConstraintEditor,
-    EditorEffect, EditorError, EditorScene, IntentBootstrapError, IntentInspectorProjection,
-    IntentSourceEditError, IntentSourceTokenId, IntentValidationEvidence,
-    IntentWorkbenchProjection, Modifiers, PointerInput, ProjectionalAuthoringError,
-    ProjectionalCoordinatorError, ProjectionalIntentCoordinator, ProjectionalPatchOutcome,
-    SelectionItem, Viewport, decode_flat_intent_bootstrap,
+    AuthoringApplication, AuthoringState, ColdIntentMaterialization, ColdIntentMaterializer,
+    ConstraintEditor, EditorEffect, EditorError, EditorScene, IntentBootstrapError,
+    IntentInspectorProjection, IntentSourceEditError, IntentSourceTokenId,
+    IntentValidationEvidence, IntentWorkbenchProjection, Modifiers, PickTolerance, PointerInput,
+    ProjectionalAuthoringError, ProjectionalCoordinatorError, ProjectionalIntentCoordinator,
+    ProjectionalPatchOutcome, SelectionItem, Viewport, decode_flat_intent_bootstrap,
     flat_intent_bootstrap_materialization_map, projectional_application_patch,
     projectional_construction_patch,
 };
@@ -533,6 +533,32 @@ impl ProjectionalEditorSession {
     /// Applies one transient selection click without touching intent or history.
     pub fn select_item(&mut self, item: SelectionItem, modifiers: Modifiers) {
         self.editor.select_item(item, modifiers);
+    }
+
+    /// Publishes the exact compatible native item that the current relation or
+    /// dimension authoring state would consume on pointer-down.
+    ///
+    /// This is presentation-only hover state. It reads the same currently
+    /// presentable accepted document and geometry-interaction policy as the
+    /// flat coordinator, and it never changes intent, accepted evidence, or
+    /// history.
+    pub fn pointer_move_authoring(
+        &mut self,
+        state: &AuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        tolerance: PickTolerance,
+    ) -> Vec<EditorEffect> {
+        let target = self.coordinator.presentation_session().and_then(|session| {
+            state.hover_item_at_with_policy(
+                session.design_document(),
+                scene,
+                input.position,
+                tolerance,
+                self.editor.geometry_interaction_policy(),
+            )
+        });
+        self.editor.set_authoring_hover_target(target)
     }
 
     /// Starts one headless pointer gesture. Selection changes are transient.
