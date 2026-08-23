@@ -10,6 +10,7 @@ import {
   aliasPort,
   canonicalStringify,
   cascade,
+  cascadeRoots,
   createCell,
   createNode,
   deleteCell,
@@ -45,6 +46,10 @@ const fixtureText = readFileSync(
 ).trim();
 const literalFixtureText = readFileSync(
   new URL("../../test/fixtures/rust-intent-literals-v1.json", import.meta.url),
+  "utf8",
+).trim();
+const cascadeRootsFixtureText = readFileSync(
+  new URL("../../test/fixtures/rust-intent-cascade-roots-v1.json", import.meta.url),
   "utf8",
 ).trim();
 const fixture = JSON.parse(fixtureText) as {
@@ -125,6 +130,29 @@ function representativePatch() {
 
 test("TypeScript builders reproduce the checked canonical Rust patch byte-for-byte", () => {
   assert.equal(encodeIntentPatch(representativePatch()), fixtureText);
+});
+
+test("multi-root cascade policy reproduces the checked Rust operation byte-for-byte", () => {
+  const owner = session(fixture.expected.session);
+  const n = (value: string) => stableNode(owner, value);
+  const operation = deleteNode(
+    owner,
+    n("0000000000000030"),
+    cascadeRoots(
+      owner,
+      [n("0000000000000032"), n("0000000000000030")],
+      [n("0000000000000032"), n("0000000000000031"), n("0000000000000030")],
+    ),
+  );
+  const encoded = encodeIntentPatch(patch(
+    owner,
+    sessionIdentity(owner, fixture.expected),
+    "require_accepted",
+    [operation],
+  ));
+  const decoded = JSON.parse(encoded) as { operations: unknown[] };
+
+  assert.equal(JSON.stringify(decoded.operations[0]), cascadeRootsFixtureText);
 });
 
 test("finite float edge spellings reproduce checked Rust serde bytes", () => {

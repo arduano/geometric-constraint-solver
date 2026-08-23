@@ -1477,18 +1477,34 @@ fn apply_patch_operations(
                 }
             }
             IntentPatchOperation::DeleteNode { node, policy } => {
-                let closure = staged.graph.dependent_closure([node])?;
+                let roots = match &policy {
+                    DeletePolicy::RejectDependents | DeletePolicy::Cascade { .. } => {
+                        BTreeSet::from([node])
+                    }
+                    DeletePolicy::CascadeRoots { exact_roots, .. } => {
+                        if !exact_roots.contains(&node) {
+                            return Err(IntentPlanError::CascadeRootMissing { node });
+                        }
+                        exact_roots.clone()
+                    }
+                };
+                let closure = staged.graph.dependent_closure(roots)?;
                 match policy {
                     DeletePolicy::RejectDependents if closure.len() != 1 => {
                         return Err(IntentPlanError::DeleteHasDependents { node, closure });
                     }
-                    DeletePolicy::Cascade { exact_nodes } if exact_nodes != closure => {
+                    DeletePolicy::Cascade { exact_nodes }
+                    | DeletePolicy::CascadeRoots { exact_nodes, .. }
+                        if exact_nodes != closure =>
+                    {
                         return Err(IntentPlanError::CascadeMismatch {
                             expected: closure,
                             actual: exact_nodes,
                         });
                     }
-                    DeletePolicy::RejectDependents | DeletePolicy::Cascade { .. } => {}
+                    DeletePolicy::RejectDependents
+                    | DeletePolicy::Cascade { .. }
+                    | DeletePolicy::CascadeRoots { .. } => {}
                 }
                 staged.graph.remove_nodes(&closure, &mut staged.instance);
                 for cell in staged.organization.cells.values_mut() {
@@ -1896,6 +1912,8 @@ pub enum IntentPlanError {
         expected: BTreeSet<NodeId>,
         actual: BTreeSet<NodeId>,
     },
+    #[error("delete cascade roots do not include the addressed node {node}")]
+    CascadeRootMissing { node: NodeId },
     #[error("the default Sketch cell cannot be deleted")]
     CannotDeleteDefaultCell,
     #[error("invalid exact cell ordering")]

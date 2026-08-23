@@ -354,7 +354,12 @@ export type PatchPolicy = "require_accepted" | "retain_failed_intent";
 
 export type DeletePolicy =
   | { readonly policy: "reject_dependents" }
-  | { readonly policy: "cascade"; readonly exact_nodes: readonly string[] };
+  | { readonly policy: "cascade"; readonly exact_nodes: readonly string[] }
+  | {
+      readonly policy: "cascade_roots";
+      readonly exact_roots: readonly string[];
+      readonly exact_nodes: readonly string[];
+    };
 
 export type CellTarget<S extends string = string> =
   | { readonly target: "stable"; readonly cell: string; readonly [cellBrand]: S }
@@ -667,6 +672,28 @@ export function cascade<S extends string>(
     values.add(node.id);
   }
   return { policy: "cascade", exact_nodes: [...values].sort(compareStrings) };
+}
+
+export function cascadeRoots<S extends string>(
+  owner: SessionRef<S>,
+  roots: readonly NodeRef<NoInfer<S>>[],
+  nodes: readonly NodeRef<NoInfer<S>>[],
+): DeletePolicy {
+  const exactRoots = new Set<string>();
+  const exactNodes = new Set<string>();
+  for (const node of roots) {
+    requireOwner(owner, node);
+    exactRoots.add(node.id);
+  }
+  for (const node of nodes) {
+    requireOwner(owner, node);
+    exactNodes.add(node.id);
+  }
+  return {
+    policy: "cascade_roots",
+    exact_roots: [...exactRoots].sort(compareStrings),
+    exact_nodes: [...exactNodes].sort(compareStrings),
+  };
 }
 
 export function createNode<S extends string>(
@@ -1230,9 +1257,14 @@ function encodeDraft(value: IntentNodeDraft<string>): string {
 }
 
 function encodeDeletePolicy(value: DeletePolicy): string {
-  return value.policy === "reject_dependents"
-    ? "{\"policy\":\"reject_dependents\"}"
-    : `{"policy":"cascade","exact_nodes":[${[...value.exact_nodes].sort(compareStrings).map(quote).join(",")}]}`;
+  switch (value.policy) {
+    case "reject_dependents":
+      return "{\"policy\":\"reject_dependents\"}";
+    case "cascade":
+      return `{"policy":"cascade","exact_nodes":[${[...value.exact_nodes].sort(compareStrings).map(quote).join(",")}]}`;
+    case "cascade_roots":
+      return `{"policy":"cascade_roots","exact_roots":[${[...value.exact_roots].sort(compareStrings).map(quote).join(",")}],"exact_nodes":[${[...value.exact_nodes].sort(compareStrings).map(quote).join(",")}]}`;
+  }
 }
 
 function encodeExternalInputs(value: ExternalInputs): string {

@@ -246,14 +246,44 @@ pub fn projectional_profile_offset_delete_patch(
     dimension: DocumentDimensionId,
 ) -> Result<IntentPatch, ProjectionalProfileOffsetError> {
     let node = profile_offset_owner(intent, ownership, dimension)?;
+    let declaration = intent
+        .graph()
+        .node(node)
+        .ok_or(ProjectionalProfileOffsetError::WrongDeclarationKind)?;
+    let mut roots = std::collections::BTreeSet::from([node]);
+    for (slot, source) in &declaration.inputs {
+        let owned_kind = match slot.role {
+            InputRole::Profile => Some(AggregateKind::ClosedProfile),
+            InputRole::Chain => Some(AggregateKind::OpenChain),
+            _ => None,
+        };
+        let Some(owned_kind) = owned_kind else {
+            continue;
+        };
+        if matches!(
+            intent.graph().node(source.node).map(|source| &source.kind),
+            Some(IntentNodeKind::Aggregate { aggregate }) if *aggregate == owned_kind
+        ) {
+            // Profile/Chain aggregate inputs are closed-schema helper
+            // declarations created as part of this operation transaction.
+            // This is typed ownership: mutable display names and symbols are
+            // deliberately not inspected.
+            roots.insert(source.node);
+        }
+    }
     let closure = intent
         .graph()
-        .dependent_closure([node])
+        .dependent_closure(roots.clone())
         .map_err(|error| ProjectionalProfileOffsetError::PreparationRejected(error.to_string()))?;
-    let policy = if closure.len() == 1 {
+    let policy = if roots.len() == 1 && closure.len() == 1 {
         DeletePolicy::RejectDependents
-    } else {
+    } else if roots.len() == 1 {
         DeletePolicy::Cascade {
+            exact_nodes: closure,
+        }
+    } else {
+        DeletePolicy::CascadeRoots {
+            exact_roots: roots,
             exact_nodes: closure,
         }
     };

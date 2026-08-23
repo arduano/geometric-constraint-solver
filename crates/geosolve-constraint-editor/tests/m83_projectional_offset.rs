@@ -342,6 +342,16 @@ fn open_chain_delete_cascades_downstream_and_undo_redo_restore_exact_outputs() {
         .unwrap();
     let dimension = profile_offset_dimension(&session);
     let operation = profile_offset_node(&session);
+    let operand_aggregates = session
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .filter(|node| matches!(node.kind, IntentNodeKind::Aggregate { .. }))
+        .map(|node| node.id)
+        .collect::<Vec<_>>();
+    assert_eq!(operand_aggregates.len(), 1);
     let accepted = session.coordinator().accepted_materialization().unwrap();
     let output_bindings = accepted
         .ownership
@@ -406,6 +416,14 @@ fn open_chain_delete_cascades_downstream_and_undo_redo_restore_exact_outputs() {
             .node(downstream)
             .is_none()
     );
+    assert!(operand_aggregates.iter().all(|aggregate| {
+        session
+            .coordinator()
+            .intent()
+            .graph()
+            .node(*aggregate)
+            .is_none()
+    }));
     assert!(
         session
             .coordinator()
@@ -437,6 +455,14 @@ fn open_chain_delete_cascades_downstream_and_undo_redo_restore_exact_outputs() {
             .node(downstream)
             .is_some()
     );
+    assert!(operand_aggregates.iter().all(|aggregate| {
+        session
+            .coordinator()
+            .intent()
+            .graph()
+            .node(*aggregate)
+            .is_some()
+    }));
     session.redo().unwrap().unwrap();
     assert!(
         session
@@ -454,6 +480,57 @@ fn open_chain_delete_cascades_downstream_and_undo_redo_restore_exact_outputs() {
             .node(downstream)
             .is_none()
     );
+    assert!(operand_aggregates.iter().all(|aggregate| {
+        session
+            .coordinator()
+            .intent()
+            .graph()
+            .node(*aggregate)
+            .is_none()
+    }));
+}
+
+#[test]
+fn face_offset_delete_removes_every_typed_loop_operand_and_undo_restores_them() {
+    let mut session = fixture(true, 0x8300_0ff5_0004);
+    let mut state = offset_state(&session, true);
+    session
+        .apply_profile_offset(&mut state, key("offset.face.delete"))
+        .unwrap();
+    let dimension = profile_offset_dimension(&session);
+    let operation = profile_offset_node(&session);
+    let aggregates = session
+        .coordinator()
+        .intent()
+        .graph()
+        .nodes()
+        .values()
+        .filter(|node| matches!(node.kind, IntentNodeKind::Aggregate { .. }))
+        .map(|node| node.id)
+        .collect::<Vec<_>>();
+    assert_eq!(aggregates.len(), 1);
+
+    session.delete_profile_offset(dimension).unwrap();
+    let graph = session.coordinator().intent().graph();
+    assert!(graph.node(operation).is_none());
+    assert!(aggregates.iter().all(|node| graph.node(*node).is_none()));
+    assert!(
+        session
+            .coordinator()
+            .accepted_materialization()
+            .unwrap()
+            .session
+            .design_document()
+            .dimension(dimension)
+            .is_none()
+    );
+
+    session.undo().unwrap().unwrap();
+    let graph = session.coordinator().intent().graph();
+    assert!(graph.node(operation).is_some());
+    assert!(aggregates.iter().all(|node| graph.node(*node).is_some()));
+    assert_eq!(profile_offset_dimension(&session), dimension);
+    assert_independently_valid(&session);
 }
 
 #[test]

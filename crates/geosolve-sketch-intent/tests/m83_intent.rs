@@ -318,6 +318,104 @@ fn create_point(
 }
 
 #[test]
+fn multi_root_delete_rejects_unauthenticated_root_sets_atomically() {
+    let mut session = IntentSession::with_id(IntentSessionId::from_raw(0x83ca_5cad)).unwrap();
+    let (root, root_port) = create_point(&mut session, "root");
+    let segment_patch = IntentPatch::new(
+        session.identity(),
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::CreateNode {
+            alias: key("dependent-segment"),
+            draft: Box::new(
+                IntentNodeDraft::new(
+                    IntentNodeKind::Geometry {
+                        recipe: GeometryRecipeKind::Segment,
+                    },
+                    key("dependent.segment"),
+                )
+                .with_input(
+                    InputSlot::new(InputRole::Point, 0),
+                    PatchPortRef::Stable { port: root_port },
+                ),
+            ),
+            cell: None,
+        }],
+    );
+    let segment_plan = session.plan_patch(segment_patch, accepted).unwrap();
+    let dependent = segment_plan
+        .aliases()
+        .node(&key("dependent-segment"))
+        .unwrap();
+    session.commit_plan(segment_plan).unwrap();
+    let (other_root, _) = create_point(&mut session, "other-root");
+
+    let canonical_before = session.to_canonical_json().unwrap();
+    let identity_before = session.identity();
+    let allocator_before = session.allocator_high_water();
+    let unknown = NodeId::from_raw(0xdead_beef);
+
+    let missing_addressed_root = IntentPatch::new(
+        identity_before,
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::DeleteNode {
+            node: root,
+            policy: DeletePolicy::CascadeRoots {
+                exact_roots: BTreeSet::from([other_root]),
+                exact_nodes: BTreeSet::from([other_root]),
+            },
+        }],
+    );
+    assert!(matches!(
+        session.plan_patch(missing_addressed_root, |_| {
+            panic!("an unauthenticated root set must not reach evaluation")
+        }),
+        Err(IntentPlanError::CascadeRootMissing { node }) if node == root
+    ));
+
+    let unknown_root = IntentPatch::new(
+        identity_before,
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::DeleteNode {
+            node: root,
+            policy: DeletePolicy::CascadeRoots {
+                exact_roots: BTreeSet::from([root, unknown]),
+                exact_nodes: BTreeSet::from([root, dependent, unknown]),
+            },
+        }],
+    );
+    assert!(matches!(
+        session.plan_patch(unknown_root, |_| {
+            panic!("an unknown root must not reach evaluation")
+        }),
+        Err(IntentPlanError::Graph(IntentGraphError::UnknownNode(node))) if node == unknown
+    ));
+
+    let incomplete_closure = IntentPatch::new(
+        identity_before,
+        IntentPatchPolicy::RequireAccepted,
+        vec![IntentPatchOperation::DeleteNode {
+            node: root,
+            policy: DeletePolicy::CascadeRoots {
+                exact_roots: BTreeSet::from([root, other_root]),
+                exact_nodes: BTreeSet::from([root, other_root]),
+            },
+        }],
+    );
+    assert!(matches!(
+        session.plan_patch(incomplete_closure, |_| {
+            panic!("a stale dependent closure must not reach evaluation")
+        }),
+        Err(IntentPlanError::CascadeMismatch { expected, actual })
+            if expected == BTreeSet::from([root, dependent, other_root])
+                && actual == BTreeSet::from([root, other_root])
+    ));
+
+    assert_eq!(session.to_canonical_json().unwrap(), canonical_before);
+    assert_eq!(session.identity(), identity_before);
+    assert_eq!(session.allocator_high_water(), allocator_before);
+}
+
+#[test]
 fn closed_geometry_catalog_has_all_twenty_five_recipes() {
     assert_eq!(GeometryRecipeKind::ALL.len(), 25);
     assert_eq!(

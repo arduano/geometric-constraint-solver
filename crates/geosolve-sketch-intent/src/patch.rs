@@ -24,7 +24,20 @@ pub enum IntentPatchPolicy {
 #[serde(tag = "policy", rename_all = "snake_case", deny_unknown_fields)]
 pub enum DeletePolicy {
     RejectDependents,
-    Cascade { exact_nodes: BTreeSet<NodeId> },
+    Cascade {
+        exact_nodes: BTreeSet<NodeId>,
+    },
+    /// Deletes several explicitly selected semantic roots plus their exact
+    /// current dependent closure as one unordered transaction.
+    ///
+    /// This is used when one user-facing declaration owns typed helper
+    /// declarations which necessarily precede it in the dependency DAG. The
+    /// caller must stamp both the complete root set and Rust-computed closure;
+    /// mutable names and patch-array order never participate.
+    CascadeRoots {
+        exact_roots: BTreeSet<NodeId>,
+        exact_nodes: BTreeSet<NodeId>,
+    },
 }
 
 /// Stable or transaction-local target cell.

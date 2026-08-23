@@ -200,6 +200,27 @@ fn canonical_rust_patch_matches_the_checked_typescript_fixture() {
 }
 
 #[test]
+fn cascade_roots_policy_matches_the_checked_typescript_fixture() {
+    let operation = IntentPatchOperation::DeleteNode {
+        node: node(0x30),
+        policy: DeletePolicy::CascadeRoots {
+            exact_roots: BTreeSet::from([node(0x30), node(0x32)]),
+            exact_nodes: BTreeSet::from([node(0x30), node(0x31), node(0x32)]),
+        },
+    };
+    let actual = serde_json::to_string(&operation).expect("multi-root delete serializes");
+    let expected = include_str!(
+        "../../../packages/geosolve-intent/test/fixtures/rust-intent-cascade-roots-v1.json"
+    )
+    .trim();
+
+    assert_eq!(actual, expected);
+    let decoded: IntentPatchOperation =
+        serde_json::from_str(expected).expect("fixture is Rust-decodable");
+    assert_eq!(decoded, operation);
+}
+
+#[test]
 fn simplified_pre_parity_shapes_are_rejected_by_the_rust_wire() {
     let patch = representative_patch();
     let value = serde_json::to_value(patch).expect("fixture patch serializes");
